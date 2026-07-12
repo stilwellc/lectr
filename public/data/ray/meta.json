@@ -1,0 +1,97 @@
+{
+  "lastCrawl": "2026-07-03T15:22:53.906Z",
+  "artists": [
+    {
+      "slug": "george-condo",
+      "displayName": "George Condo"
+    },
+    {
+      "slug": "futura-2000",
+      "displayName": "Futura 2000"
+    },
+    {
+      "slug": "kaws",
+      "displayName": "KAWS"
+    },
+    {
+      "slug": "george-nakashima",
+      "displayName": "George Nakashima"
+    },
+    {
+      "slug": "charles-eames",
+      "displayName": "Charles & Ray Eames"
+    },
+    {
+      "slug": "andy-warhol",
+      "displayName": "Andy Warhol"
+    },
+    {
+      "slug": "tom-sachs",
+      "displayName": "Tom Sachs"
+    },
+    {
+      "slug": "barry-mcgee",
+      "displayName": "Barry McGee"
+    },
+    {
+      "slug": "keith-haring",
+      "displayName": "Keith Haring"
+    },
+    {
+      "slug": "peter-saul",
+      "displayName": "Peter Saul"
+    },
+    {
+      "slug": "ed-ruscha",
+      "displayName": "Ed Ruscha"
+    },
+    {
+      "slug": "r-crumb",
+      "displayName": "R. Crumb"
+    },
+    {
+      "slug": "raymond-pettibon",
+      "displayName": "Raymond Pettibon"
+    },
+    {
+      "slug": "henri-matisse",
+      "displayName": "Henri Matisse"
+    },
+    {
+      "slug": "pablo-picasso",
+      "displayName": "Pablo Picasso"
+    },
+    {
+      "slug": "fab-5-freddy",
+      "displayName": "Fab 5 Freddy"
+    },
+    {
+      "slug": "francesco-clemente",
+      "displayName": "Francesco Clemente"
+    },
+    {
+      "slug": "jean-prouve",
+      "displayName": "Jean Prouvé"
+    },
+    {
+      "slug": "pierre-jeanneret",
+      "displayName": "Pierre Jeanneret"
+    },
+    {
+      "slug": "eddie-martinez",
+      "displayName": "Eddie Martinez"
+    },
+    {
+      "slug": "kenny-scharf",
+      "displayName": "Kenny Scharf"
+    }
+  ],
+  "sources": [
+    "Phillips",
+    "Sotheby's",
+    "Christie's",
+    "Wright/Rago",
+    "Bonhams"
+  ],
+  "version": 2
+}

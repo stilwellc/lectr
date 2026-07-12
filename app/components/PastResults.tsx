@@ -1,0 +1,356 @@
+'use client';
+
+import { useState, useMemo, useEffect } from 'react';
+import { AuctionLot } from '../types';
+import type { LotCategory } from '../types';
+import { ARTIST_LABEL } from '../constants';
+import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors } from '../utils';
+import SectionMark from './SectionMark';
+
+type SortMode = 'date' | 'price';
+type CategoryFilter = 'all' | LotCategory;
+
+interface Props {
+  lots: AuctionLot[];
+  showArtist?: boolean;
+  categoryFilter?: CategoryFilter;
+  onCategoryChange?: (cat: CategoryFilter) => void;
+  savedIds?: string[];
+  onToggleSave?: (lotId: string) => void;
+  /** ghost ordinal behind the h2 band (headers only) */
+  mark?: string;
+}
+
+export default function PastResults({ lots, showArtist = false, categoryFilter: externalFilter, onCategoryChange, savedIds = [], onToggleSave, mark }: Props) {
+  const [visible, setVisible] = useState(20);
+  const [sortBy, setSortBy] = useState<SortMode>('date');
+  const [internalFilter, setInternalFilter] = useState<CategoryFilter>('all');
+
+  const categoryFilter = externalFilter ?? internalFilter;
+  const setCategoryFilter = (cat: CategoryFilter) => {
+    if (onCategoryChange) {
+      onCategoryChange(cat);
+    } else {
+      setInternalFilter(cat);
+    }
+    setVisible(20);
+  };
+
+  useEffect(() => {
+    if (externalFilter !== undefined) setVisible(20);
+  }, [externalFilter]);
+
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    for (const lot of lots) {
+      if (lot.category && lot.category !== 'unknown') cats.add(lot.category);
+    }
+    return Array.from(cats).sort();
+  }, [lots]);
+
+  const filtered = useMemo(() => {
+    if (categoryFilter === 'all') return lots;
+    return lots.filter(l => l.category === categoryFilter);
+  }, [lots, categoryFilter]);
+
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    if (sortBy === 'price') {
+      copy.sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0));
+    } else {
+      copy.sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
+    }
+    return copy;
+  }, [filtered, sortBy]);
+
+  const shown = sorted.slice(0, visible);
+
+  return (
+    <section className="ray-results rail">
+      <style>{`
+        .ray-results { padding-block: 40px 120px; }
+        .ray-result-row {
+          position: relative;
+          display: grid;
+          grid-template-columns: 1fr auto auto auto auto;
+          align-items: center;
+          gap: 20px;
+          padding: 14px 24px;
+          text-decoration: none;
+          color: inherit;
+          transition: background var(--duration-fast) var(--ease-signature);
+        }
+        .ray-result-row:hover { background: var(--color-hover-item); }
+        .ray-sort-pill {
+          font-family: var(--font-sans), sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          padding: 6px 16px;
+          border-radius: 100px;
+          border: 1px solid var(--color-border);
+          background: transparent;
+          color: var(--color-text-muted);
+          cursor: pointer;
+          transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
+        }
+        .ray-sort-pill:hover {
+          border-color: var(--color-accent-wine);
+          color: var(--color-accent-wine-text);
+        }
+        /* Quote-free selector on purpose - quotes in server-rendered style
+           text get HTML-escaped and break hydration. */
+        .ray-sort-pill[data-active=true] {
+          background: var(--color-accent-wine);
+          border-color: var(--color-accent-wine);
+          color: var(--color-bg);
+        }
+        @media (max-width: 768px) {
+          .ray-results { padding-block: 32px 80px; }
+          .ray-result-row {
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            padding: 14px 16px;
+          }
+          .ray-result-badges { display: none; }
+        }
+      `}</style>
+
+      <div style={{ marginBottom: 28 }}>
+        {/* Ghost ordinal clipped to the header band — never under the table */}
+        <div style={{ position: 'relative', overflow: 'hidden' }}>
+          {mark && <SectionMark n={mark} style={{ fontSize: 'clamp(96px, 12vw, 150px)' }} />}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '16px 0 4px' }}>
+          <div>
+            <h2 style={{
+              fontFamily: "var(--font-serif), serif",
+              fontSize: 32,
+              fontWeight: 300,
+              letterSpacing: '-0.02em',
+            }}>
+              Recent <span style={{ fontStyle: 'italic' }}>Results</span>
+            </h2>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
+              {filtered.length.toLocaleString()} sold lots
+              {categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              className="ray-sort-pill"
+              data-active={sortBy === 'date' ? 'true' : 'false'}
+              onClick={() => { setSortBy('date'); setVisible(20); }}
+            >
+              Date
+            </button>
+            <button
+              className="ray-sort-pill"
+              data-active={sortBy === 'price' ? 'true' : 'false'}
+              onClick={() => { setSortBy('price'); setVisible(20); }}
+            >
+              Price
+            </button>
+          </div>
+          </div>
+        </div>
+
+        {availableCategories.length > 1 && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+            <button
+              className="ray-sort-pill"
+              data-active={categoryFilter === 'all' ? 'true' : 'false'}
+              onClick={() => setCategoryFilter('all')}
+            >
+              All
+            </button>
+            {availableCategories.map(cat => (
+              <button
+                key={cat}
+                className="ray-sort-pill"
+                data-active={categoryFilter === cat ? 'true' : 'false'}
+                onClick={() => setCategoryFilter(cat as CategoryFilter)}
+              >
+                {categoryLabels[cat] || cat}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{
+        background: 'var(--color-bg-elevated)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 16,
+        overflow: 'hidden',
+      }}>
+        {shown.map((lot, i) => {
+          const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
+          const catColor = (lot.category && lot.category !== 'unknown') ? categoryColors[lot.category] : null;
+          return (
+            <div
+              key={lot.id}
+              className="ray-result-row"
+              style={{
+                borderBottom: i < shown.length - 1 ? '1px solid var(--color-border)' : 'none',
+              }}
+            >
+              {/* Stretched primary link — save button stays a sibling, not a descendant */}
+              <a
+                href={lot.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
+                style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+              />
+              <div style={{ minWidth: 0 }}>
+                {showArtist && lot.artist && (
+                  <div style={{
+                    fontSize: 12,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    color: 'var(--color-text-muted)',
+                    fontWeight: 600,
+                    marginBottom: 2,
+                  }}>
+                    {ARTIST_LABEL[lot.artist] || lot.artist}
+                  </div>
+                )}
+                <div style={{
+                  fontFamily: "var(--font-serif), serif",
+                  fontSize: 17,
+                  fontWeight: 400,
+                  lineHeight: 1.3,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {lot.title}
+                </div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 3,
+                  fontSize: 12,
+                  color: 'var(--color-text-faint)',
+                }}>
+                  {lot.year && <span>{lot.year}</span>}
+                  {lot.year && lot.medium && <span style={{ opacity: 0.4 }}>·</span>}
+                  {lot.medium && (
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                      {lot.medium}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{
+                  fontSize: 15,
+                  fontWeight: 500,
+                  color: 'var(--color-fg)',
+                  lineHeight: 1.3,
+                }}>
+                  {lot.priceUsd ? formatPrice(lot.priceUsd) : '—'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 1 }}>
+                  {formatDate(lot.saleDate, { month: 'short', year: 'numeric' })}
+                </div>
+              </div>
+
+              <div className="ray-result-badges" style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {catColor && (
+                  <span style={{
+                    padding: '3px 10px',
+                    borderRadius: 100,
+                    background: `color-mix(in srgb, ${catColor} 7%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${catColor} 15%, transparent)`,
+                    fontSize: 12,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: catColor,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {categoryLabels[lot.category] || lot.category}
+                  </span>
+                )}
+                <span style={{
+                  padding: '3px 10px',
+                  borderRadius: 100,
+                  background: `color-mix(in srgb, ${color} 7%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${color} 15%, transparent)`,
+                  fontSize: 12,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: color,
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {lot.auctionHouse}
+                </span>
+              </div>
+
+              {onToggleSave && (
+                <button
+                  className="ray-save-btn"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id); }}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: savedIds.includes(lot.id) ? 'var(--color-accent-wine)' : 'transparent',
+                    border: savedIds.includes(lot.id) ? 'none' : '1px solid var(--color-border)',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                    position: 'relative',
+                    zIndex: 2,
+                  }}
+                  aria-label={savedIds.includes(lot.id) ? 'Remove from saved' : 'Save lot'}
+                >
+                  <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                    <path
+                      d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+                      fill={savedIds.includes(lot.id) ? 'var(--color-bg)' : 'var(--color-text-faint)'}
+                      stroke={savedIds.includes(lot.id) ? 'var(--color-bg)' : 'var(--color-text-faint)'}
+                      strokeWidth="0.8"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {visible < sorted.length && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
+          <button
+            onClick={() => setVisible((v) => v + 20)}
+            style={{
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: 100,
+              padding: '10px 32px',
+              fontSize: 12,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: "var(--font-sans), sans-serif",
+              transition: 'border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature)',
+            }}
+          >
+            Show More
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
