@@ -1846,6 +1846,382 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-strip-s { font-size: 12px; color: var(--color-text-faint); margin-top: 4px; }
 .ray-tape-wrap { margin-top: 28px; }
 
+/* ═══════════════════════════════════════════════════════════════════
+   RAY TERMINAL — the trading floor, settled (committee build spec 1.0)
+   One grid, one seam grammar (1px hairlines), one type scale, two curves.
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-soft: rgba(255, 255, 255, 0.06);
+  --panel: #101216;
+  --panel-mat: #15171A;
+  --ease-ui: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* R2 · the tape — the terminal's signature slot, directly under the bar */
+.ray-tapeband {
+  height: 34px;
+  background: #0C0D10;
+  border-bottom: 1px solid var(--hairline);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 48px, black calc(100% - 48px), transparent);
+  mask-image: linear-gradient(90deg, transparent, black 48px, black calc(100% - 48px), transparent);
+}
+.ray-tapeband .ray-tape { border: none; background: transparent; height: 34px; }
+.ray-tapeband .ray-tape-track { animation-duration: 90s; height: 34px; align-items: center; }
+.ray-tapeband .ray-tape-item {
+  font-size: 12.5px;
+  gap: 10px;
+  padding: 0 12px 0 0;
+  margin-right: 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ray-tapeband .ray-tape-artist { color: var(--color-fg); font-weight: 600; }
+.ray-tapeband .ray-tape-title { color: #7A8087; }
+.ray-tapeband .ray-tape-price { color: var(--color-up); font-weight: 550; font-variant-numeric: tabular-nums; }
+.ray-tapeband .ray-tape-house { color: var(--color-text-faint); }
+@media (max-width: 768px) {
+  .ray-tapeband { height: 32px; }
+  .ray-tapeband .ray-tape-track { animation-duration: 110s; height: 32px; }
+  .ray-tapeband .ray-tape-item { font-size: 12px; }
+}
+
+/* R3 · the index rail — five exchange cells; the ONLY market switch */
+.ray-idxrail {
+  background: #0A0B0D;
+  border-bottom: 1px solid var(--hairline);
+}
+.ray-idxrail-in {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.ray-idxcell {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  align-items: center;
+  background: #0A0B0D;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  position: relative;
+  min-width: 0;
+}
+.ray-idxcell[data-live=false] { cursor: default; }
+.ray-idxcell-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #9AA0A6;
+  white-space: nowrap;
+  transition: color 120ms var(--ease-ui);
+}
+.ray-idxcell:hover[data-live=true] .ray-idxcell-name { color: var(--color-fg); }
+.ray-idxcell[data-active=true] .ray-idxcell-name { color: var(--color-fg); }
+.ray-idxcell[data-active=true]::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-fg);
+}
+.ray-idxcell-val { font-size: 15px; font-weight: 650; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.ray-idxcell-delta { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ray-idxcell-delta[data-tone=up] { color: var(--color-up); }
+.ray-idxcell-delta[data-tone=down] { color: var(--color-down); }
+.ray-idxcell-soon { font-size: 11px; font-weight: 500; color: #7A8087; }
+@media (max-width: 900px) {
+  .ray-idxrail { overflow-x: auto; scrollbar-width: none; scroll-snap-type: x mandatory;
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 24px), transparent);
+    mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 24px), transparent); }
+  .ray-idxrail::-webkit-scrollbar { display: none; }
+  .ray-idxrail-in { display: flex; }
+  .ray-idxcell { min-width: 148px; height: 44px; scroll-snap-align: start; flex: none; }
+}
+
+/* R4 · the board — seamed 1fr/396px grid; the 1px gap IS the seam */
+.ray-board-wrap { padding: 20px 0 0; }
+.ray-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 396px;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+.ray-board-demand { background: #0A0B0D; padding: 20px 24px 14px; min-width: 0; }
+.ray-board-rail { display: grid; grid-template-rows: auto 1fr; gap: 1px; background: var(--hairline); min-width: 0; }
+.ray-board-panel { background: var(--panel); padding: 16px 18px; min-width: 0; }
+.ray-panel-k {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #9AA0A6;
+  margin-bottom: 10px;
+}
+/* the proof strip under the board */
+.ray-proofstrip {
+  border: 1px solid var(--hairline);
+  border-top: none;
+  padding: 9px 24px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  display: block;
+  text-decoration: none;
+  transition: color 120ms var(--ease-ui);
+}
+.ray-proofstrip:hover { color: var(--color-text-secondary); }
+.ray-proofstrip b.up { color: var(--color-up); font-weight: 700; }
+
+/* the demand panel internals */
+.ray-demand-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hairline-soft);
+  margin-bottom: 14px;
+}
+.ray-demand-label { font-size: 12px; font-weight: 600; color: #9AA0A6; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ray-ranges2 { display: flex; gap: 14px; }
+.ray-range2 {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #7A8087;
+  padding: 0 0 10px;
+  margin-bottom: -11px;
+  position: relative;
+}
+.ray-range2[data-active=true] { color: var(--color-fg); }
+.ray-range2[data-active=true]::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: var(--color-fg);
+}
+.ray-numrow { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.ray-numrow .ray-hero2-value { font-size: 64px; font-weight: 700; letter-spacing: -0.035em; }
+.ray-numrow-delta { font-size: 13px; font-weight: 600; }
+.ray-numrow-delta .up { color: var(--color-up); }
+.ray-numrow-delta .down { color: var(--color-down); }
+.ray-scrubchip {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  background: var(--panel-mat);
+  border: 1px solid var(--hairline);
+  padding: 4px 10px;
+}
+/* mini-ledger: four figures split by hairline verticals */
+.ray-ledger {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  border-block: 1px solid var(--hairline-soft);
+  margin: 16px 0 4px;
+}
+.ray-ledger > div { background: #0A0B0D; padding: 10px 14px 12px; min-width: 0; }
+.ray-ledger > div:first-child { padding-left: 0; }
+.ray-ledger-k { font-size: 12px; font-weight: 600; color: #9AA0A6; margin-bottom: 4px; }
+.ray-ledger-v { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ray-ledger-v.up { color: var(--color-up); }
+.ray-ledger-s { font-size: 11px; color: #7A8087; margin-top: 3px; }
+
+/* the matted plate — catalogue-grade image treatment */
+.ray-plate-mat {
+  background: var(--panel-mat);
+  border: 1px solid var(--hairline);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.ray-plate-img {
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+  outline: 1px solid rgba(255, 255, 255, 0.1);
+  outline-offset: -1px;
+  background: var(--color-bg);
+}
+.ray-plate-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ray-plate-cap {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #7A8087;
+  font-variant-numeric: tabular-nums;
+  padding-top: 9px;
+  text-align: center;
+}
+.ray-deckcall .ray-deckcall-maker { font-size: 14px; font-weight: 650; }
+
+/* R5 · the desk — the maker matrix as two seamed tables */
+.ray-desk-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 2px;
+}
+.ray-desk-title { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--color-fg); }
+.ray-desk-sub { font-size: 12px; color: var(--color-text-faint); }
+.ray-desk-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+.ray-deskrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 40px;
+  border-bottom: 1px solid var(--hairline-soft);
+  text-decoration: none;
+  color: inherit;
+  transition: background 120ms var(--ease-ui);
+  padding: 0 6px;
+}
+.ray-deskrow:hover { background: rgba(255, 255, 255, 0.04); }
+.ray-deskrow-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ray-deskrow-spark { flex: none; }
+.ray-deskrow[data-tone=up] .ray-deskrow-spark { color: var(--color-up); }
+.ray-deskrow[data-tone=down] .ray-deskrow-spark { color: var(--color-down); }
+.ray-deskrow-idx { flex: none; width: 56px; text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-fg); }
+.ray-deskrow-delta { flex: none; width: 64px; text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ray-deskrow[data-tone=up] .ray-deskrow-delta { color: var(--color-up); }
+.ray-deskrow[data-tone=down] .ray-deskrow-delta { color: var(--color-down); }
+.ray-deskrow-lots { flex: none; width: 44px; text-align: right; font-size: 12px; color: #7A8087; font-variant-numeric: tabular-nums; }
+.ray-deskrow-next { flex: none; width: 76px; text-align: right; font-size: 12px; color: #7A8087; font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) {
+  .ray-desk-tables { grid-template-columns: 1fr; }
+  .ray-deskrow { height: 44px; }
+  .ray-deskrow-lots, .ray-deskrow-next { display: none; }
+}
+
+/* R6 · the film strip — the eye */
+.ray-filmstrip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  padding: 14px 0 6px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 48px), transparent);
+  mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 48px), transparent);
+}
+.ray-filmstrip::-webkit-scrollbar { display: none; }
+.ray-film {
+  flex: none;
+  scroll-snap-align: start;
+  width: 197px;
+  height: 148px;
+  position: relative;
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+  text-decoration: none;
+}
+.ray-film::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  outline: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+.ray-film img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ray-film-scrim {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 22px 12px 9px;
+  background: linear-gradient(180deg, transparent, rgba(6, 7, 9, 0.88));
+}
+.ray-film-l1 { font-size: 11px; font-weight: 600; color: var(--color-fg); }
+.ray-film-l1 b { color: var(--color-up); font-weight: 700; }
+.ray-film-l2 { font-size: 10px; font-weight: 500; color: rgba(255, 255, 255, 0.62); font-variant-numeric: tabular-nums; margin-top: 1px; }
+@media (max-width: 768px) { .ray-film { width: 165px; height: 124px; } }
+
+/* R7 · the record band + backtest monument */
+.ray-recordband {
+  background: #0C0D10;
+  border-top: 1px solid var(--hairline);
+  padding: 48px 0 56px;
+  margin-top: 48px;
+}
+.ray-record-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 396px;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+.ray-record-left { background: #0C0D10; min-width: 0; padding: 4px 0 0; }
+.ray-record-left .ray-results { padding-block: 0 12px; }
+.ray-record-left .rail { padding-inline: 20px; max-width: none; }
+.ray-monument { background: var(--panel); padding: 24px 20px; }
+.ray-monu-in { position: sticky; top: 72px; }
+.ray-monu-fig { padding: 14px 0 16px; border-bottom: 1px solid var(--hairline-soft); }
+.ray-monu-fig:last-of-type { border-bottom: none; }
+.ray-monu-v { font-size: 56px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--color-fg); }
+.ray-monu-v.up { color: var(--color-up); }
+.ray-monu-k { font-size: 11px; font-weight: 600; color: #9AA0A6; margin-top: 6px; }
+.ray-monu-body { font-size: 13.5px; color: #9AA0A6; line-height: 1.55; margin-top: 14px; }
+.ray-monu-cta { display: inline-block; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; text-decoration: none; }
+.ray-monu-cta:hover { color: var(--color-fg); }
+@media (max-width: 1000px) {
+  .ray-board { grid-template-columns: 1fr; }
+  .ray-record-grid { grid-template-columns: 1fr; }
+  .ray-numrow .ray-hero2-value { font-size: 40px; }
+  .ray-monu-v { font-size: 40px; }
+  .ray-ledger { grid-template-columns: 1fr 1fr; }
+  .ray-ledger > div { padding-left: 14px; }
+}
+
+/* R8 · the colophon — provenance closes the page */
+.ray-colophon {
+  border-top: 1px solid var(--hairline);
+  padding-block: 24px;
+}
+.ray-colophon-in {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 48px;
+  font-size: 11.5px;
+  color: #7A8087;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) { .ray-colophon-in { grid-template-columns: 1fr; gap: 8px; } }
+
+/* seam-draw + panel entrance choreography */
+@keyframes raySeamX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes rayPanelIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.ray-choreo .ray-board { transform-origin: left center; animation: raySeamX 500ms var(--ease-ui) both; }
+.ray-choreo .ray-board > * { animation: rayPanelIn 400ms var(--ease-ui) both; animation-delay: 120ms; }
+.ray-choreo .ray-board-rail > * { animation: rayPanelIn 400ms var(--ease-ui) both; }
+.ray-choreo .ray-board-rail > *:nth-child(1) { animation-delay: 180ms; }
+.ray-choreo .ray-board-rail > *:nth-child(2) { animation-delay: 240ms; }
+.ray-choreo .ray-proofstrip { animation: rayPanelIn 400ms var(--ease-ui) both; animation-delay: 300ms; }
+@media (prefers-reduced-motion: reduce) {
+  .ray-choreo .ray-board, .ray-choreo .ray-board > *, .ray-choreo .ray-board-rail > *, .ray-choreo .ray-proofstrip { animation: none; }
+}
+
 /* ── the command deck: the lander as an instrument, not a page ── */
 .ray-deck {
   display: grid;

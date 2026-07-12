@@ -254,7 +254,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   {lot.year && lot.medium && <span style={{ opacity: 0.4 }}>·</span>}
                   {lot.medium && (
                     <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
-                      {lot.medium}
+                      {craftTitle(lot.medium)}
                     </span>
                   )}
                 </div>
