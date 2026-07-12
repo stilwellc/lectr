@@ -7,6 +7,7 @@ import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice } from '../../utils';
 import { ARTISTS } from '../../constants';
 import { useChartDraw } from '../../hooks/useChartDraw';
+import { demandSeries, formatDemand } from '../../lib/demand';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -62,8 +63,8 @@ function SparkTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
         {d.date}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--color-fg)', fontWeight: 500 }}>
-        {formatAxis(d.avgPrice)}
+      <div style={{ fontSize: 12, fontWeight: 600, color: d.avgPrice >= 0 ? 'var(--color-up)' : 'var(--color-down)' }}>
+        {`${d.avgPrice >= 0 ? '+' : ''}${Math.round(d.avgPrice)}% vs estimate`}
       </div>
     </div>
   );
@@ -118,7 +119,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
             color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)',
             whiteSpace: 'nowrap',
           }}>
-            {artist.appreciation > 0 ? '\u25B2' : '\u25BC'} {artist.appreciation > 0 ? '+' : ''}{artist.appreciation.toFixed(1)}%
+            {artist.appreciation > 0 ? '\u25B2' : '\u25BC'} {formatDemand(artist.appreciation)}
           </div>
         )}
       </div>
@@ -204,13 +205,12 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
   );
 }
 
-export default function ArtistSparklines({ statsByArtist, allLots }: Props) {
+export default function ArtistSparklines({ statsByArtist, allLots, limit = 6 }: Props & { limit?: number }) {
   const artists = useMemo<ArtistCardData[]>(() => {
     return ARTISTS.map(a => {
       const stats = statsByArtist[a.slug];
       const artistLots = allLots.filter(l => l.artist === a.slug);
-      const sold = artistLots.filter(l => l.status === 'sold');
-      const sparkData = computeSparkData(sold);
+      const sparkData = demandSeries(artistLots).map(p => ({ date: p.date, avgPrice: p.value }));
 
       const withEstimate = artistLots.filter(l =>
         l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0
@@ -226,14 +226,14 @@ export default function ArtistSparklines({ statsByArtist, allLots }: Props) {
         sparkData,
         totalRevenue: stats?.totalAuctionRevenue || 0,
         avgPrice: stats?.avgPriceLast12Months || 0,
-        appreciation: stats?.appreciationRate || 0,
+        appreciation: (() => { const ds = demandSeries(artistLots); return ds.length ? ds[ds.length - 1].value : 0; })(),
         overEstimate,
         totalLots: artistLots.length,
       };
     })
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
-      .slice(0, 6);
-  }, [statsByArtist, allLots]);
+      .slice(0, limit);
+  }, [statsByArtist, allLots, limit]);
 
   return (
     <section className="ray-sparklines rail">

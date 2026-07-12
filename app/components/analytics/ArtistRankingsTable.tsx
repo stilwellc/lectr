@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice } from '../../utils';
+import { demandSeries, formatDemand } from '../../lib/demand';
 import { ARTISTS } from '../../constants';
 
 interface Props {
@@ -11,7 +12,7 @@ interface Props {
   allLots: AuctionLot[];
 }
 
-type SortKey = 'name' | 'totalRevenue' | 'avgPrice' | 'recordPrice' | 'appreciation' | 'overEstimate' | 'totalLots' | 'sellThrough';
+type SortKey = 'name' | 'totalRevenue' | 'avgPrice' | 'recordPrice' | 'demand' | 'overEstimate' | 'totalLots' | 'sellThrough';
 
 interface ArtistRow {
   slug: string;
@@ -19,7 +20,7 @@ interface ArtistRow {
   totalRevenue: number;
   avgPrice: number;
   recordPrice: number;
-  appreciation: number;
+  demand: number;
   overEstimate: number;
   totalLots: number;
   sellThrough: number;
@@ -53,7 +54,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
         totalRevenue: stats?.totalAuctionRevenue || 0,
         avgPrice: stats?.avgPriceLast12Months || 0,
         recordPrice: stats?.recordPrice || 0,
-        appreciation: stats?.appreciationRate || 0,
+        demand: (() => { const ds = demandSeries(artistLots); return ds.length ? ds[ds.length - 1].value : -9999; })(),
         overEstimate,
         totalLots: artistLots.length,
         sellThrough,
@@ -177,9 +178,9 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
                   Record {sortKey === 'recordPrice' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
                 </button>
               </th>
-              <th style={thStyle('appreciation')} aria-sort={ariaSort('appreciation')}>
-                <button type="button" style={sortBtnStyle} onClick={() => handleSort('appreciation')}>
-                  Appr. {sortKey === 'appreciation' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+              <th style={thStyle('demand')} aria-sort={ariaSort('demand')}>
+                <button type="button" style={sortBtnStyle} onClick={() => handleSort('demand')}>
+                  Demand {sortKey === 'demand' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
                 </button>
               </th>
               <th style={thStyle('overEstimate')} aria-sort={ariaSort('overEstimate')}>
@@ -228,13 +229,11 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
                 <td className="ray-rankings-td" style={{
                   textAlign: 'right',
                   fontWeight: 500,
-                  color: row.appreciation === 0
+                  color: row.demand <= -9999
                     ? 'var(--color-text-muted)'
-                    : row.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)',
+                    : row.demand >= 0 ? 'var(--color-up)' : 'var(--color-down)',
                 }}>
-                  {row.appreciation > 0 && '\u25B2 +'}
-                  {row.appreciation < 0 && '\u25BC '}
-                  {row.appreciation === 0 ? '\u2014' : `${row.appreciation.toFixed(1)}%`}
+                  {row.demand <= -9999 ? '\u2014' : formatDemand(row.demand)}
                 </td>
                 <td className="ray-rankings-td" style={{
                   textAlign: 'right',

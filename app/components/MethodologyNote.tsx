@@ -64,6 +64,12 @@ export default function MethodologyNote({ trigger = 'How Ray calls it' }: { trig
               </li>
             </ul>
             <p className="ray-method-foot">
+              The record: every historical call is replayed point-in-time — using
+              only sales that had already happened — and flagged lots have
+              outperformed unflagged ones on both median result and the rate of
+              beating the high estimate. See &ldquo;The record&rdquo; on the Value page.
+            </p>
+            <p className="ray-method-foot">
               Every figure links to the auction house record it came from. Estimates
               and results are the houses&rsquo; own, converted to USD.
             </p>

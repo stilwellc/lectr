@@ -13,7 +13,7 @@ import TopSales from '../components/analytics/TopSales';
 import RayHero from '../components/RayHero';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 
-const PortfolioPerformanceChart = dynamic(() => import('../components/analytics/PortfolioPerformanceChart'), { ssr: false });
+const DemandChart = dynamic(() => import('../components/analytics/DemandChart'), { ssr: false });
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 const CategoryBreakdown = dynamic(() => import('../components/analytics/CategoryBreakdown'), { ssr: false });
 const AuctionHouseDistribution = dynamic(() => import('../components/analytics/AuctionHouseDistribution'), { ssr: false });
@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
         <RayEntrance animate={!fromCache}>
           {[
             <PortfolioHeader key="header" statsByArtist={statsByArtist} allLots={allLots} />,
-            <PortfolioPerformanceChart key="perf" statsByArtist={statsByArtist} />,
+            <DemandChart key="demand" allLots={allLots} />,
             <ArtistSparklines key="spark" statsByArtist={statsByArtist} allLots={allLots} />,
             <ArtistRankingsTable key="rank" statsByArtist={statsByArtist} allLots={allLots} />,
             <CategoryBreakdown key="cat" allLots={allLots} />,
