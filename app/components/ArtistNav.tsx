@@ -310,8 +310,24 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             >
               Analytics
             </button>
-            <div className="ray-artist-dropdown-label" role="presentation">Artists</div>
-            {ARTISTS.map(a => (
+            <div className="ray-artist-dropdown-label" role="presentation">Art</div>
+            {ARTISTS.filter(a => a.market === 'art').map(a => (
+              <button
+                key={a.slug}
+                role="menuitem"
+                className="ray-artist-dropdown-item"
+                data-active={activeSlug === a.slug ? 'true' : 'false'}
+                onClick={() => navigate(`/${a.slug}`)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <span>{a.label}</span>
+                {(upcomingCounts[a.slug] || 0) > 0 && (
+                  <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
+                )}
+              </button>
+            ))}
+            <div className="ray-artist-dropdown-label" role="presentation">Design</div>
+            {ARTISTS.filter(a => a.market === 'design').map(a => (
               <button
                 key={a.slug}
                 role="menuitem"

@@ -2,7 +2,9 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ARTIST_LABEL } from '../constants';
+import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
+import { useMarket } from '../lib/market';
+import MarketSwitch from '../components/MarketSwitch';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
@@ -28,17 +30,21 @@ function fmtEst(lo: number | null, hi: number | null): string {
  */
 export default function ValuePage() {
   const { allLots, statsByArtist, backtest, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
+  const { market } = useMarket();
+  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'art';
+  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const { savedIds, toggle, isSaved } = useSavedLots();
   const [compsOpen, setCompsOpen] = useState(false);
 
   const deals = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    return allLots
+    return marketLots
       .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
-      .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
+      .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
       .sort((a, b) => (b.signal!.pct - a.signal!.pct));
-  }, [allLots]);
+  }, [marketLots]);
 
   const summary = useMemo(() => {
     const withEst = deals.filter(d => (d.lot.estimateLow || 0) > 0 || (d.lot.estimateHigh || 0) > 0);
@@ -73,14 +79,14 @@ export default function ValuePage() {
   const callComps = useMemo(() => {
     if (!call || !fullLoaded) return [];
     const lot = call.lot;
-    const sold = allLots.filter(l => l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id);
+    const sold = marketLots.filter(l => l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id);
     if (call.signal!.kind === 'edition') {
       const nt = normalizeTitle(lot.title);
       const form = classifyForm(lot);
       return sold.filter(l => normalizeTitle(l.title) === nt && classifyForm(l) === form).map(l => l.priceUsd!).sort((a, b) => a - b);
     }
     return sold.filter(l => areComparable(lot, l)).map(l => l.priceUsd!).sort((a, b) => a - b).slice(0, 60);
-  }, [call, allLots, fullLoaded]);
+  }, [call, marketLots, fullLoaded]);
   const callMedian = useMemo(() => {
     if (callComps.length < 3) return null;
     const m = Math.floor(callComps.length / 2);
@@ -114,7 +120,8 @@ export default function ValuePage() {
       ) : (
         <RayEntrance animate={!fromCache}>
           <section className="ray-hero2 rail ray-enter">
-            <p className="ray-hero2-label">Value · below-market lots on the block</p>
+            <div style={{ marginBottom: 18 }}><MarketSwitch compact /></div>
+            <p className="ray-hero2-label">Value · below-market {activeKey} lots on the block</p>
             <h1 className="ray-hero2-value">
               <CountUp to={deals.length} format={n => Math.round(n).toString()} duration={900} />
             </h1>
@@ -188,7 +195,7 @@ export default function ValuePage() {
                 </div>
               </div>
               {compsOpen && (
-                <ComparableModal lot={call.lot} allLots={allLots} onClose={() => setCompsOpen(false)} />
+                <ComparableModal lot={call.lot} allLots={marketLots} onClose={() => setCompsOpen(false)} />
               )}
             </section>
           )}
@@ -255,7 +262,7 @@ export default function ValuePage() {
                       <LotCard
                         lot={d.lot}
                         showArtist
-                        allLots={allLots}
+                        allLots={marketLots}
                         stats={statsByArtist[d.lot.artist]}
                         saved={isSaved(d.lot.id)}
                         onToggleSave={toggle}

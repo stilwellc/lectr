@@ -6,7 +6,7 @@ import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice } from '../../utils';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import ArtistAvatar from '../ArtistAvatar';
-import { ARTISTS } from '../../constants';
+import { ARTISTS, marketArtists, Market } from '../../constants';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -27,12 +27,13 @@ interface ArtistRow {
   sellThrough: number;
 }
 
-export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
+export default function ArtistRankingsTable({ statsByArtist, allLots, market }: Props & { market?: Market }) {
   const [sortKey, setSortKey] = useState<SortKey>('totalRevenue');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const rows = useMemo<ArtistRow[]>(() => {
-    return ARTISTS.map(a => {
+    const roster = market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)) : ARTISTS;
+    return roster.map(a => {
       const stats = statsByArtist[a.slug];
       const artistLots = allLots.filter(l => l.artist === a.slug);
       const concluded = artistLots.filter(l => l.status === 'sold' || l.status === 'bought_in');
@@ -61,7 +62,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
         sellThrough,
       };
     });
-  }, [statsByArtist, allLots]);
+  }, [statsByArtist, allLots, market]);
 
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {

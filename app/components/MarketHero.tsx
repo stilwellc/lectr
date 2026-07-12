@@ -29,12 +29,14 @@ interface Pulse {
 export default function MarketHero({
   allLots,
   demand,
+  marketLabel = 'art',
   totalValue,
   pulse,
 }: {
   allLots: AuctionLot[];
   /** precomputed at crawl time (eager payload) — computed locally as fallback */
   demand?: { date: string; value: number }[];
+  marketLabel?: string;
   totalValue: number;
   pulse: Pulse;
 }) {
@@ -66,7 +68,7 @@ export default function MarketHero({
         <span>
           {hover
             ? `Typical sale vs estimate · 12 months to ${hover.date}`
-            : 'The art market · typical sale vs its estimate, trailing 12 months'}
+            : `The ${marketLabel} market · typical sale vs its estimate, trailing 12 months`}
         </span>
         <MethodologyNote trigger="what is this?" />
       </p>

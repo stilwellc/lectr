@@ -5,6 +5,7 @@ import { AuctionLot, MarketStats } from '../types';
 
 export interface TapeItem { artist: string; title: string; price: string; house: string }
 export interface DemandPoint { date: string; value: number; n: number }
+export type DemandByMarket = Record<string, DemandPoint[]>;
 export interface Backtest {
   flagged: { n: number; medianPerfPct: number; beatHighPct: number };
   unflagged: { n: number; medianPerfPct: number; beatHighPct: number };
@@ -16,7 +17,7 @@ interface RayData {
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeItem[];
-  demand: DemandPoint[];
+  demand: DemandByMarket;
   backtest: Backtest | null;
   lastCrawl: string;
   sources: string[];
@@ -33,7 +34,7 @@ interface RayPayload {
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeItem[];
-  demand: DemandPoint[];
+  demand: DemandByMarket;
   backtest: Backtest | null;
   lastCrawl: string;
   sources: string[];
@@ -86,7 +87,7 @@ function loadRayData(): Promise<RayPayload> {
     const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[] };
     const backtest = btR.status === 'fulfilled' ? (btR.value as Backtest) : null;
     const up = upR.status === 'fulfilled'
-      ? (upR.value as { tape?: TapeItem[]; demand?: DemandPoint[]; lots?: AuctionLot[] })
+      ? (upR.value as { tape?: TapeItem[]; demand?: DemandByMarket | DemandPoint[]; lots?: AuctionLot[] })
       : null;
 
     if (up && statsData) {
@@ -94,7 +95,7 @@ function loadRayData(): Promise<RayPayload> {
         statsByArtist: parseStats(statsData, up.lots || []),
         allLots: up.lots || [],
         tape: up.tape || [],
-        demand: up.demand || [],
+        demand: Array.isArray(up.demand) ? { art: up.demand } : (up.demand || {}),
         backtest,
         lastCrawl: metaData.lastCrawl || '',
         sources: metaData.sources || [],
@@ -127,7 +128,7 @@ function loadRayData(): Promise<RayPayload> {
       statsByArtist: parseStats(statsData, lotsData),
       allLots: lotsData,
       tape: [],
-      demand: [],
+      demand: {},
       backtest,
       lastCrawl: metaData.lastCrawl || '',
       sources: metaData.sources || [],
@@ -158,7 +159,7 @@ export function useRayData(): RayData {
     statsByArtist: data?.statsByArtist || {},
     allLots: data?.allLots || [],
     tape: data?.tape || [],
-    demand: data?.demand || [],
+    demand: data?.demand || {},
     backtest: data?.backtest || null,
     lastCrawl: data?.lastCrawl || '',
     sources: data?.sources || [],

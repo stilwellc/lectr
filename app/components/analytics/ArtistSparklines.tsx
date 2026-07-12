@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip } from 'recharts';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice } from '../../utils';
-import { ARTISTS } from '../../constants';
+import { ARTISTS, marketArtists, Market } from '../../constants';
 import { useChartDraw } from '../../hooks/useChartDraw';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import ArtistAvatar from '../ArtistAvatar';
@@ -206,9 +206,10 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
   );
 }
 
-export default function ArtistSparklines({ statsByArtist, allLots, limit = 6 }: Props & { limit?: number }) {
+export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, market }: Props & { limit?: number; market?: Market }) {
   const artists = useMemo<ArtistCardData[]>(() => {
-    return ARTISTS.map(a => {
+    const roster = market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)) : ARTISTS;
+    return roster.map(a => {
       const stats = statsByArtist[a.slug];
       const artistLots = allLots.filter(l => l.artist === a.slug);
       const sparkData = demandSeries(artistLots).map(p => ({ date: p.date, avgPrice: p.value }));
@@ -234,7 +235,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6 }: 
     })
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, limit);
-  }, [statsByArtist, allLots, limit]);
+  }, [statsByArtist, allLots, limit, market]);
 
   return (
     <section className="ray-sparklines rail">
