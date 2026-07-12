@@ -1843,10 +1843,15 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-strip-v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); line-height: 1.1; }
 .ray-strip-s { font-size: 12px; color: var(--color-text-faint); margin-top: 4px; }
 @media (max-width: 768px) {
-  .ray-strip { grid-template-columns: 1fr 1fr; }
+  .ray-strip { grid-template-columns: 1fr 1fr; margin-top: 20px; }
+  .ray-strip > div { padding: 14px 16px 15px; }
   .ray-strip > div:nth-child(odd) { border-left: none; padding-left: 0; }
   .ray-strip > div:nth-child(-n+2) { border-bottom: 1px solid var(--color-border); }
-  .ray-hero2-chart { height: 210px; }
+  .ray-strip-v { font-size: 23px; }
+  .ray-hero2 { padding-block: 22px 0; }
+  .ray-hero2-label-tail { display: none; }
+  .ray-hero2-delta { margin-top: 10px; font-size: 14.5px; gap: 5px 10px; }
+  .ray-hero2-chart { height: 190px; margin-top: 14px; }
 }
 
 /* segmented control (Apple) */
@@ -2669,20 +2674,38 @@ body {
 .ray-mkt-card[data-active=true] .ray-mkt-card-stat span { color: #82868D; }
 .ray-mkt-card[data-active=true] .ray-market-soon { color: #8A6D2F; }
 
+/* mobile: the shelf becomes pillars — every market visible, one thin row each */
 @media (max-width: 900px) {
   .ray-mkt-cards {
     display: flex;
-    overflow-x: auto;
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
-    padding-bottom: 4px;
+    flex-direction: column;
+    gap: 7px;
   }
-  .ray-mkt-cards::-webkit-scrollbar { display: none; }
   .ray-mkt-card {
-    flex: none;
-    min-width: 158px;
-    scroll-snap-align: start;
+    flex-direction: row;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+    padding: 12px 15px;
+    border-radius: 14px;
   }
+  .ray-mkt-card:hover { transform: none; }
+  .ray-mkt-card-top { display: contents; }
+  .ray-mkt-ic svg { width: 17px; height: 17px; }
+  .ray-mkt-card-label { font-size: 14.5px; }
+  .ray-mkt-spark { order: 1; margin-left: auto; flex: none; }
+  .ray-mkt-card-stat { order: 2; font-size: 13px; min-width: 44px; text-align: right; }
+  .ray-mkt-card-stat span { display: none; }
+  .ray-mkt-card-tag {
+    order: 1;
+    margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: right;
+  }
+  .ray-market-soon { order: 2; flex: none; }
 }
 
 /* coming-soon market state */

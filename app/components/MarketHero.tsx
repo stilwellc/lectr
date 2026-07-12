@@ -68,7 +68,7 @@ export default function MarketHero({
         <span>
           {hover
             ? `Typical sale vs estimate · 12 months to ${hover.date}`
-            : `The ${marketLabel} market · typical sale vs its estimate, trailing 12 months`}
+            : <>The {marketLabel} market<span className="ray-hero2-label-tail"> · typical sale vs its estimate, trailing 12 months</span></>}
         </span>
         <MethodologyNote trigger="what is this?" />
       </p>
