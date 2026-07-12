@@ -60,7 +60,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       <style>{`
         .ray-artist-nav {
           position: sticky;
-          top: 60px;
+          top: 0;
           z-index: 40;
           background: var(--color-nav-bg);
           backdrop-filter: blur(30px);
@@ -74,15 +74,22 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           align-items: center;
           gap: 12px;
         }
-        .ray-back-link {
-          color: var(--color-text-muted);
+        .ray-wordmark {
+          font-family: var(--font-serif), serif;
+          font-style: italic;
+          font-weight: 500;
+          font-size: 21px;
+          line-height: 1;
+          letter-spacing: 0.01em;
+          color: var(--color-accent-wine-text);
+          text-decoration: none;
           white-space: nowrap;
-          padding: 8px 0;
-          margin: -8px 0;
-          transition: color var(--duration-fast) var(--ease-signature);
+          padding: 6px 0;
+          margin: -6px 0;
+          transition: opacity var(--duration-fast) var(--ease-signature);
         }
-        .ray-back-link:hover,
-        .ray-back-link:focus-visible { color: var(--color-accent-wine-text); }
+        .ray-wordmark:hover,
+        .ray-wordmark:focus-visible { opacity: 0.68; }
         .ray-artist-select-wrap {
           position: relative;
           flex: 1;
@@ -195,14 +202,12 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           border-bottom: 1px solid var(--color-border);
         }
         @media (max-width: 768px) {
-          .ray-artist-nav { top: 52px; }
+          .ray-artist-nav { top: 0; }
         }
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
-        <a href="https://mobi-lovat.vercel.app/software" className="link-action ray-back-link">
-          <span className="arrow" data-dir="back">&#8592;</span> Software
-        </a>
+        <a href="/" className="ray-wordmark" aria-label="Ray — home">Ray</a>
 
         <div className="ray-artist-select-wrap">
         <button

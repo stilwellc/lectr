@@ -959,3 +959,86 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   .ambient-field .orb { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   STAT CARDS — a shared, alive treatment across every Ray page
+   (overview, artist, analytics). A wine signature tick anchors the
+   figure; the card lifts and warms its border on hover so the whole
+   surface reads as considered, not a flat grid of boxes.
+   ══════════════════════════════════════════════════════════════ */
+.ray-stat-card,
+.ray-portfolio-card {
+  transition:
+    transform 280ms var(--ease-signature),
+    box-shadow 280ms var(--ease-signature),
+    border-color 280ms var(--ease-signature);
+}
+.ray-stat-card::after,
+.ray-portfolio-card::after {
+  content: '';
+  position: absolute;
+  top: 22px;
+  left: -1px; /* sit on the card's own left border */
+  width: 2px;
+  height: 26px;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(180deg, var(--color-accent-wine), transparent);
+  opacity: 0.85;
+  transition: height 280ms var(--ease-signature), opacity 280ms var(--ease-signature);
+}
+.ray-stat-card:hover,
+.ray-portfolio-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-accent-wine) 32%, var(--glass-border));
+  box-shadow:
+    0 1px 0 0 rgba(232, 213, 188, 0.06) inset,
+    0 18px 40px rgba(0, 0, 0, 0.30);
+}
+[data-theme="light"] .ray-stat-card:hover,
+[data-theme="light"] .ray-portfolio-card:hover {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
+    0 18px 36px rgba(93, 74, 48, 0.12);
+}
+.ray-stat-card:hover::after,
+.ray-portfolio-card:hover::after {
+  height: 34px;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ray-stat-card,
+  .ray-portfolio-card { transition: none; }
+  .ray-stat-card:hover,
+  .ray-portfolio-card:hover { transform: none; }
+}
+
+/* LOT CARDS — the feed should respond to the cursor: a gentle lift, a
+   warmed border, and a slow gallery-zoom on the artwork. */
+.ray-lot-card {
+  transition:
+    transform 260ms var(--ease-signature),
+    box-shadow 260ms var(--ease-signature),
+    border-color 260ms var(--ease-signature);
+}
+.ray-lot-card .ray-lot-img { overflow: hidden; }
+.ray-lot-card .ray-lot-img img {
+  transition: opacity 400ms var(--ease-signature), transform 700ms var(--ease-signature);
+}
+.ray-lot-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-accent-wine) 26%, var(--glass-border));
+  box-shadow:
+    0 1px 0 0 rgba(232, 213, 188, 0.06) inset,
+    0 18px 40px rgba(0, 0, 0, 0.32);
+}
+[data-theme="light"] .ray-lot-card:hover {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
+    0 18px 36px rgba(93, 74, 48, 0.13);
+}
+.ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.045); }
+@media (prefers-reduced-motion: reduce) {
+  .ray-lot-card { transition: none; }
+  .ray-lot-card:hover { transform: none; }
+  .ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: none; }
+}
