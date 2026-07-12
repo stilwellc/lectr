@@ -188,7 +188,7 @@ export default function RayPage() {
         .ray-upcoming-section { padding-block: 44px 48px; }
         @media (max-width: 768px) {
           .ray-upcoming-grid { grid-template-columns: 1fr; gap: 26px; }
-          .ray-upcoming-section { padding-block: 32px; }
+          .ray-upcoming-section { padding-block: 38px 32px; }
         }
       `}</style>
 
@@ -265,7 +265,7 @@ export default function RayPage() {
 
           {/* Recent hammers, rolling by */}
           {tapeItems.length > 0 && (
-            <div className="ray-enter" style={{ '--enter-delay': '90ms', marginTop: 28 } as React.CSSProperties}>
+            <div className="ray-enter ray-tape-wrap" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               <MarketTape items={tapeItems} />
             </div>
           )}
