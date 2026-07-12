@@ -6,6 +6,8 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { computeDeepSignal } from '../app/lib/comps';
+import type { AuctionLot } from '../app/types';
 
 interface Lot {
   id: string;
@@ -40,34 +42,13 @@ function fmtPrice(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
-/** Mirror of the client buy signal: comps median vs estimate midpoint. */
-function computeSignal(lot: Lot, all: Lot[]): { label: string; pct: number } | null {
-  if (!lot.estimateLow || !lot.estimateHigh) return null;
-  const estMid = (lot.estimateLow + lot.estimateHigh) / 2;
-  const comps = all.filter(l =>
-    l.artist === lot.artist &&
-    l.status === 'sold' &&
-    l.priceUsd &&
-    l.id !== lot.id &&
-    (lot.category === 'unknown' || l.category === 'unknown' || l.category === lot.category)
-  );
-  if (comps.length < 3) return null;
-  const prices = comps.map(l => l.priceUsd!).sort((a, b) => a - b);
-  const median = prices.length % 2 === 0
-    ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
-    : prices[Math.floor(prices.length / 2)];
-  const ratio = median / estMid;
-  if (ratio >= 1.2) return { label: 'Below Market', pct: Math.round((ratio - 1) * 100) };
-  if (ratio <= 0.75) return { label: 'Above Market', pct: Math.round((1 - ratio) * 100) };
-  return null;
-}
 
 export function buildUpcoming(dataDir: string): void {
   const lots: Lot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
 
   const upcoming = lots
     .filter(l => l.status === 'upcoming')
-    .map(l => ({ ...l, signal: computeSignal(l, lots) }));
+    .map(l => ({ ...l, signal: computeDeepSignal(l as unknown as AuctionLot, lots as unknown as AuctionLot[]) }));
 
   const tape = lots
     .filter(l => l.status === 'sold' && l.priceUsd && l.title)
