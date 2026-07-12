@@ -59,6 +59,12 @@ export default function MethodologyNote({ trigger = 'How Ray calls it' }: { trig
                 prices a mural.
               </li>
               <li>
+                <b>Confidence, stated.</b> Every call carries a meter (●●●●).
+                Very high means this exact work has sold three or more times;
+                high means a large tight pool or one full of same-series titles;
+                low means the call passed the guards but the evidence is thin.
+              </li>
+              <li>
                 <b>Silent over wrong.</b> Fewer than three true comps, or a pool
                 that disagrees with itself, and Ray says nothing at all.
               </li>

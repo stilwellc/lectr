@@ -213,7 +213,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
-        <a href="/" className="ray-wordmark" aria-label="Ray — home">Ray</a>
+        <a href="/" className="ray-wordmark" aria-label="Ray — home">
+          <svg className="ray-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="5.2" cy="18.8" r="2.7" fill="currentColor" />
+            <path d="M9.4 14.6 L20 4" stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" />
+          </svg>
+          <span>Ray</span>
+        </a>
 
         {/* Desktop quick links — one click to each room; the dropdown stays
             the artist index. Hidden on mobile where the dropdown covers all. */}

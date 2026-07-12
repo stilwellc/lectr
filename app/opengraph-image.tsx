@@ -51,7 +51,13 @@ export default function OG() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 40, fontWeight: 800, color: '#E8B95B', letterSpacing: -1.5 }}>Ray</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <svg width="34" height="34" viewBox="0 0 24 24">
+              <circle cx="5.2" cy="18.8" r="2.7" fill="#E8B95B" />
+              <path d="M9.4 14.6 L20 4" stroke="#E8B95B" strokeWidth="2.7" strokeLinecap="round" />
+            </svg>
+            <div style={{ fontSize: 38, fontWeight: 800, color: '#E8B95B', letterSpacing: -1.5 }}>Ray</div>
+          </div>
           <div style={{ fontSize: 22, color: '#63686E' }}>auction intelligence</div>
         </div>
         <div style={{ display: 'flex', fontSize: 26, color: '#9AA0A6', marginTop: 28 }}>

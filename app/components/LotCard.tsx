@@ -20,10 +20,20 @@ function formatEstimate(lot: AuctionLot): string {
 }
 
 /** Prefer the crawl-time signal when present; else compute from history. */
-export type LotSignal = { label: string; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string } | null;
+export type LotSignal = { label: string; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string; confidence?: 'very-high' | 'high' | 'medium' | 'low' } | null;
 export function lotSignal(lot: AuctionLot, allLots: AuctionLot[]): LotSignal {
   if (lot.signal !== undefined) return lot.signal;
   return computeBuySignal(lot, allLots);
+}
+
+/** Confidence as a compact meter: filled dots out of four. */
+export function confidenceMeter(c?: string): { dots: string; word: string } {
+  switch (c) {
+    case 'very-high': return { dots: '●●●●', word: 'very high' };
+    case 'high': return { dots: '●●●○', word: 'high' };
+    case 'medium': return { dots: '●●○○', word: 'medium' };
+    default: return { dots: '●○○○', word: 'low' };
+  }
 }
 
 /** The deep comps engine decides what counts as a comp (see app/lib/comps). */
@@ -268,9 +278,18 @@ export default function LotCard({
             >
               {(() => {
                 const dir = buySignal.label === 'Below Market' ? `+${buySignal.pct}% above` : `−${buySignal.pct}% below`;
-                if (buySignal.kind === 'edition') return `Same edition sold ${dir} this estimate (${buySignal.basis} sales)`;
-                const what = buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] || 'comps' : 'comps';
-                return `${buySignal.basis || ''} comparable ${what}: median ${dir} est.`;
+                const meter = confidenceMeter(buySignal.confidence);
+                const text = buySignal.kind === 'edition'
+                  ? `Same edition sold ${dir} this estimate (${buySignal.basis} sales)`
+                  : `${buySignal.basis || ''} comparable ${(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}: median ${dir} est.`;
+                return (
+                  <>
+                    {text}
+                    <span title={`${meter.word} confidence`} aria-label={`${meter.word} confidence`} style={{ marginLeft: 7, letterSpacing: 1, fontSize: 9, opacity: 0.85 }}>
+                      {meter.dots}
+                    </span>
+                  </>
+                );
               })()}
             </div>
           )}

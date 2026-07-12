@@ -6,7 +6,7 @@ import { ARTIST_LABEL } from '../constants';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
-import LotCard, { lotSignal } from '../components/LotCard';
+import LotCard, { lotSignal, confidenceMeter } from '../components/LotCard';
 import ComparableModal, { PriceBand } from '../components/ComparableModal';
 import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -161,6 +161,11 @@ export default function ValuePage() {
                     {call.signal!.kind === 'edition'
                       ? `This exact edition has sold ${call.signal!.pct}% above this estimate (${call.signal!.basis} sales).`
                       : `${call.signal!.basis} comparable ${(FORM_LABEL as Record<string, string>)[call.signal!.form!] || 'works'} put the median ${call.signal!.pct}% above this estimate.`}
+                    <span style={{ display: 'block', marginTop: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                      {confidenceMeter(call.signal!.confidence).dots}{' '}
+                      {confidenceMeter(call.signal!.confidence).word} confidence
+                      {call.signal!.kind === 'edition' ? ' — the strongest comp there is' : ''}
+                    </span>
                   </div>
                   <div className="ray-call-ctas">
                     <button className="ray-call-btn ray-call-btn-primary" onClick={() => setCompsOpen(true)}>
