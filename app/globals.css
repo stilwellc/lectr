@@ -1842,6 +1842,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-strip-k { font-size: 12.5px; font-weight: 500; color: var(--color-text-muted); margin-bottom: 6px; }
 .ray-strip-v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); line-height: 1.1; }
 .ray-strip-s { font-size: 12px; color: var(--color-text-faint); margin-top: 4px; }
+.ray-tape-wrap { margin-top: 28px; }
+
 /* the context sentence: beside the trend on desktop, below the chart on mobile */
 .ray-hero2-ctx {
   display: none;
@@ -1851,7 +1853,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   color: var(--color-text-muted);
 }
 @media (max-width: 768px) {
-  .ray-strip { grid-template-columns: 1fr 1fr; margin-top: 18px; }
+  .ray-strip { grid-template-columns: 1fr 1fr; margin-top: 34px; }
   .ray-strip > div { padding: 14px 16px 15px; }
   .ray-strip > div:nth-child(odd) { border-left: none; padding-left: 0; }
   .ray-strip > div:nth-child(-n+2) { border-bottom: 1px solid var(--color-border); }
@@ -1864,6 +1866,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-hero2-delta .ctx { display: none; }
   .ray-hero2-ctx { display: block; }
   .ray-hero2-chart { height: 168px; margin-top: 10px; }
+  /* section rhythm: tight inside a section, a full breath between sections */
+  .ray-tape-wrap { margin-top: 34px; }
+  .ray-block { padding-block: 34px 0; }
 }
 
 /* segmented control (Apple) */
