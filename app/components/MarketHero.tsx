@@ -62,6 +62,21 @@ export default function MarketHero({
   // Demand above the ask is green; below it, red. The line reads the same way.
   const lineColor = (hover ? hover.value : now) >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
+  // The context sentence lives beside the trend on desktop and moves below
+  // the chart on mobile, so pillars + numeral + chart share one viewport.
+  const ctxLine = (
+    <>
+      {formatPrice(totalValue)} realized all-time
+      {pulse.topArtist && <> · led by {pulse.topArtist}</>}
+      {pulse.thisWeek > 0 && (
+        <>
+          {' '}· {pulse.thisWeek} lots hammer this week
+          {pulse.belowFlagged > 0 && <> · {pulse.belowFlagged} below estimate</>}
+        </>
+      )}
+    </>
+  );
+
   return (
     <section className="ray-hero2 rail" data-tone={(hover ? hover.value : now) >= 0 ? 'up' : 'down'}>
       <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -85,16 +100,7 @@ export default function MarketHero({
             {delta > 0 ? '▲ heating' : '▼ cooling'} · was {formatDemand(yearAgo)} a year ago
           </span>
         )}
-        <span className="ctx">
-          {formatPrice(totalValue)} realized all-time
-          {pulse.topArtist && <> · led by {pulse.topArtist}</>}
-          {pulse.thisWeek > 0 && (
-            <>
-              {' '}· {pulse.thisWeek} lots hammer this week
-              {pulse.belowFlagged > 0 && <> · {pulse.belowFlagged} below estimate</>}
-            </>
-          )}
-        </span>
+        <span className="ctx">{ctxLine}</span>
       </p>
 
       {visible.length >= 2 && (
@@ -143,6 +149,7 @@ export default function MarketHero({
             <span style={{ color: 'var(--color-text-faint)' }}>0% = sells at estimate</span>
             <span>{visible[visible.length - 1].date}</span>
           </div>
+          <p className="ray-hero2-ctx">{ctxLine}</p>
           <div className="ray-hero2-ranges" role="radiogroup" aria-label="Chart range">
             {(['1Y', '5Y', 'MAX'] as Range[]).map(r => (
               <button
