@@ -18,6 +18,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       ? 'Analytics'
       : activeSlug === 'value'
       ? 'Value'
+      : activeSlug === 'artists'
+      ? 'Artists'
       : activeSlug
         ? (ARTIST_LABEL[activeSlug] || activeSlug)
         : 'Overview';
@@ -218,6 +220,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         <nav className="ray-nav-links" aria-label="Sections">
           <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate('/')}>Overview</button>
           <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Artists</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
             Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
@@ -276,6 +279,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
               onClick={() => navigate('/value')}
             >
               Value
+            </button>
+            <button
+              role="menuitem"
+              className="ray-artist-dropdown-item"
+              data-active={activeSlug === 'artists' ? 'true' : 'false'}
+              onClick={() => navigate('/artists')}
+            >
+              Artists
             </button>
             <button
               role="menuitem"

@@ -27,7 +27,7 @@ function fmtEst(lo: number | null, hi: number | null): string {
  * is the same statistic everywhere: comps median vs estimate midpoint.
  */
 export default function ValuePage() {
-  const { allLots, statsByArtist, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
+  const { allLots, statsByArtist, backtest, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
   const { savedIds, toggle, isSaved } = useSavedLots();
   const [compsOpen, setCompsOpen] = useState(false);
 
@@ -185,6 +185,39 @@ export default function ValuePage() {
               {compsOpen && (
                 <ComparableModal lot={call.lot} allLots={allLots} onClose={() => setCompsOpen(false)} />
               )}
+            </section>
+          )}
+
+          {backtest && backtest.flagged.n >= 100 && (
+            <section className="rail ray-enter" style={{ '--enter-delay': '90ms', paddingTop: 34 } as React.CSSProperties}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
+                <h2 className="ray-h2">The record</h2>
+                <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
+                  every historical call replayed with only the data Ray had that day
+                </span>
+              </div>
+              <div className="ray-strip">
+                <div>
+                  <div className="ray-strip-k">Flagged lots delivered</div>
+                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>+{backtest.flagged.medianPerfPct}%</div>
+                  <div className="ray-strip-s">median result vs estimate · {backtest.flagged.n.toLocaleString()} calls</div>
+                </div>
+                <div>
+                  <div className="ray-strip-k">Unflagged delivered</div>
+                  <div className="ray-strip-v">+{backtest.unflagged.medianPerfPct}%</div>
+                  <div className="ray-strip-s">the signal&rsquo;s edge: {backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</div>
+                </div>
+                <div>
+                  <div className="ray-strip-k">Beat their high estimate</div>
+                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>{backtest.flagged.beatHighPct}%</div>
+                  <div className="ray-strip-s">of flagged lots · vs {backtest.unflagged.beatHighPct}% unflagged</div>
+                </div>
+                <div>
+                  <div className="ray-strip-k">&ldquo;Above market&rdquo; calls</div>
+                  <div className="ray-strip-v" style={{ color: 'var(--color-down)' }}>+{backtest.above.medianPerfPct}%</div>
+                  <div className="ray-strip-s">underperformed both — the ordering holds</div>
+                </div>
+              </div>
             </section>
           )}
 

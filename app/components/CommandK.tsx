@@ -26,6 +26,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
   const items = useMemo<Item[]>(() => [
     { label: 'Overview', hint: 'the market', path: '/' },
     { label: 'Value', hint: 'below-market lots', path: '/value' },
+    { label: 'Artists', hint: 'the roster, as demand curves', path: '/artists' },
     { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics' },
     { label: 'Saved', hint: 'your watchlist', path: '/saved' },
     ...ARTISTS.map(a => ({

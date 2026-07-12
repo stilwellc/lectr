@@ -5,12 +5,19 @@ import { AuctionLot, MarketStats } from '../types';
 
 export interface TapeItem { artist: string; title: string; price: string; house: string }
 export interface DemandPoint { date: string; value: number; n: number }
+export interface Backtest {
+  flagged: { n: number; medianPerfPct: number; beatHighPct: number };
+  unflagged: { n: number; medianPerfPct: number; beatHighPct: number };
+  above: { n: number; medianPerfPct: number; beatHighPct: number };
+  series: { year: number; flaggedMedianPct: number | null; unflaggedMedianPct: number | null; nFlagged: number }[];
+}
 
 interface RayData {
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeItem[];
   demand: DemandPoint[];
+  backtest: Backtest | null;
   lastCrawl: string;
   sources: string[];
   loading: boolean;
@@ -27,6 +34,7 @@ interface RayPayload {
   allLots: AuctionLot[];
   tape: TapeItem[];
   demand: DemandPoint[];
+  backtest: Backtest | null;
   lastCrawl: string;
   sources: string[];
   fullLoaded: boolean;
@@ -68,13 +76,15 @@ function loadRayData(): Promise<RayPayload> {
 
   inflight = (async () => {
     // ── phase 1: the small eager payload — stats + meta + upcoming (w/ signals)
-    const [statsR, metaR, upR] = await Promise.allSettled([
+    const [statsR, metaR, upR, btR] = await Promise.allSettled([
       fetchJson('/data/ray/stats.json'),
       fetchJson('/data/ray/meta.json'),
       fetchJson('/data/ray/upcoming.json'),
+      fetchJson('/data/ray/backtest.json'),
     ]);
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
     const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[] };
+    const backtest = btR.status === 'fulfilled' ? (btR.value as Backtest) : null;
     const up = upR.status === 'fulfilled'
       ? (upR.value as { tape?: TapeItem[]; demand?: DemandPoint[]; lots?: AuctionLot[] })
       : null;
@@ -85,6 +95,7 @@ function loadRayData(): Promise<RayPayload> {
         allLots: up.lots || [],
         tape: up.tape || [],
         demand: up.demand || [],
+        backtest,
         lastCrawl: metaData.lastCrawl || '',
         sources: metaData.sources || [],
         fullLoaded: false,
@@ -117,6 +128,7 @@ function loadRayData(): Promise<RayPayload> {
       allLots: lotsData,
       tape: [],
       demand: [],
+      backtest,
       lastCrawl: metaData.lastCrawl || '',
       sources: metaData.sources || [],
       fullLoaded: lotsOk,
@@ -147,6 +159,7 @@ export function useRayData(): RayData {
     allLots: data?.allLots || [],
     tape: data?.tape || [],
     demand: data?.demand || [],
+    backtest: data?.backtest || null,
     lastCrawl: data?.lastCrawl || '',
     sources: data?.sources || [],
     loading: data === null,
