@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip } from 'recharts';
-import { MarketStats } from '../types';
+import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip, ReferenceLine } from 'recharts';
+import { AuctionLot } from '../types';
 import { formatPrice } from '../utils';
+import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
 
 type Range = '1Y' | '5Y' | 'MAX';
@@ -16,43 +17,32 @@ interface Pulse {
 }
 
 /**
- * MarketHero — the market as a portfolio view. One giant numeral (total
- * realized across every tracked artist) and the same quantity drawn through
- * time: a chrome-less cumulative curve that ends exactly at the number.
- * Hover scrubs "total realized through <quarter>"; green/red never touch
- * this line — they belong to the price delta in the sentence above.
+ * MarketHero — the market as a demand curve. The numeral is the Demand Index
+ * (how the typical sale performs against its own estimate, trailing 12 months)
+ * and the line is the same quantity through time — mix-proof, because every
+ * lot is normalized by its own ask. The dashed zero line is "sells exactly at
+ * estimate"; above it the market is beating the houses' asks. Hover scrubs
+ * the numeral; total realized and the price delta live in the context line.
  */
 export default function MarketHero({
-  statsByArtist,
+  allLots,
+  demand,
   totalValue,
   pulse,
 }: {
-  statsByArtist: Record<string, MarketStats>;
+  allLots: AuctionLot[];
+  /** precomputed at crawl time (eager payload) — computed locally as fallback */
+  demand?: { date: string; value: number }[];
   totalValue: number;
   pulse: Pulse;
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
 
-  // The line IS the numeral, through time: cumulative $ realized across the
-  // roster, quarter by quarter. It ends exactly at the headline total, hover
-  // reads "through <quarter>", and the slope is market activity — quarterly
-  // turnover would spike with the auction calendar and read as volatility.
-  const series = useMemo(() => {
-    const q: Record<string, number> = {};
-    for (const stats of Object.values(statsByArtist)) {
-      for (const p of stats.priceHistory || []) {
-        q[p.date] = (q[p.date] || 0) + p.avgPrice * p.totalSales;
-      }
-    }
-    let running = 0;
-    return Object.entries(q)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, v]) => {
-        running += v;
-        return { date: date.replace('-', ' '), value: running };
-      });
-  }, [statsByArtist]);
+  const series = useMemo(
+    () => (demand && demand.length ? demand : demandSeries(allLots)),
+    [demand, allLots]
+  );
 
   const visible = useMemo(() => {
     if (range === '1Y') return series.slice(-4);
@@ -60,30 +50,36 @@ export default function MarketHero({
     return series;
   }, [series, range]);
 
-  // Accumulation only ever rises — the line is activity, not gains, so it
-  // stays neutral-white; green/red are reserved for the price delta above.
-  const lineColor = 'var(--color-fg)';
+  const now = series.length ? series[series.length - 1].value : 0;
+  const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
+  const delta = yearAgo === null ? null : now - yearAgo;
 
-  const apprUp = pulse.weightedAppreciation >= 0;
+  // Demand above the ask is green; below it, red. The line reads the same way.
+  const lineColor = (hover ? hover.value : now) >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
   return (
     <section className="ray-hero2 rail">
       <p className="ray-hero2-label">
-        {hover ? `Total realized through ${hover.date}` : 'The art market · total realized, all time'}
+        {hover
+          ? `Typical sale vs estimate · 12 months to ${hover.date}`
+          : 'The art market · typical sale vs its estimate, trailing 12 months'}
       </p>
       {hover ? (
-        <h1 className="ray-hero2-value">{formatPrice(hover.value)}</h1>
+        <h1 className="ray-hero2-value" style={{ color: lineColor }}>{formatDemand(hover.value)}</h1>
       ) : (
-        <h1 className="ray-hero2-value">
-          <CountUp to={totalValue} format={formatPrice} duration={1300} />
+        <h1 className="ray-hero2-value" style={{ color: lineColor }}>
+          <CountUp to={now} format={formatDemand} duration={1100} />
         </h1>
       )}
       <p className="ray-hero2-delta">
-        <span className={apprUp ? 'up' : 'down'}>
-          {apprUp ? '▲' : '▼'} prices {apprUp ? 'up' : 'down'} {Math.abs(pulse.weightedAppreciation).toFixed(1)}% this year
-        </span>
+        {delta !== null && Math.round(delta) !== 0 && (
+          <span className={delta > 0 ? 'up' : 'down'}>
+            {delta > 0 ? '▲' : '▼'} demand {delta > 0 ? 'up' : 'down'} {Math.abs(Math.round(delta))} pts vs last year
+          </span>
+        )}
         <span className="ctx">
-          {pulse.topArtist && <>led by {pulse.topArtist}</>}
+          {formatPrice(totalValue)} realized all-time
+          {pulse.topArtist && <> · led by {pulse.topArtist}</>}
           {pulse.thisWeek > 0 && (
             <>
               {' '}· {pulse.thisWeek} lots hammer this week
@@ -111,11 +107,12 @@ export default function MarketHero({
               >
                 <defs>
                   <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={lineColor} stopOpacity={0.1} />
+                    <stop offset="0%" stopColor={lineColor} stopOpacity={0.13} />
                     <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <YAxis hide domain={['dataMin', 'dataMax']} />
+                <YAxis hide domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} />
+                <ReferenceLine y={0} stroke="var(--color-border-mid)" strokeDasharray="4 4" />
                 <Tooltip
                   content={() => null}
                   cursor={{ stroke: 'var(--color-border-mid)', strokeWidth: 1 }}
@@ -135,6 +132,7 @@ export default function MarketHero({
           </div>
           <div className="ray-hero2-span" aria-hidden="true">
             <span>{visible[0].date}</span>
+            <span style={{ color: 'var(--color-text-faint)' }}>0% = sells at estimate</span>
             <span>{visible[visible.length - 1].date}</span>
           </div>
           <div className="ray-hero2-ranges" role="radiogroup" aria-label="Chart range">

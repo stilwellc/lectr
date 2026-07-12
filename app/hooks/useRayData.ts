@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { AuctionLot, MarketStats } from '../types';
 
 export interface TapeItem { artist: string; title: string; price: string; house: string }
+export interface DemandPoint { date: string; value: number; n: number }
 
 interface RayData {
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeItem[];
+  demand: DemandPoint[];
   lastCrawl: string;
   sources: string[];
   loading: boolean;
@@ -24,6 +26,7 @@ interface RayPayload {
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeItem[];
+  demand: DemandPoint[];
   lastCrawl: string;
   sources: string[];
   fullLoaded: boolean;
@@ -73,7 +76,7 @@ function loadRayData(): Promise<RayPayload> {
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
     const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[] };
     const up = upR.status === 'fulfilled'
-      ? (upR.value as { tape?: TapeItem[]; lots?: AuctionLot[] })
+      ? (upR.value as { tape?: TapeItem[]; demand?: DemandPoint[]; lots?: AuctionLot[] })
       : null;
 
     if (up && statsData) {
@@ -81,6 +84,7 @@ function loadRayData(): Promise<RayPayload> {
         statsByArtist: parseStats(statsData, up.lots || []),
         allLots: up.lots || [],
         tape: up.tape || [],
+        demand: up.demand || [],
         lastCrawl: metaData.lastCrawl || '',
         sources: metaData.sources || [],
         fullLoaded: false,
@@ -112,6 +116,7 @@ function loadRayData(): Promise<RayPayload> {
       statsByArtist: parseStats(statsData, lotsData),
       allLots: lotsData,
       tape: [],
+      demand: [],
       lastCrawl: metaData.lastCrawl || '',
       sources: metaData.sources || [],
       fullLoaded: lotsOk,
@@ -141,6 +146,7 @@ export function useRayData(): RayData {
     statsByArtist: data?.statsByArtist || {},
     allLots: data?.allLots || [],
     tape: data?.tape || [],
+    demand: data?.demand || [],
     lastCrawl: data?.lastCrawl || '',
     sources: data?.sources || [],
     loading: data === null,

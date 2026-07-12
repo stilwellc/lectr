@@ -7,6 +7,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { computeDeepSignal } from '../app/lib/comps';
+import { demandSeries } from '../app/lib/demand';
+import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot } from '../app/types';
 
 interface Lot {
@@ -63,7 +65,8 @@ export function buildUpcoming(dataDir: string): void {
       house: l.auctionHouse,
     }));
 
-  const out = { generatedAt: new Date().toISOString(), tape, lots: upcoming };
+  const demand = demandSeries(lots as unknown as EngineLot[]);
+  const out = { generatedAt: new Date().toISOString(), tape, demand, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
   console.log(`upcoming.json: ${upcoming.length} lots, ${tape.length} tape items, ${kb}KB`);
