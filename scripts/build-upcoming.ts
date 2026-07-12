@@ -69,6 +69,7 @@ export function buildUpcoming(dataDir: string): void {
   const artSet = marketArtists('art');
   const designSet = marketArtists('design');
   const demand = {
+    all: demandSeries(lots as unknown as EngineLot[]),
     art: demandSeries(lots.filter(l => artSet.has(l.artist)) as unknown as EngineLot[]),
     design: demandSeries(lots.filter(l => designSet.has(l.artist)) as unknown as EngineLot[]),
   };

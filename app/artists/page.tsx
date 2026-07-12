@@ -22,8 +22,9 @@ const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSpa
 export default function ArtistsPage() {
   const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache } = useRayData();
   const { market } = useMarket();
-  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'art';
-  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
+  const activeLabel = MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
+  const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const rosterCount = useMemo(() => ARTISTS.filter(a => mktSet.has(a.slug)).length, [mktSet]);
   const { savedIds } = useSavedLots();
@@ -53,7 +54,7 @@ export default function ArtistsPage() {
         <RayEntrance animate={!fromCache}>
           <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
             <div style={{ marginBottom: 18 }}><MarketSwitch compact /></div>
-            <p className="ray-hero2-label">The {activeKey} roster</p>
+            <p className="ray-hero2-label">The {activeLabel} roster</p>
             <h1 className="ray-hero2-value" style={{ fontSize: 'clamp(34px, 4.5vw, 48px)' }}>
               <CountUp to={rosterCount} format={n => `${Math.round(n)} artists`} duration={900} />
             </h1>

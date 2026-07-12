@@ -11,7 +11,7 @@ import { Market, MARKETS } from '../constants';
 const KEY = 'ray-market';
 
 const MarketContext = createContext<{ market: Market; setMarket: (m: Market) => void }>({
-  market: 'art',
+  market: 'all',
   setMarket: () => {},
 });
 
@@ -20,7 +20,7 @@ export function useMarket() {
 }
 
 export function MarketProvider({ children }: { children: React.ReactNode }) {
-  const [market, setMarketState] = useState<Market>('art');
+  const [market, setMarketState] = useState<Market>('all');
 
   useEffect(() => {
     try {

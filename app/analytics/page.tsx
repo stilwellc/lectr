@@ -24,8 +24,8 @@ const PriceDistribution = dynamic(() => import('../components/analytics/PriceDis
 export default function AnalyticsPage() {
   const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache } = useRayData();
   const { market } = useMarket();
-  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'art';
-  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
+  const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const marketStats = useMemo(() => {
     const out: typeof statsByArtist = {};
@@ -68,8 +68,8 @@ export default function AnalyticsPage() {
           {[
             <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
             <DemandChart key="demand" allLots={marketLots} />,
-            <ArtistSparklines key="spark" statsByArtist={marketStats} allLots={marketLots} market={activeKey as 'art' | 'design'} />,
-            <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey as 'art' | 'design'} />,
+            <ArtistSparklines key="spark" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
+            <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
             <CategoryBreakdown key="cat" allLots={marketLots} />,
             <AuctionHouseDistribution key="house" statsByArtist={statsByArtist} />,
             <TopSales key="top" allLots={marketLots} />,
