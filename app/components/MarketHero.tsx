@@ -6,6 +6,7 @@ import { AuctionLot } from '../types';
 import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
+import MethodologyNote from './MethodologyNote';
 
 type Range = '1Y' | '5Y' | 'MAX';
 
@@ -59,10 +60,13 @@ export default function MarketHero({
 
   return (
     <section className="ray-hero2 rail">
-      <p className="ray-hero2-label">
-        {hover
-          ? `Typical sale vs estimate · 12 months to ${hover.date}`
-          : 'The art market · typical sale vs its estimate, trailing 12 months'}
+      <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span>
+          {hover
+            ? `Typical sale vs estimate · 12 months to ${hover.date}`
+            : 'The art market · typical sale vs its estimate, trailing 12 months'}
+        </span>
+        <MethodologyNote trigger="what is this?" />
       </p>
       {hover ? (
         <h1 className="ray-hero2-value" style={{ color: lineColor }}>{formatDemand(hover.value)}</h1>
@@ -72,9 +76,9 @@ export default function MarketHero({
         </h1>
       )}
       <p className="ray-hero2-delta">
-        {delta !== null && Math.round(delta) !== 0 && (
+        {delta !== null && Math.round(delta) !== 0 && yearAgo !== null && (
           <span className={delta > 0 ? 'up' : 'down'}>
-            {delta > 0 ? '▲' : '▼'} demand {delta > 0 ? 'up' : 'down'} {Math.abs(Math.round(delta))} pts vs last year
+            {delta > 0 ? '▲ heating' : '▼ cooling'} · was {formatDemand(yearAgo)} a year ago
           </span>
         )}
         <span className="ctx">

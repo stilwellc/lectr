@@ -28,8 +28,18 @@ export default function MethodologyNote({ trigger = 'How Ray calls it' }: { trig
           <div className="ray-method" role="dialog" aria-modal="true" aria-label="How Ray calls it" onClick={e => e.stopPropagation()}>
             <h3>How Ray calls it</h3>
             <p className="ray-method-lede">
-              A lot is flagged when the median of its true comparables sits at least
-              20% above the estimate midpoint — and a comparable has to earn the name.
+              <b style={{ color: 'var(--color-fg)' }}>The Demand Index</b> is how the
+              typical sale performs against its own estimate over the trailing twelve
+              months. +30% means the median lot hammered 30% above the estimate
+              midpoint; 0% means the market pays exactly what the houses ask; below
+              zero, lots are clearing under estimate. Because every sale is measured
+              against its own ask, a $900 print and a $3M canvas count equally —
+              the index can’t be skewed by what happened to come up for sale.
+            </p>
+            <p className="ray-method-lede">
+              <b style={{ color: 'var(--color-fg)' }}>Deal signals</b> flag a lot when
+              the median of its true comparables sits at least 20% above the estimate
+              midpoint — and a comparable has to earn the name.
             </p>
             <ul>
               <li>
