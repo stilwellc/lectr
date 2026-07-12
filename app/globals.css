@@ -1339,3 +1339,304 @@ h1 {
 
   color-scheme: dark;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   FEED TOOLBAR — the command bar. Search, house/category lenses,
+   the below-market signal, and sort. Sticky beneath the site nav;
+   hairline pills, gold active states, live counts.
+   ══════════════════════════════════════════════════════════════ */
+.ray-toolbar {
+  position: sticky;
+  top: 54px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 0 12px;
+  margin-bottom: 18px;
+  background: var(--color-nav-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--color-border);
+}
+.ray-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ray-toolbar-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 240px;
+  max-width: 420px;
+  border-bottom: 1px solid var(--color-border-mid);
+  padding: 6px 2px 8px;
+  transition: border-color var(--duration-fast) var(--ease-signature);
+}
+.ray-toolbar-search:focus-within { border-color: var(--color-accent-gold); }
+.ray-toolbar-search svg { width: 15px; height: 15px; color: var(--color-text-faint); flex: none; }
+.ray-toolbar-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--color-fg);
+  padding: 0;
+}
+.ray-toolbar-search input::placeholder { color: var(--color-text-faint); }
+.ray-toolbar-search input::-webkit-search-cancel-button { display: none; }
+.ray-toolbar-clearq {
+  border: none;
+  background: none;
+  color: var(--color-text-faint);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.ray-toolbar-clearq:hover { color: var(--color-fg); }
+.ray-toolbar-sorts { display: inline-flex; gap: 6px; margin-left: auto; }
+.ray-toolbar-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  border-radius: 100px;
+  padding: 6px 13px;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--duration-fast) var(--ease-signature),
+    border-color var(--duration-fast) var(--ease-signature),
+    background var(--duration-fast) var(--ease-signature);
+}
+.ray-toolbar-pill i {
+  font-style: normal;
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  color: var(--color-text-faint);
+  letter-spacing: 0;
+}
+.ray-toolbar-pill:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
+.ray-toolbar-pill[data-active=true] {
+  background: var(--color-accent-gold);
+  border-color: var(--color-accent-gold);
+  color: var(--color-bg);
+}
+.ray-toolbar-pill[data-active=true] i { color: color-mix(in srgb, var(--color-bg) 72%, transparent); }
+.ray-toolbar-pill-signal { color: var(--color-up); border-color: color-mix(in srgb, var(--color-up) 34%, transparent); }
+.ray-toolbar-pill-signal:hover { color: var(--color-up); border-color: var(--color-up); }
+.ray-toolbar-pill-signal[data-active=true] {
+  background: var(--color-up);
+  border-color: var(--color-up);
+  color: var(--color-bg);
+}
+.ray-toolbar-divider { width: 1px; height: 16px; background: var(--color-border-mid); margin: 0 4px; flex: none; }
+.ray-toolbar-count {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+.ray-toolbar-reset {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent-gold-text);
+  padding: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent-gold) 45%, transparent);
+}
+.ray-toolbar-reset:hover { color: var(--color-accent-gold); }
+
+/* Filter-change: cards re-enter with a soft rise */
+@keyframes rayFeedIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.ray-feed-rekey { animation: rayFeedIn 420ms var(--ease-signature) both; }
+
+/* Elegant zero-result state */
+.ray-feed-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 72px 20px;
+}
+.ray-feed-empty p {
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-size: 21px;
+  color: var(--color-text-muted);
+  margin: 0 0 18px;
+}
+
+@media (max-width: 768px) {
+  .ray-toolbar { top: 54px; gap: 8px; }
+  .ray-toolbar-search { max-width: none; flex-basis: 100%; }
+  .ray-toolbar-sorts { margin-left: 0; }
+  .ray-toolbar-row-filters { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; padding-bottom: 2px; }
+  .ray-toolbar-row-filters::-webkit-scrollbar { display: none; }
+  .ray-toolbar-count { margin-left: 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ray-feed-rekey { animation: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOT CARD REFINEMENT — matted monogram plates for imageless lots,
+   a figures block that reads like intelligence, and a quiet footer
+   (the old full-width button shouted over the artwork).
+   ══════════════════════════════════════════════════════════════ */
+/* The plate: a print mat — hairline double frame inked in the house
+   color, serif monogram, short rule. Rows of these read as a set of
+   catalogue plates rather than broken image boxes. */
+.ray-lot-plate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background:
+    radial-gradient(120% 90% at 50% 0%,
+      color-mix(in srgb, var(--plate-ink, var(--color-accent-gold)) 7%, transparent),
+      transparent 70%);
+}
+.ray-lot-plate::before {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 1px solid color-mix(in srgb, var(--plate-ink, var(--color-accent-gold)) 26%, transparent);
+  pointer-events: none;
+}
+.ray-lot-plate::after {
+  content: '';
+  position: absolute;
+  inset: 17px;
+  border: 1px solid color-mix(in srgb, var(--plate-ink, var(--color-accent-gold)) 12%, transparent);
+  pointer-events: none;
+}
+.ray-lot-plate-letter {
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 52px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--plate-ink, var(--color-accent-gold)) 66%, var(--color-text-faint));
+  opacity: 0.75;
+}
+.ray-lot-plate-rule {
+  width: 26px;
+  height: 1px;
+  background: color-mix(in srgb, var(--plate-ink, var(--color-accent-gold)) 48%, transparent);
+}
+/* Figures block + signal line */
+.ray-lot-est {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+}
+.ray-lot-signal-line {
+  margin-top: 5px;
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+.ray-lot-signal-line[data-tone=up] { color: var(--color-up); }
+.ray-lot-signal-line[data-tone=down] { color: var(--color-down); }
+/* Quiet footer: hairline top, text actions instead of a shouting button */
+.ray-lot-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--color-border);
+}
+.ray-lot-remind {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  transition: color var(--duration-fast) var(--ease-signature);
+}
+.ray-lot-remind:hover,
+.ray-lot-remind:focus-visible { color: var(--color-accent-gold-text); }
+.ray-lot-comps {
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color var(--duration-fast) var(--ease-signature), gap var(--duration-fast) var(--ease-signature);
+}
+.ray-lot-card:hover .ray-lot-comps { color: var(--color-accent-gold-text); gap: 8px; }
+/* Uniform grids: titles cap at three lines */
+.ray-lot-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Nav quick links — one click to each room (desktop; mobile keeps the dropdown) */
+.ray-nav-links { display: none; }
+@media (min-width: 769px) {
+  .ray-nav-links { display: inline-flex; gap: 4px; margin-left: 18px; }
+}
+.ray-nav-link {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 7px 11px;
+  border-radius: 100px;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  transition: color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
+}
+.ray-nav-link:hover { color: var(--color-fg); }
+.ray-nav-link[data-active=true] {
+  color: var(--color-accent-gold-text);
+  background: color-mix(in srgb, var(--color-accent-gold) 10%, transparent);
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot } from 'recharts';
 import { MarketStats } from '../../types';
 import { useChartDraw } from '../../hooks/useChartDraw';
 
@@ -76,6 +76,12 @@ export default function PortfolioPerformanceChart({ statsByArtist }: Props) {
     });
   }, [statsByArtist]);
 
+  // The portfolio's record quarter — annotated so the peak is a fact, not a spike.
+  const record = useMemo(() => {
+    if (data.length < 2) return null;
+    return data.reduce((best, p) => (p.highPrice > best.highPrice ? p : best), data[0]);
+  }, [data]);
+
   if (data.length < 2) return null;
 
   return (
@@ -126,40 +132,44 @@ export default function PortfolioPerformanceChart({ statsByArtist }: Props) {
           </div>
           <div className="ray-perf-chart-container ray-chart-draw" ref={drawRef}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+              <AreaChart data={data} margin={{ top: 24, right: 16, left: 8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="perfIvoryGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-fg)" stopOpacity={0.08} />
                     <stop offset="100%" stopColor="var(--color-fg)" stopOpacity={0.01} />
                   </linearGradient>
                   <linearGradient id="perfGoldGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--color-accent-gold)" stopOpacity={0.1} />
+                    <stop offset="0%" stopColor="var(--color-accent-gold)" stopOpacity={0.22} />
                     <stop offset="100%" stopColor="var(--color-accent-gold)" stopOpacity={0.01} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                  tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
                   axisLine={{ stroke: 'var(--color-border)' }}
                   tickLine={false}
                   interval="preserveStartEnd"
+                  minTickGap={56}
                 />
                 <YAxis
                   tickFormatter={formatAxis}
-                  tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                  tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
                   axisLine={false}
                   tickLine={false}
                   width={55}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip
+                  content={<CustomTooltip />}
+                  cursor={{ stroke: 'var(--color-accent-gold)', strokeDasharray: '4 4', strokeOpacity: 0.45 }}
+                />
                 <Area
                   type="monotone"
                   dataKey="highPrice"
                   stroke="var(--color-accent-gold)"
                   strokeWidth={1}
                   fill="url(#perfGoldGrad)"
-                  strokeOpacity={0.35}
+                  strokeOpacity={0.5}
                   dot={false}
                 />
                 <Area
@@ -180,6 +190,30 @@ export default function PortfolioPerformanceChart({ statsByArtist }: Props) {
                   dot={false}
                   connectNulls={false}
                 />
+                {record && (
+                  <ReferenceDot
+                    x={record.date}
+                    y={record.highPrice}
+                    r={3.5}
+                    fill="var(--color-accent-gold)"
+                    stroke="var(--color-bg)"
+                    strokeWidth={2}
+                    isFront
+                    label={({ viewBox }: { viewBox: { x: number; y: number } }) => (
+                      <text
+                        x={viewBox.x}
+                        y={viewBox.y - 10}
+                        textAnchor="middle"
+                        fill="var(--color-accent-gold-text)"
+                        fontFamily="var(--font-mono), monospace"
+                        fontSize={10.5}
+                        letterSpacing="0.08em"
+                      >
+                        {`RECORD ${formatAxis(record.highPrice)}`}
+                      </text>
+                    )}
+                  />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           </div>

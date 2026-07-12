@@ -108,21 +108,6 @@ export default function LotCard({
         /* hotlink-blocked or dead images stay invisible — the serif
            initial sits in flow behind and reads instead */
         .ray-lot-img img[data-error=true] { opacity: 0; }
-        .ray-remind-btn {
-          background: transparent;
-          border: 1px solid var(--color-border-mid);
-          color: var(--color-text-secondary);
-          transition:
-            background var(--duration-fast) var(--ease-signature),
-            border-color var(--duration-fast) var(--ease-signature),
-            color var(--duration-fast) var(--ease-signature);
-        }
-        .ray-remind-btn:hover,
-        .ray-remind-btn:focus-visible {
-          background: var(--color-accent-wine);
-          border-color: var(--color-accent-wine);
-          color: var(--color-bg);
-        }
         .ray-save-btn:hover { opacity: 0.85; }
         @media (max-width: 768px) {
           .ray-lot-img { height: 170px; }
@@ -170,18 +155,16 @@ export default function LotCard({
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        {/* serif initial — the honest fallback while the image loads,
+        {/* the matted plate — the honest fallback while the image loads,
             and the permanent face when it never arrives (many houses
             hotlink-block via CORP/ORB). The img paints over it. */}
-        <div aria-hidden={lot.imageUrl ? 'true' : undefined} style={{
-          fontFamily: "var(--font-serif), serif",
-          fontSize: 42,
-          fontWeight: 300,
-          color: 'var(--color-text-faint)',
-          opacity: 0.3,
-          fontStyle: 'italic',
-        }}>
-          {lot.title.charAt(0)}
+        <div
+          className="ray-lot-plate"
+          aria-hidden={lot.imageUrl ? 'true' : undefined}
+          style={{ '--plate-ink': color } as React.CSSProperties}
+        >
+          <span className="ray-lot-plate-letter">{lot.title.charAt(0)}</span>
+          <span className="ray-lot-plate-rule" />
         </div>
         {lot.imageUrl && (
           <img
@@ -330,7 +313,7 @@ export default function LotCard({
             {ARTIST_LABEL[lot.artist] || lot.artist}
           </div>
         )}
-        <h3 style={{
+        <h3 className="ray-lot-title" style={{
           fontFamily: "var(--font-serif), serif",
           fontSize: 19,
           fontWeight: 400,
@@ -345,63 +328,57 @@ export default function LotCard({
             {lot.year}{lot.medium ? ` · ${lot.medium}` : ''}
           </div>
         )}
-        <div style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 8,
-          marginTop: 'auto',
-        }}>
-          <span style={{
-            fontSize: 14,
-            color: 'var(--color-fg)',
-            fontWeight: 500,
-            fontVariantNumeric: 'tabular-nums',
+        <div style={{ marginTop: 'auto' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 8,
           }}>
-            {formatEstimate(lot)}
-          </span>
-          <span style={{
-            fontSize: 12,
-            color: 'var(--color-text-faint)',
-            fontWeight: 500,
-            whiteSpace: 'nowrap',
-          }}>
-            {formatDate(lot.saleDate)}
-          </span>
+            <span className="ray-lot-est">{formatEstimate(lot)}</span>
+            <span style={{
+              fontSize: 12,
+              color: 'var(--color-text-faint)',
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-mono), monospace',
+            }}>
+              {formatDate(lot.saleDate)}
+            </span>
+          </div>
+          {/* The intelligence, made precise: where the artist's comps sit
+              against this estimate. Green = headroom, red = rich. */}
+          {buySignal && (
+            <div
+              className="ray-lot-signal-line"
+              data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'}
+            >
+              {buySignal.label === 'Below Market'
+                ? `comps median +${buySignal.pct}% above this estimate`
+                : `comps median −${buySignal.pct}% below this estimate`}
+            </div>
+          )}
         </div>
 
         {isUpcoming && (
-          <button
-            onClick={handleAddToCalendar}
-            className="ray-remind-btn"
-            aria-label={`Add ${lot.title} auction to calendar`}
-            style={{
-              marginTop: 10,
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              padding: '10px 0',
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              fontFamily: "var(--font-sans), sans-serif",
-              position: 'relative',
-              zIndex: 2,
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.25" fill="none"/>
-              <line x1="4" y1="1" x2="4" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-              <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-              <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" strokeWidth="1.25"/>
-            </svg>
-            Remind Me
-          </button>
+          <div className="ray-lot-footer">
+            <button
+              onClick={handleAddToCalendar}
+              className="ray-lot-remind"
+              aria-label={`Add ${lot.title} auction to calendar`}
+            >
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.25" fill="none"/>
+                <line x1="4" y1="1" x2="4" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+                <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+                <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" strokeWidth="1.25"/>
+              </svg>
+              Remind me
+            </button>
+            <span className="ray-lot-comps" aria-hidden="true">
+              Comps <span style={{ fontSize: 12 }}>→</span>
+            </span>
+          </div>
         )}
       </div>
     </div>
