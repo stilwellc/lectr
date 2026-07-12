@@ -1109,6 +1109,77 @@ function parseWrightAdvancedItem(item: any, artistSlug: string): AuctionLot {
 
 const BONHAMS_TYPESENSE_KEY = '7YZqOyG0twgst4ACc2VuCyZxpGAYzM0weFTLCC20FQY';
 
+// ── Sotheby's Marketplace Crawler (Algolia) ──
+// Beyond timed auctions, Sotheby's runs a fixed-price "buy now" marketplace
+// with hundreds of watches available RIGHT NOW. These are real current
+// inventory (a collector can buy them today) even though they never hammer,
+// so they belong in the on-the-block feed — status 'upcoming', asking price
+// as the estimate, no priceUsd (they never enter the sold demand index).
+const SOTHEBYS_ALGOLIA_APP = 'KAR1UEUPJD';
+
+async function crawlSothebysMarketplace(): Promise<AuctionLot[]> {
+  const lots: AuctionLot[] = [];
+  console.log("  [Sotheby's Marketplace] Fetching buy-now watch inventory...");
+  try {
+    const page = await fetch('https://www.sothebys.com/en/buy/luxury/watches/watch/rolex', {
+      headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+    });
+    const keyM = (await page.text()).match(/"algoliaSearchKey":"([^"]+)"/);
+    if (!keyM) { console.log("  [Sotheby's Marketplace] no search key — layout changed?"); return lots; }
+    const key = keyM[1];
+
+    const query = async (body: object) => {
+      const res = await fetch(`https://${SOTHEBYS_ALGOLIA_APP}-dsn.algolia.net/1/indexes/prod_product_items/query`, {
+        method: 'POST',
+        headers: { 'X-Algolia-API-Key': key, 'X-Algolia-Application-Id': SOTHEBYS_ALGOLIA_APP },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20000),
+      });
+      return res.json() as Promise<any>;
+    };
+
+    let pg = 0, nbPages = 1, kept = 0;
+    while (pg < nbPages && pg < 20) {
+      const r = await query({ query: '', hitsPerPage: 100, page: pg, filters: 'waysToBuy:buyNow AND department:Watches' });
+      nbPages = r.nbPages || 1;
+      for (const hit of r.hits || []) {
+        const maker = routeWatchMaker((hit.creators || []).join(' '), hit.title || '');
+        if (!maker || !hit.title) continue;
+        const price = hit.listPrice || hit.lowEstimate || null;
+        const img = hit.imageUrl || null;
+        lots.push({
+          id: `sothebys-mkt-${hit.sku || hit.objectID}`,
+          artist: maker,
+          title: hit.title,
+          year: Array.isArray(hit.Year) ? String(hit.Year[0]) : null,
+          medium: null,
+          dimensions: null,
+          category: 'unknown',
+          imageUrl: img,
+          auctionHouse: "Sotheby's",
+          saleName: 'Sotheby’s Marketplace',
+          // available now — stamp the crawl time so it sorts as current stock
+          saleDate: new Date().toISOString(),
+          lotNumber: null,
+          estimateLow: price,
+          estimateHigh: price,
+          priceUsd: null,
+          currency: (hit.currency || 'USD') as Currency,
+          status: 'upcoming',
+          url: hit.url ? `https://www.sothebys.com/en/${hit.url.replace(/^\//, '')}` : `https://www.sothebys.com/en/buy/luxury/watches/watch/${hit.slug || ''}`,
+        } as AuctionLot);
+        kept++;
+      }
+      pg++;
+      await sleep(300);
+    }
+    console.log(`  [Sotheby's Marketplace] ${kept} buy-now watches available now`);
+  } catch (err) {
+    console.error("  [Sotheby's Marketplace] Error:", err);
+  }
+  return lots;
+}
+
 // ── Sotheby's Auction Crawler (GraphQL) ──
 // Sotheby's has no maker pages; their real auction lots (watches + the
 // curated Geek Week science sales) come from the auction pages, whose lots
@@ -2141,6 +2212,9 @@ async function main() {
     freshLots.push(...await crawlSothebysAuctions(auctionScope));
     freshLots.push(...await crawlChristiesAuctions(auctionScope));
   }
+  // Sotheby's fixed-price marketplace has hundreds of watches available now —
+  // real current inventory even between auctions.
+  if (wantWatch) freshLots.push(...await crawlSothebysMarketplace());
 
   // Merge: new data overwrites existing by ID
   const lotMap = new Map<string, AuctionLot>();
