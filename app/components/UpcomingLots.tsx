@@ -53,14 +53,14 @@ export default function UpcomingLots({
           style={{
             '--enter-delay': `${enterDelay}ms`,
             position: 'relative',
-            fontFamily: 'var(--font-serif), serif',
-            fontSize: 32,
-            fontWeight: 300,
+            fontFamily: 'var(--font-sans), sans-serif',
+            fontSize: 24,
+            fontWeight: 700,
             letterSpacing: '-0.02em',
             padding: '16px 0 12px',
           } as React.CSSProperties}
         >
-          Upcoming <span style={{ fontStyle: 'italic' }}>Lots</span>
+          Upcoming <span style={{ fontStyle: 'normal' }}>Lots</span>
         </h2>
       </div>
 
@@ -93,8 +93,8 @@ export default function UpcomingLots({
               borderRadius: 100,
               padding: '10px 32px',
               fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
               color: 'var(--color-text-muted)',
               fontWeight: 600,
               cursor: 'pointer',

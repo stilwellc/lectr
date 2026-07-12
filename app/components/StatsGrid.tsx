@@ -113,8 +113,8 @@ export default function StatsGrid({ stats, lots, categoryFilter = 'all' }: Props
           <div key={card.label} className="ray-stat-card glass glass-quiet">
             <div style={{
               fontSize: 12,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
               color: 'var(--color-text-muted)',
               fontWeight: 600,
               marginBottom: 14,

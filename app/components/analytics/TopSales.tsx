@@ -44,12 +44,12 @@ export default function TopSales({ allLots }: Props) {
 
       <div style={{ marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: "var(--font-serif), serif",
-          fontSize: 32,
-          fontWeight: 300,
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Top <span style={{ fontStyle: 'italic', color: 'var(--color-accent-gold)' }}>Sales</span>
+          Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Sales</span>
         </h2>
       </div>
 
@@ -64,7 +64,7 @@ export default function TopSales({ allLots }: Props) {
           <thead>
             <tr>
               <th style={{
-                fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
                 color: 'var(--color-text-faint)', fontWeight: 600,
                 padding: '14px 16px 10px', textAlign: 'left', width: 40,
                 borderBottom: '1px solid var(--color-border)',
@@ -72,7 +72,7 @@ export default function TopSales({ allLots }: Props) {
                 #
               </th>
               <th style={{
-                fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
                 color: 'var(--color-text-faint)', fontWeight: 600,
                 padding: '14px 16px 10px', textAlign: 'left',
                 borderBottom: '1px solid var(--color-border)',
@@ -80,7 +80,7 @@ export default function TopSales({ allLots }: Props) {
                 Lot
               </th>
               <th style={{
-                fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
                 color: 'var(--color-text-faint)', fontWeight: 600,
                 padding: '14px 16px 10px', textAlign: 'right',
                 borderBottom: '1px solid var(--color-border)',
@@ -88,7 +88,7 @@ export default function TopSales({ allLots }: Props) {
                 Price
               </th>
               <th style={{
-                fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
                 color: 'var(--color-text-faint)', fontWeight: 600,
                 padding: '14px 16px 10px', textAlign: 'right',
                 borderBottom: '1px solid var(--color-border)',
@@ -96,7 +96,7 @@ export default function TopSales({ allLots }: Props) {
                 % Over Est.
               </th>
               <th className="ray-top-hide-mobile" style={{
-                fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
                 color: 'var(--color-text-faint)', fontWeight: 600,
                 padding: '14px 16px 10px', textAlign: 'left',
                 borderBottom: '1px solid var(--color-border)',
@@ -104,7 +104,7 @@ export default function TopSales({ allLots }: Props) {
                 House
               </th>
               <th className="ray-top-hide-mobile" style={{
-                fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
                 color: 'var(--color-text-faint)', fontWeight: 600,
                 padding: '14px 16px 10px', textAlign: 'right',
                 borderBottom: '1px solid var(--color-border)',
@@ -134,8 +134,8 @@ export default function TopSales({ allLots }: Props) {
                   <td className="ray-top-td">
                     <div style={{
                       fontSize: 12,
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
+                      letterSpacing: '-0.01em',
+                      textTransform: 'none',
                       color: 'var(--color-text-muted)',
                       fontWeight: 600,
                       marginBottom: 3,

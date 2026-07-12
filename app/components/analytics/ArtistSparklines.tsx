@@ -59,7 +59,7 @@ function SparkTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       padding: '6px 10px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
         {d.date}
       </div>
       <div style={{ fontSize: 12, color: 'var(--color-fg)', fontWeight: 500 }}>
@@ -100,7 +100,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           fontSize: 13,
           fontWeight: 600,
           color: 'var(--color-fg)',
-          letterSpacing: '0.01em',
+          letterSpacing: '-0.01em',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -166,7 +166,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
         borderTop: '1px solid var(--color-border)',
       }}>
         <div>
-          <div style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
             Sales Value
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-fg)' }}>
@@ -174,7 +174,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           </div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
             Avg (12mo)
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-muted)' }}>
@@ -182,7 +182,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
             % Over Est.
           </div>
           <div style={{
@@ -257,20 +257,20 @@ export default function ArtistSparklines({ statsByArtist, allLots }: Props) {
 
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: "var(--font-serif), serif",
-          fontSize: 32,
-          fontWeight: 300,
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Artist <span style={{ fontStyle: 'italic', color: 'var(--color-accent-gold)' }}>Performance</span>
+          Artist <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Performance</span>
         </h2>
         <a
           href="#artist-rankings"
           style={{
             fontFamily: 'var(--font-mono), monospace',
             fontSize: 12,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
+            letterSpacing: '-0.01em',
+            textTransform: 'none',
             color: 'var(--color-text-muted)',
             textDecoration: 'none',
           }}

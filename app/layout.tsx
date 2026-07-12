@@ -1,29 +1,16 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Cormorant_Garamond, Syne, Space_Mono } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from './components/ThemeProvider';
 import { ARTISTS } from './constants';
 
-const cormorant = Cormorant_Garamond({
+// One voice. Inter carries everything — display numerals, labels, body —
+// with tabular figures for anything that counts money.
+const inter = Inter({
   subsets: ['latin'],
-  weight: ['300', '400', '500'],
-  style: ['normal', 'italic'],
-  variable: '--font-serif',
-  display: 'swap',
-});
-
-const syne = Syne({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-const spaceMono = Space_Mono({
-  subsets: ['latin'],
-  weight: ['400', '700'],
-  variable: '--font-mono',
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-inter',
   display: 'swap',
 });
 
@@ -49,19 +36,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0D0B08' },
-    { media: '(prefers-color-scheme: light)', color: '#F5F0E6' },
-  ],
+  themeColor: '#0A0B0D',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${cormorant.variable} ${syne.variable} ${spaceMono.variable}`}
-    >
+    <html lang="en" suppressHydrationWarning className={inter.variable}>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -69,11 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <style>{`
-          /* Every numeric display in Ray uses tabular figures */
           .ray-shell { font-variant-numeric: tabular-nums; }
-          /* THE MARKET DRAWS ITSELF — chart bodies wipe in left to right along the
-             time axis on first intersection (attribute set by useChartDraw). Keep this
-             block free of quotes/apostrophes/angle brackets so hydration stays clean. */
           .ray-chart-draw .recharts-area,
           .ray-chart-draw .recharts-line { clip-path: inset(0 100% 0 0); }
           .ray-chart-draw[data-drawn=true] .recharts-area,
@@ -100,7 +76,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <main id="main" className="ray-shell">{children}</main>
         </ThemeProvider>
-        <div className="grain-overlay" aria-hidden="true" />
       </body>
     </html>
   );

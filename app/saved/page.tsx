@@ -62,7 +62,7 @@ export default function SavedPage() {
 
       <RayHero
         eyebrow="Watchlist"
-        title={<span style={{ fontStyle: 'italic', color: 'var(--color-accent-gold)' }}>Saved</span>}
+        title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Saved</span>}
         sub={savedIds.length === 0
           ? <>
               No lots saved yet. Bookmark lots from the{' '}
@@ -104,7 +104,7 @@ export default function SavedPage() {
             <Link
               href="/"
               className="link-action"
-              style={{ color: 'var(--color-accent-wine-text)' }}
+              style={{ color: 'var(--color-fg)' }}
             >
               Browse upcoming lots <span className="arrow">&#8594;</span>
             </Link>
@@ -124,7 +124,7 @@ export default function SavedPage() {
                   marginBottom: 24,
                 }}
               >
-                Upcoming <span style={{ fontStyle: 'italic' }}>Lots</span>
+                Upcoming <span style={{ fontStyle: 'normal' }}>Lots</span>
               </h2>
 
               <div className="ray-saved-grid">

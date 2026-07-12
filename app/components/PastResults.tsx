@@ -102,8 +102,8 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         /* Quote-free selector on purpose - quotes in server-rendered style
            text get HTML-escaped and break hydration. */
         .ray-sort-pill[data-active=true] {
-          background: var(--color-accent-wine);
-          border-color: var(--color-accent-wine);
+          background: var(--color-fg);
+          border-color: var(--color-fg);
           color: var(--color-bg);
         }
         @media (max-width: 768px) {
@@ -124,12 +124,12 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           <div style={{ position: 'relative', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '16px 0 4px' }}>
           <div>
             <h2 style={{
-              fontFamily: "var(--font-serif), serif",
-              fontSize: 32,
-              fontWeight: 300,
+              fontFamily: 'var(--font-sans), sans-serif',
+              fontSize: 24,
+              fontWeight: 700,
               letterSpacing: '-0.02em',
             }}>
-              Recent <span style={{ fontStyle: 'italic' }}>Results</span>
+              Recent <span style={{ fontStyle: 'normal' }}>Results</span>
             </h2>
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
               {filtered.length.toLocaleString()} sold lots
@@ -207,8 +207,8 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 {showArtist && lot.artist && (
                   <div style={{
                     fontSize: 12,
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
+                    letterSpacing: '-0.01em',
+                    textTransform: 'none',
                     color: 'var(--color-text-muted)',
                     fontWeight: 600,
                     marginBottom: 2,
@@ -267,8 +267,8 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     background: `color-mix(in srgb, ${catColor} 7%, transparent)`,
                     border: `1px solid color-mix(in srgb, ${catColor} 15%, transparent)`,
                     fontSize: 12,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
+                    letterSpacing: '-0.01em',
+                    textTransform: 'none',
                     color: catColor,
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
@@ -282,8 +282,8 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   background: `color-mix(in srgb, ${color} 7%, transparent)`,
                   border: `1px solid color-mix(in srgb, ${color} 15%, transparent)`,
                   fontSize: 12,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
+                  letterSpacing: '-0.01em',
+                  textTransform: 'none',
                   color: color,
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
@@ -338,8 +338,8 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               borderRadius: 100,
               padding: '10px 32px',
               fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
               color: 'var(--color-text-muted)',
               fontWeight: 600,
               cursor: 'pointer',

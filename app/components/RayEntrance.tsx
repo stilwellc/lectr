@@ -116,8 +116,8 @@ export function RayLoading() {
       <span className="ray-loading-label" style={{
         fontFamily: 'var(--font-mono), monospace',
         fontSize: 12,
-        letterSpacing: '0.18em',
-        textTransform: 'uppercase',
+        letterSpacing: '-0.01em',
+        textTransform: 'none',
         color: 'var(--color-text-faint)',
       }}>
         Loading

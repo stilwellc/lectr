@@ -94,8 +94,8 @@ export default function RayHero({
             marginTop: 14,
             fontFamily: 'var(--font-mono), monospace',
             fontSize: 12,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
+            letterSpacing: '-0.01em',
+            textTransform: 'none',
             color: 'var(--color-text-faint)',
             fontWeight: 400,
           }}>
