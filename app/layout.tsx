@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     default: 'Ray — Auction Intelligence',
     template: '%s — Ray',
   },
-  description: `Auction intelligence for the art market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
+  description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
   openGraph: {
     title: 'Ray — Auction Intelligence',
-    description: `Auction intelligence for the art market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
+    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
     siteName: 'Ray',
     type: 'website',
     locale: 'en_US',
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Ray — Auction Intelligence',
-    description: `Auction intelligence for the art market — ${ARTISTS.length} artists tracked across major houses.`,
+    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses.`,
   },
 };
 

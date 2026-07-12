@@ -61,7 +61,10 @@ export default function ArtistHero({
   const now = series.length ? series[series.length - 1].value : 0;
   const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
   const delta = yearAgo === null ? null : now - yearAgo;
-  const lineColor = (hover ? hover.value : now) >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+  // Color says direction, never level: the chart line and ambient tone follow
+  // the visible period's trend; the level numeral stays foreground-white.
+  const dir = visible.length >= 2 ? visible[visible.length - 1].value - visible[0].value : 0;
+  const lineColor = dir >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
   // Price context: median sale of the trailing 12 months (per lens).
   const typicalSale = useMemo(() => {
@@ -88,7 +91,7 @@ export default function ArtistHero({
   const lensWord = lens === 'original' ? 'unique work' : lens === 'print' ? 'edition' : 'sale';
 
   return (
-    <section className="ray-hero2 rail" data-tone={(hover ? hover.value : now) >= 0 ? 'up' : 'down'}>
+    <section className="ray-hero2 rail" data-tone={dir >= 0 ? 'up' : 'down'}>
       <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
           <ArtistAvatar label={label} size={26} />
@@ -99,9 +102,9 @@ export default function ArtistHero({
         <MethodologyNote trigger="what is this?" />
       </p>
       {hover ? (
-        <h1 className="ray-hero2-value" style={{ color: lineColor }}>{formatDemand(hover.value)}</h1>
+        <h1 className="ray-hero2-value">{formatDemand(hover.value)}</h1>
       ) : (
-        <h1 className="ray-hero2-value" style={{ color: lineColor }}>
+        <h1 className="ray-hero2-value">
           {series.length ? <CountUp to={now} format={formatDemand} duration={1000} /> : '—'}
         </h1>
       )}

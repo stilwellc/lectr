@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import stats from '../public/data/ray/stats.json';
 
 export const runtime = 'edge';
-export const alt = 'Ray — auction intelligence for the art market';
+export const alt = 'Ray — auction intelligence for the collectibles market';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -61,7 +61,7 @@ export default function OG() {
           <div style={{ fontSize: 22, color: '#63686E' }}>auction intelligence</div>
         </div>
         <div style={{ display: 'flex', fontSize: 26, color: '#9AA0A6', marginTop: 28 }}>
-          The art market · total realized, all time
+          The collectibles market · art, design, watches &amp; science · total realized, all time
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 26 }}>
           <div style={{ fontSize: 110, fontWeight: 800, color: '#F4F5F6', letterSpacing: -4 }}>{totalLabel}</div>

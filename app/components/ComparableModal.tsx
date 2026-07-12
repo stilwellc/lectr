@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice } from '../utils';
-import { areComparable } from '../lib/comps';
+import { areComparable, signalWithPool, FORM_LABEL } from '../lib/comps';
 
 function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
@@ -285,9 +285,20 @@ export default function ComparableModal({
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  // ONE LOT, ONE NUMBER: when the engine made a call on this lot, the modal
+  // shows exactly the pool that made it — same sales, same median, same
+  // percentage as the card sentence. Only when there is NO call does the
+  // modal fall back to the broader gated comps, clearly labeled as context.
+  const called = useMemo(() => signalWithPool(lot, allLots), [lot, allLots]);
+
   const comparables = useMemo(() => {
-    // The deep engine decides what counts as a comp (form + size gates) — the
-    // modal list and the card signal can never disagree about the pool.
+    if (called) {
+      // the call's own pool, most recent first — this IS the statistic
+      return [...called.pool]
+        .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+        .map(l => ({ lot: l, score: 1 }));
+    }
+    // context only: gated comps ranked by similarity
     const sold = allLots.filter(l =>
       l.artist === lot.artist &&
       l.status === 'sold' &&
@@ -295,36 +306,30 @@ export default function ComparableModal({
       l.id !== lot.id &&
       areComparable(lot, l)
     );
-
-    const scored = sold.map(s => ({
-      lot: s,
-      score: scoreComparable(lot, s),
-    }));
-
-    // Sort by score desc, then by most recent sale date as tiebreaker
+    const scored = sold.map(s => ({ lot: s, score: scoreComparable(lot, s) }));
     scored.sort((a, b) => {
       if (Math.abs(a.score - b.score) > 0.01) return b.score - a.score;
       return new Date(b.lot.saleDate).getTime() - new Date(a.lot.saleDate).getTime();
     });
-
     return scored.slice(0, MAX_COMPARABLES);
-  }, [lot, allLots]);
+  }, [lot, allLots, called]);
 
   const compStats = useMemo(() => {
     if (comparables.length === 0) return null;
     const prices = comparables.map(c => c.lot.priceUsd!).sort((a, b) => a - b);
-    const median = prices.length % 2 === 0
-      ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
-      : prices[Math.floor(prices.length / 2)];
     const low = prices[0];
     const high = prices[prices.length - 1];
     const estMid = lot.estimateLow && lot.estimateHigh
       ? (lot.estimateLow + lot.estimateHigh) / 2
       : null;
     const aboveEst = estMid ? prices.filter(p => p >= estMid).length : 0;
+    // when a call exists, the median is the CALL's median — never re-derived
+    const median = called?.signal.med ?? (prices.length % 2 === 0
+      ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
+      : prices[Math.floor(prices.length / 2)]);
     const hammerVsEst = estMid ? median / estMid : null;
     return { median, low, high, aboveEst, total: prices.length, hammerVsEst };
-  }, [comparables, lot]);
+  }, [comparables, lot, called]);
 
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
   const catLabel = categoryLabels[lot.category] || null;
@@ -562,7 +567,7 @@ export default function ComparableModal({
                 alignSelf: 'flex-start',
               }}
             >
-              View Lot &#8599;
+              View lot &#8599;
             </a>
           </div>
         </div>
@@ -634,7 +639,11 @@ export default function ComparableModal({
             fontWeight: 600,
             marginBottom: 16,
           }}>
-            Comparable Sales ({comparables.length})
+            {called
+              ? called.signal.kind === 'edition'
+                ? `The call — this exact work, sold ${comparables.length} times`
+                : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}`
+              : `Context — ${comparables.length} comparable sales (no call on this lot)`}
           </div>
 
           {comparables.length === 0 ? (

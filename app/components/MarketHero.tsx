@@ -59,8 +59,10 @@ export default function MarketHero({
   const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
   const delta = yearAgo === null ? null : now - yearAgo;
 
-  // Demand above the ask is green; below it, red. The line reads the same way.
-  const lineColor = (hover ? hover.value : now) >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+  // Color says direction, never level: the chart line and ambient tone follow
+  // the visible period's trend; the level numeral stays foreground-white.
+  const dir = visible.length >= 2 ? visible[visible.length - 1].value - visible[0].value : 0;
+  const lineColor = dir >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
   // The context sentence lives beside the trend on desktop and moves below
   // the chart on mobile, so pillars + numeral + chart share one viewport.
@@ -78,7 +80,7 @@ export default function MarketHero({
   );
 
   return (
-    <section className="ray-hero2 rail" data-tone={(hover ? hover.value : now) >= 0 ? 'up' : 'down'}>
+    <section className="ray-hero2 rail" data-tone={dir >= 0 ? 'up' : 'down'}>
       <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span>
           {hover
@@ -88,9 +90,9 @@ export default function MarketHero({
         <MethodologyNote trigger="what is this?" />
       </p>
       {hover ? (
-        <h1 className="ray-hero2-value" style={{ color: lineColor }}>{formatDemand(hover.value)}</h1>
+        <h1 className="ray-hero2-value">{formatDemand(hover.value)}</h1>
       ) : (
-        <h1 className="ray-hero2-value" style={{ color: lineColor }}>
+        <h1 className="ray-hero2-value">
           <CountUp to={now} format={formatDemand} duration={1100} />
         </h1>
       )}

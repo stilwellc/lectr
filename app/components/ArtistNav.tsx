@@ -170,8 +170,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         }
         .ray-artist-dropdown-item:last-child { border-bottom: none; }
         .ray-artist-dropdown-item:hover {
-          background: color-mix(in srgb, var(--color-accent-wine) 6%, transparent);
-          color: var(--color-accent-wine-text);
+          background: var(--color-hover-item);
+          color: var(--color-fg);
         }
         /* NOTE: keep this style block free of quotes and angle brackets.
            React HTML-escapes them in server-rendered style text, but the
@@ -179,7 +179,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
            element - the text node then differs between server and client
            and hydration fails. */
         .ray-artist-dropdown-item[data-active=true] {
-          color: var(--color-accent-wine-text);
+          color: var(--color-fg);
+          background: var(--color-hover-item);
           font-weight: 600;
         }
         .ray-artist-count {

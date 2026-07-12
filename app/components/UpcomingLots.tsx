@@ -60,7 +60,7 @@ export default function UpcomingLots({
             padding: '16px 0 12px',
           } as React.CSSProperties}
         >
-          Upcoming <span style={{ fontStyle: 'normal' }}>Lots</span>
+          Upcoming <span style={{ fontStyle: 'normal' }}>lots</span>
         </h2>
       </div>
 

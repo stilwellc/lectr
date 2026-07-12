@@ -197,7 +197,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               </th>
               <th className="ray-rankings-hide-mobile" style={thStyle('sellThrough')} aria-sort={ariaSort('sellThrough')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('sellThrough')}>
-                  Sell-Through {sortKey === 'sellThrough' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Sell-through {sortKey === 'sellThrough' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
                 </button>
               </th>
             </tr>

@@ -68,7 +68,7 @@ export default function StatsGrid({ stats, lots, categoryFilter = 'all' }: Props
       sub: filteredStats.recordYear ? `${filteredStats.recordTitle}, ${filteredStats.recordYear}` : '—',
     },
     {
-      label: 'Sell-Through Rate',
+      label: 'Sell-through rate',
       value: sellThrough ? `${sellThrough.rate}%` : '—',
       sub: sellThrough ? `${sellThrough.total.toLocaleString()} lots concluded` : 'Insufficient data',
     },

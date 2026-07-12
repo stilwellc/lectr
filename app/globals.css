@@ -1663,7 +1663,9 @@ h1 {
   --color-fg: #F4F5F6;
   --color-text-secondary: #C6CACF;
   --color-text-muted: #9AA0A6;
-  --color-text-faint: #63686E;
+  /* 4.6:1 on both bg and elevated — #63686E failed WCAG AA at the 10.5–13px
+     sizes this token is used at everywhere (card meta, chart dates, hints) */
+  --color-text-faint: #7A8087;
   --color-border: rgba(255, 255, 255, 0.07);
   --color-border-mid: rgba(255, 255, 255, 0.14);
   --color-nav-bg: rgba(10, 11, 13, 0.86);
@@ -1843,6 +1845,20 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-strip-v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); line-height: 1.1; }
 .ray-strip-s { font-size: 12px; color: var(--color-text-faint); margin-top: 4px; }
 .ray-tape-wrap { margin-top: 28px; }
+
+/* the proof line — Ray's track record, one quiet sentence under the hero */
+.ray-proof {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color var(--duration-fast) var(--ease-signature);
+}
+.ray-proof:hover { color: var(--color-text-secondary); }
+.ray-proof b.up { color: var(--color-up); font-weight: 700; }
 
 /* ── the rooms: tonal bands separate the lander's areas (Robinhood-style) ── */
 .ray-band {

@@ -270,6 +270,8 @@ export interface DeepSignal {
   pct: number;
   /** how many comps the median is drawn from */
   basis: number;
+  /** the pool's median price — THE number; every surface must display this */
+  med?: number;
   /** 'edition' = same-title sales of this exact work; 'form' = same-form comps */
   kind: 'edition' | 'form';
   form: Form;
@@ -291,7 +293,12 @@ function median(sorted: number[]): number {
  * estimate midpoint = Below Market; <= -25% = Above Market) — but the pool is
  * now honest.
  */
-export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepSignal | null {
+/**
+ * The signal WITH the exact pool that produced it. Every surface that shows
+ * the number (card sentence, Today's Call band, comps modal) must render this
+ * same pool and this same median — one lot, one statistic, no second math.
+ */
+export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal: DeepSignal; pool: AuctionLot[] } | null {
   if (!lot.estimateLow || !lot.estimateHigh) return null;
   const form = classifyForm(lot);
   if (form === 'unknown') return null;
@@ -357,7 +364,11 @@ export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepS
     : 'low';
 
   const ratio = med / estMid;
-  if (ratio >= 1.2) return { label: 'Below Market', pct: Math.round((ratio - 1) * 100), basis: pool.length, kind, form, confidence };
-  if (ratio <= 0.75) return { label: 'Above Market', pct: Math.round((1 - ratio) * 100), basis: pool.length, kind, form, confidence };
+  if (ratio >= 1.2) return { signal: { label: 'Below Market', pct: Math.round((ratio - 1) * 100), basis: pool.length, med, kind, form, confidence }, pool };
+  if (ratio <= 0.75) return { signal: { label: 'Above Market', pct: Math.round((1 - ratio) * 100), basis: pool.length, med, kind, form, confidence }, pool };
   return null;
+}
+
+export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepSignal | null {
+  return signalWithPool(lot, allLots)?.signal ?? null;
 }

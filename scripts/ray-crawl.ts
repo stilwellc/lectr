@@ -1152,22 +1152,27 @@ const SOTHEBYS_SCIENCE_SALES = [
   '2023/space-exploration',
 ];
 
-function routeWatchMaker(creators: string | null, title: string): string | null {
-  const t = `${creators || ''} ${title}`.toLowerCase();
+/**
+ * ITEM-LEVEL routing — the doctrine. An auction is only a container; every
+ * lot is classified on its OWN text, never by which sale it appeared in.
+ * A Speedmaster in a Space Exploration sale is an Omega watch; a meteorite
+ * in a jewelry sale would be a meteorite. A lot that matches nothing we
+ * track is skipped — never guessed into a bucket.
+ */
+function routeItem(creators: string | null, title: string, extra = ''): string | null {
+  const t = `${creators || ''} ${title} ${extra}`.toLowerCase();
+  // tracked watch makers first — the strongest identity a lot can have
   if (/\brolex\b/.test(t)) return 'rolex';
   if (/\bpatek\b/.test(t)) return 'patek-philippe';
   if (/\baudemars\b/.test(t)) return 'audemars-piguet';
   if (/\bomega\b/.test(t)) return 'omega';
   if (/\bcartier\b/.test(t)) return 'cartier';
-  return null; // a maker we don't track — skip
-}
-
-function routeScience(text: string): string {
-  const t = text.toLowerCase();
-  if (/meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite/.test(t)) return 'meteorites';
-  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|neanderthal|paleolithic|petrified|skeleton|skull|tooth|jaw|amber/.test(t)) return 'fossils';
-  if (/apollo|nasa|space|lunar|moon|astronaut|cosmonaut|sputnik|gemini|soyuz|rocket|viking|voyager|mercury|x-15|spacesuit|satellite/.test(t)) return 'space-exploration';
-  return 'scientific-instruments';
+  // science collections — positive signals only, no sale-level fallback
+  if (/meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite|lunar meteorite|martian/.test(t)) return 'meteorites';
+  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|neanderthal|paleolithic|petrified|skeleton|skull|tusk|claw|tooth of|jaws?\b|amber with|coprolite|stromatolite/.test(t)) return 'fossils';
+  if (/apollo|nasa|space[- ]flown|space (exploration|shuttle|suit|program|station)|spacesuit|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|vostok|skylab|rocket|x-15|satellite|mission (control|patch)|flight plan|star chart/.test(t)) return 'space-exploration';
+  if (/telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|chronometer\b|slide rule|surveying|globe\b|celestial|enigma machine|cipher|calculat(or|ing)|typewriter|computer|macintosh|apple[- ](1|ii)|altair|commodore|prototype|patent model|anatomical|medical (instrument|kit)|laboratory|einstein|newton|darwin|curie|tesla|edison|manuscript.*(scien|math|physic)|first edition.*(scien|math|physic)/.test(t)) return 'scientific-instruments';
+  return null; // nothing we track — never guess
 }
 
 async function sothebysAuctionMeta(slug: string): Promise<{ uuid: string; endDate: string | null; state: string; title: string } | null> {
@@ -1245,9 +1250,9 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'all'): Prom
     let kept = 0;
     for (const lot of rawLots) {
       if (!lot.title) continue;
-      const text = `${lot.creatorsDisplayTitle || ''} ${lot.title} ${lot.subtitle || ''}`;
-      const artist = kind === 'watches' ? routeWatchMaker(lot.creatorsDisplayTitle, lot.title) : routeScience(text);
-      if (!artist) continue; // watch maker we don't track
+      // item-level: the lot's own text decides where it belongs, never the sale
+      const artist = routeItem(lot.creatorsDisplayTitle, lot.title, lot.subtitle || '');
+      if (!artist) continue; // nothing we track — skip, never guess
 
       const soldRes = lot.bidState?.sold;
       const finalPrice = soldRes?.premiums?.finalPrice;
@@ -1373,9 +1378,9 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'all'): Pro
       const title = secondary ? `${primary} ${secondary}`.trim() : primary;
       if (!title) continue;
       if (lot.lot_withdrawn) continue;
-      const routeText = `${primary} ${secondary} ${lot.description_txt || ''}`;
-      const artist = kind === 'watches' ? routeWatchMaker(primary, secondary) : routeScience(routeText);
-      if (!artist) continue;
+      // item-level: the lot's own text decides where it belongs, never the sale
+      const artist = routeItem(primary, secondary, lot.description_txt || '');
+      if (!artist) continue; // nothing we track — skip, never guess
 
       const realisedNum = parseFloat(lot.price_realised || '');
       const isSold = !!realisedNum && realisedNum > 0;
