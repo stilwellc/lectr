@@ -28,7 +28,7 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://ray.vercel.app'),
+  metadataBase: new URL('https://ray-one-theta.vercel.app'),
   title: {
     default: 'Ray — Auction Intelligence',
     template: '%s — Ray',
