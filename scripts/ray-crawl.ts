@@ -338,19 +338,23 @@ const ARTISTS: ArtistConfig[] = [
   // ── The watches vertical: makers, not artists. Phillips (the watch house)
   // maker pages + Christie's maker pages + Bonhams keyword search.
   // Wright/Rago don't trade watches — deliberately absent.
-  { slug: 'rolex', displayName: 'Rolex', phillips: { id: '5830', slug: 'rolex' }, christies: 'rolex', bonhams: 'Rolex wristwatch' },
-  { slug: 'patek-philippe', displayName: 'Patek Philippe', phillips: { id: '12634', slug: 'patek-philippe' }, christies: 'patek-philippe', bonhams: 'Patek Philippe' },
-  { slug: 'audemars-piguet', displayName: 'Audemars Piguet', phillips: { id: '10464', slug: 'audemars-piguet' }, christies: 'audemars-piguet', bonhams: 'Audemars Piguet' },
-  { slug: 'omega', displayName: 'Omega', phillips: { id: '10364', slug: 'omega' }, christies: 'omega', bonhams: 'Omega wristwatch' },
-  { slug: 'cartier', displayName: 'Cartier', phillips: { id: '4810', slug: 'cartier' }, christies: 'cartier', bonhams: 'Cartier' },
+  // christies omitted — crawlChristiesAuctions pulls full curated watch sales
+  // (the maker/search page only gave 50 lots and would double-count).
+  { slug: 'rolex', displayName: 'Rolex', phillips: { id: '5830', slug: 'rolex' }, bonhams: 'Rolex wristwatch' },
+  { slug: 'patek-philippe', displayName: 'Patek Philippe', phillips: { id: '12634', slug: 'patek-philippe' }, bonhams: 'Patek Philippe' },
+  { slug: 'audemars-piguet', displayName: 'Audemars Piguet', phillips: { id: '10464', slug: 'audemars-piguet' }, bonhams: 'Audemars Piguet' },
+  { slug: 'omega', displayName: 'Omega', phillips: { id: '10364', slug: 'omega' }, bonhams: 'Omega wristwatch' },
+  { slug: 'cartier', displayName: 'Cartier', phillips: { id: '4810', slug: 'cartier' }, bonhams: 'Cartier' },
 
-  // ── The science vertical: collections, Geek Week-style (tech, fossils,
-  // space, natural history). Bonhams' science & natural history departments
-  // are the backbone; Rago would never have science.
-  { slug: 'meteorites', displayName: 'Meteorites', bonhams: 'meteorite' },
-  { slug: 'fossils', displayName: 'Fossils & Dinosaurs', bonhams: 'fossil dinosaur' },
-  { slug: 'space-exploration', displayName: 'Space Exploration', bonhams: 'nasa apollo' },
-  { slug: 'scientific-instruments', displayName: 'Scientific Instruments', bonhams: 'scientific instrument' },
+  // ── The science vertical: Sotheby's curated Geek Week sales only (natural
+  // history, space exploration, history of science & technology). No Bonhams
+  // keyword dredging — that pulled thousands of junk fragments. These slugs
+  // carry no house config; crawlSothebysAuctions populates them by routing
+  // each lot's text. Rago would never have science.
+  { slug: 'meteorites', displayName: 'Meteorites' },
+  { slug: 'fossils', displayName: 'Fossils & Dinosaurs' },
+  { slug: 'space-exploration', displayName: 'Space Exploration' },
+  { slug: 'scientific-instruments', displayName: 'Scientific Instruments' },
 ];
 
 const DATA_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
@@ -1104,127 +1108,319 @@ function parseWrightAdvancedItem(item: any, artistSlug: string): AuctionLot {
 // We query the 'lots' collection for the artist name.
 
 const BONHAMS_TYPESENSE_KEY = '7YZqOyG0twgst4ACc2VuCyZxpGAYzM0weFTLCC20FQY';
-// ── Sotheby's Luxury Crawler (Algolia) ──
-// Sotheby's has no maker pages for watch brands; their LIVE auction lots
-// (watches, science) surface through the luxury marketplace's Algolia index.
-// Lot channel only — retail buy-now listings are fixed-price, not auction
-// data, and would corrupt the demand index. The page embeds a rotating
-// secured search key; lift it fresh each run.
-const SOTHEBYS_ALGOLIA_APP = 'KAR1UEUPJD';
-const SOTHEBYS_WATCH_CREATORS: Record<string, RegExp> = {
-  rolex: /^rolex/i,
-  'patek-philippe': /^patek/i,
-  'audemars-piguet': /^audemars/i,
-  omega: /^omega/i,
-  cartier: /^cartier/i,
-};
 
-function scienceSlugFor(title: string): string {
-  const t = title.toLowerCase();
-  if (/meteorite|pallasite|tektite|moldavite/.test(t)) return 'meteorites';
-  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaurus|triceratops|pterosaur/.test(t)) return 'fossils';
-  if (/apollo|nasa|space|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|rocket/.test(t)) return 'space-exploration';
+// ── Sotheby's Auction Crawler (GraphQL) ──
+// Sotheby's has no maker pages; their real auction lots (watches + the
+// curated Geek Week science sales) come from the auction pages, whose lots
+// load through a public GraphQL API — full titles, estimates, hammer prices
+// and images, no auth. We seed known watch & science sales and also discover
+// the current ones from the department / Geek Week pages so CI stays fresh.
+const SOTHEBYS_GQL = 'https://clientapi.prod.sothelabs.com/graphql';
+const SOTHEBYS_LOT_QUERY = `query LotCards($id: String!, $limit: Int, $offset: Int) {
+  auction(id: $id, language: ENGLISH) {
+    currency
+    lotCards: lotCardsConnection(offset: $offset, limit: $limit, filter: ALL) {
+      hasNextPage
+      totalCount
+      lots {
+        lotId
+        title
+        subtitle
+        creatorsDisplayTitle
+        lotNumber { ... on VisibleLotNumber { lotDisplayNumber } }
+        slug { lotSlug }
+        estimateV2 { ... on LowHighEstimateV2 { lowEstimate { amount } highEstimate { amount } } }
+        bidState { sold { ... on ResultVisible { isSold premiums { finalPrice: finalPriceV2 { currency amount } } } } }
+        media(imageSizes: [Medium, Large]) { images { renditions { url imageSize } } }
+      }
+    }
+  }
+}`;
+
+// Known Sotheby's sales for historical depth (the crawler also discovers the
+// current ones live). Watches map to a maker by lot; science sales carry a
+// default routing hint but each lot is re-routed by its own text.
+const SOTHEBYS_WATCH_SALES = [
+  '2026/important-watches', '2026/fine-watches', '2025/important-watches',
+  '2025/important-watches-2', '2025/fine-watches-2', '2025/fine-watches-3',
+  '2024/important-watches', '2024/fine-watches',
+];
+const SOTHEBYS_SCIENCE_SALES = [
+  '2026/natural-history', '2026/space-exploration-2', '2026/history-of-science-technology',
+  '2026/history-of-science-technology-2', '2025/natural-history', '2025/space-exploration',
+  '2025/history-of-science-technology', '2024/natural-history', '2024/space-exploration',
+  '2023/space-exploration',
+];
+
+function routeWatchMaker(creators: string | null, title: string): string | null {
+  const t = `${creators || ''} ${title}`.toLowerCase();
+  if (/\brolex\b/.test(t)) return 'rolex';
+  if (/\bpatek\b/.test(t)) return 'patek-philippe';
+  if (/\baudemars\b/.test(t)) return 'audemars-piguet';
+  if (/\bomega\b/.test(t)) return 'omega';
+  if (/\bcartier\b/.test(t)) return 'cartier';
+  return null; // a maker we don't track — skip
+}
+
+function routeScience(text: string): string {
+  const t = text.toLowerCase();
+  if (/meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite/.test(t)) return 'meteorites';
+  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|neanderthal|paleolithic|petrified|skeleton|skull|tooth|jaw|amber/.test(t)) return 'fossils';
+  if (/apollo|nasa|space|lunar|moon|astronaut|cosmonaut|sputnik|gemini|soyuz|rocket|viking|voyager|mercury|x-15|spacesuit|satellite/.test(t)) return 'space-exploration';
   return 'scientific-instruments';
 }
 
-async function crawlSothebysLuxury(): Promise<AuctionLot[]> {
-  const lots: AuctionLot[] = [];
-  console.log("  [Sotheby's Luxury] Fetching live auction lots (watches + science)...");
+async function sothebysAuctionMeta(slug: string): Promise<{ uuid: string; endDate: string | null; state: string; title: string } | null> {
   try {
-    const page = await fetch('https://www.sothebys.com/en/buy/luxury/watches/watch/rolex', {
-      headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
-    });
-    const html = await page.text();
-    const keyM = html.match(/"algoliaSearchKey":"([^"]+)"/);
-    if (!keyM) { console.log("  [Sotheby's Luxury] no search key on page — layout changed?"); return lots; }
-    const key = keyM[1];
+    const res = await fetch(`https://www.sothebys.com/en/buy/auction/${slug}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const uuid = (html.match(/"auctionId":"([0-9a-f-]{36})"/) || [])[1];
+    if (!uuid) return null;
+    const state = (html.match(/"state":"(Closed|Opened|Published)"/) || [])[1] || 'Unknown';
+    const title = (html.match(/"title":"([^"]{2,80})"/) || [])[1] || slug;
+    const ends = (html.match(/"endDate":"20[0-9-]+T[^"]+"/g) || []).map(s => s.slice(11, -1));
+    const latest = ends.map(d => new Date(d)).filter(d => !isNaN(d.getTime())).sort((x, y) => y.getTime() - x.getTime())[0];
+    return { uuid, endDate: latest ? latest.toISOString() : null, state, title };
+  } catch { return null; }
+}
 
-    const query = async (body: object): Promise<any> => {
-      const res = await fetch(`https://${SOTHEBYS_ALGOLIA_APP}-dsn.algolia.net/1/indexes/prod_product_items/query`, {
+async function sothebysAuctionLots(uuid: string): Promise<{ currency: Currency; lots: any[] }> {
+  const out: any[] = [];
+  let offset = 0;
+  let currency: Currency = 'USD';
+  for (let guard = 0; guard < 40; guard++) {
+    try {
+      const res = await fetch(SOTHEBYS_GQL, {
         method: 'POST',
-        headers: { 'X-Algolia-API-Key': key, 'X-Algolia-Application-Id': SOTHEBYS_ALGOLIA_APP },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(20000),
+        headers: { 'Content-Type': 'application/json', 'apollographql-client-name': 'sothebys-web', 'User-Agent': UA },
+        body: JSON.stringify({ query: SOTHEBYS_LOT_QUERY, variables: { id: uuid, limit: 100, offset } }),
+        signal: AbortSignal.timeout(30000),
       });
-      return res.json();
-    };
+      const j = await res.json() as any;
+      const auc = j?.data?.auction;
+      const lc = auc?.lotCards;
+      if (auc?.currency && ['USD', 'GBP', 'EUR', 'HKD', 'CNY', 'AUD', 'CHF'].includes(auc.currency)) currency = auc.currency;
+      if (!lc || !lc.lots) break;
+      out.push(...lc.lots);
+      if (!lc.hasNextPage) break;
+      offset += 100;
+      await sleep(350);
+    } catch { break; }
+  }
+  return { currency, lots: out };
+}
 
-    // exact creator names for our makers (facet values are case-sensitive)
-    const facetRes = await query({ query: '', hitsPerPage: 0, filters: 'salesChannel:lot', facets: ['creators'], maxValuesPerFacet: 900 });
-    const creatorNames: string[] = Object.keys(facetRes.facets?.creators || {});
+async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'all'): Promise<AuctionLot[]> {
+  const lots: AuctionLot[] = [];
 
-    // gather raw hits: one filter per maker + the whole Science department
-    const jobs: { artist: string | null; filters: string }[] = [];
-    for (const [slug, rx] of Object.entries(SOTHEBYS_WATCH_CREATORS)) {
-      const names = creatorNames.filter(n => rx.test(n));
-      if (names.length) jobs.push({ artist: slug, filters: `salesChannel:lot AND (${names.map(n => `creators:"${n.replace(/"/g, '\\"')}"`).join(' OR ')})` });
-    }
-    jobs.push({ artist: null, filters: 'salesChannel:lot AND department:Science' });
+  // discover current sales live so CI picks up new Geek Week / watch sales
+  const discovered = { watches: new Set<string>(), science: new Set<string>() };
+  const grab = async (url: string, into: Set<string>) => {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+      const h = await r.text();
+      (h.match(/\/en\/buy\/auction\/20[0-9]{2}\/[a-z0-9-]+/g) || []).forEach(s => into.add(s.replace('/en/buy/auction/', '')));
+    } catch { /* ignore */ }
+  };
+  if (scope === 'watches' || scope === 'all') await grab('https://www.sothebys.com/en/departments/watches', discovered.watches);
+  if (scope === 'science' || scope === 'all') await grab('https://www.sothebys.com/en/buy/series/geek-week?locale=en', discovered.science);
 
-    const rawHits: { artist: string; hit: any }[] = [];
-    for (const job of jobs) {
-      let pg = 0, nbPages = 1;
-      while (pg < nbPages && pg < 12) {
-        const r = await query({ query: '', hitsPerPage: 100, page: pg, filters: job.filters });
-        nbPages = r.nbPages || 1;
-        for (const hit of r.hits || []) {
-          rawHits.push({ artist: job.artist || scienceSlugFor(hit.title || ''), hit });
-        }
-        pg++;
-        await sleep(300);
+  const watchSales = Array.from(new Set([...SOTHEBYS_WATCH_SALES, ...Array.from(discovered.watches)]))
+    .filter(s => /watch/i.test(s));
+  const scienceSales = Array.from(new Set([...SOTHEBYS_SCIENCE_SALES, ...Array.from(discovered.science)]))
+    .filter(s => /natural-history|space-exploration|science|meteor|fossil/i.test(s));
+
+  const jobs: { sale: string; kind: 'watches' | 'science' }[] = [];
+  if (scope === 'watches' || scope === 'all') watchSales.forEach(sale => jobs.push({ sale, kind: 'watches' }));
+  if (scope === 'science' || scope === 'all') scienceSales.forEach(sale => jobs.push({ sale, kind: 'science' }));
+
+  console.log(`  [Sotheby's] ${jobs.length} sales to crawl (${watchSales.length} watch, ${scienceSales.length} science)`);
+
+  for (const { sale, kind } of jobs) {
+    const meta = await sothebysAuctionMeta(sale);
+    if (!meta) { console.log(`  [Sotheby's] ${sale}: no metadata, skip`); continue; }
+    const { currency: auctionCur, lots: rawLots } = await sothebysAuctionLots(meta.uuid);
+    const saleName = sale.split('/').pop()!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    let kept = 0;
+    for (const lot of rawLots) {
+      if (!lot.title) continue;
+      const text = `${lot.creatorsDisplayTitle || ''} ${lot.title} ${lot.subtitle || ''}`;
+      const artist = kind === 'watches' ? routeWatchMaker(lot.creatorsDisplayTitle, lot.title) : routeScience(text);
+      if (!artist) continue; // watch maker we don't track
+
+      const soldRes = lot.bidState?.sold;
+      const finalPrice = soldRes?.premiums?.finalPrice;
+      const isSold = !!soldRes?.isSold && !!finalPrice;
+      let status: string, priceUsd: number | null, saleDate: string;
+      if (isSold) {
+        status = 'sold';
+        priceUsd = toUsd(parseFloat(finalPrice.amount), (finalPrice.currency || auctionCur) as Currency);
+        saleDate = meta.endDate || new Date().toISOString();
+      } else if (meta.endDate && new Date(meta.endDate).getTime() > Date.now()) {
+        status = 'upcoming';
+        priceUsd = null;
+        saleDate = meta.endDate;
+      } else {
+        continue; // closed & unsold (bought-in) — not signal
       }
-    }
-    console.log(`  [Sotheby's Luxury] ${rawHits.length} live lots matched`);
 
-    // resolve sale dates once per auction (the lot slug embeds the sale path)
-    const auctionDates = new Map<string, string | null>();
-    const auctionOf = (slug: string) => {
-      const m = (slug || '').match(/^(\/en\/buy\/auction\/\d{4}\/[^/]+)/);
-      return m ? m[1] : null;
-    };
-    for (const { hit } of rawHits) {
-      const a = auctionOf(hit.slug);
-      if (!a || auctionDates.has(a)) continue;
-      try {
-        const res = await fetch(`https://www.sothebys.com${a}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25000) });
-        const ah = await res.text();
-        const ends = ah.match(/"endDate":"([^"]+)"/g)?.map(s => s.slice(11, -1)) || [];
-        const latest = ends.map(d => new Date(d)).filter(d => !isNaN(d.getTime())).sort((x, y) => y.getTime() - x.getTime())[0];
-        auctionDates.set(a, latest ? latest.toISOString() : null);
-      } catch { auctionDates.set(a, null); }
-      await sleep(400);
-    }
+      const est = lot.estimateV2;
+      const rendition = lot.media?.images?.[0]?.renditions;
+      const img = rendition?.find((r: any) => r.imageSize === 'Large') || rendition?.find((r: any) => r.imageSize === 'Medium') || rendition?.[0];
 
-    for (const { artist, hit } of rawHits) {
-      const a = auctionOf(hit.slug);
-      const saleDate = a ? auctionDates.get(a) : null;
-      if (!saleDate || !hit.title) continue; // no fake dates
-      const saleSeg = a!.split('/').pop()!;
       lots.push({
-        id: `sothebys-lux-${hit.sku || hit.objectID}`,
+        id: `sothebys-${lot.lotId}`,
         artist,
-        title: hit.title,
+        title: lot.title,
         year: null,
-        medium: null,
+        medium: lot.subtitle || null,
         dimensions: null,
         category: 'unknown',
-        imageUrl: hit.imageUrl || null,
+        imageUrl: img?.url || null,
         auctionHouse: "Sotheby's",
-        saleName: saleSeg.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        saleName,
+        saleDate,
+        lotNumber: lot.lotNumber?.lotDisplayNumber ? parseInt(lot.lotNumber.lotDisplayNumber, 10) || null : null,
+        estimateLow: est?.lowEstimate?.amount ? toUsd(parseFloat(est.lowEstimate.amount), auctionCur) : null,
+        estimateHigh: est?.highEstimate?.amount ? toUsd(parseFloat(est.highEstimate.amount), auctionCur) : null,
+        priceUsd,
+        currency: 'USD' as Currency,
+        status: status as any,
+        url: `https://www.sothebys.com/en/buy/auction/${sale}/${lot.slug?.lotSlug || lot.lotId}`,
+      } as AuctionLot);
+      kept++;
+    }
+    console.log(`  [Sotheby's] ${sale} (${meta.state}): ${rawLots.length} lots → ${kept} kept`);
+    await sleep(500);
+  }
+  console.log(`  [Sotheby's] Total ${lots.length} lots (${lots.filter(l => l.status === 'sold').length} sold, ${lots.filter(l => l.status === 'upcoming').length} upcoming)`);
+  return lots;
+}
+
+// ── Christie's Auction Crawler ──
+// Same bar as the Sotheby's crawler: full watch & science auction lots (not
+// the 50-lot maker/search page). Christie's auction pages embed all lot data
+// in `window.chrComponents.lots` — titles, estimates, prices realised, images.
+// Pages ≥2 return the whole sale; we dedupe by object_id to be safe.
+const CHRISTIES_WATCH_SEEDS = [
+  'important-watches-30715', 'important-watches-24504',
+  'rare-watches-including-watches-for-ela-24403', 'watches-online-the-new-york-edit-24505',
+];
+const CHRISTIES_SCIENCE_SEEDS = ['jurassic-icons-allosaurus-stegosaurus-30576'];
+
+function parseChristiesCurrency(txt: string): Currency {
+  if (/HK\$|HKD/.test(txt)) return 'HKD';
+  if (/£|GBP/.test(txt)) return 'GBP';
+  if (/€|EUR/.test(txt)) return 'EUR';
+  if (/CHF/.test(txt)) return 'CHF';
+  if (/CN¥|RMB|CNY/.test(txt)) return 'CNY';
+  if (/AU\$|AUD/.test(txt)) return 'AUD';
+  return 'USD';
+}
+
+async function christiesAuctionLots(slug: string): Promise<any[]> {
+  const byId = new Map<string, any>();
+  let total = Infinity;
+  for (let page = 1; page <= 12 && byId.size < total; page++) {
+    try {
+      const res = await fetch(`https://www.christies.com/en/auction/${slug}?sortby=lotnumber&page=${page}`, {
+        headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) break;
+      const html = await res.text();
+      const m = html.match(/window\.chrComponents\.lots\s*=\s*(\{[\s\S]*?\});\s*(?:window\.|<\/script>)/);
+      if (!m) break;
+      const d = JSON.parse(m[1]);
+      total = d.data.total_hits_filtered || d.data.lots.length;
+      const before = byId.size;
+      for (const lot of d.data.lots) byId.set(lot.object_id, lot);
+      if (byId.size === before) break; // no new lots
+      await sleep(400);
+    } catch { break; }
+  }
+  return Array.from(byId.values());
+}
+
+async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'all'): Promise<AuctionLot[]> {
+  const lots: AuctionLot[] = [];
+  const discovered = { watches: new Set<string>(), science: new Set<string>() };
+  const grab = async (url: string, into: Set<string>) => {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+      const h = await r.text();
+      (h.match(/\/en\/auction\/[a-z0-9-]+-[0-9]{4,6}/g) || []).forEach(s => into.add(s.replace('/en/auction/', '')));
+    } catch { /* ignore */ }
+  };
+  if (scope === 'watches' || scope === 'all') await grab('https://www.christies.com/en/departments/watches-and-wristwatches', discovered.watches);
+  if (scope === 'science' || scope === 'all') await grab('https://www.christies.com/en/departments/science-and-natural-history', discovered.science);
+
+  const watchSales = Array.from(new Set([...CHRISTIES_WATCH_SEEDS, ...Array.from(discovered.watches)]));
+  const scienceSales = Array.from(new Set([...CHRISTIES_SCIENCE_SEEDS, ...Array.from(discovered.science)]));
+
+  const jobs: { sale: string; kind: 'watches' | 'science' }[] = [];
+  if (scope === 'watches' || scope === 'all') watchSales.forEach(sale => jobs.push({ sale, kind: 'watches' }));
+  if (scope === 'science' || scope === 'all') scienceSales.forEach(sale => jobs.push({ sale, kind: 'science' }));
+  console.log(`  [Christie's Auctions] ${jobs.length} sales (${watchSales.length} watch, ${scienceSales.length} science)`);
+
+  for (const { sale, kind } of jobs) {
+    const rawLots = await christiesAuctionLots(sale);
+    const saleName = sale.replace(/-\d{4,6}$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    let kept = 0;
+    for (const lot of rawLots) {
+      const primary = lot.title_primary_txt || '';
+      const secondary = lot.title_secondary_txt || '';
+      const title = secondary ? `${primary} ${secondary}`.trim() : primary;
+      if (!title) continue;
+      if (lot.lot_withdrawn) continue;
+      const routeText = `${primary} ${secondary} ${lot.description_txt || ''}`;
+      const artist = kind === 'watches' ? routeWatchMaker(primary, secondary) : routeScience(routeText);
+      if (!artist) continue;
+
+      const realisedNum = parseFloat(lot.price_realised || '');
+      const isSold = !!realisedNum && realisedNum > 0;
+      const cur = parseChristiesCurrency(`${lot.price_realised_txt || ''} ${lot.estimate_txt || ''}`);
+      const endDate = lot.end_date || lot.start_date;
+      const endMs = endDate ? new Date(endDate).getTime() : NaN;
+      let status: string, priceUsd: number | null, saleDate: string;
+      if (isSold) {
+        status = 'sold';
+        priceUsd = toUsd(realisedNum, cur);
+        saleDate = endDate || new Date().toISOString();
+      } else if (!isNaN(endMs) && endMs > Date.now()) {
+        status = 'upcoming';
+        priceUsd = null;
+        saleDate = endDate;
+      } else {
+        continue; // closed & unsold — not signal
+      }
+
+      lots.push({
+        id: `christies-auc-${lot.object_id}`,
+        artist,
+        title,
+        year: null,
+        medium: secondary || null,
+        dimensions: null,
+        category: 'unknown',
+        imageUrl: lot.image?.image_src || null,
+        auctionHouse: "Christie's",
+        saleName,
         saleDate,
         lotNumber: null,
-        estimateLow: hit.lowEstimate || null,
-        estimateHigh: hit.highEstimate || null,
-        priceUsd: null,
-        currency: (hit.currency || 'USD') as Currency,
-        status: 'upcoming',
-        url: `https://www.sothebys.com${hit.slug}`,
+        estimateLow: lot.estimate_low ? toUsd(parseFloat(lot.estimate_low), cur) : null,
+        estimateHigh: lot.estimate_high ? toUsd(parseFloat(lot.estimate_high), cur) : null,
+        priceUsd,
+        currency: 'USD' as Currency,
+        status: status as any,
+        url: lot.url || `https://www.christies.com/en/auction/${sale}`,
       } as AuctionLot);
+      kept++;
     }
-    console.log(`  [Sotheby's Luxury] Parsed ${lots.length} dated upcoming lots across ${auctionDates.size} sales`);
-  } catch (err) {
-    console.error("  [Sotheby's Luxury] Error:", err);
+    console.log(`  [Christie's Auctions] ${sale}: ${rawLots.length} lots → ${kept} kept`);
+    await sleep(500);
   }
+  console.log(`  [Christie's Auctions] Total ${lots.length} lots (${lots.filter(l => l.status === 'sold').length} sold, ${lots.filter(l => l.status === 'upcoming').length} upcoming)`);
   return lots;
 }
 
@@ -1934,11 +2130,16 @@ async function main() {
     if (artist !== roster[roster.length - 1]) await sleep(DELAY_MS);
   }
 
-  // Sotheby's live watch & science lots ride the luxury Algolia index —
-  // one cross-roster pass, not per-artist.
-  const LUXURY_SLUGS = ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier', 'meteorites', 'fossils', 'space-exploration', 'scientific-instruments'];
-  if (!only || LUXURY_SLUGS.some(s => only.has(s))) {
-    freshLots.push(...await crawlSothebysLuxury());
+  // Sotheby's watch & science auctions ride the GraphQL API — one cross-roster
+  // pass, not per-artist. Scope to whichever verticals this run touches.
+  const WATCH_SLUGS = ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'];
+  const SCIENCE_SLUGS = ['meteorites', 'fossils', 'space-exploration', 'scientific-instruments'];
+  const wantWatch = !only || WATCH_SLUGS.some(s => only.has(s));
+  const wantScience = !only || SCIENCE_SLUGS.some(s => only.has(s));
+  const auctionScope = wantWatch && wantScience ? 'all' : wantWatch ? 'watches' : wantScience ? 'science' : null;
+  if (auctionScope) {
+    freshLots.push(...await crawlSothebysAuctions(auctionScope));
+    freshLots.push(...await crawlChristiesAuctions(auctionScope));
   }
 
   // Merge: new data overwrites existing by ID
@@ -1947,12 +2148,22 @@ async function main() {
   for (const lot of freshLots) lotMap.set(lot.id, lot);
 
   // Clean up stale/bad entries
+  const SCIENCE_SET = new Set(['meteorites', 'fossils', 'space-exploration', 'scientific-instruments']);
+  const WATCH_SET = new Set(['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier']);
   const badIds = new Set<string>();
   for (const [id, lot] of Array.from(lotMap.entries())) {
     if (lot.title.match(/^Lot\.\d+/i)) badIds.add(id);
     if (id === 'sothebys-upcoming-boy-white-hat' && lotMap.has('sothebys-george-condo-qiao-zhikang-duo-the-boy-with-white')) {
       badIds.add(id);
     }
+    // Science is Sotheby's + Christie's curated auctions only — evict Bonhams junk.
+    if (SCIENCE_SET.has(lot.artist) && lot.auctionHouse !== "Sotheby's" && lot.auctionHouse !== "Christie's") badIds.add(id);
+    // Evict the deprecated Algolia crawler's lots (sothebys-lux-*, no images) —
+    // superseded by the GraphQL auction crawler's sothebys-<uuid> lots.
+    if (id.startsWith('sothebys-lux-')) badIds.add(id);
+    // Watch makers: evict the old Christie's maker-search lots (now superseded
+    // by christies-auc-* from the full auction crawler) to avoid double-count.
+    if (WATCH_SET.has(lot.artist) && lot.auctionHouse === "Christie's" && !id.startsWith('christies-auc-')) badIds.add(id);
   }
   for (const id of Array.from(badIds)) lotMap.delete(id);
 
