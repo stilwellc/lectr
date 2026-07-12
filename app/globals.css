@@ -1042,3 +1042,74 @@ h1 {
   .ray-lot-card:hover { transform: none; }
   .ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   MARKET TAPE — a full-bleed ribbon of the biggest recent hammers.
+   The page opens on money moving, not a static line. Edges fade,
+   hover pauses, reduced-motion stops it dead.
+   ══════════════════════════════════════════════════════════════ */
+.ray-tape {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: 13px 0;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--color-accent-wine) 4%, transparent),
+      transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+.ray-tape-track {
+  display: flex;
+  width: max-content;
+  animation: rayTape 72s linear infinite;
+}
+.ray-tape:hover .ray-tape-track { animation-play-state: paused; }
+.ray-tape-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 30px;
+  white-space: nowrap;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+.ray-tape-item::after {
+  content: '\2726'; /* ✦ */
+  margin-left: 30px;
+  color: var(--color-accent-wine);
+  opacity: 0.7;
+  font-size: 10px;
+  align-self: center;
+}
+.ray-tape-artist {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--color-fg);
+}
+.ray-tape-title {
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--color-text-muted);
+}
+.ray-tape-price {
+  font-weight: 600;
+  color: var(--color-accent-wine-text);
+  font-variant-numeric: tabular-nums;
+}
+.ray-tape-house {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+@keyframes rayTape { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ray-tape-track { animation: none; }
+}

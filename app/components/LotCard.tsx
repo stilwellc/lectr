@@ -19,7 +19,7 @@ function formatEstimate(lot: AuctionLot): string {
 }
 
 /** Compute a quick buy signal: median comp price vs estimate midpoint */
-function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]): { label: string; pct: number } | null {
+export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]): { label: string; pct: number } | null {
   if (!lot.estimateLow || !lot.estimateHigh) return null;
   const estMid = (lot.estimateLow + lot.estimateHigh) / 2;
   // Get same-artist sold lots in same category

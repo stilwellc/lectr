@@ -1,16 +1,18 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { ARTISTS } from './constants';
+import { ARTISTS, ARTIST_LABEL } from './constants';
 import { useRayData } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts } from './utils';
 import ArtistNav from './components/ArtistNav';
-import LotCard from './components/LotCard';
+import LotCard, { computeBuySignal } from './components/LotCard';
 import PastResults from './components/PastResults';
 import RayHero from './components/RayHero';
 import RayEntrance, { RayLoading } from './components/RayEntrance';
 import SectionMark from './components/SectionMark';
+import CountUp from './components/CountUp';
+import MarketTape from './components/MarketTape';
 
 const PAGE_SIZE = 48;
 
@@ -57,13 +59,74 @@ export default function RayPage() {
     const avgPrice = recentSold.length
       ? recentSold.reduce((sum, l) => sum + (l.priceUsd || 0), 0) / recentSold.length
       : 0;
+    const asInt = (n: number) => Math.round(n).toString();
+    const asComma = (n: number) => Math.round(n).toLocaleString();
     return [
-      { label: 'Artists', value: `${ARTISTS.length}`, sub: `${houseCount} auction houses` },
-      { label: 'Total Lots', value: totalLots.toLocaleString(), sub: 'sold, upcoming & bought-in' },
-      { label: 'Total Sales Value', value: formatPrice(totalSalesValue), sub: 'aggregate realized prices' },
-      { label: 'Avg. Price (12mo)', value: formatPrice(avgPrice), sub: `${recentSold.length.toLocaleString()} recent sales` },
+      { label: 'Artists', to: ARTISTS.length, format: asInt, sub: `${houseCount} auction houses` },
+      { label: 'Total Lots', to: totalLots, format: asComma, sub: 'sold, upcoming & bought-in' },
+      { label: 'Total Sales Value', to: totalSalesValue, format: formatPrice, sub: 'aggregate realized prices' },
+      { label: 'Avg. Price (12mo)', to: avgPrice, format: formatPrice, sub: `${recentSold.length.toLocaleString()} recent sales` },
     ];
   }, [allLots, sold, statsByArtist, houseCount]);
+
+  // A living read on the market — one derived, honest line (revenue-weighted
+  // appreciation matching the analytics page, the top house by revenue, this
+  // week's hammers, and how many upcoming lots the buy-signal flags as cheap).
+  const pulse = useMemo(() => {
+    const stats = Object.values(statsByArtist);
+    const totalRevenue = stats.reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0);
+    const weightedAppreciation = totalRevenue > 0
+      ? stats.reduce((s, x) => s + (x.appreciationRate || 0) * (x.totalAuctionRevenue || 0), 0) / totalRevenue
+      : 0;
+    const topEntry = Object.entries(statsByArtist)
+      .sort((a, b) => (b[1].totalAuctionRevenue || 0) - (a[1].totalAuctionRevenue || 0))[0];
+    const topArtist = topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
+    const now = new Date();
+    const weekAhead = new Date(now.getTime() + 7 * 86_400_000);
+    const thisWeekLots = upcoming.filter(l => {
+      const d = new Date(l.saleDate);
+      return !isNaN(d.getTime()) && d >= now && d <= weekAhead;
+    });
+    // Flagged count is among *this week's* lots so the sentence stays honest.
+    const belowFlagged = thisWeekLots.filter(l => {
+      const sig = computeBuySignal(l, allLots);
+      return sig && sig.label === 'Below Market';
+    }).length;
+    return { weightedAppreciation, topArtist, thisWeek: thisWeekLots.length, belowFlagged };
+  }, [statsByArtist, upcoming, allLots]);
+
+  // The tape: the biggest hammers among recent sales (recent-first, then by
+  // value) — records the market actually just paid.
+  const tapeItems = useMemo(() =>
+    sold.slice(0, 90)
+      .filter(l => l.priceUsd && l.title)
+      .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
+      .slice(0, 18)
+      .map(l => ({
+        artist: ARTIST_LABEL[l.artist] || l.artist,
+        title: l.title.length > 44 ? l.title.slice(0, 42) + '…' : l.title,
+        price: formatPrice(l.priceUsd!),
+        house: l.auctionHouse,
+      })),
+    [sold]
+  );
+
+  const accent: React.CSSProperties = { color: 'var(--color-accent-wine-text)', fontWeight: 600 };
+  const pulseLine = (
+    <>
+      The market is{' '}
+      <b style={accent}>
+        {pulse.weightedAppreciation >= 0 ? 'up' : 'down'} {Math.abs(pulse.weightedAppreciation).toFixed(1)}%
+      </b>{' '}
+      year over year{pulse.topArtist && <>, led by <b style={accent}>{pulse.topArtist}</b></>}.
+      {pulse.thisWeek > 0 && (
+        <>
+          {' '}<b style={accent}>{pulse.thisWeek} {pulse.thisWeek === 1 ? 'lot' : 'lots'}</b> hammer this week
+          {pulse.belowFlagged > 0 && <> — <b style={accent}>{pulse.belowFlagged}</b> flagged below estimate</>}.
+        </>
+      )}
+    </>
+  );
 
   return (
     <div style={{
@@ -104,9 +167,11 @@ export default function RayPage() {
         title={<span style={{ fontStyle: 'italic', color: 'var(--color-accent-wine)' }}>Ray</span>}
         sub={loading
           ? '\u00A0' /* reserve the line — no zero-count flash while the crawl delivers */
-          : <>Tracking {ARTISTS.length} artists across {houseCount} auction houses.</>}
+          : pulseLine}
         timestamp={lastCrawl ? formatDate(lastCrawl) : undefined}
       />
+
+      {!loading && !error && tapeItems.length > 0 && <MarketTape items={tapeItems} />}
 
       {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12 }}>
@@ -141,16 +206,19 @@ export default function RayPage() {
                   }}>
                     {card.label}
                   </div>
-                  <div style={{
-                    fontFamily: 'var(--font-serif), serif',
-                    fontSize: 34,
-                    fontWeight: 300,
-                    color: 'var(--color-fg)',
-                    lineHeight: 1,
-                    marginBottom: 8,
-                  }}>
-                    {card.value}
-                  </div>
+                  <CountUp
+                    to={card.to}
+                    format={card.format}
+                    style={{
+                      display: 'block',
+                      fontFamily: 'var(--font-serif), serif',
+                      fontSize: 34,
+                      fontWeight: 300,
+                      color: 'var(--color-fg)',
+                      lineHeight: 1,
+                      marginBottom: 8,
+                    }}
+                  />
                   <div style={{
                     fontSize: 12,
                     color: 'var(--color-text-muted)',
