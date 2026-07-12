@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice } from '../utils';
@@ -12,9 +13,83 @@ function formatEstimate(lot: AuctionLot): string {
     return `$${n.toLocaleString()}`;
   };
   if (lot.estimateLow && lot.estimateHigh) {
-    return `${fmt(lot.estimateLow)} — ${fmt(lot.estimateHigh)} ${lot.currency}`;
+    return `${fmt(lot.estimateLow)}–${fmt(lot.estimateHigh)} ${lot.currency}`;
   }
   return 'Estimate on request';
+}
+
+/**
+ * PriceBand — the decision picture. Every comparable sale plotted as a dot on
+ * a log price axis, the median marked, and this lot's estimate drawn as a
+ * band over it — so "is this cheap?" is readable at a glance: estimate band
+ * left of the dot cloud = priced under the market.
+ */
+function PriceBand({
+  prices,
+  median,
+  estLow,
+  estHigh,
+  below,
+}: {
+  prices: number[];
+  median: number;
+  estLow: number | null;
+  estHigh: number | null;
+  below: boolean | null;
+}) {
+  if (prices.length < 3) return null;
+  const all = [...prices, ...(estLow ? [estLow] : []), ...(estHigh ? [estHigh] : [])];
+  const lo = Math.min(...all) * 0.9;
+  const hi = Math.max(...all) * 1.1;
+  if (lo <= 0 || hi <= lo) return null;
+  const x = (v: number) => ((Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo))) * 100;
+  const bandColor = below === null ? 'var(--color-text-faint)' : below ? 'var(--color-up)' : 'var(--color-down)';
+  const fmt = (n: number) => formatPrice(n);
+  return (
+    <div style={{ padding: '20px 28px 6px' }}>
+      <svg width="100%" height="76" style={{ display: 'block', overflow: 'visible' }} aria-label="Comparable sales vs estimate">
+        {/* axis */}
+        <line x1="0" y1="44" x2="100%" y2="44" stroke="var(--color-border-mid)" strokeWidth="1" />
+        {/* estimate band */}
+        {estLow && estHigh && (
+          <>
+            <rect
+              x={`${x(estLow)}%`}
+              y="30"
+              width={`${Math.max(x(estHigh) - x(estLow), 1.2)}%`}
+              height="28"
+              rx="4"
+              fill={bandColor}
+              opacity="0.16"
+            />
+            <rect
+              x={`${x(estLow)}%`}
+              y="30"
+              width={`${Math.max(x(estHigh) - x(estLow), 1.2)}%`}
+              height="28"
+              rx="4"
+              fill="none"
+              stroke={bandColor}
+              strokeOpacity="0.7"
+              strokeWidth="1.25"
+            />
+            <text x={`${(x(estLow) + x(estHigh)) / 2}%`} y="74" textAnchor="middle" fill={bandColor} fontSize="11" fontWeight="600" fontFamily="var(--font-sans)">
+              this estimate
+            </text>
+          </>
+        )}
+        {/* comp dots */}
+        {prices.map((p, i) => (
+          <circle key={i} cx={`${x(p)}%`} cy="44" r="3.5" fill="var(--color-text-muted)" opacity="0.55" />
+        ))}
+        {/* median */}
+        <line x1={`${x(median)}%`} y1="26" x2={`${x(median)}%`} y2="62" stroke="var(--color-fg)" strokeWidth="1.5" />
+        <text x={`${x(median)}%`} y="16" textAnchor="middle" fill="var(--color-fg)" fontSize="11" fontWeight="600" fontFamily="var(--font-sans)">
+          comps median {fmt(median)}
+        </text>
+      </svg>
+    </div>
+  );
 }
 
 /** Convert fraction characters (½, ¼, etc.), slash fractions (3/8), and mixed numbers to decimals */
@@ -253,7 +328,10 @@ export default function ComparableModal({
   const catLabel = categoryLabels[lot.category] || null;
   const catColor = categoryColors[lot.category] || 'var(--color-text-faint)';
 
-  return (
+  // Portal to <body>: the card grid animates with transforms, and a transformed
+  // ancestor traps fixed/z-indexed descendants beneath the sticky toolbar.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div
       onClick={onClose}
       role="presentation"
@@ -487,6 +565,17 @@ export default function ComparableModal({
           </div>
         </div>
 
+        {/* The decision picture: comps plotted against this lot's estimate */}
+        {compStats && (
+          <PriceBand
+            prices={comparables.map(c => c.lot.priceUsd!)}
+            median={compStats.median}
+            estLow={lot.estimateLow}
+            estHigh={lot.estimateHigh}
+            below={compStats.hammerVsEst === null ? null : compStats.hammerVsEst >= 1.2 ? true : compStats.hammerVsEst <= 0.75 ? false : null}
+          />
+        )}
+
         {/* Summary Stats */}
         {compStats && (
           <div className="comp-modal-stats" style={{
@@ -688,5 +777,5 @@ export default function ComparableModal({
         </div>
       </div>
     </div>
-  );
+  , document.body);
 }

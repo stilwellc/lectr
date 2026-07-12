@@ -8,13 +8,12 @@ import { ARTISTS, ARTIST_LABEL } from '../constants';
 import type { LotCategory } from '../types';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { formatDate, getUpcomingCounts } from '../utils';
+import { getUpcomingCounts } from '../utils';
 
 import ArtistNav from '../components/ArtistNav';
-import StatsGrid from '../components/StatsGrid';
+import ArtistHero from '../components/ArtistHero';
 import UpcomingLots from '../components/UpcomingLots';
 import PastResults from '../components/PastResults';
-import RayHero from '../components/RayHero';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 
 const PriceChart = dynamic(() => import('../components/PriceChart'), { ssr: false });
@@ -24,7 +23,7 @@ type CategoryFilter = 'all' | LotCategory;
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.artist as string;
-  const { statsByArtist, allLots, lastCrawl, loading, fromCache } = useRayData();
+  const { statsByArtist, allLots, loading, fromCache } = useRayData();
   const { toggle, savedIds } = useSavedLots();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
@@ -70,24 +69,13 @@ export default function ArtistDetailPage() {
         </div>
       ) : (
         <>
-          <RayHero
-            eyebrow="Artist Detail"
-            title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>{label}</span>}
-            sub={loading
-              ? '\u00A0' /* reserve the line — no zero-count flash while the crawl delivers */
-              : <>{lots.length} lots across {stats?.houseDistribution?.length || 0} auction houses.</>}
-            timestamp={lastCrawl ? formatDate(lastCrawl) : undefined}
-          />
-
           {loading ? (
             <RayLoading />
           ) : (
             <RayEntrance animate={!fromCache}>
-              {stats && (
-                <div className="ray-enter">
-                  <StatsGrid stats={stats} lots={lots} categoryFilter={categoryFilter} />
-                </div>
-              )}
+              <div className="ray-enter">
+                <ArtistHero label={label} stats={stats} lots={lots} />
+              </div>
               {sold.length > 0 && (
                 <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
                   <PriceChart
