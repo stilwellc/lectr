@@ -7,6 +7,8 @@ import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts } from './utils';
 import ArtistNav from './components/ArtistNav';
 import LotCard, { lotSignal } from './components/LotCard';
+import ComparableModal from './components/ComparableModal';
+import type { AuctionLot } from './types';
 import PastResults from './components/PastResults';
 import RayEntrance, { RayLoading } from './components/RayEntrance';
 import CountUp from './components/CountUp';
@@ -22,6 +24,8 @@ export default function RayPage() {
   const { toggle, isSaved, savedIds } = useSavedLots();
   const [visibleUpcoming, setVisibleUpcoming] = useState(PAGE_SIZE);
   const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
+  const [feedView, setFeedView] = useState<'grid' | 'table'>('grid');
+  const [tableLot, setTableLot] = useState<AuctionLot | null>(null);
 
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -174,7 +178,7 @@ export default function RayPage() {
         }
       `}</style>
 
-      <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} />
+      <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12 }}>
@@ -246,11 +250,21 @@ export default function RayPage() {
                 } as React.CSSProperties}
               >
                 <h2 className="ray-h2">Upcoming lots</h2>
-                {lastCrawl && (
-                  <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
-                    Updated {formatDate(lastCrawl)}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 14 }}>
+                  {lastCrawl && (
+                    <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
+                      Updated {formatDate(lastCrawl)}
+                    </span>
+                  )}
+                  <span className="ray-viewtoggle" role="radiogroup" aria-label="Feed layout">
+                    <button role="radio" aria-checked={feedView === 'grid'} aria-label="Card view" data-active={feedView === 'grid'} onClick={() => setFeedView('grid')}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
+                    </button>
+                    <button role="radio" aria-checked={feedView === 'table'} aria-label="Table view" data-active={feedView === 'table'} onClick={() => setFeedView('table')}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round"/></svg>
+                    </button>
                   </span>
-                )}
+                </span>
               </div>
 
               <FeedToolbar
@@ -262,6 +276,65 @@ export default function RayPage() {
                 total={upcoming.length}
               />
 
+              {feedView === 'table' && feed.length > 0 ? (
+                <div key={feedKey} className="ray-feed-rekey" style={{ overflowX: 'auto' }}>
+                  <table className="ray-feedtable">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Artist / work</th>
+                        <th>House</th>
+                        <th>Hammers</th>
+                        <th className="num">Estimate</th>
+                        <th>Signal</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {feed.slice(0, visibleUpcoming).map(lot => {
+                        const sig = lotSignal(lot, allLots);
+                        return (
+                          <tr key={lot.id} onClick={() => setTableLot(lot)}>
+                            <td style={{ width: 56 }}>
+                              {lot.imageUrl
+                                ? <img className="thumb" src={lot.imageUrl} alt="" referrerPolicy="no-referrer" onError={e => { e.currentTarget.outerHTML = `<span class="thumb-plate">${(lot.title || '?').charAt(0)}</span>`; }} />
+                                : <span className="thumb-plate">{(lot.title || '?').charAt(0)}</span>}
+                            </td>
+                            <td>
+                              <div className="t-artist">{ARTIST_LABEL[lot.artist] || lot.artist}</div>
+                              <div className="t-title">{lot.title}</div>
+                            </td>
+                            <td>{lot.auctionHouse}</td>
+                            <td>{formatDate(lot.saleDate)}</td>
+                            <td className="num t-est">
+                              {lot.estimateLow && lot.estimateHigh ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}` : '—'}
+                            </td>
+                            <td>
+                              {sig
+                                ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
+                                    {sig.label === 'Below Market' ? `+${sig.pct}% under comps` : `${sig.pct}% over comps`}
+                                  </span>
+                                : <span style={{ color: 'var(--color-text-faint)' }}>—</span>}
+                            </td>
+                            <td style={{ width: 44 }}>
+                              <button
+                                className="ray-save-btn"
+                                onClick={e => { e.stopPropagation(); toggle(lot.id); }}
+                                aria-label={isSaved(lot.id) ? 'Remove from saved' : 'Save lot'}
+                                style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-accent-gold)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
+                              >
+                                <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                                  <path d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z" fill={isSaved(lot.id) ? 'var(--color-bg)' : 'var(--color-text-faint)'} />
+                                </svg>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
               <div className="ray-upcoming-grid" key={feedKey}>
                 {feed.length === 0 ? (
                   <div className="ray-feed-empty">
@@ -289,6 +362,11 @@ export default function RayPage() {
                   ))
                 )}
               </div>
+              )}
+
+              {tableLot && (
+                <ComparableModal lot={tableLot} allLots={allLots} onClose={() => setTableLot(null)} />
+              )}
 
               {visibleUpcoming < feed.length && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>

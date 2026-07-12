@@ -25,7 +25,7 @@ function formatEstimate(lot: AuctionLot): string {
  * band over it — so "is this cheap?" is readable at a glance: estimate band
  * left of the dot cloud = priced under the market.
  */
-function PriceBand({
+export function PriceBand({
   prices,
   median,
   estLow,

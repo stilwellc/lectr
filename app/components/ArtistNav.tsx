@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL } from '../constants';
 import CommandK from './CommandK';
 
-export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {} }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number> }) {
+export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
@@ -223,6 +223,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
           </button>
         </nav>
+
+        {lastCrawl && (
+          <span className="ray-fresh" title="Data refreshes with the daily crawl">
+            <span className="ray-fresh-dot" aria-hidden="true" />
+            Live · updated {lastCrawl}
+          </span>
+        )}
 
         <button
           className="ray-ck-hintbtn"

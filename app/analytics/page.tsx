@@ -37,7 +37,7 @@ export default function AnalyticsPage() {
       color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
-      <ArtistNav activeSlug="analytics" savedCount={savedIds.length} upcomingCounts={upcomingCounts} />
+      <ArtistNav activeSlug="analytics" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       <RayHero
         eyebrow="Market Analytics"

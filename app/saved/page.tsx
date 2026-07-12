@@ -26,7 +26,7 @@ function hammerWord(days: number): string {
  * signal flags as cheap — then the lots in urgency order.
  */
 export default function SavedPage() {
-  const { allLots, statsByArtist, loading, fromCache } = useRayData();
+  const { allLots, statsByArtist, lastCrawl, loading, fromCache } = useRayData();
   const { savedIds, toggle, isSaved } = useSavedLots();
 
   const savedLots = useMemo(() =>
@@ -87,7 +87,7 @@ export default function SavedPage() {
         }
       `}</style>
 
-      <ArtistNav activeSlug="saved" savedCount={savedIds.length} upcomingCounts={upcomingCounts} />
+      <ArtistNav activeSlug="saved" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {loading ? (
         <RayLoading />
