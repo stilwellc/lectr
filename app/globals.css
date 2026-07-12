@@ -1887,6 +1887,87 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-tapeband .ray-tape-item { font-size: 12px; }
 }
 
+/* THE STAR — the market tiles: the areas we cover, big and clickable,
+   fused to the chart in one pane. People click these first. */
+.ray-pane {
+  border: 1px solid var(--hairline);
+  background: #0A0B0D;
+}
+.ray-mkttiles {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--hairline);
+}
+.ray-mkttile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 78px;
+  padding: 12px 14px;
+  background: #0A0B0D;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  min-width: 0;
+  transition: background 140ms var(--ease-ui);
+}
+.ray-mkttile:hover[data-live=true] { background: #101216; }
+.ray-mkttile[data-active=true] { background: #101216; }
+.ray-mkttile[data-active=true]::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: var(--color-fg);
+}
+.ray-mkttile[data-live=false] { cursor: default; }
+.ray-mkttile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ray-mkttile-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text-secondary);
+  transition: color 140ms var(--ease-ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ray-mkttile:hover[data-live=true] .ray-mkttile-name,
+.ray-mkttile[data-active=true] .ray-mkttile-name { color: var(--color-fg); }
+.ray-mkttile[data-live=false] .ray-mkttile-name { color: #7A8087; }
+.ray-mkttile-spark { flex: none; opacity: 0.9; }
+.ray-mkttile[data-tone=up] .ray-mkttile-spark { color: var(--color-up); }
+.ray-mkttile[data-tone=down] .ray-mkttile-spark { color: var(--color-down); }
+.ray-mkttile-figs { display: flex; align-items: baseline; gap: 8px; }
+.ray-mkttile-val { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1; }
+.ray-mkttile-delta { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ray-mkttile[data-tone=up] .ray-mkttile-delta { color: var(--color-up); }
+.ray-mkttile[data-tone=down] .ray-mkttile-delta { color: var(--color-down); }
+.ray-mkttile-soon { font-size: 11px; font-weight: 500; color: #7A8087; }
+@media (max-width: 900px) {
+  .ray-mkttiles { grid-template-columns: repeat(3, 1fr); }
+  .ray-mkttile { min-height: 64px; padding: 10px 12px; }
+  .ray-mkttile-spark { display: none; }
+  .ray-mkttile-val { font-size: 16px; }
+  .ray-mkttile-name { font-size: 12.5px; }
+}
+
+/* the data band below the pane: call plate + hammers side by side */
+.ray-subdeck {
+  display: grid;
+  grid-template-columns: 396px minmax(0, 1fr);
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  margin-top: 28px;
+}
+@media (max-width: 1000px) { .ray-subdeck { grid-template-columns: 1fr; } }
+
 /* R3 · the index rail — five exchange cells; the ONLY market switch */
 .ray-idxrail {
   background: #0A0B0D;
@@ -3331,3 +3412,11 @@ body {
   margin: 0 0 22px;
 }
 .ray-soon p b { color: var(--color-text-secondary); }
+
+/* the pane keeps the chart primary: slimmer numeral, tighter head */
+.ray-pane .ray-board-demand { padding: 16px 20px 12px; }
+.ray-pane .ray-numrow .ray-hero2-value { font-size: 48px; }
+@media (max-width: 900px) {
+  .ray-pane .ray-numrow .ray-hero2-value { font-size: 36px; }
+  .ray-pane .ray-board-demand { padding: 14px 14px 10px; }
+}

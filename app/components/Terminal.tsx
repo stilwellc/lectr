@@ -24,6 +24,67 @@ function daysWord(dateStr: string): string {
   return `in ${days}d`;
 }
 
+/* ── THE STAR: the market tiles — big, clickable, first ─────────────── */
+export function MarketTiles({
+  demand,
+  active,
+  onPick,
+}: {
+  demand: Record<string, DemandPoint[]>;
+  active: Market;
+  onPick: (m: Market) => void;
+}) {
+  return (
+    <div className="ray-mkttiles" role="tablist" aria-label="Markets">
+      {MARKETS.map(m => {
+        const series = demand[m.key] || [];
+        const now = m.live && series.length ? series[series.length - 1].value : null;
+        const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
+        const delta = now !== null && yearAgo !== null ? Math.round(now - yearAgo) : null;
+        const spark = series.slice(-12).map(p => p.value);
+        const min = Math.min(...spark);
+        const span = Math.max(...spark) - min || 1;
+        const W = 56, H = 18;
+        const pts = spark.length > 1
+          ? spark.map((v, i) => `${((i / (spark.length - 1)) * W).toFixed(1)},${(H - 2 - ((v - min) / span) * (H - 4)).toFixed(1)}`).join(' ')
+          : '';
+        const tone = delta === null ? undefined : delta >= 0 ? 'up' : 'down';
+        return (
+          <button
+            key={m.key}
+            role="tab"
+            aria-selected={active === m.key}
+            className="ray-mkttile"
+            data-active={active === m.key}
+            data-live={m.live}
+            data-tone={tone}
+            onClick={() => m.live && onPick(m.key)}
+          >
+            <span className="ray-mkttile-top">
+              <span className="ray-mkttile-name">{m.label}</span>
+              {pts && m.live && (
+                <svg className="ray-mkttile-spark" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none" aria-hidden="true">
+                  <polyline points={pts} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </span>
+            {m.live && now !== null ? (
+              <span className="ray-mkttile-figs">
+                <span className="ray-mkttile-val">{formatDemand(now)}</span>
+                {delta !== null && delta !== 0 && (
+                  <span className="ray-mkttile-delta">{delta > 0 ? '▲' : '▼'} {Math.abs(delta)} pts</span>
+                )}
+              </span>
+            ) : (
+              <span className="ray-mkttile-soon">soon</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── R3 · the index rail ────────────────────────────────────────────── */
 export function IndexRail({
   demand,

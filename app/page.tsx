@@ -16,7 +16,7 @@ import CountUp from './components/CountUp';
 import MarketTape from './components/MarketTape';
 import BoardDemand from './components/BoardDemand';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
-import { IndexRail, CallPlate, HammersPanel, DeskMatrix, FilmStrip, Monument, Colophon } from './components/Terminal';
+import { MarketTiles, CallPlate, HammersPanel, DeskMatrix, FilmStrip, Monument, Colophon } from './components/Terminal';
 
 const PAGE_SIZE = 48;
 
@@ -206,9 +206,6 @@ export default function RayPage() {
         </div>
       )}
 
-      {/* R3 · the index rail — cross-market state, the only market switch */}
-      <IndexRail demand={demand} active={market} onPick={setMarket} />
-
       {!marketMeta.live ? (
         <div className="rail">
           <section className="ray-soon">
@@ -244,21 +241,17 @@ export default function RayPage() {
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
-          {/* R4 · THE BOARD — the room's main screen. Demand panel left
-              (numeral · ledger · instrumented curve), the matted call plate
-              and the next hammers right, one seam grammar throughout. */}
+          {/* THE HERO PANE — the star is the areas we cover: six big market
+              tiles people click FIRST, fused to the demand curve in one pane.
+              Everything data-heavy waits below. */}
           <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
-            <div className="ray-board">
+            <div className="ray-pane">
+              <MarketTiles demand={demand} active={market} onPick={setMarket} />
               <BoardDemand
                 allLots={marketLots}
                 demand={demand[activeKey] || []}
                 marketLabel={marketMeta.label.toLowerCase()}
-                ledger={strip}
               />
-              <div className="ray-board-rail">
-                <CallPlate lots={marketLots} allLots={marketLots} />
-                <HammersPanel lots={marketLots} allLots={marketLots} />
-              </div>
             </div>
             {backtest && backtest.flagged.n > 500 && (
               <a href="/value" className="ray-proofstrip">
@@ -268,6 +261,23 @@ export default function RayPage() {
               </a>
             )}
           </div>
+
+          {/* Now the data: the market in four figures, then the call + hammers */}
+          <section className="rail ray-enter" style={{ paddingTop: 26 }}>
+            <div className="ray-ledger" style={{ margin: 0 }}>
+              {strip.map(item => (
+                <div key={item.k}>
+                  <div className="ray-ledger-k">{item.k}</div>
+                  <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
+                  <div className="ray-ledger-s">{item.s}</div>
+                </div>
+              ))}
+            </div>
+            <div className="ray-subdeck">
+              <CallPlate lots={marketLots} allLots={marketLots} />
+              <HammersPanel lots={marketLots} allLots={marketLots} />
+            </div>
+          </section>
 
           {/* R5 · THE DESK — every maker as a bookable row */}
           {fullLoaded && (
