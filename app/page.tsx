@@ -14,6 +14,7 @@ import SectionMark from './components/SectionMark';
 import CountUp from './components/CountUp';
 import MarketTape from './components/MarketTape';
 import MarketBlock from './components/MarketBlock';
+import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
 
 const PAGE_SIZE = 48;
 
@@ -21,6 +22,7 @@ export default function RayPage() {
   const { allLots, statsByArtist, lastCrawl, loading, error, fromCache } = useRayData();
   const { toggle, isSaved, savedIds } = useSavedLots();
   const [visibleUpcoming, setVisibleUpcoming] = useState(PAGE_SIZE);
+  const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
 
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -34,6 +36,48 @@ export default function RayPage() {
   }, [allLots]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+
+  // One shared below-market id set — the toolbar lens, its count, and the
+  // cards all read the same signal (computed once, not per keystroke).
+  const belowIds = useMemo(() => {
+    const ids = new Set<string>();
+    upcoming.forEach(l => {
+      const s = computeBuySignal(l, allLots);
+      if (s && s.label === 'Below Market') ids.add(l.id);
+    });
+    return ids;
+  }, [upcoming, allLots]);
+
+  // The feed the reader actually sees — search + lenses + sort applied.
+  const feed = useMemo(() => {
+    const f = feedFilters;
+    const q = f.query.trim().toLowerCase();
+    let arr = upcoming;
+    if (f.house) arr = arr.filter(l => l.auctionHouse === f.house);
+    if (f.category) arr = arr.filter(l => l.category === f.category);
+    if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
+    if (q) {
+      arr = arr.filter(l =>
+        `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
+          .toLowerCase()
+          .includes(q)
+      );
+    }
+    const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || 0;
+    if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
+    else if (f.sort === 'est-asc') arr = [...arr].sort((a, b) => est(a) - est(b));
+    return arr; // 'soonest' keeps the date order upcoming already has
+  }, [upcoming, feedFilters, belowIds]);
+
+  // Any lens change restarts pagination and re-runs the card entrance.
+  const feedKey = useMemo(() => {
+    const f = feedFilters;
+    return `${f.query}|${f.house}|${f.category}|${f.belowOnly}|${f.sort}`;
+  }, [feedFilters]);
+  const handleFilters = (next: FeedFilters) => {
+    setFeedFilters(next);
+    setVisibleUpcoming(PAGE_SIZE);
+  };
 
   const sold = useMemo(() =>
     allLots
@@ -266,36 +310,47 @@ export default function RayPage() {
                   }}>
                     Upcoming <span style={{ fontStyle: 'italic' }}>Lots</span>
                   </h2>
-                  <span style={{
-                    fontFamily: 'var(--font-mono), monospace',
-                    fontSize: 12,
-                    color: 'var(--color-text-faint)',
-                  }}>
-                    {upcoming.length.toLocaleString()} lots
-                  </span>
                 </div>
               </div>
 
-              <div className="ray-upcoming-grid">
-                {upcoming.slice(0, visibleUpcoming).map((lot, i) => (
-                  <div
-                    key={lot.id}
-                    className="ray-enter-card"
-                    style={{ '--enter-delay': `${90 + Math.min(i, 8) * 60}ms` } as React.CSSProperties}
-                  >
-                    <LotCard
-                      lot={lot}
-                      showArtist
-                      allLots={allLots}
-                      stats={statsByArtist[lot.artist]}
-                      saved={isSaved(lot.id)}
-                      onToggleSave={toggle}
-                    />
+              <FeedToolbar
+                lots={upcoming}
+                belowIds={belowIds}
+                filters={feedFilters}
+                onChange={handleFilters}
+                shown={feed.length}
+                total={upcoming.length}
+              />
+
+              <div className="ray-upcoming-grid" key={feedKey}>
+                {feed.length === 0 ? (
+                  <div className="ray-feed-empty">
+                    <p>Nothing on the block matches that.</p>
+                    <button className="ray-toolbar-reset" onClick={() => handleFilters(FEED_DEFAULTS)}>
+                      Clear the lenses
+                    </button>
                   </div>
-                ))}
+                ) : (
+                  feed.slice(0, visibleUpcoming).map((lot, i) => (
+                    <div
+                      key={lot.id}
+                      className="ray-feed-rekey"
+                      style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
+                    >
+                      <LotCard
+                        lot={lot}
+                        showArtist
+                        allLots={allLots}
+                        stats={statsByArtist[lot.artist]}
+                        saved={isSaved(lot.id)}
+                        onToggleSave={toggle}
+                      />
+                    </div>
+                  ))
+                )}
               </div>
 
-              {visibleUpcoming < upcoming.length && (
+              {visibleUpcoming < feed.length && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
                   <button
                     onClick={() => setVisibleUpcoming(v => v + PAGE_SIZE)}
@@ -314,7 +369,7 @@ export default function RayPage() {
                       transition: 'border-color var(--duration-fast) var(--ease-signature)',
                     }}
                   >
-                    Show more ({(upcoming.length - visibleUpcoming).toLocaleString()} remaining)
+                    Show more ({(feed.length - visibleUpcoming).toLocaleString()} remaining)
                   </button>
                 </div>
               )}

@@ -209,6 +209,16 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       <div className="ray-artist-nav-inner rail">
         <a href="/" className="ray-wordmark" aria-label="Ray — home">Ray</a>
 
+        {/* Desktop quick links — one click to each room; the dropdown stays
+            the artist index. Hidden on mobile where the dropdown covers all. */}
+        <nav className="ray-nav-links" aria-label="Sections">
+          <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate('/')}>Overview</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
+            Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
+          </button>
+        </nav>
+
         <div className="ray-artist-select-wrap">
         <button
           ref={triggerRef}

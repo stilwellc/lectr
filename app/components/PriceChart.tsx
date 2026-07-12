@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot } from 'recharts';
 import { PricePoint, AuctionLot } from '../types';
 import type { LotCategory } from '../types';
 import { formatPrice, categoryLabels, categoryColors } from '../utils';
@@ -125,6 +125,13 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
   const hasChart = data.length >= 2;
   const hasCategories = catPricing.length > 1;
 
+  // The record quarter — annotated on the chart so the peak reads as a fact,
+  // not an anonymous spike.
+  const record = useMemo(() => {
+    if (data.length < 2) return null;
+    return data.reduce((best, p) => (p.highPrice > best.highPrice ? p : best), data[0]);
+  }, [data]);
+
   if (!hasChart && !hasCategories) return null;
 
   const filterLabel = categoryFilter !== 'all' ? ` — ${categoryLabels[categoryFilter]}` : '';
@@ -206,40 +213,44 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
             </div>
             <div className="ray-chart-container ray-chart-draw" ref={drawRef}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data} margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                <AreaChart data={data} margin={{ top: 24, right: 16, left: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="ivoryGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="var(--color-fg)" stopOpacity={0.08} />
                       <stop offset="100%" stopColor="var(--color-fg)" stopOpacity={0.01} />
                     </linearGradient>
                     <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--color-accent-gold)" stopOpacity={0.1} />
+                      <stop offset="0%" stopColor="var(--color-accent-gold)" stopOpacity={0.22} />
                       <stop offset="100%" stopColor="var(--color-accent-gold)" stopOpacity={0.01} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                    tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
                     axisLine={{ stroke: 'var(--color-border)' }}
                     tickLine={false}
                     interval="preserveStartEnd"
+                    minTickGap={56}
                   />
                   <YAxis
                     tickFormatter={formatAxis}
-                    tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                    tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
                     axisLine={false}
                     tickLine={false}
                     width={50}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    cursor={{ stroke: 'var(--color-accent-gold)', strokeDasharray: '4 4', strokeOpacity: 0.45 }}
+                  />
                   <Area
                     type="monotone"
                     dataKey="highPrice"
                     stroke="var(--color-accent-gold)"
                     strokeWidth={1}
                     fill="url(#goldGrad)"
-                    strokeOpacity={0.35}
+                    strokeOpacity={0.5}
                     dot={false}
                   />
                   <Area
@@ -260,6 +271,32 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     dot={false}
                     connectNulls={false}
                   />
+                  {record && (
+                    <ReferenceDot
+                      x={record.date}
+                      y={record.highPrice}
+                      r={3.5}
+                      fill="var(--color-accent-gold)"
+                      stroke="var(--color-bg)"
+                      strokeWidth={2}
+                      isFront
+                      label={({ viewBox }: { viewBox: { x: number; y: number } }) => (
+                        <g>
+                          <text
+                            x={viewBox.x}
+                            y={viewBox.y - 10}
+                            textAnchor="middle"
+                            fill="var(--color-accent-gold-text)"
+                            fontFamily="var(--font-mono), monospace"
+                            fontSize={10.5}
+                            letterSpacing="0.08em"
+                          >
+                            {`RECORD ${formatAxis(record.highPrice)}`}
+                          </text>
+                        </g>
+                      )}
+                    />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
