@@ -20,7 +20,7 @@ import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolba
 const PAGE_SIZE = 48;
 
 export default function RayPage() {
-  const { allLots, statsByArtist, tape, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
+  const { allLots, statsByArtist, tape, demand, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
   const { toggle, isSaved, savedIds } = useSavedLots();
   const [visibleUpcoming, setVisibleUpcoming] = useState(PAGE_SIZE);
   const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
@@ -201,7 +201,7 @@ export default function RayPage() {
         <RayEntrance animate={!fromCache}>
           {/* The market as a portfolio: giant numeral, green performance line */}
           <div className="ray-enter">
-            <MarketHero statsByArtist={statsByArtist} totalValue={totalRealized} pulse={pulse} />
+            <MarketHero allLots={allLots} demand={demand} totalValue={totalRealized} pulse={pulse} />
           </div>
 
           {/* The live strip: today's market in four figures */}
