@@ -335,14 +335,14 @@ const ARTISTS: ArtistConfig[] = [
     bonhams: 'Kenny Scharf',
   },
 
-  // ── The watches vertical: makers, not artists. Bonhams keyword search is
-  // the workhorse; Christie's maker pages fall back to keyword search.
+  // ── The watches vertical: makers, not artists. Phillips (the watch house)
+  // maker pages + Christie's maker pages + Bonhams keyword search.
   // Wright/Rago don't trade watches — deliberately absent.
-  { slug: 'rolex', displayName: 'Rolex', christies: 'rolex', bonhams: 'Rolex wristwatch' },
-  { slug: 'patek-philippe', displayName: 'Patek Philippe', christies: 'patek-philippe', bonhams: 'Patek Philippe' },
-  { slug: 'audemars-piguet', displayName: 'Audemars Piguet', christies: 'audemars-piguet', bonhams: 'Audemars Piguet' },
-  { slug: 'omega', displayName: 'Omega', bonhams: 'Omega wristwatch' },
-  { slug: 'cartier', displayName: 'Cartier', christies: 'cartier', bonhams: 'Cartier' },
+  { slug: 'rolex', displayName: 'Rolex', phillips: { id: '5830', slug: 'rolex' }, christies: 'rolex', bonhams: 'Rolex wristwatch' },
+  { slug: 'patek-philippe', displayName: 'Patek Philippe', phillips: { id: '12634', slug: 'patek-philippe' }, christies: 'patek-philippe', bonhams: 'Patek Philippe' },
+  { slug: 'audemars-piguet', displayName: 'Audemars Piguet', phillips: { id: '10464', slug: 'audemars-piguet' }, christies: 'audemars-piguet', bonhams: 'Audemars Piguet' },
+  { slug: 'omega', displayName: 'Omega', phillips: { id: '10364', slug: 'omega' }, christies: 'omega', bonhams: 'Omega wristwatch' },
+  { slug: 'cartier', displayName: 'Cartier', phillips: { id: '4810', slug: 'cartier' }, christies: 'cartier', bonhams: 'Cartier' },
 
   // ── The science vertical: collections, Geek Week-style (tech, fossils,
   // space, natural history). Bonhams' science & natural history departments
@@ -1104,6 +1104,130 @@ function parseWrightAdvancedItem(item: any, artistSlug: string): AuctionLot {
 // We query the 'lots' collection for the artist name.
 
 const BONHAMS_TYPESENSE_KEY = '7YZqOyG0twgst4ACc2VuCyZxpGAYzM0weFTLCC20FQY';
+// ── Sotheby's Luxury Crawler (Algolia) ──
+// Sotheby's has no maker pages for watch brands; their LIVE auction lots
+// (watches, science) surface through the luxury marketplace's Algolia index.
+// Lot channel only — retail buy-now listings are fixed-price, not auction
+// data, and would corrupt the demand index. The page embeds a rotating
+// secured search key; lift it fresh each run.
+const SOTHEBYS_ALGOLIA_APP = 'KAR1UEUPJD';
+const SOTHEBYS_WATCH_CREATORS: Record<string, RegExp> = {
+  rolex: /^rolex/i,
+  'patek-philippe': /^patek/i,
+  'audemars-piguet': /^audemars/i,
+  omega: /^omega/i,
+  cartier: /^cartier/i,
+};
+
+function scienceSlugFor(title: string): string {
+  const t = title.toLowerCase();
+  if (/meteorite|pallasite|tektite|moldavite/.test(t)) return 'meteorites';
+  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaurus|triceratops|pterosaur/.test(t)) return 'fossils';
+  if (/apollo|nasa|space|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|rocket/.test(t)) return 'space-exploration';
+  return 'scientific-instruments';
+}
+
+async function crawlSothebysLuxury(): Promise<AuctionLot[]> {
+  const lots: AuctionLot[] = [];
+  console.log("  [Sotheby's Luxury] Fetching live auction lots (watches + science)...");
+  try {
+    const page = await fetch('https://www.sothebys.com/en/buy/luxury/watches/watch/rolex', {
+      headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+    });
+    const html = await page.text();
+    const keyM = html.match(/"algoliaSearchKey":"([^"]+)"/);
+    if (!keyM) { console.log("  [Sotheby's Luxury] no search key on page — layout changed?"); return lots; }
+    const key = keyM[1];
+
+    const query = async (body: object): Promise<any> => {
+      const res = await fetch(`https://${SOTHEBYS_ALGOLIA_APP}-dsn.algolia.net/1/indexes/prod_product_items/query`, {
+        method: 'POST',
+        headers: { 'X-Algolia-API-Key': key, 'X-Algolia-Application-Id': SOTHEBYS_ALGOLIA_APP },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20000),
+      });
+      return res.json();
+    };
+
+    // exact creator names for our makers (facet values are case-sensitive)
+    const facetRes = await query({ query: '', hitsPerPage: 0, filters: 'salesChannel:lot', facets: ['creators'], maxValuesPerFacet: 900 });
+    const creatorNames: string[] = Object.keys(facetRes.facets?.creators || {});
+
+    // gather raw hits: one filter per maker + the whole Science department
+    const jobs: { artist: string | null; filters: string }[] = [];
+    for (const [slug, rx] of Object.entries(SOTHEBYS_WATCH_CREATORS)) {
+      const names = creatorNames.filter(n => rx.test(n));
+      if (names.length) jobs.push({ artist: slug, filters: `salesChannel:lot AND (${names.map(n => `creators:"${n.replace(/"/g, '\\"')}"`).join(' OR ')})` });
+    }
+    jobs.push({ artist: null, filters: 'salesChannel:lot AND department:Science' });
+
+    const rawHits: { artist: string; hit: any }[] = [];
+    for (const job of jobs) {
+      let pg = 0, nbPages = 1;
+      while (pg < nbPages && pg < 12) {
+        const r = await query({ query: '', hitsPerPage: 100, page: pg, filters: job.filters });
+        nbPages = r.nbPages || 1;
+        for (const hit of r.hits || []) {
+          rawHits.push({ artist: job.artist || scienceSlugFor(hit.title || ''), hit });
+        }
+        pg++;
+        await sleep(300);
+      }
+    }
+    console.log(`  [Sotheby's Luxury] ${rawHits.length} live lots matched`);
+
+    // resolve sale dates once per auction (the lot slug embeds the sale path)
+    const auctionDates = new Map<string, string | null>();
+    const auctionOf = (slug: string) => {
+      const m = (slug || '').match(/^(\/en\/buy\/auction\/\d{4}\/[^/]+)/);
+      return m ? m[1] : null;
+    };
+    for (const { hit } of rawHits) {
+      const a = auctionOf(hit.slug);
+      if (!a || auctionDates.has(a)) continue;
+      try {
+        const res = await fetch(`https://www.sothebys.com${a}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25000) });
+        const ah = await res.text();
+        const ends = ah.match(/"endDate":"([^"]+)"/g)?.map(s => s.slice(11, -1)) || [];
+        const latest = ends.map(d => new Date(d)).filter(d => !isNaN(d.getTime())).sort((x, y) => y.getTime() - x.getTime())[0];
+        auctionDates.set(a, latest ? latest.toISOString() : null);
+      } catch { auctionDates.set(a, null); }
+      await sleep(400);
+    }
+
+    for (const { artist, hit } of rawHits) {
+      const a = auctionOf(hit.slug);
+      const saleDate = a ? auctionDates.get(a) : null;
+      if (!saleDate || !hit.title) continue; // no fake dates
+      const saleSeg = a!.split('/').pop()!;
+      lots.push({
+        id: `sothebys-lux-${hit.sku || hit.objectID}`,
+        artist,
+        title: hit.title,
+        year: null,
+        medium: null,
+        dimensions: null,
+        category: 'unknown',
+        imageUrl: hit.imageUrl || null,
+        auctionHouse: "Sotheby's",
+        saleName: saleSeg.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        saleDate,
+        lotNumber: null,
+        estimateLow: hit.lowEstimate || null,
+        estimateHigh: hit.highEstimate || null,
+        priceUsd: null,
+        currency: (hit.currency || 'USD') as Currency,
+        status: 'upcoming',
+        url: `https://www.sothebys.com${hit.slug}`,
+      } as AuctionLot);
+    }
+    console.log(`  [Sotheby's Luxury] Parsed ${lots.length} dated upcoming lots across ${auctionDates.size} sales`);
+  } catch (err) {
+    console.error("  [Sotheby's Luxury] Error:", err);
+  }
+  return lots;
+}
+
 const BONHAMS_SEARCH_URL = 'https://api01.bonhams.com/search-proxy/collections/lots/documents/search';
 
 async function crawlBonhams(artist: ArtistConfig): Promise<AuctionLot[]> {
@@ -1810,6 +1934,13 @@ async function main() {
     if (artist !== roster[roster.length - 1]) await sleep(DELAY_MS);
   }
 
+  // Sotheby's live watch & science lots ride the luxury Algolia index —
+  // one cross-roster pass, not per-artist.
+  const LUXURY_SLUGS = ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier', 'meteorites', 'fossils', 'space-exploration', 'scientific-instruments'];
+  if (!only || LUXURY_SLUGS.some(s => only.has(s))) {
+    freshLots.push(...await crawlSothebysLuxury());
+  }
+
   // Merge: new data overwrites existing by ID
   const lotMap = new Map<string, AuctionLot>();
   for (const lot of existingLots) lotMap.set(lot.id, lot);
@@ -1844,6 +1975,27 @@ async function main() {
     categoryCounts[lot.category] = (categoryCounts[lot.category] || 0) + 1;
   }
   console.log(`[Ray] Category breakdown:`, categoryCounts);
+
+  // The watches vertical trades WATCHES: maker keyword searches also surface
+  // jewelry (Cartier necklaces, Rolex-set brooches, vanity cases from the
+  // jewels departments) — drop it at the door. A lot goes if its form is
+  // jewelry, or if it came out of a jewels sale and isn't horology.
+  const WATCH_MAKERS = new Set(['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier']);
+  const { classifyForm } = await import('../app/lib/comps');
+  const HOROLOGY = new Set(['wristwatch', 'pocket-watch', 'clock']);
+  const beforeJewelry = allLots.length;
+  const keptLots = allLots.filter(l => {
+    if (!WATCH_MAKERS.has(l.artist)) return true;
+    const form = classifyForm(l as any);
+    if (form === 'jewelry') return false;
+    if (/jewel/i.test(l.saleName || '') && !HOROLOGY.has(form)) return false;
+    return true;
+  });
+  if (keptLots.length < beforeJewelry) {
+    console.log(`[Ray] Dropped ${beforeJewelry - keptLots.length} non-watch jewelry lots from watch makers`);
+  }
+  allLots.length = 0;
+  allLots.push(...keptLots);
 
   // Compute per-artist stats
   const statsByArtist: Record<string, MarketStats> = {};
