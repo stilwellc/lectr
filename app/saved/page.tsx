@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
-import LotCard, { computeBuySignal } from '../components/LotCard';
+import LotCard, { lotSignal } from '../components/LotCard';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
@@ -58,7 +58,7 @@ export default function SavedPage() {
       return s + (lo + hi) / 2;
     }, 0);
     const flagged = upcoming.filter(l => {
-      const sig = computeBuySignal(l, allLots);
+      const sig = lotSignal(l, allLots);
       return sig && sig.label === 'Below Market';
     }).length;
     const next = upcoming[0] || null;

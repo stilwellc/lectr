@@ -24,6 +24,10 @@ export interface AuctionLot {
   priceUsd: number | null;
   status: LotStatus;
   url: string;
+  /** Precomputed at crawl time for upcoming lots (comps median vs estimate
+      midpoint) so the feed can paint before the full history downloads.
+      undefined = not precomputed (compute client-side from allLots). */
+  signal?: { label: 'Below Market' | 'Above Market'; pct: number } | null;
 }
 
 export interface PricePoint {

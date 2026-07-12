@@ -20,7 +20,7 @@ const AuctionHouseDistribution = dynamic(() => import('../components/analytics/A
 const PriceDistribution = dynamic(() => import('../components/analytics/PriceDistribution'), { ssr: false });
 
 export default function AnalyticsPage() {
-  const { allLots, statsByArtist, sources, lastCrawl, loading, fromCache } = useRayData();
+  const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache } = useRayData();
   const { savedIds } = useSavedLots();
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -42,13 +42,13 @@ export default function AnalyticsPage() {
       <RayHero
         eyebrow="Market Analytics"
         title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Analytics</span>}
-        sub={loading
+        sub={!fullLoaded
           ? '\u00A0' /* reserve the line — no zero-count flash while the crawl delivers */
           : <>Market-level intelligence across {ARTISTS.length} artists and {houseCount} auction houses.</>}
         timestamp={lastCrawl ? formatDate(lastCrawl) : undefined}
       />
 
-      {loading ? (
+      {!fullLoaded ? (
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>

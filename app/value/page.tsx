@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
-import LotCard, { computeBuySignal } from '../components/LotCard';
+import LotCard, { lotSignal } from '../components/LotCard';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import { getUpcomingCounts, formatPrice, formatDate } from '../utils';
@@ -23,7 +23,7 @@ export default function ValuePage() {
     const today = new Date().toISOString().split('T')[0];
     return allLots
       .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
-      .map(l => ({ lot: l, signal: computeBuySignal(l, allLots) }))
+      .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
       .sort((a, b) => (b.signal!.pct - a.signal!.pct));
   }, [allLots]);

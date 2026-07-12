@@ -18,6 +18,12 @@ function formatEstimate(lot: AuctionLot): string {
   return 'Estimate on request';
 }
 
+/** Prefer the crawl-time signal when present; else compute from history. */
+export function lotSignal(lot: AuctionLot, allLots: AuctionLot[]): { label: string; pct: number } | null {
+  if (lot.signal !== undefined) return lot.signal;
+  return computeBuySignal(lot, allLots);
+}
+
 /** Compute a quick buy signal: median comp price vs estimate midpoint */
 export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]): { label: string; pct: number } | null {
   if (!lot.estimateLow || !lot.estimateHigh) return null;
@@ -85,8 +91,8 @@ export default function LotCard({
   const isUpcoming = lot.status === 'upcoming';
 
   const buySignal = useMemo(() => {
-    if (!isUpcoming || !allLots.length) return null;
-    return computeBuySignal(lot, allLots);
+    if (!isUpcoming) return null;
+    return lotSignal(lot, allLots);
   }, [lot, allLots, isUpcoming]);
 
   const cardContent = (

@@ -6,7 +6,7 @@ import { useRayData } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts } from './utils';
 import ArtistNav from './components/ArtistNav';
-import LotCard, { computeBuySignal } from './components/LotCard';
+import LotCard, { lotSignal } from './components/LotCard';
 import PastResults from './components/PastResults';
 import RayEntrance, { RayLoading } from './components/RayEntrance';
 import CountUp from './components/CountUp';
@@ -18,7 +18,7 @@ import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolba
 const PAGE_SIZE = 48;
 
 export default function RayPage() {
-  const { allLots, statsByArtist, lastCrawl, loading, error, fromCache } = useRayData();
+  const { allLots, statsByArtist, tape, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
   const { toggle, isSaved, savedIds } = useSavedLots();
   const [visibleUpcoming, setVisibleUpcoming] = useState(PAGE_SIZE);
   const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
@@ -41,7 +41,7 @@ export default function RayPage() {
   const belowIds = useMemo(() => {
     const ids = new Set<string>();
     upcoming.forEach(l => {
-      const s = computeBuySignal(l, allLots);
+      const s = lotSignal(l, allLots);
       if (s && s.label === 'Below Market') ids.add(l.id);
     });
     return ids;
@@ -132,16 +132,17 @@ export default function RayPage() {
     });
     // Flagged count is among *this week's* lots so the sentence stays honest.
     const belowFlagged = thisWeekLots.filter(l => {
-      const sig = computeBuySignal(l, allLots);
+      const sig = lotSignal(l, allLots);
       return sig && sig.label === 'Below Market';
     }).length;
     return { weightedAppreciation, topArtist, thisWeek: thisWeekLots.length, belowFlagged };
   }, [statsByArtist, upcoming, allLots]);
 
-  // The tape: the biggest hammers among recent sales (recent-first, then by
-  // value) — records the market actually just paid.
-  const tapeItems = useMemo(() =>
-    sold.slice(0, 90)
+  // The tape ships precomputed in upcoming.json (instant); compute it only as
+  // a fallback for deploys that predate the split.
+  const tapeItems = useMemo(() => {
+    if (tape.length) return tape;
+    return sold.slice(0, 90)
       .filter(l => l.priceUsd && l.title)
       .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
       .slice(0, 18)
@@ -150,9 +151,8 @@ export default function RayPage() {
         title: l.title.length > 44 ? l.title.slice(0, 42) + '…' : l.title,
         price: formatPrice(l.priceUsd!),
         house: l.auctionHouse,
-      })),
-    [sold]
-  );
+      }));
+  }, [tape, sold]);
 
   return (
     <div style={{
