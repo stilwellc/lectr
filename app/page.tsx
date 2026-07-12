@@ -18,7 +18,7 @@ import MarketBlock from './components/MarketBlock';
 const PAGE_SIZE = 48;
 
 export default function RayPage() {
-  const { allLots, statsByArtist, sources, lastCrawl, loading, error, fromCache } = useRayData();
+  const { allLots, statsByArtist, lastCrawl, loading, error, fromCache } = useRayData();
   const { toggle, isSaved, savedIds } = useSavedLots();
   const [visibleUpcoming, setVisibleUpcoming] = useState(PAGE_SIZE);
 
@@ -42,33 +42,29 @@ export default function RayPage() {
     [allLots]
   );
 
-  // Truthful house count: crawler meta first, otherwise derived from the lots themselves
-  const houseCount = useMemo(() =>
-    sources.length || new Set(allLots.map(l => l.auctionHouse)).size,
-    [sources, allLots]
-  );
-
+  // The overview is a snapshot of the LIVE market — active (upcoming) lots only,
+  // never sold history — so it agrees with the "on the block" island below it.
+  // The all-time realized totals live on the analytics page.
   const overviewStats = useMemo(() => {
-    const totalLots = allLots.length;
-    const totalSalesValue = Object.values(statsByArtist).reduce((sum, s) => sum + (s.totalAuctionRevenue || 0), 0);
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    const recentSold = sold.filter(l => {
-      const d = new Date(l.saleDate);
-      return !isNaN(d.getTime()) && d >= oneYearAgo;
-    });
-    const avgPrice = recentSold.length
-      ? recentSold.reduce((sum, l) => sum + (l.priceUsd || 0), 0) / recentSold.length
-      : 0;
+    const active = upcoming;
+    const withEst = active.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
+    const estValue = withEst.reduce((sum, l) => {
+      const lo = l.estimateLow || l.estimateHigh || 0;
+      const hi = l.estimateHigh || l.estimateLow || 0;
+      return sum + (lo + hi) / 2;
+    }, 0);
+    const avgEst = withEst.length ? estValue / withEst.length : 0;
+    const liveArtists = new Set(active.map(l => l.artist)).size;
+    const liveHouses = new Set(active.map(l => l.auctionHouse)).size;
     const asInt = (n: number) => Math.round(n).toString();
     const asComma = (n: number) => Math.round(n).toLocaleString();
     return [
-      { label: 'Artists', to: ARTISTS.length, format: asInt, sub: `${houseCount} auction houses` },
-      { label: 'Total Lots', to: totalLots, format: asComma, sub: 'sold, upcoming & bought-in' },
-      { label: 'Total Sales Value', to: totalSalesValue, format: formatPrice, sub: 'aggregate realized prices' },
-      { label: 'Avg. Price (12mo)', to: avgPrice, format: formatPrice, sub: `${recentSold.length.toLocaleString()} recent sales` },
+      { label: 'Artists Live', to: liveArtists, format: asInt, sub: `of ${ARTISTS.length} tracked` },
+      { label: 'Active Lots', to: active.length, format: asComma, sub: `across ${liveHouses} houses` },
+      { label: 'Est. Value', to: estValue, format: formatPrice, sub: 'aggregate mid-estimates' },
+      { label: 'Avg. Estimate', to: avgEst, format: formatPrice, sub: `${withEst.length.toLocaleString()} lots with estimates` },
     ];
-  }, [allLots, sold, statsByArtist, houseCount]);
+  }, [upcoming]);
 
   // A living read on the market — one derived, honest line (revenue-weighted
   // appreciation matching the analytics page, the top house by revenue, this
