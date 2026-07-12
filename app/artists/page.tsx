@@ -23,7 +23,7 @@ export default function ArtistsPage() {
   const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache } = useRayData();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
-  const activeLabel = MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
+  const activeLabel = activeKey === 'all' ? 'full' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const rosterCount = useMemo(() => ARTISTS.filter(a => mktSet.has(a.slug)).length, [mktSet]);
