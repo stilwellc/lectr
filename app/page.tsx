@@ -13,6 +13,7 @@ import RayEntrance, { RayLoading } from './components/RayEntrance';
 import SectionMark from './components/SectionMark';
 import CountUp from './components/CountUp';
 import MarketTape from './components/MarketTape';
+import MarketBlock from './components/MarketBlock';
 
 const PAGE_SIZE = 48;
 
@@ -230,6 +231,12 @@ export default function RayPage() {
               ))}
             </div>
           </section>
+
+          {upcoming.length > 0 && (
+            <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
+              <MarketBlock upcoming={upcoming} allLots={allLots} />
+            </div>
+          )}
 
           {upcoming.length > 0 && (
             <section className="ray-upcoming-section rail">
