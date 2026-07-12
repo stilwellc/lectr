@@ -31,8 +31,9 @@ function fmtEst(lo: number | null, hi: number | null): string {
 export default function ValuePage() {
   const { allLots, statsByArtist, backtest, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
   const { market } = useMarket();
-  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'art';
-  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
+  const activeLabel = MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
+  const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const { savedIds, toggle, isSaved } = useSavedLots();
   const [compsOpen, setCompsOpen] = useState(false);
@@ -121,7 +122,7 @@ export default function ValuePage() {
         <RayEntrance animate={!fromCache}>
           <section className="ray-hero2 rail ray-enter">
             <div style={{ marginBottom: 18 }}><MarketSwitch compact /></div>
-            <p className="ray-hero2-label">Value · below-market {activeKey} lots on the block</p>
+            <p className="ray-hero2-label">Value · below-market {activeLabel} lots on the block</p>
             <h1 className="ray-hero2-value">
               <CountUp to={deals.length} format={n => Math.round(n).toString()} duration={900} />
             </h1>

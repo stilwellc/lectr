@@ -2,11 +2,19 @@ import type { Market } from '../constants';
 
 /**
  * MarketIcon — one monoline glyph per vertical, drawn in the same 1.6px
- * stroke family as the Ray mark. Art = framed gesture, Design = chair in
- * profile, Watches = dial with crown, Sports = the trophy, Science = the
- * flask. currentColor so each context tints them.
+ * stroke family as the Ray mark. Collectibles = the whole grid, Art = framed
+ * gesture, Design = chair in profile, Watches = dial with crown, Sports = the
+ * trophy, Science = the flask. currentColor so each context tints them.
  */
 const GLYPHS: Record<Market, React.ReactNode> = {
+  all: (
+    <>
+      <rect x="4" y="4" width="7" height="7" rx="1.6" />
+      <rect x="13" y="4" width="7" height="7" rx="1.6" />
+      <rect x="4" y="13" width="7" height="7" rx="1.6" />
+      <rect x="13" y="13" width="7" height="7" rx="1.6" />
+    </>
+  ),
   art: (
     <>
       <rect x="4" y="4.5" width="16" height="15" rx="1.8" />

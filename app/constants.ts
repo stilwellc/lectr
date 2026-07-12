@@ -2,11 +2,13 @@
  * The roster and the markets. Every artist belongs to a MARKET — the way the
  * trade actually splits (design sales vs contemporary art sales), so a
  * Nakashima bench never muddies the art demand index and vice versa.
- * Watches, Sports and Science are announced but not yet live.
+ * Watches, Sports and Science are announced but not yet live. 'all' is the
+ * whole collectibles market — the lander's default until a vertical is chosen.
  */
-export type Market = 'art' | 'design' | 'watches' | 'sports' | 'science';
+export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science';
 
 export const MARKETS: { key: Market; label: string; live: boolean; tagline: string }[] = [
+  { key: 'all', label: 'Collectibles', live: true, tagline: 'every market Ray tracks' },
   { key: 'art', label: 'Art', live: true, tagline: 'paintings, editions, photography & sculpture' },
   { key: 'design', label: 'Design', live: true, tagline: 'the furniture & objects market' },
   { key: 'watches', label: 'Watches', live: false, tagline: 'the reference market' },
@@ -49,6 +51,7 @@ export const ARTIST_MARKET: Record<string, Market> = Object.fromEntries(
 );
 
 export function marketArtists(market: Market): Set<string> {
+  if (market === 'all') return new Set(ARTISTS.map(a => a.slug));
   return new Set(ARTISTS.filter(a => a.market === market).map(a => a.slug));
 }
 

@@ -25,9 +25,9 @@ export default function RayPage() {
   const { allLots, statsByArtist, tape, demand, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
-  // Coming-soon markets preview over the Art dataset structure; live ones filter.
-  const activeKey = marketMeta.live ? market : 'art';
-  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  // Coming-soon markets fall back to the whole collectibles market; live ones filter.
+  const activeKey = marketMeta.live ? market : 'all';
+  const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const marketStats = useMemo(() => {
     const out: typeof statsByArtist = {};
@@ -210,8 +210,8 @@ export default function RayPage() {
               comparables only, demand measured against the ask, and a point-in-time record for
               every call. The engine generalizes; the crawl is being built.
             </p>
-            <button className="ray-call-btn ray-call-btn-primary" onClick={() => setMarket('art')}>
-              Explore Art in the meantime
+            <button className="ray-call-btn ray-call-btn-primary" onClick={() => setMarket('all')}>
+              Explore the collectibles market
             </button>
           </section>
         </div>
