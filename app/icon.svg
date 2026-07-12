@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0A0B0D"/>
+  <text x="32" y="45" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="38" font-weight="800" letter-spacing="-1" fill="#E8B95B">R</text>
+  <path d="M14 52 L26 44 L34 48 L50 38" stroke="#2FBF71" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

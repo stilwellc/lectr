@@ -25,6 +25,24 @@ export default function ArtistHero({
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
+  const [lens, setLens] = useState<'all' | 'original' | 'print'>('all');
+
+  // The medium lens: a $180K unique canvas and a $900 print are different
+  // markets — let the reader split them. Only offered when both sides have
+  // enough sales to draw honestly.
+  const lensCounts = useMemo(() => {
+    const sold = lots.filter(l => l.status === 'sold' && l.priceUsd);
+    return {
+      original: sold.filter(l => l.category === 'original').length,
+      print: sold.filter(l => l.category === 'print').length,
+    };
+  }, [lots]);
+  const showLens = lensCounts.original >= 8 && lensCounts.print >= 8;
+
+  const lensLots = useMemo(() => {
+    if (lens === 'all' || !showLens) return lots;
+    return lots.filter(l => l.category === lens);
+  }, [lots, lens, showLens]);
 
   // Trailing-12-month MEDIAN sale price, evaluated at each quarter — the same
   // quantity as the headline numeral, through time. Median, not mean: a single
@@ -36,7 +54,7 @@ export default function ArtistHero({
   const MIN_WINDOW_SALES = 3;
   const series = useMemo(() => {
     const byQuarter: Record<string, number[]> = {};
-    for (const l of lots) {
+    for (const l of lensLots) {
       if (l.status !== 'sold' || !l.priceUsd) continue;
       const d = new Date(l.saleDate);
       if (isNaN(d.getTime())) continue;
@@ -55,7 +73,7 @@ export default function ArtistHero({
       points.push({ date: qk, value: median });
     });
     return points;
-  }, [lots]);
+  }, [lensLots]);
 
   const visible = useMemo(() => {
     if (range === '1Y') return series.slice(-4);
@@ -75,18 +93,28 @@ export default function ArtistHero({
     return { sellThrough, houses, upcoming, total: lots.length };
   }, [lots]);
 
-  const appr = stats?.appreciationRate || 0;
+  // Delta from the SAME series the line draws (typical price now vs a year
+  // ago), so the sentence, the numeral and the chart can never disagree —
+  // and it stays correct under the medium lens.
+  const appr = useMemo(() => {
+    if (series.length < 5) return 0;
+    const now = series[series.length - 1].value;
+    const yearAgo = series[series.length - 5].value;
+    return yearAgo > 0 ? ((now - yearAgo) / yearAgo) * 100 : 0;
+  }, [series]);
   // The numeral comes from the same series the line draws, so the line ends
   // exactly at the number (crawler stat as fallback for artists with no chart).
   const avg12 = series.length ? series[series.length - 1].value : (stats?.avgPriceLast12Months || 0);
   const recordYear = stats?.recordDate ? new Date(stats.recordDate).getUTCFullYear() : null;
 
+  const lensWord = lens === 'original' ? 'unique work' : lens === 'print' ? 'edition' : 'sale';
+
   return (
     <section className="ray-hero2 rail">
       <p className="ray-hero2-label">
         {hover
-          ? `${label} · typical sale, 12 months to ${hover.date}`
-          : `${label} · typical sale price, trailing 12 months`}
+          ? `${label} · typical ${lensWord}, 12 months to ${hover.date}`
+          : `${label} · typical ${lensWord} price, trailing 12 months`}
       </p>
       {hover ? (
         <h1 className="ray-hero2-value">{formatPrice(hover.value)}</h1>
@@ -109,7 +137,7 @@ export default function ArtistHero({
 
       {visible.length >= 2 && (
         <>
-          <div key={range} className="ray-hero2-chart ray-chartfade" style={{ height: 230 }} onMouseLeave={() => setHover(null)}>
+          <div key={`${range}-${lens}`} className="ray-hero2-chart ray-chartfade" style={{ height: 230 }} onMouseLeave={() => setHover(null)}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={visible}
@@ -145,19 +173,37 @@ export default function ArtistHero({
             <span>{visible[0].date}</span>
             <span>{visible[visible.length - 1].date}</span>
           </div>
-          <div className="ray-hero2-ranges" role="radiogroup" aria-label="Chart range">
-            {(['1Y', '5Y', 'MAX'] as Range[]).map(r => (
-              <button
-                key={r}
-                role="radio"
-                aria-checked={range === r}
-                className="ray-range-btn"
-                data-active={range === r}
-                onClick={() => { setRange(r); setHover(null); }}
-              >
-                {r === 'MAX' ? 'Max' : r}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div className="ray-hero2-ranges" role="radiogroup" aria-label="Chart range">
+              {(['1Y', '5Y', 'MAX'] as Range[]).map(r => (
+                <button
+                  key={r}
+                  role="radio"
+                  aria-checked={range === r}
+                  className="ray-range-btn"
+                  data-active={range === r}
+                  onClick={() => { setRange(r); setHover(null); }}
+                >
+                  {r === 'MAX' ? 'Max' : r}
+                </button>
+              ))}
+            </div>
+            {showLens && (
+              <div className="ray-seg" role="radiogroup" aria-label="Medium">
+                {([['all', 'All'], ['original', 'Unique works'], ['print', 'Editions']] as const).map(([key, lbl]) => (
+                  <button
+                    key={key}
+                    role="radio"
+                    aria-checked={lens === key}
+                    className="ray-seg-btn"
+                    data-active={lens === key}
+                    onClick={() => { setLens(key); setHover(null); }}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL } from '../constants';
+import CommandK from './CommandK';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {} }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number> }) {
   const [open, setOpen] = useState(false);
@@ -15,6 +16,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     ? `Saved${savedCount > 0 ? ` (${savedCount})` : ''}`
     : activeSlug === 'analytics'
       ? 'Analytics'
+      : activeSlug === 'value'
+      ? 'Value'
       : activeSlug
         ? (ARTIST_LABEL[activeSlug] || activeSlug)
         : 'Overview';
@@ -56,6 +59,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   }
 
   return (
+    <>
     <div className="ray-artist-nav" ref={ref}>
       <style>{`
         .ray-artist-nav {
@@ -213,11 +217,20 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             the artist index. Hidden on mobile where the dropdown covers all. */}
         <nav className="ray-nav-links" aria-label="Sections">
           <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate('/')}>Overview</button>
+          <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
             Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
           </button>
         </nav>
+
+        <button
+          className="ray-ck-hintbtn"
+          aria-label="Open jump palette (Command K)"
+          onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+        >
+          &#8984;K
+        </button>
 
         <div className="ray-artist-select-wrap">
         <button
@@ -248,6 +261,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
               onClick={() => navigate('/')}
             >
               Overview
+            </button>
+            <button
+              role="menuitem"
+              className="ray-artist-dropdown-item"
+              data-active={activeSlug === 'value' ? 'true' : 'false'}
+              onClick={() => navigate('/value')}
+            >
+              Value
             </button>
             <button
               role="menuitem"
@@ -285,6 +306,43 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         )}
         </div>
       </div>
+
     </div>
+
+      {/* Mobile bottom tab bar — a SIBLING of the nav: backdrop-filter on the
+          nav would otherwise become the containing block for position:fixed
+          and pin the bar to the top. */}
+      <nav className="ray-tabbar" aria-label="Sections">
+        <button className="ray-tab" data-active={activeSlug === null} onClick={() => navigate('/')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M3 16l5-6 4 4 6-8" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3 21h18" strokeLinecap="round" />
+          </svg>
+          Overview
+        </button>
+        <button className="ray-tab" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M19 5L5 19" strokeLinecap="round" />
+            <circle cx="7.5" cy="7.5" r="2.6" />
+            <circle cx="16.5" cy="16.5" r="2.6" />
+          </svg>
+          Value
+        </button>
+        <button className="ray-tab" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M5 20V10M12 20V4M19 20v-7" strokeLinecap="round" />
+          </svg>
+          Analytics
+        </button>
+        <button className="ray-tab" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M6 3h12v18l-6-4.2L6 21V3z" strokeLinejoin="round" />
+          </svg>
+          Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
+        </button>
+      </nav>
+
+      <CommandK upcomingCounts={upcomingCounts} />
+    </>
   );
 }
