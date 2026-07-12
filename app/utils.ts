@@ -67,6 +67,7 @@ export const categoryLabels: Record<string, string> = {
   photograph: 'Photograph',
   sculpture: 'Sculpture',
   design: 'Design Object',
+  object: 'Object',
   unknown: 'Unknown',
 };
 
@@ -78,6 +79,7 @@ export const categoryColors: Record<string, string> = {
   photograph: 'color-mix(in srgb, var(--color-fg) 86%, var(--color-bg))',
   sculpture: 'color-mix(in srgb, var(--color-fg) 79%, var(--color-bg))',
   design: 'color-mix(in srgb, var(--color-fg) 72%, var(--color-bg))',
+  object: 'color-mix(in srgb, var(--color-fg) 68%, var(--color-bg))',
   unknown: 'color-mix(in srgb, var(--color-fg) 65%, var(--color-bg))',
 };
 
@@ -89,6 +91,7 @@ export const categoryColorsHex: Record<'dark' | 'light', Record<string, string>>
     photograph: '#CEC7BD',
     sculpture: '#BEB8AE',
     design: '#AEA99F',
+    object: '#A6A198',
     unknown: '#9F9991',
   },
   light: {
@@ -97,6 +100,7 @@ export const categoryColorsHex: Record<'dark' | 'light', Record<string, string>>
     photograph: '#413B32',
     sculpture: '#504A41',
     design: '#5F5950',
+    object: '#666157',
     unknown: '#6D685E',
   },
 };

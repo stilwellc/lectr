@@ -1,7 +1,7 @@
 export type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 'Rago' | 'Heritage' | 'Bonhams' | 'Hindman';
 export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn';
 export type Currency = 'USD' | 'GBP' | 'EUR' | 'HKD' | 'CNY' | 'AUD' | 'CHF';
-export type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'unknown';
+export type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'object' | 'unknown';
 
 export interface AuctionLot {
   id: string;

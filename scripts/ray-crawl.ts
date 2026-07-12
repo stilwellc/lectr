@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 'Rago' | 'Heritage' | 'Bonhams' | 'Hindman';
 type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn';
 type Currency = 'USD' | 'GBP' | 'EUR' | 'HKD' | 'CNY' | 'AUD' | 'CHF';
-type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'unknown';
+type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'object' | 'unknown';
 
 interface AuctionLot {
   id: string;
@@ -37,6 +37,12 @@ interface AuctionLot {
 // based on medium, title, sale name, URL, and artist context.
 
 const DESIGN_ARTISTS = new Set(['george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret']);
+// Watches makers + science collections: their lots are objects, never
+// paintings/prints — pattern classifiers ("printed dial") must not touch them.
+const OBJECT_ARTISTS = new Set([
+  'rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier',
+  'meteorites', 'fossils', 'space-exploration', 'scientific-instruments',
+]);
 // Fine artists whose unclassified lots default to 'print' (edition-heavy output)
 const EDITION_DEFAULT_ARTISTS = new Set(['andy-warhol', 'keith-haring', 'ed-ruscha', 'henri-matisse', 'pablo-picasso']);
 // Fine artists whose unclassified lots default to 'original' (painting/drawing-heavy output)
@@ -56,6 +62,10 @@ const ORIGINAL_PATTERNS = /\b(oil on|acrylic on|tempera on|gouache on|watercolor
 const TITLE_EDITION_PATTERNS = /\b(plates?\s*,?\s*from\b|,\s*from\s+[A-Z]|\bfrom\s+the\s+portfolio\b|\bfrom\s+(?:Myths|Ads|Flowers|Marilyn|Mao|Campbell|Electric Chair|Endangered Species|Cowboys and Indians|Ladies and Gentlemen|Flash|Martha Graham|Hans Christian Andersen|Wild Raspberries|In the Bottom|Ten Portraits|Space Fruit|Sunset|Ingrid Bergman|Reigning Queens))\b/i;
 
 function classifyLot(lot: AuctionLot): LotCategory {
+  // Watches & science lots are objects — before any pattern matching, or a
+  // Rolex with a "printed dial" becomes a print.
+  if (OBJECT_ARTISTS.has(lot.artist)) return 'object';
+
   // Combine all text signals
   const medium = (lot.medium || '').toLowerCase();
   const title = (lot.title || '').toLowerCase();
@@ -324,6 +334,23 @@ const ARTISTS: ArtistConfig[] = [
     wright: 'kenny-scharf',
     bonhams: 'Kenny Scharf',
   },
+
+  // ── The watches vertical: makers, not artists. Bonhams keyword search is
+  // the workhorse; Christie's maker pages fall back to keyword search.
+  // Wright/Rago don't trade watches — deliberately absent.
+  { slug: 'rolex', displayName: 'Rolex', christies: 'rolex', bonhams: 'Rolex wristwatch' },
+  { slug: 'patek-philippe', displayName: 'Patek Philippe', christies: 'patek-philippe', bonhams: 'Patek Philippe' },
+  { slug: 'audemars-piguet', displayName: 'Audemars Piguet', christies: 'audemars-piguet', bonhams: 'Audemars Piguet' },
+  { slug: 'omega', displayName: 'Omega', bonhams: 'Omega wristwatch' },
+  { slug: 'cartier', displayName: 'Cartier', christies: 'cartier', bonhams: 'Cartier' },
+
+  // ── The science vertical: collections, Geek Week-style (tech, fossils,
+  // space, natural history). Bonhams' science & natural history departments
+  // are the backbone; Rago would never have science.
+  { slug: 'meteorites', displayName: 'Meteorites', bonhams: 'meteorite' },
+  { slug: 'fossils', displayName: 'Fossils & Dinosaurs', bonhams: 'fossil dinosaur' },
+  { slug: 'space-exploration', displayName: 'Space Exploration', bonhams: 'nasa apollo' },
+  { slug: 'scientific-instruments', displayName: 'Scientific Instruments', bonhams: 'scientific instrument' },
 ];
 
 const DATA_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
@@ -1771,12 +1798,16 @@ async function main() {
     } catch { /* ignore */ }
   }
 
-  // Crawl all artists
+  // Crawl all artists (RAY_ONLY=slug,slug scopes a run to specific entries —
+  // used when onboarding a new vertical without recrawling the world)
+  const only = process.env.RAY_ONLY ? new Set(process.env.RAY_ONLY.split(',')) : null;
+  const roster = only ? ARTISTS.filter(a => only.has(a.slug)) : ARTISTS;
+  if (only) console.log(`[Ray] RAY_ONLY: crawling ${roster.map(a => a.slug).join(', ')}`);
   const freshLots: AuctionLot[] = [];
-  for (const artist of ARTISTS) {
+  for (const artist of roster) {
     const lots = await crawlArtist(artist);
     freshLots.push(...lots);
-    if (artist !== ARTISTS[ARTISTS.length - 1]) await sleep(DELAY_MS);
+    if (artist !== roster[roster.length - 1]) await sleep(DELAY_MS);
   }
 
   // Merge: new data overwrites existing by ID
