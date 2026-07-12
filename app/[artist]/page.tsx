@@ -8,7 +8,7 @@ import { ARTISTS, ARTIST_LABEL } from '../constants';
 import type { LotCategory } from '../types';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { getUpcomingCounts } from '../utils';
+import { getUpcomingCounts, formatDate } from '../utils';
 
 import ArtistNav from '../components/ArtistNav';
 import ArtistHero from '../components/ArtistHero';
@@ -23,7 +23,7 @@ type CategoryFilter = 'all' | LotCategory;
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.artist as string;
-  const { statsByArtist, allLots, fullLoaded, fromCache } = useRayData();
+  const { statsByArtist, allLots, lastCrawl, fullLoaded, fromCache } = useRayData();
   const { toggle, savedIds } = useSavedLots();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
@@ -51,7 +51,7 @@ export default function ArtistDetailPage() {
       color: 'var(--color-fg)',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <ArtistNav activeSlug={slug} savedCount={savedIds.length} upcomingCounts={upcomingCounts} />
+      <ArtistNav activeSlug={slug} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {!valid ? (
         <div style={{ padding: '120px 56px', textAlign: 'center' }}>
