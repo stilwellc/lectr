@@ -15,14 +15,13 @@ import RayEntrance, { RayLoading } from './components/RayEntrance';
 import CountUp from './components/CountUp';
 import MarketHero from './components/MarketHero';
 import MarketTape from './components/MarketTape';
-import MarketBlock from './components/MarketBlock';
 import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
 
 const PAGE_SIZE = 48;
 
 export default function RayPage() {
-  const { allLots, statsByArtist, tape, demand, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
+  const { allLots, statsByArtist, tape, demand, backtest, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
   // Coming-soon markets fall back to the whole collectibles market; live ones filter.
@@ -196,9 +195,9 @@ export default function RayPage() {
 
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {/* The verticals — the first choice on the lander */}
+      {/* The verticals — first choice, one quiet row; the hero owns the screen */}
       <div className="rail ray-shelfrail">
-        <MarketSwitch demand={demand} />
+        <MarketSwitch compact />
       </div>
 
       {!marketMeta.live ? (
@@ -247,6 +246,17 @@ export default function RayPage() {
             />
           </div>
 
+          {/* The proof line: Ray's one defensible edge, stated where it counts */}
+          {backtest && backtest.flagged.n > 500 && (
+            <div className="rail ray-enter" style={{ '--enter-delay': '40ms' } as React.CSSProperties}>
+              <a href="/value" className="ray-proof">
+                Ray&rsquo;s flagged calls beat estimates by <b className="up">+{backtest.flagged.medianPerfPct}%</b> median
+                — vs +{backtest.unflagged.medianPerfPct}% unflagged — across {backtest.flagged.n.toLocaleString()} replayed
+                sales · see the record →
+              </a>
+            </div>
+          )}
+
           {/* The live strip: today's market in four figures */}
           <section className="rail ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
             <div className="ray-strip">
@@ -265,19 +275,12 @@ export default function RayPage() {
             </div>
           </section>
 
-          {/* The week's room: recent hammers + what the block looks like, on a lifted band */}
-          {(tapeItems.length > 0 || upcoming.length > 0) && (
+          {/* The week's room: recent hammers rolling by on a lifted band */}
+          {tapeItems.length > 0 && (
             <div className="ray-band">
-              {tapeItems.length > 0 && (
-                <div className="ray-enter ray-tape-wrap" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
-                  <MarketTape items={tapeItems} />
-                </div>
-              )}
-              {upcoming.length > 0 && (
-                <div className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
-                  <MarketBlock upcoming={upcoming} allLots={marketLots} />
-                </div>
-              )}
+              <div className="ray-enter ray-tape-wrap" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+                <MarketTape items={tapeItems} />
+              </div>
             </div>
           )}
 

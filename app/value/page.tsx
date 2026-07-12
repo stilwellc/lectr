@@ -14,7 +14,7 @@ import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import { getUpcomingCounts, formatPrice, formatDate, categoryLabels } from '../utils';
-import { FORM_LABEL, areComparable, normalizeTitle, classifyForm } from '../lib/comps';
+import { FORM_LABEL, signalWithPool } from '../lib/comps';
 
 function fmtEst(lo: number | null, hi: number | null): string {
   const f = (n: number) => formatPrice(n);
@@ -75,24 +75,18 @@ export default function ValuePage() {
     () => (call ? deals.filter(d => d.lot.id !== call.lot.id) : deals),
     [deals, call]
   );
-  // The band draws the signal's own pool: same-edition sales when that made
-  // the call, otherwise the gated same-form comps.
-  const callComps = useMemo(() => {
-    if (!call || !fullLoaded) return [];
-    const lot = call.lot;
-    const sold = marketLots.filter(l => l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id);
-    if (call.signal!.kind === 'edition') {
-      const nt = normalizeTitle(lot.title);
-      const form = classifyForm(lot);
-      return sold.filter(l => normalizeTitle(l.title) === nt && classifyForm(l) === form).map(l => l.priceUsd!).sort((a, b) => a - b);
-    }
-    return sold.filter(l => areComparable(lot, l)).map(l => l.priceUsd!).sort((a, b) => a - b).slice(0, 60);
+  // ONE LOT, ONE NUMBER: the band draws the signal's own pool via the same
+  // function that made the call — the card sentence, this band, and the comps
+  // modal can never disagree.
+  const callPool = useMemo(() => {
+    if (!call || !fullLoaded) return null;
+    return signalWithPool(call.lot, marketLots);
   }, [call, marketLots, fullLoaded]);
-  const callMedian = useMemo(() => {
-    if (callComps.length < 3) return null;
-    const m = Math.floor(callComps.length / 2);
-    return callComps.length % 2 === 0 ? (callComps[m - 1] + callComps[m]) / 2 : callComps[m];
-  }, [callComps]);
+  const callComps = useMemo(
+    () => (callPool ? callPool.pool.map(l => l.priceUsd!).sort((a: number, b: number) => a - b) : []),
+    [callPool]
+  );
+  const callMedian = callPool?.signal.med ?? null;
 
   return (
     <div style={{

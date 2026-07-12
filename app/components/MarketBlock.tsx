@@ -100,7 +100,7 @@ export default function MarketBlock({
                   data-active={period === p}
                   onClick={() => setPeriod(p)}
                 >
-                  {p === 'week' ? 'This Week' : 'This Month'}
+                  {p === 'week' ? 'This week' : 'This month'}
                 </button>
               ))}
             </div>

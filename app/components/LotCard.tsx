@@ -14,7 +14,12 @@ function formatEstimate(lot: AuctionLot): string {
     return `$${n.toLocaleString()}`;
   };
   if (lot.estimateLow && lot.estimateHigh) {
-    return `${fmt(lot.estimateLow)}–${fmt(lot.estimateHigh)} ${lot.currency}`;
+    const lo = fmt(lot.estimateLow);
+    const hi = fmt(lot.estimateHigh);
+    // K-rounding often collapses low and high into the same string — a
+    // "$49K–$49K" range reads as a bug on the most repeated line in the
+    // product. One value, and the app is USD-denominated: no suffix noise.
+    return lo === hi ? `${lo} est.` : `${lo}–${hi} est.`;
   }
   return 'Estimate on request';
 }

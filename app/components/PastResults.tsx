@@ -144,7 +144,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               fontWeight: 700,
               letterSpacing: '-0.02em',
             }}>
-              Recent <span style={{ fontStyle: 'normal' }}>Results</span>
+              Recent <span style={{ fontStyle: 'normal' }}>results</span>
             </h2>
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
               {filtered.length.toLocaleString()} sold lots

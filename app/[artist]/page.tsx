@@ -54,17 +54,21 @@ export default function ArtistDetailPage() {
       <ArtistNav activeSlug={slug} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {!valid ? (
-        <div style={{ padding: '120px 56px', textAlign: 'center' }}>
+        <div style={{ padding: '120px 24px', textAlign: 'center' }}>
           <h2 style={{
-            fontFamily: "var(--font-serif), serif",
-            fontSize: 36,
-            fontWeight: 300,
-            marginBottom: 16,
+            fontFamily: 'var(--font-sans), sans-serif',
+            fontSize: 32,
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            marginBottom: 10,
           }}>
-            Artist not found
+            Nothing tracked at this address
           </h2>
-          <Link href="/" className="link-action" style={{ color: 'var(--color-fg)' }}>
-            <span className="arrow" data-dir="back">&#8592;</span> Back to overview
+          <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
+            Ray follows {ARTISTS.length} artists and makers across art, design, watches and science.
+          </p>
+          <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+            Back to the market
           </Link>
         </div>
       ) : (

@@ -180,7 +180,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
           letterSpacing: '-0.02em',
           padding: '16px 0 12px',
         }}>
-          Price <span style={{ fontStyle: 'normal' }}>History</span>
+          Price <span style={{ fontStyle: 'normal' }}>history</span>
           {filterLabel && (
             <span style={{ fontSize: 18, color: 'var(--color-text-muted)', fontStyle: 'normal', marginLeft: 8 }}>{filterLabel}</span>
           )}
