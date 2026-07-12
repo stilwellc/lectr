@@ -111,8 +111,8 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
         }
         .ray-sort-pill:hover {
-          border-color: var(--color-accent-wine);
-          color: var(--color-accent-wine-text);
+          border-color: var(--color-border-mid);
+          color: var(--color-fg);
         }
         /* Quote-free selector on purpose - quotes in server-rendered style
            text get HTML-escaped and break hydration. */
@@ -270,6 +270,19 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   {lot.priceUsd ? formatPrice(lot.priceUsd) : '—'}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 1 }}>
+                  {/* the product's core statistic, on every result it has one for */}
+                  {(() => {
+                    if (!lot.priceUsd || !lot.estimateLow || !lot.estimateHigh) return null;
+                    const mid = (lot.estimateLow + lot.estimateHigh) / 2;
+                    if (mid <= 0) return null;
+                    const pct = Math.round((lot.priceUsd / mid - 1) * 100);
+                    if (Math.abs(pct) > 2000) return null; // bad estimate data — say nothing
+                    return (
+                      <span style={{ color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 600 }}>
+                        {pct >= 0 ? '+' : ''}{pct}% vs est ·{' '}
+                      </span>
+                    );
+                  })()}
                   {formatDate(lot.saleDate, { month: 'short', year: 'numeric' })}
                 </div>
               </div>
@@ -317,7 +330,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: savedIds.includes(lot.id) ? 'var(--color-accent-wine)' : 'transparent',
+                    background: savedIds.includes(lot.id) ? 'var(--color-fg)' : 'transparent',
                     border: savedIds.includes(lot.id) ? 'none' : '1px solid var(--color-border)',
                     borderRadius: 8,
                     cursor: 'pointer',

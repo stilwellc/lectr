@@ -221,7 +221,7 @@ export default function LotCard({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: saved ? 'var(--color-accent-wine)' : 'rgba(0,0,0,0.45)',
+              background: saved ? 'var(--color-fg)' : 'rgba(0,0,0,0.45)',
               border: 'none',
               borderRadius: 100,
               cursor: 'pointer',
