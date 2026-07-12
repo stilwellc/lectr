@@ -34,7 +34,8 @@ export default function BoardDemand({
   allLots: AuctionLot[];
   demand?: { date: string; value: number }[];
   marketLabel?: string;
-  ledger: LedgerItem[];
+  /** optional — when absent the pane stays chart-pure and the ledger renders elsewhere */
+  ledger?: LedgerItem[];
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
@@ -111,15 +112,17 @@ export default function BoardDemand({
         )}
       </div>
 
-      <div className="ray-ledger">
-        {ledger.map(item => (
-          <div key={item.k}>
-            <div className="ray-ledger-k">{item.k}</div>
-            <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
-            <div className="ray-ledger-s">{item.s}</div>
-          </div>
-        ))}
-      </div>
+      {ledger && (
+        <div className="ray-ledger">
+          {ledger.map(item => (
+            <div key={item.k}>
+              <div className="ray-ledger-k">{item.k}</div>
+              <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
+              <div className="ray-ledger-s">{item.s}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {visible.length >= 2 && (
         <div
