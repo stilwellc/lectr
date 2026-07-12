@@ -2096,3 +2096,14 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-loading { padding-block: 32px 80px; }
   .ray-sk-cards { grid-template-columns: 1fr; }
 }
+
+/* chart time context — faint endpoints, no axis chrome */
+.ray-hero2-span {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
