@@ -17,6 +17,7 @@ import MarketHero from './components/MarketHero';
 import MarketTape from './components/MarketTape';
 import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
+import { TodaysCallCard, NextHammers, MarketMovers } from './components/CommandDeck';
 
 const PAGE_SIZE = 48;
 
@@ -235,25 +236,40 @@ export default function RayPage() {
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
-          {/* The market as a portfolio: giant numeral, green performance line */}
-          <div className="ray-enter">
-            <MarketHero
-              allLots={marketLots}
-              demand={demand[activeKey] || []}
-              marketLabel={marketMeta.label.toLowerCase()}
-              totalValue={totalRealized}
-              pulse={pulse}
-            />
+          {/* THE COMMAND DECK — the market on the left, the instrument rail on
+              the right: today's strongest call (with its photograph) and the
+              lots hammering next. The first screen reads like something you
+              trade from, not something you scroll. */}
+          <div className="rail ray-enter">
+            <div className="ray-deck">
+              <div>
+                <MarketHero
+                  allLots={marketLots}
+                  demand={demand[activeKey] || []}
+                  marketLabel={marketMeta.label.toLowerCase()}
+                  totalValue={totalRealized}
+                  pulse={pulse}
+                  bare
+                />
+                {backtest && backtest.flagged.n > 500 && (
+                  <a href="/value" className="ray-proof">
+                    Ray&rsquo;s flagged calls beat estimates by <b className="up">+{backtest.flagged.medianPerfPct}%</b> median
+                    — vs +{backtest.unflagged.medianPerfPct}% unflagged — across {backtest.flagged.n.toLocaleString()} replayed
+                    sales · see the record →
+                  </a>
+                )}
+              </div>
+              <div className="ray-deck-rail ray-enter" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+                <TodaysCallCard lots={marketLots} allLots={marketLots} />
+                <NextHammers lots={marketLots} allLots={marketLots} />
+              </div>
+            </div>
           </div>
 
-          {/* The proof line: Ray's one defensible edge, stated where it counts */}
-          {backtest && backtest.flagged.n > 500 && (
-            <div className="rail ray-enter" style={{ '--enter-delay': '40ms' } as React.CSSProperties}>
-              <a href="/value" className="ray-proof">
-                Ray&rsquo;s flagged calls beat estimates by <b className="up">+{backtest.flagged.medianPerfPct}%</b> median
-                — vs +{backtest.unflagged.medianPerfPct}% unflagged — across {backtest.flagged.n.toLocaleString()} replayed
-                sales · see the record →
-              </a>
+          {/* The movers — every maker gets a pulse (needs full history) */}
+          {fullLoaded && (
+            <div className="ray-enter" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
+              <MarketMovers lots={marketLots} market={activeKey} ready={fullLoaded} />
             </div>
           )}
 
