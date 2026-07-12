@@ -1780,6 +1780,11 @@ async function main() {
     version: 2,
   }, null, 2));
 
+  // The small eager payload (upcoming lots + precomputed signals + the tape)
+  // so the app paints before the full history downloads.
+  const { buildUpcoming } = await import('./build-upcoming');
+  buildUpcoming(DATA_DIR);
+
   console.log(`\n[Ray] Done. ${allLots.length} total lots written.`);
 }
 

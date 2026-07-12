@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { formatPrice, categoryLabels } from '../utils';
-import { computeBuySignal } from './LotCard';
+import { lotSignal } from './LotCard';
 
 /**
  * MarketBlock — "what the block looks like." A dynamic island (inspired by the
@@ -47,7 +47,7 @@ export default function MarketBlock({
       .sort((a, b) => b[1] - a[1])[0];
 
     const deals = lots.filter((l) => {
-      const s = computeBuySignal(l, allLots);
+      const s = lotSignal(l, allLots);
       return s && s.label === 'Below Market';
     }).length;
 

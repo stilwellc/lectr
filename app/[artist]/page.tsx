@@ -23,7 +23,7 @@ type CategoryFilter = 'all' | LotCategory;
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.artist as string;
-  const { statsByArtist, allLots, loading, fromCache } = useRayData();
+  const { statsByArtist, allLots, fullLoaded, fromCache } = useRayData();
   const { toggle, savedIds } = useSavedLots();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
@@ -69,7 +69,7 @@ export default function ArtistDetailPage() {
         </div>
       ) : (
         <>
-          {loading ? (
+          {!fullLoaded ? (
             <RayLoading />
           ) : (
             <RayEntrance animate={!fromCache}>
