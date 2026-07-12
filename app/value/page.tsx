@@ -204,22 +204,28 @@ export default function ValuePage() {
               <div className="ray-strip">
                 <div>
                   <div className="ray-strip-k">Flagged lots delivered</div>
-                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>+{backtest.flagged.medianPerfPct}%</div>
+                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>
+                    <CountUp to={backtest.flagged.medianPerfPct} format={n => `+${Math.round(n)}%`} duration={1200} />
+                  </div>
                   <div className="ray-strip-s">median result vs estimate · {backtest.flagged.n.toLocaleString()} calls</div>
                 </div>
                 <div>
                   <div className="ray-strip-k">Unflagged delivered</div>
-                  <div className="ray-strip-v">+{backtest.unflagged.medianPerfPct}%</div>
+                  <div className="ray-strip-v"><CountUp to={backtest.unflagged.medianPerfPct} format={n => `+${Math.round(n)}%`} duration={1200} /></div>
                   <div className="ray-strip-s">the signal&rsquo;s edge: {backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</div>
                 </div>
                 <div>
                   <div className="ray-strip-k">Beat their high estimate</div>
-                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>{backtest.flagged.beatHighPct}%</div>
+                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>
+                    <CountUp to={backtest.flagged.beatHighPct} format={n => `${Math.round(n)}%`} duration={1200} />
+                  </div>
                   <div className="ray-strip-s">of flagged lots · vs {backtest.unflagged.beatHighPct}% unflagged</div>
                 </div>
                 <div>
                   <div className="ray-strip-k">&ldquo;Above market&rdquo; calls</div>
-                  <div className="ray-strip-v" style={{ color: 'var(--color-down)' }}>+{backtest.above.medianPerfPct}%</div>
+                  <div className="ray-strip-v" style={{ color: 'var(--color-down)' }}>
+                    <CountUp to={backtest.above.medianPerfPct} format={n => `+${Math.round(n)}%`} duration={1200} />
+                  </div>
                   <div className="ray-strip-s">underperformed both — the ordering holds</div>
                 </div>
               </div>

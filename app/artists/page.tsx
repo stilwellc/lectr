@@ -9,6 +9,7 @@ import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import { formatDate, getUpcomingCounts } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
+import CountUp from '../components/CountUp';
 
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 
@@ -45,7 +46,7 @@ export default function ArtistsPage() {
           <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
             <p className="ray-hero2-label">The roster</p>
             <h1 className="ray-hero2-value" style={{ fontSize: 'clamp(34px, 4.5vw, 48px)' }}>
-              {ARTISTS.length} artists
+              <CountUp to={ARTISTS.length} format={n => `${Math.round(n)} artists`} duration={900} />
             </h1>
             <p className="ray-hero2-delta">
               <span className="ctx">

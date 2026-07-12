@@ -5,6 +5,7 @@ import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { formatPrice, categoryLabels } from '../utils';
 import { lotSignal } from './LotCard';
+import CountUp from './CountUp';
 
 /**
  * MarketBlock — "what the block looks like." A dynamic island (inspired by the
@@ -122,9 +123,9 @@ export default function MarketBlock({
           )}
 
           <div className="ray-block-stats">
-            <span><b>{data.lots.length}</b>lots</span>
-            <span><b>{formatPrice(data.totalLow)}</b>on the block</span>
-            <span><b>{data.deals}</b>below estimate</span>
+            <span><b><CountUp to={data.lots.length} format={n => `${Math.round(n)}`} duration={1100} /></b>lots</span>
+            <span><b><CountUp to={data.totalLow} format={formatPrice} duration={1100} /></b>on the block</span>
+            <span><b><CountUp to={data.deals} format={n => `${Math.round(n)}`} duration={1100} /></b>below estimate</span>
           </div>
         </div>
 
