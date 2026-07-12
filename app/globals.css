@@ -1113,3 +1113,203 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   .ray-tape-track { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   MARKET BLOCK — the dynamic island. A Week/Month toggle recomputes
+   the read; the serif intel line auto-rotates through derived facts;
+   the biggest upcoming lot is spotlit. Editorial, in Ray's register.
+   ══════════════════════════════════════════════════════════════ */
+.ray-block { padding-block: 8px 0; }
+.ray-block-card {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  overflow: hidden;
+  border-radius: 20px;
+}
+.ray-block-copy { padding: clamp(26px, 3vw, 42px); min-width: 0; }
+.ray-block-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-accent-wine-text);
+  margin-bottom: 18px;
+}
+.ray-block-rule { width: 22px; height: 1px; background: currentColor; opacity: 0.55; flex: none; }
+.ray-block-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 100px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-fg) 3%, transparent);
+}
+.ray-block-toggle-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  padding: 6px 12px;
+  border-radius: 100px;
+  transition: background var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature);
+}
+.ray-block-toggle-btn:hover { color: var(--color-text-secondary); }
+.ray-block-toggle-btn[data-active=true] {
+  background: var(--color-accent-wine);
+  color: var(--color-bg);
+}
+.ray-block-head {
+  font-family: var(--font-serif), serif;
+  font-weight: 300;
+  font-size: clamp(26px, 3vw, 40px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  color: var(--color-fg);
+  margin: 0 0 16px;
+}
+.ray-block-head em { font-style: italic; color: var(--color-accent-wine-text); }
+.ray-block-intel {
+  font-family: var(--font-serif), serif;
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  margin: 0;
+  min-height: 3em;
+  max-width: 46ch;
+  animation: rayBlockFade 520ms var(--ease-signature) both;
+}
+.ray-block-intel b { color: var(--color-accent-wine-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ray-block-intel em { color: var(--color-fg); font-style: italic; }
+@keyframes rayBlockFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.ray-block-dots { display: flex; gap: 6px; margin: 16px 0 22px; }
+.ray-block-dot {
+  width: 5px; height: 5px; border-radius: 100px;
+  background: var(--color-border-mid, var(--color-border));
+  transition: background var(--duration-base) var(--ease-signature), width var(--duration-base) var(--ease-signature);
+}
+.ray-block-dot[data-active=true] { width: 16px; background: var(--color-accent-wine); }
+.ray-block-stats { display: flex; gap: clamp(20px, 3vw, 40px); }
+.ray-block-stats span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+.ray-block-stats b {
+  font-family: var(--font-serif), serif;
+  font-size: 30px;
+  font-weight: 300;
+  color: var(--color-fg);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* spotlight — the biggest lot on the block */
+.ray-block-spot {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  border-left: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--color-fg) 2%, transparent);
+}
+.ray-block-spot-img {
+  position: relative;
+  flex: 1;
+  min-height: 200px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-bg-elevated), var(--color-bg));
+}
+.ray-block-spot-initial {
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-size: 54px;
+  font-weight: 300;
+  color: var(--color-text-faint);
+  opacity: 0.3;
+}
+.ray-block-spot-img img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 500ms var(--ease-signature), transform 700ms var(--ease-signature);
+}
+.ray-block-spot-img img[data-loaded=true] { opacity: 1; }
+.ray-block-spot:hover .ray-block-spot-img img[data-loaded=true] { transform: scale(1.05); }
+.ray-block-spot-tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-bg);
+  background: var(--color-accent-wine);
+  padding: 4px 9px;
+  border-radius: 100px;
+}
+.ray-block-spot-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px 18px;
+}
+.ray-block-spot-artist {
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.ray-block-spot-title {
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--color-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ray-block-spot-est {
+  font-size: 12px;
+  color: var(--color-accent-wine-text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ray-block-intel { animation: none; }
+  .ray-block-spot:hover .ray-block-spot-img img[data-loaded=true] { transform: none; }
+}
+@media (max-width: 768px) {
+  .ray-block-card { grid-template-columns: 1fr; }
+  .ray-block-spot { flex-direction: row; border-left: none; border-top: 1px solid var(--glass-border); }
+  .ray-block-spot-img { min-height: 0; width: 44%; flex: none; align-self: stretch; }
+  .ray-block-spot-meta { flex: 1; justify-content: center; }
+  .ray-block-stats { gap: 24px; }
+}
