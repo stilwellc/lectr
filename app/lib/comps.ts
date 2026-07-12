@@ -128,6 +128,42 @@ export function parseDims(dims: string | null | undefined): [number, number] | n
   return [h, w];
 }
 
+/**
+ * Furniture bifurcates by MODEL, not just form: an LC2 sofa is a licensed
+ * Cassina production line trading at $1–4K while an unmarked Jeanneret
+ * Chandigarh sofa hammers at $15–30K — same artist, same form, different
+ * markets. The model key is extracted from the title: alphanumeric codes
+ * (LC2, PK22, CH24, PJ-010100) or a named series word directly before the
+ * form noun (Conoid bench, Standard chair, Diamond chair). Comps must share
+ * the model key — including both having none.
+ */
+const MODEL_STOPWORDS = new Set([
+  'a', 'an', 'the', 'pair', 'set', 'two', 'three', 'four', 'six', 'his', 'her',
+  'walnut', 'teak', 'oak', 'rosewood', 'pine', 'maple', 'cherry', 'burl', 'laurel',
+  'custom', 'rare', 'early', 'important', 'fine', 'exceptional', 'monumental',
+  'large', 'small', 'long', 'low', 'high', 'tall', 'double', 'single', 'grand',
+  'occasional', 'freeform', 'free-form', 'upholstered', 'illuminated', 'unique',
+  'special', 'signed', 'vintage', 'original',
+]);
+const CODE_BLACKLIST = new Set(['no', 'ca', 'vol', 'lot', 'est', 'circa']);
+const FORM_NOUNS = /(sofa|couch|settee|bench|daybed|stool|ottoman|chair|rocker|table|cabinet|chest|dresser|sideboard|credenza|desk|bed|headboard|lamp|sconce|chandelier|mirror|shelf|shelves|bookcase)/;
+
+export function modelKey(lot: Pick<AuctionLot, 'title'>): string | null {
+  const t = (lot.title || '').toLowerCase();
+  // 1 · alphanumeric model codes: lc2, lc-2, pk22, ch 24, pj-010100
+  const code = t.match(/\b([a-z]{1,3})[-. ]?(\d{1,4})[a-z]?\b/);
+  if (code && !CODE_BLACKLIST.has(code[1]) && !/^(19|20)\d\d$/.test(code[2])) {
+    return `${code[1]}${code[2]}`;
+  }
+  // 2 · "model 123" / "model no. 45"
+  const modelNo = t.match(/\bmodel\s+(?:no\.?\s*)?([a-z0-9-]{1,10})\b/);
+  if (modelNo) return modelNo[1].replace(/-/g, '');
+  // 3 · named series word immediately before the form noun
+  const named = t.match(new RegExp('\\b([a-z][a-z-]{2,})\\s+' + FORM_NOUNS.source + 's?\\b'));
+  if (named && !MODEL_STOPWORDS.has(named[1])) return named[1];
+  return null;
+}
+
 const FURNITURE = new Set<Form>([
   'seating-chair', 'seating-stool', 'seating-bench', 'seating-sofa',
   'table-dining', 'table-low', 'table-side', 'table', 'case', 'desk', 'bed',
@@ -140,6 +176,10 @@ export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
   const b = classifyForm(candidate);
   if (a === 'unknown' || b === 'unknown') return false; // never guess
   if (a !== b) return false;
+
+  // furniture bifurcates by model: LC2 comps LC2, Conoid comps Conoid, and a
+  // generic piece never comps a model-coded production line (or vice versa)
+  if (FURNITURE.has(a) && modelKey(lot) !== modelKey(candidate)) return false;
 
   // opportunistic size gate when both sides are measurable
   const da = parseDims(lot.dimensions);
