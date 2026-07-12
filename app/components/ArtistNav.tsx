@@ -87,6 +87,18 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           position: relative;
           flex: 1;
         }
+        /* On wide screens the selector stays a compact control pinned to the
+           right, back-link on the left, instead of stretching into a big empty
+           bar. Mobile keeps the full-width tap target. NOTE: no apostrophes,
+           quotes or angle brackets in this block - React escapes them server
+           side and hydration of the raw-text style element then fails. */
+        @media (min-width: 769px) {
+          .ray-artist-select-wrap {
+            flex: 0 0 auto;
+            width: clamp(240px, 24vw, 320px);
+            margin-left: auto;
+          }
+        }
         .ray-artist-select-btn {
           width: 100%;
           display: flex;
