@@ -96,7 +96,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           margin: -6px 0;
           transition: opacity var(--duration-fast) var(--ease-signature);
         }
-        .ray-mark-r { display: block; width: 26px; height: 26px; object-fit: contain; }
+        .ray-mark-r { display: block; width: 30px; height: 30px; object-fit: contain; }
         .ray-wordmark:hover,
         .ray-wordmark:focus-visible { opacity: 0.68; }
         .ray-artist-select-wrap {
@@ -218,9 +218,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
 
       <div className="ray-artist-nav-inner rail">
         <a href="/" className="ray-wordmark" aria-label="Ray — home">
-          {/* the slashed R — the mark */}
-          <img className="ray-mark-r" src="/brand/ray-r.png" alt="" width={26} height={26} />
-          <span>Ray</span>
+          {/* the slashed R stands alone — the mark IS the name */}
+          <img className="ray-mark-r" src="/brand/ray-r.png" alt="Ray" width={30} height={30} />
         </a>
 
         {/* Desktop quick links — one click to each room; the dropdown stays

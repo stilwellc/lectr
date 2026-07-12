@@ -3141,8 +3141,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* ── the mark: the slashed R ── */
 .ray-wordmark { display: inline-flex !important; align-items: center; gap: 9px; }
 .ray-mark-r {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   display: block;
   object-fit: contain;
   /* the source art is green-on-black; screen-blending drops the black
