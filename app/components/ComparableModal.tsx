@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice } from '../utils';
+import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle } from '../utils';
 import { areComparable, signalWithPool, FORM_LABEL } from '../lib/comps';
 
 function formatEstimate(lot: AuctionLot): string {
@@ -528,7 +528,7 @@ export default function ComparableModal({
               lineHeight: 1.25,
               marginBottom: 4,
             }}>
-              {lot.title}
+              {craftTitle(lot.title)}
             </h2>
 
             {lot.year && (

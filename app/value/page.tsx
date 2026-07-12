@@ -13,7 +13,7 @@ import ComparableModal, { PriceBand } from '../components/ComparableModal';
 import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
-import { getUpcomingCounts, formatPrice, formatDate, categoryLabels } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle } from '../utils';
 import { FORM_LABEL, signalWithPool } from '../lib/comps';
 
 function fmtEst(lo: number | null, hi: number | null): string {
@@ -142,7 +142,7 @@ export default function ValuePage() {
                     <MethodologyNote />
                   </div>
                   <div className="ray-call-artist">{ARTIST_LABEL[call.lot.artist] || call.lot.artist}</div>
-                  <div className="ray-call-title">{call.lot.title}</div>
+                  <div className="ray-call-title">{craftTitle(call.lot.title)}</div>
                   <div className="ray-call-meta">
                     {call.lot.auctionHouse}
                     {call.lot.category !== 'unknown' && categoryLabels[call.lot.category] ? ` · ${categoryLabels[call.lot.category]}` : ''}

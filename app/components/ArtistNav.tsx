@@ -19,7 +19,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       : activeSlug === 'value'
       ? 'Value'
       : activeSlug === 'artists'
-      ? 'Artists'
+      ? 'Makers'
       : activeSlug
         ? (ARTIST_LABEL[activeSlug] || activeSlug)
         : 'Overview';
@@ -227,7 +227,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         <nav className="ray-nav-links" aria-label="Sections">
           <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate('/')}>Overview</button>
           <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Artists</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
             Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
@@ -356,6 +356,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             <circle cx="16.5" cy="16.5" r="2.6" />
           </svg>
           Value
+        </button>
+        <button className="ray-tab" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <circle cx="12" cy="8" r="3.4" />
+            <path d="M5 20c1.4-3.4 4-5 7-5s5.6 1.6 7 5" strokeLinecap="round" />
+          </svg>
+          Makers
         </button>
         <button className="ray-tab" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">

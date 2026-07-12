@@ -126,7 +126,7 @@ export default function RayPage() {
       { k: 'Active lots', to: active.length, format: asComma, s: `across ${liveHouses} houses` },
       { k: 'On the block', to: estValue, format: formatPrice, s: 'aggregate mid-estimates' },
       { k: 'Below estimate', to: belowIds.size, format: asComma, s: 'flagged against comps', tone: 'up' },
-      { k: 'Artists live', to: liveArtists, format: asComma, s: `of ${mktSet.size} tracked · next ${next}` },
+      { k: 'Makers live', to: liveArtists, format: asComma, s: `of ${mktSet.size} tracked · next ${next}` },
     ];
   }, [upcoming, belowIds, mktSet]);
 

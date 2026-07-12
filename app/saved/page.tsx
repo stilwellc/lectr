@@ -95,31 +95,23 @@ export default function SavedPage() {
         <RayEntrance animate={!fromCache}>
           <section className="ray-hero2 rail ray-enter">
             <p className="ray-hero2-label">Your watchlist</p>
-            <h1 className="ray-hero2-value">—</h1>
+            <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>0</h1>
             <p className="ray-hero2-delta">
-              <span className="ctx">Nothing watched yet.</span>
+              <span className="ctx">
+                Every collector starts by watching. Bookmark a lot and Ray tracks its
+                hammer, its comps, and — once it concludes — how your eye did.
+              </span>
             </p>
           </section>
           <div
             className="ray-enter"
             style={{
               textAlign: 'center',
-              padding: '60px 20px 120px',
-              color: 'var(--color-text-faint)',
+              padding: '48px 20px 120px',
             }}
           >
-            <svg width="32" height="38" viewBox="0 0 12 14" fill="none" style={{ opacity: 0.2, margin: '0 auto 16px', display: 'block' }} aria-hidden="true">
-              <path
-                d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
-                stroke="currentColor"
-                strokeWidth="1"
-              />
-            </svg>
-            <p style={{ fontSize: 14, fontWeight: 400, marginBottom: 24 }}>
-              Tap the bookmark on any lot to watch it here.
-            </p>
-            <Link href="/" className="link-action" style={{ color: 'var(--color-fg)' }}>
-              Browse upcoming lots <span className="arrow">&#8594;</span>
+            <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Start with today&rsquo;s below-market lots
             </Link>
           </div>
         </RayEntrance>
@@ -201,6 +193,31 @@ export default function SavedPage() {
 
           {sold.length > 0 && (
             <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+              {/* The outcome — how your eye did once the hammer fell */}
+              {(() => {
+                const judged = sold.filter(l => l.priceUsd && l.estimateLow && l.estimateHigh);
+                if (!judged.length) return null;
+                const pcts = judged
+                  .map(l => (l.priceUsd! / ((l.estimateLow! + l.estimateHigh!) / 2) - 1) * 100)
+                  .sort((a, b) => a - b);
+                const medianPct = Math.round(pcts.length % 2 === 0
+                  ? (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2
+                  : pcts[Math.floor(pcts.length / 2)]);
+                const hammered = judged.reduce((s, l) => s + l.priceUsd!, 0);
+                return (
+                  <section className="rail" style={{ paddingTop: 34 }}>
+                    <h2 className="ray-h2" style={{ marginBottom: 6 }}>How your eye did</h2>
+                    <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0 }}>
+                      {judged.length} watched {judged.length === 1 ? 'lot' : 'lots'} concluded ·{' '}
+                      {formatPrice(hammered)} hammered · your picks went{' '}
+                      <b style={{ color: medianPct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
+                        {medianPct >= 0 ? '+' : ''}{medianPct}%
+                      </b>{' '}
+                      vs estimate, median
+                    </p>
+                  </section>
+                );
+              })()}
               <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
             </div>
           )}
