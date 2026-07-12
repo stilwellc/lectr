@@ -242,11 +242,11 @@ export default function LotCard({
             padding: '3px 9px',
             borderRadius: 100,
             background: 'color-mix(in srgb, var(--color-bg) 68%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--color-fg) 30%, transparent)',
+            border: `1px solid color-mix(in srgb, ${buySignal.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down)'} 42%, transparent)`,
             fontSize: 12,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
-            color: 'var(--color-fg)',
+            color: buySignal.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down)',
             fontWeight: 600,
           }}>
             {buySignal.label}

@@ -109,10 +109,16 @@ export default function RayPage() {
   );
 
   const accent: React.CSSProperties = { color: 'var(--color-accent-wine-text)', fontWeight: 600 };
+  // Market movement is coded green (up) / red (down) — the correct convention;
+  // gold stays the brand accent for everything that isn't a gain or a loss.
+  const move: React.CSSProperties = {
+    color: pulse.weightedAppreciation >= 0 ? 'var(--color-up)' : 'var(--color-down)',
+    fontWeight: 600,
+  };
   const pulseLine = (
     <>
       The market is{' '}
-      <b style={accent}>
+      <b style={move}>
         {pulse.weightedAppreciation >= 0 ? 'up' : 'down'} {Math.abs(pulse.weightedAppreciation).toFixed(1)}%
       </b>{' '}
       year over year{pulse.topArtist && <>, led by <b style={accent}>{pulse.topArtist}</b></>}.

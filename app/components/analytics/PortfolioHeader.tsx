@@ -38,10 +38,10 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
       : 0;
 
     return [
-      { label: 'Total Sales Value', value: formatPrice(totalRevenue), sub: 'aggregate realized prices, all artists' },
-      { label: 'Total Lots', value: allLots.length.toLocaleString(), sub: `${ARTISTS.length} artists tracked` },
-      { label: 'Appreciation', value: `${weightedAppreciation >= 0 ? '+' : ''}${weightedAppreciation.toFixed(1)}%`, sub: 'sales-weighted avg across artists' },
-      { label: 'Avg. % Over Estimate', value: `${avgOverEstimate >= 0 ? '+' : ''}${avgOverEstimate.toFixed(1)}%`, sub: `${lotsWithEstimate.length.toLocaleString()} lots with estimates` },
+      { label: 'Total Sales Value', value: formatPrice(totalRevenue), sub: 'aggregate realized prices, all artists', tone: '' },
+      { label: 'Total Lots', value: allLots.length.toLocaleString(), sub: `${ARTISTS.length} artists tracked`, tone: '' },
+      { label: 'Appreciation', value: `${weightedAppreciation >= 0 ? '+' : ''}${weightedAppreciation.toFixed(1)}%`, sub: 'sales-weighted avg across artists', tone: weightedAppreciation >= 0 ? 'up' : 'down' },
+      { label: 'Avg. % Over Estimate', value: `${avgOverEstimate >= 0 ? '+' : ''}${avgOverEstimate.toFixed(1)}%`, sub: `${lotsWithEstimate.length.toLocaleString()} lots with estimates`, tone: avgOverEstimate >= 0 ? 'up' : 'down' },
     ];
   }, [statsByArtist, allLots]);
 
@@ -94,7 +94,10 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
             }}>
               {card.label}
             </div>
-            <div className="ray-portfolio-value">
+            <div
+              className="ray-portfolio-value"
+              style={card.tone === 'up' ? { color: 'var(--color-up)' } : card.tone === 'down' ? { color: 'var(--color-down)' } : undefined}
+            >
               {card.value}
             </div>
             <div style={{

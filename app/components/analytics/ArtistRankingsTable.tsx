@@ -230,7 +230,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
                   fontWeight: 500,
                   color: row.appreciation === 0
                     ? 'var(--color-text-muted)'
-                    : 'var(--color-text-secondary)',
+                    : row.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)',
                 }}>
                   {row.appreciation > 0 && '\u25B2 +'}
                   {row.appreciation < 0 && '\u25BC '}
@@ -241,7 +241,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
                   fontWeight: 500,
                   color: row.overEstimate <= -999
                     ? 'var(--color-text-muted)'
-                    : 'var(--color-text-secondary)',
+                    : row.overEstimate >= 0 ? 'var(--color-up)' : 'var(--color-down)',
                 }}>
                   {row.overEstimate <= -999 ? '\u2014' : `${row.overEstimate >= 0 ? '+' : ''}${row.overEstimate.toFixed(1)}%`}
                 </td>
