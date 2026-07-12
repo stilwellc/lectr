@@ -2536,3 +2536,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ray-hero2::before { opacity: 0.25; }
 }
+
+/* the aurora breathes — slow, alive, calm */
+@keyframes rayAurora {
+  0%, 100% { opacity: 0.34; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.08); }
+}
+.ray-hero2::before { animation: rayAurora 9s var(--ease-signature) infinite; }
+@media (prefers-reduced-motion: reduce) { .ray-hero2::before { animation: none; } }

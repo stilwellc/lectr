@@ -148,7 +148,7 @@ export default function SavedPage() {
             <div className="ray-strip" style={{ marginTop: 22 }}>
               <div>
                 <div className="ray-strip-k">Watching</div>
-                <div className="ray-strip-v">{upcoming.length}</div>
+                <div className="ray-strip-v"><CountUp to={upcoming.length} format={n => `${Math.round(n)}`} duration={1000} /></div>
                 <div className="ray-strip-s">live lots on the block</div>
               </div>
               <div>
@@ -159,7 +159,7 @@ export default function SavedPage() {
               <div>
                 <div className="ray-strip-k">Below market</div>
                 <div className="ray-strip-v" style={summary.flagged > 0 ? { color: 'var(--color-up)' } : undefined}>
-                  {summary.flagged}
+                  <CountUp to={summary.flagged} format={n => `${Math.round(n)}`} duration={1000} />
                 </div>
                 <div className="ray-strip-s">flagged against comps</div>
               </div>

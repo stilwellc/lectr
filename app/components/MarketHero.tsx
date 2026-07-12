@@ -6,6 +6,7 @@ import { AuctionLot } from '../types';
 import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
+import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
 
 type Range = '1Y' | '5Y' | 'MAX';
@@ -39,6 +40,7 @@ export default function MarketHero({
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
+  const drawRef = useChartDraw();
 
   const series = useMemo(
     () => (demand && demand.length ? demand : demandSeries(allLots)),
@@ -96,7 +98,7 @@ export default function MarketHero({
       {visible.length >= 2 && (
         <>
           <div
-            key={range} className="ray-hero2-chart ray-chartfade"
+            key={range} ref={drawRef} className="ray-hero2-chart ray-chartfade ray-chart-draw"
             onMouseLeave={() => setHover(null)}
           >
             <ResponsiveContainer width="100%" height="100%">

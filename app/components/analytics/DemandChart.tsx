@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
 import { AuctionLot } from '../../types';
 import { demandSeries, formatDemand } from '../../lib/demand';
+import { useChartDraw } from '../../hooks/useChartDraw';
 
 /**
  * DemandChart — the market's Demand Index as the analytics lead chart. Same
@@ -34,6 +35,7 @@ function Tip({ active, payload, label }: { active?: boolean; payload?: Array<{ p
 export default function DemandChart({ allLots }: { allLots: AuctionLot[] }) {
   const series = useMemo(() => demandSeries(allLots), [allLots]);
   const [hovered, setHovered] = useState(false);
+  const drawRef = useChartDraw();
   const now = series.length ? series[series.length - 1].value : 0;
   const lineColor = now >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
@@ -49,7 +51,7 @@ export default function DemandChart({ allLots }: { allLots: AuctionLot[] }) {
         </span>
       </div>
       <div className="glass glass-quiet" style={{ padding: '22px 18px 10px' }} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-        <div style={{ height: 280 }}>
+        <div ref={drawRef} className="ray-chart-draw" style={{ height: 280 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={series} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
               <defs>

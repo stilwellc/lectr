@@ -6,6 +6,7 @@ import { AuctionLot, MarketStats } from '../types';
 import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
+import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
 import ArtistAvatar from './ArtistAvatar';
 
@@ -31,6 +32,7 @@ export default function ArtistHero({
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
+  const drawRef = useChartDraw();
   const [lens, setLens] = useState<'all' | 'original' | 'print'>('all');
 
   const lensCounts = useMemo(() => {
@@ -118,7 +120,7 @@ export default function ArtistHero({
 
       {visible.length >= 2 && (
         <>
-          <div key={`${range}-${lens}`} className="ray-hero2-chart ray-chartfade" style={{ height: 230 }} onMouseLeave={() => setHover(null)}>
+          <div key={`${range}-${lens}`} ref={drawRef} className="ray-hero2-chart ray-chartfade ray-chart-draw" style={{ height: 230 }} onMouseLeave={() => setHover(null)}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={visible}
@@ -194,7 +196,9 @@ export default function ArtistHero({
       <div className="ray-strip">
         <div>
           <div className="ray-strip-k">Record sale</div>
-          <div className="ray-strip-v">{stats?.recordPrice ? formatPrice(stats.recordPrice) : '—'}</div>
+          <div className="ray-strip-v">
+            {stats?.recordPrice ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1200} /> : '—'}
+          </div>
           <div className="ray-strip-s">
             {stats?.recordTitle
               ? `${stats.recordTitle.length > 34 ? stats.recordTitle.slice(0, 32) + '…' : stats.recordTitle}${recordYear ? `, ${recordYear}` : ''}`
@@ -203,17 +207,19 @@ export default function ArtistHero({
         </div>
         <div>
           <div className="ray-strip-k">Sell-through</div>
-          <div className="ray-strip-v">{facts.sellThrough !== null ? `${facts.sellThrough}%` : '—'}</div>
+          <div className="ray-strip-v">
+            {facts.sellThrough !== null ? <CountUp to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—'}
+          </div>
           <div className="ray-strip-s">of concluded lots found buyers</div>
         </div>
         <div>
           <div className="ray-strip-k">Lots tracked</div>
-          <div className="ray-strip-v">{facts.total.toLocaleString()}</div>
+          <div className="ray-strip-v"><CountUp to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} /></div>
           <div className="ray-strip-s">{facts.upcoming} live right now</div>
         </div>
         <div>
           <div className="ray-strip-k">Auction houses</div>
-          <div className="ray-strip-v">{facts.houses}</div>
+          <div className="ray-strip-v"><CountUp to={facts.houses} format={n => `${Math.round(n)}`} duration={1200} /></div>
           <div className="ray-strip-s">selling this artist</div>
         </div>
       </div>
