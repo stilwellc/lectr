@@ -1890,34 +1890,45 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 
 /* THE STAR — the market tiles: the areas we cover, big and clickable,
    fused to the chart in one pane. People click these first. */
-.ray-pane {
+.ray-pane { background: transparent; }
+.ray-pane .ray-board-demand {
   border: 1px solid var(--hairline);
   background: #0A0B0D;
 }
 .ray-mkttiles {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 1px;
-  background: rgba(255, 255, 255, 0.07);
-  border-bottom: 1px solid var(--hairline);
+  gap: 10px;
+  padding-bottom: 14px;
 }
 .ray-mkttile {
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 92px;
-  padding: 14px 16px;
-  background: #0A0B0D;
-  border: none;
+  gap: 10px;
+  min-height: 118px;
+  padding: 16px;
+  background: linear-gradient(180deg, #14171B, #0E1013);
+  border: 1px solid color-mix(in srgb, var(--tile-glyph, #9AA0A6) 22%, transparent);
+  border-radius: 14px;
   cursor: pointer;
   font-family: var(--font-sans);
   text-align: left;
   min-width: 0;
   overflow: hidden;
-  transition: background 140ms var(--ease-ui);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 180ms var(--ease-ui),
+    border-color 180ms var(--ease-ui),
+    box-shadow 180ms var(--ease-ui);
 }
+.ray-mkttile:hover[data-live=true] {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--tile-glyph, #9AA0A6) 48%, transparent);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+}
+.ray-mkttile:active[data-live=true] { transform: translateY(-1px) scale(0.985); }
 /* each vertical wears its own material — an identity wash + glyph ink.
    These are MATERIALS, not signals: deltas alone stay green/red. */
 .ray-mkttile::before {
@@ -1925,34 +1936,50 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.9;
   transition: opacity 180ms var(--ease-ui);
-  background: radial-gradient(130% 100% at 18% 0%, var(--tile-ink, transparent), transparent 62%);
+  background: radial-gradient(140% 110% at 18% 0%, var(--tile-ink, transparent), transparent 64%);
 }
 .ray-mkttile:hover[data-live=true]::before,
-.ray-mkttile[data-active=true]::before { opacity: 1; }
-.ray-mkttile[data-market=all] { --tile-ink: rgba(244, 245, 246, 0.09); --tile-glyph: #C6CACF; }
-.ray-mkttile[data-market=art] { --tile-ink: rgba(232, 205, 160, 0.11); --tile-glyph: #D8C4A0; }
-.ray-mkttile[data-market=design] { --tile-ink: rgba(196, 140, 84, 0.12); --tile-glyph: #C08B57; }
-.ray-mkttile[data-market=watches] { --tile-ink: rgba(155, 176, 200, 0.12); --tile-glyph: #9FB4CB; }
-.ray-mkttile[data-market=sports] { --tile-ink: rgba(150, 150, 150, 0.05); --tile-glyph: #6E747B; }
-.ray-mkttile[data-market=science] { --tile-ink: rgba(134, 140, 235, 0.12); --tile-glyph: #9AA0F0; }
+.ray-mkttile[data-active=true]::before { opacity: 1.35; }
+.ray-mkttile[data-market=all] { --tile-ink: rgba(244, 245, 246, 0.14); --tile-glyph: #D9DDE1; }
+.ray-mkttile[data-market=art] { --tile-ink: rgba(232, 205, 160, 0.17); --tile-glyph: #E4CFA6; }
+.ray-mkttile[data-market=design] { --tile-ink: rgba(200, 141, 82, 0.18); --tile-glyph: #D19A63; }
+.ray-mkttile[data-market=watches] { --tile-ink: rgba(155, 178, 205, 0.18); --tile-glyph: #AEC3DA; }
+.ray-mkttile[data-market=sports] { --tile-ink: rgba(150, 150, 150, 0.06); --tile-glyph: #7A8087; }
+.ray-mkttile[data-market=science] { --tile-ink: rgba(138, 144, 240, 0.18); --tile-glyph: #A6ACF5; }
+.ray-mkttile-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.42;
+  transform: scale(1.02);
+  transition: opacity 220ms var(--ease-ui), transform 400ms var(--ease-ui);
+}
+.ray-mkttile-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 11, 13, 0.32), rgba(10, 11, 13, 0.64) 48%, rgba(10, 11, 13, 0.94) 100%);
+}
+.ray-mkttile:hover[data-live=true] .ray-mkttile-bg { opacity: 0.55; transform: scale(1.06); }
+.ray-mkttile[data-active=true] .ray-mkttile-bg { opacity: 0.5; }
 .ray-mkttile > * { position: relative; }
-.ray-mkttile:hover[data-live=true] { background: #0E1013; }
-.ray-mkttile[data-active=true] { background: #0E1013; }
+.ray-mkttile > .ray-mkttile-bg { position: absolute; }
+
 .ray-mkttile-ident { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .ray-mkttile-glyph { display: inline-flex; flex: none; color: var(--tile-glyph, #9AA0A6); }
-.ray-mkttile[data-active=true]::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 2px;
-  background: var(--color-fg);
+.ray-mkttile-glyph svg { width: 21px; height: 21px; }
+.ray-mkttile[data-active=true] {
+  border-color: color-mix(in srgb, var(--tile-glyph, #F4F5F6) 62%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 color-mix(in srgb, var(--tile-glyph, #fff) 25%, transparent);
 }
 .ray-mkttile[data-live=false] { cursor: default; }
 .ray-mkttile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .ray-mkttile-name {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 750;
   letter-spacing: -0.01em;
   color: var(--color-text-secondary);
@@ -1969,18 +1996,18 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-mkttile[data-tone=down] .ray-mkttile-spark { color: var(--color-down); }
 .ray-mkttile-figs { display: flex; align-items: baseline; gap: 8px; width: 100%; }
 .ray-mkttile-figs .ray-mkttile-spark { margin-left: auto; align-self: center; }
-.ray-mkttile-val { font-size: 22px; font-weight: 650; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1; }
+.ray-mkttile-val { font-size: 24px; font-weight: 650; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1; }
 .ray-mkttile-delta { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ray-mkttile[data-tone=up] .ray-mkttile-delta { color: var(--color-up); }
 .ray-mkttile[data-tone=down] .ray-mkttile-delta { color: var(--color-down); }
 .ray-mkttile-soon { font-size: 11px; font-weight: 500; color: #7A8087; }
 @media (max-width: 900px) {
-  .ray-mkttiles { grid-template-columns: repeat(3, 1fr); }
-  .ray-mkttile { min-height: 72px; padding: 11px 12px; gap: 6px; }
+  .ray-mkttiles { grid-template-columns: repeat(2, 1fr); gap: 8px; padding-bottom: 12px; }
+  .ray-mkttile { min-height: 84px; padding: 13px 14px; gap: 8px; border-radius: 12px; }
   .ray-mkttile-spark { display: none; }
-  .ray-mkttile-val { font-size: 17px; }
-  .ray-mkttile-name { font-size: 12.5px; }
-  .ray-mkttile-glyph svg { width: 14px; height: 14px; }
+  .ray-mkttile-val { font-size: 20px; }
+  .ray-mkttile-name { font-size: 13.5px; }
+  .ray-mkttile-glyph svg { width: 17px; height: 17px; }
   /* mobile hero stays clean: the tiles say what this is; the chart shows it */
   .ray-pane .ray-demand-label { display: none; }
   .ray-pane .ray-demand-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 4px; }
