@@ -59,7 +59,7 @@ export default function MarketHero({
   const lineColor = (hover ? hover.value : now) >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
   return (
-    <section className="ray-hero2 rail">
+    <section className="ray-hero2 rail" data-tone={(hover ? hover.value : now) >= 0 ? 'up' : 'down'}>
       <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span>
           {hover

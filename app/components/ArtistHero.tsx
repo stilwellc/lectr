@@ -7,6 +7,7 @@ import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
 import MethodologyNote from './MethodologyNote';
+import ArtistAvatar from './ArtistAvatar';
 
 type Range = '1Y' | '5Y' | 'MAX';
 
@@ -85,9 +86,10 @@ export default function ArtistHero({
   const lensWord = lens === 'original' ? 'unique work' : lens === 'print' ? 'edition' : 'sale';
 
   return (
-    <section className="ray-hero2 rail">
+    <section className="ray-hero2 rail" data-tone={(hover ? hover.value : now) >= 0 ? 'up' : 'down'}>
       <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+          <ArtistAvatar label={label} size={26} />
           {hover
             ? `${label} · typical ${lensWord} vs estimate · 12 months to ${hover.date}`
             : `${label} · typical ${lensWord} vs its estimate, trailing 12 months`}

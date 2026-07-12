@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice } from '../../utils';
 import { demandSeries, formatDemand } from '../../lib/demand';
+import ArtistAvatar from '../ArtistAvatar';
 import { ARTISTS } from '../../constants';
 
 interface Props {
@@ -210,10 +211,14 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
                       textDecoration: 'none',
                       color: 'var(--color-fg)',
                       transition: 'color var(--duration-fast) var(--ease-signature)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 10,
                     }}
                     onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent-gold)')}
                     onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
                   >
+                    <ArtistAvatar label={row.label} size={24} />
                     {row.label}
                   </Link>
                 </td>
