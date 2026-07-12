@@ -5,6 +5,7 @@ import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, formatDate, makeAuctionIcs } from '../utils';
 import ComparableModal from './ComparableModal';
+import { computeDeepSignal, FORM_LABEL } from '../lib/comps';
 
 function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
@@ -19,33 +20,15 @@ function formatEstimate(lot: AuctionLot): string {
 }
 
 /** Prefer the crawl-time signal when present; else compute from history. */
-export function lotSignal(lot: AuctionLot, allLots: AuctionLot[]): { label: string; pct: number } | null {
+export type LotSignal = { label: string; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string } | null;
+export function lotSignal(lot: AuctionLot, allLots: AuctionLot[]): LotSignal {
   if (lot.signal !== undefined) return lot.signal;
   return computeBuySignal(lot, allLots);
 }
 
-/** Compute a quick buy signal: median comp price vs estimate midpoint */
-export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]): { label: string; pct: number } | null {
-  if (!lot.estimateLow || !lot.estimateHigh) return null;
-  const estMid = (lot.estimateLow + lot.estimateHigh) / 2;
-  // Get same-artist sold lots in same category
-  const comps = allLots.filter(l =>
-    l.artist === lot.artist &&
-    l.status === 'sold' &&
-    l.priceUsd &&
-    l.id !== lot.id &&
-    (lot.category === 'unknown' || l.category === 'unknown' || l.category === lot.category)
-  );
-  if (comps.length < 3) return null;
-  const prices = comps.map(l => l.priceUsd!).sort((a, b) => a - b);
-  const median = prices.length % 2 === 0
-    ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
-    : prices[Math.floor(prices.length / 2)];
-  const ratio = median / estMid;
-  // Only show signal when there's a meaningful gap
-  if (ratio >= 1.2) return { label: 'Below Market', pct: Math.round((ratio - 1) * 100) };
-  if (ratio <= 0.75) return { label: 'Above Market', pct: Math.round((1 - ratio) * 100) };
-  return null;
+/** The deep comps engine decides what counts as a comp (see app/lib/comps). */
+export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]) {
+  return computeDeepSignal(lot, allLots);
 }
 
 export default function LotCard({
@@ -283,9 +266,12 @@ export default function LotCard({
               className="ray-lot-signal-line"
               data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'}
             >
-              {buySignal.label === 'Below Market'
-                ? `Comps median +${buySignal.pct}% above this estimate`
-                : `Comps median −${buySignal.pct}% below this estimate`}
+              {(() => {
+                const dir = buySignal.label === 'Below Market' ? `+${buySignal.pct}% above` : `−${buySignal.pct}% below`;
+                if (buySignal.kind === 'edition') return `Same edition sold ${dir} this estimate (${buySignal.basis} sales)`;
+                const what = buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] || 'comps' : 'comps';
+                return `${buySignal.basis || ''} comparable ${what}: median ${dir} est.`;
+              })()}
             </div>
           )}
         </div>

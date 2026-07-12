@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice } from '../utils';
+import { areComparable } from '../lib/comps';
 
 function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
@@ -285,13 +286,14 @@ export default function ComparableModal({
   }, []);
 
   const comparables = useMemo(() => {
+    // The deep engine decides what counts as a comp (form + size gates) — the
+    // modal list and the card signal can never disagree about the pool.
     const sold = allLots.filter(l =>
       l.artist === lot.artist &&
       l.status === 'sold' &&
       l.priceUsd &&
       l.id !== lot.id &&
-      // Hard filter: category must match (prints comp prints, originals comp originals, etc.)
-      (lot.category === 'unknown' || l.category === 'unknown' || l.category === lot.category)
+      areComparable(lot, l)
     );
 
     const scored = sold.map(s => ({
