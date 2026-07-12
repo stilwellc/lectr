@@ -29,7 +29,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
       padding: '10px 14px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
         {label}
       </div>
       {payload.filter(e => e.value != null).map((entry) => (
@@ -97,12 +97,12 @@ export default function PortfolioPerformanceChart({ statsByArtist }: Props) {
 
       <div style={{ marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: "var(--font-serif), serif",
-          fontSize: 32,
-          fontWeight: 300,
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Market <span style={{ fontStyle: 'italic', color: 'var(--color-accent-gold)' }}>Performance</span>
+          Market <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Performance</span>
         </h2>
       </div>
 
@@ -113,19 +113,19 @@ export default function PortfolioPerformanceChart({ statsByArtist }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 20px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-fg)', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-faint)', fontWeight: 600 }}>
+              <span style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                 Avg
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent-gold)', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-faint)', fontWeight: 600 }}>
+              <span style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                 High
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 12, height: 2, background: 'var(--color-accent-wine)', borderRadius: 1, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-faint)', fontWeight: 600 }}>
+              <span style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                 Trend
               </span>
             </div>

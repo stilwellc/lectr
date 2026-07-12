@@ -8,10 +8,9 @@ import { formatDate, formatPrice, getUpcomingCounts } from './utils';
 import ArtistNav from './components/ArtistNav';
 import LotCard, { computeBuySignal } from './components/LotCard';
 import PastResults from './components/PastResults';
-import RayHero from './components/RayHero';
 import RayEntrance, { RayLoading } from './components/RayEntrance';
-import SectionMark from './components/SectionMark';
 import CountUp from './components/CountUp';
+import MarketHero from './components/MarketHero';
 import MarketTape from './components/MarketTape';
 import MarketBlock from './components/MarketBlock';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
@@ -86,10 +85,14 @@ export default function RayPage() {
     [allLots]
   );
 
-  // The overview is a snapshot of the LIVE market — active (upcoming) lots only,
-  // never sold history — so it agrees with the "on the block" island below it.
-  // The all-time realized totals live on the analytics page.
-  const overviewStats = useMemo(() => {
+  // All-time realized — the hero numeral (the "portfolio" of the market).
+  const totalRealized = useMemo(
+    () => Object.values(statsByArtist).reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0),
+    [statsByArtist]
+  );
+
+  // The live strip: active lots only, so it agrees with everything below it.
+  const strip = useMemo(() => {
     const active = upcoming;
     const withEst = active.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
     const estValue = withEst.reduce((sum, l) => {
@@ -97,18 +100,17 @@ export default function RayPage() {
       const hi = l.estimateHigh || l.estimateLow || 0;
       return sum + (lo + hi) / 2;
     }, 0);
-    const avgEst = withEst.length ? estValue / withEst.length : 0;
     const liveArtists = new Set(active.map(l => l.artist)).size;
     const liveHouses = new Set(active.map(l => l.auctionHouse)).size;
-    const asInt = (n: number) => Math.round(n).toString();
+    const next = active[0]?.saleDate ? formatDate(active[0].saleDate) : '—';
     const asComma = (n: number) => Math.round(n).toLocaleString();
     return [
-      { label: 'Artists Live', to: liveArtists, format: asInt, sub: `of ${ARTISTS.length} tracked` },
-      { label: 'Active Lots', to: active.length, format: asComma, sub: `across ${liveHouses} houses` },
-      { label: 'Est. Value', to: estValue, format: formatPrice, sub: 'aggregate mid-estimates' },
-      { label: 'Avg. Estimate', to: avgEst, format: formatPrice, sub: `${withEst.length.toLocaleString()} lots with estimates` },
+      { k: 'Active lots', to: active.length, format: asComma, s: `across ${liveHouses} houses` },
+      { k: 'On the block', to: estValue, format: formatPrice, s: 'aggregate mid-estimates' },
+      { k: 'Below estimate', to: belowIds.size, format: asComma, s: 'flagged against comps', tone: 'up' },
+      { k: 'Artists live', to: liveArtists, format: asComma, s: `of ${ARTISTS.length} tracked · next ${next}` },
     ];
-  }, [upcoming]);
+  }, [upcoming, belowIds]);
 
   // A living read on the market — one derived, honest line (revenue-weighted
   // appreciation matching the analytics page, the top house by revenue, this
@@ -152,29 +154,6 @@ export default function RayPage() {
     [sold]
   );
 
-  const accent: React.CSSProperties = { color: 'var(--color-accent-wine-text)', fontWeight: 600 };
-  // Market movement is coded green (up) / red (down) — the correct convention;
-  // gold stays the brand accent for everything that isn't a gain or a loss.
-  const move: React.CSSProperties = {
-    color: pulse.weightedAppreciation >= 0 ? 'var(--color-up)' : 'var(--color-down)',
-    fontWeight: 600,
-  };
-  const pulseLine = (
-    <>
-      The market is{' '}
-      <b style={move}>
-        {pulse.weightedAppreciation >= 0 ? 'up' : 'down'} {Math.abs(pulse.weightedAppreciation).toFixed(1)}%
-      </b>{' '}
-      year over year{pulse.topArtist && <>, led by <b style={accent}>{pulse.topArtist}</b></>}.
-      {pulse.thisWeek > 0 && (
-        <>
-          {' '}<b style={accent}>{pulse.thisWeek} {pulse.thisWeek === 1 ? 'lot' : 'lots'}</b> hammer this week
-          {pulse.belowFlagged > 0 && <> — <b style={accent}>{pulse.belowFlagged}</b> flagged below estimate</>}.
-        </>
-      )}
-    </>
-  );
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -183,42 +162,19 @@ export default function RayPage() {
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
       <style>{`
-        .ray-overview-stats {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
-        }
-        .ray-overview-stats .ray-stat-card {
-          padding: 28px 24px;
-        }
         .ray-upcoming-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+          gap: 30px 20px;
         }
-        .ray-overview-stats-section { padding-block: 40px 0; }
-        .ray-upcoming-section { padding-block: 40px 48px; }
+        .ray-upcoming-section { padding-block: 44px 48px; }
         @media (max-width: 768px) {
-          .ray-overview-stats { grid-template-columns: repeat(2, 1fr); }
-          .ray-overview-stats .ray-stat-card { padding: 20px 18px; }
-          .ray-upcoming-grid { grid-template-columns: 1fr; gap: 14px; }
-          .ray-overview-stats-section { padding-block: 32px 0; }
+          .ray-upcoming-grid { grid-template-columns: 1fr; gap: 26px; }
           .ray-upcoming-section { padding-block: 32px; }
         }
       `}</style>
 
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} />
-
-      <RayHero
-        eyebrow="Market Intelligence"
-        title={<span style={{ fontStyle: 'italic', color: 'var(--color-accent-wine)' }}>Ray</span>}
-        sub={loading
-          ? '\u00A0' /* reserve the line — no zero-count flash while the crawl delivers */
-          : pulseLine}
-        timestamp={lastCrawl ? formatDate(lastCrawl) : undefined}
-      />
-
-      {!loading && !error && tapeItems.length > 0 && <MarketTape items={tapeItems} />}
 
       {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12 }}>
@@ -239,78 +195,62 @@ export default function RayPage() {
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
-          <section className="ray-overview-stats-section ray-enter rail">
-            <div className="ray-overview-stats">
-              {overviewStats.map((card) => (
-                <div key={card.label} className="ray-stat-card glass glass-quiet">
-                  <div style={{
-                    fontSize: 12,
-                    letterSpacing: '0.18em',
-                    textTransform: 'uppercase',
-                    color: 'var(--color-text-muted)',
-                    fontWeight: 600,
-                    marginBottom: 14,
-                  }}>
-                    {card.label}
-                  </div>
+          {/* The market as a portfolio: giant numeral, green performance line */}
+          <div className="ray-enter">
+            <MarketHero statsByArtist={statsByArtist} totalValue={totalRealized} pulse={pulse} />
+          </div>
+
+          {/* The live strip: today's market in four figures */}
+          <section className="rail ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
+            <div className="ray-strip">
+              {strip.map(item => (
+                <div key={item.k}>
+                  <div className="ray-strip-k">{item.k}</div>
                   <CountUp
-                    to={card.to}
-                    format={card.format}
-                    style={{
-                      display: 'block',
-                      fontFamily: 'var(--font-serif), serif',
-                      fontSize: 34,
-                      fontWeight: 300,
-                      color: 'var(--color-fg)',
-                      lineHeight: 1,
-                      marginBottom: 8,
-                    }}
+                    to={item.to}
+                    format={item.format}
+                    className="ray-strip-v"
+                    style={item.tone === 'up' ? { color: 'var(--color-up)', display: 'block' } : { display: 'block' }}
                   />
-                  <div style={{
-                    fontSize: 12,
-                    color: 'var(--color-text-muted)',
-                    fontWeight: 400,
-                  }}>
-                    {card.sub}
-                  </div>
+                  <div className="ray-strip-s">{item.s}</div>
                 </div>
               ))}
             </div>
           </section>
 
+          {/* Recent hammers, rolling by */}
+          {tapeItems.length > 0 && (
+            <div className="ray-enter" style={{ '--enter-delay': '90ms', marginTop: 28 } as React.CSSProperties}>
+              <MarketTape items={tapeItems} />
+            </div>
+          )}
+
           {upcoming.length > 0 && (
-            <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
+            <div className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
               <MarketBlock upcoming={upcoming} allLots={allLots} />
             </div>
           )}
 
           {upcoming.length > 0 && (
             <section className="ray-upcoming-section rail">
-              {/* Ghost ordinal clipped to the header band — never under the cards */}
-              <div style={{ position: 'relative', overflow: 'hidden', marginBottom: 16 }}>
-                <SectionMark n="01" style={{ fontSize: 'clamp(96px, 12vw, 150px)' }} />
-                <div
-                  className="ray-enter"
-                  style={{
-                    '--enter-delay': '90ms',
-                    position: 'relative',
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: 12,
-                    padding: '16px 0 12px',
-                  } as React.CSSProperties}
-                >
-                  <h2 style={{
-                    fontFamily: 'var(--font-serif), serif',
-                    fontSize: 32,
-                    fontWeight: 300,
-                    letterSpacing: '-0.02em',
-                  }}>
-                    Upcoming <span style={{ fontStyle: 'italic' }}>Lots</span>
-                  </h2>
-                </div>
+              <div
+                className="ray-enter"
+                style={{
+                  '--enter-delay': '150ms',
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  padding: '0 0 14px',
+                } as React.CSSProperties}
+              >
+                <h2 className="ray-h2">Upcoming lots</h2>
+                {lastCrawl && (
+                  <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
+                    Updated {formatDate(lastCrawl)}
+                  </span>
+                )}
               </div>
 
               <FeedToolbar

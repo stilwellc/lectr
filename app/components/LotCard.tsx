@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, categoryColors, formatDate, makeAuctionIcs } from '../utils';
+import { houseColors, categoryLabels, formatDate, makeAuctionIcs } from '../utils';
 import ComparableModal from './ComparableModal';
 
 function formatEstimate(lot: AuctionLot): string {
@@ -13,7 +13,7 @@ function formatEstimate(lot: AuctionLot): string {
     return `$${n.toLocaleString()}`;
   };
   if (lot.estimateLow && lot.estimateHigh) {
-    return `${fmt(lot.estimateLow)} — ${fmt(lot.estimateHigh)} ${lot.currency}`;
+    return `${fmt(lot.estimateLow)}–${fmt(lot.estimateHigh)} ${lot.currency}`;
   }
   return 'Estimate on request';
 }
@@ -81,7 +81,6 @@ export default function LotCard({
     }
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  const catColor = categoryColors[lot.category] || 'var(--color-text-faint)';
   const catLabel = categoryLabels[lot.category] || null;
   const isUpcoming = lot.status === 'upcoming';
 
@@ -189,50 +188,20 @@ export default function LotCard({
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           />
         )}
-        {isUpcoming && (
-          <div style={{
-            position: 'absolute',
-            top: 10,
-            left: 10,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '3px 10px',
-            borderRadius: 100,
-            border: '1px solid color-mix(in srgb, var(--color-fg) 30%, transparent)',
-            background: 'color-mix(in srgb, var(--color-bg) 68%, transparent)',
-            fontSize: 12,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: 'var(--color-fg)',
-            fontWeight: 600,
-          }}>
-            <span aria-hidden="true" style={{
-              width: 5,
-              height: 5,
-              borderRadius: '50%',
-              background: 'var(--color-fg)',
-              flexShrink: 0,
-            }} />
-            Live
-          </div>
-        )}
         {buySignal && (
           <div style={{
             position: 'absolute',
             top: 10,
-            right: onToggleSave ? 46 : 10,
-            padding: '3px 9px',
+            left: 10,
+            padding: '4px 11px',
             borderRadius: 100,
-            background: 'color-mix(in srgb, var(--color-bg) 68%, transparent)',
-            border: `1px solid color-mix(in srgb, ${buySignal.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down)'} 42%, transparent)`,
-            fontSize: 12,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: buySignal.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down)',
+            background: buySignal.label === 'Below Market' ? 'var(--color-up)' : 'rgba(0,0,0,0.55)',
+            fontSize: 12.5,
+            letterSpacing: '-0.01em',
+            color: buySignal.label === 'Below Market' ? '#fff' : 'var(--color-down)',
             fontWeight: 600,
           }}>
-            {buySignal.label}
+            {buySignal.label === 'Below Market' ? 'Below market' : 'Above market'}
           </div>
         )}
         {onToggleSave && (
@@ -250,7 +219,7 @@ export default function LotCard({
               justifyContent: 'center',
               background: saved ? 'var(--color-accent-wine)' : 'rgba(0,0,0,0.45)',
               border: 'none',
-              borderRadius: 8,
+              borderRadius: 100,
               cursor: 'pointer',
               padding: 0,
               zIndex: 2,
@@ -269,83 +238,38 @@ export default function LotCard({
         )}
       </div>
 
-      <div style={{ padding: '14px 18px 18px', flex: 1, display: 'flex', flexDirection: 'column', zIndex: 'auto' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          marginBottom: 8,
-        }}>
-          <span style={{
-            fontSize: 12,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: color,
-            fontWeight: 600,
-          }}>
-            {lot.auctionHouse}
-          </span>
-          {catLabel && lot.category !== 'unknown' && (
-            <>
-              <span style={{ color: 'var(--color-text-faint)', fontSize: 12 }}>&middot;</span>
-              <span style={{
-                fontSize: 12,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: catColor,
-                fontWeight: 600,
-              }}>
-                {catLabel}
-              </span>
-            </>
-          )}
-        </div>
+      <div style={{ padding: '13px 2px 4px', flex: 1, display: 'flex', flexDirection: 'column', zIndex: 'auto' }}>
 
         {showArtist && lot.artist && (
           <div style={{
-            fontSize: 12,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: 'var(--color-text-muted)',
+            fontSize: 15,
+            letterSpacing: '-0.01em',
+            color: 'var(--color-fg)',
             fontWeight: 600,
-            marginBottom: 4,
+            marginBottom: 2,
           }}>
             {ARTIST_LABEL[lot.artist] || lot.artist}
           </div>
         )}
         <h3 className="ray-lot-title" style={{
-          fontFamily: "var(--font-serif), serif",
-          fontSize: 19,
-          fontWeight: 400,
-          marginBottom: 4,
-          lineHeight: 1.25,
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: showArtist ? 14 : 15,
+          fontWeight: showArtist ? 400 : 600,
+          color: showArtist ? 'var(--color-text-muted)' : 'var(--color-fg)',
+          letterSpacing: '-0.01em',
+          margin: '0 0 3px',
+          lineHeight: 1.4,
           flex: 1,
         }}>
           {lot.title}
         </h3>
-        {lot.year && (
-          <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 10 }}>
-            {lot.year}{lot.medium ? ` · ${lot.medium}` : ''}
-          </div>
-        )}
+        <div style={{ fontSize: 13, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
+          {lot.auctionHouse}
+          {catLabel && lot.category !== 'unknown' ? ` · ${catLabel}` : ''}
+          {` · ${formatDate(lot.saleDate)}`}
+        </div>
         <div style={{ marginTop: 'auto' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}>
-            <span className="ray-lot-est">{formatEstimate(lot)}</span>
-            <span style={{
-              fontSize: 12,
-              color: 'var(--color-text-faint)',
-              fontWeight: 500,
-              whiteSpace: 'nowrap',
-              fontFamily: 'var(--font-mono), monospace',
-            }}>
-              {formatDate(lot.saleDate)}
-            </span>
-          </div>
+          <span className="ray-lot-est">{formatEstimate(lot)}</span>
           {/* The intelligence, made precise: where the artist's comps sit
               against this estimate. Green = headroom, red = rich. */}
           {buySignal && (
@@ -354,8 +278,8 @@ export default function LotCard({
               data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'}
             >
               {buySignal.label === 'Below Market'
-                ? `comps median +${buySignal.pct}% above this estimate`
-                : `comps median −${buySignal.pct}% below this estimate`}
+                ? `Comps median +${buySignal.pct}% above this estimate`
+                : `Comps median −${buySignal.pct}% below this estimate`}
             </div>
           )}
         </div>

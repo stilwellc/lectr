@@ -27,7 +27,7 @@ function HouseTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       padding: '10px 14px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
         {d.house}
       </div>
       <div style={{ fontSize: 13, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
@@ -77,12 +77,12 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
 
       <div style={{ marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: "var(--font-serif), serif",
-          fontSize: 32,
-          fontWeight: 300,
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Auction House <span style={{ fontStyle: 'italic', color: 'var(--color-accent-gold)' }}>Distribution</span>
+          Auction House <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Distribution</span>
         </h2>
       </div>
 

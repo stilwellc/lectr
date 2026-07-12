@@ -391,7 +391,7 @@ export default function ComparableModal({
                 fontWeight: 300,
                 color: 'var(--color-text-faint)',
                 opacity: 0.3,
-                fontStyle: 'italic',
+                fontStyle: 'normal',
               }}>
                 {lot.title.charAt(0)}
               </div>
@@ -402,8 +402,8 @@ export default function ComparableModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <span style={{
                 fontSize: 12,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
+                letterSpacing: '-0.01em',
+                textTransform: 'none',
                 color: houseColor,
                 fontWeight: 600,
               }}>
@@ -414,8 +414,8 @@ export default function ComparableModal({
                   <span style={{ color: 'var(--color-text-faint)', fontSize: 12 }}>&middot;</span>
                   <span style={{
                     fontSize: 12,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
+                    letterSpacing: '-0.01em',
+                    textTransform: 'none',
                     color: catColor,
                     fontWeight: 600,
                   }}>
@@ -427,8 +427,8 @@ export default function ComparableModal({
 
             <div style={{
               fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
               color: 'var(--color-text-muted)',
               fontWeight: 600,
               marginBottom: 4,
@@ -475,8 +475,8 @@ export default function ComparableModal({
                 color: 'var(--color-bg)',
                 fontSize: 12,
                 fontWeight: 600,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
+                letterSpacing: '-0.01em',
+                textTransform: 'none',
                 textDecoration: 'none',
                 transition: 'opacity var(--duration-fast) var(--ease-signature)',
                 alignSelf: 'flex-start',
@@ -499,7 +499,7 @@ export default function ComparableModal({
               <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontFamily: "var(--font-serif), serif" }}>
                 {formatPrice(compStats.median)}
               </div>
-              <div style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-text-faint)', marginTop: 3 }}>
+              <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
                 Median
               </div>
             </div>
@@ -508,7 +508,7 @@ export default function ComparableModal({
               <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontFamily: "var(--font-serif), serif" }}>
                 {formatPrice(compStats.low)} — {formatPrice(compStats.high)}
               </div>
-              <div style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-text-faint)', marginTop: 3 }}>
+              <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
                 Range
               </div>
             </div>
@@ -524,7 +524,7 @@ export default function ComparableModal({
                   }}>
                     {compStats.hammerVsEst >= 1 ? '+' : ''}{((compStats.hammerVsEst - 1) * 100).toFixed(0)}%
                   </div>
-                  <div style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-text-faint)', marginTop: 3 }}>
+                  <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
                     vs. Est.
                   </div>
                 </div>
@@ -537,8 +537,8 @@ export default function ComparableModal({
         <div className="comp-modal-comps">
           <div style={{
             fontSize: 12,
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
+            letterSpacing: '-0.01em',
+            textTransform: 'none',
             color: 'var(--color-text-muted)',
             fontWeight: 600,
             marginBottom: 16,
@@ -613,7 +613,7 @@ export default function ComparableModal({
                             fontSize: 18,
                             color: 'var(--color-text-faint)',
                             opacity: 0.3,
-                            fontStyle: 'italic',
+                            fontStyle: 'normal',
                           }}>
                             {comp.title.charAt(0)}
                           </span>

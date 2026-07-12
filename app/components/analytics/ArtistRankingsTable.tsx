@@ -84,8 +84,8 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
 
   const thStyle = (key: SortKey, align: 'left' | 'right' = 'right'): React.CSSProperties => ({
     fontSize: 12,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
+    letterSpacing: '-0.01em',
+    textTransform: 'none',
     color: sortKey === key ? 'var(--color-accent-gold)' : 'var(--color-text-faint)',
     fontWeight: 600,
     padding: '14px 16px 10px',
@@ -138,12 +138,12 @@ export default function ArtistRankingsTable({ statsByArtist, allLots }: Props) {
 
       <div style={{ marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: "var(--font-serif), serif",
-          fontSize: 32,
-          fontWeight: 300,
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Artist <span style={{ fontStyle: 'italic', color: 'var(--color-accent-gold)' }}>Rankings</span>
+          Artist <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Rankings</span>
         </h2>
       </div>
 

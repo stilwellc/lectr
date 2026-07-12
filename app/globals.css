@@ -1640,3 +1640,408 @@ h1 {
   color: var(--color-accent-gold-text);
   background: color-mix(in srgb, var(--color-accent-gold) 10%, transparent);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   RAY 2.0 — THE REBUILD.
+   A market app with an Apple/Airbnb lens: one typeface (Inter), a true
+   neutral dark ground, flat borderless surfaces, giant confident numerals,
+   sentence case everywhere. Green is the market's voice (gains/live),
+   red only ever means a fall, gold is reserved for the brand mark.
+   This layer overrides everything editorial that came before it.
+   ════════════════════════════════════════════════════════════════════════ */
+:root,
+[data-theme="light"],
+[data-theme="dark"] {
+  /* one voice */
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: var(--font-sans);
+  --font-mono: var(--font-sans);
+
+  /* neutral ground */
+  --color-bg: #0A0B0D;
+  --color-bg-elevated: #15171A;
+  --color-fg: #F4F5F6;
+  --color-text-secondary: #C6CACF;
+  --color-text-muted: #9AA0A6;
+  --color-text-faint: #63686E;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-mid: rgba(255, 255, 255, 0.14);
+  --color-nav-bg: rgba(10, 11, 13, 0.86);
+  --color-hover-item: rgba(255, 255, 255, 0.04);
+  --color-overlay-light: rgba(255, 255, 255, 0.04);
+
+  /* roles */
+  --color-accent-gold: #E8B95B;        /* brand only */
+  --color-accent-gold-text: #EDC275;
+  --color-accent-wine: #E8B95B;        /* legacy slots collapse to brand */
+  --color-accent-wine-text: #EDC275;
+  --color-accent-coral: #E8B95B;
+  --color-up: #2FBF71;
+  --color-up-soft: rgba(47, 191, 113, 0.13);
+  --color-down: #E5544B;
+  --color-down-soft: rgba(229, 84, 75, 0.13);
+
+  /* flat surfaces: the glass system collapses to fills */
+  --glass-bg: #15171A;
+  --glass-bg-hover: #1B1E22;
+  --glass-border: transparent;
+  --glass-border-top: transparent;
+  --glass-specular: transparent;
+  --glass-caustic: transparent;
+  --glass-shadow: none;
+  --glass-shadow-hover: none;
+
+  /* houses/categories: quiet inks that sit on neutral dark */
+  --ray-house-phillips: #7FA3C8;
+  --ray-house-sothebys: #C8B183;
+  --ray-house-christies: #A9ADB3;
+  --ray-house-rago: #B99F72;
+  --ray-house-wright: #86A6C2;
+  --ray-house-heritage: #8FA9BC;
+  --ray-house-bonhams: #C2A868;
+  --ray-house-hindman: #9AA0A6;
+  --ray-cat-original: #C8B183;
+  --ray-cat-print: #7FA3C8;
+  --ray-cat-photograph: #86A6C2;
+  --ray-cat-sculpture: #B99F72;
+  --ray-cat-design: #A9ADB3;
+  --ray-cat-unknown: #9AA0A6;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* kill the decorative layer wholesale */
+.grain-overlay, .ambient-field, .route-line { display: none !important; }
+[class*="section-mark"], .sm-ghost { display: none !important; }
+.glass, .glass-quiet, .glass-noblur, .glass-pill {
+  background: var(--color-bg-elevated) !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 16px;
+}
+body { font-family: var(--font-sans); letter-spacing: -0.011em; }
+
+/* flat cards do not levitate — hover is a fill shift, images may breathe */
+.ray-stat-card, .ray-portfolio-card, .ray-lot-card {
+  transition: background var(--duration-fast) var(--ease-signature);
+}
+.ray-stat-card:hover, .ray-portfolio-card:hover, .ray-lot-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  background: var(--color-bg-elevated);
+}
+.ray-stat-card::after, .ray-portfolio-card::after { display: none; }
+
+/* ───────────────────────── app bar ───────────────────────── */
+.ray-artist-nav { padding-block: 10px; }
+.ray-wordmark {
+  font-family: var(--font-sans) !important;
+  font-style: normal !important;
+  font-weight: 800 !important;
+  font-size: 19px !important;
+  letter-spacing: -0.03em !important;
+  color: var(--color-accent-gold) !important;
+}
+.ray-nav-link {
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  padding: 7px 13px !important;
+  color: var(--color-text-muted);
+}
+.ray-nav-link:hover { color: var(--color-fg); background: var(--color-hover-item); }
+.ray-nav-link[data-active=true] {
+  color: var(--color-fg) !important;
+  background: var(--color-bg-elevated) !important;
+}
+.ray-artist-select-btn {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  border-radius: 10px !important;
+}
+.ray-artist-dropdown { border-radius: 12px !important; border: 1px solid var(--color-border-mid) !important; }
+.ray-artist-dropdown-item {
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+}
+.ray-artist-dropdown-label {
+  font-size: 11px !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
+  font-weight: 600 !important;
+}
+.ray-artist-count { background: var(--color-bg-elevated) !important; color: var(--color-text-muted) !important; font-size: 11px !important; }
+
+/* ───────────────────────── market hero ───────────────────────── */
+.ray-hero2 { padding: 34px 0 0; }
+.ray-hero2-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin: 0 0 6px;
+}
+.ray-hero2-value {
+  font-size: clamp(44px, 6.5vw, 68px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: var(--color-fg);
+  margin: 0;
+}
+.ray-hero2-delta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 0;
+  font-size: 15.5px;
+  font-weight: 600;
+}
+.ray-hero2-delta .up { color: var(--color-up); }
+.ray-hero2-delta .down { color: var(--color-down); }
+.ray-hero2-delta .ctx { color: var(--color-text-muted); font-weight: 400; }
+.ray-hero2-chart { position: relative; height: 280px; margin-top: 18px; }
+.ray-hero2-ranges { display: flex; gap: 2px; margin-top: 6px; }
+.ray-range-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-faint);
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
+}
+.ray-range-btn:hover { color: var(--color-text-secondary); }
+.ray-range-btn[data-active=true] { color: var(--color-fg); background: var(--color-bg-elevated); }
+
+/* the live strip under the hero: flat columns, hairline dividers */
+.ray-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  margin-top: 26px;
+}
+.ray-strip > div {
+  padding: 18px 20px 20px;
+  border-left: 1px solid var(--color-border);
+}
+.ray-strip > div:first-child { border-left: none; padding-left: 0; }
+.ray-strip-k { font-size: 12.5px; font-weight: 500; color: var(--color-text-muted); margin-bottom: 6px; }
+.ray-strip-v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); line-height: 1.1; }
+.ray-strip-s { font-size: 12px; color: var(--color-text-faint); margin-top: 4px; }
+@media (max-width: 768px) {
+  .ray-strip { grid-template-columns: 1fr 1fr; }
+  .ray-strip > div:nth-child(odd) { border-left: none; padding-left: 0; }
+  .ray-strip > div:nth-child(-n+2) { border-bottom: 1px solid var(--color-border); }
+  .ray-hero2-chart { height: 210px; }
+}
+
+/* segmented control (Apple) */
+.ray-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--color-bg-elevated);
+}
+.ray-seg-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-muted);
+  padding: 6px 14px;
+  border-radius: 8px;
+  transition: color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
+}
+.ray-seg-btn[data-active=true] { color: var(--color-bg); background: var(--color-fg); }
+
+/* ───────────────────────── tape, quieted ───────────────────────── */
+.ray-tape { padding: 10px 0; background: none; border-color: var(--color-border); }
+.ray-tape-item { font-size: 12.5px; gap: 8px; padding: 0 26px; }
+.ray-tape-item::after { content: '·'; color: var(--color-text-faint); margin-left: 26px; font-size: 12px; }
+.ray-tape-artist { text-transform: none; letter-spacing: -0.01em; font-weight: 600; font-size: 12.5px; color: var(--color-text-secondary); }
+.ray-tape-title { font-family: var(--font-sans); font-style: normal; font-size: 12.5px; color: var(--color-text-faint); }
+.ray-tape-price { color: var(--color-up); font-weight: 600; }
+.ray-tape-house { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--color-text-faint); }
+
+/* ───────────────────────── on the block ───────────────────────── */
+.ray-block-card { border-radius: 20px; }
+.ray-block-eyebrow {
+  text-transform: none !important;
+  letter-spacing: -0.01em !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--color-text-secondary) !important;
+}
+.ray-block-rule { display: none; }
+.ray-block-toggle { border: none; background: var(--color-bg); padding: 3px; }
+.ray-block-toggle-btn {
+  text-transform: none !important;
+  letter-spacing: -0.01em !important;
+  font-size: 12.5px !important;
+  border-radius: 8px !important;
+}
+.ray-block-toggle-btn[data-active=true] { background: var(--color-fg) !important; color: var(--color-bg) !important; }
+.ray-block-head {
+  font-family: var(--font-sans) !important;
+  font-weight: 700 !important;
+  font-size: clamp(22px, 2.6vw, 30px) !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.15 !important;
+}
+.ray-block-head em { font-style: normal !important; color: var(--color-up) !important; }
+.ray-block-intel {
+  font-family: var(--font-sans) !important;
+  font-size: 15px !important;
+  line-height: 1.55 !important;
+  min-height: 2.6em !important;
+  color: var(--color-text-muted) !important;
+}
+.ray-block-intel b { color: var(--color-fg) !important; font-weight: 600 !important; }
+.ray-block-intel em { color: var(--color-text-secondary) !important; font-style: normal !important; }
+.ray-block-dot[data-active=true] { background: var(--color-up); }
+.ray-block-stats span { text-transform: none; letter-spacing: -0.01em; font-size: 12.5px; font-weight: 500; }
+.ray-block-stats b { font-family: var(--font-sans); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.ray-block-spot { border-left: 1px solid var(--color-border); background: none; }
+.ray-block-spot-tag {
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-bg);
+  background: var(--color-fg);
+  padding: 4px 10px;
+}
+.ray-block-spot-artist { text-transform: none; letter-spacing: -0.01em; font-size: 13px; font-weight: 600; color: var(--color-fg); }
+.ray-block-spot-title { font-family: var(--font-sans); font-style: normal; font-size: 13.5px; color: var(--color-text-muted); }
+.ray-block-spot-est { color: var(--color-fg); font-weight: 600; font-size: 13px; }
+
+/* ───────────────────────── toolbar, humanized ───────────────────────── */
+.ray-toolbar { border-bottom-color: var(--color-border); }
+.ray-toolbar-search { border-bottom: none; background: var(--color-bg-elevated); border-radius: 12px; padding: 9px 14px; max-width: 380px; }
+.ray-toolbar-search:focus-within { outline: 1.5px solid var(--color-border-mid); }
+.ray-toolbar-search input { font-family: var(--font-sans); font-style: normal; font-size: 14px; }
+.ray-toolbar-pill {
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border: none;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+.ray-toolbar-pill i { font-family: var(--font-sans); font-size: 12px; font-weight: 500; }
+.ray-toolbar-pill:hover { color: var(--color-fg); background: var(--glass-bg-hover); }
+.ray-toolbar-pill[data-active=true] { background: var(--color-fg); border: none; color: var(--color-bg); }
+.ray-toolbar-pill-signal { color: var(--color-up); background: var(--color-up-soft); }
+.ray-toolbar-pill-signal:hover { color: var(--color-up); }
+.ray-toolbar-pill-signal[data-active=true] { background: var(--color-up); color: #fff; }
+.ray-toolbar-count { font-family: var(--font-sans); font-size: 13px; color: var(--color-text-faint); }
+.ray-toolbar-reset {
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-fg);
+  border-bottom: none;
+}
+.ray-feed-empty p { font-family: var(--font-sans); font-style: normal; font-size: 17px; color: var(--color-text-muted); }
+
+/* ───────────────────────── lot cards → Airbnb ───────────────────────── */
+.ray-lot-card,
+.ray-lot-card.glass,
+.ray-lot-card.glass-quiet {
+  background: transparent !important;
+  border-radius: 0;
+  overflow: visible !important;
+}
+.ray-lot-card:hover { background: transparent !important; }
+.ray-lot-img {
+  height: 240px !important;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--color-bg-elevated) !important;
+}
+.ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.035); }
+.ray-lot-plate { background: var(--color-bg-elevated); }
+.ray-lot-plate::before { inset: 14px; border-color: var(--color-border-mid); }
+.ray-lot-plate::after { display: none; }
+.ray-lot-plate-letter {
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 40px;
+  letter-spacing: -0.02em;
+  color: var(--color-text-faint);
+  opacity: 0.9;
+}
+.ray-lot-plate-rule { background: var(--color-border-mid); }
+.ray-lot-est { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
+.ray-lot-signal-line { font-family: var(--font-sans); font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em; }
+.ray-lot-footer { border-top: none; margin-top: 10px; padding-top: 0; }
+.ray-lot-remind {
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg-elevated);
+  border-radius: 10px;
+  padding: 8px 14px;
+}
+.ray-lot-remind:hover { color: var(--color-fg); background: var(--glass-bg-hover); }
+.ray-lot-comps { text-transform: none; letter-spacing: -0.01em; font-size: 13px; font-weight: 500; color: var(--color-text-faint); }
+.ray-lot-card:hover .ray-lot-comps { color: var(--color-fg); }
+@media (max-width: 768px) { .ray-lot-img { height: 220px !important; } }
+
+/* section heads: plain confident sans */
+.ray-h2 {
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--color-fg);
+  margin: 0;
+}
+
+/* page header for interior pages (analytics / artist / saved) */
+.ray-hero .eyebrow,
+.ray-hero-eyebrow {
+  text-transform: none !important;
+  letter-spacing: -0.01em !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--color-text-muted) !important;
+}
+.ray-hero h1 {
+  font-family: var(--font-sans) !important;
+  font-weight: 800 !important;
+  font-size: clamp(30px, 4vw, 42px) !important;
+  letter-spacing: -0.03em !important;
+}
+.ray-hero h1 em, .ray-hero h1 span { font-style: normal !important; }
+.ray-hero-stamp {
+  font-family: var(--font-sans) !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 12.5px !important;
+}
+.ray-divider-wrap { display: none; }

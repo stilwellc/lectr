@@ -59,10 +59,11 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
           min-width: 0;
         }
         .ray-portfolio-value {
-          font-family: var(--font-serif), serif;
-          font-size: 34px;
-          font-weight: 300;
-          color: var(--color-accent-gold);
+          font-family: var(--font-sans), sans-serif;
+          font-size: 26px;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: var(--color-fg);
           line-height: 1.1;
           margin-bottom: 8px;
           overflow-wrap: anywhere;
@@ -86,8 +87,8 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
           <div key={card.label} className="ray-portfolio-card glass glass-quiet">
             <div style={{
               fontSize: 12,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
               color: 'var(--color-text-muted)',
               fontWeight: 600,
               marginBottom: 14,

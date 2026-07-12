@@ -64,7 +64,7 @@ export default function ArtistDetailPage() {
           }}>
             Artist not found
           </h2>
-          <Link href="/" className="link-action" style={{ color: 'var(--color-accent-wine-text)' }}>
+          <Link href="/" className="link-action" style={{ color: 'var(--color-fg)' }}>
             <span className="arrow" data-dir="back">&#8592;</span> Back to overview
           </Link>
         </div>
@@ -72,7 +72,7 @@ export default function ArtistDetailPage() {
         <>
           <RayHero
             eyebrow="Artist Detail"
-            title={<span style={{ fontStyle: 'italic', color: 'var(--color-accent-wine)' }}>{label}</span>}
+            title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>{label}</span>}
             sub={loading
               ? '\u00A0' /* reserve the line — no zero-count flash while the crawl delivers */
               : <>{lots.length} lots across {stats?.houseDistribution?.length || 0} auction houses.</>}

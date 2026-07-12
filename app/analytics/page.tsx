@@ -41,7 +41,7 @@ export default function AnalyticsPage() {
 
       <RayHero
         eyebrow="Market Analytics"
-        title={<span style={{ fontStyle: 'italic', color: 'var(--color-accent-gold)' }}>Analytics</span>}
+        title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Analytics</span>}
         sub={loading
           ? '\u00A0' /* reserve the line — no zero-count flash while the crawl delivers */
           : <>Market-level intelligence across {ARTISTS.length} artists and {houseCount} auction houses.</>}
