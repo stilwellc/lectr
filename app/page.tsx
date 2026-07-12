@@ -196,7 +196,7 @@ export default function RayPage() {
 
       {/* The verticals — the first choice on the lander */}
       <div className="rail" style={{ paddingTop: 22 }}>
-        <MarketSwitch />
+        <MarketSwitch demand={demand} />
       </div>
 
       {!marketMeta.live ? (
