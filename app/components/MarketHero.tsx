@@ -32,6 +32,7 @@ export default function MarketHero({
   marketLabel = 'art',
   totalValue,
   pulse,
+  bare = false,
 }: {
   allLots: AuctionLot[];
   /** precomputed at crawl time (eager payload) — computed locally as fallback */
@@ -39,6 +40,8 @@ export default function MarketHero({
   marketLabel?: string;
   totalValue: number;
   pulse: Pulse;
+  /** inside the command deck the wrapper owns the rail padding */
+  bare?: boolean;
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
@@ -80,7 +83,7 @@ export default function MarketHero({
   );
 
   return (
-    <section className="ray-hero2 rail" data-tone={dir >= 0 ? 'up' : 'down'}>
+    <section className={bare ? 'ray-hero2' : 'ray-hero2 rail'} data-tone={dir >= 0 ? 'up' : 'down'}>
       <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span>
           {hover
