@@ -2,30 +2,98 @@
 
 import { MARKETS } from '../constants';
 import { useMarket } from '../lib/market';
+import { formatDemand, DemandPoint } from '../lib/demand';
+import MarketIcon from './MarketIcon';
 
 /**
- * MarketSwitch — the verticals. Art and Design are live; Watches, Sports and
- * Science are announced. Selecting a coming market shows its preview state
- * (the lander handles that); the choice persists across every page.
+ * MarketSwitch — the verticals as the lander's focal shelf. Each market is a
+ * card: its glyph, its name, and for live markets its own demand reading with
+ * a micro-sparkline (the same TTM series the hero draws). Coming markets show
+ * their tagline under a gold "soon". The compact variant (inner pages) stays
+ * a pill row, now with glyphs. The choice persists across every page.
  */
-export default function MarketSwitch({ compact = false }: { compact?: boolean }) {
-  const { market, setMarket } = useMarket();
+
+function Spark({ series }: { series: DemandPoint[] }) {
+  const pts = series.slice(-14);
+  if (pts.length < 2) return null;
+  const vals = pts.map(p => p.value);
+  const min = Math.min(...vals);
+  const span = Math.max(...vals) - min || 1;
+  const W = 58;
+  const H = 20;
+  const d = pts
+    .map((p, i) => `${((i / (pts.length - 1)) * W).toFixed(1)},${(H - 2 - ((p.value - min) / span) * (H - 4)).toFixed(1)}`)
+    .join(' ');
   return (
-    <div className={`ray-markets${compact ? ' ray-markets-compact' : ''}`} role="tablist" aria-label="Markets">
-      {MARKETS.map(m => (
-        <button
-          key={m.key}
-          role="tab"
-          aria-selected={market === m.key}
-          className="ray-market-tab"
-          data-active={market === m.key}
-          data-live={m.live}
-          onClick={() => setMarket(m.key)}
-        >
-          {m.label}
-          {!m.live && <span className="ray-market-soon">soon</span>}
-        </button>
-      ))}
+    <svg className="ray-mkt-spark" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none" aria-hidden="true">
+      <polyline points={d} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export default function MarketSwitch({
+  compact = false,
+  demand,
+}: {
+  compact?: boolean;
+  demand?: Record<string, DemandPoint[]>;
+}) {
+  const { market, setMarket } = useMarket();
+
+  if (compact) {
+    return (
+      <div className="ray-markets ray-markets-compact" role="tablist" aria-label="Markets">
+        {MARKETS.map(m => (
+          <button
+            key={m.key}
+            role="tab"
+            aria-selected={market === m.key}
+            className="ray-market-tab"
+            data-active={market === m.key}
+            data-live={m.live}
+            onClick={() => setMarket(m.key)}
+          >
+            <MarketIcon market={m.key} size={14} />
+            {m.label}
+            {!m.live && <span className="ray-market-soon">soon</span>}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="ray-mkt-cards" role="tablist" aria-label="Markets">
+      {MARKETS.map(m => {
+        const series = demand?.[m.key] || [];
+        const now = m.live && series.length ? series[series.length - 1].value : null;
+        const tone = now == null ? undefined : now >= 0 ? 'up' : 'down';
+        return (
+          <button
+            key={m.key}
+            role="tab"
+            aria-selected={market === m.key}
+            className="ray-mkt-card"
+            data-active={market === m.key}
+            data-live={m.live}
+            data-tone={tone}
+            onClick={() => setMarket(m.key)}
+          >
+            <div className="ray-mkt-card-top">
+              <span className="ray-mkt-ic"><MarketIcon market={m.key} /></span>
+              {now != null ? <Spark series={series} /> : !m.live && <span className="ray-market-soon">soon</span>}
+            </div>
+            <div className="ray-mkt-card-label">{m.label}</div>
+            {now != null ? (
+              <div className="ray-mkt-card-stat">
+                {formatDemand(now)} <span>demand</span>
+              </div>
+            ) : (
+              <div className="ray-mkt-card-tag">{m.tagline}</div>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
