@@ -195,7 +195,7 @@ export default function RayPage() {
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {/* The verticals — the first choice on the lander */}
-      <div className="rail" style={{ paddingTop: 22 }}>
+      <div className="rail ray-shelfrail">
         <MarketSwitch demand={demand} />
       </div>
 
