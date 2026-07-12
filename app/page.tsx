@@ -250,7 +250,7 @@ export default function RayPage() {
               <BoardDemand
                 allLots={marketLots}
                 demand={demand[activeKey] || []}
-                marketLabel={marketMeta.label.toLowerCase()}
+                marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
               />
             </div>
             {backtest && backtest.flagged.n > 500 && (

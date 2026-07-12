@@ -8,7 +8,7 @@
 export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science';
 
 export const MARKETS: { key: Market; label: string; live: boolean; tagline: string }[] = [
-  { key: 'all', label: 'Collectibles', live: true, tagline: 'every market Ray tracks' },
+  { key: 'all', label: 'Total market', live: true, tagline: 'every vertical, one tape' },
   { key: 'art', label: 'Art', live: true, tagline: 'paintings, editions, photography & sculpture' },
   { key: 'design', label: 'Design', live: true, tagline: 'the furniture & objects market' },
   { key: 'watches', label: 'Watches', live: true, tagline: 'the reference market' },

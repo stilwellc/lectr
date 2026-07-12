@@ -32,7 +32,7 @@ export default function ValuePage() {
   const { allLots, statsByArtist, backtest, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
-  const activeLabel = MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
+  const activeLabel = activeKey === 'all' ? 'collectible' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const { savedIds, toggle, isSaved } = useSavedLots();

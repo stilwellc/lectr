@@ -8,6 +8,7 @@ import { craftTitle, formatPrice, formatDate } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import type { DemandPoint } from '../hooks/useRayData';
 import { lotSignal, confidenceMeter } from './LotCard';
+import MarketIcon from './MarketIcon';
 
 /**
  * Ray Terminal — the trading floor, settled. The committee's merged build:
@@ -58,21 +59,25 @@ export function MarketTiles({
             data-active={active === m.key}
             data-live={m.live}
             data-tone={tone}
+            data-market={m.key}
             onClick={() => m.live && onPick(m.key)}
           >
             <span className="ray-mkttile-top">
-              <span className="ray-mkttile-name">{m.label}</span>
-              {pts && m.live && (
-                <svg className="ray-mkttile-spark" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none" aria-hidden="true">
-                  <polyline points={pts} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
+              <span className="ray-mkttile-ident">
+                <span className="ray-mkttile-glyph"><MarketIcon market={m.key} size={17} /></span>
+                <span className="ray-mkttile-name">{m.label}</span>
+              </span>
             </span>
             {m.live && now !== null ? (
               <span className="ray-mkttile-figs">
                 <span className="ray-mkttile-val">{formatDemand(now)}</span>
                 {delta !== null && delta !== 0 && (
-                  <span className="ray-mkttile-delta">{delta > 0 ? '▲' : '▼'} {Math.abs(delta)} pts</span>
+                  <span className="ray-mkttile-delta">{delta > 0 ? '▲' : '▼'} {Math.abs(delta)}</span>
+                )}
+                {pts && (
+                  <svg className="ray-mkttile-spark" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none" aria-hidden="true">
+                    <polyline points={pts} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 )}
               </span>
             ) : (
