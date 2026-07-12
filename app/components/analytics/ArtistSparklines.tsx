@@ -8,6 +8,7 @@ import { formatPrice } from '../../utils';
 import { ARTISTS } from '../../constants';
 import { useChartDraw } from '../../hooks/useChartDraw';
 import { demandSeries, formatDemand } from '../../lib/demand';
+import ArtistAvatar from '../ArtistAvatar';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;

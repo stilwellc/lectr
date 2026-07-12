@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ARTISTS } from '../constants';
+import ArtistAvatar from './ArtistAvatar';
 
 interface Item {
   label: string;
@@ -107,7 +108,12 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
                 onMouseEnter={() => setIdx(i)}
                 onClick={() => go(item)}
               >
-                <span>{item.label}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+                  {item.path.length > 1 && !['/value', '/analytics', '/saved', '/artists'].includes(item.path) && (
+                    <ArtistAvatar label={item.label} size={20} />
+                  )}
+                  {item.label}
+                </span>
                 <span className="ray-ck-hint">{item.hint}</span>
               </button>
             ))
