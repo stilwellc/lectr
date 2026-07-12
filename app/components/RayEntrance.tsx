@@ -82,46 +82,37 @@ export default function RayEntrance({
   );
 }
 
+/**
+ * RayLoading — a skeleton of the real layout (label, numeral, chart, strip,
+ * cards) shimmering while the crawl delivers, so arrival is a settle rather
+ * than a pop. Reduced motion: static blocks.
+ */
 export function RayLoading() {
   return (
-    <div
-      className="ray-loading rail"
-      role="status"
-      aria-label="Loading auction data"
-    >
-      <style>{`
-        .ray-loading { padding-block: 72px 160px; }
-        @keyframes rayCrawl {
-          0% { transform: scaleX(0.2); opacity: 0.35; }
-          45% { opacity: 1; }
-          100% { transform: scaleX(1); opacity: 0; }
-        }
-        .ray-loading-line {
-          width: 120px;
-          height: 1px;
-          background: var(--color-accent-wine);
-          transform-origin: left;
-          animation: rayCrawl 1.2s var(--ease-signature) infinite;
-        }
-        .ray-loading-label { display: none; }
-        @media (prefers-reduced-motion: reduce) {
-          .ray-loading-line { animation: none; opacity: 0.6; }
-          .ray-loading-label { display: inline-block; margin-top: 14px; }
-        }
-        @media (max-width: 768px) {
-          .ray-loading { padding-block: 56px 120px; }
-        }
-      `}</style>
-      <div className="ray-loading-line" />
-      <span className="ray-loading-label" style={{
-        fontFamily: 'var(--font-mono), monospace',
-        fontSize: 12,
-        letterSpacing: '-0.01em',
-        textTransform: 'none',
-        color: 'var(--color-text-faint)',
-      }}>
-        Loading
-      </span>
+    <div className="ray-loading rail" role="status" aria-label="Loading auction data">
+      {/* skeleton styles live in globals.css — raw-text style blocks with
+          quotes/apostrophes break hydration (React escapes them server-side) */}
+      <div className="ray-sk" style={{ width: 190, height: 15, marginBottom: 12 }} />
+      <div className="ray-sk" style={{ width: 280, height: 56, marginBottom: 14 }} />
+      <div className="ray-sk" style={{ width: 340, height: 15, marginBottom: 22 }} />
+      <div className="ray-sk" style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 24 }} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
+        {[0, 1, 2, 3].map(i => (
+          <div key={i}>
+            <div className="ray-sk" style={{ width: '55%', height: 12, marginBottom: 10 }} />
+            <div className="ray-sk" style={{ width: '40%', height: 24 }} />
+          </div>
+        ))}
+      </div>
+      <div className="ray-sk-cards">
+        {[0, 1, 2].map(i => (
+          <div key={i}>
+            <div className="ray-sk" style={{ width: '100%', height: 240, borderRadius: 16, marginBottom: 12 }} />
+            <div className="ray-sk" style={{ width: '55%', height: 14, marginBottom: 8 }} />
+            <div className="ray-sk" style={{ width: '80%', height: 12 }} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

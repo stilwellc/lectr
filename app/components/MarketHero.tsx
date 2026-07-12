@@ -89,7 +89,7 @@ export default function MarketHero({
       {visible.length >= 2 && (
         <>
           <div
-            className="ray-hero2-chart"
+            key={range} className="ray-hero2-chart ray-chartfade"
             onMouseLeave={() => setHover(null)}
           >
             <ResponsiveContainer width="100%" height="100%">

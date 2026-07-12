@@ -2045,3 +2045,54 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-size: 12.5px !important;
 }
 .ray-divider-wrap { display: none; }
+
+/* ── liveness: everything pressable answers the finger ── */
+.ray-range-btn, .ray-seg-btn, .ray-toolbar-pill, .ray-lot-remind,
+.ray-nav-link, .ray-block-toggle-btn, .ray-sort-pill, .ray-toolbar-reset {
+  transition:
+    color var(--duration-fast) var(--ease-signature),
+    background var(--duration-fast) var(--ease-signature),
+    transform 120ms var(--ease-signature);
+}
+.ray-range-btn:active, .ray-seg-btn:active, .ray-toolbar-pill:active,
+.ray-lot-remind:active, .ray-nav-link:active, .ray-block-toggle-btn:active,
+.ray-sort-pill:active { transform: scale(0.95); }
+
+/* range switches settle in rather than snap */
+@keyframes rayChartFade { from { opacity: 0; } to { opacity: 1; } }
+.ray-chartfade { animation: rayChartFade 340ms var(--ease-signature) both; }
+@media (prefers-reduced-motion: reduce) {
+  .ray-chartfade { animation: none; }
+  .ray-range-btn:active, .ray-seg-btn:active, .ray-toolbar-pill:active,
+  .ray-lot-remind:active, .ray-nav-link:active, .ray-block-toggle-btn:active,
+  .ray-sort-pill:active { transform: none; }
+}
+
+/* ── loading skeleton (RayLoading) ── */
+.ray-loading { padding-block: 40px 120px; }
+.ray-sk {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-bg-elevated);
+  border-radius: 8px;
+}
+.ray-sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.045), transparent);
+  animation: raySkShimmer 1.6s var(--ease-signature) infinite;
+}
+@keyframes raySkShimmer { to { transform: translateX(100%); } }
+.ray-sk-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 30px 20px;
+  margin-top: 44px;
+}
+@media (prefers-reduced-motion: reduce) { .ray-sk::after { animation: none; } }
+@media (max-width: 768px) {
+  .ray-loading { padding-block: 32px 80px; }
+  .ray-sk-cards { grid-template-columns: 1fr; }
+}
