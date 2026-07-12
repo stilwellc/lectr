@@ -263,16 +263,19 @@ export default function RayPage() {
             </div>
           </section>
 
-          {/* Recent hammers, rolling by */}
-          {tapeItems.length > 0 && (
-            <div className="ray-enter ray-tape-wrap" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
-              <MarketTape items={tapeItems} />
-            </div>
-          )}
-
-          {upcoming.length > 0 && (
-            <div className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
-              <MarketBlock upcoming={upcoming} allLots={marketLots} />
+          {/* The week's room: recent hammers + what the block looks like, on a lifted band */}
+          {(tapeItems.length > 0 || upcoming.length > 0) && (
+            <div className="ray-band">
+              {tapeItems.length > 0 && (
+                <div className="ray-enter ray-tape-wrap" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+                  <MarketTape items={tapeItems} />
+                </div>
+              )}
+              {upcoming.length > 0 && (
+                <div className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
+                  <MarketBlock upcoming={upcoming} allLots={marketLots} />
+                </div>
+              )}
             </div>
           )}
 
@@ -439,7 +442,7 @@ export default function RayPage() {
           )}
 
           {sold.length > 0 && (
-            <div className="ray-enter" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
+            <div className="ray-enter ray-band ray-band-results" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
               <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} mark="02" />
             </div>
           )}

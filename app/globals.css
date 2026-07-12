@@ -1844,6 +1844,19 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-strip-s { font-size: 12px; color: var(--color-text-faint); margin-top: 4px; }
 .ray-tape-wrap { margin-top: 28px; }
 
+/* ── the rooms: tonal bands separate the lander's areas (Robinhood-style) ── */
+.ray-band {
+  margin-top: 44px;
+  padding-block: 30px 44px;
+  background: linear-gradient(180deg, #0F1115 0%, #0C0D10 420px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.ray-band .ray-tape-wrap { margin-top: 0; }
+.ray-band-results { margin-top: 0; padding-block: 0; }
+@media (max-width: 768px) {
+  .ray-band { margin-top: 34px; padding-block: 26px 36px; }
+}
+
 /* the context sentence: beside the trend on desktop, below the chart on mobile */
 .ray-hero2-ctx {
   display: none;
