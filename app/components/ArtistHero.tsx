@@ -26,10 +26,14 @@ export default function ArtistHero({
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
 
-  // Trailing-12-month average sale price, evaluated at each quarter — the SAME
-  // quantity as the headline numeral, through time. A raw quarterly average is
-  // mix-noise (one $3.8M canvas in a quarter of prints reads as a 100x spike,
-  // and its absence as a crash); the rolling window shows the actual drift.
+  // Trailing-12-month MEDIAN sale price, evaluated at each quarter — the same
+  // quantity as the headline numeral, through time. Median, not mean: a single
+  // $3.8M canvas in a window of $20K prints yanks a trailing average up for
+  // four straight quarters and fakes a cliff when it leaves the window; the
+  // median barely notices it. Quarters whose trailing window holds fewer than
+  // three sales are not plotted at all — one lonely lot must not draw an era.
+  // (Same statistic the lot cards' buy signal uses: comps median.)
+  const MIN_WINDOW_SALES = 3;
   const series = useMemo(() => {
     const byQuarter: Record<string, number[]> = {};
     for (const l of lots) {
@@ -40,12 +44,17 @@ export default function ArtistHero({
       (byQuarter[key] = byQuarter[key] || []).push(l.priceUsd);
     }
     const quarters = Object.keys(byQuarter).sort();
-    return quarters.map((qk, i) => {
+    const points: { date: string; value: number }[] = [];
+    quarters.forEach((qk, i) => {
       // the 4 quarters ending here = the trailing year
       const window = quarters.slice(Math.max(0, i - 3), i + 1);
-      const prices = window.flatMap(w => byQuarter[w]);
-      return { date: qk, value: prices.reduce((s, p) => s + p, 0) / prices.length };
+      const prices = window.flatMap(w => byQuarter[w]).sort((a, b) => a - b);
+      if (prices.length < MIN_WINDOW_SALES) return;
+      const m = Math.floor(prices.length / 2);
+      const median = prices.length % 2 === 0 ? (prices[m - 1] + prices[m]) / 2 : prices[m];
+      points.push({ date: qk, value: median });
     });
+    return points;
   }, [lots]);
 
   const visible = useMemo(() => {
@@ -75,7 +84,9 @@ export default function ArtistHero({
   return (
     <section className="ray-hero2 rail">
       <p className="ray-hero2-label">
-        {hover ? `${label} · avg sale, 12 months to ${hover.date}` : `${label} · avg sale price, trailing 12 months`}
+        {hover
+          ? `${label} · typical sale, 12 months to ${hover.date}`
+          : `${label} · typical sale price, trailing 12 months`}
       </p>
       {hover ? (
         <h1 className="ray-hero2-value">{formatPrice(hover.value)}</h1>
