@@ -1315,90 +1315,27 @@ h1 {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   CATALOGUE — Ray's own identity. An auction house on paper: warm ivory
-   ground, deep ink, oxblood, and a shock of cinnabar. This single block
-   remaps every design token (it inherited co.stil's dark palette on
-   extraction) and wins over the earlier definitions by source order,
-   for any theme state. Cards become printed plates, not glass.
+   RAY PALETTE — dark ground, CHAMPAGNE GOLD accent. Gold is the auction
+   room and the color of value: it is the brand and the positive. Red is
+   never the hero here — in a market red reads as loss. Movement is coded
+   green (up/gains) / red (down/losses) via --color-up / --color-down and
+   applied ONLY to real deltas. This remaps the inherited wine(red) accent
+   to gold across every component; the dark surfaces are kept.
    ══════════════════════════════════════════════════════════════════════ */
 :root,
 [data-theme="light"],
 [data-theme="dark"] {
-  /* paper */
-  --color-bg: #F1EADB;
-  --color-bg-elevated: #FBF6EB;
-  --color-fg: #1B1712;
+  --color-accent-gold: #D9B26A;
+  --color-accent-gold-text: #E0C083;
+  --color-accent-wine: #D9B26A;       /* was red-wine; now champagne gold */
+  --color-accent-wine-text: #E0C083;  /* gold for small text (AA on dark) */
+  --color-accent-coral: #D9B26A;
 
-  /* ink */
-  --color-text-secondary: #453E32;
-  --color-text-muted: #6B6252;
-  --color-text-faint: #978E7D;
+  /* market movement — the only place red appears, and only for a fall */
+  --color-up: #57BE87;
+  --color-up-soft: rgba(87, 190, 135, 0.15);
+  --color-down: #CC6A5C;
+  --color-down-soft: rgba(204, 106, 92, 0.15);
 
-  /* accents: cinnabar (fills/graphics) · oxblood (accent text) · brass (hairline) */
-  --color-accent-gold: #9C7C3A;
-  --color-accent-gold-text: #6E5620;
-  --color-accent-wine: #D8442A;
-  --color-accent-wine-text: #8C2733;
-  --color-accent-coral: #C0603A;
-
-  /* hairlines / chrome */
-  --color-border: rgba(27, 23, 18, 0.15);
-  --color-border-mid: rgba(27, 23, 18, 0.26);
-  --color-nav-bg: rgba(241, 234, 219, 0.86);
-  --color-hover-item: rgba(27, 23, 18, 0.045);
-  --color-overlay-light: rgba(27, 23, 18, 0.04);
-
-  /* houses / categories — inked to read on paper */
-  --ray-house-phillips: #35597D;
-  --ray-house-sothebys: #7A5E33;
-  --ray-house-christies: #665C4B;
-  --ray-house-rago: #6F5A34;
-  --ray-house-wright: #385A78;
-  --ray-house-heritage: #436075;
-  --ray-house-bonhams: #745C30;
-  --ray-house-hindman: #5F5646;
-  --ray-cat-original: #7A5E33;
-  --ray-cat-print: #8C2733;
-  --ray-cat-photograph: #385A78;
-  --ray-cat-sculpture: #745C30;
-  --ray-cat-design: #665C4B;
-  --ray-cat-unknown: #5F5646;
-
-  /* cards → paper plates */
-  --glass-bg: rgba(255, 251, 242, 0.62);
-  --glass-bg-hover: rgba(255, 251, 242, 0.85);
-  --glass-border: rgba(27, 23, 18, 0.13);
-  --glass-border-top: rgba(255, 255, 255, 0.7);
-  --glass-specular: rgba(255, 255, 255, 0.5);
-  --glass-caustic: rgba(154, 123, 58, 0.05);
-  --glass-shimmer: 255 255 255;
-  --glass-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.6) inset,
-    0 14px 34px -10px rgba(74, 48, 28, 0.14),
-    0 4px 12px rgba(74, 48, 28, 0.06);
-  --glass-shadow-hover:
-    0 1px 0 0 rgba(255, 255, 255, 0.75) inset,
-    0 22px 48px -12px rgba(74, 48, 28, 0.18),
-    0 6px 16px rgba(74, 48, 28, 0.08);
-
-  --grain-opacity: 0.03;
-  color-scheme: light;
-}
-
-/* Printed-plate treatment: quiet the heavy dark glass shadow, gentle blur */
-.glass-quiet {
-  backdrop-filter: blur(8px) saturate(104%);
-  -webkit-backdrop-filter: blur(8px) saturate(104%);
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.6) inset,
-    0 10px 26px -8px rgba(74, 48, 28, 0.12) !important;
-}
-
-/* Card hover glows were tuned for a black ground — warm them for paper */
-.ray-stat-card:hover,
-.ray-portfolio-card:hover,
-.ray-lot-card:hover {
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
-    0 18px 40px -12px rgba(74, 48, 28, 0.20) !important;
+  color-scheme: dark;
 }

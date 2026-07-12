@@ -113,7 +113,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           <div style={{
             fontSize: 12,
             fontWeight: 600,
-            color: 'var(--color-text-secondary)',
+            color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)',
             whiteSpace: 'nowrap',
           }}>
             {artist.appreciation > 0 ? '\u25B2' : '\u25BC'} {artist.appreciation > 0 ? '+' : ''}{artist.appreciation.toFixed(1)}%
@@ -190,7 +190,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
             fontWeight: 500,
             color: artist.overEstimate <= -999
               ? 'var(--color-text-muted)'
-              : 'var(--color-text-secondary)',
+              : artist.overEstimate >= 0 ? 'var(--color-up)' : 'var(--color-down)',
           }}>
             {artist.overEstimate <= -999
               ? '\u2014'

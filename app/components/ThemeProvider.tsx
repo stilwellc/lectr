@@ -24,21 +24,10 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    let saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (!saved) {
-      // one-time migration from the old key
-      const legacy = localStorage.getItem(LEGACY_KEY) as Theme | null;
-      if (legacy === 'light' || legacy === 'dark') {
-        saved = legacy;
-        localStorage.setItem(STORAGE_KEY, legacy);
-      }
-      localStorage.removeItem(LEGACY_KEY);
-    }
-    if (saved === 'light' || saved === 'dark') {
-      setTheme(saved);
-    } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-      setTheme('light');
-    }
+    // Ray ships one look — the dark "Catalogue" ground. No light variant and
+    // no OS-pref switch; force dark and clear any stale saved preference.
+    localStorage.removeItem(LEGACY_KEY);
+    setTheme('dark');
     setMounted(true);
   }, []);
 
