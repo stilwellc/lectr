@@ -11,9 +11,9 @@ export const MARKETS: { key: Market; label: string; live: boolean; tagline: stri
   { key: 'all', label: 'Collectibles', live: true, tagline: 'every market Ray tracks' },
   { key: 'art', label: 'Art', live: true, tagline: 'paintings, editions, photography & sculpture' },
   { key: 'design', label: 'Design', live: true, tagline: 'the furniture & objects market' },
-  { key: 'watches', label: 'Watches', live: false, tagline: 'the reference market' },
+  { key: 'watches', label: 'Watches', live: true, tagline: 'the reference market' },
   { key: 'sports', label: 'Sports', live: false, tagline: 'cards, jerseys & memorabilia' },
-  { key: 'science', label: 'Science', live: false, tagline: 'instruments, fossils & first editions' },
+  { key: 'science', label: 'Science', live: true, tagline: 'tech, fossils, space & instruments' },
 ];
 
 export const ARTISTS = [
@@ -38,6 +38,17 @@ export const ARTISTS = [
   { slug: 'pierre-jeanneret', label: 'Pierre Jeanneret', market: 'design' },
   { slug: 'eddie-martinez', label: 'Eddie Martinez', market: 'art' },
   { slug: 'kenny-scharf', label: 'Kenny Scharf', market: 'art' },
+  // the watches vertical: makers, not artists
+  { slug: 'rolex', label: 'Rolex', market: 'watches' },
+  { slug: 'patek-philippe', label: 'Patek Philippe', market: 'watches' },
+  { slug: 'audemars-piguet', label: 'Audemars Piguet', market: 'watches' },
+  { slug: 'omega', label: 'Omega', market: 'watches' },
+  { slug: 'cartier', label: 'Cartier', market: 'watches' },
+  // the science vertical: collections — tech, fossils, space, instruments
+  { slug: 'meteorites', label: 'Meteorites', market: 'science' },
+  { slug: 'fossils', label: 'Fossils & Dinosaurs', market: 'science' },
+  { slug: 'space-exploration', label: 'Space Exploration', market: 'science' },
+  { slug: 'scientific-instruments', label: 'Scientific Instruments', market: 'science' },
 ] as const;
 
 export type ArtistSlug = (typeof ARTISTS)[number]['slug'];

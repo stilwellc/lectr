@@ -31,6 +31,8 @@ export type Form =
   | 'seating-chair' | 'seating-stool' | 'seating-bench' | 'seating-sofa'
   | 'table-dining' | 'table-low' | 'table-side' | 'table'
   | 'case' | 'desk' | 'bed' | 'lighting' | 'mirror' | 'design-other'
+  | 'wristwatch' | 'pocket-watch' | 'clock' | 'jewelry'
+  | 'meteorite' | 'fossil' | 'mineral' | 'space' | 'instrument' | 'tech'
   | 'unknown';
 
 export const FORM_LABEL: Record<Form, string> = {
@@ -43,6 +45,10 @@ export const FORM_LABEL: Record<Form, string> = {
   'seating-sofa': 'sofas', 'table-dining': 'dining tables', 'table-low': 'coffee tables',
   'table-side': 'side tables', table: 'tables', case: 'case pieces', desk: 'desks',
   bed: 'beds', lighting: 'lighting', mirror: 'mirrors', 'design-other': 'design objects',
+  wristwatch: 'wristwatches', 'pocket-watch': 'pocket watches', clock: 'clocks',
+  jewelry: 'jewelry',
+  meteorite: 'meteorites', fossil: 'fossils', mineral: 'minerals',
+  space: 'space artifacts', instrument: 'scientific instruments', tech: 'technology',
   unknown: 'lots',
 };
 
@@ -64,6 +70,33 @@ export function classifyForm(lot: Pick<AuctionLot, 'title' | 'medium' | 'categor
 
   // editioned objects & multiples (KAWS companions, decks, plates, plush…)
   if (/\b(skateboard|skate deck|deck set|companion|be@rbrick|bearbrick|vinyl figure|plush|figure set|ceramic (container|set|plate)|perfume|snow ?globe|keychain|ornament|chess set|cushion|pillow|dish set)\b/.test(tm)) return 'object-edition';
+
+  // The watches & science verticals: their lots arrive as category 'object'
+  // (never art/design), so these checks can't hijack a Nakashima "fossilized
+  // walnut" table or a KAWS "Companion" into science forms — and vice versa.
+  if (lot.category === 'object') {
+    // horology & jewelry — explicit jewelry nouns first (a Panthère brooch is
+    // jewelry even though Panthère is also a watch line)
+    if (/\bpocket ?watch\b/.test(tm)) return 'pocket-watch';
+    if (/\b(ring|necklace|brooch|earrings?|pendant|bangle|choker|cufflinks)\b/.test(t)) return 'jewelry';
+    // watch titles are catalog-style ("Cosmograph Daytona, Ref: 16518",
+    // "Montre bracelet en or…") — the word "watch" is often absent
+    if (/\b(wristwatch|wrist ?watch|montre)\b/.test(tm)
+      || (/\bwatch\b/.test(tm) && /\b(chronograph|chronometer|automatic|quartz|manual wind|movement|dial|bezel|calibre|caliber|tourbillon|perpetual calendar|bracelet|gold|steel|lady'?s|gentleman)\b/.test(tm))
+      || /\bref[:.]?\s*[a-z]?\d{3,6}/.test(t)
+      || /\b(chronograph|chronometer|chronometre|oyster|cosmograph|cellini)\b/.test(t)
+      || WATCH_MODELS.test(t)) return 'wristwatch';
+    if (/\b(clock|regulator)\b/.test(tm)) return 'clock';
+
+    // natural history, space & technology
+    if (/\b(meteorite|pallasite|tektite|moldavite)\b/.test(tm)) return 'meteorite';
+    if (/\b(fossil|fossilis|fossiliz|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaurus|triceratops|pterosaur|ichthyosaur|plesiosaur|sabre[- ]tooth|saber[- ]tooth)\b/.test(tm)) return 'fossil';
+    if (/\b(mineral|crystal|geode|amethyst|tourmaline|malachite|azurite|pyrite)\b/.test(tm)) return 'mineral';
+    if (/\b(space[- ]flown|apollo|nasa|astronaut|cosmonaut|lunar|spacecraft|space suit|spacesuit|sputnik|gemini|soyuz|vostok|skylab|space shuttle|rocket)\b/.test(tm)) return 'space';
+    if (/\b(telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|slide rule|surveying|navigational|scientific instrument|globe)\b/.test(tm)) return 'instrument';
+    if (/\b(computer|macintosh|apple|altair|commodore|enigma|calculator|typewriter|prototype|microprocessor|arcade|camera)\b/.test(tm)) return 'tech';
+    return 'unknown'; // an object lot that matched nothing — never guess
+  }
 
   // furniture / design forms (title carries the truth in this data)
   const isDesign = lot.category === 'design';
@@ -170,6 +203,28 @@ const FURNITURE = new Set<Form>([
   'lighting', 'mirror', 'design-other',
 ]);
 
+/**
+ * Watches bifurcate by REFERENCE the way furniture bifurcates by model: a
+ * Daytona never comps a Datejust, a Nautilus never comps a Calatrava — same
+ * maker, same form, different markets. The key is the reference number when
+ * the title carries one, else the model line name. Comps must share the key —
+ * including both having none.
+ */
+const WATCH_MODELS = /(submariner|daytona|datejust|day[- ]date|gmt[- ]master(?:\s*ii)?|explorer(?:\s*ii)?|sea[- ]dweller|yacht[- ]master|milgauss|air[- ]king|oyster perpetual|cellini|nautilus|aquanaut|calatrava|ellipse|gondolo|twenty[~-]?4|world time|royal oak(?: offshore)?|millenary|jules audemars|speedmaster|seamaster|constellation|de ville|railmaster|tank|santos|panth[eè]re|ballon bleu|pasha|crash|baignoire|tortue|reverso|memovox|polaris|navitimer|superocean|chronomat|monaco|carrera|autavia|el primero|defy|portugieser|portofino|ingenieur|aquatimer|luminor|radiomir|overseas|patrimony|fifty ?fathoms|villeret)/;
+
+export function watchKey(lot: Pick<AuctionLot, 'title'>): string | null {
+  const t = (lot.title || '').toLowerCase();
+  // 1 · explicit reference: "Ref. 116500LN", "reference 5711/1A"
+  const ref = t.match(/\bref(?:erence)?\.?,?\s*([a-z]?\d{3,6}[a-z]{0,4}(?:\/\d+[a-z]?)?)\b/);
+  if (ref) return ref[1];
+  // 2 · the model line name
+  const model = t.match(WATCH_MODELS);
+  if (model) return model[1].replace(/[-~ ]/g, '');
+  return null;
+}
+
+const WATCHES = new Set<Form>(['wristwatch', 'pocket-watch']);
+
 /** The hard gate: is `candidate` a legitimate comp for `lot`? */
 export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
   const a = classifyForm(lot);
@@ -180,6 +235,9 @@ export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
   // furniture bifurcates by model: LC2 comps LC2, Conoid comps Conoid, and a
   // generic piece never comps a model-coded production line (or vice versa)
   if (FURNITURE.has(a) && modelKey(lot) !== modelKey(candidate)) return false;
+
+  // watches bifurcate by reference: Daytona comps Daytona, never Datejust
+  if (WATCHES.has(a) && watchKey(lot) !== watchKey(candidate)) return false;
 
   // opportunistic size gate when both sides are measurable
   const da = parseDims(lot.dimensions);

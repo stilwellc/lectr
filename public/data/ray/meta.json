@@ -1,5 +1,5 @@
 {
-  "lastCrawl": "2026-07-12T18:12:19.776Z",
+  "lastCrawl": "2026-07-12T18:17:12.952Z",
   "artists": [
     {
       "slug": "george-condo",
@@ -84,6 +84,42 @@
     {
       "slug": "kenny-scharf",
       "displayName": "Kenny Scharf"
+    },
+    {
+      "slug": "rolex",
+      "displayName": "Rolex"
+    },
+    {
+      "slug": "patek-philippe",
+      "displayName": "Patek Philippe"
+    },
+    {
+      "slug": "audemars-piguet",
+      "displayName": "Audemars Piguet"
+    },
+    {
+      "slug": "omega",
+      "displayName": "Omega"
+    },
+    {
+      "slug": "cartier",
+      "displayName": "Cartier"
+    },
+    {
+      "slug": "meteorites",
+      "displayName": "Meteorites"
+    },
+    {
+      "slug": "fossils",
+      "displayName": "Fossils & Dinosaurs"
+    },
+    {
+      "slug": "space-exploration",
+      "displayName": "Space Exploration"
+    },
+    {
+      "slug": "scientific-instruments",
+      "displayName": "Scientific Instruments"
     }
   ],
   "sources": [

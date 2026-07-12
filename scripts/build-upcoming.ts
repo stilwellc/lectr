@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { computeDeepSignal } from '../app/lib/comps';
 import { demandSeries } from '../app/lib/demand';
-import { marketArtists } from '../app/constants';
+import { marketArtists, MARKETS } from '../app/constants';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot } from '../app/types';
 
@@ -66,13 +66,15 @@ export function buildUpcoming(dataDir: string): void {
       house: l.auctionHouse,
     }));
 
-  const artSet = marketArtists('art');
-  const designSet = marketArtists('design');
-  const demand = {
+  // One demand series per live market, plus the aggregate — the shelf and
+  // every hero read from these precomputed curves.
+  const demand: Record<string, ReturnType<typeof demandSeries>> = {
     all: demandSeries(lots as unknown as EngineLot[]),
-    art: demandSeries(lots.filter(l => artSet.has(l.artist)) as unknown as EngineLot[]),
-    design: demandSeries(lots.filter(l => designSet.has(l.artist)) as unknown as EngineLot[]),
   };
+  for (const m of MARKETS.filter(m => m.live && m.key !== 'all')) {
+    const set = marketArtists(m.key);
+    demand[m.key] = demandSeries(lots.filter(l => set.has(l.artist)) as unknown as EngineLot[]);
+  }
   const out = { generatedAt: new Date().toISOString(), tape, demand, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);

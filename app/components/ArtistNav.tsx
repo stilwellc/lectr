@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ARTISTS, ARTIST_LABEL } from '../constants';
+import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
 import CommandK from './CommandK';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
@@ -310,37 +310,25 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             >
               Analytics
             </button>
-            <div className="ray-artist-dropdown-label" role="presentation">Art</div>
-            {ARTISTS.filter(a => a.market === 'art').map(a => (
-              <button
-                key={a.slug}
-                role="menuitem"
-                className="ray-artist-dropdown-item"
-                data-active={activeSlug === a.slug ? 'true' : 'false'}
-                onClick={() => navigate(`/${a.slug}`)}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-              >
-                <span>{a.label}</span>
-                {(upcomingCounts[a.slug] || 0) > 0 && (
-                  <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
-                )}
-              </button>
-            ))}
-            <div className="ray-artist-dropdown-label" role="presentation">Design</div>
-            {ARTISTS.filter(a => a.market === 'design').map(a => (
-              <button
-                key={a.slug}
-                role="menuitem"
-                className="ray-artist-dropdown-item"
-                data-active={activeSlug === a.slug ? 'true' : 'false'}
-                onClick={() => navigate(`/${a.slug}`)}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-              >
-                <span>{a.label}</span>
-                {(upcomingCounts[a.slug] || 0) > 0 && (
-                  <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
-                )}
-              </button>
+            {MARKETS.filter(m => m.live && m.key !== 'all').map(m => (
+              <React.Fragment key={m.key}>
+                <div className="ray-artist-dropdown-label" role="presentation">{m.label}</div>
+                {ARTISTS.filter(a => a.market === m.key).map(a => (
+                  <button
+                    key={a.slug}
+                    role="menuitem"
+                    className="ray-artist-dropdown-item"
+                    data-active={activeSlug === a.slug ? 'true' : 'false'}
+                    onClick={() => navigate(`/${a.slug}`)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <span>{a.label}</span>
+                    {(upcomingCounts[a.slug] || 0) > 0 && (
+                      <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
+                    )}
+                  </button>
+                ))}
+              </React.Fragment>
             ))}
           </div>
         )}
