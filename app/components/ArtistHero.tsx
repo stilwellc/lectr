@@ -26,19 +26,26 @@ export default function ArtistHero({
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
 
-  // Quarterly average sale price from the artist's own sold lots.
+  // Trailing-12-month average sale price, evaluated at each quarter — the SAME
+  // quantity as the headline numeral, through time. A raw quarterly average is
+  // mix-noise (one $3.8M canvas in a quarter of prints reads as a 100x spike,
+  // and its absence as a crash); the rolling window shows the actual drift.
   const series = useMemo(() => {
-    const q: Record<string, number[]> = {};
+    const byQuarter: Record<string, number[]> = {};
     for (const l of lots) {
       if (l.status !== 'sold' || !l.priceUsd) continue;
       const d = new Date(l.saleDate);
       if (isNaN(d.getTime())) continue;
       const key = `${d.getUTCFullYear()} Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
-      (q[key] = q[key] || []).push(l.priceUsd);
+      (byQuarter[key] = byQuarter[key] || []).push(l.priceUsd);
     }
-    return Object.entries(q)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, prices]) => ({ date, value: prices.reduce((s, p) => s + p, 0) / prices.length }));
+    const quarters = Object.keys(byQuarter).sort();
+    return quarters.map((qk, i) => {
+      // the 4 quarters ending here = the trailing year
+      const window = quarters.slice(Math.max(0, i - 3), i + 1);
+      const prices = window.flatMap(w => byQuarter[w]);
+      return { date: qk, value: prices.reduce((s, p) => s + p, 0) / prices.length };
+    });
   }, [lots]);
 
   const visible = useMemo(() => {
@@ -60,13 +67,15 @@ export default function ArtistHero({
   }, [lots]);
 
   const appr = stats?.appreciationRate || 0;
-  const avg12 = stats?.avgPriceLast12Months || 0;
+  // The numeral comes from the same series the line draws, so the line ends
+  // exactly at the number (crawler stat as fallback for artists with no chart).
+  const avg12 = series.length ? series[series.length - 1].value : (stats?.avgPriceLast12Months || 0);
   const recordYear = stats?.recordDate ? new Date(stats.recordDate).getUTCFullYear() : null;
 
   return (
     <section className="ray-hero2 rail">
       <p className="ray-hero2-label">
-        {hover ? `${label} · avg sale, ${hover.date}` : `${label} · avg sale price, last 12 months`}
+        {hover ? `${label} · avg sale, 12 months to ${hover.date}` : `${label} · avg sale price, trailing 12 months`}
       </p>
       {hover ? (
         <h1 className="ray-hero2-value">{formatPrice(hover.value)}</h1>
@@ -78,7 +87,7 @@ export default function ArtistHero({
       <p className="ray-hero2-delta">
         {appr !== 0 && (
           <span className={appr > 0 ? 'up' : 'down'}>
-            {appr > 0 ? '▲' : '▼'} {Math.abs(appr).toFixed(1)}% this year
+            {appr > 0 ? '▲' : '▼'} prices {appr > 0 ? 'up' : 'down'} {Math.abs(appr).toFixed(1)}% this year
           </span>
         )}
         <span className="ctx">
@@ -120,6 +129,10 @@ export default function ArtistHero({
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+          <div className="ray-hero2-span" aria-hidden="true">
+            <span>{visible[0].date}</span>
+            <span>{visible[visible.length - 1].date}</span>
           </div>
           <div className="ray-hero2-ranges" role="radiogroup" aria-label="Chart range">
             {(['1Y', '5Y', 'MAX'] as Range[]).map(r => (

@@ -17,10 +17,10 @@ interface Pulse {
 
 /**
  * MarketHero — the market as a portfolio view. One giant numeral (total
- * realized across every tracked artist), a green performance line with no
- * chrome, range control, and the intelligence sentence. Hovering the chart
- * swaps the numeral to that quarter's turnover — the number and the line
- * are the same thing.
+ * realized across every tracked artist) and the same quantity drawn through
+ * time: a chrome-less cumulative curve that ends exactly at the number.
+ * Hover scrubs "total realized through <quarter>"; green/red never touch
+ * this line — they belong to the price delta in the sentence above.
  */
 export default function MarketHero({
   statsByArtist,
@@ -34,7 +34,10 @@ export default function MarketHero({
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
 
-  // Quarterly turnover across the whole roster — money actually through the market.
+  // The line IS the numeral, through time: cumulative $ realized across the
+  // roster, quarter by quarter. It ends exactly at the headline total, hover
+  // reads "through <quarter>", and the slope is market activity — quarterly
+  // turnover would spike with the auction calendar and read as volatility.
   const series = useMemo(() => {
     const q: Record<string, number> = {};
     for (const stats of Object.values(statsByArtist)) {
@@ -42,9 +45,13 @@ export default function MarketHero({
         q[p.date] = (q[p.date] || 0) + p.avgPrice * p.totalSales;
       }
     }
+    let running = 0;
     return Object.entries(q)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, value]) => ({ date, value }));
+      .map(([date, v]) => {
+        running += v;
+        return { date: date.replace('-', ' '), value: running };
+      });
   }, [statsByArtist]);
 
   const visible = useMemo(() => {
@@ -53,16 +60,16 @@ export default function MarketHero({
     return series;
   }, [series, range]);
 
-  // Range performance colors the line: green when the window ends higher.
-  const rangeUp = visible.length >= 2 ? visible[visible.length - 1].value >= visible[0].value : true;
-  const lineColor = rangeUp ? 'var(--color-up)' : 'var(--color-down)';
+  // Accumulation only ever rises — the line is activity, not gains, so it
+  // stays neutral-white; green/red are reserved for the price delta above.
+  const lineColor = 'var(--color-fg)';
 
   const apprUp = pulse.weightedAppreciation >= 0;
 
   return (
     <section className="ray-hero2 rail">
       <p className="ray-hero2-label">
-        {hover ? `Realized in ${hover.date}` : 'The art market · total realized'}
+        {hover ? `Total realized through ${hover.date}` : 'The art market · total realized, all time'}
       </p>
       {hover ? (
         <h1 className="ray-hero2-value">{formatPrice(hover.value)}</h1>
@@ -73,7 +80,7 @@ export default function MarketHero({
       )}
       <p className="ray-hero2-delta">
         <span className={apprUp ? 'up' : 'down'}>
-          {apprUp ? '▲' : '▼'} {Math.abs(pulse.weightedAppreciation).toFixed(1)}% this year
+          {apprUp ? '▲' : '▼'} prices {apprUp ? 'up' : 'down'} {Math.abs(pulse.weightedAppreciation).toFixed(1)}% this year
         </span>
         <span className="ctx">
           {pulse.topArtist && <>led by {pulse.topArtist}</>}
@@ -104,7 +111,7 @@ export default function MarketHero({
               >
                 <defs>
                   <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={lineColor} stopOpacity={0.18} />
+                    <stop offset="0%" stopColor={lineColor} stopOpacity={0.1} />
                     <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
@@ -125,6 +132,10 @@ export default function MarketHero({
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+          <div className="ray-hero2-span" aria-hidden="true">
+            <span>{visible[0].date}</span>
+            <span>{visible[visible.length - 1].date}</span>
           </div>
           <div className="ray-hero2-ranges" role="radiogroup" aria-label="Chart range">
             {(['1Y', '5Y', 'MAX'] as Range[]).map(r => (
