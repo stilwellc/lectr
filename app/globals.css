@@ -1,0 +1,961 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   co.stil — Golden Hour tokens
+   Foundation-owned. Everyone consumes; nobody redefines.
+   ============================================================ */
+
+:root {
+  /* Surfaces */
+  --color-bg: #0D0B08;
+  --color-bg-elevated: #14110D;
+  --color-fg: #EDE6DA;
+
+  /* Text scale */
+  --color-text-secondary: #C9BEAC;
+  --color-text-muted: #9A8F7D;
+  --color-text-faint: #756C5D;
+
+  /* Accents.
+     NOTE: --color-text-faint is large-text-only (3.80:1 on bg / 3.64:1 on elevated). */
+  --color-accent-gold: #D4B896;
+  --color-accent-gold-text: #D4B896; /* AA-safe gold for small text (9.95:1 on elevated) */
+  --color-accent-wine: #C1666B;
+  --color-accent-wine-text: #CF7F83; /* AA-safe wine for small text (6.57:1 on bg) */
+  --color-accent-coral: #E08D6D;
+
+  /* Borders & chrome */
+  --color-border: rgba(212, 184, 150, 0.10);
+  --color-border-mid: rgba(212, 184, 150, 0.18);
+  --color-nav-bg: rgba(13, 11, 8, 0.78);
+
+  /* Type scale */
+  --text-display: clamp(3rem, 8vw, 6.5rem);   /* Cormorant 300, lh 1.05, ls -0.02em */
+  --text-title: clamp(1.75rem, 3vw, 2.5rem);
+  --text-body: 1.0625rem;                      /* Syne, lh 1.65, max 65ch */
+  --text-label: 0.75rem;                       /* 600, ls 0.18em, uppercase */
+
+  /* Motion — one easing, three durations */
+  --ease-signature: cubic-bezier(0.23, 1, 0.32, 1);
+  --duration-fast: 200ms;
+  --duration-base: 500ms;
+  --duration-slow: 800ms;
+
+  /* Space — 8px rhythm */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 40px;
+  --space-5: 64px;
+  --space-6: 104px;
+  --space-7: 168px;
+  --content-max: 1200px;
+  --prose-max: 65ch;
+
+  --grain-opacity: 0.03;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --color-bg: #F5F0E6;
+  --color-bg-elevated: #FBF8F1;
+  --color-fg: #241E15;
+
+  --color-text-secondary: #4A4133;
+  --color-text-muted: #6E6353;
+  --color-text-faint: #948A79;
+
+  /* NOTE: light --color-accent-gold (3.15:1), --color-accent-coral (3.43:1) and
+     --color-text-faint (3.00:1) are large-text-only — use --color-accent-gold-text
+     (or --color-text-secondary) for small gold text. */
+  --color-accent-gold: #A8875D;
+  --color-accent-gold-text: #7D6140; /* AA-safe gold for small text (5.4:1 on elevated) */
+  --color-accent-wine: #8F4149; /* display/graphics only in light (4.38:1) */
+  --color-accent-wine-text: #7A343C; /* AA-safe wine for small text (7.76:1 on bg) */
+  --color-accent-coral: #C06A47;
+
+  --color-border: rgba(36, 30, 21, 0.10);
+  --color-border-mid: rgba(36, 30, 21, 0.18);
+  --color-nav-bg: rgba(245, 240, 230, 0.82);
+
+  --grain-opacity: 0.015;
+
+  color-scheme: light;
+}
+
+/* Row-hover wash used by Ray tables and chart cursors. */
+:root {
+  --color-hover-item: rgba(212, 184, 150, 0.04);
+}
+[data-theme="light"] {
+  --color-hover-item: rgba(36, 30, 21, 0.04);
+}
+[data-theme="light"] {
+  --color-hover-item: rgba(36, 30, 21, 0.03);
+  --color-overlay-light: rgba(36, 30, 21, 0.03);
+}
+
+/* Ray house/category palette — theme-aware.
+   Dark values are the golden-hour originals; light values are darkened
+   so 12px labels pass WCAG AA (>= 4.5:1) on --color-bg-elevated. */
+:root {
+  --ray-house-phillips: #C1666B;
+  --ray-house-sothebys: #D4B896;
+  --ray-house-christies: #C9BEAC;
+  --ray-house-rago: #B89A6E;
+  --ray-house-wright: #7A9CB8;
+  --ray-house-heritage: #AEC4D4;
+  --ray-house-bonhams: #C4A265;
+  --ray-house-hindman: #9A8F7D;
+  --ray-cat-original: #D4B896;
+  --ray-cat-print: #C1666B;
+  --ray-cat-photograph: #7A9CB8;
+  --ray-cat-sculpture: #C4A265;
+  --ray-cat-design: #C9BEAC;
+  --ray-cat-unknown: #9A8F7D;
+}
+[data-theme="light"] {
+  --ray-house-phillips: #3E6488;
+  --ray-house-sothebys: #7D6140;
+  --ray-house-christies: #6B6150;
+  --ray-house-rago: #75603A;
+  --ray-house-wright: #3D607F;
+  --ray-house-heritage: #48657A;
+  --ray-house-bonhams: #7A6236;
+  --ray-house-hindman: #665C4C;
+  --ray-cat-original: #7D6140;
+  --ray-cat-print: #3E6488;
+  --ray-cat-photograph: #3D607F;
+  --ray-cat-sculpture: #7A6236;
+  --ray-cat-design: #6B6150;
+  --ray-cat-unknown: #665C4C;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Safety net against horizontal scroll on phones.
+   clip (not hidden) so position: sticky keeps working. */
+html,
+body {
+  overflow-x: clip;
+}
+
+body {
+  color: var(--color-fg);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: var(--font-sans), sans-serif;
+  font-size: var(--text-body);
+  line-height: 1.65;
+}
+
+::selection {
+  background: rgba(212, 184, 150, 0.3);
+  color: var(--color-fg);
+}
+
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-mid);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-gold);
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-accent-gold);
+  outline-offset: 3px;
+}
+
+/* Skip link — visually hidden until focused */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: var(--space-2);
+  z-index: 200;
+  padding: 12px var(--space-2); /* >=44px touch target */
+  background: var(--color-bg-elevated);
+  color: var(--color-fg);
+  border: 1px solid var(--color-border-mid);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: top var(--duration-fast) var(--ease-signature);
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+}
+
+/* Static grain — no animation, ever */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+/* ============================================================
+   Footer — mobile touch targets & narrow-viewport safety
+   ============================================================ */
+
+/* Long email never forces horizontal scroll at 320px */
+.footer-email {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  /* Reach ~44px touch targets on phones. The email link keeps its
+     inline padding-bottom (underline stays tight), so pad the top. */
+  .footer-email { padding-top: 18px; margin-top: -8px; }
+  .footer-link { padding: 11px 0; }
+}
+
+/* ============================================================
+   Keyframes — only what earns its place
+   ============================================================ */
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes menuReveal {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Shared Ray layout classes — used across all Ray pages
+   ============================================================ */
+
+/* Horizontal geometry comes from .rail — these own block padding only */
+.ray-nav { padding-block: 24px; }
+.ray-hero { padding-block: 60px 40px; }
+
+@media (max-width: 768px) {
+  .ray-nav { padding-block: 16px; }
+  .ray-hero { padding-block: 40px 32px; }
+}
+
+/* ============================================================
+   Reduced motion — everything stops
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Display headings never orphan a single word */
+h1 {
+  text-wrap: balance;
+}
+
+/* Anchor targets clear the fixed nav */
+#directory-index {
+  scroll-margin-top: 96px;
+}
+
+/* ============================================================
+   GOLDEN GLASS — the material system.
+   Warm light pooled on driftwood. Glass is for objects
+   (cards, nav, pills, tiles); paper stays for reading.
+   ============================================================ */
+
+:root {
+  --glass-bg: rgba(237, 230, 218, 0.022);
+  --glass-bg-hover: rgba(237, 230, 218, 0.045);
+  --glass-border: rgba(212, 184, 150, 0.14);
+  --glass-border-top: rgba(232, 213, 188, 0.24);
+  --glass-specular: rgba(237, 230, 218, 0.05);
+  --glass-caustic: rgba(212, 184, 150, 0.035);
+  --glass-shimmer: 237 230 218;
+  --glass-shadow:
+    0 1px 0 0 rgba(232, 213, 188, 0.09) inset,
+    0 0 40px 0 rgba(212, 184, 150, 0.02) inset,
+    0 20px 50px -12px rgba(212, 184, 150, 0.05),
+    0 12px 40px rgba(0, 0, 0, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.22);
+  --glass-shadow-hover:
+    0 1px 0 0 rgba(232, 213, 188, 0.14) inset,
+    0 0 60px 0 rgba(212, 184, 150, 0.035) inset,
+    0 24px 60px -14px rgba(212, 184, 150, 0.08),
+    0 18px 50px rgba(0, 0, 0, 0.4),
+    0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="light"] {
+  --glass-bg: rgba(255, 253, 248, 0.4);
+  --glass-bg-hover: rgba(255, 253, 248, 0.62);
+  --glass-border: rgba(36, 30, 21, 0.10);
+  --glass-border-top: rgba(255, 255, 255, 0.75);
+  --glass-specular: rgba(255, 255, 255, 0.45);
+  --glass-caustic: rgba(168, 135, 93, 0.05);
+  --glass-shimmer: 255 255 255;
+  --glass-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.6) inset,
+    0 0 40px 0 rgba(212, 184, 150, 0.05) inset,
+    0 16px 40px -10px rgba(93, 74, 48, 0.13),
+    0 4px 12px rgba(93, 74, 48, 0.06);
+  --glass-shadow-hover:
+    0 1px 0 0 rgba(255, 255, 255, 0.75) inset,
+    0 0 60px 0 rgba(212, 184, 150, 0.08) inset,
+    0 22px 52px -12px rgba(93, 74, 48, 0.18),
+    0 6px 16px rgba(93, 74, 48, 0.08);
+}
+
+/* Shimmer intensity animates through a registered custom property */
+@property --shimmer-o {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.glass {
+  position: relative;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-top-color: var(--glass-border-top);
+  border-radius: 18px;
+  backdrop-filter: blur(28px) saturate(135%) brightness(1.03);
+  -webkit-backdrop-filter: blur(28px) saturate(135%) brightness(1.03);
+  box-shadow: var(--glass-shadow);
+  transition:
+    background var(--duration-base) var(--ease-signature),
+    border-color var(--duration-base) var(--ease-signature),
+    box-shadow var(--duration-base) var(--ease-signature),
+    --shimmer-o 1.2s var(--ease-signature);
+}
+
+/* Specular sheet + cursor shimmer — light on the surface of the water */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      420px circle at var(--mx, 50%) var(--my, -30%),
+      rgb(var(--glass-shimmer) / calc(0.08 * var(--shimmer-o, 0))),
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--glass-specular) 0%, transparent 45%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Caustics — refracted light concentrating inside the glass */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 80% 50% at 22% 8%, var(--glass-caustic), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 78% 18%, var(--glass-caustic), transparent 55%);
+  mix-blend-mode: screen;
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Content sits above the light layers */
+.glass > * { position: relative; z-index: 2; }
+
+@media (hover: hover) and (pointer: fine) {
+  .glass:hover {
+    --shimmer-o: 1;
+    background: var(--glass-bg-hover);
+    box-shadow: var(--glass-shadow-hover);
+  }
+}
+
+/* Pill variant — nav chips, CTAs, toggles */
+.glass-pill {
+  border-radius: 100px;
+}
+.glass-pill::before,
+.glass-pill::after {
+  border-radius: 100px;
+}
+
+/* Quiet variant — same material, half the voice (list tiles, dense grids) */
+.glass-quiet {
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  box-shadow:
+    0 1px 0 0 rgba(232, 213, 188, 0.06) inset,
+    0 8px 24px rgba(0, 0, 0, 0.22);
+}
+[data-theme="light"] .glass-quiet {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
+    0 8px 20px rgba(93, 74, 48, 0.08);
+}
+
+/* The room the glass lives in — ambient light so blur has something to bend */
+.ambient-field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ambient-field .orb-gold,
+.ambient-field .orb-wine {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+}
+.ambient-field .orb-gold {
+  width: min(44vw, 560px);
+  height: min(44vw, 560px);
+  top: -8%;
+  right: -6%;
+  background: radial-gradient(circle, rgba(212, 184, 150, 0.07) 0%, transparent 65%);
+  animation: floatSlow 26s ease-in-out infinite;
+}
+.ambient-field .orb-wine {
+  width: min(36vw, 460px);
+  height: min(36vw, 460px);
+  bottom: -10%;
+  left: -8%;
+  background: radial-gradient(circle, rgba(193, 102, 107, 0.05) 0%, transparent 65%);
+  animation: floatSlow 32s ease-in-out infinite reverse;
+}
+[data-theme="light"] .ambient-field .orb-gold {
+  background: radial-gradient(circle, rgba(168, 135, 93, 0.10) 0%, transparent 65%);
+}
+[data-theme="light"] .ambient-field .orb-wine {
+  background: radial-gradient(circle, rgba(143, 65, 73, 0.07) 0%, transparent 65%);
+}
+
+/* Cursor veil — a faint light that travels with the pointer (fine pointers only) */
+.cursor-veil {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 560px;
+  height: 560px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(var(--glass-shimmer) / 0.028) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  will-change: transform;
+}
+.cursor-veil.on { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  .cursor-veil { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass::before { background: linear-gradient(180deg, var(--glass-specular) 0%, transparent 45%); }
+  .cursor-veil { display: none; }
+  .ambient-field .orb-gold, .ambient-field .orb-wine { animation: none; }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(18px, -24px) scale(1.03); }
+  66% { transform: translate(-12px, 14px) scale(0.98); }
+}
+
+/* Dense grids: glass look without per-tile blur cost (48-card grids) */
+.glass-noblur,
+.glass-noblur.glass-quiet {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
+}
+
+/* ============================================================
+   CHOREOGRAPHY — Golden Hour motion foundation.
+   Foundation-owned (this section + the primitives in
+   app/components/motion). Appliers consume these contracts;
+   nobody redefines them. Grammar: transform + opacity +
+   clip-path only; one easing: var(--ease-signature).
+   ============================================================ */
+
+/* THE RAIL — one left edge for the entire site.
+   Every page container, Nav inner, hero, Index, Philosophy,
+   Footer migrates here. Sole sanctioned exception: the home
+   hero's full-bleed bottom Horizon. */
+.rail {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-inline: clamp(24px, 5vw, 56px);
+}
+
+/* LINK GRAMMAR — exactly two tiers, sitewide.
+   Tier 1 .link-draw = inline/read links (underline draws in).
+   Tier 2 .link-action = labeled actions; arrow glyph goes inside
+   <span class=arrow> (data-dir=back for left-pointing links). */
+.link-draw {
+  position: relative;
+  text-decoration: none;
+}
+.link-draw::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--duration-base) var(--ease-signature);
+}
+.link-draw:hover::after,
+.link-draw:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.link-action {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+/* Invisible hit-area expander — inline links reach the 24px tap
+   minimum (WCAG 2.5.8) without moving a pixel of layout. Vertical
+   only, so neighboring links never overlap horizontally. */
+.link-draw::before,
+.link-action::before {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+.link-action .arrow {
+  display: inline-block;
+  transition: transform var(--duration-fast) var(--ease-signature);
+}
+.link-action:hover .arrow,
+.link-action:focus-visible .arrow {
+  transform: translateX(2px);
+}
+.link-action:hover .arrow[data-dir=back],
+.link-action:focus-visible .arrow[data-dir=back] {
+  transform: translateX(-2px);
+}
+
+/* EYEBROW — the label voice above every h1 (doubles as breadcrumb host) */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* ROUTE RITUAL — consumed by app/template.tsx.
+   Horizon first, then light: the line draws (480ms), content
+   rises 20px into place (600ms, 90ms behind). data-entered
+   releases the transform containing block after arrival. */
+@keyframes routeDraw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes routeRise {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.route-line {
+  height: 1px;
+  transform-origin: left;
+  animation: routeDraw 480ms var(--ease-signature) both;
+}
+.route-content {
+  animation: routeRise 600ms var(--ease-signature) 90ms both;
+}
+.route-content[data-entered=true] {
+  animation: none; /* releases the transform containing block */
+}
+
+/* MASKED LINE REVEALS — consumed by RevealLines.
+   inview: server HTML ships .rl-revealed (visible without JS); the
+   component arms the mask on mount, then reveals on intersection.
+   mount: server HTML ships .rl-mount (lines masked) and the reveal
+   is this CSS animation on the paint clock — the same clock as the
+   other entrance beats, no hydration beat, and it plays without JS
+   (a noscript override in the component makes no-JS instant). */
+.rl-mask {
+  display: block;
+  overflow: hidden;
+}
+.rl-line {
+  display: block;
+  transform: translateY(110%);
+}
+.rl-revealed .rl-line {
+  transform: translateY(0);
+  transition: transform 600ms var(--ease-signature);
+}
+.rl-mount .rl-line {
+  animation: rlLineRise 600ms var(--ease-signature) both;
+}
+@keyframes rlLineRise {
+  from { transform: translateY(110%); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rl-mount .rl-line { animation: none; transform: none; }
+}
+
+/* EDITORIAL UNVEIL — consumed by Reveal variant=unveil.
+   Classes are applied by JS on mount only (no-JS HTML stays
+   visible). --unveil-delay carries the optional stagger. */
+.unveil {
+  clip-path: inset(100% 0 0 0);
+}
+.unveil img,
+.unveil .unveil-img {
+  transform: scale(1.06);
+}
+.unveil.is-shown {
+  clip-path: inset(0 0 0 0);
+  transition: clip-path var(--duration-slow) var(--ease-signature);
+  transition-delay: var(--unveil-delay, 0ms);
+}
+.unveil.is-shown img,
+.unveil.is-shown .unveil-img {
+  transform: scale(1);
+  transition: transform var(--duration-slow) var(--ease-signature);
+  transition-delay: var(--unveil-delay, 0ms);
+}
+
+/* HORIZON DRAW — consumed by Horizon draw prop.
+   Applied by JS on mount only; no-JS HTML keeps the full line. */
+.horizon-draw {
+  transform: scaleX(0);
+}
+.horizon-draw[data-origin=center] {
+  transform-origin: center;
+}
+.horizon-draw[data-origin=left] {
+  transform-origin: left;
+}
+.horizon-draw.is-drawn {
+  transform: scaleX(1);
+  transition: transform var(--duration-slow) var(--ease-signature);
+}
+
+/* SECTION MARK — the ghost numeral. Static, aria-hidden,
+   never above 4%. Component: app/components/motion/SectionMark. */
+.section-mark {
+  color: var(--color-fg);
+  opacity: 0.035;
+}
+[data-theme=light] .section-mark {
+  opacity: 0.04;
+}
+
+/* ============================================================
+   INDEX GRAMMAR — the one list language.
+   .index-row (rows) + .index-spread (route spreads). Whole
+   element is the Link. ONE hover grammar: bottom hairline warms
+   border -> section accent, arrow nudges 2px + takes accent,
+   all at var(--duration-fast). No background wash, ever.
+   ============================================================ */
+
+.index-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.5ch 1fr auto;
+  grid-template-areas:
+    "num title arrow"
+    "num desc arrow"
+    "num meta arrow";
+  column-gap: var(--space-3);
+  row-gap: 6px;
+  align-items: baseline;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  text-decoration: none;
+  color: var(--color-fg);
+  transition: border-color var(--duration-fast) var(--ease-signature);
+}
+.index-row[data-has-media=true] {
+  grid-template-areas:
+    "media media media"
+    "num title arrow"
+    "num desc arrow"
+    "num meta arrow";
+}
+@media (min-width: 768px) {
+  .index-row[data-has-media=true] {
+    grid-template-columns: 3.5ch 1fr minmax(200px, 28%) auto;
+    grid-template-areas:
+      "num title media arrow"
+      "num desc media arrow"
+      "num meta media arrow";
+  }
+}
+.index-row-num {
+  grid-area: num;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.index-row-title {
+  grid-area: title;
+  font-family: var(--font-serif);
+  font-weight: 300;
+  font-size: clamp(1.6rem, 2.6vw, 2.25rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.index-row[data-flagship=true] .index-row-title {
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
+}
+.index-row-desc {
+  grid-area: desc;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  max-width: 55ch;
+}
+.index-row-meta {
+  grid-area: meta;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.index-row-media {
+  grid-area: media;
+  align-self: center;
+}
+.index-row-media img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+.index-row-arrow,
+.index-spread-arrow {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  transition:
+    transform var(--duration-fast) var(--ease-signature),
+    color var(--duration-fast) var(--ease-signature);
+}
+.index-row-arrow {
+  grid-area: arrow;
+  align-self: start;
+}
+.index-row:hover,
+.index-row:focus-visible {
+  border-bottom-color: var(--color-accent-gold);
+}
+.index-row:hover .index-row-arrow,
+.index-row:focus-visible .index-row-arrow {
+  transform: translateX(2px);
+  color: var(--color-accent-gold-text);
+}
+.index-row[data-accent=wine]:hover,
+.index-row[data-accent=wine]:focus-visible {
+  border-bottom-color: var(--color-accent-wine);
+}
+.index-row[data-accent=wine]:hover .index-row-arrow,
+.index-row[data-accent=wine]:focus-visible .index-row-arrow {
+  color: var(--color-accent-wine);
+}
+
+/* Spread — image is DOM-first so it stacks ABOVE text on mobile */
+.index-spread {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border);
+  text-decoration: none;
+  color: var(--color-fg);
+  transition: border-color var(--duration-fast) var(--ease-signature);
+}
+@media (min-width: 768px) {
+  .index-spread {
+    grid-template-columns: 58% 1fr;
+    align-items: center;
+    column-gap: var(--space-5);
+  }
+  .index-spread[data-reverse=true] {
+    grid-template-columns: 1fr 58%;
+  }
+  .index-spread[data-reverse=true] .index-spread-media {
+    order: 2;
+  }
+}
+.index-spread-media img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+.index-spread-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.index-spread-title {
+  font-family: var(--font-serif);
+  font-weight: 300;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.index-spread-desc {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+  max-width: 48ch;
+}
+.index-spread-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.index-spread:hover,
+.index-spread:focus-visible {
+  border-bottom-color: var(--color-accent-gold);
+}
+.index-spread:hover .index-spread-arrow,
+.index-spread:focus-visible .index-spread-arrow {
+  transform: translateX(2px);
+  color: var(--color-accent-gold-text);
+}
+.index-spread[data-accent=wine]:hover,
+.index-spread[data-accent=wine]:focus-visible {
+  border-bottom-color: var(--color-accent-wine);
+}
+.index-spread[data-accent=wine]:hover .index-spread-arrow,
+.index-spread[data-accent=wine]:focus-visible .index-spread-arrow {
+  color: var(--color-accent-wine);
+}
+
+/* ============================================================
+   ROUTE-AWARE AMBIENT — each orb is two stacked gradient layers;
+   ONLY opacity transitions (never background). Shell applier
+   renders: .ambient-field > .orb.orb-a / .orb.orb-b, each
+   containing .orb-layer-gold + .orb-layer-wine, and sets
+   data-ambient=neutral|wine|gold on the field div.
+   Legacy single-layer .orb-gold/.orb-wine rules above remain
+   until Shell migrates the markup.
+   ============================================================ */
+.ambient-field .orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+}
+.ambient-field .orb-a {
+  width: min(44vw, 560px);
+  height: min(44vw, 560px);
+  top: -8%;
+  right: -6%;
+  animation: floatSlow 26s ease-in-out infinite;
+}
+.ambient-field .orb-b {
+  width: min(36vw, 460px);
+  height: min(36vw, 460px);
+  bottom: -10%;
+  left: -8%;
+  animation: floatSlow 32s ease-in-out infinite reverse;
+}
+.ambient-field .orb-layer-gold,
+.ambient-field .orb-layer-wine {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transition: opacity 1600ms var(--ease-signature);
+}
+.ambient-field .orb-layer-gold {
+  background: radial-gradient(circle, rgba(212, 184, 150, 0.07) 0%, transparent 65%);
+}
+.ambient-field .orb-layer-wine {
+  background: radial-gradient(circle, rgba(193, 102, 107, 0.05) 0%, transparent 65%);
+}
+[data-theme=light] .ambient-field .orb-layer-gold {
+  background: radial-gradient(circle, rgba(168, 135, 93, 0.10) 0%, transparent 65%);
+}
+[data-theme=light] .ambient-field .orb-layer-wine {
+  background: radial-gradient(circle, rgba(143, 65, 73, 0.07) 0%, transparent 65%);
+}
+/* Default = current balance: gold top-right, wine bottom-left */
+.ambient-field .orb-a .orb-layer-gold { opacity: 1; }
+.ambient-field .orb-a .orb-layer-wine { opacity: 0; }
+.ambient-field .orb-b .orb-layer-gold { opacity: 0; }
+.ambient-field .orb-b .orb-layer-wine { opacity: 1; }
+/* Section tints */
+.ambient-field[data-ambient=wine] .orb .orb-layer-wine { opacity: 1; }
+.ambient-field[data-ambient=wine] .orb .orb-layer-gold { opacity: 0.35; }
+.ambient-field[data-ambient=gold] .orb .orb-layer-gold { opacity: 1; }
+.ambient-field[data-ambient=gold] .orb .orb-layer-wine { opacity: 0.35; }
+/* Neutral restores the default balance (wins on specificity) */
+.ambient-field[data-ambient=neutral] .orb-a .orb-layer-gold { opacity: 1; }
+.ambient-field[data-ambient=neutral] .orb-a .orb-layer-wine { opacity: 0; }
+.ambient-field[data-ambient=neutral] .orb-b .orb-layer-gold { opacity: 0; }
+.ambient-field[data-ambient=neutral] .orb-b .orb-layer-wine { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-field .orb { animation: none; }
+}
