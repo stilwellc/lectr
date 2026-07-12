@@ -40,6 +40,28 @@ export const houseColorsHex: Record<'dark' | 'light', Record<string, string>> = 
   },
 };
 
+/**
+ * craftTitle — the object made worthy. Auction feeds arrive raw: Bonhams
+ * SHOUTS ("CARTIER: AN 18K GOLD WRISTWATCH, CIRCA 1950"), catalog styles
+ * repeat the maker the card already names, titles trail orphan periods.
+ * One pass: strip the redundant maker prefix, sentence-case the shouting,
+ * trim the tail. The data stays untouched — this is presentation craft.
+ */
+const MAKER_PREFIX = /^(rolex|patek philippe|audemars piguet|omega|cartier|vacheron constantin|jaeger[- ]lecoultre)\s*[.,:]\s*/i;
+export function craftTitle(raw: string): string {
+  let t = (raw || '').trim();
+  t = t.replace(MAKER_PREFIX, '');
+  const letters = t.replace(/[^a-zA-Z]/g, '');
+  if (letters.length > 8) {
+    const shouting = t.replace(/[^A-Z]/g, '').length / letters.length > 0.7;
+    if (shouting) {
+      t = t.toLowerCase().replace(/(^|[.!?]\s+)([a-z])/g, (_, a, b) => a + b.toUpperCase());
+    }
+  }
+  t = t.replace(/\s*[.,;]+\s*$/, '');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 // Shared date formatter for the Ray suite. saleDate/lastCrawl are date-only
 // strings (YYYY-MM-DD) that JS parses as UTC midnight — formatting them in
 // the viewer's local timezone can shift the displayed day AND makes the

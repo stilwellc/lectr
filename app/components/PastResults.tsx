@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { AuctionLot } from '../types';
 import type { LotCategory } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors } from '../utils';
+import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle } from '../utils';
 import SectionMark from './SectionMark';
 
 type SortMode = 'date' | 'price';
@@ -240,7 +240,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                 }}>
-                  {lot.title}
+                  {craftTitle(lot.title)}
                 </div>
                 <div style={{
                   display: 'flex',

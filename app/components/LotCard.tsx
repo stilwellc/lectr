@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs } from '../utils';
+import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle } from '../utils';
 import ComparableModal from './ComparableModal';
 import { computeDeepSignal, FORM_LABEL } from '../lib/comps';
 
@@ -192,22 +192,8 @@ export default function LotCard({
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           />
         )}
-        {buySignal && (
-          <div style={{
-            position: 'absolute',
-            top: 10,
-            left: 10,
-            padding: '4px 11px',
-            borderRadius: 100,
-            background: buySignal.label === 'Below Market' ? 'var(--color-up)' : 'rgba(0,0,0,0.55)',
-            fontSize: 12.5,
-            letterSpacing: '-0.01em',
-            color: buySignal.label === 'Below Market' ? '#fff' : 'var(--color-down)',
-            fontWeight: 600,
-          }}>
-            {buySignal.label === 'Below Market' ? 'Below market' : 'Above market'}
-          </div>
-        )}
+        {/* the old corner pill died in the committee review — the signal row
+            below leads with the number itself, once, unmissably */}
         {onToggleSave && (
           <button
             className="ray-save-btn"
@@ -265,39 +251,35 @@ export default function LotCard({
           lineHeight: 1.4,
           flex: 1,
         }}>
-          {lot.title}
+          {craftTitle(lot.title)}
         </h3>
         <div style={{ fontSize: 13, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
           {lot.auctionHouse}
-          {catLabel && lot.category !== 'unknown' ? ` · ${catLabel}` : ''}
-          {` · ${formatDate(lot.saleDate)}`}
+          {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
+          {` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
         </div>
         <div style={{ marginTop: 'auto' }}>
-          <span className="ray-lot-est">{formatEstimate(lot)}</span>
-          {/* The intelligence, made precise: where the artist's comps sit
-              against this estimate. Green = headroom, red = rich. */}
+          {/* The intelligence leads — the number IS the card's rank. */}
           {buySignal && (
-            <div
-              className="ray-lot-signal-line"
-              data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'}
-            >
-              {(() => {
-                const dir = buySignal.label === 'Below Market' ? `+${buySignal.pct}% above` : `−${buySignal.pct}% below`;
-                const meter = confidenceMeter(buySignal.confidence);
-                const text = buySignal.kind === 'edition'
-                  ? `Same edition sold ${dir} this estimate (${buySignal.basis} sales)`
-                  : `${buySignal.basis || ''} comparable ${(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}: median ${dir} est.`;
-                return (
-                  <>
-                    {text}
-                    <span title={`${meter.word} confidence`} aria-label={`${meter.word} confidence`} style={{ marginLeft: 7, letterSpacing: 1, fontSize: 9, opacity: 0.85 }}>
-                      {meter.dots}
-                    </span>
-                  </>
-                );
-              })()}
+            <div className="ray-sigrow" data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'}>
+              <span className="ray-sigrow-pct">
+                {buySignal.label === 'Below Market' ? '+' : '−'}{buySignal.pct}%
+              </span>
+              <span className="ray-sigrow-ctx">
+                {buySignal.kind === 'edition'
+                  ? <>this edition&rsquo;s sales run {buySignal.label === 'Below Market' ? 'over' : 'under'} the ask · {buySignal.basis} sales</>
+                  : <>comps median vs ask · {buySignal.basis} {(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}</>}
+                <span
+                  className="ray-sigrow-dots"
+                  title={`${confidenceMeter(buySignal.confidence).word} confidence`}
+                  aria-label={`${confidenceMeter(buySignal.confidence).word} confidence`}
+                >
+                  {confidenceMeter(buySignal.confidence).dots}
+                </span>
+              </span>
             </div>
           )}
+          <span className="ray-lot-est">{formatEstimate(lot)}</span>
         </div>
 
         {isUpcoming && (
