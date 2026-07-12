@@ -1746,7 +1746,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-weight: 800 !important;
   font-size: 19px !important;
   letter-spacing: -0.03em !important;
-  color: var(--color-accent-gold) !important;
+  /* the slashed-R mark carries the brand color; the wordmark reads in fg */
+  color: var(--color-fg) !important;
 }
 .ray-nav-link {
   font-size: 13.5px !important;
@@ -3082,12 +3083,19 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 @keyframes rayPulse { 0% { transform: scale(0.5); opacity: 0.6; } 70% { transform: scale(1.15); opacity: 0; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ray-fresh-dot::after { animation: none; } }
 
-/* ── the mark: an origin emitting a ray ── */
-.ray-wordmark { display: inline-flex !important; align-items: center; gap: 8px; }
-.ray-mark { width: 19px; height: 19px; display: block; }
-.ray-wordmark:hover .ray-mark path { transform: translate(1px, -1px); }
-.ray-mark path { transition: transform var(--duration-fast) var(--ease-signature); }
-.ray-tab .ray-mark { width: 21px; height: 21px; }
+/* ── the mark: the slashed R ── */
+.ray-wordmark { display: inline-flex !important; align-items: center; gap: 9px; }
+.ray-mark-r {
+  width: 26px;
+  height: 26px;
+  display: block;
+  object-fit: contain;
+  /* the source art is green-on-black; screen-blending drops the black
+     plate so the R sits directly on the nav */
+  mix-blend-mode: screen;
+  transition: transform var(--duration-fast) var(--ease-signature);
+}
+.ray-wordmark:hover .ray-mark-r { transform: translateX(1px); }
 
 /* ════════════════════════════════════════════════════════════════════
    DEPTH & CHARACTER — the fintech-terminal layer (Robinhood/Coinbase

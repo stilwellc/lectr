@@ -81,19 +81,22 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           gap: 12px;
         }
         .ray-wordmark {
-          font-family: var(--font-serif), serif;
-          font-style: italic;
-          font-weight: 500;
-          font-size: 21px;
+          display: inline-flex;
+          align-items: center;
+          gap: 9px;
+          font-family: var(--font-sans), sans-serif;
+          font-weight: 750;
+          font-size: 18px;
           line-height: 1;
-          letter-spacing: 0.01em;
-          color: var(--color-accent-wine-text);
+          letter-spacing: -0.02em;
+          color: var(--color-fg);
           text-decoration: none;
           white-space: nowrap;
           padding: 6px 0;
           margin: -6px 0;
           transition: opacity var(--duration-fast) var(--ease-signature);
         }
+        .ray-mark-r { display: block; width: 26px; height: 26px; object-fit: contain; }
         .ray-wordmark:hover,
         .ray-wordmark:focus-visible { opacity: 0.68; }
         .ray-artist-select-wrap {
@@ -215,10 +218,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
 
       <div className="ray-artist-nav-inner rail">
         <a href="/" className="ray-wordmark" aria-label="Ray — home">
-          <svg className="ray-mark" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="5.2" cy="18.8" r="2.7" fill="currentColor" />
-            <path d="M9.4 14.6 L20 4" stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" />
-          </svg>
+          {/* the slashed R — the mark */}
+          <img className="ray-mark-r" src="/brand/ray-r.png" alt="" width={26} height={26} />
           <span>Ray</span>
         </a>
 
