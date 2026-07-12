@@ -1782,7 +1782,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-artist-count { background: var(--color-bg-elevated) !important; color: var(--color-text-muted) !important; font-size: 11px !important; }
 
 /* ───────────────────────── market hero ───────────────────────── */
-.ray-hero2 { padding: 34px 0 0; }
+.ray-hero2 { padding-block: 34px 0; }
 .ray-hero2-label {
   font-size: 14px;
   font-weight: 500;
@@ -2406,3 +2406,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 @keyframes rayPulse { 0% { transform: scale(0.5); opacity: 0.6; } 70% { transform: scale(1.15); opacity: 0; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ray-fresh-dot::after { animation: none; } }
+
+/* ── the mark: an origin emitting a ray ── */
+.ray-wordmark { display: inline-flex !important; align-items: center; gap: 8px; }
+.ray-mark { width: 19px; height: 19px; display: block; }
+.ray-wordmark:hover .ray-mark path { transform: translate(1px, -1px); }
+.ray-mark path { transition: transform var(--duration-fast) var(--ease-signature); }
+.ray-tab .ray-mark { width: 21px; height: 21px; }

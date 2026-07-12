@@ -6,7 +6,7 @@ import { useRayData } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts } from './utils';
 import ArtistNav from './components/ArtistNav';
-import LotCard, { lotSignal } from './components/LotCard';
+import LotCard, { lotSignal, confidenceMeter } from './components/LotCard';
 import ComparableModal from './components/ComparableModal';
 import type { AuctionLot } from './types';
 import PastResults from './components/PastResults';
@@ -313,6 +313,9 @@ export default function RayPage() {
                               {sig
                                 ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
                                     {sig.label === 'Below Market' ? `+${sig.pct}% under comps` : `${sig.pct}% over comps`}
+                                    <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 8.5, letterSpacing: 1, opacity: 0.8 }}>
+                                      {confidenceMeter(sig.confidence).dots}
+                                    </span>
                                   </span>
                                 : <span style={{ color: 'var(--color-text-faint)' }}>—</span>}
                             </td>

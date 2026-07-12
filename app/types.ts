@@ -27,7 +27,7 @@ export interface AuctionLot {
   /** Precomputed at crawl time for upcoming lots (comps median vs estimate
       midpoint) so the feed can paint before the full history downloads.
       undefined = not precomputed (compute client-side from allLots). */
-  signal?: { label: 'Below Market' | 'Above Market'; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string } | null;
+  signal?: { label: 'Below Market' | 'Above Market'; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string; confidence?: 'very-high' | 'high' | 'medium' | 'low' } | null;
 }
 
 export interface PricePoint {

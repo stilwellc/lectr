@@ -42,7 +42,13 @@ export default function OG({ params }: { params: { artist: string } }) {
     (
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#0A0B0D', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 36, fontWeight: 800, color: '#E8B95B', letterSpacing: -1.5 }}>Ray</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <svg width="34" height="34" viewBox="0 0 24 24">
+              <circle cx="5.2" cy="18.8" r="2.7" fill="#E8B95B" />
+              <path d="M9.4 14.6 L20 4" stroke="#E8B95B" strokeWidth="2.7" strokeLinecap="round" />
+            </svg>
+            <div style={{ fontSize: 38, fontWeight: 800, color: '#E8B95B', letterSpacing: -1.5 }}>Ray</div>
+          </div>
           <div style={{ fontSize: 21, color: '#63686E' }}>artist market page</div>
         </div>
         <div style={{ display: 'flex', fontSize: 62, fontWeight: 800, color: '#F4F5F6', letterSpacing: -2.5, marginTop: 22 }}>{label}</div>

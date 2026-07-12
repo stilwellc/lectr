@@ -215,6 +215,12 @@ export interface DeepSignal {
   /** 'edition' = same-title sales of this exact work; 'form' = same-form comps */
   kind: 'edition' | 'form';
   form: Form;
+  /** how much to trust the call — from the pool itself:
+      very-high = this exact work (same normalized title) has sold 3+ times
+      high      = a large tight pool, or many comps from the same series
+      medium    = a decent pool that mostly agrees
+      low       = passes the guards, but thin or spread out */
+  confidence: 'very-high' | 'high' | 'medium' | 'low';
 }
 
 function median(sorted: number[]): number {
@@ -274,8 +280,26 @@ export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepS
   const q3 = prices[Math.floor(prices.length * 0.75)];
   if (med > 0 && (q3 - q1) / med > 2.5) return null;
 
+  // Confidence from the pool itself: what kind of comps, how many, how
+  // tightly they agree (IQR/median), and how much the titles match — the
+  // same exact work having sold repeatedly is the strongest evidence there is,
+  // and a pool full of same-series titles (shared significant words) beats an
+  // anonymous same-form pool.
+  const spread = med > 0 ? (q3 - q1) / med : 99;
+  const words = new Set(nt.split(' ').filter(w => w.length > 3));
+  const titleKin = words.size === 0 ? 0 : pool.filter(l => {
+    let hits = 0;
+    for (const w of normalizeTitle(l.title).split(' ')) if (words.has(w)) hits++;
+    return hits >= 2;
+  }).length;
+  const confidence: DeepSignal['confidence'] =
+    kind === 'edition' ? 'very-high'
+    : (pool.length >= 12 && spread <= 1.0) || (titleKin >= 6 && spread <= 1.5) ? 'high'
+    : pool.length >= 6 && spread <= 1.8 ? 'medium'
+    : 'low';
+
   const ratio = med / estMid;
-  if (ratio >= 1.2) return { label: 'Below Market', pct: Math.round((ratio - 1) * 100), basis: pool.length, kind, form };
-  if (ratio <= 0.75) return { label: 'Above Market', pct: Math.round((1 - ratio) * 100), basis: pool.length, kind, form };
+  if (ratio >= 1.2) return { label: 'Below Market', pct: Math.round((ratio - 1) * 100), basis: pool.length, kind, form, confidence };
+  if (ratio <= 0.75) return { label: 'Above Market', pct: Math.round((1 - ratio) * 100), basis: pool.length, kind, form, confidence };
   return null;
 }
