@@ -53,10 +53,14 @@ export function buildUpcoming(dataDir: string): void {
     .filter(l => l.status === 'upcoming')
     .map(l => ({ ...l, signal: computeDeepSignal(l as unknown as AuctionLot, lots as unknown as AuctionLot[]) }));
 
-  const tape = lots
+  // The tape ("recent hammers") is PER MARKET so each vertical shows its own
+  // notable sales. Take the most recent sold lots, then the top by price —
+  // which naturally surfaces the premium houses (Sotheby's / Christie's /
+  // Phillips six-figure watches) instead of drowning in Bonhams volume.
+  const buildTape = (pool: Lot[]) => pool
     .filter(l => l.status === 'sold' && l.priceUsd && l.title)
     .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
-    .slice(0, 90)
+    .slice(0, 160)
     .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
     .slice(0, 18)
     .map(l => ({
@@ -66,6 +70,7 @@ export function buildUpcoming(dataDir: string): void {
       house: l.auctionHouse,
     }));
 
+  const tape: Record<string, ReturnType<typeof buildTape>> = { all: buildTape(lots) };
   // One demand series per live market, plus the aggregate — the shelf and
   // every hero read from these precomputed curves.
   const demand: Record<string, ReturnType<typeof demandSeries>> = {
@@ -73,12 +78,14 @@ export function buildUpcoming(dataDir: string): void {
   };
   for (const m of MARKETS.filter(m => m.live && m.key !== 'all')) {
     const set = marketArtists(m.key);
-    demand[m.key] = demandSeries(lots.filter(l => set.has(l.artist)) as unknown as EngineLot[]);
+    const marketLots = lots.filter(l => set.has(l.artist));
+    demand[m.key] = demandSeries(marketLots as unknown as EngineLot[]);
+    tape[m.key] = buildTape(marketLots);
   }
   const out = { generatedAt: new Date().toISOString(), tape, demand, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
-  console.log(`upcoming.json: ${upcoming.length} lots, ${tape.length} tape items, ${kb}KB`);
+  console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], ${kb}KB`);
 }
 
 // standalone entry

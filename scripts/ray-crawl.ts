@@ -2187,23 +2187,24 @@ async function main() {
   }
   console.log(`[Ray] Category breakdown:`, categoryCounts);
 
-  // The watches vertical trades WATCHES: maker keyword searches also surface
-  // jewelry (Cartier necklaces, Rolex-set brooches, vanity cases from the
-  // jewels departments) — drop it at the door. A lot goes if its form is
-  // jewelry, or if it came out of a jewels sale and isn't horology.
+  // The watches vertical trades WATCHES only. Cartier especially is a jeweler
+  // as much as a watchmaker — maker crawls drag in thermometer cases, lipstick
+  // holders, earclips, pearl sets, bracelets. A blocklist is whack-a-mole, so
+  // require a POSITIVE horology signal: keep a lot only if its form is a
+  // watch/clock or its text names a watch (movement, ref, a Cartier watch
+  // line, etc). Everything without a watch signal is dropped.
   const WATCH_MAKERS = new Set(['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier']);
   const { classifyForm } = await import('../app/lib/comps');
   const HOROLOGY = new Set(['wristwatch', 'pocket-watch', 'clock']);
-  const beforeJewelry = allLots.length;
+  const WATCH_SIGNAL = /watch|montre|chronograph|chronometer|chronometre|tourbillon|calibre|caliber|\bref\.?\b|reference|automatic|self-?winding|manual wind|movement|\bdial\b|perpetual|minute repeat|moonphase|moon phase|day-?date|tank|santos|panth|ballon|pasha|tortue|baignoire|\bronde\b|roadster|\bdrive\b|cloche|oyster|cosmograph|datejust|submariner|seamaster|speedmaster|constellation|nautilus|aquanaut|calatrava|royal oak|cellini|de ville|must de|must 21|jaeger|reverso/i;
+  const beforeWatch = allLots.length;
   const keptLots = allLots.filter(l => {
     if (!WATCH_MAKERS.has(l.artist)) return true;
-    const form = classifyForm(l as any);
-    if (form === 'jewelry') return false;
-    if (/jewel/i.test(l.saleName || '') && !HOROLOGY.has(form)) return false;
-    return true;
+    if (HOROLOGY.has(classifyForm(l as any))) return true;
+    return WATCH_SIGNAL.test(`${l.title || ''} ${l.medium || ''}`);
   });
-  if (keptLots.length < beforeJewelry) {
-    console.log(`[Ray] Dropped ${beforeJewelry - keptLots.length} non-watch jewelry lots from watch makers`);
+  if (keptLots.length < beforeWatch) {
+    console.log(`[Ray] Dropped ${beforeWatch - keptLots.length} non-watch lots from watch makers (jewelry/objects)`);
   }
   allLots.length = 0;
   allLots.push(...keptLots);

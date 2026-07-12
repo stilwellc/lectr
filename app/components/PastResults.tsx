@@ -57,10 +57,25 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
     const copy = [...filtered];
     if (sortBy === 'price') {
       copy.sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0));
-    } else {
-      copy.sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
+      return copy;
     }
-    return copy;
+    // 'date' = most recent, but round-robin across houses so every house
+    // surfaces near the top instead of one high-volume house monopolizing
+    // the view (e.g. Bonhams burying Sotheby's / Christie's / Phillips).
+    copy.sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
+    const groups = new Map<string, typeof copy>();
+    for (const l of copy) {
+      const g = groups.get(l.auctionHouse) || [];
+      g.push(l);
+      groups.set(l.auctionHouse, g);
+    }
+    if (groups.size < 2) return copy;
+    const queues = Array.from(groups.values());
+    const woven: typeof copy = [];
+    for (let i = 0; woven.length < copy.length; i++) {
+      for (const q of queues) if (i < q.length) woven.push(q[i]);
+    }
+    return woven;
   }, [filtered, sortBy]);
 
   const shown = sorted.slice(0, visible);

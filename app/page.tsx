@@ -95,6 +95,8 @@ export default function RayPage() {
     setVisibleUpcoming(PAGE_SIZE);
   };
 
+  // Recent Results (PastResults) round-robins these across houses itself so
+  // every house surfaces; here we just want the market's sold lots by recency.
   const sold = useMemo(() =>
     marketLots
       .filter(l => l.status === 'sold' && l.priceUsd)
@@ -155,12 +157,12 @@ export default function RayPage() {
     return { weightedAppreciation, topArtist, thisWeek: thisWeekLots.length, belowFlagged };
   }, [marketStats, upcoming, marketLots]);
 
-  // The tape ships precomputed in upcoming.json (instant); compute it only as
-  // a fallback for deploys that predate the split.
-  const marketLabels = useMemo(() => new Set(ARTISTS.filter(a => mktSet.has(a.slug)).map(a => a.label as string)), [mktSet]);
+  // The tape ships precomputed PER MARKET in upcoming.json (instant); compute
+  // it only as a fallback for deploys that predate the per-market split.
   const tapeItems = useMemo(() => {
-    if (tape.length) return tape.filter(t => marketLabels.has(t.artist));
-    return sold.slice(0, 90)
+    const pre = tape[activeKey];
+    if (pre && pre.length) return pre;
+    return sold.slice(0, 160)
       .filter(l => l.priceUsd && l.title)
       .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
       .slice(0, 18)
@@ -170,7 +172,7 @@ export default function RayPage() {
         price: formatPrice(l.priceUsd!),
         house: l.auctionHouse,
       }));
-  }, [tape, sold, marketLabels]);
+  }, [tape, activeKey, sold]);
 
   return (
     <div style={{
