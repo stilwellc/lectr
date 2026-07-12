@@ -327,6 +327,10 @@ const ARTISTS: ArtistConfig[] = [
 ];
 
 const DATA_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
+// One-time (or occasional) history expander: RAY_DEEP=1 walks much deeper
+// pagination on the houses that expose it, and enriches far more detail
+// pages. Polite delays are kept; it just keeps walking.
+const DEEP = process.env.RAY_DEEP === '1';
 const DELAY_MS = 1500;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
@@ -671,11 +675,37 @@ async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]> {
 // ── Christie's Crawler ──
 // Christie's embeds lot data as JSON in window.chrComponents.configurableSearch.
 
+function parseChristiesHtml(html: string, artistSlug: string): AuctionLot[] {
+  const searchMatch = html.match(/window\.chrComponents\s*=\s*window\.chrComponents\s*\|\|\s*\{\};\s*window\.chrComponents\.configurableSearch\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+  if (searchMatch) return parseChristiesJson(searchMatch[1], artistSlug);
+  const altMatch = html.match(/configurableSearch\s*=\s*(\{[\s\S]*?\});\s*(?:window\.|<\/script>)/);
+  if (altMatch) return parseChristiesJson(altMatch[1], artistSlug);
+  return [];
+}
+
 async function crawlChristies(artist: ArtistConfig): Promise<AuctionLot[]> {
   if (!artist.christies) return [];
 
   const lots: AuctionLot[] = [];
   const seen = new Set<string>();
+
+  // deep mode: the artist page paginates — walk back through history
+  if (DEEP) {
+    for (let p = 2; p <= 8; p++) {
+      await sleep(800);
+      try {
+        const r = await fetch(`https://www.christies.com/en/artists/${artist.christies}?lotavailability=All&sortby=relevance&page=${p}`, {
+          headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+        });
+        if (!r.ok) break;
+        const pageLots = parseChristiesHtml(await r.text(), artist.slug);
+        let fresh = 0;
+        pageLots.forEach(lot => { if (!seen.has(lot.id)) { seen.add(lot.id); lots.push(lot); fresh++; } });
+        if (fresh === 0) break;
+      } catch { break; }
+    }
+    if (lots.length) console.log(`  [Christie's] Deep pages added ${lots.length} lots`);
+  }
 
   // Fetch from artist page (gets recent/past lots)
   const artistUrl = `https://www.christies.com/en/artists/${artist.christies}?lotavailability=All&sortby=relevance`;
@@ -887,9 +917,31 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
       || pageData?.props?.results?.primary_results?.sorted_items?.results;
     if (paginator?.data && Array.isArray(paginator.data)) {
       const items = paginator.data;
-      console.log(`  [Wright] Found ${items.length} lots on page 1 of ${paginator.last_page || 1} (${paginator.total || items.length} total, advanced page)`);
+      const lastPage = paginator.last_page || 1;
+      console.log(`  [Wright] Found ${items.length} lots on page 1 of ${lastPage} (${paginator.total || items.length} total, advanced page)`);
       for (const item of items) {
         lots.push(parseWrightAdvancedItem(item, artist.slug));
+      }
+      // deep mode: walk the whole paginator (history lives back here)
+      if (DEEP && lastPage > 1) {
+        const cap = Math.min(lastPage, 30);
+        for (let p = 2; p <= cap; p++) {
+          await sleep(600);
+          try {
+            const r2 = await fetch(`${url}?page=${p}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+            if (!r2.ok) break;
+            const $2 = cheerio.load(await r2.text());
+            const dp2 = $2('#app').attr('data-page');
+            if (!dp2) break;
+            const pd2 = JSON.parse(dp2);
+            const pag2 = pd2?.props?.results?.primary_results?.paginator?.items
+              || pd2?.props?.results?.primary_results?.sorted_items?.results;
+            const items2 = pag2?.data;
+            if (!items2 || !Array.isArray(items2) || items2.length === 0) break;
+            for (const item of items2) lots.push(parseWrightAdvancedItem(item, artist.slug));
+          } catch { break; }
+        }
+        console.log(`  [Wright] Deep walk complete: ${lots.length} lots total`);
       }
       return lots;
     }
@@ -1073,7 +1125,7 @@ async function crawlBonhams(artist: ArtistConfig): Promise<AuctionLot[]> {
       if (totalFetched < totalFound && hits.length > 0) {
         await sleep(500);
       }
-    } while (totalFetched < totalFound && page <= 10);
+    } while (totalFetched < totalFound && page <= (DEEP ? 40 : 10));
 
     console.log(`  [Bonhams] Parsed ${lots.length} lots (${lots.filter(l => l.status === 'sold').length} sold)`);
   } catch (err) {
@@ -1563,7 +1615,7 @@ async function enrichSothebys(lot: AuctionLot): Promise<EnrichResult> {
   } catch { return {}; }
 }
 
-const ENRICH_MAX_PER_RUN = 500;
+const ENRICH_MAX_PER_RUN = DEEP ? 6000 : 500;
 const ENRICH_DELAY = 250;
 
 async function enrichLots(lots: AuctionLot[]): Promise<void> {
