@@ -30,11 +30,37 @@ export function MarketTiles({
   demand,
   active,
   onPick,
+  lots = [],
 }: {
   demand: Record<string, DemandPoint[]>;
   active: Market;
   onPick: (m: Market) => void;
+  /** live lots — each tile wears its market's own photography */
+  lots?: AuctionLot[];
 }) {
+  // one deterministic hero image per market: the highest-estimate upcoming
+  // lot with house photography (stable across renders — no hydration drift)
+  const tileArt = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const withImg = lots.filter(l => l.status === 'upcoming' && l.imageUrl && l.saleDate && l.saleDate >= today);
+    const best = (pool: AuctionLot[]) =>
+      [...pool].sort((a, b) => (b.estimateHigh || b.estimateLow || 0) - (a.estimateHigh || a.estimateLow || 0))[0]?.imageUrl || null;
+    const out: Record<string, string | null> = {};
+    const used = new Set<string>();
+    // verticals pick first so each shows its own object; 'all' takes the
+    // best image nobody else claimed
+    const order = [...MARKETS.filter(m => m.key !== 'all'), ...MARKETS.filter(m => m.key === 'all')];
+    for (const m of order) {
+      if (!m.live) { out[m.key] = null; continue; }
+      const set = marketArtists(m.key);
+      const pool = withImg.filter(l => set.has(l.artist) && !used.has(l.imageUrl!));
+      const pick = best(pool);
+      out[m.key] = pick;
+      if (pick) used.add(pick);
+    }
+    return out;
+  }, [lots]);
+
   return (
     <div className="ray-mkttiles" role="tablist" aria-label="Markets">
       {MARKETS.map(m => {
@@ -62,6 +88,17 @@ export function MarketTiles({
             data-market={m.key}
             onClick={() => m.live && onPick(m.key)}
           >
+            {tileArt[m.key] && (
+              <img
+                className="ray-mkttile-bg"
+                src={tileArt[m.key]!}
+                alt=""
+                loading="lazy"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                ref={(el) => { if (el && el.complete && el.naturalWidth === 0) el.style.display = 'none'; }}
+              />
+            )}
+            <span className="ray-mkttile-scrim" aria-hidden="true" />
             <span className="ray-mkttile-top">
               <span className="ray-mkttile-ident">
                 <span className="ray-mkttile-glyph"><MarketIcon market={m.key} size={17} /></span>

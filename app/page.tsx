@@ -246,7 +246,7 @@ export default function RayPage() {
               Everything data-heavy waits below. */}
           <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
             <div className="ray-pane">
-              <MarketTiles demand={demand} active={market} onPick={setMarket} />
+              <MarketTiles demand={demand} active={market} onPick={setMarket} lots={allLots} />
               <BoardDemand
                 allLots={marketLots}
                 demand={demand[activeKey] || []}
