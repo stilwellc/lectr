@@ -32,7 +32,9 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
     { label: 'Saved', hint: 'your watchlist', path: '/saved' },
     ...ARTISTS.map(a => ({
       label: a.label,
-      hint: upcomingCounts[a.slug] ? `${upcomingCounts[a.slug]} live lots` : 'artist',
+      hint: upcomingCounts[a.slug]
+        ? `${a.market} · ${upcomingCounts[a.slug]} live lots`
+        : `${a.market} artist`,
       path: `/${a.slug}`,
     })),
   ], [upcomingCounts]);

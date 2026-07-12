@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { ARTISTS, ARTIST_LABEL } from './constants';
+import { ARTISTS, ARTIST_LABEL, MARKETS, marketArtists } from './constants';
+import { useMarket } from './lib/market';
 import { useRayData } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts } from './utils';
@@ -15,12 +16,24 @@ import CountUp from './components/CountUp';
 import MarketHero from './components/MarketHero';
 import MarketTape from './components/MarketTape';
 import MarketBlock from './components/MarketBlock';
+import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
 
 const PAGE_SIZE = 48;
 
 export default function RayPage() {
   const { allLots, statsByArtist, tape, demand, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
+  const { market, setMarket } = useMarket();
+  const marketMeta = MARKETS.find(m => m.key === market)!;
+  // Coming-soon markets preview over the Art dataset structure; live ones filter.
+  const activeKey = marketMeta.live ? market : 'art';
+  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
+  const marketStats = useMemo(() => {
+    const out: typeof statsByArtist = {};
+    for (const [k, v] of Object.entries(statsByArtist)) if (mktSet.has(k)) out[k] = v;
+    return out;
+  }, [statsByArtist, mktSet]);
   const { toggle, isSaved, savedIds } = useSavedLots();
   const [visibleUpcoming, setVisibleUpcoming] = useState(PAGE_SIZE);
   const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
@@ -29,14 +42,14 @@ export default function RayPage() {
 
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    return allLots
+    return marketLots
       .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
       .sort((a, b) => {
         if (!a.saleDate) return 1;
         if (!b.saleDate) return -1;
         return new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime();
       });
-  }, [allLots]);
+  }, [marketLots]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
@@ -45,11 +58,11 @@ export default function RayPage() {
   const belowIds = useMemo(() => {
     const ids = new Set<string>();
     upcoming.forEach(l => {
-      const s = lotSignal(l, allLots);
+      const s = lotSignal(l, marketLots);
       if (s && s.label === 'Below Market') ids.add(l.id);
     });
     return ids;
-  }, [upcoming, allLots]);
+  }, [upcoming, marketLots]);
 
   // The feed the reader actually sees — search + lenses + sort applied.
   const feed = useMemo(() => {
@@ -83,16 +96,16 @@ export default function RayPage() {
   };
 
   const sold = useMemo(() =>
-    allLots
+    marketLots
       .filter(l => l.status === 'sold' && l.priceUsd)
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
-    [allLots]
+    [marketLots]
   );
 
   // All-time realized — the hero numeral (the "portfolio" of the market).
   const totalRealized = useMemo(
-    () => Object.values(statsByArtist).reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0),
-    [statsByArtist]
+    () => Object.values(marketStats).reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0),
+    [marketStats]
   );
 
   // The live strip: active lots only, so it agrees with everything below it.
@@ -112,20 +125,20 @@ export default function RayPage() {
       { k: 'Active lots', to: active.length, format: asComma, s: `across ${liveHouses} houses` },
       { k: 'On the block', to: estValue, format: formatPrice, s: 'aggregate mid-estimates' },
       { k: 'Below estimate', to: belowIds.size, format: asComma, s: 'flagged against comps', tone: 'up' },
-      { k: 'Artists live', to: liveArtists, format: asComma, s: `of ${ARTISTS.length} tracked · next ${next}` },
+      { k: 'Artists live', to: liveArtists, format: asComma, s: `of ${mktSet.size} tracked · next ${next}` },
     ];
-  }, [upcoming, belowIds]);
+  }, [upcoming, belowIds, mktSet]);
 
   // A living read on the market — one derived, honest line (revenue-weighted
   // appreciation matching the analytics page, the top house by revenue, this
   // week's hammers, and how many upcoming lots the buy-signal flags as cheap).
   const pulse = useMemo(() => {
-    const stats = Object.values(statsByArtist);
+    const stats = Object.values(marketStats);
     const totalRevenue = stats.reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0);
     const weightedAppreciation = totalRevenue > 0
       ? stats.reduce((s, x) => s + (x.appreciationRate || 0) * (x.totalAuctionRevenue || 0), 0) / totalRevenue
       : 0;
-    const topEntry = Object.entries(statsByArtist)
+    const topEntry = Object.entries(marketStats)
       .sort((a, b) => (b[1].totalAuctionRevenue || 0) - (a[1].totalAuctionRevenue || 0))[0];
     const topArtist = topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
     const now = new Date();
@@ -136,16 +149,17 @@ export default function RayPage() {
     });
     // Flagged count is among *this week's* lots so the sentence stays honest.
     const belowFlagged = thisWeekLots.filter(l => {
-      const sig = lotSignal(l, allLots);
+      const sig = lotSignal(l, marketLots);
       return sig && sig.label === 'Below Market';
     }).length;
     return { weightedAppreciation, topArtist, thisWeek: thisWeekLots.length, belowFlagged };
-  }, [statsByArtist, upcoming, allLots]);
+  }, [marketStats, upcoming, marketLots]);
 
   // The tape ships precomputed in upcoming.json (instant); compute it only as
   // a fallback for deploys that predate the split.
+  const marketLabels = useMemo(() => new Set(ARTISTS.filter(a => mktSet.has(a.slug)).map(a => a.label as string)), [mktSet]);
   const tapeItems = useMemo(() => {
-    if (tape.length) return tape;
+    if (tape.length) return tape.filter(t => marketLabels.has(t.artist));
     return sold.slice(0, 90)
       .filter(l => l.priceUsd && l.title)
       .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
@@ -156,7 +170,7 @@ export default function RayPage() {
         price: formatPrice(l.priceUsd!),
         house: l.auctionHouse,
       }));
-  }, [tape, sold]);
+  }, [tape, sold, marketLabels]);
 
   return (
     <div style={{
@@ -180,7 +194,28 @@ export default function RayPage() {
 
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {error ? (
+      {/* The verticals — the first choice on the lander */}
+      <div className="rail" style={{ paddingTop: 22 }}>
+        <MarketSwitch />
+      </div>
+
+      {!marketMeta.live ? (
+        <div className="rail">
+          <section className="ray-soon">
+            <div className="ray-soon-k">Coming to Ray</div>
+            <h2>{marketMeta.label}</h2>
+            <p>
+              {marketMeta.tagline.charAt(0).toUpperCase() + marketMeta.tagline.slice(1)} — read the
+              same way Ray reads art and design: <b>every estimate against every hammer</b>, true
+              comparables only, demand measured against the ask, and a point-in-time record for
+              every call. The engine generalizes; the crawl is being built.
+            </p>
+            <button className="ray-call-btn ray-call-btn-primary" onClick={() => setMarket('art')}>
+              Explore Art in the meantime
+            </button>
+          </section>
+        </div>
+      ) : error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12 }}>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center' }}>{error}</p>
           <button
@@ -201,7 +236,13 @@ export default function RayPage() {
         <RayEntrance animate={!fromCache}>
           {/* The market as a portfolio: giant numeral, green performance line */}
           <div className="ray-enter">
-            <MarketHero allLots={allLots} demand={demand} totalValue={totalRealized} pulse={pulse} />
+            <MarketHero
+              allLots={marketLots}
+              demand={demand[activeKey] || []}
+              marketLabel={marketMeta.label.toLowerCase()}
+              totalValue={totalRealized}
+              pulse={pulse}
+            />
           </div>
 
           {/* The live strip: today's market in four figures */}
@@ -231,7 +272,7 @@ export default function RayPage() {
 
           {upcoming.length > 0 && (
             <div className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
-              <MarketBlock upcoming={upcoming} allLots={allLots} />
+              <MarketBlock upcoming={upcoming} allLots={marketLots} />
             </div>
           )}
 
@@ -292,7 +333,7 @@ export default function RayPage() {
                     </thead>
                     <tbody>
                       {feed.slice(0, visibleUpcoming).map(lot => {
-                        const sig = lotSignal(lot, allLots);
+                        const sig = lotSignal(lot, marketLots);
                         return (
                           <tr key={lot.id} onClick={() => setTableLot(lot)}>
                             <td style={{ width: 56 }}>
@@ -356,7 +397,7 @@ export default function RayPage() {
                       <LotCard
                         lot={lot}
                         showArtist
-                        allLots={allLots}
+                        allLots={marketLots}
                         stats={statsByArtist[lot.artist]}
                         saved={isSaved(lot.id)}
                         onToggleSave={toggle}
@@ -368,7 +409,7 @@ export default function RayPage() {
               )}
 
               {tableLot && (
-                <ComparableModal lot={tableLot} allLots={allLots} onClose={() => setTableLot(null)} />
+                <ComparableModal lot={tableLot} allLots={marketLots} onClose={() => setTableLot(null)} />
               )}
 
               {visibleUpcoming < feed.length && (

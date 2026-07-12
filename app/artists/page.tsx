@@ -2,7 +2,9 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { ARTISTS } from '../constants';
+import { ARTISTS, MARKETS, marketArtists } from '../constants';
+import { useMarket } from '../lib/market';
+import MarketSwitch from '../components/MarketSwitch';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
@@ -19,16 +21,22 @@ const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSpa
  */
 export default function ArtistsPage() {
   const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache } = useRayData();
+  const { market } = useMarket();
+  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'art';
+  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
+  const rosterCount = useMemo(() => ARTISTS.filter(a => mktSet.has(a.slug)).length, [mktSet]);
   const { savedIds } = useSavedLots();
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   const summary = useMemo(() => {
     const live = Object.values(upcomingCounts).reduce((s, n) => s + n, 0);
-    const ds = demandSeries(allLots);
+    const ds = demandSeries(marketLots);
     const marketNow = ds.length ? ds[ds.length - 1].value : null;
-    return { live, marketNow };
-  }, [allLots, upcomingCounts]);
+    const liveMkt = ARTISTS.filter(a => mktSet.has(a.slug)).reduce((s, a) => s + (upcomingCounts[a.slug] || 0), 0);
+    return { live: liveMkt, marketNow };
+  }, [marketLots, upcomingCounts, mktSet]);
 
   return (
     <div style={{
@@ -44,9 +52,10 @@ export default function ArtistsPage() {
       ) : (
         <RayEntrance animate={!fromCache}>
           <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
-            <p className="ray-hero2-label">The roster</p>
+            <div style={{ marginBottom: 18 }}><MarketSwitch compact /></div>
+            <p className="ray-hero2-label">The {activeKey} roster</p>
             <h1 className="ray-hero2-value" style={{ fontSize: 'clamp(34px, 4.5vw, 48px)' }}>
-              <CountUp to={ARTISTS.length} format={n => `${Math.round(n)} artists`} duration={900} />
+              <CountUp to={rosterCount} format={n => `${Math.round(n)} artists`} duration={900} />
             </h1>
             <p className="ray-hero2-delta">
               <span className="ctx">
@@ -64,7 +73,7 @@ export default function ArtistsPage() {
           </section>
 
           <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-            <ArtistSparklines statsByArtist={statsByArtist} allLots={allLots} limit={ARTISTS.length} />
+            <ArtistSparklines statsByArtist={statsByArtist} allLots={allLots} limit={ARTISTS.length} market={activeKey} />
           </div>
         </RayEntrance>
       )}

@@ -2,7 +2,9 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { ARTISTS } from '../constants';
+import { ARTISTS, MARKETS, marketArtists } from '../constants';
+import { useMarket } from '../lib/market';
+import MarketSwitch from '../components/MarketSwitch';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
@@ -21,6 +23,15 @@ const PriceDistribution = dynamic(() => import('../components/analytics/PriceDis
 
 export default function AnalyticsPage() {
   const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache } = useRayData();
+  const { market } = useMarket();
+  const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'art';
+  const mktSet = useMemo(() => marketArtists(activeKey as 'art' | 'design'), [activeKey]);
+  const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
+  const marketStats = useMemo(() => {
+    const out: typeof statsByArtist = {};
+    for (const [k, v] of Object.entries(statsByArtist)) if (mktSet.has(k)) out[k] = v;
+    return out;
+  }, [statsByArtist, mktSet]);
   const { savedIds } = useSavedLots();
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -48,19 +59,21 @@ export default function AnalyticsPage() {
         timestamp={lastCrawl ? formatDate(lastCrawl) : undefined}
       />
 
+      <div className="rail" style={{ paddingTop: 16 }}><MarketSwitch compact /></div>
+
       {!fullLoaded ? (
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
           {[
-            <PortfolioHeader key="header" statsByArtist={statsByArtist} allLots={allLots} />,
-            <DemandChart key="demand" allLots={allLots} />,
-            <ArtistSparklines key="spark" statsByArtist={statsByArtist} allLots={allLots} />,
-            <ArtistRankingsTable key="rank" statsByArtist={statsByArtist} allLots={allLots} />,
-            <CategoryBreakdown key="cat" allLots={allLots} />,
+            <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
+            <DemandChart key="demand" allLots={marketLots} />,
+            <ArtistSparklines key="spark" statsByArtist={marketStats} allLots={marketLots} market={activeKey as 'art' | 'design'} />,
+            <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey as 'art' | 'design'} />,
+            <CategoryBreakdown key="cat" allLots={marketLots} />,
             <AuctionHouseDistribution key="house" statsByArtist={statsByArtist} />,
-            <TopSales key="top" allLots={allLots} />,
-            <PriceDistribution key="dist" allLots={allLots} />,
+            <TopSales key="top" allLots={marketLots} />,
+            <PriceDistribution key="dist" allLots={marketLots} />,
           ].map((node, i) => (
             <div
               key={node.key}
