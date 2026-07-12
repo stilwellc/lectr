@@ -83,6 +83,8 @@ interface ArtistCardData {
 function ArtistCard({ artist }: { artist: ArtistCardData }) {
   const drawRef = useChartDraw();
   const hasChart = artist.sparkData.length >= 2;
+  // the list reads like a watchlist: line tinted by the year's movement
+  const tint = artist.appreciation > 0 ? 'var(--color-up)' : artist.appreciation < 0 ? 'var(--color-down)' : 'var(--color-fg)';
 
   return (
     <Link
@@ -127,8 +129,8 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
             <AreaChart data={artist.sparkData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id={`spark-${artist.slug}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--color-fg)" stopOpacity={0.1} />
-                  <stop offset="100%" stopColor="var(--color-fg)" stopOpacity={0.01} />
+                  <stop offset="0%" stopColor={tint} stopOpacity={0.12} />
+                  <stop offset="100%" stopColor={tint} stopOpacity={0.01} />
                 </linearGradient>
               </defs>
               <YAxis hide domain={['dataMin', 'dataMax']} />
@@ -136,11 +138,11 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
               <Area
                 type="monotone"
                 dataKey="avgPrice"
-                stroke="var(--color-fg)"
+                stroke={tint}
                 strokeWidth={1.5}
                 fill={`url(#spark-${artist.slug})`}
                 dot={false}
-                activeDot={{ r: 2, fill: 'var(--color-fg)', stroke: 'var(--color-bg-elevated)', strokeWidth: 1.5 }}
+                activeDot={{ r: 2, fill: tint, stroke: 'var(--color-bg-elevated)', strokeWidth: 1.5 }}
               />
             </AreaChart>
           </ResponsiveContainer>

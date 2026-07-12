@@ -5,12 +5,26 @@ import Link from 'next/link';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
-import LotCard from '../components/LotCard';
+import LotCard, { computeBuySignal } from '../components/LotCard';
 import PastResults from '../components/PastResults';
-import RayHero from '../components/RayHero';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import { getUpcomingCounts } from '../utils';
+import CountUp from '../components/CountUp';
+import { getUpcomingCounts, formatPrice, formatDate } from '../utils';
 
+function daysUntil(dateStr: string): number {
+  return Math.max(0, Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000));
+}
+function hammerWord(days: number): string {
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return `in ${days} days`;
+}
+
+/**
+ * Saved — the watchlist. Answers "what am I watching and when must I act":
+ * total estimate at stake, the next hammer, which of the watched lots the
+ * signal flags as cheap — then the lots in urgency order.
+ */
 export default function SavedPage() {
   const { allLots, statsByArtist, loading, fromCache } = useRayData();
   const { savedIds, toggle, isSaved } = useSavedLots();
@@ -36,6 +50,21 @@ export default function SavedPage() {
     [savedLots]
   );
 
+  const summary = useMemo(() => {
+    const withEst = upcoming.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
+    const totalEst = withEst.reduce((s, l) => {
+      const lo = l.estimateLow || l.estimateHigh || 0;
+      const hi = l.estimateHigh || l.estimateLow || 0;
+      return s + (lo + hi) / 2;
+    }, 0);
+    const flagged = upcoming.filter(l => {
+      const sig = computeBuySignal(l, allLots);
+      return sig && sig.label === 'Below Market';
+    }).length;
+    const next = upcoming[0] || null;
+    return { totalEst, flagged, next };
+  }, [upcoming, allLots]);
+
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   return (
@@ -48,46 +77,34 @@ export default function SavedPage() {
       <style>{`
         .ray-saved-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+          gap: 30px 20px;
         }
         .ray-saved-section { padding-block: 40px 48px; }
         @media (max-width: 768px) {
-          .ray-saved-grid { grid-template-columns: 1fr; gap: 14px; }
+          .ray-saved-grid { grid-template-columns: 1fr; gap: 26px; }
           .ray-saved-section { padding-block: 32px 32px; }
         }
       `}</style>
 
       <ArtistNav activeSlug="saved" savedCount={savedIds.length} upcomingCounts={upcomingCounts} />
 
-      <RayHero
-        eyebrow="Watchlist"
-        title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Saved</span>}
-        sub={savedIds.length === 0
-          ? <>
-              No lots saved yet. Bookmark lots from the{' '}
-              <Link
-                href="/"
-                className="link-draw"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                overview
-              </Link>
-              {' '}or artist pages.
-            </>
-          : <>{savedIds.length} lot{savedIds.length === 1 ? '' : 's'} saved.</>
-        }
-      />
-
       {loading ? (
         <RayLoading />
       ) : savedLots.length === 0 ? (
         <RayEntrance animate={!fromCache}>
+          <section className="ray-hero2 rail ray-enter">
+            <p className="ray-hero2-label">Your watchlist</p>
+            <h1 className="ray-hero2-value">—</h1>
+            <p className="ray-hero2-delta">
+              <span className="ctx">Nothing watched yet.</span>
+            </p>
+          </section>
           <div
             className="ray-enter"
             style={{
               textAlign: 'center',
-              padding: '80px 20px 120px',
+              padding: '60px 20px 120px',
               color: 'var(--color-text-faint)',
             }}
           >
@@ -98,35 +115,69 @@ export default function SavedPage() {
                 strokeWidth="1"
               />
             </svg>
-            <p style={{ fontSize: 13, fontWeight: 400, marginBottom: 24 }}>
-              Click the bookmark icon on any lot to save it here.
+            <p style={{ fontSize: 14, fontWeight: 400, marginBottom: 24 }}>
+              Tap the bookmark on any lot to watch it here.
             </p>
-            <Link
-              href="/"
-              className="link-action"
-              style={{ color: 'var(--color-fg)' }}
-            >
+            <Link href="/" className="link-action" style={{ color: 'var(--color-fg)' }}>
               Browse upcoming lots <span className="arrow">&#8594;</span>
             </Link>
           </div>
         </RayEntrance>
       ) : (
         <RayEntrance animate={!fromCache}>
+          <section className="ray-hero2 rail ray-enter">
+            <p className="ray-hero2-label">Your watchlist · total at stake</p>
+            <h1 className="ray-hero2-value">
+              {summary.totalEst > 0
+                ? <CountUp to={summary.totalEst} format={formatPrice} duration={1100} />
+                : `${upcoming.length || savedLots.length}`}
+            </h1>
+            <p className="ray-hero2-delta">
+              {summary.next && (
+                <span className="up">
+                  next hammer {hammerWord(daysUntil(summary.next.saleDate))}
+                </span>
+              )}
+              <span className="ctx">
+                watching {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
+                {summary.flagged > 0 && <> · {summary.flagged} below market</>}
+                {sold.length > 0 && <> · {sold.length} concluded</>}
+              </span>
+            </p>
+
+            <div className="ray-strip" style={{ marginTop: 22 }}>
+              <div>
+                <div className="ray-strip-k">Watching</div>
+                <div className="ray-strip-v">{upcoming.length}</div>
+                <div className="ray-strip-s">live lots on the block</div>
+              </div>
+              <div>
+                <div className="ray-strip-k">Total estimate</div>
+                <div className="ray-strip-v">{summary.totalEst > 0 ? formatPrice(summary.totalEst) : '—'}</div>
+                <div className="ray-strip-s">aggregate mid-estimates</div>
+              </div>
+              <div>
+                <div className="ray-strip-k">Below market</div>
+                <div className="ray-strip-v" style={summary.flagged > 0 ? { color: 'var(--color-up)' } : undefined}>
+                  {summary.flagged}
+                </div>
+                <div className="ray-strip-s">flagged against comps</div>
+              </div>
+              <div>
+                <div className="ray-strip-k">Next hammer</div>
+                <div className="ray-strip-v">{summary.next ? formatDate(summary.next.saleDate) : '—'}</div>
+                <div className="ray-strip-s">
+                  {summary.next ? hammerWord(daysUntil(summary.next.saleDate)) : 'nothing scheduled'}
+                </div>
+              </div>
+            </div>
+          </section>
+
           {upcoming.length > 0 && (
             <section className="ray-saved-section rail">
-              <h2
-                className="ray-enter"
-                style={{
-                  fontFamily: 'var(--font-serif), serif',
-                  fontSize: 32,
-                  fontWeight: 300,
-                  letterSpacing: '-0.02em',
-                  marginBottom: 24,
-                }}
-              >
-                Upcoming <span style={{ fontStyle: 'normal' }}>Lots</span>
+              <h2 className="ray-h2 ray-enter" style={{ marginBottom: 18 }}>
+                On the block, soonest first
               </h2>
-
               <div className="ray-saved-grid">
                 {upcoming.map((lot, i) => (
                   <div

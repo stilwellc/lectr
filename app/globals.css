@@ -2107,3 +2107,117 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   color: var(--color-text-faint);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── mobile bottom tab bar ── */
+.ray-tabbar { display: none; }
+@media (max-width: 768px) {
+  .ray-tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    display: flex;
+    background: var(--color-nav-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid var(--color-border);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  /* clear the bar at page bottom */
+  .ray-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+}
+.ray-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 9px 4px 10px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-faint);
+  transition: color var(--duration-fast) var(--ease-signature);
+}
+.ray-tab svg { width: 21px; height: 21px; }
+.ray-tab[data-active=true] { color: var(--color-fg); }
+.ray-tab:active { transform: scale(0.94); }
+/* Value link gets the up-green tick when active */
+.ray-nav-link-value[data-active=true] { color: var(--color-up) !important; }
+.ray-tab[data-active=true]:nth-child(2) { color: var(--color-up); }
+
+/* ── command palette ── */
+.ray-ck-hintbtn {
+  display: none;
+  border: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text-faint);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
+}
+.ray-ck-hintbtn:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
+@media (min-width: 900px) { .ray-ck-hintbtn { display: inline-flex; margin-left: auto; margin-right: 10px; } }
+@media (min-width: 900px) { .ray-artist-select-wrap { margin-left: 0 !important; } }
+.ray-ck-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14vh 20px 20px;
+  animation: rayChartFade 160ms var(--ease-signature) both;
+}
+.ray-ck {
+  width: 100%;
+  max-width: 560px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-mid);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.ray-ck-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: none;
+  padding: 17px 20px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--color-fg);
+  border-bottom: 1px solid var(--color-border);
+}
+.ray-ck-input::placeholder { color: var(--color-text-faint); }
+.ray-ck-list { max-height: 46vh; overflow-y: auto; padding: 6px; }
+.ray-ck-item {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.ray-ck-item[data-active=true] { background: var(--color-hover-item); color: var(--color-fg); }
+.ray-ck-hint { font-size: 12px; color: var(--color-text-faint); white-space: nowrap; }
+.ray-ck-empty { padding: 24px; text-align: center; font-size: 13.5px; color: var(--color-text-faint); }
