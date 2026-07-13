@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Pure static export — the whole site prerenders to files (Cloudflare Pages
+  // hosting; no server anywhere, which is what the Vercel fair-use block
+  // taught us the hard way).
+  output: 'export',
   reactStrictMode: true,
   images: {
     unoptimized: true,
