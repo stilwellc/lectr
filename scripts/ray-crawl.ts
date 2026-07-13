@@ -1530,7 +1530,12 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       currency: 'USD',
       status: 'upcoming',
       url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
-    } as AuctionLot);
+      // the archive's raw material: the running bid and premium, refreshed
+      // every crawl until the hammer
+      trackedBid: lot.current_price || 0,
+      trackedBids: lot.number_of_bids || 0,
+      buyerPremium: lot.buyer_premium || 22,
+    } as unknown as AuctionLot);
   };
 
   for (const pass of GOLDIN_FACET_PASSES) {
@@ -2314,10 +2319,23 @@ async function main() {
     // Evict any buy-now marketplace lots — fixed-price asks are not auction
     // data and must never be in the dataset (see doctrine above).
     if (id.startsWith('sothebys-mkt-')) badIds.add(id);
-    // Goldin: no public sold archive — past-dated lots can't resolve to a
-    // hammer and leave; when the crawler ran, unconfirmed lots leave too.
-    if (id.startsWith('goldin-') && new Date(lot.saleDate).getTime() < Date.now() - 86_400_000) badIds.add(id);
-    if (id.startsWith('goldin-') && goldinRan && !freshGoldinIds.has(id)) badIds.add(id);
+    // Goldin: no public sold archive — so RAY IS THE ARCHIVE. Every lot we
+    // ever showed stays. While live we refresh its running bid; once its end
+    // passes it promotes to a sold record at the last tracked bid plus the
+    // buyer's premium (priceBasis marks it as tracked, not a verified
+    // hammer). Zero-bid lots resolve to bought-in and leave the sold tape.
+    if (id.startsWith('goldin-') && lot.status === 'upcoming' && new Date(lot.saleDate).getTime() < Date.now()) {
+      const anyLot = lot as any;
+      const bid = anyLot.trackedBid || 0;
+      const bids = anyLot.trackedBids || 0;
+      if (bid > 0 && bids > 0) {
+        lot.status = 'sold';
+        lot.priceUsd = Math.round(bid * (1 + (anyLot.buyerPremium || 22) / 100));
+        anyLot.priceBasis = 'last-tracked-bid';
+      } else {
+        badIds.add(id); // never drew a bid — not a result, not inventory
+      }
+    }
     // Watch makers: evict the old Christie's maker-search lots (now superseded
     // by christies-auc-* from the full auction crawler) to avoid double-count.
     if (WATCH_SET.has(lot.artist) && lot.auctionHouse === "Christie's" && !id.startsWith('christies-auc-')) badIds.add(id);
