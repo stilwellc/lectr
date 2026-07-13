@@ -92,7 +92,10 @@ export function RayLoading() {
     <div className="ray-loading rail" role="status" aria-label="Loading auction data">
       {/* skeleton styles live in globals.css — raw-text style blocks with
           quotes/apostrophes break hydration (React escapes them server-side) */}
-      <div className="ray-sk" style={{ width: 190, height: 15, marginBottom: 12 }} />
+      <div className="lectr-loader">
+        <img src="/brand/lectr-nav.png" alt="" className="lectr-write" style={{ height: 40, width: 'auto' }} />
+        <div className="lectr-lead" />
+      </div>
       <div className="ray-sk" style={{ width: 280, height: 56, marginBottom: 14 }} />
       <div className="ray-sk" style={{ width: 340, height: 15, marginBottom: 22 }} />
       <div className="ray-sk" style={{ width: '100%', height: 240, borderRadius: 12, marginBottom: 24 }} />

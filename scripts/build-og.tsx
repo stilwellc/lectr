@@ -24,6 +24,9 @@ interface ArtistStats {
 
 const size = { width: 1200, height: 630 };
 
+// The sign, embedded — this script runs pre-build with no host to fetch from.
+const mark = fs.readFileSync(path.join(process.cwd(), 'public', 'brand', 'lectr.png')).toString('base64');
+
 function fmt(n: number): string {
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
@@ -45,16 +48,24 @@ function card(label: string, s: ArtistStats) {
 
   return new ImageResponse(
     (
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#0A0B0D', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <svg width="34" height="34" viewBox="0 0 24 24">
-              <circle cx="5.2" cy="18.8" r="2.7" fill="#E8B95B" />
-              <path d="M9.4 14.6 L20 4" stroke="#E8B95B" strokeWidth="2.7" strokeLinecap="round" />
-            </svg>
-            <div style={{ fontSize: 38, fontWeight: 800, color: '#E8B95B', letterSpacing: -1.5 }}>Ray</div>
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', background: '#060709', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
+        {/* mat frame — holds the edge in an iMessage dark-mode bubble */}
+        <div style={{ position: 'absolute', top: 24, left: 24, right: 24, bottom: 24, border: '1px solid rgba(255,255,255,0.14)' }} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          {/* the light the sign casts on the wall */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 36,
+              margin: -36,
+              background: 'radial-gradient(closest-side, rgba(244,246,255,0.07), transparent 70%)',
+            }}
+          >
+            <img src={'data:image/png;base64,' + mark} width={150} height={96} alt="" />
           </div>
-          <div style={{ fontSize: 21, color: '#63686E' }}>artist market page</div>
+          <div style={{ fontSize: 20, color: '#7A8087' }}>artist market page · lectr.bid</div>
         </div>
         <div style={{ display: 'flex', fontSize: 62, fontWeight: 800, color: '#F4F5F6', letterSpacing: -2.5, marginTop: 22 }}>{label}</div>
         <div style={{ display: 'flex', gap: 40, marginTop: 10, fontSize: 24, color: '#9AA0A6' }}>

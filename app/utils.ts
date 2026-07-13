@@ -190,7 +190,7 @@ export function makeAuctionIcs(lot: {
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//co.stil Ray//EN',
+    'PRODID:-//co.stil lectr//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',

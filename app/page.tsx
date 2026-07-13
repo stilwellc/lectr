@@ -17,6 +17,7 @@ import MarketTape from './components/MarketTape';
 import BoardDemand from './components/BoardDemand';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
 import { MarketTiles, CallPlate, HammersPanel, DeskMatrix, FilmStrip, Monument, Colophon } from './components/Terminal';
+import Flick from './components/Flick';
 
 const PAGE_SIZE = 48;
 
@@ -243,7 +244,7 @@ export default function RayPage() {
               <a href="/value" className="ray-proofstrip">
                 Flagged calls beat their estimates by <b className="up">+{backtest.flagged.medianPerfPct}%</b> median
                 — vs +{backtest.unflagged.medianPerfPct}% unflagged — across {backtest.flagged.n.toLocaleString()} replayed
-                sales · the record →
+                sales · the record <Flick size={12} />
               </a>
             )}
           </div>
@@ -297,10 +298,10 @@ export default function RayPage() {
                   )}
                   <span className="ray-viewtoggle" role="radiogroup" aria-label="Feed layout">
                     <button role="radio" aria-checked={feedView === 'grid'} aria-label="Card view" data-active={feedView === 'grid'} onClick={() => setFeedView('grid')}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
                     </button>
                     <button role="radio" aria-checked={feedView === 'table'} aria-label="Table view" data-active={feedView === 'table'} onClick={() => setFeedView('table')}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </button>
                   </span>
                 </span>
@@ -383,7 +384,7 @@ export default function RayPage() {
                                 className="ray-save-btn"
                                 onClick={e => { e.stopPropagation(); toggle(lot.id); }}
                                 aria-label={isSaved(lot.id) ? 'Remove from saved' : 'Save lot'}
-                                style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-accent-gold)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
+                                style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-fg)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
                               >
                                 <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
                                   <path d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z" fill={isSaved(lot.id) ? 'var(--color-bg)' : 'var(--color-text-faint)'} />
@@ -400,6 +401,7 @@ export default function RayPage() {
               <div className="ray-upcoming-grid" key={feedKey}>
                 {feed.length === 0 ? (
                   <div className="ray-feed-empty">
+                    <Flick size={28} draw style={{ color: 'var(--color-text-faint)' }} />
                     <p>Nothing on the block matches that.</p>
                     <button className="ray-toolbar-reset" onClick={() => handleFilters(FEED_DEFAULTS)}>
                       Clear the lenses

@@ -7,7 +7,23 @@ import CommandK from './CommandK';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
+  const [lit, setLit] = useState(false);
   const router = useRouter();
+
+  // The switch-on ritual — once per session the mark warms from dim to full.
+  // Client-only: sessionStorage guard, class added after mount so SSR markup
+  // stays identical. Keyframes (lectrSwitchOn) live in globals.css behind a
+  // prefers-reduced-motion gate; without them the class is a no-op.
+  useEffect(() => {
+    try {
+      if (!sessionStorage.getItem('lectr-lit')) {
+        sessionStorage.setItem('lectr-lit', '1');
+        setLit(true);
+      }
+    } catch {
+      // sessionStorage unavailable (private mode edge cases) — skip the ritual.
+    }
+  }, []);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -96,7 +112,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           margin: -6px 0;
           transition: opacity var(--duration-fast) var(--ease-signature);
         }
-        .ray-mark-r { display: block; width: 30px; height: 30px; object-fit: contain; }
+        .ray-mark-r { display: block; height: 26px; width: auto; }
+        .ray-mark-r.lectr-on { animation: lectrSwitchOn 480ms var(--ease-signature) 1 both; }
         .ray-wordmark:hover,
         .ray-wordmark:focus-visible { opacity: 0.68; }
         .ray-artist-select-wrap {
@@ -217,9 +234,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
-        <a href="/" className="ray-wordmark" aria-label="Ray — home">
-          {/* the slashed R stands alone — the mark IS the name */}
-          <img className="ray-mark-r" src="/brand/ray-r.png" alt="Ray" width={30} height={30} />
+        <a href="/" className="ray-wordmark" aria-label="lectr — home">
+          {/* the script mark stands alone — the mark IS the name; its upward tilt is intentional */}
+          <img className={`ray-mark-r${lit ? ' lectr-on' : ''}`} src="/brand/lectr-nav.png" alt="lectr" />
         </a>
 
         {/* Desktop quick links — one click to each room; the dropdown stays
@@ -256,7 +273,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           onClick={() => setOpen(o => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={`Navigate Ray — currently: ${activeLabel}`}
+          aria-label={`Navigate lectr — currently: ${activeLabel}`}
         >
           <span>{activeLabel}</span>
           <span style={{
@@ -270,7 +287,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         </button>
 
         {open && (
-          <div className="ray-artist-dropdown glass glass-noblur" role="menu" aria-label="Navigate Ray" ref={dropdownRef}>
+          <div className="ray-artist-dropdown glass glass-noblur" role="menu" aria-label="Navigate lectr" ref={dropdownRef}>
             <button
               role="menuitem"
               className="ray-artist-dropdown-item"
@@ -343,14 +360,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           and pin the bar to the top. */}
       <nav className="ray-tabbar" aria-label="Sections">
         <button className="ray-tab" data-active={activeSlug === null} onClick={() => navigate('/')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M3 16l5-6 4 4 6-8" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M3 21h18" strokeLinecap="round" />
           </svg>
           Overview
         </button>
         <button className="ray-tab" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M19 5L5 19" strokeLinecap="round" />
             <circle cx="7.5" cy="7.5" r="2.6" />
             <circle cx="16.5" cy="16.5" r="2.6" />
@@ -358,20 +375,20 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           Value
         </button>
         <button className="ray-tab" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="8" r="3.4" />
             <path d="M5 20c1.4-3.4 4-5 7-5s5.6 1.6 7 5" strokeLinecap="round" />
           </svg>
           Makers
         </button>
         <button className="ray-tab" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M5 20V10M12 20V4M19 20v-7" strokeLinecap="round" />
           </svg>
           Analytics
         </button>
         <button className="ray-tab" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M6 3h12v18l-6-4.2L6 21V3z" strokeLinejoin="round" />
           </svg>
           Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
