@@ -1462,6 +1462,7 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
 // Live inventory only (no public sold archive): every crawl replaces the
 // previous Goldin set wholesale, ended lots leave the dataset.
 const GOLDIN_API_V2 = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';
+const GOLDIN_AUCTIONS_API = 'https://d2l9s2774i83t9.cloudfront.net/api/auctions';
 const GOLDIN_IMG = (lotId: string, img: string) =>
   `https://d2tt46f3mh26nl.cloudfront.net/public/Lots/${lotId}/${img}@1x`;
 
@@ -1517,44 +1518,76 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   console.log('  [Goldin] Fetching live auction lots (facet-driven: objects, never cards)...');
   let dropped = 0;
 
-  const ingest = (lot: any, fallback: string | null) => {
-    if (!lot.title || !lot.lot_id || byId.has(lot.lot_id)) return;
-    if (lot.status && lot.status !== 'Live' && lot.status !== 'Preview') return;
+  // ingest handles both LIVE inventory (upcoming, with the running bid) and
+  // ENDED lots (sold, at the final hammer — Goldin's completed auctions keep
+  // serving each lot's winning current_price, so we log the real result).
+  const ingest = (lot: any, fallback: string | null, ended: boolean, saleEnd?: string) => {
+    if (!lot.title || !lot.lot_id) return;
     const t = lot.title.toLowerCase();
     if (GOLDIN_CARD_MAKERS.test(t) || GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t)) { dropped++; return; }
     const artist = goldinRoute(lot.title) || fallback;
     if (!artist) { dropped++; return; }
-    const end = lot.end_timestamp || lot.start_timestamp;
-    if (!end || new Date(end).getTime() < Date.now()) return;
+    const end = saleEnd || lot.end_timestamp || lot.start_timestamp;
+    if (!end) return;
+    const past = new Date(end).getTime() < Date.now();
+    const bp = lot.buyer_premium || 22;
+    const bid = lot.current_price || 0;
+
+    // an ended lot with a winning bid becomes a sold record at the hammer +
+    // premium; an ended lot that drew no bid is bought-in (skip). A live lot
+    // is upcoming inventory. Sold records win over an earlier upcoming one.
+    if (ended || past) {
+      if (bid <= 0) return; // no bid = bought-in, not a result
+      const existing = byId.get(lot.lot_id);
+      if (existing && existing.status === 'sold') return; // already logged
+      byId.set(lot.lot_id, {
+        id: `goldin-${lot.lot_id}`,
+        artist,
+        title: lot.title,
+        year: null, medium: null, dimensions: null,
+        category: 'object',
+        imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
+        auctionHouse: 'Goldin',
+        saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
+        saleDate: end,
+        lotNumber: lot.lot_number || null,
+        estimateLow: null, estimateHigh: null,
+        priceUsd: Math.round(bid * (1 + bp / 100)), // final hammer + buyer's premium
+        priceBasis: 'goldin-final-bid',
+        currency: 'USD',
+        status: 'sold',
+        url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
+        currentBid: bid,
+        bidCount: lot.number_of_bids || 0,
+      } as unknown as AuctionLot);
+      return;
+    }
+
+    if (byId.has(lot.lot_id)) return;
+    if (lot.status && lot.status !== 'Live' && lot.status !== 'Preview') return;
     byId.set(lot.lot_id, {
       id: `goldin-${lot.lot_id}`,
       artist,
       title: lot.title,
-      year: null,
-      medium: null,
-      dimensions: null,
+      year: null, medium: null, dimensions: null,
       category: 'object',
       imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
       auctionHouse: 'Goldin',
       saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
       saleDate: end,
       lotNumber: lot.lot_number || null,
-      estimateLow: null,   // bid auctions publish no estimates —
-      estimateHigh: null,  // these lots carry inventory, not signals
+      estimateLow: null, estimateHigh: null,
       priceUsd: null,
       currency: 'USD',
       status: 'upcoming',
       url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
-      // the archive's raw material: the running bid and premium, refreshed
-      // every crawl until the hammer
-      trackedBid: lot.current_price || 0,
-      trackedBids: lot.number_of_bids || 0,
-      currentBid: lot.current_price || 0,
+      currentBid: bid,
       bidCount: lot.number_of_bids || 0,
-      buyerPremium: lot.buyer_premium || 22,
+      buyerPremium: bp,
     } as unknown as AuctionLot);
   };
 
+  // 1 · LIVE inventory — object facets + science keyword passes
   for (const pass of GOLDIN_FACET_PASSES) {
     let from = 0, total = Infinity;
     while (from < Math.min(total, 600)) {
@@ -1562,7 +1595,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
         const { lots, total: t } = await goldinQuery({ item_type: [pass.itemType], size: 100, from });
         total = t;
         if (!lots.length) break;
-        lots.forEach((l: any) => ingest(l, pass.fallback));
+        lots.forEach((l: any) => ingest(l, pass.fallback, false));
         from += 100;
         await sleep(400);
       } catch { break; }
@@ -1571,11 +1604,51 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   for (const q of GOLDIN_SCIENCE_QUERIES) {
     try {
       const { lots } = await goldinQuery({ searchTerm: q, size: 100, from: 0 });
-      lots.forEach((l: any) => ingest(l, null));
+      lots.forEach((l: any) => ingest(l, null, false));
       await sleep(400);
     } catch { /* next */ }
   }
-  console.log(`  [Goldin] ${byId.size} lots kept (${dropped} gated out)`);
+
+  // 2 · ARCHIVE — completed auctions keep serving final prices. Walk the
+  // recently-closed ones and log each object lot's winning hammer, building
+  // Ray's own Goldin price history. (Sold records persist in lots.json, so
+  // steady-state this only re-touches auctions closed since the last run;
+  // RAY_DEEP widens the backfill window for a one-time hydration.)
+  const windowDays = DEEP ? 365 : 30;
+  try {
+    const aRes = await fetch(GOLDIN_AUCTIONS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+      body: JSON.stringify({ status: 'All', order: 'desc' }),
+      signal: AbortSignal.timeout(25000),
+    });
+    const auctions = ((await aRes.json() as any).auctions || []).filter((a: any) => {
+      const end = new Date(a.end_timestamp).getTime();
+      return end < Date.now() && end > Date.now() - windowDays * 86_400_000;
+    });
+    let archived = 0;
+    for (const a of auctions) {
+      for (const pass of GOLDIN_FACET_PASSES) {
+        let from = 0, total = Infinity;
+        while (from < Math.min(total, 400)) {
+          try {
+            const { lots, total: t } = await goldinQuery({ item_type: [pass.itemType], auctions: [a.auction_id], size: 100, from });
+            total = t;
+            if (!lots.length) break;
+            const before = byId.size;
+            lots.forEach((l: any) => ingest({ ...l, buyer_premium: l.buyer_premium || a.buyer_premium }, pass.fallback, true, a.end_timestamp));
+            archived += byId.size - before;
+            from += 100;
+            await sleep(300);
+          } catch { break; }
+        }
+      }
+    }
+    console.log(`  [Goldin] archive pass: ${auctions.length} closed auctions (${windowDays}d), ${archived} final hammers logged`);
+  } catch (e) { console.log('  [Goldin] archive pass skipped:', e); }
+
+  const sold = Array.from(byId.values()).filter(l => l.status === 'sold').length;
+  console.log(`  [Goldin] ${byId.size} lots kept (${sold} sold w/ final hammer, ${dropped} gated out)`);
   return Array.from(byId.values());
 }
 
@@ -2339,22 +2412,13 @@ async function main() {
     // Evict any buy-now marketplace lots — fixed-price asks are not auction
     // data and must never be in the dataset (see doctrine above).
     if (id.startsWith('sothebys-mkt-')) badIds.add(id);
-    // Goldin: no public sold archive — so RAY IS THE ARCHIVE. Every lot we
-    // ever showed stays. While live we refresh its running bid; once its end
-    // passes it promotes to a sold record at the last tracked bid plus the
-    // buyer's premium (priceBasis marks it as tracked, not a verified
-    // hammer). Zero-bid lots resolve to bought-in and leave the sold tape.
-    if (id.startsWith('goldin-') && lot.status === 'upcoming' && new Date(lot.saleDate).getTime() < Date.now()) {
-      const anyLot = lot as any;
-      const bid = anyLot.trackedBid || 0;
-      const bids = anyLot.trackedBids || 0;
-      if (bid > 0 && bids > 0) {
-        lot.status = 'sold';
-        lot.priceUsd = Math.round(bid * (1 + (anyLot.buyerPremium || 22) / 100));
-        anyLot.priceBasis = 'last-tracked-bid';
-      } else {
-        badIds.add(id); // never drew a bid — not a result, not inventory
-      }
+    // Goldin has no public sold archive — RAY IS THE ARCHIVE. Sold records
+    // (final hammers captured from completed auctions) are permanent. Only
+    // LIVE inventory the crawler no longer confirms is delisted stock and
+    // leaves; a stale 'upcoming' lot past its end that never got a sold
+    // record (bought-in / missed) also goes.
+    if (id.startsWith('goldin-') && goldinRan && lot.status === 'upcoming') {
+      if (!freshGoldinIds.has(id) || new Date(lot.saleDate).getTime() < Date.now() - 86_400_000) badIds.add(id);
     }
     // Watch makers: evict the old Christie's maker-search lots (now superseded
     // by christies-auc-* from the full auction crawler) to avoid double-count.

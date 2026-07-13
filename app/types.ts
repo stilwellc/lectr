@@ -4,7 +4,7 @@ export type Currency = 'USD' | 'GBP' | 'EUR' | 'HKD' | 'CNY' | 'AUD' | 'CHF';
 export type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'object' | 'unknown';
 /** how a sold price was established: a verified hammer, or the last bid Ray
     tracked before a house that publishes no results closed (Goldin) */
-export type PriceBasis = 'hammer' | 'last-tracked-bid';
+export type PriceBasis = 'hammer' | 'last-tracked-bid' | 'goldin-final-bid';
 
 export interface AuctionLot {
   id: string;
