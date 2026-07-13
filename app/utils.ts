@@ -12,6 +12,7 @@ export const houseColors: Record<string, string> = {
   'Heritage': 'color-mix(in srgb, var(--color-fg) 75%, var(--color-bg))',
   'Bonhams': 'color-mix(in srgb, var(--color-fg) 70%, var(--color-bg))',
   'Hindman': 'color-mix(in srgb, var(--color-fg) 65%, var(--color-bg))',
+  'Goldin': 'color-mix(in srgb, var(--color-fg) 60%, var(--color-bg))',
 };
 
 // Concrete hexes per theme — ONLY for recharts/SVG fills, where var() is not
@@ -27,6 +28,7 @@ export const houseColorsHex: Record<'dark' | 'light', Record<string, string>> = 
     'Heritage': '#B5AFA6',
     'Bonhams': '#AAA49B',
     'Hindman': '#9F9991',
+    'Goldin': '#948E86',
   },
   light: {
     'Phillips': '#241E15',
@@ -37,6 +39,7 @@ export const houseColorsHex: Record<'dark' | 'light', Record<string, string>> = 
     'Heritage': '#585349',
     'Bonhams': '#635D54',
     'Hindman': '#6D685E',
+    'Goldin': '#787368',
   },
 };
 

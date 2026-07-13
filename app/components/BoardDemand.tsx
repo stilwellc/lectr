@@ -52,9 +52,18 @@ export default function BoardDemand({
     return series;
   }, [series, range]);
 
+  const hasIndex = series.length >= 2;
   const now = series.length ? series[series.length - 1].value : 0;
   const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
   const delta = yearAgo === null ? null : now - yearAgo;
+
+  // a live market with no index yet (bid auctions publish no estimates):
+  // lead with the honest figure it does have
+  const liveCount = useMemo(() => {
+    if (hasIndex) return 0;
+    const today = new Date().toISOString().split('T')[0];
+    return allLots.filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today).length;
+  }, [allLots, hasIndex]);
 
   // color says direction, never level
   const dir = visible.length >= 2 ? visible[visible.length - 1].value - visible[0].value : 0;
@@ -90,6 +99,18 @@ export default function BoardDemand({
         </span>
       </div>
 
+      {!hasIndex && (
+        <div className="ray-numrow">
+          <h1 className="ray-hero2-value"><CountUp to={liveCount} format={n => Math.round(n).toString()} duration={900} /></h1>
+          <span className="ray-numrow-delta">
+            <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
+              lots on the block · demand index pending — these auctions publish no estimates to measure against
+            </span>
+          </span>
+        </div>
+      )}
+
+      {hasIndex && (
       <div className="ray-numrow">
         {hover ? (
           <h1 className="ray-hero2-value">{formatDemand(hover.value)}</h1>
@@ -111,6 +132,7 @@ export default function BoardDemand({
           </span>
         )}
       </div>
+      )}
 
       {ledger && (
         <div className="ray-ledger">
