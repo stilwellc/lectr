@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { ARTISTS, MARKETS, marketArtists } from '../constants';
+import { ARTISTS, MARKETS, marketArtists, rosterNoun } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import { useRayData } from '../hooks/useRayData';
@@ -16,8 +16,10 @@ import CountUp from '../components/CountUp';
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 
 /**
- * Artists — the roster as a wall of demand curves. Every tracked artist, each
- * card a live market read, one click to their asset page.
+ * Makers — the roster as a wall of demand curves. Every tracked name (artist,
+ * designer, watch maker, science collection, or sports category), each a live
+ * market read, one click to its page. The noun follows the market — they are
+ * not all artists.
  */
 export default function ArtistsPage() {
   const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache } = useRayData();
@@ -56,7 +58,7 @@ export default function ArtistsPage() {
             <div style={{ marginBottom: 18 }}><MarketSwitch compact /></div>
             <p className="ray-hero2-label">The {activeLabel} roster</p>
             <h1 className="ray-hero2-value" style={{ fontSize: 'clamp(34px, 4.5vw, 48px)' }}>
-              <CountUp to={rosterCount} format={n => `${Math.round(n)} artists`} duration={900} />
+              <CountUp to={rosterCount} format={n => `${Math.round(n)} ${rosterNoun(activeKey, Math.round(n))}`} duration={900} />
             </h1>
             <p className="ray-hero2-delta">
               <span className="ctx">
