@@ -83,7 +83,7 @@ export default function RayPage() {
           .includes(q)
       );
     }
-    const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || 0;
+    const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
     if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
     else if (f.sort === 'est-asc') arr = [...arr].sort((a, b) => est(a) - est(b));
     return arr; // 'soonest' keeps the date order upcoming already has

@@ -21,7 +21,12 @@ function formatEstimate(lot: AuctionLot): string {
     // product. One value, and the app is USD-denominated: no suffix noise.
     return lo === hi ? `${lo} est.` : `${lo}–${hi} est.`;
   }
-  return 'Estimate on request';
+  // Goldin runs bid auctions with no estimates — the live bid is the honest
+  // number, and it's real money on the lot right now.
+  if (lot.currentBid && lot.currentBid > 0) {
+    return `${fmt(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} bids` : ''}`;
+  }
+  return 'No reserve · opening bid';
 }
 
 /** Prefer the crawl-time signal when present; else compute from history. */

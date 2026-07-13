@@ -1549,6 +1549,8 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       // every crawl until the hammer
       trackedBid: lot.current_price || 0,
       trackedBids: lot.number_of_bids || 0,
+      currentBid: lot.current_price || 0,
+      bidCount: lot.number_of_bids || 0,
       buyerPremium: lot.buyer_premium || 22,
     } as unknown as AuctionLot);
   };
