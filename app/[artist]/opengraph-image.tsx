@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import stats from '../../public/data/ray/stats.json';
 import { ARTISTS } from '../constants';
 
-export const runtime = 'edge';
+export const dynamic = 'force-static';
 export const alt = 'Ray — artist market page';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';

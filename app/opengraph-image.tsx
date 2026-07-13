@@ -1,7 +1,6 @@
 import { ImageResponse } from 'next/og';
 import stats from '../public/data/ray/stats.json';
 
-export const runtime = 'edge';
 export const alt = 'Ray — auction intelligence for the collectibles market';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
