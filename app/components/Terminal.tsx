@@ -28,7 +28,7 @@ function daysWord(dateStr: string): string {
 // Hand-picked tile faces that override the auto-pick. Art wears George Condo's
 // Untitled (Christie's NY, lot 6586062) instead of the priciest painting.
 const TILE_PIN: Partial<Record<string, string>> = {
-  art: 'https://www.christies.com/img/lotimages/2026/NYR/2026_NYR_24267_0605_000(george_condo_untitled_d6586062110713).jpg?mode=max',
+  art: '/tiles/art-condo.jpg', // self-hosted (Christie's hotlink-blocks cross-origin)
 };
 
 /* ── THE STAR: the market tiles — big, clickable, first ─────────────── */
