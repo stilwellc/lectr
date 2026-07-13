@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "tsx scripts/build-og.tsx && next build",
     "start": "next start",
     "lint": "next lint",
-    "crawl": "tsx scripts/ray-crawl.ts"
+    "crawl": "tsx scripts/ray-crawl.ts",
+    "build-og": "tsx scripts/build-og.tsx"
   },
   "dependencies": {
     "autoprefixer": "^10.4.17",

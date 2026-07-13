@@ -1,11 +1,18 @@
+/**
+ * Pre-renders every artist's OG share card to public/og/<slug>.png at build
+ * time. This replaces app/[artist]/opengraph-image.tsx — Next can't export
+ * dynamic-segment metadata images with `output: 'export'`, and a static host
+ * has no server to render them per scrape anyway. Same satori pipeline
+ * (next/og ImageResponse), same visual: sharing /kaws shows KAWS's own line
+ * and numbers — the share IS the product.
+ *
+ * Run before `next build` (wired into the build script in package.json).
+ */
+import React from 'react';
 import { ImageResponse } from 'next/og';
-import stats from '../../public/data/ray/stats.json';
-import { ARTISTS } from '../constants';
-
-export const dynamic = 'force-static';
-export const alt = 'Ray — artist market page';
-export const size = { width: 1200, height: 630 };
-export const contentType = 'image/png';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ARTISTS } from '../app/constants';
 
 interface ArtistStats {
   totalAuctionRevenue?: number;
@@ -15,6 +22,8 @@ interface ArtistStats {
   priceHistory?: { date: string; avgPrice: number; totalSales: number }[];
 }
 
+const size = { width: 1200, height: 630 };
+
 function fmt(n: number): string {
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
@@ -22,12 +31,8 @@ function fmt(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-/** Sharing /kaws shows KAWS's own line and numbers — the share IS the product. */
-export default function OG({ params }: { params: { artist: string } }) {
-  const label = ARTISTS.find(a => a.slug === params.artist)?.label || params.artist;
-  const s = (stats as Record<string, ArtistStats>)[params.artist] || {};
+function card(label: string, s: ArtistStats) {
   const appr = s.appreciationRate || 0;
-
   const hist = (s.priceHistory || []).map(p => p.avgPrice);
   const W = 1080, H = 200;
   const max = Math.max(...hist, 1);
@@ -69,3 +74,19 @@ export default function OG({ params }: { params: { artist: string } }) {
     { ...size }
   );
 }
+
+async function main() {
+  const stats: Record<string, ArtistStats> = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), 'public', 'data', 'ray', 'stats.json'), 'utf8')
+  );
+  const outDir = path.join(process.cwd(), 'public', 'og');
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const a of ARTISTS) {
+    const res = card(a.label, stats[a.slug] || {});
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(path.join(outDir, `${a.slug}.png`), buf);
+  }
+  console.log(`[og] ${ARTISTS.length} share cards → public/og/`);
+}
+
+main().catch(err => { console.error('[og] failed:', err); process.exit(1); });
