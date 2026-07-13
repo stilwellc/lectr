@@ -12,7 +12,7 @@ export const MARKETS: { key: Market; label: string; live: boolean; tagline: stri
   { key: 'art', label: 'Art', live: true, tagline: 'paintings, editions, photography & sculpture' },
   { key: 'design', label: 'Design', live: true, tagline: 'the furniture & objects market' },
   { key: 'watches', label: 'Watches', live: true, tagline: 'the reference market' },
-  { key: 'sports', label: 'Sports', live: false, tagline: 'cards, jerseys & memorabilia' },
+  { key: 'sports', label: 'Sports', live: true, tagline: 'game-worn, trophies & tickets — never cards' },
   { key: 'science', label: 'Science', live: true, tagline: 'tech, fossils, space & instruments' },
 ];
 
@@ -49,6 +49,10 @@ export const ARTISTS = [
   { slug: 'fossils', label: 'Fossils & Dinosaurs', market: 'science' },
   { slug: 'space-exploration', label: 'Space Exploration', market: 'science' },
   { slug: 'scientific-instruments', label: 'Scientific Instruments', market: 'science' },
+  // the sports vertical: Goldin objects — never cards
+  { slug: 'game-used', label: 'Game Worn & Used', market: 'sports' },
+  { slug: 'trophies-awards', label: 'Trophies & Awards', market: 'sports' },
+  { slug: 'tickets-passes', label: 'Tickets & Passes', market: 'sports' },
 ] as const;
 
 export type ArtistSlug = (typeof ARTISTS)[number]['slug'];

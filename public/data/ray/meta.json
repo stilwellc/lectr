@@ -1,5 +1,5 @@
 {
-  "lastCrawl": "2026-07-12T21:27:44.109Z",
+  "lastCrawl": "2026-07-13T01:09:22.016Z",
   "artists": [
     {
       "slug": "george-condo",
@@ -120,6 +120,18 @@
     {
       "slug": "scientific-instruments",
       "displayName": "Scientific Instruments"
+    },
+    {
+      "slug": "game-used",
+      "displayName": "Game Worn & Used"
+    },
+    {
+      "slug": "trophies-awards",
+      "displayName": "Trophies & Awards"
+    },
+    {
+      "slug": "tickets-passes",
+      "displayName": "Tickets & Passes"
     }
   ],
   "sources": [

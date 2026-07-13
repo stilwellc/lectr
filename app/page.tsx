@@ -156,9 +156,10 @@ export default function RayPage() {
       const d = new Date(l.saleDate);
       return !isNaN(d.getTime()) && d >= now && d <= weekAhead;
     }).length;
+    const priceOrDash = (n: number) => (n > 0 ? formatPrice(n) : '—');
     return [
-      { k: 'Realized all-time', to: totalRealized, format: formatPrice, s: pulse.topArtist ? `led by ${pulse.topArtist}` : 'across the market' },
-      { k: 'On the block', to: estValue, format: formatPrice, s: `${asComma(active.length)} lots, mid-estimates` },
+      { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: pulse.topArtist ? `led by ${pulse.topArtist}` : 'across the market' },
+      { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
       { k: 'Hammers this week', to: thisWeek, format: asComma, s: `across ${liveHouses} houses` },
       { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up' },
     ];

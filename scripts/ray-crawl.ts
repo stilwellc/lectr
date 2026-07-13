@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 
 // ── Types (mirrored from app/software/ray/types.ts to avoid import issues in standalone script) ──
 
-type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 'Rago' | 'Heritage' | 'Bonhams' | 'Hindman';
+type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 'Rago' | 'Heritage' | 'Bonhams' | 'Hindman' | 'Goldin';
 type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn';
 type Currency = 'USD' | 'GBP' | 'EUR' | 'HKD' | 'CNY' | 'AUD' | 'CHF';
 type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'object' | 'unknown';
@@ -42,6 +42,7 @@ const DESIGN_ARTISTS = new Set(['george-nakashima', 'charles-eames', 'jean-prouv
 const OBJECT_ARTISTS = new Set([
   'rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier',
   'meteorites', 'fossils', 'space-exploration', 'scientific-instruments',
+  'game-used', 'trophies-awards', 'tickets-passes',
 ]);
 // Fine artists whose unclassified lots default to 'print' (edition-heavy output)
 const EDITION_DEFAULT_ARTISTS = new Set(['andy-warhol', 'keith-haring', 'ed-ruscha', 'henri-matisse', 'pablo-picasso']);
@@ -355,6 +356,12 @@ const ARTISTS: ArtistConfig[] = [
   { slug: 'fossils', displayName: 'Fossils & Dinosaurs' },
   { slug: 'space-exploration', displayName: 'Space Exploration' },
   { slug: 'scientific-instruments', displayName: 'Scientific Instruments' },
+
+  // ── The sports vertical: Goldin only, and ONLY the real objects —
+  // game-used, trophies & awards, tickets & passes. NEVER cards.
+  { slug: 'game-used', displayName: 'Game Worn & Used' },
+  { slug: 'trophies-awards', displayName: 'Trophies & Awards' },
+  { slug: 'tickets-passes', displayName: 'Tickets & Passes' },
 ];
 
 const DATA_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
@@ -1429,6 +1436,127 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'all'): Pro
   return lots;
 }
 
+
+// ── Goldin Crawler ──
+// goldin.co runs bid auctions (no published estimates). Their lots_v2 API is
+// open and FACETED — Goldin curates item types themselves, so we query the
+// object facets directly and never touch Single Cards, Cases/Boxes/Packs, or
+// Video Games. DOCTRINE, item-level and belt-and-braces:
+//   sports  = game-used / trophies & awards / tickets & passes — NEVER cards
+//   science = Apple & computing history + fossils/meteorites — NEVER video games
+// Live inventory only (no public sold archive): every crawl replaces the
+// previous Goldin set wholesale, ended lots leave the dataset.
+const GOLDIN_API_V2 = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';
+const GOLDIN_IMG = (lotId: string, img: string) =>
+  `https://d2tt46f3mh26nl.cloudfront.net/public/Lots/${lotId}/${img}@1x`;
+
+const GOLDIN_CARD_MAKERS = /\b(topps|panini|bowman|upper deck|fleer|donruss|prizm|optic|mosaic|refractor|rookie card|\brc\b|pok[eé]mon|yu-?gi-?oh|magic the gathering|\bmtg\b|\btcg\b|booster|wax pack|hobby box|checklist|parallel|kakawow|skybox|pro set|leaf\b|trading card|patch card|sticker)\b/i;
+const GOLDIN_GRADED = /\b(psa|bgs|sgc|cgc|slab|gem m(in)?t)\b/i;
+const GOLDIN_EXCLUDE_GAMES = /\b(video game|nintendo|playstation|\bps[1-5]\b|xbox|sega|atari|game ?boy|n64|game ?cube|wii|famicom|wata|vga\b|sealed game|arcade)\b/i;
+const GOLDIN_EXCLUDE_MISC = /\b(sports illustrated|magazine|newsstand|comic|shonen|disney(land)?|universal studios|concert|music festival|movie prop|production[- ]used)\b/i;
+
+const GOLDIN_GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|fight[- ]worn|tour[- ](used|worn)|warm[- ]?up[- ]worn|practice[- ]worn|game bat|game ball|photo[- ]?match(ed)?|mears\b)\b/i;
+const GOLDIN_TROPHY = /\b(trophy|award|championship ring|title belt|winners? medal|olympic medal|plaque|mvp\b|heisman|hall of fame ring|championship pendant)\b/i;
+const GOLDIN_TICKET = /\b(tickets?\b|stub|full ticket|season pass|press pass|credential|all[- ]access pass)\b/i;
+
+function goldinRoute(title: string): string | null {
+  const t = title.toLowerCase();
+  if (GOLDIN_CARD_MAKERS.test(t)) return null;     // never cards
+  if (GOLDIN_EXCLUDE_GAMES.test(t)) return null;   // never video games
+  if (GOLDIN_EXCLUDE_MISC.test(t)) return null;    // magazines, theme parks, props
+  // science first: an Apple-1 is science even in a sports house
+  if (/\b(apple[- ]?(1|i{1,3}|ii)|macintosh|steve jobs|wozniak|apple computer|commodore|ibm\b|altair|enigma)\b/.test(t)) return 'scientific-instruments';
+  if (/\b(meteorite|pallasite|tektite)\b/.test(t)) return 'meteorites';
+  if (/\b(fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|amber with|t[- ]rex|raptor)\b/.test(t)) return 'fossils';
+  // sports objects — a grading mark doesn't disqualify a real object
+  const objectSignal = GOLDIN_GAME_USED.test(t) ? 'game-used'
+    : GOLDIN_TROPHY.test(t) ? 'trophies-awards'
+    : GOLDIN_TICKET.test(t) ? 'tickets-passes'
+    : null;
+  if (objectSignal) return objectSignal;
+  if (GOLDIN_GRADED.test(t)) return null;          // graded, no object signal = a slab
+  return null;
+}
+
+const GOLDIN_FACET_PASSES: { itemType: string; fallback: string | null }[] = [
+  { itemType: 'Game-Used Memorabilia', fallback: 'game-used' },
+  { itemType: 'Tickets and Passes', fallback: 'tickets-passes' },
+  { itemType: 'Awards and Trophies', fallback: 'trophies-awards' },
+  { itemType: 'Memorabilia', fallback: null }, // mixed — router only
+];
+const GOLDIN_SCIENCE_QUERIES = ['apple computer', 'macintosh', 'steve jobs', 'fossil', 'meteorite', 'dinosaur', 'amber'];
+
+async function goldinQuery(body: object): Promise<{ lots: any[]; total: number }> {
+  const res = await fetch(GOLDIN_API_V2, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+    body: JSON.stringify({ search: { queryType: 'Featured', hasAnalyticsConsent: false, ...body } }),
+    signal: AbortSignal.timeout(25000),
+  });
+  const j = await res.json() as any;
+  return { lots: j?.searchalgolia?.lots || [], total: j?.searchalgolia?.total || 0 };
+}
+
+async function crawlGoldin(): Promise<AuctionLot[]> {
+  const byId = new Map<string, AuctionLot>();
+  console.log('  [Goldin] Fetching live auction lots (facet-driven: objects, never cards)...');
+  let dropped = 0;
+
+  const ingest = (lot: any, fallback: string | null) => {
+    if (!lot.title || !lot.lot_id || byId.has(lot.lot_id)) return;
+    if (lot.status && lot.status !== 'Live' && lot.status !== 'Preview') return;
+    const t = lot.title.toLowerCase();
+    if (GOLDIN_CARD_MAKERS.test(t) || GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t)) { dropped++; return; }
+    const artist = goldinRoute(lot.title) || fallback;
+    if (!artist) { dropped++; return; }
+    const end = lot.end_timestamp || lot.start_timestamp;
+    if (!end || new Date(end).getTime() < Date.now()) return;
+    byId.set(lot.lot_id, {
+      id: `goldin-${lot.lot_id}`,
+      artist,
+      title: lot.title,
+      year: null,
+      medium: null,
+      dimensions: null,
+      category: 'object',
+      imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
+      auctionHouse: 'Goldin',
+      saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
+      saleDate: end,
+      lotNumber: lot.lot_number || null,
+      estimateLow: null,   // bid auctions publish no estimates —
+      estimateHigh: null,  // these lots carry inventory, not signals
+      priceUsd: null,
+      currency: 'USD',
+      status: 'upcoming',
+      url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
+    } as AuctionLot);
+  };
+
+  for (const pass of GOLDIN_FACET_PASSES) {
+    let from = 0, total = Infinity;
+    while (from < Math.min(total, 600)) {
+      try {
+        const { lots, total: t } = await goldinQuery({ item_type: [pass.itemType], size: 100, from });
+        total = t;
+        if (!lots.length) break;
+        lots.forEach((l: any) => ingest(l, pass.fallback));
+        from += 100;
+        await sleep(400);
+      } catch { break; }
+    }
+  }
+  for (const q of GOLDIN_SCIENCE_QUERIES) {
+    try {
+      const { lots } = await goldinQuery({ searchTerm: q, size: 100, from: 0 });
+      lots.forEach((l: any) => ingest(l, null));
+      await sleep(400);
+    } catch { /* next */ }
+  }
+  console.log(`  [Goldin] ${byId.size} lots kept (${dropped} gated out)`);
+  return Array.from(byId.values());
+}
+
 const BONHAMS_SEARCH_URL = 'https://api01.bonhams.com/search-proxy/collections/lots/documents/search';
 
 async function crawlBonhams(artist: ArtistConfig): Promise<AuctionLot[]> {
@@ -2146,6 +2274,19 @@ async function main() {
     freshLots.push(...await crawlSothebysAuctions(auctionScope));
     freshLots.push(...await crawlChristiesAuctions(auctionScope));
   }
+  // Goldin: sports objects (never cards) + computing/fossils (never games).
+  // Live inventory only — each crawl replaces the previous Goldin set
+  // wholesale, so gate refinements purge immediately.
+  const GOLDIN_SLUGS = ['game-used', 'trophies-awards', 'tickets-passes', 'meteorites', 'fossils', 'scientific-instruments'];
+  let goldinRan = false;
+  let freshGoldinIds = new Set<string>();
+  if (!only || GOLDIN_SLUGS.some(s => only.has(s))) {
+    const goldinLots = await crawlGoldin();
+    goldinRan = true;
+    freshGoldinIds = new Set(goldinLots.map(l => l.id));
+    freshLots.push(...goldinLots);
+  }
+
   // DOCTRINE: Ray is AUCTION intelligence. Buy-now / fixed-price / retail
   // listings are NEVER crawled — an asking price is not market data. A
   // marketplace crawler was added and removed here in July 2026; do not
@@ -2173,6 +2314,10 @@ async function main() {
     // Evict any buy-now marketplace lots — fixed-price asks are not auction
     // data and must never be in the dataset (see doctrine above).
     if (id.startsWith('sothebys-mkt-')) badIds.add(id);
+    // Goldin: no public sold archive — past-dated lots can't resolve to a
+    // hammer and leave; when the crawler ran, unconfirmed lots leave too.
+    if (id.startsWith('goldin-') && new Date(lot.saleDate).getTime() < Date.now() - 86_400_000) badIds.add(id);
+    if (id.startsWith('goldin-') && goldinRan && !freshGoldinIds.has(id)) badIds.add(id);
     // Watch makers: evict the old Christie's maker-search lots (now superseded
     // by christies-auc-* from the full auction crawler) to avoid double-count.
     if (WATCH_SET.has(lot.artist) && lot.auctionHouse === "Christie's" && !id.startsWith('christies-auc-')) badIds.add(id);

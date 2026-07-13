@@ -68,6 +68,19 @@ export function MarketTiles({
     return out;
   }, [lots]);
 
+  // live-lot counts for markets without a demand index yet
+  const liveCounts = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const up = lots.filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today);
+    const out: Record<string, number> = {};
+    for (const m of MARKETS) {
+      if (!m.live) continue;
+      const set = marketArtists(m.key);
+      out[m.key] = up.filter(l => set.has(l.artist)).length;
+    }
+    return out;
+  }, [lots]);
+
   return (
     <div className="ray-mkttiles" role="tablist" aria-label="Markets">
       {MARKETS.map(m => {
@@ -123,6 +136,13 @@ export function MarketTiles({
                     <polyline points={pts} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
+              </span>
+            ) : m.live ? (
+              // live market with no demand series yet (bid auctions carry no
+              // estimates) — show the honest figure it does have: live lots
+              <span className="ray-mkttile-figs">
+                <span className="ray-mkttile-val">{liveCounts[m.key] || 0}</span>
+                <span className="ray-mkttile-soon">on the block</span>
               </span>
             ) : (
               <span className="ray-mkttile-soon">soon</span>
