@@ -1,5 +1,9 @@
 name: Ray - Crawl Auction Data
 
+# The data commit this pushes to main triggers deploy.yml, which rebuilds the
+# static export and ships it to Cloudflare Pages — that's how fresh data goes
+# live (the site has no server; data is baked into the deploy).
+
 on:
   schedule:
     - cron: '0 13 * * *'
