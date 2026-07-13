@@ -1152,6 +1152,7 @@ const SOTHEBYS_WATCH_SALES = [
   '2025/important-watches-2', '2025/fine-watches-2', '2025/fine-watches-3',
   '2024/important-watches', '2024/fine-watches',
 ];
+const SOTHEBYS_SPORTS_SALES = ['2025/sports', '2024/sports'];
 const SOTHEBYS_SCIENCE_SALES = [
   '2026/natural-history', '2026/space-exploration-2', '2026/history-of-science-technology',
   '2026/history-of-science-technology-2', '2025/natural-history', '2025/space-exploration',
@@ -1179,6 +1180,12 @@ function routeItem(creators: string | null, title: string, extra = ''): string |
   if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|neanderthal|paleolithic|petrified|skeleton|skull|tusk|claw|tooth of|jaws?\b|amber with|coprolite|stromatolite/.test(t)) return 'fossils';
   if (/apollo|nasa|space[- ]flown|space (exploration|shuttle|suit|program|station)|spacesuit|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|vostok|skylab|rocket|x-15|satellite|mission (control|patch)|flight plan|star chart/.test(t)) return 'space-exploration';
   if (/telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|chronometer\b|slide rule|surveying|globe\b|celestial|enigma machine|cipher|calculat(or|ing)|typewriter|computer|macintosh|apple[- ](1|ii)|altair|commodore|prototype|patent model|anatomical|medical (instrument|kit)|laboratory|einstein|newton|darwin|curie|tesla|edison|manuscript.*(scien|math|physic)|first edition.*(scien|math|physic)/.test(t)) return 'scientific-instruments';
+  // sports objects — Christie's/Sotheby's sports sales, same doctrine as
+  // Goldin: game-used, trophies & awards, tickets & passes. NEVER cards.
+  if (/\b(cards?|n172|t20[0-9]|tobacco (card|silk)|psa\b|sgc\b|topps|bowman|panini|goudey|leaf\b|cabinet (photo|card)|carte de visite)\b/.test(t)) return null;
+  if (/\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|tour[- ](used|worn)|worn (jersey|uniform|cleats|boots|gloves|jacket|cap|shirt)|game (bat|ball|jersey|uniform|glove|worn)|match[- ]worn (shirt|jersey|boots))\b/.test(t)) return 'game-used';
+  if (/\b(trophy|championship (ring|trophy|belt|pennant)|title belt|winners? medal|olympic (medal|torch)|world series (ring|trophy)|super bowl ring|mvp award|heisman|vince lombardi|stanley cup|green jacket|lombardi trophy)\b/.test(t)) return 'trophies-awards';
+  if (/\b(full ticket|ticket stub|game[- ]used ticket|world series ticket|super bowl ticket|world cup (ticket|final ticket)|olympic ticket|season pass|press pass|all[- ]access (pass|credential))\b/.test(t)) return 'tickets-passes';
   return null; // nothing we track — never guess
 }
 
@@ -1223,11 +1230,11 @@ async function sothebysAuctionLots(uuid: string): Promise<{ currency: Currency; 
   return { currency, lots: out };
 }
 
-async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'all'): Promise<AuctionLot[]> {
+async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | 'all'): Promise<AuctionLot[]> {
   const lots: AuctionLot[] = [];
 
   // discover current sales live so CI picks up new Geek Week / watch sales
-  const discovered = { watches: new Set<string>(), science: new Set<string>() };
+  const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>() };
   const grab = async (url: string, into: Set<string>) => {
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
@@ -1237,17 +1244,21 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'all'): Prom
   };
   if (scope === 'watches' || scope === 'all') await grab('https://www.sothebys.com/en/departments/watches', discovered.watches);
   if (scope === 'science' || scope === 'all') await grab('https://www.sothebys.com/en/buy/series/geek-week?locale=en', discovered.science);
+  if (scope === 'sports' || scope === 'all') await grab('https://www.sothebys.com/en/departments/popular-culture', discovered.sports);
 
   const watchSales = Array.from(new Set([...SOTHEBYS_WATCH_SALES, ...Array.from(discovered.watches)]))
     .filter(s => /watch/i.test(s));
   const scienceSales = Array.from(new Set([...SOTHEBYS_SCIENCE_SALES, ...Array.from(discovered.science)]))
     .filter(s => /natural-history|space-exploration|science|meteor|fossil/i.test(s));
+  const sportsSales = Array.from(new Set([...SOTHEBYS_SPORTS_SALES, ...Array.from(discovered.sports)]))
+    .filter(s => /sport|memorabilia|olympic/i.test(s));
 
-  const jobs: { sale: string; kind: 'watches' | 'science' }[] = [];
+  const jobs: { sale: string; kind: 'watches' | 'science' | 'sports' }[] = [];
   if (scope === 'watches' || scope === 'all') watchSales.forEach(sale => jobs.push({ sale, kind: 'watches' }));
   if (scope === 'science' || scope === 'all') scienceSales.forEach(sale => jobs.push({ sale, kind: 'science' }));
+  if (scope === 'sports' || scope === 'all') sportsSales.forEach(sale => jobs.push({ sale, kind: 'sports' }));
 
-  console.log(`  [Sotheby's] ${jobs.length} sales to crawl (${watchSales.length} watch, ${scienceSales.length} science)`);
+  console.log(`  [Sotheby's] ${jobs.length} sales to crawl (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports)`);
 
   for (const { sale, kind } of jobs) {
     const meta = await sothebysAuctionMeta(sale);
@@ -1320,6 +1331,7 @@ const CHRISTIES_WATCH_SEEDS = [
   'rare-watches-including-watches-for-ela-24403', 'watches-online-the-new-york-edit-24505',
 ];
 const CHRISTIES_SCIENCE_SEEDS = ['jurassic-icons-allosaurus-stegosaurus-30576'];
+const CHRISTIES_SPORTS_SEEDS = ['the-golden-age-of-baseball-selections-of-works-from-the-national-pastime-museum-26565'];
 
 function parseChristiesCurrency(txt: string): Currency {
   if (/HK\$|HKD/.test(txt)) return 'HKD';
@@ -1354,9 +1366,9 @@ async function christiesAuctionLots(slug: string): Promise<any[]> {
   return Array.from(byId.values());
 }
 
-async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'all'): Promise<AuctionLot[]> {
+async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 'all'): Promise<AuctionLot[]> {
   const lots: AuctionLot[] = [];
-  const discovered = { watches: new Set<string>(), science: new Set<string>() };
+  const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>() };
   const grab = async (url: string, into: Set<string>) => {
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
@@ -1366,14 +1378,17 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'all'): Pro
   };
   if (scope === 'watches' || scope === 'all') await grab('https://www.christies.com/en/departments/watches-and-wristwatches', discovered.watches);
   if (scope === 'science' || scope === 'all') await grab('https://www.christies.com/en/departments/science-and-natural-history', discovered.science);
+  if (scope === 'sports' || scope === 'all') await grab('https://www.christies.com/en/departments/sports-memorabilia', discovered.sports);
 
   const watchSales = Array.from(new Set([...CHRISTIES_WATCH_SEEDS, ...Array.from(discovered.watches)]));
   const scienceSales = Array.from(new Set([...CHRISTIES_SCIENCE_SEEDS, ...Array.from(discovered.science)]));
+  const sportsSales = Array.from(new Set([...CHRISTIES_SPORTS_SEEDS, ...Array.from(discovered.sports)]));
 
-  const jobs: { sale: string; kind: 'watches' | 'science' }[] = [];
+  const jobs: { sale: string; kind: 'watches' | 'science' | 'sports' }[] = [];
   if (scope === 'watches' || scope === 'all') watchSales.forEach(sale => jobs.push({ sale, kind: 'watches' }));
   if (scope === 'science' || scope === 'all') scienceSales.forEach(sale => jobs.push({ sale, kind: 'science' }));
-  console.log(`  [Christie's Auctions] ${jobs.length} sales (${watchSales.length} watch, ${scienceSales.length} science)`);
+  if (scope === 'sports' || scope === 'all') sportsSales.forEach(sale => jobs.push({ sale, kind: 'sports' }));
+  console.log(`  [Christie's Auctions] ${jobs.length} sales (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports)`);
 
   for (const { sale, kind } of jobs) {
     const rawLots = await christiesAuctionLots(sale);
@@ -2272,9 +2287,12 @@ async function main() {
   // pass, not per-artist. Scope to whichever verticals this run touches.
   const WATCH_SLUGS = ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'];
   const SCIENCE_SLUGS = ['meteorites', 'fossils', 'space-exploration', 'scientific-instruments'];
+  const SPORTS_SLUGS = ['game-used', 'trophies-awards', 'tickets-passes'];
   const wantWatch = !only || WATCH_SLUGS.some(s => only.has(s));
   const wantScience = !only || SCIENCE_SLUGS.some(s => only.has(s));
-  const auctionScope = wantWatch && wantScience ? 'all' : wantWatch ? 'watches' : wantScience ? 'science' : null;
+  const wantSports = !only || SPORTS_SLUGS.some(s => only.has(s));
+  const scopeCount = [wantWatch, wantScience, wantSports].filter(Boolean).length;
+  const auctionScope = scopeCount > 1 ? 'all' : wantWatch ? 'watches' : wantScience ? 'science' : wantSports ? 'sports' : null;
   if (auctionScope) {
     freshLots.push(...await crawlSothebysAuctions(auctionScope));
     freshLots.push(...await crawlChristiesAuctions(auctionScope));
