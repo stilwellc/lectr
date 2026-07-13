@@ -11,7 +11,9 @@ permissions:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # the crawl grew a lot (6 houses + Goldin + watches/science/sports auction
+    # APIs) — 15 min was cutting it close, so give it real headroom
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
@@ -26,6 +28,9 @@ jobs:
 
       - name: Run crawler
         run: npx tsx scripts/ray-crawl.ts
+
+      - name: Rebuild the point-in-time backtest
+        run: npx tsx scripts/build-backtest.ts
 
       - name: Commit updated data
         run: |
