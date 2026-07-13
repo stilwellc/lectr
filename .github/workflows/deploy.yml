@@ -1,0 +1,48 @@
+name: Deploy to Cloudflare Pages
+
+# The site is a pure static export (output: 'export') hosted on Cloudflare
+# Pages as project "collectr" — no git integration, this workflow IS the
+# deploy pipeline. Fires on every push to main: code changes and the daily
+# crawl's data commit alike (data is baked into the export, so a data commit
+# must redeploy to go live).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-collectr
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # build-og pre-renders the 33 artist share cards, then next exports
+      # the whole site to out/ (50 static pages + data)
+      - name: Build static export
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN secret is not set — create a token at dash.cloudflare.com/profile/api-tokens (Custom: Account → Cloudflare Pages → Edit) and add it with: gh secret set CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+          npx wrangler pages deploy out --project-name collectr --branch main --commit-dirty=true
