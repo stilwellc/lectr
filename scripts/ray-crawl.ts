@@ -1152,7 +1152,7 @@ const SOTHEBYS_WATCH_SALES = [
   '2025/important-watches-2', '2025/fine-watches-2', '2025/fine-watches-3',
   '2024/important-watches', '2024/fine-watches',
 ];
-const SOTHEBYS_SPORTS_SALES = ['2025/sports', '2024/sports'];
+const SOTHEBYS_SPORTS_SALES = ['2025/sports', '2025/sports-2', '2024/sports', '2024/the-one'];
 const SOTHEBYS_SCIENCE_SALES = [
   '2026/natural-history', '2026/space-exploration-2', '2026/history-of-science-technology',
   '2026/history-of-science-technology-2', '2025/natural-history', '2025/space-exploration',
@@ -1251,7 +1251,7 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
   const scienceSales = Array.from(new Set([...SOTHEBYS_SCIENCE_SALES, ...Array.from(discovered.science)]))
     .filter(s => /natural-history|space-exploration|science|meteor|fossil/i.test(s));
   const sportsSales = Array.from(new Set([...SOTHEBYS_SPORTS_SALES, ...Array.from(discovered.sports)]))
-    .filter(s => /sport|memorabilia|olympic/i.test(s));
+    .filter(s => /sport|memorabilia|olympic|the-one/i.test(s));
 
   const jobs: { sale: string; kind: 'watches' | 'science' | 'sports' }[] = [];
   if (scope === 'watches' || scope === 'all') watchSales.forEach(sale => jobs.push({ sale, kind: 'watches' }));
