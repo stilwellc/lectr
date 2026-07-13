@@ -25,6 +25,12 @@ function daysWord(dateStr: string): string {
   return `in ${days}d`;
 }
 
+// Hand-picked tile faces that override the auto-pick. Art wears George Condo's
+// Untitled (Christie's NY, lot 6586062) instead of the priciest painting.
+const TILE_PIN: Partial<Record<string, string>> = {
+  art: 'https://www.christies.com/img/lotimages/2026/NYR/2026_NYR_24267_0605_000(george_condo_untitled_d6586062110713).jpg?mode=max',
+};
+
 /* ── THE STAR: the market tiles — big, clickable, first ─────────────── */
 export function MarketTiles({
   demand,
@@ -39,7 +45,8 @@ export function MarketTiles({
   lots?: AuctionLot[];
 }) {
   // one deterministic hero image per market: the highest-estimate upcoming
-  // lot with house photography (stable across renders — no hydration drift)
+  // lot with house photography (stable across renders — no hydration drift).
+  // TILE_PIN overrides the auto-pick for a hand-chosen face when we want one.
   const tileArt = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const withImg = lots.filter(l => l.status === 'upcoming' && l.imageUrl && l.saleDate && l.saleDate >= today);
@@ -52,12 +59,13 @@ export function MarketTiles({
       return ranked[0]?.imageUrl || null;
     };
     const out: Record<string, string | null> = {};
-    const used = new Set<string>();
+    const used = new Set<string>(Object.values(TILE_PIN).filter(Boolean) as string[]);
     // verticals pick first so each shows its own object; 'all' takes the
     // best image nobody else claimed
     const order = [...MARKETS.filter(m => m.key !== 'all'), ...MARKETS.filter(m => m.key === 'all')];
     for (const m of order) {
       if (!m.live) { out[m.key] = null; continue; }
+      if (TILE_PIN[m.key]) { out[m.key] = TILE_PIN[m.key] || null; continue; }
       const set = marketArtists(m.key);
       const pool = withImg.filter(l => set.has(l.artist) && !used.has(l.imageUrl!));
       // art wears a painting, not whatever edition happens to be priciest
@@ -114,6 +122,7 @@ export function MarketTiles({
                 src={tileArt[m.key]!}
                 alt=""
                 loading="lazy"
+                referrerPolicy="no-referrer"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 ref={(el) => { if (el && el.complete && el.naturalWidth === 0) el.style.display = 'none'; }}
               />
