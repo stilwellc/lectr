@@ -5,7 +5,7 @@ import { ARTISTS, ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
 import { useRayData } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle } from './utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf } from './utils';
 import ArtistNav from './components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from './components/LotCard';
 import ComparableModal from './components/ComparableModal';
@@ -73,6 +73,7 @@ export default function RayPage() {
       arr = arr.filter(l => vset.has(l.artist));
     }
     if (f.maker) arr = arr.filter(l => l.artist === f.maker);
+    if (f.sport) arr = arr.filter(l => (sportOf(l.title) || 'Other') === f.sport);
     if (f.category) arr = arr.filter(l => l.category === f.category);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
     if (q) {
@@ -91,7 +92,7 @@ export default function RayPage() {
   // Any lens change restarts pagination and re-runs the card entrance.
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.query}|${f.vertical}|${f.maker}|${f.category}|${f.belowOnly}|${f.sort}`;
+    return `${f.query}|${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     setFeedFilters(next);

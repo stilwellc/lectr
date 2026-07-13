@@ -65,6 +65,33 @@ export function craftTitle(raw: string): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+/**
+ * sportOf — which sport a sports lot belongs to, read from its title (league,
+ * team, athlete, or venue). Soccer dominates the current data so its cues are
+ * broad; American sports lead with league + marquee names. Returns null when
+ * nothing identifies the sport (kept as "Other" in the filter).
+ */
+const SPORT_RULES: [string, RegExp][] = [
+  ['Soccer', /\b(soccer|fifa|world cup|uefa|premier league|la liga|serie a|bundesliga|ligue 1|champions league|barcelona|real madrid|manchester|arsenal|chelsea|liverpool|psg|paris saint|juventus|benfica|honved|galaxy|messi|ronaldo|ronaldinho|mbappe|haaland|neymar|pele|maradona|salah|yamal|pedri|busquets|fabregas|henry|mendy|terry|moore|bobby moore|beckham|charlton|eusebio|puskas|puskás|tostão|tostao|rodman|meazza|figc|santos)\b/i],
+  ['Basketball', /\b(nba|basketball|lakers|celtics|bulls|warriors|heat\b|nuggets|knicks|76ers|clippers|nets\b|ncaa|final four|lebron|jordan|kobe|jokic|curry|durant|anthony edwards|luka|shai gilgeous)\b/i],
+  ['Baseball', /\b(mlb|baseball|yankees|dodgers|red sox|cubs|world series|ohtani|jeter|rivera|mantle|ruth|aaron|home run|no-hitter|cy young)\b/i],
+  ['Football', /\b(nfl|super bowl|quarterback|touchdown|heisman|patriots|chiefs|cowboys|packers|49ers|tom brady|mahomes|amendola|lombardi)\b/i],
+  ['Hockey', /\b(nhl|hockey|stanley cup|gretzky|ovechkin|crosby|maple leafs|canadiens|bruins|goal no\.)\b/i],
+  ['Racing', /\b(formula 1|f1\b|grand prix|nascar|leclerc|hamilton|verstappen|senna|ferrari|mclaren|race-worn|racing)\b/i],
+  ['Boxing / MMA', /\b(boxing|ufc\b|mma\b|title belt|heavyweight|muhammad ali|mike tyson|mayweather|fight-worn)\b/i],
+  ['Golf', /\b(golf|pga\b|masters|green jacket|tiger woods|the open|ryder cup)\b/i],
+  ['Tennis', /\b(tennis|wimbledon|us open tennis|roland garros|federer|nadal|djokovic|serena)\b/i],
+  ['Olympics', /\b(olympic|olympics|torch|gold medal.*(games|olympic))\b/i],
+];
+export function sportOf(title: string): string | null {
+  const t = title || '';
+  for (const [sport, re] of SPORT_RULES) if (re.test(t)) return sport;
+  // "match-used / match-worn" is soccer/international grammar — Americans say
+  // "game-used". A boot/shirt/jersey in that grammar is soccer.
+  if (/\bmatch[- ](used|worn)\b/i.test(t) && /\b(jersey|shirt|boots|kit|strip|cleats)\b/i.test(t)) return 'Soccer';
+  return null;
+}
+
 // Shared date formatter for the Ray suite. saleDate/lastCrawl are date-only
 // strings (YYYY-MM-DD) that JS parses as UTC midnight — formatting them in
 // the viewer's local timezone can shift the displayed day AND makes the

@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { AuctionLot } from '../types';
-import { categoryLabels } from '../utils';
+import { categoryLabels, sportOf } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 
 export type FeedSort = 'soonest' | 'est-desc' | 'est-asc';
@@ -13,6 +13,8 @@ export interface FeedFilters {
   vertical: Market | null;
   /** inside a vertical: narrow to one maker */
   maker: string | null;
+  /** sports: narrow to one sport (Soccer, Basketball, …) */
+  sport: string | null;
   category: string | null;
   belowOnly: boolean;
   sort: FeedSort;
@@ -22,6 +24,7 @@ export const FEED_DEFAULTS: FeedFilters = {
   query: '',
   vertical: null,
   maker: null,
+  sport: null,
   category: null,
   belowOnly: false,
   sort: 'soonest',
@@ -71,6 +74,14 @@ export default function FeedToolbar({
     return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [lots, market]);
 
+  // sports → which sport (the cut collectors actually shop by)
+  const sports = useMemo(() => {
+    if (market !== 'sports') return [] as [string, number][];
+    const c: Record<string, number> = {};
+    lots.forEach(l => { const s = sportOf(l.title) || 'Other'; c[s] = (c[s] || 0) + 1; });
+    return Object.entries(c).sort((a, b) => b[1] - a[1]);
+  }, [lots, market]);
+
   // art → its mediums (the meaningful cut for that market)
   const categories = useMemo(() => {
     if (market !== 'art') return [] as [string, number][];
@@ -86,7 +97,7 @@ export default function FeedToolbar({
 
   const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch });
   const isFiltered =
-    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.category !== null || filters.belowOnly;
+    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly;
 
   return (
     <div className="ray-toolbar" role="search" aria-label="Find lots">
@@ -150,6 +161,19 @@ export default function FeedToolbar({
             {v.label} <i>{v.n}</i>
           </button>
         ))}
+
+        {sports.map(([sport, n]) => (
+          <button
+            key={sport}
+            className="ray-toolbar-pill"
+            data-active={filters.sport === sport}
+            onClick={() => set({ sport: filters.sport === sport ? null : sport })}
+          >
+            {sport} <i>{n}</i>
+          </button>
+        ))}
+
+        {sports.length > 0 && makers.length > 0 && <span className="ray-toolbar-divider" aria-hidden="true" />}
 
         {makers.map(([slug, n]) => (
           <button
