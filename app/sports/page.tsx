@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Sports',
-  description: 'Cards, jerseys & memorabilia — coming soon to Ray.',
-  openGraph: { title: 'Sports — Ray', description: 'Cards, jerseys & memorabilia — coming soon to Ray.' },
+  description: 'Auction intelligence for the sports market — game-worn, trophies & tickets. Never cards.',
+  openGraph: { title: 'Sports — Ray', description: 'Auction intelligence for the sports market — game-worn, trophies & tickets. Never cards.' },
 };
 
 export { default } from '../page';

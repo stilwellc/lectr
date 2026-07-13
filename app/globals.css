@@ -1550,21 +1550,13 @@ h1 {
   height: 1px;
   background: color-mix(in srgb, var(--plate-ink, var(--color-accent-gold)) 48%, transparent);
 }
-/* Figures block + signal line */
+/* Figures block */
 .ray-lot-est {
   font-size: 15px;
   font-weight: 600;
   color: var(--color-fg);
   font-variant-numeric: tabular-nums;
 }
-.ray-lot-signal-line {
-  margin-top: 5px;
-  font-family: var(--font-mono), monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-}
-.ray-lot-signal-line[data-tone=up] { color: var(--color-up); }
-.ray-lot-signal-line[data-tone=down] { color: var(--color-down); }
 /* Quiet footer: hairline top, text actions instead of a shouting button */
 .ray-lot-footer {
   display: flex;
@@ -1845,7 +1837,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-strip-k { font-size: 12.5px; font-weight: 500; color: var(--color-text-muted); margin-bottom: 6px; }
 .ray-strip-v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); line-height: 1.1; }
 .ray-strip-s { font-size: 12px; color: var(--color-text-faint); margin-top: 4px; }
-.ray-tape-wrap { margin-top: 28px; }
 
 /* ═══════════════════════════════════════════════════════════════════
    RAY TERMINAL — the trading floor, settled (committee build spec 1.0)
@@ -2024,64 +2015,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 @media (max-width: 1000px) { .ray-subdeck { grid-template-columns: 1fr; } }
 
-/* R3 · the index rail — five exchange cells; the ONLY market switch */
-.ray-idxrail {
-  background: #0A0B0D;
-  border-bottom: 1px solid var(--hairline);
-}
-.ray-idxrail-in {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 1px;
-  background: rgba(255, 255, 255, 0.07);
-}
-.ray-idxcell {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  height: 40px;
-  padding: 0 16px;
-  align-items: center;
-  background: #0A0B0D;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  position: relative;
-  min-width: 0;
-}
-.ray-idxcell[data-live=false] { cursor: default; }
-.ray-idxcell-name {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #9AA0A6;
-  white-space: nowrap;
-  transition: color 120ms var(--ease-ui);
-}
-.ray-idxcell:hover[data-live=true] .ray-idxcell-name { color: var(--color-fg); }
-.ray-idxcell[data-active=true] .ray-idxcell-name { color: var(--color-fg); }
-.ray-idxcell[data-active=true]::after {
-  content: '';
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 0;
-  height: 2px;
-  background: var(--color-fg);
-}
-.ray-idxcell-val { font-size: 15px; font-weight: 650; color: var(--color-fg); font-variant-numeric: tabular-nums; }
-.ray-idxcell-delta { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.ray-idxcell-delta[data-tone=up] { color: var(--color-up); }
-.ray-idxcell-delta[data-tone=down] { color: var(--color-down); }
-.ray-idxcell-soon { font-size: 11px; font-weight: 500; color: #7A8087; }
-@media (max-width: 900px) {
-  .ray-idxrail { overflow-x: auto; scrollbar-width: none; scroll-snap-type: x mandatory;
-    -webkit-mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 24px), transparent);
-    mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 24px), transparent); }
-  .ray-idxrail::-webkit-scrollbar { display: none; }
-  .ray-idxrail-in { display: flex; }
-  .ray-idxcell { min-width: 148px; height: 44px; scroll-snap-align: start; flex: none; }
-}
-
 /* R4 · the board — seamed 1fr/396px grid; the 1px gap IS the seam */
 .ray-board-wrap { padding: 20px 0 0; }
 .ray-board {
@@ -2092,7 +2025,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   border: 1px solid var(--hairline);
 }
 .ray-board-demand { background: #0A0B0D; padding: 20px 24px 14px; min-width: 0; }
-.ray-board-rail { display: grid; grid-template-rows: auto 1fr; gap: 1px; background: var(--hairline); min-width: 0; }
 .ray-board-panel { background: var(--panel); padding: 16px 18px; min-width: 0; }
 .ray-panel-k {
   font-size: 12px;
@@ -2351,12 +2283,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 @keyframes rayPanelIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .ray-choreo .ray-board { transform-origin: left center; animation: raySeamX 500ms var(--ease-ui) both; }
 .ray-choreo .ray-board > * { animation: rayPanelIn 400ms var(--ease-ui) both; animation-delay: 120ms; }
-.ray-choreo .ray-board-rail > * { animation: rayPanelIn 400ms var(--ease-ui) both; }
-.ray-choreo .ray-board-rail > *:nth-child(1) { animation-delay: 180ms; }
-.ray-choreo .ray-board-rail > *:nth-child(2) { animation-delay: 240ms; }
 .ray-choreo .ray-proofstrip { animation: rayPanelIn 400ms var(--ease-ui) both; animation-delay: 300ms; }
 @media (prefers-reduced-motion: reduce) {
-  .ray-choreo .ray-board, .ray-choreo .ray-board > *, .ray-choreo .ray-board-rail > *, .ray-choreo .ray-proofstrip { animation: none; }
+  .ray-choreo .ray-board, .ray-choreo .ray-board > *, .ray-choreo .ray-proofstrip { animation: none; }
 }
 
 /* ── the command deck: the lander as an instrument, not a page ── */
@@ -2365,11 +2294,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 28px;
   align-items: start;
-}
-.ray-deck-rail {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 .ray-deckcard {
   display: block;
@@ -2491,7 +2415,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 
 @media (max-width: 1000px) {
   .ray-deck { grid-template-columns: 1fr; gap: 8px; }
-  .ray-deck-rail { flex-direction: column; gap: 10px; margin-top: 18px; }
   .ray-deckcall-img { height: 120px; }
 }
 
@@ -2540,19 +2463,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-proof:hover { color: var(--color-text-secondary); }
 .ray-proof b.up { color: var(--color-up); font-weight: 700; }
 
-/* ── the rooms: tonal bands separate the lander's areas (Robinhood-style) ── */
-.ray-band {
-  margin-top: 44px;
-  padding-block: 30px 44px;
-  background: linear-gradient(180deg, #0F1115 0%, #0C0D10 420px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-.ray-band .ray-tape-wrap { margin-top: 0; }
-.ray-band-results { margin-top: 0; padding-block: 0; }
-@media (max-width: 768px) {
-  .ray-band { margin-top: 34px; padding-block: 26px 36px; }
-}
-
 /* the context sentence: beside the trend on desktop, below the chart on mobile */
 .ray-hero2-ctx {
   display: none;
@@ -2576,7 +2486,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-hero2-ctx { display: block; }
   .ray-hero2-chart { height: 168px; margin-top: 10px; }
   /* section rhythm: tight inside a section, a full breath between sections */
-  .ray-tape-wrap { margin-top: 34px; }
   .ray-block { padding-block: 34px 0; }
 }
 
@@ -2726,7 +2635,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-lot-plate-rule { background: var(--color-border-mid); }
 .ray-lot-est { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
-.ray-lot-signal-line { font-family: var(--font-sans); font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em; }
 .ray-lot-footer { border-top: none; margin-top: 10px; padding-top: 0; }
 .ray-lot-remind {
   text-transform: none;
@@ -3334,8 +3242,6 @@ body {
 .ray-markets-compact .ray-market-tab svg { opacity: 0.85; flex: none; }
 
 /* ── the verticals as a shelf: each market is a card with its own pulse ── */
-.ray-shelfrail { padding-top: 22px; }
-@media (max-width: 768px) { .ray-shelfrail { padding-top: 12px; } }
 .ray-mkt-cards {
   display: grid;
   grid-auto-flow: column;

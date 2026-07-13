@@ -2,8 +2,9 @@
  * The roster and the markets. Every artist belongs to a MARKET — the way the
  * trade actually splits (design sales vs contemporary art sales), so a
  * Nakashima bench never muddies the art demand index and vice versa.
- * Watches, Sports and Science are announced but not yet live. 'all' is the
- * whole collectibles market — the lander's default until a vertical is chosen.
+ * Every vertical is live; the `live` flag stays so a future vertical can be
+ * announced before it trades. 'all' is the whole collectibles market — the
+ * lander's default until a vertical is chosen.
  */
 export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science';
 

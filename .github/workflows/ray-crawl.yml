@@ -29,6 +29,12 @@ jobs:
       - name: Run crawler
         run: npx tsx scripts/ray-crawl.ts
 
+      # Derived payloads are rebuilt as explicit steps AFTER the crawl and
+      # BEFORE the commit — a bug in either builder fails the job loudly here
+      # instead of committing partial data.
+      - name: Rebuild the eager upcoming payload
+        run: npx tsx scripts/build-upcoming.ts
+
       - name: Rebuild the point-in-time backtest
         run: npx tsx scripts/build-backtest.ts
 
@@ -38,11 +44,30 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/ray/
           git diff --staged --quiet && echo "no data changes" && exit 0
+          # keep a copy of the freshly built artifacts — the conflict-recovery
+          # path below hard-resets the worktree, which would wipe them
+          cp -R public/data/ray "$RUNNER_TEMP/ray-data"
           git commit -m "chore(ray): update auction data"
           # the crawl takes ~15 min — if anything landed on main meanwhile,
-          # rebase our data commit on top and retry rather than fail
+          # rebase our data commit on top and retry rather than fail. A clean
+          # rebase only covers the pure push race: if the concurrent push
+          # touched public/data/ray/ (a local RAY_ONLY onboarding run), the
+          # rebase conflicts and is left IN PROGRESS, so blind retries would
+          # fail all 5 times and drop the day's crawl (Goldin bid snapshots —
+          # the future hammers — included). On failure: abort any half-done
+          # rebase, reset to origin/main, re-apply the built artifacts on
+          # top, and re-commit before the next attempt.
           for i in 1 2 3 4 5; do
             git pull --rebase --autostash origin main && git push && exit 0
-            echo "push attempt $i rejected, retrying…"; sleep $((i * 5))
+            echo "push attempt $i rejected, recovering…"
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            git reset --hard origin/main
+            rm -rf public/data/ray
+            cp -R "$RUNNER_TEMP/ray-data" public/data/ray
+            git add public/data/ray/
+            if git diff --staged --quiet; then echo "no data changes after reset"; exit 0; fi
+            git commit -m "chore(ray): update auction data"
+            sleep $((i * 5))
           done
           echo "push failed after retries"; exit 1

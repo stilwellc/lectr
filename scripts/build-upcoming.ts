@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { computeDeepSignal } from '../app/lib/comps';
 import { demandSeries } from '../app/lib/demand';
-import { marketArtists, MARKETS } from '../app/constants';
+import { ARTIST_LABEL, marketArtists, MARKETS } from '../app/constants';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot } from '../app/types';
 
@@ -26,18 +26,6 @@ interface Lot {
   [k: string]: unknown;
 }
 
-const ARTIST_LABEL: Record<string, string> = {
-  'george-condo': 'George Condo', 'futura-2000': 'Futura 2000', 'kaws': 'KAWS',
-  'george-nakashima': 'George Nakashima', 'charles-eames': 'Charles & Ray Eames',
-  'andy-warhol': 'Andy Warhol', 'tom-sachs': 'Tom Sachs', 'barry-mcgee': 'Barry McGee',
-  'keith-haring': 'Keith Haring', 'peter-saul': 'Peter Saul', 'ed-ruscha': 'Ed Ruscha',
-  'r-crumb': 'R. Crumb', 'raymond-pettibon': 'Raymond Pettibon', 'henri-matisse': 'Henri Matisse',
-  'pablo-picasso': 'Pablo Picasso', 'fab-5-freddy': 'Fab 5 Freddy',
-  'francesco-clemente': 'Francesco Clemente', 'jean-prouve': 'Jean Prouvé',
-  'pierre-jeanneret': 'Pierre Jeanneret', 'eddie-martinez': 'Eddie Martinez',
-  'kenny-scharf': 'Kenny Scharf',
-};
-
 function fmtPrice(n: number): string {
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
@@ -49,8 +37,19 @@ function fmtPrice(n: number): string {
 export function buildUpcoming(dataDir: string): void {
   const lots: Lot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
 
+  // Zombie guard: the Sotheby's/Christie's crawlers skip closed-unsold lots
+  // entirely, so a lot recorded 'upcoming' whose sale then closed without
+  // selling is never overwritten (only Goldin gets a stale-upcoming cleanup).
+  // The feed filters saleDate >= today, so anything more than a day past can
+  // never render — drop it here instead of paying a computeDeepSignal pass
+  // and doubling the eager payload with dead weight.
+  const staleCutoff = Date.now() - 24 * 60 * 60 * 1000;
   const upcoming = lots
-    .filter(l => l.status === 'upcoming')
+    .filter(l => {
+      if (l.status !== 'upcoming') return false;
+      const t = new Date(l.saleDate).getTime();
+      return !isNaN(t) && t >= staleCutoff;
+    })
     .map(l => ({ ...l, signal: computeDeepSignal(l as unknown as AuctionLot, lots as unknown as AuctionLot[]) }));
 
   // The tape ("recent hammers") is PER MARKET so each vertical shows its own
@@ -76,10 +75,38 @@ export function buildUpcoming(dataDir: string): void {
   const demand: Record<string, ReturnType<typeof demandSeries>> = {
     all: demandSeries(lots as unknown as EngineLot[]),
   };
+  // Coverage gate: bid auctions publish no estimates (every Goldin lot ships
+  // estimateLow/High = null by design), and demandSeries can only read lots
+  // that carry both. If most of a vertical's sold record is estimate-less,
+  // the index would be computed from a non-representative curated-sale
+  // sliver — suppress the series instead, so the market tile falls back to
+  // the honest "N on the block" figure Terminal already shows for
+  // series-less markets.
+  const MIN_EST_COVERAGE = 0.5;
+  // Recency gate: the tile presents the series' last point as NOW. A vertical
+  // whose freshest qualifying quarter is ancient (e.g. sports seeded from
+  // historic sales) would wear a year-old number as today's read — suppress
+  // instead of misrepresenting.
+  const MAX_STALE_QUARTERS = 2;
+  const demandFreshFloor = (() => {
+    const d = new Date();
+    return d.getFullYear() * 4 + Math.floor(d.getMonth() / 3) - MAX_STALE_QUARTERS;
+  })();
+  const isStale = (series: ReturnType<typeof demandSeries>) => {
+    if (!series.length) return false;
+    const m = /^(\d{4}) Q(\d)$/.exec(series[series.length - 1].date);
+    if (!m) return false;
+    return Number(m[1]) * 4 + (Number(m[2]) - 1) < demandFreshFloor;
+  };
   for (const m of MARKETS.filter(m => m.live && m.key !== 'all')) {
     const set = marketArtists(m.key);
     const marketLots = lots.filter(l => set.has(l.artist));
-    demand[m.key] = demandSeries(marketLots as unknown as EngineLot[]);
+    const sold = marketLots.filter(l => l.status === 'sold');
+    const withEst = sold.filter(l => l.estimateLow && l.estimateHigh);
+    const series = sold.length > 0 && withEst.length / sold.length >= MIN_EST_COVERAGE
+      ? demandSeries(marketLots as unknown as EngineLot[])
+      : [];
+    demand[m.key] = isStale(series) ? [] : series;
     tape[m.key] = buildTape(marketLots);
   }
   const out = { generatedAt: new Date().toISOString(), tape, demand, lots: upcoming };

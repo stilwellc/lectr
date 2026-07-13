@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle } from '../utils';
@@ -26,7 +26,11 @@ function formatEstimate(lot: AuctionLot): string {
   if (lot.currentBid && lot.currentBid > 0) {
     return `${fmt(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} bids` : ''}`;
   }
-  return 'No reserve · opening bid';
+  // "No reserve" is a Goldin fact, not a fallback — traditional houses run
+  // reserves and merely keep some estimates private. Don't assert an auction
+  // condition we can't stand behind on anyone else's lot.
+  if (lot.auctionHouse === 'Goldin') return 'No reserve · opening bid';
+  return 'Estimate on request';
 }
 
 /** Prefer the crawl-time signal when present; else compute from history. */
@@ -51,21 +55,51 @@ export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]) {
   return computeDeepSignal(lot, allLots);
 }
 
-export default function LotCard({
+// The card's static CSS, injected into <head> exactly once — the home grid
+// mounts 48+ cards (and remounts them all on every feedKey rekey), so a
+// per-instance <style> multiplies into dozens of identical nodes and repeats
+// the style recalc each time. useInsertionEffect runs before paint, so the
+// first card still lays out at the right height with no flash.
+const LOT_CARD_STYLE_ID = 'ray-lot-card-style';
+const LOT_CARD_CSS = `
+  .ray-lot-img { height: 200px; }
+  .ray-lot-img img {
+    opacity: 0;
+    transition: opacity 400ms var(--ease-signature);
+  }
+  .ray-lot-img img[data-loaded=true] { opacity: 1; }
+  /* hotlink-blocked or dead images stay invisible — the serif
+     initial sits in flow behind and reads instead */
+  .ray-lot-img img[data-error=true] { opacity: 0; }
+  .ray-save-btn:hover { opacity: 0.85; }
+  @media (max-width: 768px) {
+    .ray-lot-img { height: 170px; }
+  }
+`;
+function useLotCardStyles() {
+  useInsertionEffect(() => {
+    if (document.getElementById(LOT_CARD_STYLE_ID)) return;
+    const el = document.createElement('style');
+    el.id = LOT_CARD_STYLE_ID;
+    el.textContent = LOT_CARD_CSS;
+    document.head.appendChild(el);
+  }, []);
+}
+
+function LotCard({
   lot,
   showArtist = false,
   allLots = [],
-  stats,
   saved = false,
   onToggleSave,
 }: {
   lot: AuctionLot;
   showArtist?: boolean;
   allLots?: AuctionLot[];
-  stats?: MarketStats;
   saved?: boolean;
   onToggleSave?: (lotId: string) => void;
 }) {
+  useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
   const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
 
@@ -106,21 +140,6 @@ export default function LotCard({
       display: 'flex',
       flexDirection: 'column',
     }}>
-      <style>{`
-        .ray-lot-img { height: 200px; }
-        .ray-lot-img img {
-          opacity: 0;
-          transition: opacity 400ms var(--ease-signature);
-        }
-        .ray-lot-img img[data-loaded=true] { opacity: 1; }
-        /* hotlink-blocked or dead images stay invisible — the serif
-           initial sits in flow behind and reads instead */
-        .ray-lot-img img[data-error=true] { opacity: 0; }
-        .ray-save-btn:hover { opacity: 0.85; }
-        @media (max-width: 768px) {
-          .ray-lot-img { height: 170px; }
-        }
-      `}</style>
       {/* Stretched primary action — keeps save/remind as sibling controls, not descendants */}
       {isUpcoming ? (
         <button
@@ -178,6 +197,10 @@ export default function LotCard({
           <img
             src={lot.imageUrl}
             alt={lot.title}
+            // the grid mounts 48 cards a page — lazy-load so below-fold house
+            // photography doesn't race the phase-2 data stream at first paint
+            loading="lazy"
+            decoding="async"
             // cache hits never fire onLoad/onError — check complete at
             // attach; complete with zero naturalWidth is a cached failure
             ref={(el) => {
@@ -324,3 +347,10 @@ export default function LotCard({
     </>
   );
 }
+
+// memo pays off on the save-toggle and pagination re-renders (lot/allLots/
+// stats are memoized upstream, onToggleSave is useCallback'd). It does NOT
+// fix typing in the feed search: the grid is keyed by feedKey, which includes
+// the query, so every keystroke remounts the cards outright — that's the
+// parent's key strategy, not reconciliation.
+export default memo(LotCard);

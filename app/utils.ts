@@ -68,13 +68,17 @@ export function craftTitle(raw: string): string {
 /**
  * sportOf — which sport a sports lot belongs to, read from its title (league,
  * team, athlete, or venue). Soccer dominates the current data so its cues are
- * broad; American sports lead with league + marquee names. Returns null when
- * nothing identifies the sport (kept as "Other" in the filter).
+ * broad; American sports lead with league + marquee names. Rules run
+ * first-match-wins, so crossover surnames (Henry, Terry, Moore, Rodman,
+ * Aaron, Luka) are cued by FULL NAME only — a bare surname would file a
+ * Dennis Rodman Bulls jersey or an Aaron Rodgers Packers jersey under the
+ * wrong pill before the team/league cue ever ran. Returns null when nothing
+ * identifies the sport (kept as "Other" in the filter).
  */
 const SPORT_RULES: [string, RegExp][] = [
-  ['Soccer', /\b(soccer|fifa|world cup|uefa|premier league|la liga|serie a|bundesliga|ligue 1|champions league|barcelona|real madrid|manchester|arsenal|chelsea|liverpool|psg|paris saint|juventus|benfica|honved|galaxy|messi|ronaldo|ronaldinho|mbappe|haaland|neymar|pele|maradona|salah|yamal|pedri|busquets|fabregas|henry|mendy|terry|moore|bobby moore|beckham|charlton|eusebio|puskas|puskás|tostão|tostao|rodman|meazza|figc|santos)\b/i],
-  ['Basketball', /\b(nba|basketball|lakers|celtics|bulls|warriors|heat\b|nuggets|knicks|76ers|clippers|nets\b|ncaa|final four|lebron|jordan|kobe|jokic|curry|durant|anthony edwards|luka|shai gilgeous)\b/i],
-  ['Baseball', /\b(mlb|baseball|yankees|dodgers|red sox|cubs|world series|ohtani|jeter|rivera|mantle|ruth|aaron|home run|no-hitter|cy young)\b/i],
+  ['Soccer', /\b(soccer|fifa|world cup|uefa|premier league|la liga|serie a|bundesliga|ligue 1|champions league|barcelona|real madrid|manchester|arsenal|chelsea|liverpool|psg|paris saint|juventus|benfica|honved|galaxy|messi|ronaldo|ronaldinho|mbappe|haaland|neymar|pele|maradona|salah|yamal|pedri|busquets|fabregas|thierry henry|mendy|john terry|bobby moore|beckham|charlton|eusebio|puskas|puskás|tostão|tostao|trinity rodman|luka modric|meazza|figc|santos)\b/i],
+  ['Basketball', /\b(nba|basketball|lakers|celtics|bulls|warriors|heat\b|nuggets|knicks|76ers|clippers|nets\b|ncaa|final four|lebron|jordan|kobe|jokic|curry|durant|anthony edwards|luka doncic|shai gilgeous)\b/i],
+  ['Baseball', /\b(mlb|baseball|yankees|dodgers|red sox|cubs|world series|ohtani|jeter|rivera|mantle|ruth|hank aaron|home run|no-hitter|cy young)\b/i],
   ['Football', /\b(nfl|super bowl|quarterback|touchdown|heisman|patriots|chiefs|cowboys|packers|49ers|tom brady|mahomes|amendola|lombardi)\b/i],
   ['Hockey', /\b(nhl|hockey|stanley cup|gretzky|ovechkin|crosby|maple leafs|canadiens|bruins|goal no\.)\b/i],
   ['Racing', /\b(formula 1|f1\b|grand prix|nascar|leclerc|hamilton|verstappen|senna|ferrari|mclaren|race-worn|racing)\b/i],

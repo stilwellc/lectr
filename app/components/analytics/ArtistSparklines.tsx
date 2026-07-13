@@ -209,9 +209,16 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
 export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, market }: Props & { limit?: number; market?: Market }) {
   const artists = useMemo<ArtistCardData[]>(() => {
     const roster = market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)) : ARTISTS;
+    // one O(n) pass over the 32k lots instead of a full-dataset filter per
+    // roster entry
+    const bySlug = new Map<string, AuctionLot[]>();
+    for (const l of allLots) {
+      const arr = bySlug.get(l.artist);
+      if (arr) arr.push(l); else bySlug.set(l.artist, [l]);
+    }
     return roster.map(a => {
       const stats = statsByArtist[a.slug];
-      const artistLots = allLots.filter(l => l.artist === a.slug);
+      const artistLots = bySlug.get(a.slug) || [];
       const sparkData = demandSeries(artistLots).map(p => ({ date: p.date, avgPrice: p.value }));
 
       const withEstimate = artistLots.filter(l =>
@@ -228,7 +235,9 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
         sparkData,
         totalRevenue: stats?.totalAuctionRevenue || 0,
         avgPrice: stats?.avgPriceLast12Months || 0,
-        appreciation: (() => { const ds = demandSeries(artistLots); return ds.length ? ds[ds.length - 1].value : 0; })(),
+        // the last spark point IS the appreciation — sparkData preserved
+        // demandSeries' value as avgPrice, so no second bucketing pass
+        appreciation: sparkData.length ? sparkData[sparkData.length - 1].avgPrice : 0,
         overEstimate,
         totalLots: artistLots.length,
       };

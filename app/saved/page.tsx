@@ -181,7 +181,6 @@ export default function SavedPage() {
                       lot={lot}
                       showArtist
                       allLots={allLots}
-                      stats={statsByArtist[lot.artist]}
                       saved={isSaved(lot.id)}
                       onToggleSave={toggle}
                     />
