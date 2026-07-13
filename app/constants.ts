@@ -70,6 +70,19 @@ export function marketArtists(market: Market): Set<string> {
   return new Set(ARTISTS.filter(a => a.market === market).map(a => a.slug));
 }
 
+/** What the tracked entries in a market ARE — they aren't all artists. */
+export function rosterNoun(market: Market, n = 2): string {
+  const plural = n !== 1;
+  switch (market) {
+    case 'art': return plural ? 'artists' : 'artist';
+    case 'design': return plural ? 'designers' : 'designer';
+    case 'watches': return plural ? 'makers' : 'maker';
+    case 'science': return plural ? 'collections' : 'collection';
+    case 'sports': return plural ? 'categories' : 'category';
+    default: return 'tracked';
+  }
+}
+
 export function marketOf(slug: string): Market {
   return ARTIST_MARKET[slug] || 'art';
 }

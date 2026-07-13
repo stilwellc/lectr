@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip } from 'recharts';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice } from '../../utils';
-import { ARTISTS, marketArtists, Market } from '../../constants';
+import { ARTISTS, marketArtists, Market, rosterNoun } from '../../constants';
 import { useChartDraw } from '../../hooks/useChartDraw';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import ArtistAvatar from '../ArtistAvatar';
@@ -266,7 +266,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Artist <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Performance</span>
+          {market && market !== 'all' ? rosterNoun(market).charAt(0).toUpperCase() + rosterNoun(market).slice(1) : 'Roster'} <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>performance</span>
         </h2>
         <a
           href="#artist-rankings"
@@ -279,7 +279,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
             textDecoration: 'none',
           }}
         >
-          All {ARTISTS.length} artists &#8595;
+          All {market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)).length : ARTISTS.length} {market ? rosterNoun(market) : 'names'} &#8595;
         </a>
       </div>
 
