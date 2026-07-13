@@ -26,6 +26,9 @@ export interface AuctionLot {
   premiumPrice: number | null;
   priceUsd: number | null;
   priceBasis?: PriceBasis;
+  /** live bid on a no-estimate bid auction (Goldin) — real money on the lot now */
+  currentBid?: number;
+  bidCount?: number;
   status: LotStatus;
   url: string;
   /** Precomputed at crawl time for upcoming lots (comps median vs estimate
