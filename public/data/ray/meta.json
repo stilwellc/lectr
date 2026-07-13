@@ -135,11 +135,13 @@
     }
   ],
   "sources": [
-    "Phillips",
-    "Sotheby's",
+    "Bonhams",
     "Christie's",
-    "Wright/Rago",
-    "Bonhams"
+    "Goldin",
+    "Phillips",
+    "Rago",
+    "Sotheby's",
+    "Wright"
   ],
   "version": 2
 }
