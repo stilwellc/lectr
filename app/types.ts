@@ -2,6 +2,9 @@ export type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 
 export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn';
 export type Currency = 'USD' | 'GBP' | 'EUR' | 'HKD' | 'CNY' | 'AUD' | 'CHF';
 export type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'object' | 'unknown';
+/** how a sold price was established: a verified hammer, or the last bid Ray
+    tracked before a house that publishes no results closed (Goldin) */
+export type PriceBasis = 'hammer' | 'last-tracked-bid';
 
 export interface AuctionLot {
   id: string;
@@ -22,6 +25,7 @@ export interface AuctionLot {
   hammerPrice: number | null;
   premiumPrice: number | null;
   priceUsd: number | null;
+  priceBasis?: PriceBasis;
   status: LotStatus;
   url: string;
   /** Precomputed at crawl time for upcoming lots (comps median vs estimate
