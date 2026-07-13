@@ -21,26 +21,40 @@ export interface DemandPoint {
 
 const MIN_WINDOW_SALES = 5;
 
+const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
 export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
-  const byQuarter: Record<string, number[]> = {};
+  const sales: { t: number; perf: number }[] = [];
+  // quarter key -> exclusive end of that quarter (first ms of the next one)
+  const quarterEnd: Record<string, number> = {};
   for (const l of lots) {
     if (l.status !== 'sold' || !l.priceUsd || !l.estimateLow || !l.estimateHigh) continue;
     const d = new Date(l.saleDate);
     if (isNaN(d.getTime())) continue;
-    const key = `${d.getUTCFullYear()} Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+    const q = Math.floor(d.getUTCMonth() / 3);
+    const key = `${d.getUTCFullYear()} Q${q + 1}`;
     const estMid = (l.estimateLow + l.estimateHigh) / 2;
     if (estMid <= 0) continue;
-    (byQuarter[key] = byQuarter[key] || []).push(l.priceUsd / estMid - 1);
+    sales.push({ t: d.getTime(), perf: l.priceUsd / estMid - 1 });
+    quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
   }
-  const quarters = Object.keys(byQuarter).sort();
+  const quarters = Object.keys(quarterEnd).sort();
   const points: DemandPoint[] = [];
-  quarters.forEach((qk, i) => {
-    const window = quarters.slice(Math.max(0, i - 3), i + 1).flatMap(w => byQuarter[w]).sort((a, b) => a - b);
-    if (window.length < MIN_WINDOW_SALES) return;
+  for (const qk of quarters) {
+    // Trailing twelve CALENDAR months from the quarter's end — never adjacent
+    // array keys. A sparse vertical can have years-old quarters sitting right
+    // next to current ones; slicing keys would smuggle decade-old sales into
+    // a "trailing year" read.
+    const end = quarterEnd[qk];
+    const window = sales
+      .filter(s => s.t < end && s.t >= end - YEAR_MS)
+      .map(s => s.perf)
+      .sort((a, b) => a - b);
+    if (window.length < MIN_WINDOW_SALES) continue;
     const m = Math.floor(window.length / 2);
     const median = window.length % 2 === 0 ? (window[m - 1] + window[m]) / 2 : window[m];
     points.push({ date: qk, value: median * 100, n: window.length });
-  });
+  }
   return points;
 }
 

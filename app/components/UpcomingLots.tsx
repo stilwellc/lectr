@@ -75,7 +75,6 @@ export default function UpcomingLots({
               lot={lot}
               showArtist={showArtist}
               allLots={allLots}
-              stats={stats}
               saved={savedIds.includes(lot.id)}
               onToggleSave={onToggleSave}
             />

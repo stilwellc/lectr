@@ -5,10 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * CountUp — animates a figure to its real value, formatting every frame through
  * the same formatter the static value would use (so a total counts up through
- * its own magnitudes: $0 -> $45M -> $4.54B). It animates from the last settled
- * value whenever the target changes, so it handles data arriving after mount
- * (0 -> real) without getting stuck. Reduced motion lands on the value at once.
- * The app is client-rendered, so starting at 0 costs nothing in SSR/SEO terms.
+ * its own magnitudes: $0 -> $45M -> $4.54B). It animates from the value
+ * currently on screen whenever the target changes — not the last settled
+ * value, so an A→B→A flip mid-animation (market-pill toggles, phase-2 data
+ * landing) restarts toward A instead of freezing on an interpolated frame.
+ * Handles data arriving after mount (0 -> real) without getting stuck.
+ * Reduced motion lands on the value at once. The app is client-rendered, so
+ * starting at 0 costs nothing in SSR/SEO terms.
  */
 export default function CountUp({
   to,
@@ -24,17 +27,20 @@ export default function CountUp({
   style?: React.CSSProperties;
 }) {
   const [val, setVal] = useState(0);
-  const fromRef = useRef(0);
+  // the value actually painted right now — updated every frame, so a target
+  // change mid-animation compares/starts against the screen, not the last
+  // settled value (which would early-return and freeze mid-count)
+  const shownRef = useRef(0);
 
   useEffect(() => {
-    const from = fromRef.current;
+    const from = shownRef.current;
     if (to === from) return;
 
     const reduce =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) {
-      fromRef.current = to;
+      shownRef.current = to;
       setVal(to);
       return;
     }
@@ -45,13 +51,10 @@ export default function CountUp({
     const tick = (ts: number) => {
       if (!start) start = ts;
       const p = Math.min(1, (ts - start) / duration);
-      setVal(from + (to - from) * easeOutQuart(p));
-      if (p < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        fromRef.current = to;
-        setVal(to);
-      }
+      const next = p < 1 ? from + (to - from) * easeOutQuart(p) : to;
+      shownRef.current = next;
+      setVal(next);
+      if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);

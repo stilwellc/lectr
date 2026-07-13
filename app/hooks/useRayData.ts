@@ -25,6 +25,9 @@ interface RayData {
   loading: boolean;
   /** the full sold history has arrived (comps, analytics, artist pages) */
   fullLoaded: boolean;
+  /** phase 2 (lots.json) failed after retries — fullLoaded-gated pages should
+      show an error + retry, never an eternal skeleton */
+  fullError: boolean;
   error: string | null;
   /** true when the module cache was already warm at mount —
       revisits render instantly, no arrival choreography. */
@@ -40,6 +43,7 @@ interface RayPayload {
   lastCrawl: string;
   sources: string[];
   fullLoaded: boolean;
+  fullError: boolean;
   error: string | null;
 }
 
@@ -48,6 +52,10 @@ interface RayPayload {
 // re-notifies every mounted route.
 let cached: RayPayload | null = null;
 let inflight: Promise<RayPayload> | null = null;
+// Phase 2 gets its own inflight guard + retry hook: a single flaky fetch of
+// the largest asset must never brick fullLoaded-gated routes for the session.
+let inflightFull = false;
+let retryFull: (() => void) | null = null;
 const listeners = new Set<(p: RayPayload) => void>();
 
 function notify(p: RayPayload) {
@@ -55,8 +63,8 @@ function notify(p: RayPayload) {
   listeners.forEach(fn => fn(p));
 }
 
-async function fetchJson(url: string): Promise<unknown> {
-  const r = await fetch(url);
+async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
+  const r = await fetch(url, init);
   if (!r.ok) throw new Error(`${url}: ${r.status}`);
   return r.json();
 }
@@ -73,7 +81,12 @@ function parseStats(statsData: unknown, lots: AuctionLot[]): Record<string, Mark
 }
 
 function loadRayData(): Promise<RayPayload> {
-  if (cached) return Promise.resolve(cached);
+  if (cached) {
+    // a failed (or never-finished) phase 2 re-kicks on the next mount instead
+    // of staying dead for the rest of the session
+    if (!cached.fullLoaded && retryFull && !inflightFull) retryFull();
+    return Promise.resolve(cached);
+  }
   if (inflight) return inflight;
 
   inflight = (async () => {
@@ -101,20 +114,45 @@ function loadRayData(): Promise<RayPayload> {
         lastCrawl: metaData.lastCrawl || '',
         sources: metaData.sources || [],
         fullLoaded: false,
+        fullError: false,
         error: null,
       };
       notify(core);
 
       // ── phase 2: stream the full history behind the paint; re-attach the
       // precomputed signals so upcoming cards never flicker to a recompute.
-      fetchJson('/data/ray/lots.json')
-        .then(lotsData => {
-          const full = lotsData as AuctionLot[];
-          const signals = new Map((up.lots || []).map(l => [l.id, l.signal]));
-          const merged = full.map(l => (signals.has(l.id) ? { ...l, signal: signals.get(l.id) } : l));
-          notify({ ...core, allLots: merged, fullLoaded: true });
-        })
-        .catch(() => { /* the eager payload keeps the app alive */ });
+      // The URL is versioned by lastCrawl and fetched force-cache, so a
+      // revisit on the same crawl day reuses the browser cache instead of
+      // re-downloading the multi-MB archive; a new crawl is a new URL.
+      // Failures retry with backoff, then surface fullError — the eager
+      // payload keeps the app alive, but gated pages get a real error state.
+      const lotsUrl = metaData.lastCrawl
+        ? `/data/ray/lots.json?v=${encodeURIComponent(metaData.lastCrawl)}`
+        : '/data/ray/lots.json';
+      const loadFull = () => {
+        if (inflightFull || cached?.fullLoaded) return;
+        inflightFull = true;
+        // a retry after fullError returns gated pages to their loading state
+        if (cached?.fullError) notify({ ...cached, fullError: false });
+        (async () => {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+            try {
+              // first try trusts the cache; retries bypass it in case the
+              // cached body itself was the problem (truncated download)
+              const lotsData = await fetchJson(lotsUrl, { cache: attempt === 0 ? 'force-cache' : 'reload' });
+              const full = lotsData as AuctionLot[];
+              const signals = new Map((up.lots || []).map(l => [l.id, l.signal]));
+              const merged = full.map(l => (signals.has(l.id) ? { ...l, signal: signals.get(l.id) } : l));
+              notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });
+              return;
+            } catch { /* retry, then surface */ }
+          }
+          notify({ ...(cached || core), fullError: true });
+        })().finally(() => { inflightFull = false; });
+      };
+      retryFull = loadFull;
+      loadFull();
 
       inflight = null;
       return core;
@@ -134,6 +172,7 @@ function loadRayData(): Promise<RayPayload> {
       lastCrawl: metaData.lastCrawl || '',
       sources: metaData.sources || [],
       fullLoaded: lotsOk,
+      fullError: !lotsOk,
       error: (!lotsOk && !statsOk) ? 'Unable to load auction data. Please try again later.' : null,
     };
     if (lotsOk || statsOk) cached = payload;
@@ -142,6 +181,12 @@ function loadRayData(): Promise<RayPayload> {
   })();
 
   return inflight;
+}
+
+/** Re-attempt the phase-2 archive fetch after a fullError (no-op while a
+    fetch is already inflight or once the archive has loaded). */
+export function retryFullLoad() {
+  if (retryFull && !inflightFull && !cached?.fullLoaded) retryFull();
 }
 
 export function useRayData(): RayData {
@@ -166,6 +211,7 @@ export function useRayData(): RayData {
     sources: data?.sources || [],
     loading: data === null,
     fullLoaded: data?.fullLoaded || false,
+    fullError: data?.fullError || false,
     error: data?.error || null,
     fromCache,
   };

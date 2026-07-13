@@ -256,7 +256,6 @@ export default function ValuePage() {
                         lot={d.lot}
                         showArtist
                         allLots={marketLots}
-                        stats={statsByArtist[d.lot.artist]}
                         saved={isSaved(d.lot.id)}
                         onToggleSave={toggle}
                       />

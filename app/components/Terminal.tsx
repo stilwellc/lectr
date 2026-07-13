@@ -12,7 +12,7 @@ import MarketIcon from './MarketIcon';
 
 /**
  * Ray Terminal — the trading floor, settled. The committee's merged build:
- * index rail (the only market switch), the board's right rail (matted call
+ * market tiles (the only market switch), the board's right rail (matted call
  * plate + the next hammers), the desk (maker matrix as tables), the film
  * strip (the eye), the record's backtest monument, and the colophon.
  * One seam grammar: 1px hairlines, no radii inside the terminal bands.
@@ -64,7 +64,6 @@ export function MarketTiles({
     // best image nobody else claimed
     const order = [...MARKETS.filter(m => m.key !== 'all'), ...MARKETS.filter(m => m.key === 'all')];
     for (const m of order) {
-      if (!m.live) { out[m.key] = null; continue; }
       if (TILE_PIN[m.key]) { out[m.key] = TILE_PIN[m.key] || null; continue; }
       const set = marketArtists(m.key);
       const pool = withImg.filter(l => set.has(l.artist) && !used.has(l.imageUrl!));
@@ -82,7 +81,6 @@ export function MarketTiles({
     const up = lots.filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today);
     const out: Record<string, number> = {};
     for (const m of MARKETS) {
-      if (!m.live) continue;
       const set = marketArtists(m.key);
       out[m.key] = up.filter(l => set.has(l.artist)).length;
     }
@@ -93,7 +91,7 @@ export function MarketTiles({
     <div className="ray-mkttiles" role="tablist" aria-label="Markets">
       {MARKETS.map(m => {
         const series = demand[m.key] || [];
-        const now = m.live && series.length ? series[series.length - 1].value : null;
+        const now = series.length ? series[series.length - 1].value : null;
         const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
         const delta = now !== null && yearAgo !== null ? Math.round(now - yearAgo) : null;
         const spark = series.slice(-12).map(p => p.value);
@@ -114,7 +112,7 @@ export function MarketTiles({
             data-live={m.live}
             data-tone={tone}
             data-market={m.key}
-            onClick={() => m.live && onPick(m.key)}
+            onClick={() => onPick(m.key)}
           >
             {tileArt[m.key] && (
               <img
@@ -134,7 +132,7 @@ export function MarketTiles({
                 <span className="ray-mkttile-name">{m.label}</span>
               </span>
             </span>
-            {m.live && now !== null ? (
+            {now !== null ? (
               <span className="ray-mkttile-figs">
                 <span className="ray-mkttile-val">{formatDemand(now)}</span>
                 {delta !== null && delta !== 0 && (
@@ -146,68 +144,17 @@ export function MarketTiles({
                   </svg>
                 )}
               </span>
-            ) : m.live ? (
+            ) : (
               // live market with no demand series yet (bid auctions carry no
               // estimates) — show the honest figure it does have: live lots
               <span className="ray-mkttile-figs">
                 <span className="ray-mkttile-val">{liveCounts[m.key] || 0}</span>
                 <span className="ray-mkttile-soon">on the block</span>
               </span>
-            ) : (
-              <span className="ray-mkttile-soon">soon</span>
             )}
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/* ── R3 · the index rail ────────────────────────────────────────────── */
-export function IndexRail({
-  demand,
-  active,
-  onPick,
-}: {
-  demand: Record<string, DemandPoint[]>;
-  active: Market;
-  onPick: (m: Market) => void;
-}) {
-  return (
-    <div className="ray-idxrail" role="tablist" aria-label="Markets">
-      <div className="ray-idxrail-in">
-        {MARKETS.map(m => {
-          const series = demand[m.key] || [];
-          const now = m.live && series.length ? series[series.length - 1].value : null;
-          const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
-          const delta = now !== null && yearAgo !== null ? Math.round(now - yearAgo) : null;
-          return (
-            <button
-              key={m.key}
-              role="tab"
-              aria-selected={active === m.key}
-              className="ray-idxcell"
-              data-active={active === m.key}
-              data-live={m.live}
-              onClick={() => m.live && onPick(m.key)}
-            >
-              <span className="ray-idxcell-name">{m.label}</span>
-              {m.live && now !== null ? (
-                <>
-                  <span className="ray-idxcell-val">{Math.round(now)}</span>
-                  {delta !== null && delta !== 0 && (
-                    <span className="ray-idxcell-delta" data-tone={delta > 0 ? 'up' : 'down'}>
-                      {delta > 0 ? '▲' : '▼'} {Math.abs(delta)}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="ray-idxcell-soon">soon</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

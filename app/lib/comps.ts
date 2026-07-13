@@ -52,8 +52,20 @@ export const FORM_LABEL: Record<Form, string> = {
   unknown: 'lots',
 };
 
-/** Classify a lot into its form. Order matters: the most specific cues win. */
+/** Classify a lot into its form. Order matters: the most specific cues win.
+    Cached per lot object (WeakMap) — the ~40 regex tests run once per lot per
+    session, not once per comp-gate evaluation; lots are immutable after JSON
+    load in both the client and the build script, so identity caching is safe. */
+const FORM_CACHE = new WeakMap<object, Form>();
 export function classifyForm(lot: Pick<AuctionLot, 'title' | 'medium' | 'category'>): Form {
+  const hit = FORM_CACHE.get(lot);
+  if (hit !== undefined) return hit;
+  const form = classifyFormUncached(lot);
+  FORM_CACHE.set(lot, form);
+  return form;
+}
+
+function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'category'>): Form {
   const t = ` ${(lot.title || '').toLowerCase()} `;
   const m = ` ${(lot.medium || '').toLowerCase()} `;
   const tm = t + m;
@@ -225,34 +237,51 @@ export function watchKey(lot: Pick<AuctionLot, 'title'>): string | null {
 
 const WATCHES = new Set<Form>(['wristwatch', 'pocket-watch']);
 
-/** The hard gate: is `candidate` a legitimate comp for `lot`? */
-export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
+/** The hard gate, curried: classify/key/measure the ANCHOR once, then test
+    many candidates — `sold.filter(comparableTo(lot))` instead of re-deriving
+    the anchor's form, model/watch key and dims per candidate. */
+export function comparableTo(lot: AuctionLot): (candidate: AuctionLot) => boolean {
   const a = classifyForm(lot);
-  const b = classifyForm(candidate);
-  if (a === 'unknown' || b === 'unknown') return false; // never guess
-  if (a !== b) return false;
-
-  // furniture bifurcates by model: LC2 comps LC2, Conoid comps Conoid, and a
-  // generic piece never comps a model-coded production line (or vice versa)
-  if (FURNITURE.has(a) && modelKey(lot) !== modelKey(candidate)) return false;
-
-  // watches bifurcate by reference: Daytona comps Daytona, never Datejust
-  if (WATCHES.has(a) && watchKey(lot) !== watchKey(candidate)) return false;
-
-  // opportunistic size gate when both sides are measurable
+  if (a === 'unknown') return () => false; // never guess
+  const isFurniture = FURNITURE.has(a);
+  const isWatch = WATCHES.has(a);
+  const keyA = isFurniture ? modelKey(lot) : null;
+  const refA = isWatch ? watchKey(lot) : null;
   const da = parseDims(lot.dimensions);
-  const db = parseDims(candidate.dimensions);
-  if (da && db) {
-    if (FURNITURE.has(a)) {
-      // a 40-inch bench is not a comp for a ten-footer
-      const la = Math.max(...da), lb = Math.max(...db);
-      if (la > 0 && lb > 0 && (la / lb > 2.2 || lb / la > 2.2)) return false;
-    } else {
-      const areaA = da[0] * da[1], areaB = db[0] * db[1];
-      if (areaA > 0 && areaB > 0 && (areaA / areaB > 4 || areaB / areaA > 4)) return false;
+
+  return (candidate: AuctionLot) => {
+    // form equality — a is known, so an unknown candidate never matches
+    if (classifyForm(candidate) !== a) return false;
+
+    // furniture bifurcates by model: LC2 comps LC2, Conoid comps Conoid, and a
+    // generic piece never comps a model-coded production line (or vice versa)
+    if (isFurniture && keyA !== modelKey(candidate)) return false;
+
+    // watches bifurcate by reference: Daytona comps Daytona, never Datejust
+    if (isWatch && refA !== watchKey(candidate)) return false;
+
+    // opportunistic size gate when both sides are measurable
+    if (da) {
+      const db = parseDims(candidate.dimensions);
+      if (db) {
+        if (isFurniture) {
+          // a 40-inch bench is not a comp for a ten-footer
+          const la = Math.max(...da), lb = Math.max(...db);
+          if (la > 0 && lb > 0 && (la / lb > 2.2 || lb / la > 2.2)) return false;
+        } else {
+          const areaA = da[0] * da[1], areaB = db[0] * db[1];
+          if (areaA > 0 && areaB > 0 && (areaA / areaB > 4 || areaB / areaA > 4)) return false;
+        }
+      }
     }
-  }
-  return true;
+    return true;
+  };
+}
+
+/** The hard gate: is `candidate` a legitimate comp for `lot`? One-shot form
+    of comparableTo — inside a filter, prefer the curried gate. */
+export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
+  return comparableTo(lot)(candidate);
 }
 
 export function normalizeTitle(t: string | null | undefined): string {
@@ -317,11 +346,13 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
     if (sameTitle.length >= 3) { pool = sameTitle; kind = 'edition'; }
   }
 
-  // 2 · same-form comps through the hard gates
+  // 2 · same-form comps through the hard gates (curried: anchor derived once)
   if (pool.length === 0) {
-    pool = sold.filter(l => areComparable(lot, l));
+    pool = sold.filter(comparableTo(lot));
     if (pool.length > 24) {
-      // prefer recent sales and titles that share words with this lot
+      // prefer recent sales and titles that share words with this lot —
+      // overlap/date are scored ONCE per lot, not once per sort comparison
+      // (normalizeTitle inside the comparator was the modal's other stall)
       const words = new Set(nt.split(' ').filter(w => w.length > 3));
       const overlap = (l: AuctionLot) => {
         const w = normalizeTitle(l.title).split(' ');
@@ -329,9 +360,11 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
         for (const x of w) if (words.has(x)) n++;
         return n;
       };
-      pool = [...pool]
-        .sort((a, b) => (overlap(b) - overlap(a)) || (new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()))
-        .slice(0, 24);
+      pool = pool
+        .map(l => [overlap(l), new Date(l.saleDate).getTime(), l] as const)
+        .sort((a, b) => (b[0] - a[0]) || (b[1] - a[1]))
+        .slice(0, 24)
+        .map(s => s[2]);
     }
   }
 

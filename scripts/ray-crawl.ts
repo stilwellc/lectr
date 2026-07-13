@@ -2,40 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cheerio from 'cheerio';
 
-// ── Types (mirrored from app/software/ray/types.ts to avoid import issues in standalone script) ──
+// ── Types ──
+// Imported from app/types.ts — the app's types are the single source of truth.
+// (This block used to be a hand-mirrored copy "to avoid import issues in a
+// standalone script", but the script is no longer standalone — it already
+// imports app/lib/comps and build-upcoming — and the mirror had drifted.)
 
-type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 'Rago' | 'Heritage' | 'Bonhams' | 'Hindman' | 'Goldin';
-type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn';
-type Currency = 'USD' | 'GBP' | 'EUR' | 'HKD' | 'CNY' | 'AUD' | 'CHF';
-type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'object' | 'unknown';
-
-interface AuctionLot {
-  id: string;
-  artist: string;
-  title: string;
-  year: string | null;
-  medium: string | null;
-  dimensions: string | null;
-  category: LotCategory;
-  imageUrl: string | null;
-  auctionHouse: AuctionHouse;
-  saleName: string;
-  saleDate: string;
-  lotNumber: number | null;
-  estimateLow: number | null;
-  estimateHigh: number | null;
-  currency: Currency;
-  hammerPrice: number | null;
-  premiumPrice: number | null;
-  priceUsd: number | null;
-  priceBasis?: 'hammer' | 'last-tracked-bid' | 'goldin-final-bid';
-  currentBid?: number;
-  bidCount?: number;
-  buyerPremium?: number;
-  auctionId?: string | null;
-  status: LotStatus;
-  url: string;
-}
+import type {
+  AuctionLot, AuctionHouse, LotStatus, Currency, LotCategory,
+  MarketStats, PricePoint, HouseCount,
+} from '../app/types';
 
 // ── Lot Classification ──
 // Classifies a lot as original, print, photograph, sculpture, design, or unknown
@@ -120,35 +96,6 @@ function classifyLot(lot: AuctionLot): LotCategory {
   if (medium && ORIGINAL_PATTERNS.test(text)) return 'original';
 
   return 'unknown';
-}
-
-interface PricePoint {
-  date: string;
-  avgPrice: number;
-  medianPrice: number;
-  totalSales: number;
-  highPrice: number;
-}
-
-interface HouseCount {
-  house: AuctionHouse;
-  count: number;
-  totalValue: number;
-}
-
-interface MarketStats {
-  lastUpdated: string;
-  totalLotsTracked: number;
-  avgPriceLast12Months: number;
-  medianPriceLast12Months: number;
-  recordPrice: number;
-  recordTitle: string;
-  recordDate: string;
-  recordHouse: AuctionHouse;
-  appreciationRate: number;
-  totalAuctionRevenue: number;
-  priceHistory: PricePoint[];
-  houseDistribution: HouseCount[];
 }
 
 // ── Artist Configuration ──
@@ -599,11 +546,18 @@ async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]> {
         ? hrefParts[auctionIdx + 2].split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
         : '';
 
-      let status: LotStatus = 'sold';
+      // The artist page exposes NO results (no hammer, no real sale date) — a
+      // record without a realized price is not a sale, so lots from this path
+      // are never 'sold'. A current-year card still showing a live Estimate is
+      // treated as upcoming; everything else resolved without a knowable
+      // result and is recorded as bought_in (matching how the other crawlers
+      // handle indeterminate past lots). The June 1 date is a placeholder —
+      // the year is all the page gives us.
+      let status: LotStatus = 'bought_in';
       let saleDate = '';
       if (auctionYear) {
         saleDate = `${auctionYear}-06-01`;
-        if (auctionYear >= now.getFullYear()) {
+        if (auctionYear >= now.getFullYear() && estimateLow !== null) {
           status = 'upcoming';
         }
       }
@@ -674,12 +628,11 @@ async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]> {
 
       const yearMatch = href.match(/\/auction\/(\d{4})\//);
       const auctionYear = yearMatch ? parseInt(yearMatch[1]) : null;
-      let status: LotStatus = 'sold';
+      // Bare links carry no estimate and no result — never 'upcoming' (would
+      // be a phantom that can't resolve) and never 'sold' (no realized price).
+      let status: LotStatus = 'bought_in';
       let saleDate = '';
-      if (auctionYear) {
-        saleDate = `${auctionYear}-06-01`;
-        if (auctionYear >= now.getFullYear()) status = 'upcoming';
-      }
+      if (auctionYear) saleDate = `${auctionYear}-06-01`;
 
       const fullUrl = href.startsWith('http') ? href : `https://www.sothebys.com${href}`;
       lots.push({
@@ -760,28 +713,12 @@ async function crawlChristies(artist: ArtistConfig): Promise<AuctionLot[]> {
       signal: AbortSignal.timeout(30000)
     });
     if (res.ok) {
-      const html = await res.text();
-      const searchMatch = html.match(/window\.chrComponents\s*=\s*window\.chrComponents\s*\|\|\s*\{\};\s*window\.chrComponents\.configurableSearch\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
-      if (searchMatch) {
-        const artistLots = parseChristiesJson(searchMatch[1], artist.slug);
-        artistLots.forEach(lot => {
-          if (!seen.has(lot.id)) {
-            seen.add(lot.id);
-            lots.push(lot);
-          }
-        });
-      } else {
-        const altMatch = html.match(/configurableSearch\s*=\s*(\{[\s\S]*?\});\s*(?:window\.|<\/script>)/);
-        if (altMatch) {
-          const artistLots = parseChristiesJson(altMatch[1], artist.slug);
-          artistLots.forEach(lot => {
-            if (!seen.has(lot.id)) {
-              seen.add(lot.id);
-              lots.push(lot);
-            }
-          });
+      parseChristiesHtml(await res.text(), artist.slug).forEach(lot => {
+        if (!seen.has(lot.id)) {
+          seen.add(lot.id);
+          lots.push(lot);
         }
-      }
+      });
     }
   } catch (err) {
     console.error("  [Christie's] Error fetching artist page:", err);
@@ -797,28 +734,12 @@ async function crawlChristies(artist: ArtistConfig): Promise<AuctionLot[]> {
       signal: AbortSignal.timeout(30000)
     });
     if (res.ok) {
-      const html = await res.text();
-      const searchMatch = html.match(/window\.chrComponents\s*=\s*window\.chrComponents\s*\|\|\s*\{\};\s*window\.chrComponents\.configurableSearch\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
-      if (searchMatch) {
-        const searchLots = parseChristiesJson(searchMatch[1], artist.slug);
-        searchLots.forEach(lot => {
-          if (!seen.has(lot.id)) {
-            seen.add(lot.id);
-            lots.push(lot);
-          }
-        });
-      } else {
-        const altMatch = html.match(/configurableSearch\s*=\s*(\{[\s\S]*?\});\s*(?:window\.|<\/script>)/);
-        if (altMatch) {
-          const searchLots = parseChristiesJson(altMatch[1], artist.slug);
-          searchLots.forEach(lot => {
-            if (!seen.has(lot.id)) {
-              seen.add(lot.id);
-              lots.push(lot);
-            }
-          });
+      parseChristiesHtml(await res.text(), artist.slug).forEach(lot => {
+        if (!seen.has(lot.id)) {
+          seen.add(lot.id);
+          lots.push(lot);
         }
-      }
+      });
     }
   } catch (err) {
     console.error("  [Christie's] Error fetching search:", err);
@@ -1174,6 +1095,12 @@ const SOTHEBYS_SCIENCE_SALES = [
  */
 function routeItem(creators: string | null, title: string, extra = ''): string | null {
   const t = `${creators || ''} ${title} ${extra}`.toLowerCase();
+  // NEVER cards — unambiguous trading-card signals gate EVERYTHING, before any
+  // science/sports route can claim the lot (mirrors goldinRoute: exclusions
+  // first). Deliberately narrower than the sports-route blocklist below: no
+  // bare 'card'/'psa', or a Steve Jobs business card / PSA-DNA-authenticated
+  // Apollo lot would be dropped.
+  if (/\b(topps|bowman|panini|goudey|fleer|donruss|upper deck|rookie card|trading card|tobacco (card|silk)|pok[eé]mon|yu-?gi-?oh|\btcg\b)\b/.test(t)) return null;
   // tracked watch makers first — the strongest identity a lot can have
   if (/\brolex\b/.test(t)) return 'rolex';
   if (/\bpatek\b/.test(t)) return 'patek-philippe';
@@ -1182,8 +1109,11 @@ function routeItem(creators: string | null, title: string, extra = ''): string |
   if (/\bcartier\b/.test(t)) return 'cartier';
   // science collections — positive signals only, no sale-level fallback
   if (/meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite|lunar meteorite|martian/.test(t)) return 'meteorites';
-  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|neanderthal|paleolithic|petrified|skeleton|skull|tusk|claw|tooth of|jaws?\b|amber with|coprolite|stromatolite/.test(t)) return 'fossils';
-  if (/apollo|nasa|space[- ]flown|space (exploration|shuttle|suit|program|station)|spacesuit|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|vostok|skylab|rocket|x-15|satellite|mission (control|patch)|flight plan|star chart/.test(t)) return 'space-exploration';
+  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|neanderthal|paleolithic|petrified|tooth of|amber with|coprolite|stromatolite/.test(t)) return 'fossils';
+  // generic anatomy words are fossils ONLY with paleo context — a
+  // "skeletonized" watch dial, skull-logo jersey, or Jaws poster is not a fossil
+  if (/\b(skeletons?|skulls?|tusks?|claws?|jaws?)\b/.test(t) && /\b(prehistoric|cretaceous|jurassic|triassic|permian|eocene|oligocene|miocene|pliocene|pleistocene|ice age|saber[- ]tooth(ed)?|cave (bear|lion)|woolly|dire wolf|raptor|extinct)\b/.test(t)) return 'fossils';
+  if (/apollo|nasa|space[- ]flown|space (exploration|shuttle|suit|program|station)|spacesuit|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|vostok|skylab|\brocket\b|x-15|satellite|mission (control|patch)|flight plan|star chart/.test(t)) return 'space-exploration';
   if (/telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|chronometer\b|slide rule|surveying|globe\b|celestial|enigma machine|cipher|calculat(or|ing)|typewriter|computer|macintosh|apple[- ](1|ii)|altair|commodore|prototype|patent model|anatomical|medical (instrument|kit)|laboratory|einstein|newton|darwin|curie|tesla|edison|manuscript.*(scien|math|physic)|first edition.*(scien|math|physic)/.test(t)) return 'scientific-instruments';
   // sports objects — Christie's/Sotheby's sports sales, same doctrine as
   // Goldin: game-used, trophies & awards, tickets & passes. NEVER cards.
@@ -1464,8 +1394,9 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
 // Video Games. DOCTRINE, item-level and belt-and-braces:
 //   sports  = game-used / trophies & awards / tickets & passes — NEVER cards
 //   science = Apple & computing history + fossils/meteorites — NEVER video games
-// Live inventory only (no public sold archive): every crawl replaces the
-// previous Goldin set wholesale, ended lots leave the dataset.
+// Live inventory only (no public sold archive): the crawl returns the CURRENT
+// live set; the merge step promotes tracked lots to sold when their auction
+// flips 'Completed' (Ray IS the archive) and evicts genuinely delisted stock.
 const GOLDIN_API_V2 = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';
 const GOLDIN_AUCTIONS_API = 'https://d2l9s2774i83t9.cloudfront.net/api/auctions';
 const GOLDIN_IMG = (lotId: string, img: string) =>
@@ -1474,17 +1405,20 @@ const GOLDIN_IMG = (lotId: string, img: string) =>
 const GOLDIN_CARD_MAKERS = /\b(topps|panini|bowman|upper deck|fleer|donruss|prizm|optic|mosaic|refractor|rookie card|\brc\b|pok[eé]mon|yu-?gi-?oh|magic the gathering|\bmtg\b|\btcg\b|booster|wax pack|hobby box|checklist|parallel|kakawow|skybox|pro set|leaf\b|trading card|patch card|sticker)\b/i;
 const GOLDIN_GRADED = /\b(psa|bgs|sgc|cgc|slab|gem m(in)?t)\b/i;
 const GOLDIN_EXCLUDE_GAMES = /\b(video game|nintendo|playstation|\bps[1-5]\b|xbox|sega|atari|game ?boy|n64|game ?cube|wii|famicom|wata|vga\b|sealed game|arcade)\b/i;
-const GOLDIN_EXCLUDE_MISC = /\b(sports illustrated|magazine|newsstand|comic|shonen|disney(land)?|universal studios|concert|music festival|movie prop|production[- ]used)\b/i;
+const GOLDIN_EXCLUDE_MISC = /\b(sports illustrated|magazine|newsstand|comic|shonen|disney(land)?|universal studios|concert|music festival|movie (prop|pass|premiere)|screening pass|production[- ]used)\b/i;
 
 const GOLDIN_GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|fight[- ]worn|tour[- ](used|worn)|warm[- ]?up[- ]worn|practice[- ]worn|game bat|game ball|photo[- ]?match(ed)?|mears\b)\b/i;
 const GOLDIN_TROPHY = /\b(trophy|award|championship ring|title belt|winners? medal|olympic medal|plaque|mvp\b|heisman|hall of fame ring|championship pendant)\b/i;
 const GOLDIN_TICKET = /\b(tickets?\b|stub|full ticket|season pass|press pass|credential|all[- ]access pass)\b/i;
 
+// Returns a routing slug, 'blocked' (hard exclusion — the facet fallback must
+// NEVER override it, or the slab gate is dead code on the fallback passes), or
+// null (no signal — the facet fallback may apply).
 function goldinRoute(title: string): string | null {
   const t = title.toLowerCase();
-  if (GOLDIN_CARD_MAKERS.test(t)) return null;     // never cards
-  if (GOLDIN_EXCLUDE_GAMES.test(t)) return null;   // never video games
-  if (GOLDIN_EXCLUDE_MISC.test(t)) return null;    // magazines, theme parks, props
+  if (GOLDIN_CARD_MAKERS.test(t)) return 'blocked';     // never cards
+  if (GOLDIN_EXCLUDE_GAMES.test(t)) return 'blocked';   // never video games
+  if (GOLDIN_EXCLUDE_MISC.test(t)) return 'blocked';    // magazines, theme parks, props
   // science first: an Apple-1 is science even in a sports house
   if (/\b(apple[- ]?(1|i{1,3}|ii)|macintosh|steve jobs|wozniak|apple computer|commodore|ibm\b|altair|enigma)\b/.test(t)) return 'scientific-instruments';
   if (/\b(meteorite|pallasite|tektite)\b/.test(t)) return 'meteorites';
@@ -1495,7 +1429,7 @@ function goldinRoute(title: string): string | null {
     : GOLDIN_TICKET.test(t) ? 'tickets-passes'
     : null;
   if (objectSignal) return objectSignal;
-  if (GOLDIN_GRADED.test(t)) return null;          // graded, no object signal = a slab
+  if (GOLDIN_GRADED.test(t)) return 'blocked';          // graded, no object signal = a slab
   return null;
 }
 
@@ -1514,6 +1448,10 @@ async function goldinQuery(body: object): Promise<{ lots: any[]; total: number }
     body: JSON.stringify({ search: { queryType: 'Featured', hasAnalyticsConsent: false, ...body } }),
     signal: AbortSignal.timeout(25000),
   });
+  // a 5xx/403 HTML body must throw here, not half-parse — the callers treat a
+  // failed page as an INCOMPLETE feed (goldinFeedComplete=false), never as
+  // "these lots are gone".
+  if (!res.ok) throw new Error(`Goldin lots_v2 HTTP ${res.status}`);
   const j = await res.json() as any;
   return { lots: j?.searchalgolia?.lots || [], total: j?.searchalgolia?.total || 0 };
 }
@@ -1525,6 +1463,15 @@ async function goldinQuery(body: object): Promise<{ lots: any[]; total: number }
 // the last bid we saw to a sold record. This set carries the completed-auction
 // ids from the crawl to the merge/promotion step below.
 let goldinCompletedAuctions = new Set<string>();
+// True only when the auctions-status fetch succeeded this run. When false the
+// merge must NOT touch tracked Goldin lots at all — with an empty Completed set
+// every closed lot would look "delisted" and be evicted, permanently destroying
+// the sold archive over one transient network error (Ray IS the archive).
+let goldinStatusOk = false;
+// True only when every facet/keyword pass enumerated fully. A failed page
+// truncates freshGoldinIds — absence from a partial feed is UNKNOWN, not
+// delisted, so eviction is skipped for the run when this is false.
+let goldinFeedComplete = true;
 
 async function crawlGoldin(): Promise<AuctionLot[]> {
   const byId = new Map<string, AuctionLot>();
@@ -1534,57 +1481,32 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // ingest LIVE inventory only (upcoming, with the running bid + its auction id).
   // There is no ended branch on the live feed — sold is decided at merge time,
   // strictly from the auction's own 'Completed' status, never a timestamp or bid.
-  const ingest = (lot: any, fallback: string | null, ended: boolean, saleEnd?: string) => {
+  // A live bid is NEVER a sale: Goldin's clock crosses end_timestamp BEFORE
+  // extended bidding resolves, and its lot-level `status` field lies (always
+  // "Live"), so sold is never inferred here from a timestamp or a bid.
+  const ingest = (lot: any, fallback: string | null) => {
     if (!lot.title || !lot.lot_id) return;
     const t = lot.title.toLowerCase();
     if (GOLDIN_CARD_MAKERS.test(t) || GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t)) { dropped++; return; }
-    const artist = goldinRoute(lot.title) || fallback;
+    const routed = goldinRoute(lot.title);
+    // 'blocked' is a hard exclusion (slab with no object signal, etc.) — the
+    // facet fallback must never resurrect it, or graded cards ride the
+    // Tickets/Game-Used facets straight into the sports vertical.
+    if (routed === 'blocked') { dropped++; return; }
+    const artist = routed || fallback;
     if (!artist) { dropped++; return; }
-    const end = saleEnd || lot.end_timestamp || lot.start_timestamp;
+    const end = lot.end_timestamp || lot.start_timestamp;
     if (!end) return;
     const bp = lot.buyer_premium || 22;
     const bid = lot.current_price || 0;
 
-    // SOLD is authoritative and time-based: the ONLY sold signal is `ended`,
-    // which the archive pass sets solely from the auction's own
-    // status === 'Completed'. A live bid is NEVER a sale — Goldin's clock
-    // crosses end_timestamp BEFORE extended bidding resolves, and its lot-level
-    // `status` field lies (always "Live"), so we never infer sold from a
-    // timestamp or a bid. An ended lot with a winning bid becomes a sold record
-    // at hammer + premium; a zero-bid ended lot is bought-in (skip).
-    if (ended) {
-      if (bid <= 0) return; // no bid = bought-in, not a result
-      const existing = byId.get(lot.lot_id);
-      if (existing && existing.status === 'sold') return; // already logged
-      byId.set(lot.lot_id, {
-        id: `goldin-${lot.lot_id}`,
-        artist,
-        title: lot.title,
-        year: null, medium: null, dimensions: null,
-        category: 'object',
-        imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
-        auctionHouse: 'Goldin',
-        saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
-        saleDate: end,
-        lotNumber: lot.lot_number || null,
-        estimateLow: null, estimateHigh: null,
-        priceUsd: Math.round(bid * (1 + bp / 100)), // final hammer + buyer's premium
-        priceBasis: 'goldin-final-bid',
-        currency: 'USD',
-        status: 'sold',
-        url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
-        currentBid: bid,
-        bidCount: lot.number_of_bids || 0,
-      } as unknown as AuctionLot);
-      return;
-    }
-
     if (byId.has(lot.lot_id)) return;
     if (lot.status && lot.status !== 'Live' && lot.status !== 'Preview') return;
-    // a lot whose end has already passed belongs to a closing/closed auction —
-    // don't add it as upcoming; the Completed-auction archive pass logs it once
-    // it's genuinely hammered.
-    if (new Date(end).getTime() < Date.now()) return;
+    // A lot whose end has passed but that Goldin still SERVES is in extended
+    // bidding / awaiting its auction's 'Completed' flip — keep tracking it as
+    // upcoming (with its latest bid). Dropping it here would keep it out of
+    // freshGoldinIds and the merge would evict it as delisted, losing the
+    // hammer forever. The Completed flip decides its fate, nothing else.
     byId.set(lot.lot_id, {
       id: `goldin-${lot.lot_id}`,
       artist,
@@ -1604,30 +1526,41 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       currentBid: bid,
       bidCount: lot.number_of_bids || 0,
       buyerPremium: bp,
-      auctionId: lot.auction_id || null,
+      auctionId: lot.auction_id || undefined, // app type: string | undefined, never null
     } as unknown as AuctionLot);
   };
 
-  // 1 · LIVE inventory — object facets + science keyword passes
+  // 1 · LIVE inventory — object facets + science keyword passes. A failed or
+  // capped page marks the whole feed incomplete: the merge must never read
+  // "absent from a partial fetch" as "delisted".
   for (const pass of GOLDIN_FACET_PASSES) {
     let from = 0, total = Infinity;
-    while (from < Math.min(total, 600)) {
+    const CAP = 3000; // headroom for flagship events; today's facets run ~30-160
+    while (from < Math.min(total, CAP)) {
       try {
         const { lots, total: t } = await goldinQuery({ item_type: [pass.itemType], size: 100, from });
         total = t;
         if (!lots.length) break;
-        lots.forEach((l: any) => ingest(l, pass.fallback, false));
+        lots.forEach((l: any) => ingest(l, pass.fallback));
         from += 100;
         await sleep(400);
-      } catch { break; }
+      } catch (e) {
+        console.log(`  [Goldin] facet '${pass.itemType}' truncated at ${from}:`, e);
+        goldinFeedComplete = false;
+        break;
+      }
     }
+    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false; // windowed, not enumerated
   }
   for (const q of GOLDIN_SCIENCE_QUERIES) {
     try {
       const { lots } = await goldinQuery({ searchTerm: q, size: 100, from: 0 });
-      lots.forEach((l: any) => ingest(l, null, false));
+      lots.forEach((l: any) => ingest(l, null));
       await sleep(400);
-    } catch { /* next */ }
+    } catch (e) {
+      console.log(`  [Goldin] science query '${q}' failed:`, e);
+      goldinFeedComplete = false;
+    }
   }
 
   // 2 · COMPLETION — record which auctions have closed. Goldin purges a lot
@@ -1643,12 +1576,19 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       body: JSON.stringify({ status: 'All', order: 'desc' }),
       signal: AbortSignal.timeout(25000),
     });
+    if (!aRes.ok) throw new Error(`Goldin auctions HTTP ${aRes.status}`);
     const auctions = (await aRes.json() as any).auctions || [];
     goldinCompletedAuctions = new Set<string>(
       auctions.filter((a: any) => a.status === 'Completed').map((a: any) => a.auction_id)
     );
+    goldinStatusOk = true; // only a verified fetch may drive promotion/eviction
     console.log(`  [Goldin] ${goldinCompletedAuctions.size} auctions marked Completed (promotion source)`);
-  } catch (e) { console.log('  [Goldin] auction-status fetch skipped:', e); }
+  } catch (e) {
+    // Leave goldinStatusOk false: the merge skips the whole promotion/eviction
+    // pass and tracked lots simply wait for the next run — nothing is lost by
+    // waiting, everything is lost by evicting on an empty Completed set.
+    console.log('  [Goldin] auction-status fetch FAILED — promotion/eviction deferred to next run:', e);
+  }
 
   console.log(`  [Goldin] ${byId.size} live lots kept (${dropped} gated out)`);
   return Array.from(byId.values());
@@ -1779,8 +1719,10 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
         continue;
       }
 
-      // Dimension line (has cm or in measurements)
-      if (/\d+\s*(?:×|x)\s*\d+|(?:cm|in)\b/.test(line) && !medium) {
+      // Dimension line (has cm or in measurements) — Bonhams order is
+      // title → medium → dimensions, so guard on !dimensions (a !medium guard
+      // would skip the dims line once medium is captured)
+      if (/\d+\s*(?:×|x)\s*\d+|\b(?:cm|in)\b/.test(line) && !dimensions) {
         dimensions = line;
         continue;
       }
@@ -2194,11 +2136,20 @@ async function enrichSothebys(lot: AuctionLot): Promise<EnrichResult> {
 
 const ENRICH_MAX_PER_RUN = DEEP ? 6000 : 500;
 const ENRICH_DELAY = 250;
+// Wall-clock budget: worst case (a stalled house timing out every 10s fetch)
+// would run ~85 min while the CI workflow is killed at 45 — taking the day's
+// crawl (and Goldin bid tracking) down with it. Stop enriching and let the
+// run write/commit; the backlog picks up next run.
+const ENRICH_TIME_BUDGET_MS = 20 * 60_000;
+// Only houses with an enricher in the switch below — anything else (Goldin
+// especially: all upcoming, always null medium/dims/year) would sort to the
+// front of the batch and burn slots on guaranteed no-ops.
+const ENRICHABLE_HOUSES = new Set<AuctionHouse>(['Phillips', "Christie's", 'Bonhams', "Sotheby's"]);
 
 async function enrichLots(lots: AuctionLot[]): Promise<void> {
-  // Find lots missing any of medium, dimensions, year (skip Wright — already good)
+  // Find lots missing any of medium, dimensions, year (Wright/Rago already good)
   const needsEnrich = lots.filter(l =>
-    l.auctionHouse !== 'Wright' && l.auctionHouse !== 'Rago' &&
+    ENRICHABLE_HOUSES.has(l.auctionHouse) &&
     (!l.medium || !l.dimensions || !l.year) &&
     l.url
   );
@@ -2232,8 +2183,13 @@ async function enrichLots(lots: AuctionLot[]): Promise<void> {
 
   let enriched = 0;
   const houseCounts: Record<string, { total: number; success: number }> = {};
+  const enrichStart = Date.now();
 
   for (const lot of batch) {
+    if (Date.now() - enrichStart > ENRICH_TIME_BUDGET_MS) {
+      console.log('[Enrich] Time budget exhausted — stopping early so the crawl still writes/commits.');
+      break;
+    }
     const house = lot.auctionHouse;
     if (!houseCounts[house]) houseCounts[house] = { total: 0, success: 0 };
     houseCounts[house].total++;
@@ -2392,10 +2348,22 @@ async function main() {
   // marketplace crawler was added and removed here in July 2026; do not
   // reintroduce it.
 
-  // Merge: new data overwrites existing by ID
+  // Merge: new data overwrites existing by ID — but carry forward enriched
+  // fields the fresh list-page copy lacks (medium/dims/year/image are facts
+  // about the object; wiping them re-burns the enrich budget on the same lots
+  // forever). Fresh always wins for price/status/bid fields via the spread.
   const lotMap = new Map<string, AuctionLot>();
   for (const lot of existingLots) lotMap.set(lot.id, lot);
-  for (const lot of freshLots) lotMap.set(lot.id, lot);
+  for (const lot of freshLots) {
+    const prev = lotMap.get(lot.id);
+    lotMap.set(lot.id, prev ? {
+      ...lot,
+      medium: lot.medium ?? prev.medium,
+      dimensions: lot.dimensions ?? prev.dimensions,
+      year: lot.year ?? prev.year,
+      imageUrl: lot.imageUrl ?? prev.imageUrl,
+    } : lot);
+  }
 
   // Clean up stale/bad entries
   const SCIENCE_SET = new Set(['meteorites', 'fossils', 'space-exploration', 'scientific-instruments']);
@@ -2407,8 +2375,13 @@ async function main() {
     if (id === 'sothebys-upcoming-boy-white-hat' && lotMap.has('sothebys-george-condo-qiao-zhikang-duo-the-boy-with-white')) {
       badIds.add(id);
     }
-    // Science is Sotheby's + Christie's curated auctions only — evict Bonhams junk.
-    if (SCIENCE_SET.has(lot.artist) && lot.auctionHouse !== "Sotheby's" && lot.auctionHouse !== "Christie's") badIds.add(id);
+    // Evict legacy Bonhams keyword-dredge junk from the science verticals.
+    // Sotheby's/Christie's curated science auctions AND Goldin (whose crawler
+    // deliberately ingests Apple/computing + fossils — invariant: science from
+    // Goldin exists) are the legitimate sources; sold records are permanent
+    // archive and never swept here.
+    if (SCIENCE_SET.has(lot.artist) && lot.status !== 'sold'
+      && lot.auctionHouse !== "Sotheby's" && lot.auctionHouse !== "Christie's" && lot.auctionHouse !== 'Goldin') badIds.add(id);
     // Evict the deprecated Algolia crawler's lots (sothebys-lux-*, no images) —
     // superseded by the GraphQL auction crawler's sothebys-<uuid> lots.
     if (id.startsWith('sothebys-lux-')) badIds.add(id);
@@ -2422,7 +2395,11 @@ async function main() {
     // close). Sold records are permanent. A lot still live stays upcoming; a lot
     // that vanished with no completed auction and no bid is delisted stock and
     // leaves; a legacy stale 'upcoming' past its end also goes.
-    if (id.startsWith('goldin-') && goldinRan && lot.status === 'upcoming') {
+    // The whole pass is gated on goldinStatusOk: with a failed status fetch the
+    // Completed set is empty and every closed lot would read as "delisted" —
+    // one transient error must never erase the pending archive. Deferring a run
+    // loses nothing (lots are keyed by id); evicting loses the hammer forever.
+    if (id.startsWith('goldin-') && goldinRan && goldinStatusOk && lot.status === 'upcoming') {
       const auctionDone = !!lot.auctionId && goldinCompletedAuctions.has(lot.auctionId);
       const bid = lot.currentBid || 0;
       if (auctionDone) {
@@ -2435,11 +2412,18 @@ async function main() {
         } else {
           badIds.add(id); // closed with no bid = bought-in
         }
-      } else if (!freshGoldinIds.has(id)) {
-        // gone from the live feed but its auction isn't Completed → delisted
-        // stock, unless it's a legacy record we can't adjudicate (no auctionId)
-        // that's stale past its end.
-        if (lot.auctionId || new Date(lot.saleDate).getTime() < Date.now() - 86_400_000) badIds.add(id);
+      } else if (goldinFeedComplete && !freshGoldinIds.has(id)) {
+        // Gone from a FULLY-enumerated live feed but its auction isn't
+        // Completed yet. A lot carrying real money is held pending — its
+        // Completed flip adjudicates it (promote or bought-in) on a later run;
+        // evicting now would destroy the only hammer record that will ever
+        // exist. Only zero-bid delisted stock leaves, plus legacy records we
+        // can't adjudicate (no auctionId) that are stale past their end.
+        if (bid > 0 && lot.auctionId) {
+          // hold — awaiting the Completed flip
+        } else if (lot.auctionId || new Date(lot.saleDate).getTime() < Date.now() - 86_400_000) {
+          badIds.add(id);
+        }
       }
     }
     // Watch makers: evict the old Christie's maker-search lots (now superseded
@@ -2499,8 +2483,9 @@ async function main() {
     console.log(`[Ray] ${artist.displayName}: ${artistLots.length} lots, ${artistLots.filter(l => l.status === 'sold').length} sold`);
   }
 
-  // Write output
-  fs.writeFileSync(lotsPath, JSON.stringify(allLots, null, 2));
+  // Write output — lots.json is minified (like upcoming.json): every
+  // first-visit client streams the whole file, so indentation is pure waste.
+  fs.writeFileSync(lotsPath, JSON.stringify(allLots));
   fs.writeFileSync(statsPath, JSON.stringify(statsByArtist, null, 2));
   fs.writeFileSync(path.join(DATA_DIR, 'meta.json'), JSON.stringify({
     lastCrawl: new Date().toISOString(),
@@ -2511,9 +2496,15 @@ async function main() {
   }, null, 2));
 
   // The small eager payload (upcoming lots + precomputed signals + the tape)
-  // so the app paints before the full history downloads.
-  const { buildUpcoming } = await import('./build-upcoming');
-  buildUpcoming(DATA_DIR);
+  // so the app paints before the full history downloads. Non-fatal: the CI
+  // workflow runs build-upcoming as its own step, so a throw here must not
+  // take the crawl's lots.json down with it.
+  try {
+    const { buildUpcoming } = await import('./build-upcoming');
+    buildUpcoming(DATA_DIR);
+  } catch (e) {
+    console.error('[Ray] buildUpcoming failed (crawl data intact):', e);
+  }
 
   console.log(`\n[Ray] Done. ${allLots.length} total lots written.`);
 }

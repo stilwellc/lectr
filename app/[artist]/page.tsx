@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ARTISTS, ARTIST_LABEL } from '../constants';
 import type { LotCategory } from '../types';
-import { useRayData } from '../hooks/useRayData';
+import { useRayData, retryFullLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { getUpcomingCounts, formatDate } from '../utils';
 
@@ -23,7 +23,7 @@ type CategoryFilter = 'all' | LotCategory;
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.artist as string;
-  const { statsByArtist, allLots, lastCrawl, fullLoaded, fromCache } = useRayData();
+  const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache } = useRayData();
   const { toggle, savedIds } = useSavedLots();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
@@ -31,16 +31,22 @@ export default function ArtistDetailPage() {
   const valid = ARTISTS.some(a => a.slug === slug);
 
   const stats = statsByArtist[slug] || null;
-  const lots = allLots.filter(l => l.artist === slug);
-  const today = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD string
-  const upcoming = lots
-    .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
-    .sort((a, b) => {
-      if (!a.saleDate) return 1;
-      if (!b.saleDate) return -1;
-      return new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime();
-    });
-  const sold = lots.filter(l => l.status === 'sold');
+  // memoized on [allLots, slug]: the 32k filter + sort must not re-run on
+  // every pill click / save toggle — and stable identities keep the memos
+  // inside PriceChart/PastResults from re-aggregating the whole history
+  const { lots, upcoming, sold } = useMemo(() => {
+    const lots = allLots.filter(l => l.artist === slug);
+    const today = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD string
+    const upcoming = lots
+      .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
+      .sort((a, b) => {
+        if (!a.saleDate) return 1;
+        if (!b.saleDate) return -1;
+        return new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime();
+      });
+    const sold = lots.filter(l => l.status === 'sold');
+    return { lots, upcoming, sold };
+  }, [allLots, slug]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
@@ -74,7 +80,29 @@ export default function ArtistDetailPage() {
       ) : (
         <>
           {!fullLoaded ? (
-            <RayLoading />
+            fullError ? (
+              // phase 2 (the full archive) failed after retries — say so and
+              // offer a retry, never an eternal skeleton
+              <div style={{ padding: '120px 24px', textAlign: 'center' }}>
+                <h2 style={{
+                  fontFamily: 'var(--font-sans), sans-serif',
+                  fontSize: 32,
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                  marginBottom: 10,
+                }}>
+                  The archive didn&rsquo;t load
+                </h2>
+                <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
+                  Ray couldn&rsquo;t fetch the full sale history. Check your connection and try again.
+                </p>
+                <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <RayLoading />
+            )
           ) : (
             <RayEntrance animate={!fromCache}>
               <div className="ray-enter">

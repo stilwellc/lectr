@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ARTISTS, ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
 import { useRayData } from './hooks/useRayData';
@@ -24,8 +24,8 @@ export default function RayPage() {
   const { allLots, statsByArtist, tape, demand, backtest, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
-  // Coming-soon markets fall back to the whole collectibles market; live ones filter.
-  const activeKey = marketMeta.live ? market : 'all';
+  // Every market on the board is live — the picked market filters directly.
+  const activeKey = market;
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const marketStats = useMemo(() => {
@@ -39,15 +39,24 @@ export default function RayPage() {
   const [feedView, setFeedView] = useState<'grid' | 'table'>('grid');
   const [tableLot, setTableLot] = useState<AuctionLot | null>(null);
 
+  // Lenses are scoped to the market they were picked in — a sport chosen in
+  // Sports (or a maker in Watches) must not silently empty another market's
+  // feed with no visible pill. Market switches drop the scoped lenses;
+  // query, sort and the below-market lens travel with the reader.
+  useEffect(() => {
+    setFeedFilters(f =>
+      f.vertical === null && f.maker === null && f.sport === null && f.category === null
+        ? f
+        : { ...f, vertical: null, maker: null, sport: null, category: null }
+    );
+  }, [activeKey]);
+
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return marketLots
       .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
-      .sort((a, b) => {
-        if (!a.saleDate) return 1;
-        if (!b.saleDate) return -1;
-        return new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime();
-      });
+      // ISO date strings order lexicographically — no Date per comparison
+      .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
   }, [marketLots]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -89,10 +98,12 @@ export default function RayPage() {
     return arr; // 'soonest' keeps the date order upcoming already has
   }, [upcoming, feedFilters, belowIds]);
 
-  // Any lens change restarts pagination and re-runs the card entrance.
+  // Lens changes re-run the card entrance. Search typing is deliberately NOT
+  // in the key: rekeying per keystroke would remount all 48 cards per
+  // character — keyed reconciliation by lot.id handles search narrowing.
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.query}|${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}`;
+    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     setFeedFilters(next);
@@ -104,7 +115,9 @@ export default function RayPage() {
   const sold = useMemo(() =>
     marketLots
       .filter(l => l.status === 'sold' && l.priceUsd)
-      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
+      // ISO strings compare lexicographically (~25k archive lots — no Date
+      // allocations per comparison; empty saleDates sink to the end)
+      .sort((a, b) => (a.saleDate > b.saleDate ? -1 : a.saleDate < b.saleDate ? 1 : 0)),
     [marketLots]
   );
 
@@ -114,32 +127,15 @@ export default function RayPage() {
     [marketStats]
   );
 
-  // The live strip: active lots only, so it agrees with everything below it.
-  // A living read on the market — one derived, honest line (revenue-weighted
-  // appreciation matching the analytics page, the top house by revenue, this
-  // week's hammers, and how many upcoming lots the buy-signal flags as cheap).
-  const pulse = useMemo(() => {
-    const stats = Object.values(marketStats);
-    const totalRevenue = stats.reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0);
-    const weightedAppreciation = totalRevenue > 0
-      ? stats.reduce((s, x) => s + (x.appreciationRate || 0) * (x.totalAuctionRevenue || 0), 0) / totalRevenue
-      : 0;
+  // The hero strip's lead line: the top maker by all-time realized revenue.
+  // (The old pulse sentence computed appreciation / week / flagged figures
+  // here too — the strip derives its own week count and reads belowIds for
+  // flags, so this stays the one figure the strip actually consumes.)
+  const topArtist = useMemo(() => {
     const topEntry = Object.entries(marketStats)
       .sort((a, b) => (b[1].totalAuctionRevenue || 0) - (a[1].totalAuctionRevenue || 0))[0];
-    const topArtist = topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
-    const now = new Date();
-    const weekAhead = new Date(now.getTime() + 7 * 86_400_000);
-    const thisWeekLots = upcoming.filter(l => {
-      const d = new Date(l.saleDate);
-      return !isNaN(d.getTime()) && d >= now && d <= weekAhead;
-    });
-    // Flagged count is among *this week's* lots so the sentence stays honest.
-    const belowFlagged = thisWeekLots.filter(l => {
-      const sig = lotSignal(l, marketLots);
-      return sig && sig.label === 'Below Market';
-    }).length;
-    return { weightedAppreciation, topArtist, thisWeek: thisWeekLots.length, belowFlagged };
-  }, [marketStats, upcoming, marketLots]);
+    return topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
+  }, [marketStats]);
 
   const strip = useMemo(() => {
     const active = upcoming;
@@ -159,12 +155,12 @@ export default function RayPage() {
     }).length;
     const priceOrDash = (n: number) => (n > 0 ? formatPrice(n) : '—');
     return [
-      { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: pulse.topArtist ? `led by ${pulse.topArtist}` : 'across the market' },
+      { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
       { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
       { k: 'Hammers this week', to: thisWeek, format: asComma, s: `across ${liveHouses} houses` },
       { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up' },
     ];
-  }, [upcoming, belowIds, totalRealized, pulse.topArtist]);
+  }, [upcoming, belowIds, totalRealized, topArtist]);
 
   // The tape ships precomputed PER MARKET in upcoming.json (instant); compute
   // it only as a fallback for deploys that predate the per-market split.
@@ -212,23 +208,7 @@ export default function RayPage() {
         </div>
       )}
 
-      {!marketMeta.live ? (
-        <div className="rail">
-          <section className="ray-soon">
-            <div className="ray-soon-k">Coming to Ray</div>
-            <h2>{marketMeta.label}</h2>
-            <p>
-              {marketMeta.tagline.charAt(0).toUpperCase() + marketMeta.tagline.slice(1)} — read the
-              same way Ray reads art and design: <b>every estimate against every hammer</b>, true
-              comparables only, demand measured against the ask, and a point-in-time record for
-              every call. The engine generalizes; the crawl is being built.
-            </p>
-            <button className="ray-call-btn ray-call-btn-primary" onClick={() => setMarket('all')}>
-              Explore the collectibles market
-            </button>
-          </section>
-        </div>
-      ) : error ? (
+      {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12 }}>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center' }}>{error}</p>
           <button
@@ -357,9 +337,27 @@ export default function RayPage() {
                         return (
                           <tr key={lot.id} onClick={() => setTableLot(lot)}>
                             <td style={{ width: 56 }}>
-                              {lot.imageUrl
-                                ? <img className="thumb" src={lot.imageUrl} alt="" referrerPolicy="no-referrer" onError={e => { e.currentTarget.outerHTML = `<span class="thumb-plate">${(lot.title || '?').charAt(0)}</span>`; }} />
-                                : <span className="thumb-plate">{(lot.title || '?').charAt(0)}</span>}
+                              {/* the plate paints behind the img — the honest fallback
+                                  when a house hotlink-blocks; hide, never outerHTML
+                                  (React must keep owning this node) */}
+                              <span className="thumb-plate" style={{ position: 'relative' }}>
+                                {(lot.title || '?').charAt(0)}
+                                {lot.imageUrl && (
+                                  <img
+                                    className="thumb"
+                                    src={lot.imageUrl}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerPolicy="no-referrer"
+                                    style={{ position: 'absolute', inset: 0 }}
+                                    // cache hits never fire onError — complete with zero
+                                    // naturalWidth at attach is a cached failure
+                                    ref={el => { if (el && el.complete && el.naturalWidth === 0) el.style.display = 'none'; }}
+                                    onError={e => { e.currentTarget.style.display = 'none'; }}
+                                  />
+                                )}
+                              </span>
                             </td>
                             <td>
                               <div className="t-artist">{ARTIST_LABEL[lot.artist] || lot.artist}</div>
@@ -418,7 +416,6 @@ export default function RayPage() {
                         lot={lot}
                         showArtist
                         allLots={marketLots}
-                        stats={statsByArtist[lot.artist]}
                         saved={isSaved(lot.id)}
                         onToggleSave={toggle}
                       />

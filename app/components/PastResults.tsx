@@ -284,7 +284,10 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     );
                   })()}
                   {formatDate(lot.saleDate, { month: 'short', year: 'numeric' })}
-                  {(lot as { priceBasis?: string }).priceBasis === 'last-tracked-bid' && (
+                  {/* the crawler promotes Goldin closes as 'goldin-final-bid';
+                      'last-tracked-bid' is the retired spelling, kept so any
+                      legacy archive record still gets its honesty label */}
+                  {(lot.priceBasis === 'goldin-final-bid' || lot.priceBasis === 'last-tracked-bid') && (
                     <span title="Goldin publishes no results — this is the last bid Ray tracked before close, incl. premium"> · tracked</span>
                   )}
                 </div>
