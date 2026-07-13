@@ -3,12 +3,16 @@
 import { useMemo } from 'react';
 import { AuctionLot } from '../types';
 import { categoryLabels } from '../utils';
+import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 
 export type FeedSort = 'soonest' | 'est-desc' | 'est-asc';
 
 export interface FeedFilters {
   query: string;
-  house: string | null;
+  /** on the total market: narrow to one vertical */
+  vertical: Market | null;
+  /** inside a vertical: narrow to one maker */
+  maker: string | null;
   category: string | null;
   belowOnly: boolean;
   sort: FeedSort;
@@ -16,17 +20,20 @@ export interface FeedFilters {
 
 export const FEED_DEFAULTS: FeedFilters = {
   query: '',
-  house: null,
+  vertical: null,
+  maker: null,
   category: null,
   belowOnly: false,
   sort: 'soonest',
 };
 
 /**
- * FeedToolbar — the command bar for the lot feed. Search, one-tap house and
- * category filters (only values actually present, with live counts), a
- * below-market lens, and sort. Sticky under the site nav so the tools travel
- * with the reader. Styling lives in globals.css (.ray-toolbar*).
+ * FeedToolbar — the command bar for the lot book. Search, the below-market
+ * lens, sort — and facet pills that mean something for where you're standing:
+ * on the total market the pills are the VERTICALS; inside a vertical they're
+ * that market's makers (watches/design/science) or its mediums (art), with a
+ * one-tap way back to the whole market. Houses were never how anyone shops —
+ * they're gone from the pills (search still finds them).
  */
 export default function FeedToolbar({
   lots,
@@ -35,6 +42,8 @@ export default function FeedToolbar({
   onChange,
   shown,
   total,
+  market = 'all',
+  onMarketReset,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -42,18 +51,33 @@ export default function FeedToolbar({
   onChange: (next: FeedFilters) => void;
   shown: number;
   total: number;
+  market?: Market;
+  onMarketReset?: () => void;
 }) {
-  const houses = useMemo(() => {
-    const c: Record<string, number> = {};
-    lots.forEach(l => { c[l.auctionHouse] = (c[l.auctionHouse] || 0) + 1; });
-    return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [lots]);
+  // total market → the verticals, with live counts
+  const verticals = useMemo(() => {
+    if (market !== 'all') return [];
+    return MARKETS.filter(m => m.live && m.key !== 'all').map(m => {
+      const set = marketArtists(m.key);
+      return { key: m.key, label: m.label, n: lots.filter(l => set.has(l.artist)).length };
+    }).filter(v => v.n > 0);
+  }, [lots, market]);
 
-  const categories = useMemo(() => {
+  // inside a vertical → its makers (art keeps mediums instead: 17 makers is a wall)
+  const makers = useMemo(() => {
+    if (market === 'all' || market === 'art') return [] as [string, number][];
     const c: Record<string, number> = {};
-    lots.forEach(l => { if (l.category !== 'unknown') c[l.category] = (c[l.category] || 0) + 1; });
+    lots.forEach(l => { c[l.artist] = (c[l.artist] || 0) + 1; });
+    return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [lots, market]);
+
+  // art → its mediums (the meaningful cut for that market)
+  const categories = useMemo(() => {
+    if (market !== 'art') return [] as [string, number][];
+    const c: Record<string, number> = {};
+    lots.forEach(l => { if (l.category !== 'unknown' && l.category !== 'object') c[l.category] = (c[l.category] || 0) + 1; });
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [lots]);
+  }, [lots, market]);
 
   const belowCount = useMemo(
     () => lots.filter(l => belowIds.has(l.id)).length,
@@ -62,7 +86,7 @@ export default function FeedToolbar({
 
   const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch });
   const isFiltered =
-    filters.query !== '' || filters.house !== null || filters.category !== null || filters.belowOnly;
+    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.category !== null || filters.belowOnly;
 
   return (
     <div className="ray-toolbar" role="search" aria-label="Find lots">
@@ -76,7 +100,7 @@ export default function FeedToolbar({
             type="search"
             value={filters.query}
             onChange={e => set({ query: e.target.value })}
-            placeholder="Search artist, work, house…"
+            placeholder="Search maker, work, reference…"
             aria-label="Search lots"
           />
           {filters.query && (
@@ -107,18 +131,36 @@ export default function FeedToolbar({
       </div>
 
       <div className="ray-toolbar-row ray-toolbar-row-filters">
-        {houses.map(([house, n]) => (
+        {market !== 'all' && onMarketReset && (
+          <>
+            <button className="ray-toolbar-pill" onClick={onMarketReset}>
+              ‹ Total market
+            </button>
+            <span className="ray-toolbar-divider" aria-hidden="true" />
+          </>
+        )}
+
+        {verticals.map(v => (
           <button
-            key={house}
+            key={v.key}
             className="ray-toolbar-pill"
-            data-active={filters.house === house}
-            onClick={() => set({ house: filters.house === house ? null : house })}
+            data-active={filters.vertical === v.key}
+            onClick={() => set({ vertical: filters.vertical === v.key ? null : v.key })}
           >
-            {house} <i>{n}</i>
+            {v.label} <i>{v.n}</i>
           </button>
         ))}
 
-        {categories.length > 1 && <span className="ray-toolbar-divider" aria-hidden="true" />}
+        {makers.map(([slug, n]) => (
+          <button
+            key={slug}
+            className="ray-toolbar-pill"
+            data-active={filters.maker === slug}
+            onClick={() => set({ maker: filters.maker === slug ? null : slug })}
+          >
+            {ARTIST_LABEL[slug] || slug} <i>{n}</i>
+          </button>
+        ))}
 
         {categories.map(([cat, n]) => (
           <button

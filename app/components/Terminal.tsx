@@ -43,8 +43,14 @@ export function MarketTiles({
   const tileArt = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const withImg = lots.filter(l => l.status === 'upcoming' && l.imageUrl && l.saleDate && l.saleDate >= today);
-    const best = (pool: AuctionLot[]) =>
-      [...pool].sort((a, b) => (b.estimateHigh || b.estimateLow || 0) - (a.estimateHigh || a.estimateLow || 0))[0]?.imageUrl || null;
+    const best = (pool: AuctionLot[], preferCategory?: string) => {
+      const ranked = [...pool].sort((a, b) => (b.estimateHigh || b.estimateLow || 0) - (a.estimateHigh || a.estimateLow || 0));
+      if (preferCategory) {
+        const preferred = ranked.find(l => l.category === preferCategory);
+        if (preferred) return preferred.imageUrl;
+      }
+      return ranked[0]?.imageUrl || null;
+    };
     const out: Record<string, string | null> = {};
     const used = new Set<string>();
     // verticals pick first so each shows its own object; 'all' takes the
@@ -54,7 +60,8 @@ export function MarketTiles({
       if (!m.live) { out[m.key] = null; continue; }
       const set = marketArtists(m.key);
       const pool = withImg.filter(l => set.has(l.artist) && !used.has(l.imageUrl!));
-      const pick = best(pool);
+      // art wears a painting, not whatever edition happens to be priciest
+      const pick = best(pool, m.key === 'art' ? 'original' : undefined);
       out[m.key] = pick;
       if (pick) used.add(pick);
     }
@@ -177,16 +184,27 @@ export function IndexRail({
 }
 
 /* ── R4b · today's call, as a matted catalogue plate ────────────────── */
+const CONF_RANK: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, low: 0 };
+
+/** The call the product stands behind: highest-confidence tier first, never
+    low — a headline pick backed by one thin comp would burn trust. */
+export function pickCall(lots: AuctionLot[], allLots: AuctionLot[]) {
+  const today = new Date().toISOString().split('T')[0];
+  const deals = lots
+    .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
+    .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
+    .filter(d => d.signal && d.signal.label === 'Below Market' && CONF_RANK[d.signal.confidence || 'low'] >= 1)
+    .sort((a, b) =>
+      (CONF_RANK[b.signal!.confidence || 'low'] - CONF_RANK[a.signal!.confidence || 'low'])
+      || (b.signal!.pct - a.signal!.pct));
+  // stay within the top confidence tier when choosing for the photograph
+  const topRank = deals.length ? CONF_RANK[deals[0].signal!.confidence || 'low'] : 0;
+  const tier = deals.filter(d => CONF_RANK[d.signal!.confidence || 'low'] === topRank);
+  return tier.slice(0, 8).find(d => d.lot.imageUrl) || tier[0] || null;
+}
+
 export function CallPlate({ lots, allLots }: { lots: AuctionLot[]; allLots: AuctionLot[] }) {
-  const call = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const deals = lots
-      .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
-      .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
-      .filter(d => d.signal && d.signal.label === 'Below Market')
-      .sort((a, b) => b.signal!.pct - a.signal!.pct);
-    return deals.slice(0, 5).find(d => d.lot.imageUrl) || deals[0] || null;
-  }, [lots, allLots]);
+  const call = useMemo(() => pickCall(lots, allLots), [lots, allLots]);
 
   if (!call) return null;
   const { lot, signal } = call;
