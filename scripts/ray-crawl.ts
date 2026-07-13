@@ -2416,7 +2416,8 @@ async function main() {
   fs.writeFileSync(path.join(DATA_DIR, 'meta.json'), JSON.stringify({
     lastCrawl: new Date().toISOString(),
     artists: ARTISTS.map(a => ({ slug: a.slug, displayName: a.displayName })),
-    sources: ['Phillips', "Sotheby's", "Christie's", 'Wright/Rago', 'Bonhams'],
+    // derived from the data so it never drifts as houses are added
+    sources: Array.from(new Set(allLots.map(l => l.auctionHouse))).sort(),
     version: 2,
   }, null, 2));
 
