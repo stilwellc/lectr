@@ -1,8 +1,8 @@
 import type { Market } from '../constants';
 
 /**
- * MarketIcon — one monoline glyph per vertical, drawn in the same 1.6px
- * stroke family as the Ray mark. Collectibles = the whole grid, Art = framed
+ * MarketIcon — one monoline glyph per vertical, drawn in the same 1.8px
+ * round-cap stroke family as the rest of the pen-weight ramp. Collectibles = the whole grid, Art = framed
  * gesture, Design = chair in profile, Watches = dial with crown, Sports = the
  * trophy, Science = the flask. currentColor so each context tints them.
  */
@@ -63,7 +63,7 @@ export default function MarketIcon({ market, size = 20 }: { market: Market; size
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.6"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

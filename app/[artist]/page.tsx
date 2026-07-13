@@ -71,7 +71,7 @@ export default function ArtistDetailPage() {
             Nothing tracked at this address
           </h2>
           <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-            Ray follows {ARTISTS.length} artists and makers across art, design, watches and science.
+            The desk follows {ARTISTS.length} artists and makers across art, design, watches and science.
           </p>
           <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
             Back to the market
@@ -94,7 +94,7 @@ export default function ArtistDetailPage() {
                   The archive didn&rsquo;t load
                 </h2>
                 <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-                  Ray couldn&rsquo;t fetch the full sale history. Check your connection and try again.
+                  The crawl couldn&rsquo;t fetch the full sale history. Check your connection and try again.
                 </p>
                 <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
                   Retry

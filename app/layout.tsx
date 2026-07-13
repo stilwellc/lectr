@@ -16,28 +16,28 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://ray-one-theta.vercel.app'),
+  metadataBase: new URL('https://lectr.bid'),
   title: {
-    default: 'Ray — Auction Intelligence',
-    template: '%s — Ray',
+    default: 'lectr — auction intelligence',
+    template: '%s — lectr',
   },
   description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
   openGraph: {
-    title: 'Ray — Auction Intelligence',
+    title: 'lectr — auction intelligence',
     description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
-    siteName: 'Ray',
+    siteName: 'lectr',
     type: 'website',
     locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Ray — Auction Intelligence',
+    title: 'lectr — auction intelligence',
     description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses.`,
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0A0B0D',
+  themeColor: '#08090B',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

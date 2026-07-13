@@ -133,7 +133,7 @@ export default function ValuePage() {
 
           {call && (
             <section className="rail ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-              <div className="ray-call">
+              <div className="ray-call lit">
                 <div className="ray-call-copy">
                   <div className="ray-call-eyebrow">
                     <span>Today&rsquo;s call</span>
@@ -198,7 +198,7 @@ export default function ValuePage() {
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
                 <h2 className="ray-h2">The record</h2>
                 <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
-                  every historical call replayed with only the data Ray had that day
+                  every historical call replayed with only the data lectr had that day
                 </span>
               </div>
               <div className="ray-strip">

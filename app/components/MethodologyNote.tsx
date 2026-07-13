@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
  * makes it visible. A quiet text trigger opens a portal card explaining the
  * gates in plain language.
  */
-export default function MethodologyNote({ trigger = 'How Ray calls it' }: { trigger?: string }) {
+export default function MethodologyNote({ trigger = 'How lectr calls it' }: { trigger?: string }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -25,8 +25,8 @@ export default function MethodologyNote({ trigger = 'How Ray calls it' }: { trig
       </button>
       {open && typeof document !== 'undefined' && createPortal(
         <div className="ray-ck-overlay" onClick={() => setOpen(false)} role="presentation">
-          <div className="ray-method" role="dialog" aria-modal="true" aria-label="How Ray calls it" onClick={e => e.stopPropagation()}>
-            <h3>How Ray calls it</h3>
+          <div className="ray-method" role="dialog" aria-modal="true" aria-label="How lectr calls it" onClick={e => e.stopPropagation()}>
+            <h3>How lectr calls it</h3>
             <p className="ray-method-lede">
               <b style={{ color: 'var(--color-fg)' }}>The Demand Index</b> is how the
               typical sale performs against its own estimate over the trailing twelve
@@ -66,7 +66,7 @@ export default function MethodologyNote({ trigger = 'How Ray calls it' }: { trig
               </li>
               <li>
                 <b>Silent over wrong.</b> Fewer than three true comps, or a pool
-                that disagrees with itself, and Ray says nothing at all.
+                that disagrees with itself, and lectr says nothing at all.
               </li>
             </ul>
             <p className="ray-method-foot">

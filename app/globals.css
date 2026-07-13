@@ -160,7 +160,7 @@ body {
 }
 
 ::selection {
-  background: rgba(212, 184, 150, 0.3);
+  background: rgba(255, 255, 255, 0.22);
   color: var(--color-fg);
 }
 
@@ -178,11 +178,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent-gold);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 :focus-visible {
-  outline: 1px solid var(--color-accent-gold);
+  outline: 1px solid rgba(255, 255, 255, 0.8);
   outline-offset: 3px;
 }
 
@@ -1100,7 +1100,7 @@ h1 {
 }
 .ray-tape-price {
   font-weight: 600;
-  color: var(--color-accent-wine-text);
+  color: var(--color-fg);
   font-variant-numeric: tabular-nums;
 }
 .ray-tape-house {
@@ -1376,7 +1376,7 @@ h1 {
   padding: 6px 2px 8px;
   transition: border-color var(--duration-fast) var(--ease-signature);
 }
-.ray-toolbar-search:focus-within { border-color: var(--color-accent-gold); }
+.ray-toolbar-search:focus-within { border-color: rgba(255, 255, 255, 0.6); }
 .ray-toolbar-search svg { width: 15px; height: 15px; color: var(--color-text-faint); flex: none; }
 .ray-toolbar-search input {
   flex: 1;
@@ -1465,11 +1465,11 @@ h1 {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--color-accent-gold-text);
+  color: var(--color-text-secondary);
   padding: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-accent-gold) 45%, transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
 }
-.ray-toolbar-reset:hover { color: var(--color-accent-gold); }
+.ray-toolbar-reset:hover { color: var(--color-fg); }
 
 /* Filter-change: cards re-enter with a soft rise */
 @keyframes rayFeedIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -1650,8 +1650,8 @@ h1 {
   --font-mono: var(--font-sans);
 
   /* neutral ground */
-  --color-bg: #0A0B0D;
-  --color-bg-elevated: #15171A;
+  --color-bg: #08090B;
+  --color-bg-elevated: #131518;
   --color-fg: #F4F5F6;
   --color-text-secondary: #C6CACF;
   --color-text-muted: #9AA0A6;
@@ -1660,16 +1660,18 @@ h1 {
   --color-text-faint: #7A8087;
   --color-border: rgba(255, 255, 255, 0.07);
   --color-border-mid: rgba(255, 255, 255, 0.14);
-  --color-nav-bg: rgba(10, 11, 13, 0.86);
+  --color-nav-bg: rgba(8, 9, 11, 0.88);
   --color-hover-item: rgba(255, 255, 255, 0.04);
   --color-overlay-light: rgba(255, 255, 255, 0.04);
 
-  /* roles */
-  --color-accent-gold: #E8B95B;        /* brand only */
-  --color-accent-gold-text: #EDC275;
-  --color-accent-wine: #E8B95B;        /* legacy slots collapse to brand */
-  --color-accent-wine-text: #EDC275;
-  --color-accent-coral: #E8B95B;
+  /* roles — gold retires completely; legacy accent slots collapse to ink */
+  --color-accent-gold: #FFFFFF;
+  --color-accent-gold-text: #F4F5F6;
+  --color-accent-wine: #FFFFFF;
+  --color-accent-wine-text: #F4F5F6;
+  --color-accent-coral: #FFFFFF;
+  --color-lit: #FFFFFF;                /* signal white, the sign's own ink */
+  --glow-lit: 0 0 2px rgba(255, 255, 255, 0.45), 0 0 16px rgba(255, 255, 255, 0.14);
   --color-up: #2FBF71;
   --color-up-soft: rgba(47, 191, 113, 0.13);
   --color-down: #E5544B;
@@ -1703,6 +1705,13 @@ h1 {
 
   --grain-opacity: 0;
   color-scheme: dark;
+}
+
+/* the marquee rule: exactly one element per view carries the halo —
+   --glow-lit has exactly one consumer in this file, this class */
+.lit {
+  border-color: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: var(--glow-lit);
 }
 
 /* kill the decorative layer wholesale */
@@ -1845,8 +1854,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 :root {
   --hairline: rgba(255, 255, 255, 0.08);
   --hairline-soft: rgba(255, 255, 255, 0.06);
-  --panel: #101216;
-  --panel-mat: #15171A;
+  --panel: #0D0F12;
+  --panel-mat: #131518;
   --ease-ui: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
 }
@@ -1854,7 +1863,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* R2 · the tape — the terminal's signature slot, directly under the bar */
 .ray-tapeband {
   height: 34px;
-  background: #0C0D10;
+  background: #0A0B0E;
   border-bottom: 1px solid var(--hairline);
   overflow: hidden;
   -webkit-mask-image: linear-gradient(90deg, transparent, black 48px, black calc(100% - 48px), transparent);
@@ -1871,7 +1880,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-tapeband .ray-tape-artist { color: var(--color-fg); font-weight: 600; }
 .ray-tapeband .ray-tape-title { color: #7A8087; }
-.ray-tapeband .ray-tape-price { color: var(--color-up); font-weight: 550; font-variant-numeric: tabular-nums; }
+.ray-tapeband .ray-tape-price { color: var(--color-fg); font-weight: 550; font-variant-numeric: tabular-nums; }
 .ray-tapeband .ray-tape-house { color: var(--color-text-faint); }
 @media (max-width: 768px) {
   .ray-tapeband { height: 32px; }
@@ -2252,8 +2261,23 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-monu-v.up { color: var(--color-up); }
 .ray-monu-k { font-size: 11px; font-weight: 600; color: #9AA0A6; margin-top: 6px; }
 .ray-monu-body { font-size: 13.5px; color: #9AA0A6; line-height: 1.55; margin-top: 14px; }
-.ray-monu-cta { display: inline-block; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; text-decoration: none; }
+.ray-monu-cta { display: inline-block; position: relative; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; text-decoration: none; }
 .ray-monu-cta:hover { color: var(--color-fg); }
+/* the pen-draw: the underline draws left-to-right */
+.ray-monu-cta::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: auto;
+  width: 100%;
+  height: 1px;
+  background: #F4F5F6;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 220ms var(--ease-ui);
+}
+.ray-monu-cta:hover::after { transform: scaleX(1); }
 @media (max-width: 1000px) {
   .ray-board { grid-template-columns: 1fr; }
   .ray-record-grid { grid-template-columns: 1fr; }
@@ -2335,7 +2359,22 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.ray-deckcall-cta { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; }
+.ray-deckcall-cta { position: relative; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; }
+/* the pen-draw: the underline draws left-to-right on parent hover */
+.ray-deckcall-cta::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: auto;
+  width: 100%;
+  height: 1px;
+  background: #F4F5F6;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 220ms var(--ease-ui);
+}
+.ray-deckcall:hover .ray-deckcall-cta::after { transform: scaleX(1); }
 .ray-hammers { display: flex; flex-direction: column; }
 .ray-hammer-row {
   display: flex;
@@ -2518,7 +2557,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-tape-item::after { content: '·'; color: var(--color-text-faint); margin-left: 26px; font-size: 12px; }
 .ray-tape-artist { text-transform: none; letter-spacing: -0.01em; font-weight: 600; font-size: 12.5px; color: var(--color-text-secondary); }
 .ray-tape-title { font-family: var(--font-sans); font-style: normal; font-size: 12.5px; color: var(--color-text-faint); }
-.ray-tape-price { color: var(--color-up); font-weight: 600; }
+.ray-tape-price { color: var(--color-fg); font-weight: 600; }
 .ray-tape-house { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--color-text-faint); }
 
 /* ───────────────────────── on the block ───────────────────────── */
@@ -2705,6 +2744,56 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-range-btn:active, .ray-seg-btn:active, .ray-toolbar-pill:active,
   .ray-lot-remind:active, .ray-nav-link:active, .ray-block-toggle-btn:active,
   .ray-sort-pill:active { transform: none; }
+}
+
+/* ── the flick draws itself — stroke-dashoffset, one pen stroke ── */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes lectrFlickDraw {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+  }
+  .lectr-flick-draw polyline {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 0;
+    animation: lectrFlickDraw 500ms var(--ease-draw) both;
+  }
+}
+
+/* ── the loader: the sign writes itself (RayLoading brand slot) ── */
+.lectr-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+/* the pen writes — the script flows left-to-right, so a clip-path wipe
+   reads as writing; then the pen lifts and writes again */
+.lectr-write {
+  display: block;
+  animation: lectrWrite 1.8s var(--ease-draw) infinite;
+}
+@keyframes lectrWrite {
+  0% { clip-path: inset(0 100% 0 0); opacity: 1; }
+  55% { clip-path: inset(0 0 0 0); opacity: 1; }
+  72% { opacity: 1; }
+  90%, 100% { clip-path: inset(0 0 0 0); opacity: 0.35; }
+}
+/* the lead-in stroke — direct descendant of the hairline loader */
+.lectr-lead {
+  width: 120px;
+  height: 1px;
+  background: #F4F5F6;
+  transform: scaleX(0.2);
+  transform-origin: left;
+  animation: lectrLead 1.2s var(--ease-draw) infinite;
+}
+@keyframes lectrLead {
+  0% { transform: scaleX(0.2); }
+  100% { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lectr-write { animation: none; clip-path: none; opacity: 0.6; }
+  .lectr-lead { animation: none; transform: scaleX(1); }
 }
 
 /* ── loading skeleton (RayLoading) ── */
@@ -3046,19 +3135,30 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 @keyframes rayPulse { 0% { transform: scale(0.5); opacity: 0.6; } 70% { transform: scale(1.15); opacity: 0; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ray-fresh-dot::after { animation: none; } }
 
-/* ── the mark: the slashed R ── */
+/* ── the mark: the sign in the nav ── */
 .ray-wordmark { display: inline-flex !important; align-items: center; gap: 9px; }
 .ray-mark-r {
-  width: 30px;
-  height: 30px;
+  width: auto;
+  height: 26px;
   display: block;
   object-fit: contain;
-  /* the source art is green-on-black; screen-blending drops the black
-     plate so the R sits directly on the nav */
-  mix-blend-mode: screen;
-  transition: transform var(--duration-fast) var(--ease-signature);
+  transition: filter 150ms var(--ease-signature);
 }
-.ray-wordmark:hover .ray-mark-r { transform: translateX(1px); }
+/* the sign warming when touched — the only interactive glow in the chrome */
+.ray-wordmark:hover .ray-mark-r,
+.ray-wordmark:focus-visible .ray-mark-r {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+}
+
+/* the switch-on ritual — once per session, the mark warms with one dip */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes lectrSwitchOn {
+    0% { opacity: 0.55; }
+    40% { opacity: 0.85; }
+    55% { opacity: 0.65; }
+    100% { opacity: 1; }
+  }
+}
 
 /* ════════════════════════════════════════════════════════════════════
    DEPTH & CHARACTER — the fintech-terminal layer (Robinhood/Coinbase
@@ -3076,7 +3176,7 @@ body {
 
 /* surfaces: luminous gradient + inner top highlight + real shadow */
 .glass, .glass-quiet, .glass-noblur, .glass-pill {
-  background: linear-gradient(180deg, #1A1D21 0%, #131518 100%) !important;
+  background: linear-gradient(180deg, #17191D 0%, #101215 100%) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.045),
     0 8px 28px rgba(0, 0, 0, 0.35) !important;
@@ -3095,23 +3195,8 @@ body {
   border-radius: 14px 14px 0 0;
 }
 
-/* the ambient market wash — an aurora behind the hero, tinted by state */
+/* no aurora — the deepened ground replaces ambience with darkness */
 .ray-hero2 { position: relative; }
-.ray-hero2::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: -10%;
-  width: 60%;
-  height: 340px;
-  pointer-events: none;
-  border-radius: 100%;
-  filter: blur(80px);
-  opacity: 0.4;
-  background: radial-gradient(closest-side, var(--hero-tone, transparent), transparent 70%);
-}
-.ray-hero2[data-tone='up'] { --hero-tone: rgba(47, 191, 113, 0.16); }
-.ray-hero2[data-tone='down'] { --hero-tone: rgba(229, 84, 75, 0.14); }
 
 /* the line glows — the Robinhood signature */
 .ray-hero2-chart .recharts-area-curve {
@@ -3172,24 +3257,12 @@ body {
 
 /* nav gets a hair of glass depth back (still sober) */
 .ray-artist-nav {
-  background: linear-gradient(180deg, rgba(16, 17, 20, 0.92), rgba(10, 11, 13, 0.86));
+  background: linear-gradient(180deg, rgba(13, 14, 17, 0.92), rgba(8, 9, 11, 0.88));
 }
 .ray-tabbar {
-  background: linear-gradient(0deg, rgba(16, 17, 20, 0.95), rgba(10, 11, 13, 0.88));
+  background: linear-gradient(0deg, rgba(13, 14, 17, 0.92), rgba(8, 9, 11, 0.88));
   box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.4);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .ray-hero2::before { opacity: 0.25; }
-}
-
-/* the aurora breathes — slow, alive, calm */
-@keyframes rayAurora {
-  0%, 100% { opacity: 0.34; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.08); }
-}
-.ray-hero2::before { animation: rayAurora 9s var(--ease-signature) infinite; }
-@media (prefers-reduced-motion: reduce) { .ray-hero2::before { animation: none; } }
 
 /* ── the verticals: market tabs on the lander ── */
 .ray-markets {
@@ -3233,11 +3306,11 @@ body {
 .ray-market-soon {
   font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-accent-gold-text);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-text-muted);
 }
-.ray-market-tab[data-active=true] .ray-market-soon { color: #8A6D2F; }
+.ray-market-tab[data-active=true] .ray-market-soon { color: rgba(10, 11, 13, 0.7); }
 .ray-markets-compact .ray-market-tab { font-size: 12.5px; padding: 6px 13px; align-items: center; }
 .ray-markets-compact .ray-market-tab svg { opacity: 0.85; flex: none; }
 
@@ -3313,7 +3386,7 @@ body {
 .ray-mkt-card[data-active=true] .ray-mkt-ic { color: #0A0B0D; }
 .ray-mkt-card[data-active=true] .ray-mkt-card-tag { color: #5A5F66; }
 .ray-mkt-card[data-active=true] .ray-mkt-card-stat span { color: #82868D; }
-.ray-mkt-card[data-active=true] .ray-market-soon { color: #8A6D2F; }
+.ray-mkt-card[data-active=true] .ray-market-soon { color: rgba(10, 11, 13, 0.7); }
 
 /* mobile: the shelf becomes pillars — every market visible, one thin row each */
 @media (max-width: 900px) {
@@ -3356,14 +3429,14 @@ body {
   border-radius: 20px;
   text-align: left;
   background:
-    radial-gradient(600px 220px at 20% 0%, rgba(232, 185, 91, 0.07), transparent 70%),
+    radial-gradient(600px 220px at 20% 0%, rgba(255, 255, 255, 0.05), transparent 70%),
     linear-gradient(180deg, #17191D, #121417);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 .ray-soon-k {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-accent-gold-text);
+  color: var(--color-text-secondary);
   margin-bottom: 10px;
 }
 .ray-soon h2 {

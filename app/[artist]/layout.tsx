@@ -18,7 +18,7 @@ export function generateMetadata({ params }: { params: { artist: string } }) {
   const label = ARTISTS.find(a => a.slug === params.artist)?.label || params.artist;
   return {
     title: label,
-    openGraph: { title: `${label} — Ray`, images: [`/og/${params.artist}.png`] },
+    openGraph: { title: `${label} — lectr`, images: [`/og/${params.artist}.png`] },
     twitter: { card: 'summary_large_image', images: [`/og/${params.artist}.png`] },
   };
 }

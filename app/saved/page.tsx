@@ -98,7 +98,7 @@ export default function SavedPage() {
             <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>0</h1>
             <p className="ray-hero2-delta">
               <span className="ctx">
-                Every collector starts by watching. Bookmark a lot and Ray tracks its
+                Every collector starts by watching. Bookmark a lot and lectr tracks its
                 hammer, its comps, and — once it concludes — how your eye did.
               </span>
             </p>

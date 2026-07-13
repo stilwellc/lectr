@@ -288,7 +288,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                       'last-tracked-bid' is the retired spelling, kept so any
                       legacy archive record still gets its honesty label */}
                   {(lot.priceBasis === 'goldin-final-bid' || lot.priceBasis === 'last-tracked-bid') && (
-                    <span title="Goldin publishes no results — this is the last bid Ray tracked before close, incl. premium"> · tracked</span>
+                    <span title="Goldin publishes no results — this is the last bid lectr tracked before close, incl. premium"> · tracked</span>
                   )}
                 </div>
               </div>

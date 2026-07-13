@@ -9,6 +9,7 @@ import { demandSeries, formatDemand } from '../lib/demand';
 import type { DemandPoint } from '../hooks/useRayData';
 import { lotSignal, confidenceMeter } from './LotCard';
 import MarketIcon from './MarketIcon';
+import Flick from './Flick';
 
 /**
  * Ray Terminal — the trading floor, settled. The committee's merged build:
@@ -107,7 +108,7 @@ export function MarketTiles({
             key={m.key}
             role="tab"
             aria-selected={active === m.key}
-            className="ray-mkttile"
+            className={`ray-mkttile${active === m.key ? ' lit' : ''}`}
             data-active={active === m.key}
             data-live={m.live}
             data-tone={tone}
@@ -218,7 +219,12 @@ export function CallPlate({ lots, allLots }: { lots: AuctionLot[]; allLots: Auct
           <span className="ray-sigrow-dots" title={`${meter.word} confidence`}>{meter.dots}</span>
         </span>
       </div>
-      <div className="ray-deckcall-cta">Open the value tape →</div>
+      <div className="ray-deckcall-cta">Open the value tape <Flick size={13} /></div>
+      <img
+        src="/brand/lectr-nav.png"
+        alt=""
+        style={{ height: 18, width: 'auto', opacity: 0.55, alignSelf: 'flex-end', marginTop: 10 }}
+      />
     </Link>
   );
 }
@@ -381,8 +387,8 @@ export function Monument({ backtest }: { backtest: { flagged: { n: number; media
         <div className="ray-monu-v">{backtest.flagged.n.toLocaleString()}</div>
         <div className="ray-monu-k">sales replayed, 2000→2026</div>
       </div>
-      <p className="ray-monu-body">Every call scored against the hammer it predicted — with only the data Ray had that day.</p>
-      <Link href="/value" className="ray-monu-cta">How the backtest works →</Link>
+      <p className="ray-monu-body">Every call scored against the hammer it predicted — with only the data lectr had that day.</p>
+      <Link href="/value" className="ray-monu-cta">How the backtest works <Flick size={13} /></Link>
       </div>
     </aside>
   );
@@ -393,7 +399,7 @@ export function Colophon({ lotCount, houseCount, lastCrawl }: { lotCount: number
   return (
     <footer className="ray-colophon">
       <div className="rail ray-colophon-in">
-        <span>Ray reads every estimate against every hammer. {lotCount.toLocaleString()} lots · {houseCount} houses · since 2000.</span>
+        <span><img src="/brand/lectr-nav.png" alt="lectr" style={{ height: 14, width: 'auto', opacity: 0.4, verticalAlign: -3, marginRight: 8 }} />reads every estimate against every hammer. {lotCount.toLocaleString()} lots · {houseCount} houses · since 2000.</span>
         <span>Comps: same-maker, same-form, size-banded. Medians, never means.</span>
         <span>{lastCrawl ? `Data crawled ${lastCrawl}` : 'Crawled daily'}</span>
       </div>
