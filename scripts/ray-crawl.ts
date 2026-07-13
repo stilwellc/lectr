@@ -28,6 +28,11 @@ interface AuctionLot {
   hammerPrice: number | null;
   premiumPrice: number | null;
   priceUsd: number | null;
+  priceBasis?: 'hammer' | 'last-tracked-bid' | 'goldin-final-bid';
+  currentBid?: number;
+  bidCount?: number;
+  buyerPremium?: number;
+  auctionId?: string | null;
   status: LotStatus;
   url: string;
 }
@@ -1513,14 +1518,22 @@ async function goldinQuery(body: object): Promise<{ lots: any[]; total: number }
   return { lots: j?.searchalgolia?.lots || [], total: j?.searchalgolia?.total || 0 };
 }
 
+// Goldin publishes no sold archive AND purges each lot from its live index the
+// instant its auction closes — so a completed auction serves ZERO lots (verified
+// against the API). The only way to log a final hammer is to track each live
+// lot's running bid and, when its auction flips to status 'Completed', promote
+// the last bid we saw to a sold record. This set carries the completed-auction
+// ids from the crawl to the merge/promotion step below.
+let goldinCompletedAuctions = new Set<string>();
+
 async function crawlGoldin(): Promise<AuctionLot[]> {
   const byId = new Map<string, AuctionLot>();
   console.log('  [Goldin] Fetching live auction lots (facet-driven: objects, never cards)...');
   let dropped = 0;
 
-  // ingest handles both LIVE inventory (upcoming, with the running bid) and
-  // ENDED lots (sold, at the final hammer — Goldin's completed auctions keep
-  // serving each lot's winning current_price, so we log the real result).
+  // ingest LIVE inventory only (upcoming, with the running bid + its auction id).
+  // There is no ended branch on the live feed — sold is decided at merge time,
+  // strictly from the auction's own 'Completed' status, never a timestamp or bid.
   const ingest = (lot: any, fallback: string | null, ended: boolean, saleEnd?: string) => {
     if (!lot.title || !lot.lot_id) return;
     const t = lot.title.toLowerCase();
@@ -1529,14 +1542,17 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     if (!artist) { dropped++; return; }
     const end = saleEnd || lot.end_timestamp || lot.start_timestamp;
     if (!end) return;
-    const past = new Date(end).getTime() < Date.now();
     const bp = lot.buyer_premium || 22;
     const bid = lot.current_price || 0;
 
-    // an ended lot with a winning bid becomes a sold record at the hammer +
-    // premium; an ended lot that drew no bid is bought-in (skip). A live lot
-    // is upcoming inventory. Sold records win over an earlier upcoming one.
-    if (ended || past) {
+    // SOLD is authoritative and time-based: the ONLY sold signal is `ended`,
+    // which the archive pass sets solely from the auction's own
+    // status === 'Completed'. A live bid is NEVER a sale — Goldin's clock
+    // crosses end_timestamp BEFORE extended bidding resolves, and its lot-level
+    // `status` field lies (always "Live"), so we never infer sold from a
+    // timestamp or a bid. An ended lot with a winning bid becomes a sold record
+    // at hammer + premium; a zero-bid ended lot is bought-in (skip).
+    if (ended) {
       if (bid <= 0) return; // no bid = bought-in, not a result
       const existing = byId.get(lot.lot_id);
       if (existing && existing.status === 'sold') return; // already logged
@@ -1565,6 +1581,10 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
 
     if (byId.has(lot.lot_id)) return;
     if (lot.status && lot.status !== 'Live' && lot.status !== 'Preview') return;
+    // a lot whose end has already passed belongs to a closing/closed auction —
+    // don't add it as upcoming; the Completed-auction archive pass logs it once
+    // it's genuinely hammered.
+    if (new Date(end).getTime() < Date.now()) return;
     byId.set(lot.lot_id, {
       id: `goldin-${lot.lot_id}`,
       artist,
@@ -1584,6 +1604,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       currentBid: bid,
       bidCount: lot.number_of_bids || 0,
       buyerPremium: bp,
+      auctionId: lot.auction_id || null,
     } as unknown as AuctionLot);
   };
 
@@ -1609,12 +1630,12 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     } catch { /* next */ }
   }
 
-  // 2 · ARCHIVE — completed auctions keep serving final prices. Walk the
-  // recently-closed ones and log each object lot's winning hammer, building
-  // Ray's own Goldin price history. (Sold records persist in lots.json, so
-  // steady-state this only re-touches auctions closed since the last run;
-  // RAY_DEEP widens the backfill window for a one-time hydration.)
-  const windowDays = DEEP ? 365 : 30;
+  // 2 · COMPLETION — record which auctions have closed. Goldin purges a lot
+  // from lots_v2 the instant its auction completes (a completed auction serves
+  // zero lots — verified), so we can't fetch a final price after the fact. The
+  // merge step instead promotes each tracked lot's LAST bid to a hammer once its
+  // auction here flips to 'Completed'. That's the authoritative, time-based sold
+  // signal Ray uses — never a bid on a still-open lot.
   try {
     const aRes = await fetch(GOLDIN_AUCTIONS_API, {
       method: 'POST',
@@ -1622,33 +1643,14 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       body: JSON.stringify({ status: 'All', order: 'desc' }),
       signal: AbortSignal.timeout(25000),
     });
-    const auctions = ((await aRes.json() as any).auctions || []).filter((a: any) => {
-      const end = new Date(a.end_timestamp).getTime();
-      return end < Date.now() && end > Date.now() - windowDays * 86_400_000;
-    });
-    let archived = 0;
-    for (const a of auctions) {
-      for (const pass of GOLDIN_FACET_PASSES) {
-        let from = 0, total = Infinity;
-        while (from < Math.min(total, 400)) {
-          try {
-            const { lots, total: t } = await goldinQuery({ item_type: [pass.itemType], auctions: [a.auction_id], size: 100, from });
-            total = t;
-            if (!lots.length) break;
-            const before = byId.size;
-            lots.forEach((l: any) => ingest({ ...l, buyer_premium: l.buyer_premium || a.buyer_premium }, pass.fallback, true, a.end_timestamp));
-            archived += byId.size - before;
-            from += 100;
-            await sleep(300);
-          } catch { break; }
-        }
-      }
-    }
-    console.log(`  [Goldin] archive pass: ${auctions.length} closed auctions (${windowDays}d), ${archived} final hammers logged`);
-  } catch (e) { console.log('  [Goldin] archive pass skipped:', e); }
+    const auctions = (await aRes.json() as any).auctions || [];
+    goldinCompletedAuctions = new Set<string>(
+      auctions.filter((a: any) => a.status === 'Completed').map((a: any) => a.auction_id)
+    );
+    console.log(`  [Goldin] ${goldinCompletedAuctions.size} auctions marked Completed (promotion source)`);
+  } catch (e) { console.log('  [Goldin] auction-status fetch skipped:', e); }
 
-  const sold = Array.from(byId.values()).filter(l => l.status === 'sold').length;
-  console.log(`  [Goldin] ${byId.size} lots kept (${sold} sold w/ final hammer, ${dropped} gated out)`);
+  console.log(`  [Goldin] ${byId.size} live lots kept (${dropped} gated out)`);
   return Array.from(byId.values());
 }
 
@@ -2399,6 +2401,7 @@ async function main() {
   const SCIENCE_SET = new Set(['meteorites', 'fossils', 'space-exploration', 'scientific-instruments']);
   const WATCH_SET = new Set(['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier']);
   const badIds = new Set<string>();
+  let goldinPromoted = 0;
   for (const [id, lot] of Array.from(lotMap.entries())) {
     if (lot.title.match(/^Lot\.\d+/i)) badIds.add(id);
     if (id === 'sothebys-upcoming-boy-white-hat' && lotMap.has('sothebys-george-condo-qiao-zhikang-duo-the-boy-with-white')) {
@@ -2412,19 +2415,39 @@ async function main() {
     // Evict any buy-now marketplace lots — fixed-price asks are not auction
     // data and must never be in the dataset (see doctrine above).
     if (id.startsWith('sothebys-mkt-')) badIds.add(id);
-    // Goldin has no public sold archive — RAY IS THE ARCHIVE. Sold records
-    // (final hammers captured from completed auctions) are permanent. Only
-    // LIVE inventory the crawler no longer confirms is delisted stock and
-    // leaves; a stale 'upcoming' lot past its end that never got a sold
-    // record (bought-in / missed) also goes.
+    // Goldin has no public sold archive — RAY IS THE ARCHIVE. When a tracked
+    // lot's auction flips to 'Completed', promote its LAST bid to a hammer (bid
+    // + buyer's premium) — that's the authoritative, time-based sold signal, and
+    // the only one Goldin gives us (it purges the lot from its live feed on
+    // close). Sold records are permanent. A lot still live stays upcoming; a lot
+    // that vanished with no completed auction and no bid is delisted stock and
+    // leaves; a legacy stale 'upcoming' past its end also goes.
     if (id.startsWith('goldin-') && goldinRan && lot.status === 'upcoming') {
-      if (!freshGoldinIds.has(id) || new Date(lot.saleDate).getTime() < Date.now() - 86_400_000) badIds.add(id);
+      const auctionDone = !!lot.auctionId && goldinCompletedAuctions.has(lot.auctionId);
+      const bid = lot.currentBid || 0;
+      if (auctionDone) {
+        if (bid > 0) {
+          const bp = lot.buyerPremium || 22;
+          lot.status = 'sold';
+          lot.priceUsd = Math.round(bid * (1 + bp / 100)); // final hammer + premium
+          lot.priceBasis = 'goldin-final-bid';
+          goldinPromoted++;
+        } else {
+          badIds.add(id); // closed with no bid = bought-in
+        }
+      } else if (!freshGoldinIds.has(id)) {
+        // gone from the live feed but its auction isn't Completed → delisted
+        // stock, unless it's a legacy record we can't adjudicate (no auctionId)
+        // that's stale past its end.
+        if (lot.auctionId || new Date(lot.saleDate).getTime() < Date.now() - 86_400_000) badIds.add(id);
+      }
     }
     // Watch makers: evict the old Christie's maker-search lots (now superseded
     // by christies-auc-* from the full auction crawler) to avoid double-count.
     if (WATCH_SET.has(lot.artist) && lot.auctionHouse === "Christie's" && !id.startsWith('christies-auc-')) badIds.add(id);
   }
   for (const id of Array.from(badIds)) lotMap.delete(id);
+  if (goldinRan) console.log(`[Ray] Goldin: promoted ${goldinPromoted} closed lots to final hammer (last-bid + premium)`);
 
   const allLots = Array.from(lotMap.values()).sort((a, b) => {
     const da = new Date(a.saleDate).getTime();

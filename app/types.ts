@@ -29,6 +29,13 @@ export interface AuctionLot {
   /** live bid on a no-estimate bid auction (Goldin) — real money on the lot now */
   currentBid?: number;
   bidCount?: number;
+  /** buyer's premium % (Goldin) — carried so the last-tracked bid can be
+      promoted to a hammer + premium when the lot's auction completes */
+  buyerPremium?: number;
+  /** the source auction's id (Goldin) — lets us detect completion: Goldin
+      purges a lot from its live index the moment its auction closes, so the
+      only sold signal is the auction flipping to status 'Completed' */
+  auctionId?: string;
   status: LotStatus;
   url: string;
   /** Precomputed at crawl time for upcoming lots (comps median vs estimate
