@@ -37,5 +37,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/ray/
-          git diff --staged --quiet || git commit -m "chore(ray): update auction data"
-          git push
+          git diff --staged --quiet && echo "no data changes" && exit 0
+          git commit -m "chore(ray): update auction data"
+          # the crawl takes ~15 min — if anything landed on main meanwhile,
+          # rebase our data commit on top and retry rather than fail
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            echo "push attempt $i rejected, retrying…"; sleep $((i * 5))
+          done
+          echo "push failed after retries"; exit 1
