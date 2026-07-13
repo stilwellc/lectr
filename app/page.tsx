@@ -68,7 +68,11 @@ export default function RayPage() {
     const f = feedFilters;
     const q = f.query.trim().toLowerCase();
     let arr = upcoming;
-    if (f.house) arr = arr.filter(l => l.auctionHouse === f.house);
+    if (f.vertical) {
+      const vset = marketArtists(f.vertical);
+      arr = arr.filter(l => vset.has(l.artist));
+    }
+    if (f.maker) arr = arr.filter(l => l.artist === f.maker);
     if (f.category) arr = arr.filter(l => l.category === f.category);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
     if (q) {
@@ -87,7 +91,7 @@ export default function RayPage() {
   // Any lens change restarts pagination and re-runs the card entrance.
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.query}|${f.house}|${f.category}|${f.belowOnly}|${f.sort}`;
+    return `${f.query}|${f.vertical}|${f.maker}|${f.category}|${f.belowOnly}|${f.sort}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     setFeedFilters(next);
@@ -327,6 +331,8 @@ export default function RayPage() {
                 onChange={handleFilters}
                 shown={feed.length}
                 total={upcoming.length}
+                market={activeKey}
+                onMarketReset={() => setMarket('all')}
               />
 
               {feedView === 'table' && feed.length > 0 ? (

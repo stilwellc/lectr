@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
+import { pickCall } from '../components/Terminal';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
@@ -65,12 +66,9 @@ export default function ValuePage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
-  // Today's call: the strongest deal, preferring one with an artwork image
-  // among the top five so the moment lands visually.
-  const call = useMemo(() => {
-    if (!deals.length) return null;
-    return deals.slice(0, 5).find(d => d.lot.imageUrl) || deals[0];
-  }, [deals]);
+  // Today's call: the strongest deal Ray can STAND BEHIND — highest
+  // confidence tier first, never low (one thin comp is not a headline).
+  const call = useMemo(() => pickCall(marketLots, marketLots), [marketLots]);
   const gridDeals = useMemo(
     () => (call ? deals.filter(d => d.lot.id !== call.lot.id) : deals),
     [deals, call]
