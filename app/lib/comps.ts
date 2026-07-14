@@ -297,28 +297,44 @@ export function lotFitsMarket(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   return !forms || forms.has(classifyForm(lot));
 }
 
+/* ── persisted-key reads (additive) ──────────────────────────────────────
+   A migrated lot carries its classifyForm/modelKey/watchKey outputs stamped as
+   lot.formKey / lot.modelKey / lot.reference (identical values, computed once
+   at crawl time). Prefer the persisted key when present — same pools, cheaper —
+   else compute exactly as before. A pre-migration lot has these undefined and
+   falls through to the live functions, so pools are byte-identical either way. */
+function formOf(lot: AuctionLot): Form {
+  return (lot.formKey as Form | undefined) ?? classifyForm(lot);
+}
+function modelKeyOf(lot: AuctionLot): string | null {
+  return lot.modelKey !== undefined ? lot.modelKey : modelKey(lot);
+}
+function watchKeyOf(lot: AuctionLot): string | null {
+  return lot.reference !== undefined ? lot.reference : watchKey(lot);
+}
+
 /** The hard gate, curried: classify/key/measure the ANCHOR once, then test
     many candidates — `sold.filter(comparableTo(lot))` instead of re-deriving
     the anchor's form, model/watch key and dims per candidate. */
 export function comparableTo(lot: AuctionLot): (candidate: AuctionLot) => boolean {
-  const a = classifyForm(lot);
+  const a = formOf(lot);
   if (a === 'unknown') return () => false; // never guess
   const isFurniture = FURNITURE.has(a);
   const isWatch = WATCHES.has(a);
-  const keyA = isFurniture ? modelKey(lot) : null;
-  const refA = isWatch ? watchKey(lot) : null;
+  const keyA = isFurniture ? modelKeyOf(lot) : null;
+  const refA = isWatch ? watchKeyOf(lot) : null;
   const da = parseDims(lot.dimensions);
 
   return (candidate: AuctionLot) => {
     // form equality — a is known, so an unknown candidate never matches
-    if (classifyForm(candidate) !== a) return false;
+    if (formOf(candidate) !== a) return false;
 
     // furniture bifurcates by model: LC2 comps LC2, Conoid comps Conoid, and a
     // generic piece never comps a model-coded production line (or vice versa)
-    if (isFurniture && keyA !== modelKey(candidate)) return false;
+    if (isFurniture && keyA !== modelKeyOf(candidate)) return false;
 
     // watches bifurcate by reference: Daytona comps Daytona, never Datejust
-    if (isWatch && refA !== watchKey(candidate)) return false;
+    if (isWatch && refA !== watchKeyOf(candidate)) return false;
 
     // opportunistic size gate when both sides are measurable
     if (da) {
@@ -342,6 +358,20 @@ export function comparableTo(lot: AuctionLot): (candidate: AuctionLot) => boolea
     of comparableTo — inside a filter, prefer the curried gate. */
 export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
   return comparableTo(lot)(candidate);
+}
+
+/* ── v2 money read (additive, alias-safe) ────────────────────────────────
+   The estimate band the signal divides against. Post-migration the canonical
+   USD estimate lives in estLowUsd/estHighUsd (native × dated FX); pre-migration
+   only estimateLow/estimateHigh exist. Read the USD fields when present, fall
+   back to the old ones — so the ratio is correct BEFORE and AFTER migration and
+   a Bonhams GBP lot stops dividing a USD price by a native-GBP estimate. The
+   old fields become aliases of the *Usd fields at migration, so both agree. */
+function estUsdBand(lot: AuctionLot): { low: number | null; high: number | null } {
+  return {
+    low: lot.estLowUsd ?? lot.estimateLow,
+    high: lot.estHighUsd ?? lot.estimateHigh,
+  };
 }
 
 export function normalizeTitle(t: string | null | undefined): string {
@@ -388,10 +418,11 @@ function median(sorted: number[]): number {
  * same pool and this same median — one lot, one statistic, no second math.
  */
 export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal: DeepSignal; pool: AuctionLot[] } | null {
-  if (!lot.estimateLow || !lot.estimateHigh) return null;
-  const form = classifyForm(lot);
+  const est = estUsdBand(lot);
+  if (!est.low || !est.high) return null;
+  const form = formOf(lot);
   if (form === 'unknown') return null;
-  const estMid = (lot.estimateLow + lot.estimateHigh) / 2;
+  const estMid = (est.low + est.high) / 2;
 
   const sold = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id
@@ -402,7 +433,7 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
   let pool: AuctionLot[] = [];
   let kind: 'edition' | 'form' = 'form';
   if (nt.length >= 6) {
-    const sameTitle = sold.filter(l => normalizeTitle(l.title) === nt && classifyForm(l) === form);
+    const sameTitle = sold.filter(l => normalizeTitle(l.title) === nt && formOf(l) === form);
     if (sameTitle.length >= 3) { pool = sameTitle; kind = 'edition'; }
   }
 
