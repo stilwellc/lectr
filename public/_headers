@@ -1,0 +1,10 @@
+# Next's static export emits the OG share card as an extensionless file
+# (/opengraph-image), which Cloudflare serves as application/octet-stream —
+# so iMessage/Twitter/Slack refuse to render it and fall back to the tiny
+# no-photo preview. Force the real image content-type so the card shows.
+/opengraph-image
+  Content-Type: image/png
+  Cache-Control: public, max-age=3600
+/*/opengraph-image
+  Content-Type: image/png
+  Cache-Control: public, max-age=3600
