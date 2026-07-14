@@ -620,6 +620,7 @@ export default function RayPage() {
           <Colophon
             lotCount={allLots.length}
             houseCount={new Set(allLots.map(l => l.auctionHouse)).size}
+            record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.medianPerfPct } : null}
           />
         </RayEntrance>
       )}

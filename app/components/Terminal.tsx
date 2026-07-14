@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
@@ -127,12 +127,84 @@ export function CallPlate({
 }
 
 /* ── the colophon ───────────────────────────────────────────────────── */
-export function Colophon({ lotCount, houseCount }: { lotCount: number; houseCount: number }) {
+/**
+ * THE FLOOR AT CLOSE — the footer is the identity's closing statement. The
+ * sign gets its one display-scale moment: the mark writes itself in its own
+ * light when the reader arrives, over the provenance the whole product
+ * stands on. One gesture, then quiet.
+ */
+export function Colophon({ lotCount, houseCount, record }: {
+  lotCount: number;
+  houseCount: number;
+  /** the backtest's flagged record — the strongest true sentence */
+  record?: { n: number; medianPerfPct: number } | null;
+}) {
+  const [inView, setInView] = useState(false);
+  const ref = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return; }
+    const io = new IntersectionObserver(
+      entries => { if (entries.some(e => e.isIntersecting)) { setInView(true); io.disconnect(); } },
+      { threshold: 0.25 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <footer className="ray-colophon">
-      <div className="rail ray-colophon-in">
-        <span><img src="/brand/lectr-nav.png" alt="lectr" style={{ height: 14, width: 'auto', opacity: 0.4, verticalAlign: -3, marginRight: 8 }} />reads every estimate against every hammer. {lotCount.toLocaleString()} lots · {houseCount} houses · since 2000.</span>
-        <span>Comps: same-maker, same-form, size-banded. Medians, never means.</span>
+    <footer className={`ray-close${inView ? ' ray-close-on' : ''}`} ref={ref}>
+      <div className="rail ray-close-in">
+        {/* the sign, lit over the closed floor */}
+        <div className="ray-close-sign">
+          <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />
+        </div>
+        <p className="ray-close-thesis">Every estimate, read against every hammer.</p>
+
+        {/* provenance numerals */}
+        <div className="ray-close-ledger" role="list">
+          <div role="listitem"><b>{lotCount.toLocaleString()}</b><span>lots on the book</span></div>
+          <div role="listitem"><b>{houseCount}</b><span>auction houses</span></div>
+          <div role="listitem"><b>2000</b><span>archive reaches back to</span></div>
+        </div>
+
+        {/* the map of the house */}
+        <div className="ray-close-map">
+          <div className="ray-close-col">
+            <span className="ray-close-k">Markets</span>
+            <Link href="/">Total market</Link>
+            <Link href="/art">Art</Link>
+            <Link href="/design">Design</Link>
+            <Link href="/watches">Watches</Link>
+            <Link href="/sports">Sports</Link>
+            <Link href="/science">Science</Link>
+          </div>
+          <div className="ray-close-col">
+            <span className="ray-close-k">The desk</span>
+            <Link href="/value">Value</Link>
+            <Link href="/artists">Makers</Link>
+            <Link href="/analytics">Analytics</Link>
+            <Link href="/saved">Saved</Link>
+          </div>
+          <div className="ray-close-col ray-close-record">
+            <span className="ray-close-k">The record</span>
+            {record && record.n > 500 ? (
+              <p>
+                Flagged calls beat their estimates by <b className="up">+{record.medianPerfPct}% median</b> across {record.n.toLocaleString()} replayed sales.
+              </p>
+            ) : (
+              <p>Every call is replayed against what the lot really hammered for.</p>
+            )}
+            <Link href="/value" className="ray-close-cta">See the record <Flick size={12} /></Link>
+          </div>
+        </div>
+
+        {/* baseline */}
+        <div className="ray-close-base">
+          <span>© {new Date().getFullYear()} lectr · auction intelligence</span>
+          <span>Comps: same maker, same form, size-banded — medians, never means.</span>
+          <span>Data from public auction results.</span>
+        </div>
       </div>
     </footer>
   );
