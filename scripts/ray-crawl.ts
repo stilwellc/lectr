@@ -10,8 +10,20 @@ import * as cheerio from 'cheerio';
 
 import type {
   AuctionLot, AuctionHouse, LotStatus, Currency, LotCategory,
-  MarketStats, PricePoint, HouseCount,
+  MarketStats, PricePoint, HouseCount, PriceBasis,
 } from '../app/types';
+
+// v2 foundation — the single, deterministic normalization layer. Every FUTURE
+// row is born v2 by stamping these (native money fact + dated USD, persisted
+// identity keys) at parse/classify time. imageHash is the only I/O function and
+// runs INCREMENTALLY (a bounded batch per crawl — decision #3), never all 41k.
+import {
+  toUsdDated, fxRateFor, normalizeDimensions, extractYear, canonMedium,
+  extractEdition, extractSerial, extractCollectibleTags, classifyEntity,
+  objectFingerprint, titleTokens,
+  modelKey as normModelKey, watchKey as normWatchKey,
+  normalizeTitle as normNormalizeTitle,
+} from '../app/lib/normalize';
 
 // ── Lot Classification ──
 // Classifies a lot as original, print, photograph, sculpture, design, or unknown
@@ -390,6 +402,9 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
       const hammer = lot.hammerPrice ?? null;
       const soldPrice = hammerBP ?? hammer;
       const isSold = soldPrice != null && soldPrice > 0;
+      // Phillips is per-lot: premium-inclusive when hammerBP exists, else the
+      // realized number is just the hammer (no premium published).
+      const phillipsBasis: PriceBasis = hammerBP != null ? 'realized' : 'hammer-only';
 
       let auctionInPast = false;
       if (lot.auctionStartDateTimeOffset) {
@@ -422,18 +437,23 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
         year: lot.dates || lot.circa || null,
         medium: lot.medium || null,
         dimensions: lot.dimensions || null,
+        description: lot.description || lot.catalogueNote || null,
         category: 'unknown' as LotCategory,
         imageUrl,
         auctionHouse: 'Phillips',
         saleName: lot.saleTitle || '',
         saleDate,
         lotNumber: lotNum ? parseInt(lotNum) : null,
-        estimateLow: lot.lowEstimate ?? null,
-        estimateHigh: lot.highEstimate ?? null,
-        currency,
-        hammerPrice: hammer,
-        premiumPrice: hammerBP,
-        priceUsd: toUsd(soldPrice, currency),
+        ...stampMoney({
+          isSold,
+          nativeCurrency: currency,
+          saleDate: saleDate || null,
+          hammerNative: hammer,
+          premiumNative: hammerBP,
+          estLowNative: lot.lowEstimate ?? null,
+          estHighNative: lot.highEstimate ?? null,
+          priceBasis: phillipsBasis,
+        }),
         status: isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming',
         url: detailLink.startsWith('http') ? detailLink : `https://www.phillips.com${detailLink}`,
       });
@@ -602,12 +622,16 @@ async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]> {
         saleName,
         saleDate,
         lotNumber,
-        estimateLow,
-        estimateHigh,
-        currency,
-        hammerPrice: null,
-        premiumPrice: null,
-        priceUsd: null,
+        ...stampMoney({
+          isSold: false, // artist-page path exposes no realized price — never 'sold'
+          nativeCurrency: currency,
+          saleDate: saleDate || null,
+          hammerNative: null,
+          premiumNative: null,
+          estLowNative: estimateLow,
+          estHighNative: estimateHigh,
+          priceBasis: 'realized',
+        }),
         status,
         url: fullUrl,
       });
@@ -648,12 +672,16 @@ async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]> {
         saleName: '',
         saleDate,
         lotNumber: null,
-        estimateLow: null,
-        estimateHigh: null,
-        currency: 'USD',
-        hammerPrice: null,
-        premiumPrice: null,
-        priceUsd: null,
+        ...stampMoney({
+          isSold: false, // bare-link path: no estimate, no result — never 'sold'
+          nativeCurrency: 'USD', // bare links carry no currency signal; default USD
+          saleDate: saleDate || null,
+          hammerNative: null,
+          premiumNative: null,
+          estLowNative: null,
+          estHighNative: null,
+          priceBasis: 'realized',
+        }),
         status,
         url: fullUrl,
       });
@@ -798,6 +826,12 @@ function parseChristiesJson(jsonStr: string, artistSlug: string): AuctionLot[] {
         ? String(rawDimensions).replace(/<[^>]*>/g, '').replace(/&times;/g, '×').replace(/&ndash;/g, '–')
         : null;
 
+      // Christie's publishes price realised (buyer-inclusive) — the realized
+      // number is the premium; hammer is not exposed here.
+      const christiesDescription = lot.description_txt && String(lot.description_txt).length < 4000
+        ? String(lot.description_txt).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || null
+        : null;
+
       lots.push({
         id: `christies-${lotId}`,
         artist: artistSlug,
@@ -805,18 +839,23 @@ function parseChristiesJson(jsonStr: string, artistSlug: string): AuctionLot[] {
         year: lot.date_txt || null,
         medium: christiesMedium,
         dimensions: christiesDimensions,
+        description: christiesDescription,
         category: 'unknown' as LotCategory,
         imageUrl,
         auctionHouse: "Christie's",
         saleName: lot.sale?.location ? `${lot.sale.location} Sale ${saleNum}` : '',
         saleDate,
         lotNumber: lotNum ? parseInt(lotNum) : null,
-        estimateLow,
-        estimateHigh,
-        currency,
-        hammerPrice: null,
-        premiumPrice: priceRealized,
-        priceUsd: toUsd(priceRealized, currency),
+        ...stampMoney({
+          isSold,
+          nativeCurrency: currency,
+          saleDate: saleDate || null,
+          hammerNative: null,
+          premiumNative: priceRealized,
+          estLowNative: estimateLow,
+          estHighNative: estimateHigh,
+          priceBasis: 'realized',
+        }),
         status: isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming',
         url: lotUrl.startsWith('http') ? lotUrl : `https://www.christies.com${lotUrl}`,
       });
@@ -957,25 +996,40 @@ function parseWrightBasicItem(item: any, session: any, sessionKey: string, artis
   // Extract year from Wright basic item
   const year = item.year_designed || item.circa || item.year || null;
 
+  // Rago's lots are crawled through Wright's Inertia stack — record the crawl-
+  // origin platform when the selling house differs (identity §1a / W12). W12
+  // also renamespaces the id: a Rago lot is `rago-*` (invariant 6, id prefix
+  // matches the SELLING house), with `platform:'wright'` carrying the origin.
+  // Existing wright-* Rago rows are renamespaced by migrate-v2, so born-v2
+  // crawler ids line up after the migration lands.
+  const platform = auctionHouse === 'Rago' ? 'wright' : null;
+  const idPrefix = auctionHouse === 'Rago' ? 'rago' : 'wright';
+
   return {
-    id: `wright-${item.fd_key || `${lotNum}-${sessionKey}`}`,
+    id: `${idPrefix}-${item.fd_key || `${lotNum}-${sessionKey}`}`,
     artist: artistSlug,
     title,
     year,
     medium: item.material || null,
     dimensions: dims ? dims.replace(/&times;/g, '×').replace(/&ndash;/g, '–') : null,
+    description: item.description ? String(item.description).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || null : null,
+    platform,
     category: 'unknown' as LotCategory,
     imageUrl,
     auctionHouse,
     saleName: session.title || '',
     saleDate,
     lotNumber: lotNum,
-    estimateLow,
-    estimateHigh,
-    currency: 'USD',
-    hammerPrice: resultSansPremium,
-    premiumPrice: result,
-    priceUsd: result,
+    ...stampMoney({
+      isSold,
+      nativeCurrency: 'USD', // Wright/Rago publish USD
+      saleDate: saleDate || null,
+      hammerNative: resultSansPremium,
+      premiumNative: result,
+      estLowNative: estimateLow,
+      estHighNative: estimateHigh,
+      priceBasis: 'realized',
+    }),
     status: isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming',
     url: lotUrl,
   };
@@ -1012,25 +1066,36 @@ function parseWrightAdvancedItem(item: any, artistSlug: string): AuctionLot {
   // Extract dimensions from Wright advanced item
   const dims = item.formatted_dimensions || item.dimensions || null;
 
+  // W12 — renamespace Rago ids to `rago-*` (invariant 6); platform carries the
+  // Wright-stack origin.
+  const platform = auctionHouse === 'Rago' ? 'wright' : null;
+  const idPrefix = auctionHouse === 'Rago' ? 'rago' : 'wright';
+
   return {
-    id: `wright-${item.fd_key || item.id || `${lotNum}`}`,
+    id: `${idPrefix}-${item.fd_key || item.id || `${lotNum}`}`,
     artist: artistSlug,
     title,
     year: item.year_designed || null,
     medium: item.material || null,
     dimensions: dims ? String(dims).replace(/&times;/g, '×').replace(/&ndash;/g, '–') : null,
+    description: item.description ? String(item.description).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || null : null,
+    platform,
     category: 'unknown' as LotCategory,
     imageUrl,
     auctionHouse,
     saleName: item.session?.title || '',
     saleDate,
     lotNumber: lotNum,
-    estimateLow: item.estimate_low || null,
-    estimateHigh: item.estimate_high || null,
-    currency: 'USD',
-    hammerPrice: hammer,
-    premiumPrice: result,
-    priceUsd: result,
+    ...stampMoney({
+      isSold,
+      nativeCurrency: 'USD', // Wright/Rago publish USD
+      saleDate: saleDate || null,
+      hammerNative: hammer,
+      premiumNative: result,
+      estLowNative: item.estimate_low || null,
+      estHighNative: item.estimate_high || null,
+      priceBasis: 'realized',
+    }),
     status: isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming',
     url: lotUrl,
   };
@@ -1210,22 +1275,28 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
       const soldRes = lot.bidState?.sold;
       const finalPrice = soldRes?.premiums?.finalPrice;
       const isSold = !!soldRes?.isSold && !!finalPrice;
-      let status: string, priceUsd: number | null, saleDate: string;
+      let status: string, saleDate: string;
       if (isSold) {
         status = 'sold';
-        priceUsd = toUsd(parseFloat(finalPrice.amount), (finalPrice.currency || auctionCur) as Currency);
         saleDate = meta.endDate || new Date().toISOString();
       } else if (meta.endDate && new Date(meta.endDate).getTime() > Date.now()) {
         status = 'upcoming';
-        priceUsd = null;
         saleDate = meta.endDate;
       } else {
         continue; // closed & unsold (bought-in) — not signal
       }
+      const saleDay = saleDate.split('T')[0];
 
       const est = lot.estimateV2;
       const rendition = lot.media?.images?.[0]?.renditions;
       const img = rendition?.find((r: any) => r.imageSize === 'Large') || rendition?.find((r: any) => r.imageSize === 'Medium') || rendition?.[0];
+
+      // W2: keep NATIVE, convert with a dated rate. finalPrice carries its own
+      // currency (may differ from the sale's, e.g. an HKD lot in a mixed sale);
+      // estimates are in the sale currency. The finalPrice is buyer-inclusive
+      // (a Sotheby's realized/premium number), so it maps to premiumNative.
+      const finalCur = (finalPrice?.currency || auctionCur) as Currency;
+      const premiumNative = isSold && finalPrice ? parseFloat(finalPrice.amount) : null;
 
       lots.push({
         id: `sothebys-${lot.lotId}`,
@@ -1234,16 +1305,24 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
         year: null,
         medium: lot.subtitle || null,
         dimensions: null,
+        description: lot.subtitle || null,
         category: 'unknown',
         imageUrl: img?.url || null,
         auctionHouse: "Sotheby's",
         saleName,
-        saleDate,
+        saleDate: saleDay,
+        saleDateTime: saleDate, // GraphQL gives a genuine ISO timestamp
         lotNumber: lot.lotNumber?.lotDisplayNumber ? parseInt(lot.lotNumber.lotDisplayNumber, 10) || null : null,
-        estimateLow: est?.lowEstimate?.amount ? toUsd(parseFloat(est.lowEstimate.amount), auctionCur) : null,
-        estimateHigh: est?.highEstimate?.amount ? toUsd(parseFloat(est.highEstimate.amount), auctionCur) : null,
-        priceUsd,
-        currency: 'USD' as Currency,
+        ...stampMoney({
+          isSold,
+          nativeCurrency: finalCur,
+          saleDate: saleDay,
+          hammerNative: null,
+          premiumNative,
+          estLowNative: est?.lowEstimate?.amount ? parseFloat(est.lowEstimate.amount) : null,
+          estHighNative: est?.highEstimate?.amount ? parseFloat(est.highEstimate.amount) : null,
+          priceBasis: 'realized',
+        }),
         status: status as any,
         url: `https://www.sothebys.com/en/buy/auction/${sale}/${lot.slug?.lotSlug || lot.lotId}`,
       } as AuctionLot);
@@ -1344,18 +1423,20 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
       const cur = parseChristiesCurrency(`${lot.price_realised_txt || ''} ${lot.estimate_txt || ''}`);
       const endDate = lot.end_date || lot.start_date;
       const endMs = endDate ? new Date(endDate).getTime() : NaN;
-      let status: string, priceUsd: number | null, saleDate: string;
+      let status: string, saleDate: string;
       if (isSold) {
         status = 'sold';
-        priceUsd = toUsd(realisedNum, cur);
         saleDate = endDate || new Date().toISOString();
       } else if (!isNaN(endMs) && endMs > Date.now()) {
         status = 'upcoming';
-        priceUsd = null;
         saleDate = endDate;
       } else {
         continue; // closed & unsold — not signal
       }
+      const saleDay = saleDate.split('T')[0];
+      const christiesAucDescription = lot.description_txt && String(lot.description_txt).length < 4000
+        ? String(lot.description_txt).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || null
+        : null;
 
       lots.push({
         id: `christies-auc-${lot.object_id}`,
@@ -1364,16 +1445,26 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
         year: null,
         medium: secondary || null,
         dimensions: null,
+        description: christiesAucDescription,
         category: 'unknown',
         imageUrl: lot.image?.image_src || null,
         auctionHouse: "Christie's",
         saleName,
-        saleDate,
+        saleDate: saleDay,
+        saleDateTime: endDate || null,
         lotNumber: null,
-        estimateLow: lot.estimate_low ? toUsd(parseFloat(lot.estimate_low), cur) : null,
-        estimateHigh: lot.estimate_high ? toUsd(parseFloat(lot.estimate_high), cur) : null,
-        priceUsd,
-        currency: 'USD' as Currency,
+        // W2: price realised is buyer-inclusive → premiumNative; keep native +
+        // convert with a dated rate. Estimates are in the same sale currency.
+        ...stampMoney({
+          isSold,
+          nativeCurrency: cur,
+          saleDate: saleDay,
+          hammerNative: null,
+          premiumNative: isSold ? realisedNum : null,
+          estLowNative: lot.estimate_low ? parseFloat(lot.estimate_low) : null,
+          estHighNative: lot.estimate_high ? parseFloat(lot.estimate_high) : null,
+          priceBasis: 'realized',
+        }),
         status: status as any,
         url: lot.url || `https://www.christies.com/en/auction/${sale}`,
       } as AuctionLot);
@@ -1545,11 +1636,25 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
       auctionHouse: 'Goldin',
       saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
-      saleDate: end,
+      // born-v2: saleDate is the canonical bare YYYY-MM-DD (invariant 7); the
+      // full close timestamp is retained on saleDateTime.
+      saleDate: (end || '').split('T')[0],
+      saleDateTime: end || null,
       lotNumber: lot.lot_number || null,
-      estimateLow: null, estimateHigh: null,
-      priceUsd: null,
-      currency: 'USD',
+      // v2 money: a live lot is NOT sold — all price fields null (a live bid is
+      // never a sale). currentBid carries the running bid; buyerPremiumPct is
+      // stamped so a later promotion can gross it to realized.
+      ...stampMoney({
+        isSold: false,
+        nativeCurrency: 'USD',
+        saleDate: (end || '').split('T')[0] || null,
+        hammerNative: null,
+        premiumNative: null,
+        estLowNative: null,
+        estHighNative: null,
+        priceBasis: 'final-bid-plus-bp',
+        buyerPremiumPct: bp,
+      }),
       status: 'upcoming',
       url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
       currentBid: bid,
@@ -1591,12 +1696,23 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
       auctionHouse: 'Goldin',
       saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
-      saleDate: end,
+      // born-v2: canonical bare YYYY-MM-DD saleDate; full timestamp on saleDateTime.
+      saleDate: (end || '').split('T')[0],
+      saleDateTime: end || null,
       lotNumber: lot.lot_number || null,
-      estimateLow: null, estimateHigh: null,
-      priceUsd: Math.round(bid * (1 + bp / 100)), // realized: hammer + buyer's premium
-      priceBasis: 'goldin-final-bid',
-      currency: 'USD',
+      // v2 money: hammer = the winning bid; realized = hammer + buyer's premium.
+      // Goldin is USD; basis 'final-bid-plus-bp'. estimates: none (bid auction).
+      ...stampMoney({
+        isSold: true,
+        nativeCurrency: 'USD',
+        saleDate: (end || '').split('T')[0] || null,
+        hammerNative: bid,
+        premiumNative: Math.round(bid * (1 + bp / 100)),
+        estLowNative: null,
+        estHighNative: null,
+        priceBasis: 'final-bid-plus-bp',
+        buyerPremiumPct: bp,
+      }),
       status: 'sold',
       url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
       currentBid: bid,
@@ -1850,7 +1966,6 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
   const currency = isoCurrencyToInternal(doc.currency?.iso_code || '');
   const hammerPrice = doc.price?.hammerPrice || null;
   const hammerPremium = doc.price?.hammerPremium || null;
-  const soldPrice = hammerPremium || hammerPrice;
   const estimateLow = doc.price?.estimateLow || null;
   const estimateHigh = doc.price?.estimateHigh || null;
 
@@ -1872,6 +1987,19 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
   const imageUrl = doc.image?.url || null;
   const lotUrl = `https://www.bonhams.com/auction/${auctionId}/lot/${lotId}`;
 
+  // Retain the raw description (styledDescription stripped to text, else the
+  // catalog desc) — non-destructive re-parse source for the identity layer.
+  const bonhamsDescription = (() => {
+    const src = doc.styledDescription || doc.catalogDesc || doc.description || '';
+    if (!src) return null;
+    const txt = String(src).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return txt ? txt.slice(0, 4000) : null;
+  })();
+
+  // Bonhams exposes both hammer + premium-inclusive: realized when a premium
+  // number exists, else the hammer is the realized (hammer-only basis).
+  const bonhamsBasis: PriceBasis = hammerPremium != null ? 'realized' : 'hammer-only';
+
   return {
     id: `bonhams-${auctionId}-${lotId}`,
     artist: artistSlug,
@@ -1879,18 +2007,23 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
     year,
     medium,
     dimensions,
+    description: bonhamsDescription,
     category: 'unknown' as LotCategory,
     imageUrl,
     auctionHouse: 'Bonhams',
     saleName: doc.heading || '',
     saleDate,
     lotNumber: doc.lotNo?.number || null,
-    estimateLow,
-    estimateHigh,
-    currency,
-    hammerPrice,
-    premiumPrice: hammerPremium,
-    priceUsd: toUsd(soldPrice, currency),
+    ...stampMoney({
+      isSold,
+      nativeCurrency: currency,
+      saleDate: saleDate || null,
+      hammerNative: hammerPrice,
+      premiumNative: hammerPremium,
+      estLowNative: estimateLow,
+      estHighNative: estimateHigh,
+      priceBasis: bonhamsBasis,
+    }),
     status,
     url: lotUrl,
   };
@@ -1916,20 +2049,96 @@ function isoCurrencyToInternal(iso: string): Currency {
   return map[iso] || 'USD';
 }
 
-// Rough static conversion to USD for stats/charts (avoids API dependency)
-const USD_RATES: Record<Currency, number> = {
-  USD: 1,
-  GBP: 1.27,
-  EUR: 1.08,
-  HKD: 0.128,
-  CNY: 0.138,
-  AUD: 0.63,
-  CHF: 1.13,
-};
+// The flat single-rate toUsd()/USD_RATES table was removed in the v2 money
+// rewrite: every conversion now flows through toUsdDated()/stampMoney(), which
+// use the DATED per-sale-year FX_BY_YEAR table in normalize.ts (a 2015 GBP sale
+// converts at 2015's rate, not one frozen 16-year snapshot). Native is the
+// fact; USD is a derived, dated view.
 
-function toUsd(amount: number | null, currency: Currency): number | null {
-  if (amount == null) return null;
-  return Math.round(amount * (USD_RATES[currency] || 1));
+// ── v2 money stamping ──────────────────────────────────────────────────────
+// The load-bearing rewrite: native is the FACT, USD is a DERIVED view via a
+// DATED per-lot rate (toUsdDated from normalize.ts), and priceBasis says what
+// the number is. Called at every soldPrice choice so a fresh row carries the
+// full money block. Never blanket-forces 'USD' — the native currency is passed
+// through as the fact; estimates are stored native + derived to USD.
+//
+// A sold lot MUST end with realizedUsd>0 + priceBasis; a non-sold lot has NULL
+// price fields (the write-time invariant gate enforces this). We therefore null
+// every price field when !isSold, regardless of what a house returned.
+interface MoneyIn {
+  isSold: boolean;
+  nativeCurrency: Currency;
+  saleDate: string | null;
+  hammerNative: number | null;
+  premiumNative: number | null;
+  estLowNative: number | null;
+  estHighNative: number | null;
+  priceBasis: PriceBasis; // basis to stamp when sold
+  buyerPremiumPct?: number | null;
+}
+type MoneyBlock = Pick<AuctionLot,
+  'nativeCurrency' | 'hammerNative' | 'premiumNative' | 'realizedNative' |
+  'buyerPremiumPct' | 'fxRate' | 'fxAsOf' | 'hammerUsd' | 'premiumUsd' |
+  'realizedUsd' | 'estLowNative' | 'estHighNative' | 'estLowUsd' | 'estHighUsd' |
+  'priceBasis' | 'currency' | 'estimateLow' | 'estimateHigh' |
+  'hammerPrice' | 'premiumPrice' | 'priceUsd'>;
+
+function stampMoney(m: MoneyIn): MoneyBlock {
+  const { rate, asOf } = fxRateFor(m.nativeCurrency, m.saleDate);
+  // conversion goes through toUsdDated (normalize.ts) so the fresh row's USD
+  // rounding is byte-identical to the backfill's — ONE definition of "native →
+  // dated USD", shared by crawler + migrate-v2.
+  const conv = (n: number | null) => toUsdDated(n, m.nativeCurrency, m.saleDate).usd;
+
+  // estimates are ALWAYS native + derived (present on sold and upcoming alike)
+  const estLowNative = m.estLowNative;
+  const estHighNative = m.estHighNative;
+  const estLowUsd = conv(estLowNative);
+  const estHighUsd = conv(estHighNative);
+
+  if (!m.isSold) {
+    // DOCTRINE: a non-sold lot has NULL price fields. Keep estimates + the fx
+    // stamp (so a computed estUsd band is dated) but no realized/hammer/premium.
+    return {
+      nativeCurrency: m.nativeCurrency,
+      hammerNative: null, premiumNative: null, realizedNative: null,
+      buyerPremiumPct: m.buyerPremiumPct ?? null,
+      fxRate: rate, fxAsOf: asOf,
+      hammerUsd: null, premiumUsd: null, realizedUsd: null,
+      estLowNative, estHighNative, estLowUsd, estHighUsd,
+      // old aliases
+      currency: m.nativeCurrency,
+      estimateLow: estLowUsd, estimateHigh: estHighUsd,
+      hammerPrice: null, premiumPrice: null, priceUsd: null,
+      priceBasis: undefined,
+    };
+  }
+
+  const hammerNative = m.hammerNative;
+  const premiumNative = m.premiumNative;
+  const realizedNative = premiumNative ?? hammerNative;
+  const hammerUsd = conv(hammerNative);
+  const premiumUsd = conv(premiumNative);
+  const realizedUsd = conv(realizedNative);
+  // derive BP% when both native numbers are present and it wasn't supplied
+  let bp = m.buyerPremiumPct ?? null;
+  if (bp == null && hammerNative != null && premiumNative != null && hammerNative > 0) {
+    bp = Math.round((premiumNative / hammerNative - 1) * 1000) / 10;
+  }
+
+  return {
+    nativeCurrency: m.nativeCurrency,
+    hammerNative, premiumNative, realizedNative,
+    buyerPremiumPct: bp,
+    fxRate: rate, fxAsOf: asOf,
+    hammerUsd, premiumUsd, realizedUsd,
+    estLowNative, estHighNative, estLowUsd, estHighUsd,
+    priceBasis: m.priceBasis,
+    // old aliases (priceUsd = realizedUsd; estimate* = *Usd, NOT native)
+    currency: m.nativeCurrency,
+    estimateLow: estLowUsd, estimateHigh: estHighUsd,
+    hammerPrice: hammerNative, premiumPrice: premiumNative, priceUsd: realizedUsd,
+  };
 }
 
 // ── Stats Computation ──
@@ -2494,6 +2703,31 @@ async function main() {
   const WATCH_SET = new Set(['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier']);
   const badIds = new Set<string>();
   let goldinPromoted = 0;
+
+  // W11 — GENERALIZE vanished-lot reconciliation to ALL houses (not just
+  // Goldin). A non-Goldin lot that stood 'upcoming', whose sale date has now
+  // passed, but that did NOT reappear in this run's fresh crawl of its own
+  // scope, is a zombie: the source dropped it without ever publishing a result
+  // (withdrawn, or an unknown result). We can't fabricate a sold/bought_in — so
+  // we mark it 'withdrawn' when it's a clean disappearance short after the sale,
+  // else 'unknown-result'. This fixes the ~424 stale upcoming rows that never
+  // resolve. GUARDED: only reconcile a lot whose SCOPE was actually crawled
+  // this run (else a RAY_ONLY run would strand every other house's upcoming as
+  // "vanished"), and never touch sold/bought_in (permanent) or Goldin (its own
+  // Completed-flip pass above owns Goldin adjudication).
+  const freshNonGoldinIds = new Set<string>();
+  const crawledArtists = new Set<string>();
+  for (const l of freshLots) {
+    if (l.auctionHouse !== 'Goldin') freshNonGoldinIds.add(l.id);
+    crawledArtists.add(l.artist);
+  }
+  // A house appears in this run's fresh set → we have authority to reconcile
+  // its still-upcoming past-sale lots. (A house crawled but returning zero
+  // lots for an artist is indistinguishable from a not-crawled house, so we
+  // gate on the artist having produced ANY fresh lot this run.)
+  const nowMs = Date.now();
+  const RECONCILE_GRACE_MS = 3 * 86_400_000; // 3-day grace after sale close
+  let reconciledWithdrawn = 0, reconciledUnknown = 0;
   for (const [id, lot] of Array.from(lotMap.entries())) {
     if (lot.title.match(/^Lot\.\d+/i)) badIds.add(id);
     if (id === 'sothebys-upcoming-boy-white-hat' && lotMap.has('sothebys-george-condo-qiao-zhikang-duo-the-boy-with-white')) {
@@ -2529,9 +2763,21 @@ async function main() {
       if (auctionDone) {
         if (bid > 0) {
           const bp = lot.buyerPremium || 22;
+          // v2: stamp the FULL money block on promotion (native hammer =
+          // last bid, realized = hammer + premium, dated USD, basis) so a
+          // promoted lot is byte-identical to a fresh ingestSold row.
+          Object.assign(lot, stampMoney({
+            isSold: true,
+            nativeCurrency: 'USD',
+            saleDate: (lot.saleDate || '').split('T')[0] || null,
+            hammerNative: bid,
+            premiumNative: Math.round(bid * (1 + bp / 100)),
+            estLowNative: null,
+            estHighNative: null,
+            priceBasis: 'final-bid-plus-bp',
+            buyerPremiumPct: bp,
+          }));
           lot.status = 'sold';
-          lot.priceUsd = Math.round(bid * (1 + bp / 100)); // final hammer + premium
-          lot.priceBasis = 'goldin-final-bid';
           goldinPromoted++;
         } else {
           badIds.add(id); // closed with no bid = bought-in
@@ -2553,9 +2799,31 @@ async function main() {
     // Watch makers: evict the old Christie's maker-search lots (now superseded
     // by christies-auc-* from the full auction crawler) to avoid double-count.
     if (WATCH_SET.has(lot.artist) && lot.auctionHouse === "Christie's" && !id.startsWith('christies-auc-')) badIds.add(id);
+
+    // W11 — non-Goldin zombie reconciliation (see the comment block above).
+    if (lot.auctionHouse !== 'Goldin' && lot.status === 'upcoming' && !badIds.has(id)) {
+      const saleMs = new Date(lot.saleDate).getTime();
+      const salePassed = !isNaN(saleMs) && saleMs < nowMs;
+      const scopeCrawled = crawledArtists.has(lot.artist);
+      const reappeared = freshNonGoldinIds.has(id);
+      if (salePassed && scopeCrawled && !reappeared) {
+        // vanished from a scope we crawled, after its sale — never resolved.
+        // Recently past → a clean withdrawal; long past → unknown result.
+        if (nowMs - saleMs <= RECONCILE_GRACE_MS) {
+          lot.status = 'withdrawn';
+          reconciledWithdrawn++;
+        } else {
+          lot.status = 'unknown-result';
+          reconciledUnknown++;
+        }
+      }
+    }
   }
   for (const id of Array.from(badIds)) lotMap.delete(id);
   if (goldinRan) console.log(`[Ray] Goldin: promoted ${goldinPromoted} closed lots to final hammer (last-bid + premium)`);
+  if (reconciledWithdrawn || reconciledUnknown) {
+    console.log(`[Ray] Reconciled ${reconciledWithdrawn + reconciledUnknown} vanished upcoming lots (${reconciledWithdrawn} withdrawn, ${reconciledUnknown} unknown-result)`);
+  }
 
   const allLots = Array.from(lotMap.values()).sort((a, b) => {
     const da = new Date(a.saleDate).getTime();
@@ -2600,6 +2868,58 @@ async function main() {
       if (lot.eventKey !== undefined) delete lot.eventKey;
       if (lot.sportYear !== undefined) delete lot.sportYear;
     }
+
+    // ── v2 IDENTITY STAMP ──────────────────────────────────────────────────
+    // Persist what the value/similarity engine joins on, using the SAME pure
+    // functions the backfill uses (normalize.ts), so a fresh row and a migrated
+    // row are byte-identical. Runs after category/objectClass/sports tags are
+    // set (objectFingerprint reads entity/objectType). Every field is additive;
+    // an absent signal produces null (never fabricated identity).
+    lot.formKey = classifyForm(lot);
+    lot.modelKey = normModelKey(lot);
+    lot.reference = normWatchKey(lot);
+    lot.normalizedTitle = normNormalizeTitle(lot.title);
+    lot.titleTokens = titleTokens(lot.title);
+
+    const { makerSlug, entityClass } = classifyEntity(lot.artist);
+    lot.makerSlug = makerSlug;
+    lot.entityClass = entityClass;
+
+    const yr = extractYear(lot.year, lot.title, lot.description || undefined);
+    lot.yearNum = yr.yearNum;
+    lot.yearSource = yr.yearSource;
+    lot.yearIsCirca = yr.yearIsCirca;
+
+    const dims = normalizeDimensions(lot.dimensions);
+    lot.heightCm = dims?.heightCm ?? null;
+    lot.widthCm = dims?.widthCm ?? null;
+    lot.depthCm = dims?.depthCm ?? null;
+    lot.sizeClass = dims?.sizeClass ?? null;
+    lot.dimSource = dims?.dimSource ?? null;
+
+    const med = canonMedium(lot.medium);
+    lot.mediumCanon = med.mediumCanon;
+    lot.materialTokens = med.materialTokens;
+
+    const ed = extractEdition(lot.title, lot.description || undefined);
+    lot.editionOf = ed.editionOf;
+    lot.editionTotal = ed.editionTotal;
+    lot.editionMarker = ed.editionMarker;
+    lot.serialNo = extractSerial(lot.title, lot.description || undefined);
+
+    // collectible auth signals (game-used sports) — title-borne
+    const tags = extractCollectibleTags(lot.title);
+    lot.photoMatched = tags.photoMatched;
+    lot.authCert = tags.authCert;
+    lot.gradeLabel = tags.gradeLabel;
+
+    // Layer-B fingerprint LAST — reads makerSlug/model/dims/edition + sports
+    // tags all stamped above. NULL when discriminators are thin (never fabricate
+    // exact identity — guards the Untitled collisions + the Eames over-merge).
+    lot.objectFingerprint = objectFingerprint(lot);
+
+    lot.schemaVersion = 2;
+
     categoryCounts[lot.category] = (categoryCounts[lot.category] || 0) + 1;
   }
   console.log(`[Ray] Category breakdown:`, categoryCounts);
@@ -2707,6 +3027,37 @@ async function main() {
     buildBacktest(DATA_DIR, allLots);
   } catch (e) {
     console.error('[Ray] buildBacktest failed (crawl data intact):', e);
+  }
+
+  // (imageHash removed: different houses photograph the same object differently,
+  // so a perceptual hash never matches the same item across sales — Collin.
+  // Same-object identity is title + structured attributes, scored as a % in
+  // step 2; the fingerprint is a coarse blocking key only, imageHash is not
+  // worth the network pass for near-zero cross-sale value.)
+
+  // ── §4 WRITE-TIME VALIDATION GATE ─────────────────────────────────────────
+  // assertInvariants(lots) is PURE — it returns {fatal, warn} and throws
+  // nothing; the crawler owns the policy: log warnings, then THROW on any FATAL
+  // so the crawl aborts with the JSON untouched (data honesty > a bad publish).
+  // Imported dynamically (matching the comps/buildUpcoming pattern); the
+  // consumers agent owns app/lib/validate.ts. A sold lot MUST have realizedUsd>0
+  // + priceBasis + a real non-future saleDate; a non-sold lot MUST have null
+  // price fields; every *Usd == native×fxRate; ids/dates well-formed. Runs on
+  // the FULL corpus (allLots) BEFORE the payload split so an archive row can't
+  // skip the gate; passing rows are stamped validatedAt.
+  {
+    const { assertInvariants } = await import('../app/lib/validate');
+    const report = assertInvariants(allLots);
+    for (const w of report.warn) console.warn(`[Ray] WARN invariant: ${w}`);
+    if (report.fatal.length > 0) {
+      console.error(`[Ray] ${report.fatal.length} FATAL invariant violation(s) — ABORTING write (data untouched):`);
+      for (const f of report.fatal.slice(0, 50)) console.error(`  ✗ ${f}`);
+      if (report.fatal.length > 50) console.error(`  … and ${report.fatal.length - 50} more`);
+      throw new Error(`assertInvariants: ${report.fatal.length} FATAL violation(s) — refusing to publish`);
+    }
+    const validatedAt = new Date().toISOString();
+    for (const lot of allLots) lot.validatedAt = validatedAt;
+    console.log(`[Ray] Invariant gate PASSED (${report.warn.length} warnings) — stamped validatedAt on ${allLots.length} lots`);
   }
 
   // W3 · Payload split at write time. Goldin *sold* is ~35% of the corpus and

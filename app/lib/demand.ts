@@ -29,12 +29,19 @@ export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
   // quarter key -> exclusive end of that quarter (first ms of the next one)
   const quarterEnd: Record<string, number> = {};
   for (const l of lots) {
-    if (l.status !== 'sold' || !l.priceUsd || !l.estimateLow || !l.estimateHigh) continue;
+    // v2 money read (alias-safe): the canonical USD estimate is estLowUsd/
+    // estHighUsd (native × dated FX); pre-migration only estimateLow/High exist.
+    // Read the USD band when present, fall back to the old fields — so perf =
+    // priceUsd / estMid divides USD by USD before AND after migration (a
+    // non-USD sale no longer divides a USD price by a native estimate).
+    const estLow = l.estLowUsd ?? l.estimateLow;
+    const estHigh = l.estHighUsd ?? l.estimateHigh;
+    if (l.status !== 'sold' || !l.priceUsd || !estLow || !estHigh) continue;
     const d = new Date(l.saleDate);
     if (isNaN(d.getTime())) continue;
     const q = Math.floor(d.getUTCMonth() / 3);
     const key = `${d.getUTCFullYear()} Q${q + 1}`;
-    const estMid = (l.estimateLow + l.estimateHigh) / 2;
+    const estMid = (estLow + estHigh) / 2;
     if (estMid <= 0) continue;
     sales.push({ t: d.getTime(), perf: l.priceUsd / estMid - 1 });
     quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
