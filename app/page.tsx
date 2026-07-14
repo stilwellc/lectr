@@ -424,7 +424,7 @@ export default function RayPage() {
       {/* R2 · the one market switcher — a pill rail directly under the nav,
           above the board it controls. The active pill is the lit element. */}
       <div className="rail" style={{ paddingTop: 14 }}>
-        <div className="ray-markets-fade">
+        <div className="ray-markets-fade ray-markets-center">
           <MarketSwitch compact lit />
         </div>
       </div>
