@@ -3090,7 +3090,18 @@ async function main() {
     version: 2,
   }, null, 2));
 
-  console.log(`\n[Ray] Done. ${allLots.length} total lots written (corpus gz + slim served).`);
+  // ── PART-2 ENGINE PASS ──────────────────────────────────────────────────
+  // Value the upcoming lots, group repeat sales, and build the market
+  // dashboards from the freshly-written corpus. Non-fatal: a failure here
+  // leaves the crawl's data intact (the engine outputs just go stale a day).
+  try {
+    const { runMarketBuild } = await import('./build-market');
+    await runMarketBuild();
+  } catch (e) {
+    console.error('[Ray] market/value engine pass failed (crawl data intact):', e);
+  }
+
+  console.log(`\n[Ray] Done. ${allLots.length} total lots written (corpus gz + slim served + engine).`);
 }
 
 main().catch(err => {

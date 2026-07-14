@@ -222,6 +222,17 @@ export interface AuctionLot {
   objectFingerprint?: string | null;
   /** links lots believed same physical object; distinct from comp pool; null until confident */
   repeatSaleGroupId?: string | null;
+  /** Part-2 engine output, stamped at build time on upcoming lots. See
+      app/lib/value.ts ValueResult. Structural to avoid a types↔value cycle. */
+  value?: {
+    poolIds: string[]; n: number; compValueUsd: number; low: number; high: number;
+    compRatio: number | null;
+    signal: { label: string; strength: string; beatRatePct: number } | null;
+    estimateUsd: number | null;
+    vsBid: { label: string; pct: number } | null;
+    confidence: 'high' | 'medium' | 'low';
+    exact: { id: string; realizedUsd: number; saleDate: string; cls: string } | null;
+  } | null;
 
   // ── v2 STATUS / TIME / PROVENANCE ──
   /** full timestamp only when genuinely known (watch paths) */

@@ -28,6 +28,7 @@ interface RayData {
       Recent-results row paints without the 10MB archive. Eager. */
   recentSold: RecentSoldByMarket;
   backtest: Backtest | null;
+  market: MarketData | null;
   lastCrawl: string;
   sources: string[];
   loading: boolean;
@@ -42,7 +43,21 @@ interface RayData {
   fromCache: boolean;
 }
 
+export interface MarketData {
+  generatedAt: string;
+  markets: Record<string, MarketSeriesJson>;
+  makers: Record<string, MarketSeriesJson>;
+  calibration: { directional: { method: string; buckets: [string, number][] }; valueError: Record<string, number> };
+}
+export interface MarketSeriesJson {
+  method: string; label: string; n: number;
+  index: { period: string; value: number; n: number }[];
+  volume: { period: string; value: number; n: number }[];
+  sellThrough: { period: string; value: number; n: number }[];
+  houseAccuracy: { period: string; value: number; n: number }[];
+}
 interface RayPayload {
+  market: MarketData | null;
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeByMarket;
@@ -122,12 +137,14 @@ function loadRayData(): Promise<RayPayload> {
 
   inflight = (async () => {
     // ── phase 1: the small eager payload — stats + meta + upcoming (w/ signals)
-    const [statsR, metaR, upR, btR] = await Promise.allSettled([
+    const [statsR, metaR, upR, btR, mkR] = await Promise.allSettled([
       fetchJson('/data/ray/stats.json'),
       fetchJson('/data/ray/meta.json'),
       fetchJson('/data/ray/upcoming.json'),
       fetchJson('/data/ray/backtest.json'),
+      fetchJson('/data/ray/market.json'),
     ]);
+    const market = mkR.status === 'fulfilled' ? (mkR.value as MarketData) : null;
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
     const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[] };
     const backtest = btR.status === 'fulfilled' ? (btR.value as Backtest) : null;
@@ -150,6 +167,7 @@ function loadRayData(): Promise<RayPayload> {
         realized: up.realized || {},
         recentSold: up.recentSold || {},
         backtest,
+        market,
         lastCrawl: metaData.lastCrawl || '',
         sources: metaData.sources || [],
         fullLoaded: false,
@@ -218,6 +236,7 @@ function loadRayData(): Promise<RayPayload> {
       demand: {},
       realized: {},
       recentSold: {},
+      market: null,
       backtest,
       lastCrawl: metaData.lastCrawl || '',
       sources: metaData.sources || [],
@@ -303,6 +322,7 @@ export function useRayData(): RayData {
     realized: data?.realized || {},
     recentSold: data?.recentSold || {},
     backtest: data?.backtest || null,
+    market: data?.market || null,
     lastCrawl: data?.lastCrawl || '',
     sources: data?.sources || [],
     loading: data === null,
