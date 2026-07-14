@@ -94,6 +94,7 @@ export default function BoardDemand({
   ledger,
   mode = 'estimate',
   cohortLabel,
+  indexKind = 'price',
 }: {
   allLots: AuctionLot[];
   demand?: { date: string; value: number }[];
@@ -106,6 +107,8 @@ export default function BoardDemand({
   mode?: 'estimate' | 'realized' | 'index';
   /** the like-for-like cohort named in the realized label (e.g. 'tickets & passes') */
   cohortLabel?: string;
+  /** index mode sub-kind: 'price' = pure appreciation, 'blend' = price × demand */
+  indexKind?: 'price' | 'blend';
 }) {
   const isRealized = mode === 'realized';
   const isIndex = mode === 'index';
@@ -165,7 +168,9 @@ export default function BoardDemand({
       <div className="ray-demand-head">
         <span className="ray-demand-label">
           {isIndex ? (
-            <span>The {marketLabel} market · like-for-like price index, rebased 100 · 3-quarter smoothed</span>
+            <span>{indexKind === 'blend'
+              ? `The ${marketLabel} market · price appreciation blended with demand vs estimate, rebased 100`
+              : `The ${marketLabel} market · like-for-like price index, rebased 100 · 3-quarter smoothed`}</span>
           ) : isRealized ? (
             <>
               <span>Typical realized price · {cohortLabel || marketLabel} · like-for-like, trailing 12 months</span>

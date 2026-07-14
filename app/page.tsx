@@ -112,6 +112,31 @@ export default function RayPage() {
     const idx = marketData?.markets?.[activeKey]?.index || [];
     return idx.map(p => ({ date: p.period, value: p.value }));
   }, [marketData, activeKey]);
+  // BLENDED MARKET INDEX — price appreciation × demand-vs-estimate, both rebased
+  // to 100 over the same window and geometrically averaged. The composite rises
+  // when EITHER prices appreciate OR the market beats estimates (demand heat),
+  // so the lander's hero reads the market's true strength, not one dimension.
+  const blendedSeries = useMemo(() => {
+    const price = marketData?.markets?.[activeKey]?.index || [];   // rebased-100 price index
+    const dem = demand[activeKey] || [];                            // % over estimate, quarterly
+    if (price.length < 4 || dem.length < 2) return [];
+    const demByQ = new Map(dem.map(d => [d.date, d.value]));
+    // demand as a level (100 + %), rebased to 100 at the first quarter present
+    // in BOTH series; blend = geomean(priceRebased, demandRebased).
+    const firstWithDemand = price.find(pt => demByQ.has(pt.period));
+    if (!firstWithDemand) return [];
+    const demBase = 100 + (demByQ.get(firstWithDemand.period) as number);
+    const priceBase = firstWithDemand.value;
+    const out: { date: string; value: number }[] = [];
+    for (const pt of price) {
+      const dv = demByQ.get(pt.period);
+      const priceReb = pt.value / priceBase * 100;
+      if (dv === undefined) { out.push({ date: pt.period, value: Math.round(priceReb) }); continue; }
+      const demReb = (100 + dv) / demBase * 100;
+      out.push({ date: pt.period, value: Math.round(Math.sqrt(priceReb * demReb)) });
+    }
+    return out;
+  }, [marketData, demand, activeKey]);
   // Full-corpus counts precomputed at build time (meta.json) so the aggregate
   // reads honest totals without the 10MB Goldin sold-archive on the wire.
   const meta = ray as unknown as { totalLots?: number; totalSold?: number };
@@ -417,9 +442,17 @@ export default function RayPage() {
           <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
             <div className="ray-board-rail">
               <div className="ray-pane">
-                {marketIndexSeries.length >= 4 ? (
-                  /* The Part-2 engine's validated like-for-like price index —
-                     the market's real move over time, rebased 100. */
+                {blendedSeries.length >= 4 ? (
+                  /* The blended market index: price appreciation × demand vs
+                     estimate, both rebased 100 and geo-averaged. */
+                  <BoardDemand
+                    allLots={marketLots}
+                    demand={blendedSeries}
+                    marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
+                    mode="index"
+                    indexKind="blend"
+                  />
+                ) : marketIndexSeries.length >= 4 ? (
                   <BoardDemand
                     allLots={marketLots}
                     demand={marketIndexSeries}
