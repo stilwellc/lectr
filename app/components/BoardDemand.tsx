@@ -103,14 +103,15 @@ export default function BoardDemand({
   /** 'estimate' = the frozen Demand Index (byte-identical). 'realized' = the
    *  sports variant: a $ cohort-median curve, no zero-at-estimate line, no
    *  Demand Index / % vs estimate copy — colored on YoY delta, never level. */
-  mode?: 'estimate' | 'realized';
+  mode?: 'estimate' | 'realized' | 'index';
   /** the like-for-like cohort named in the realized label (e.g. 'tickets & passes') */
   cohortLabel?: string;
 }) {
   const isRealized = mode === 'realized';
-  // realized swaps the numeral/tick/scrub formatter to $; estimate path is
-  // untouched (still formatDemand, still the % Demand Index).
-  const fmt = isRealized ? formatRealized : formatDemand;
+  const isIndex = mode === 'index';
+  // realized swaps the numeral/tick/scrub formatter to $; index shows the
+  // rebased-100 level; estimate path is untouched (formatDemand, % Demand Index).
+  const fmt = isIndex ? ((n: number) => Math.round(n).toString()) : isRealized ? formatRealized : formatDemand;
   // 1Y default: the lit numeral IS the trailing-12-month claim the kicker
   // makes — the chart shows the sentence. Max stays one click away.
   const [range, setRange] = useState<Range>('1Y');
@@ -147,6 +148,9 @@ export default function BoardDemand({
   const dir = isRealized
     ? (delta ?? 0)
     : (visible.length >= 2 ? visible[visible.length - 1].value - visible[0].value : 0);
+  // index change over the visible window, as a % of the window's first level
+  const idxPct = isIndex && visible.length >= 2 && visible[0].value
+    ? Math.round((visible[visible.length - 1].value / visible[0].value - 1) * 100) : 0;
   const lineColor = dir >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
   // the scrub chip's period context: the hovered quarter vs a year prior
@@ -160,7 +164,9 @@ export default function BoardDemand({
     <div className="ray-board-demand" data-tone={dir >= 0 ? 'up' : 'down'}>
       <div className="ray-demand-head">
         <span className="ray-demand-label">
-          {isRealized ? (
+          {isIndex ? (
+            <span>The {marketLabel} market · like-for-like price index, rebased 100 · 3-quarter smoothed</span>
+          ) : isRealized ? (
             <>
               <span>Typical realized price · {cohortLabel || marketLabel} · like-for-like, trailing 12 months</span>
               <RealizedNote />
@@ -209,6 +215,13 @@ export default function BoardDemand({
         <span className="ray-numrow-delta">
           {hover
             ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>12 months to {hover.date}</span>
+            : isIndex ? (
+                idxPct !== 0 && (
+                  <span className={idxPct > 0 ? 'up' : 'down'}>
+                    {idxPct > 0 ? '▲' : '▼'} {idxPct > 0 ? '+' : ''}{idxPct}% since {visible[0]?.date}
+                  </span>
+                )
+              )
             : delta !== null && Math.round(delta) !== 0 && (
               isRealized
                 ? (yearAgo !== null && yearAgo !== 0 && (
@@ -289,16 +302,16 @@ export default function BoardDemand({
                 orientation="right"
                 width={isRealized ? 48 : 40}
                 tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }}
-                tickFormatter={isRealized ? (v: number) => formatRealized(v) : (v: number) => `${v > 0 ? '+' : ''}${v}%`}
+                tickFormatter={isIndex ? (v: number) => `${Math.round(v)}` : isRealized ? (v: number) => formatRealized(v) : (v: number) => `${v > 0 ? '+' : ''}${v}%`}
                 axisLine={false}
                 tickLine={false}
-                domain={isRealized
+                domain={(isRealized || isIndex)
                   ? [(min: number) => Math.max(0, Math.floor(min * 0.9)), (max: number) => Math.ceil(max * 1.05)]
                   : [(min: number) => Math.min(-5, Math.floor(min)), (max: number) => Math.ceil(max)]}
               />
               {/* estimate-only: the 0 line means "sells at estimate". Realized
                   has no estimate baseline, so the line is dropped entirely. */}
-              {!isRealized && (
+              {!isRealized && !isIndex && (
                 <ReferenceLine
                   y={0}
                   stroke="rgba(255,255,255,0.16)"
