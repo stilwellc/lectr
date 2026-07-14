@@ -3519,3 +3519,27 @@ body {
     font-size: 12px;
   }
 }
+
+
+/* ── THE GREETING — the sign writes itself once per session ───────────── */
+.ray-greeting {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 560px 280px at 50% 50%, rgba(244, 246, 255, 0.05), transparent 70%),
+    #060709;
+  transition: opacity 520ms var(--ease-ui);
+}
+.ray-greeting-out { opacity: 0; pointer-events: none; }
+.ray-greeting-mark {
+  height: 132px;
+  width: auto;
+  clip-path: inset(0 100% 0 0);
+  animation: lectrCloseWrite 1.4s var(--ease-draw) 150ms forwards;
+  filter: drop-shadow(0 0 26px rgba(255, 255, 255, 0.14));
+}
+@media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }

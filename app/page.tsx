@@ -19,6 +19,7 @@ import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
 import { CallPlate, Colophon, daysWord } from './components/Terminal';
 import Flick from './components/Flick';
+import Greeting from './components/Greeting';
 
 // W13 contract: useSavedLots grows a savedMeta record (hook agent's edit).
 // Read it defensively — a stable empty fallback keeps memo deps quiet.
@@ -282,6 +283,8 @@ export default function RayPage() {
   }, [savedIds, savedMeta, allLots]);
 
   return (
+    <>
+    <Greeting />
     <div style={{
       minHeight: '100vh',
       background: 'var(--color-bg)',
@@ -625,5 +628,6 @@ export default function RayPage() {
         </RayEntrance>
       )}
     </div>
+    </>
   );
 }
