@@ -3244,9 +3244,9 @@ body {
   .ray-appr {
     background: rgba(255, 255, 255, 0.045);
     padding: 13px 16px;
-    justify-content: flex-start;
-    align-items: flex-start;
-    text-align: left;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
   }
   .ray-appr-stat { display: none; }
   .ray-appr-banner { display: block; font-size: 13.5px; line-height: 1.4; color: var(--color-text-secondary); }
