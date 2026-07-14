@@ -1877,6 +1877,13 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-numrow-delta { font-size: 13px; font-weight: 600; }
 .ray-numrow-delta .up { color: var(--color-up); }
 .ray-numrow-delta .down { color: var(--color-down); }
+.ray-numrow-aux { margin-left: auto; align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; }
+.ray-numrow-aux-v { font-size: 13px; font-weight: 600; color: #9AA0A6; white-space: nowrap; }
+.ray-numrow-aux-v b { font-weight: 700; color: var(--color-fg); }
+.ray-numrow-aux-v b.up { color: var(--color-up); }
+.ray-numrow-aux-v b.down { color: var(--color-down); }
+.ray-numrow-aux-s { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }
+@media (max-width: 520px) { .ray-numrow-aux { margin-left: 0; align-items: flex-start; text-align: left; } }
 .ray-scrubchip {
   margin-left: auto;
   font-size: 11.5px;

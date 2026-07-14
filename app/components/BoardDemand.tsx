@@ -95,10 +95,14 @@ export default function BoardDemand({
   mode = 'estimate',
   cohortLabel,
   indexKind = 'price',
+  secondaryStat,
 }: {
   allLots: AuctionLot[];
   demand?: { date: string; value: number }[];
   marketLabel?: string;
+  /** an optional second metric tucked to the right of the hero numeral —
+   *  same baseline, no extra vertical space (e.g. sales-weighted appreciation) */
+  secondaryStat?: { label: string; value: string; sub?: string; tone?: 'up' | 'down' } | null;
   /** optional — when absent the pane stays chart-pure and the ledger renders elsewhere */
   ledger?: LedgerItem[];
   /** 'estimate' = the frozen Demand Index (byte-identical). 'realized' = the
@@ -250,6 +254,15 @@ export default function BoardDemand({
                   )
             )}
         </span>
+        {secondaryStat && !hover && (
+          <span className="ray-numrow-aux">
+            <span className="ray-numrow-aux-v">
+              {secondaryStat.label}{' '}
+              <b className={secondaryStat.tone}>{secondaryStat.value}</b>
+            </span>
+            {secondaryStat.sub && <span className="ray-numrow-aux-s">{secondaryStat.sub}</span>}
+          </span>
+        )}
         {hover && (
           <span className="ray-scrubchip">
             {hover.date}{hoverPrior !== null && <> · vs {fmt(hoverPrior)} a year prior</>}

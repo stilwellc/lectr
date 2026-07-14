@@ -111,6 +111,19 @@ export default function RayPage() {
   // trailing 12 months, full history (demand[activeKey], reaching back to the
   // early 2000s for the majors). No rebased index, no composite — the % demand
   // curve, exactly as it reads on /analytics.
+
+  // Sales-weighted appreciation across the active market's artists — the same
+  // stat /analytics leads its portfolio header with, shown beside the demand
+  // numeral as a second read (price appreciation vs the demand read).
+  const appreciation = useMemo(() => {
+    const set = marketArtists(activeKey);
+    const stats = Object.entries(statsByArtist)
+      .filter(([slug]) => activeKey === 'all' || set.has(slug))
+      .map(([, s]) => s);
+    const totalRev = stats.reduce((a, s) => a + (s.totalAuctionRevenue || 0), 0);
+    if (!totalRev) return null;
+    return stats.reduce((a, s) => a + (s.appreciationRate || 0) * (s.totalAuctionRevenue || 0), 0) / totalRev;
+  }, [statsByArtist, activeKey]);
   // Full-corpus counts precomputed at build time (meta.json) so the aggregate
   // reads honest totals without the 10MB Goldin sold-archive on the wire.
   const meta = ray as unknown as { totalLots?: number; totalSold?: number };
@@ -423,6 +436,12 @@ export default function RayPage() {
                     allLots={marketLots}
                     demand={demand[activeKey]}
                     marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
+                    secondaryStat={appreciation != null ? {
+                      label: 'Appreciation',
+                      value: `${appreciation >= 0 ? '+' : ''}${appreciation.toFixed(1)}%`,
+                      sub: 'sales-weighted avg across artists',
+                      tone: appreciation >= 0 ? 'up' : 'down',
+                    } : null}
                   />
                 ) : activeKey === 'sports' ? (
                   /* Goldin publishes no estimates → realized cohort median */
