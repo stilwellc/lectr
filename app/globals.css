@@ -1847,6 +1847,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   margin-bottom: 14px;
 }
 .ray-demand-label { font-size: 12px; font-weight: 600; color: #9AA0A6; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ray-demand-foot { margin: 12px 2px 2px; font-size: 12px; line-height: 1.55; color: #8A9099; max-width: 62ch; }
+.ray-demand-foot b { font-weight: 650; color: #C9CDD2; }
+.ray-demand-foot b.up { color: var(--color-up); }
+.ray-demand-foot b.down { color: var(--color-down); }
 .ray-ranges2 { display: flex; gap: 14px; }
 .ray-range2 {
   border: none;
