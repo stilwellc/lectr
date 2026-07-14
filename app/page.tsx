@@ -107,40 +107,10 @@ export default function RayPage() {
   const marketMeta = MARKETS.find(m => m.key === market)!;
   // Every market on the board is live — the picked market filters directly.
   const activeKey = market;
-  // the Part-2 engine's price index for the active market → the board hero
-  const marketIndexSeries = useMemo(() => {
-    const idx = marketData?.markets?.[activeKey]?.index || [];
-    return idx.map(p => ({ date: p.period, value: p.value }));
-  }, [marketData, activeKey]);
-  // BLENDED MARKET INDEX — price appreciation × demand-vs-estimate, both rebased
-  // to 100 over the same window and geometrically averaged. The composite rises
-  // when EITHER prices appreciate OR the market beats estimates (demand heat),
-  // so the lander's hero reads the market's true strength, not one dimension.
-  const blendedSeries = useMemo(() => {
-    const price = marketData?.markets?.[activeKey]?.index || [];   // rebased-100 price index (recent)
-    const dem = demand[activeKey] || [];                            // % over estimate, quarterly — FULL history
-    if (dem.length < 4) return [];
-    // The curve spans the DEMAND history end-to-end (it reaches back furthest —
-    // 2000-era for the majors), so the board shows the deep arc the demand chart
-    // always did. Where the price index also exists (2020→now) the point is the
-    // geomean of the two rebased dimensions; before that, the price index has no
-    // data, so the curve is the demand history alone. One continuous line.
-    const priceByQ = new Map(price.map(p => [p.period, p.value]));
-    // anchor = first quarter present in BOTH — rebase price and demand to 100
-    // there so the two dimensions are comparable and the blend joins seamlessly.
-    const anchor = dem.find(d => priceByQ.has(d.date));
-    const demBase = anchor ? 100 + anchor.value : 100 + dem[0].value;
-    const priceBase = anchor ? (priceByQ.get(anchor.date) as number) : 100;
-    const out: { date: string; value: number }[] = [];
-    for (const d of dem) {
-      const demReb = (100 + d.value) / demBase * 100;
-      const pv = priceByQ.get(d.date);
-      if (pv === undefined) { out.push({ date: d.date, value: Math.round(demReb) }); continue; }
-      const priceReb = pv / priceBase * 100;
-      out.push({ date: d.date, value: Math.round(Math.sqrt(priceReb * demReb)) });
-    }
-    return out;
-  }, [marketData, demand, activeKey]);
+  // The lander hero IS the Market demand chart: typical sale vs its estimate,
+  // trailing 12 months, full history (demand[activeKey], reaching back to the
+  // early 2000s for the majors). No rebased index, no composite — the % demand
+  // curve, exactly as it reads on /analytics.
   // Full-corpus counts precomputed at build time (meta.json) so the aggregate
   // reads honest totals without the 10MB Goldin sold-archive on the wire.
   const meta = ray as unknown as { totalLots?: number; totalSold?: number };
@@ -446,25 +416,16 @@ export default function RayPage() {
           <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
             <div className="ray-board-rail">
               <div className="ray-pane">
-                {blendedSeries.length >= 4 ? (
-                  /* The blended market index: price appreciation × demand vs
-                     estimate, both rebased 100 and geo-averaged. */
+                {(demand[activeKey] && demand[activeKey].length >= 4) ? (
+                  /* THE MARKET DEMAND CHART — typical sale vs its estimate,
+                     trailing 12 months, full history. The lander hero. */
                   <BoardDemand
                     allLots={marketLots}
-                    demand={blendedSeries}
+                    demand={demand[activeKey]}
                     marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
-                    mode="index"
-                    indexKind="blend"
-                  />
-                ) : marketIndexSeries.length >= 4 ? (
-                  <BoardDemand
-                    allLots={marketLots}
-                    demand={marketIndexSeries}
-                    marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
-                    mode="index"
                   />
                 ) : activeKey === 'sports' ? (
-                  /* thin index → Goldin realized cohort fallback */
+                  /* Goldin publishes no estimates → realized cohort median */
                   <BoardDemand
                     allLots={marketLots}
                     demand={realized['sports'] || []}
