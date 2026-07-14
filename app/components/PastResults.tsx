@@ -6,7 +6,25 @@ import { AuctionLot } from '../types';
 import type { LotCategory } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle } from '../utils';
+import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
 import SectionMark from './SectionMark';
+
+/** For a sports/science object lot, a human sub-label ("game-worn jersey",
+ *  "ticket") in place of the raw "Object" category badge. sportsForm covers
+ *  the sports slugs; science slugs fall back to the frozen classifyForm form.
+ *  Returns null for every non-sports/science lot — art/design rows unchanged. */
+function objectSubLabel(lot: AuctionLot): string | null {
+  if (!isSportsScienceObject(lot)) return null;
+  const form = sportsForm(lot) ?? classifyForm(lot);
+  const label = FORM_LABEL[form];
+  if (!label) return null;
+  // FORM_LABEL is plural ("game-worn jerseys"); a per-row badge reads as a
+  // single object, so singularize a clean single-word plural ("jerseys" →
+  // "jersey"). Multi-word forms ("tickets & passes", "trophies & awards")
+  // stay as-is rather than mangle a compound.
+  if (/[ &]/.test(label)) return label;
+  return label.endsWith('s') && !label.endsWith('ss') ? label.slice(0, -1) : label;
+}
 
 type SortMode = 'date' | 'price';
 type CategoryFilter = 'all' | LotCategory;
@@ -210,8 +228,15 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         {shown.map((lot, i) => {
           const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
           const catColor = (lot.category && lot.category !== 'unknown') ? categoryColors[lot.category] : null;
+          // sports/science objects get a human sub-label ("game-worn jersey")
+          // in place of the raw "Object" badge; art/design rows unchanged.
+          const catBadge = objectSubLabel(lot) ?? (categoryLabels[lot.category] || lot.category);
           const makerLabel = lot.artist ? (ARTIST_LABEL[lot.artist] || lot.artist) : '';
-          const titleText = craftTitle(lot.title);
+          // Defense-in-depth: strip any crawl-leaked "do not list…" / date
+          // prefix from a Goldin title before it renders (W1 filters at source;
+          // this guards a legacy archive row that slipped through).
+          const rawTitle = lot.auctionHouse === 'Goldin' ? cleanGoldinTitle(lot.title) : lot.title;
+          const titleText = craftTitle(rawTitle);
           // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the
           // maker label and the maker line renders, say it once
           const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;
@@ -331,7 +356,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
                   }}>
-                    {categoryLabels[lot.category] || lot.category}
+                    {catBadge}
                   </span>
                 )}
                 <span style={{

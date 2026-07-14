@@ -6,6 +6,37 @@ export type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'd
     tracked before a house that publishes no results closed (Goldin) */
 export type PriceBasis = 'hammer' | 'last-tracked-bid' | 'goldin-final-bid';
 
+/** The kind of sports/science object a Goldin sold lot is — stamped at crawl
+    time on category 'object' lots whose slug is in the sports/science set.
+    Short key, undefined on every non-Goldin-sports/science lot. */
+export type ObjectType = 'jersey' | 'sneakers' | 'bat' | 'ball' | 'glove' | 'helmet' | 'cap' | 'pants' | 'puck' | 'belt' | 'ring' | 'ticket' | 'trophy' | 'other';
+
+/** A descriptive realized-price band for a sports/science object, drawn from
+    same-slug sold comps. Carries NO directional label and NO percent — by type
+    it can never render a below/above-market CALL (Goldin publishes no
+    estimates; realized prices are mix-noise and must not be sold as a call). */
+export interface SoldComp {
+  /** the form label key (FORM_LABEL[form]) — e.g. 'sports-jersey' */
+  form: string;
+  /** the comp pool that produced the band */
+  pool: AuctionLot[];
+  median: number;
+  low: number;
+  high: number;
+  n: number;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+/** One quarter of a realized-cohort demand series: the median realized price
+    within a tight like-for-like cohort (single object-slug + price band).
+    Typed distinctly from DemandPoint so a `$` median can never sit in a
+    `%-over-estimate` field. */
+export interface RealizedPoint {
+  date: string;
+  value: number;
+  n: number;
+}
+
 export interface AuctionLot {
   id: string;
   artist: string;
@@ -53,6 +84,18 @@ export interface AuctionLot {
       category 'object' lots — see objectClassOf in app/lib/comps.ts.
       Undefined on non-object lots and on pre-tag archive records. */
   objectClass?: string;
+  /** Crawl-time sports/science tags — stamped only on category 'object' Goldin
+      lots in the sports/science set (via extractSportsTags in comps.ts), else
+      undefined. Short keys to keep the sold-archive footprint minimal. */
+  entity?: string;
+  objectType?: ObjectType;
+  eventKey?: string;
+  sportYear?: number;
+  /** Precomputed realized-comp band for upcoming Goldin sports/science lots
+      (the descriptive analogue of `signal`, built from soldCompBand). null on
+      every non-sports/science-object lot; undefined = not precomputed. Carries
+      no label and no pct — it can never render a directional call. */
+  soldComp?: { median: number; high: number; low: number; n: number; confidence: string; form: string } | null;
 }
 
 export interface PricePoint {

@@ -1,16 +1,27 @@
 /**
  * build-upcoming.ts — emits public/data/ray/upcoming.json: the small eager
  * payload (upcoming lots with precomputed buy signals + the recent-hammers
- * tape) so the app paints instantly while the 9MB history streams behind.
+ * tape) so the app paints instantly while the ~19.5MB main history streams
+ * behind and the ~10MB Goldin sold-archive loads only on demand.
  * Run standalone (npx tsx scripts/build-upcoming.ts) or from the crawler.
+ *
+ * After the payload split, the eager tier ALSO carries what a sports/science
+ * vertical needs before its 10MB archive arrives: precomputed lot.soldComp on
+ * upcoming sports/science lots, a lightweight recentSold slice per market
+ * (so the home Recent-results row paints without the archive), and a realized
+ * cohort series for sports (Goldin publishes no estimates, so the frozen
+ * estimate Demand Index can't run there — the realized cohort is the honest
+ * substitute, typed distinctly so it can never render as a `%` call).
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { computeDeepSignal } from '../app/lib/comps';
-import { demandSeries } from '../app/lib/demand';
+import {
+  computeDeepSignal, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
+} from '../app/lib/comps';
+import { demandSeries, realizedCohortSeries } from '../app/lib/demand';
 import { ARTIST_LABEL, marketArtists, MARKETS } from '../app/constants';
 import type { AuctionLot as EngineLot } from '../app/types';
-import type { AuctionLot } from '../app/types';
+import type { AuctionLot, RealizedPoint } from '../app/types';
 
 interface Lot {
   id: string;
@@ -33,9 +44,21 @@ function fmtPrice(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
+/** Full corpus: the crawler passes its in-memory allLots so the sold-comp
+ *  pool and realized cohort see every Goldin sold row. Standalone, the corpus
+ *  is reassembled from lots.json CONCAT sold-archive.json (never lots.json
+ *  alone — after the split that file lacks Goldin sold, which would silently
+ *  starve both the sports comp pool and the cohort series). */
+function readCorpus(dataDir: string): Lot[] {
+  const main: Lot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
+  const archivePath = path.join(dataDir, 'sold-archive.json');
+  if (!fs.existsSync(archivePath)) return main;
+  const archive: Lot[] = JSON.parse(fs.readFileSync(archivePath, 'utf8'));
+  return main.concat(archive);
+}
 
-export function buildUpcoming(dataDir: string): void {
-  const lots: Lot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
+export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
+  const lots: Lot[] = (allLots as unknown as Lot[]) ?? readCorpus(dataDir);
 
   // Zombie guard: the Sotheby's/Christie's crawlers skip closed-unsold lots
   // entirely, so a lot recorded 'upcoming' whose sale then closed without
@@ -50,7 +73,21 @@ export function buildUpcoming(dataDir: string): void {
       const t = new Date(l.saleDate).getTime();
       return !isNaN(t) && t >= staleCutoff;
     })
-    .map(l => ({ ...l, signal: computeDeepSignal(l as unknown as AuctionLot, lots as unknown as AuctionLot[]) }));
+    .map(l => {
+      const lot = l as unknown as AuctionLot;
+      const withSignal = { ...l, signal: computeDeepSignal(lot, lots as unknown as AuctionLot[]) };
+      // W5 · precompute soldComp for upcoming sports/science lots, analogous to
+      // signal — so a card/modal can paint the realized band before the archive
+      // loads. soldCompBand returns null for every non-sports/science-object lot
+      // (single choke point), so this is a no-op for art/design/watches.
+      if (isSportsScienceObject(lot)) {
+        const band = soldCompBand(lot, lots as unknown as AuctionLot[]);
+        (withSignal as { soldComp?: unknown }).soldComp = band
+          ? { median: band.median, low: band.low, high: band.high, n: band.n, confidence: band.confidence, form: band.form }
+          : null;
+      }
+      return withSignal;
+    });
 
   // The tape ("recent hammers") is PER MARKET so each vertical shows its own
   // notable sales. Take the most recent sold lots, then the top by price —
@@ -109,10 +146,59 @@ export function buildUpcoming(dataDir: string): void {
     demand[m.key] = isStale(series) ? [] : series;
     tape[m.key] = buildTape(marketLots);
   }
-  const out = { generatedAt: new Date().toISOString(), tape, demand, lots: upcoming };
+
+  // W5 · recentSold — a lightweight slice of the last ~40 Goldin closes per
+  // sports/science market, so the home Recent-results ROW paints from the
+  // eager payload without pulling the 10MB sold-archive. Sports/science only
+  // (the other verticals' sold rows already live in lots.json).
+  const RECENT_N = 40;
+  const recentSold: Record<string, Array<Record<string, unknown>>> = {};
+  for (const m of MARKETS.filter(m => (m.key === 'sports' || m.key === 'science'))) {
+    const set = marketArtists(m.key);
+    recentSold[m.key] = lots
+      .filter(l => set.has(l.artist) && l.status === 'sold' && l.priceUsd && l.title)
+      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+      .slice(0, RECENT_N)
+      .map(l => {
+        const lot = l as unknown as AuctionLot;
+        const f = sportsForm(lot) ?? classifyForm(lot);
+        return {
+          id: l.id,
+          title: l.title,
+          artist: l.artist,
+          priceUsd: l.priceUsd,
+          house: l.auctionHouse,
+          saleDate: l.saleDate,
+          url: (l as { url?: string }).url ?? '',
+          priceBasis: (l as { priceBasis?: string }).priceBasis ?? null,
+          category: l.category,
+          form: f,
+          formLabel: FORM_LABEL[f] ?? f,
+          objectType: (l as { objectType?: string }).objectType ?? null,
+          eventKey: (l as { eventKey?: string }).eventKey ?? null,
+        };
+      });
+  }
+
+  // W5 · realized['sports'] — the honest realized cohort for sports. Goldin
+  // publishes no estimates, so the estimate Demand Index above is empty for
+  // sports; the realized cohort (a single-slug + price-band median, typed as a
+  // `$` RealizedPoint) is the like-for-like substitute. tickets-passes is the
+  // deepest sports slug (per-quarter n stays above the floor). NOT emitted for
+  // science (too few sold to clear the cohort floor) nor for art/design/watches
+  // (they have the estimate index).
+  const realized: Record<string, RealizedPoint[]> = {
+    sports: realizedCohortSeries(lots as unknown as AuctionLot[], {
+      slug: 'tickets-passes',
+      band: [100, 2000],
+    }),
+  };
+
+  const out = { generatedAt: new Date().toISOString(), tape, demand, realized, recentSold, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
-  console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], ${kb}KB`);
+  const recentCounts = Object.keys(recentSold).map(k => `${k}:${recentSold[k].length}`).join(' ');
+  console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], recentSold[${recentCounts}], realized.sports:${realized.sports.length}, ${kb}KB`);
 }
 
 // standalone entry

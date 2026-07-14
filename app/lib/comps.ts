@@ -21,7 +21,7 @@
  *  5. suppresses the signal when the comp pool is too dispersed to mean
  *     anything (IQR/median guard) or too thin (< 3)
  */
-import { AuctionLot } from '../types';
+import { AuctionLot, ObjectType, SoldComp } from '../types';
 
 export type Form =
   | 'book' | 'ephemera' | 'poster' | 'photograph' | 'textile'
@@ -33,6 +33,8 @@ export type Form =
   | 'case' | 'desk' | 'bed' | 'lighting' | 'mirror' | 'design-other'
   | 'wristwatch' | 'pocket-watch' | 'clock' | 'jewelry'
   | 'meteorite' | 'fossil' | 'mineral' | 'space' | 'instrument' | 'tech'
+  | 'sports-jersey' | 'sports-bat' | 'sports-ball' | 'sports-glove'
+  | 'sports-worn' | 'sports-ticket' | 'sports-trophy'
   | 'unknown';
 
 export const FORM_LABEL: Record<Form, string> = {
@@ -49,6 +51,9 @@ export const FORM_LABEL: Record<Form, string> = {
   jewelry: 'jewelry',
   meteorite: 'meteorites', fossil: 'fossils', mineral: 'minerals',
   space: 'space artifacts', instrument: 'scientific instruments', tech: 'technology',
+  'sports-jersey': 'game-worn jerseys', 'sports-bat': 'bats', 'sports-ball': 'balls',
+  'sports-glove': 'gloves', 'sports-worn': 'game-used gear',
+  'sports-ticket': 'tickets & passes', 'sports-trophy': 'trophies & awards',
   unknown: 'lots',
 };
 
@@ -459,4 +464,201 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
 
 export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepSignal | null {
   return signalWithPool(lot, allLots)?.signal ?? null;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SPORTS / SCIENCE OBJECTS — the gated realized-comp layer (W2/W7)
+
+   Goldin sold lots publish no estimates: the frozen estimate engine
+   (classifyForm / signalWithPool / computeDeepSignal) never touches them and
+   never will. This block is ADDITIVE and every entry point is gated on a
+   SINGLE choke point — isSportsScienceObject — so it is unreachable for any
+   art / design / watch / jewelry lot. It produces a DESCRIPTIVE realized band
+   only: no directional label, no percent, never a call, never red/green.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** The Goldin sports + science object slugs (carried as lot.artist). A lot is
+    in this layer only when it is a category 'object' lot whose slug is here —
+    watches (rolex/patek/…) and every art/design maker are provably excluded. */
+export const SPORTS_SCIENCE_SLUGS = new Set<string>([
+  'game-used', 'trophies-awards', 'tickets-passes',
+  'space-exploration', 'meteorites', 'fossils', 'scientific-instruments',
+]);
+
+/** The sports subset of SPORTS_SCIENCE_SLUGS — these carry sportsForm Forms;
+    the science slugs classify through the frozen classifyForm science forms. */
+const SPORTS_SLUGS = new Set<string>(['game-used', 'trophies-awards', 'tickets-passes']);
+
+/** THE choke point. Every function below returns early / null unless this is
+    true, so none of them can ever run on a non-sports/science-object lot. */
+export function isSportsScienceObject(lot: Pick<AuctionLot, 'category' | 'artist'>): boolean {
+  return lot.category === 'object' && SPORTS_SCIENCE_SLUGS.has(lot.artist);
+}
+
+/** Strip crawl-leaked prefixes from a Goldin title: a leading internal
+    "do not list…" note up to its first dash, and a leading date prefix
+    ("Month DD, YYYY - " or "YYYY-YY - "). Pure; safe on any string. */
+export function cleanGoldinTitle(raw: string): string {
+  let s = (raw || '').trim();
+  // leading internal note: "DO NOT LIST IN AUCTION - PER Wagner ... - <title>"
+  if (/^do not list\b/i.test(s)) {
+    const dash = s.indexOf('-');
+    if (dash !== -1) s = s.slice(dash + 1).trim();
+  }
+  // leading date prefix: "January 5, 2024 - Title" (allow abbreviated months too)
+  s = s.replace(/^[A-Za-z]{3,9}\.?\s+\d{1,2},\s+\d{4}\s*-\s*/, '');
+  // leading season prefix: "2023-24 - Title" or "2023 - Title"
+  s = s.replace(/^\d{4}(?:-\d{2,4})?\s*-\s*/, '');
+  return s.trim();
+}
+
+/** The sports Form for a sports-slug object, else null. Returns null for every
+    non-sports/science-object lot AND for the science slugs (which use the
+    frozen classifyForm science forms). Keyword families mirror goldinRoute. */
+export function sportsForm(lot: Pick<AuctionLot, 'category' | 'artist' | 'title'>): Form | null {
+  if (lot.category !== 'object' || !SPORTS_SLUGS.has(lot.artist)) return null;
+  const t = ` ${(lot.title || '').toLowerCase()} `;
+  if (lot.artist === 'tickets-passes' || /\b(ticket|stub|full ticket|season pass|press pass|credential|all[- ]access)\b/.test(t)) return 'sports-ticket';
+  if (lot.artist === 'trophies-awards' || /\b(trophy|championship ring|title belt|winners? medal|olympic medal|\bmedal\b|\bring\b|plaque|heisman|award)\b/.test(t)) return 'sports-trophy';
+  // game-used gear, split by object noun
+  if (/\bjersey|uniform|shirt|sweater|kit\b/.test(t)) return 'sports-jersey';
+  if (/\bbat\b/.test(t)) return 'sports-bat';
+  if (/\bball|puck\b/.test(t)) return 'sports-ball';
+  if (/\bglove|mitt\b/.test(t)) return 'sports-glove';
+  if (/\b(cleats?|boots?|helmet|cap\b|hat\b|pants|shorts|jacket|warm[- ]?up|worn)\b/.test(t)) return 'sports-worn';
+  return 'sports-worn'; // a sports-slug object that matched no noun is still gear
+}
+
+/** Extract the short crawl tags used to tighten the comp pool. entity = the
+    athlete/subject the title names; objectType = a coarse noun; eventKey +
+    sportYear anchor a dated event (a World Series ticket). All optional. */
+const OBJECT_TYPE_RULES: [RegExp, ObjectType][] = [
+  [/\bjersey|uniform|shirt|sweater|kit\b/, 'jersey'],
+  [/\b(sneakers?|shoes?|cleats?|boots?)\b/, 'sneakers'],
+  [/\bbat\b/, 'bat'],
+  [/\bpuck\b/, 'puck'],
+  [/\bball\b/, 'ball'],
+  [/\b(glove|mitt)\b/, 'glove'],
+  [/\bhelmet\b/, 'helmet'],
+  [/\b(cap\b|hat\b)/, 'cap'],
+  [/\b(pants|shorts|trousers)\b/, 'pants'],
+  [/\b(belt|championship belt)\b/, 'belt'],
+  [/\b(ring|pendant)\b/, 'ring'],
+  [/\b(ticket|stub|pass|credential)\b/, 'ticket'],
+  [/\b(trophy|award|medal|plaque)\b/, 'trophy'],
+];
+const EVENT_RULES: [RegExp, string][] = [
+  [/\bworld series\b/, 'world-series'],
+  [/\bsuper ?bowl\b/, 'super-bowl'],
+  [/\bworld cup\b/, 'world-cup'],
+  [/\bolympics?|olympic\b/, 'olympics'],
+  [/\bnba finals?\b/, 'nba-finals'],
+  [/\bstanley cup\b/, 'stanley-cup'],
+  [/\ball[- ]star\b/, 'all-star'],
+  [/\bmasters\b/, 'masters'],
+];
+export function extractSportsTags(title: string, slug: string): {
+  entity?: string; objectType?: ObjectType; eventKey?: string; sportYear?: number;
+} {
+  const out: { entity?: string; objectType?: ObjectType; eventKey?: string; sportYear?: number } = {};
+  const raw = title || '';
+  const t = raw.toLowerCase();
+
+  // entity: the leading proper-noun run of the title (an athlete/subject name),
+  // 2–3 capitalized words before the first descriptor/comma/paren.
+  const nameMatch = raw.match(/^((?:[A-Z][A-Za-z.'’-]+\s+){1,2}[A-Z][A-Za-z.'’-]+)/);
+  if (nameMatch) {
+    const name = nameMatch[1].trim();
+    // reject a leading year/all-caps token run that isn't a person
+    if (!/^\d/.test(name) && name.split(/\s+/).length >= 2) out.entity = name;
+  }
+
+  for (const [re, ty] of OBJECT_TYPE_RULES) if (re.test(t)) { out.objectType = ty; break; }
+  if (!out.objectType) {
+    out.objectType = slug === 'tickets-passes' ? 'ticket'
+      : slug === 'trophies-awards' ? 'trophy' : 'other';
+  }
+
+  for (const [re, key] of EVENT_RULES) if (re.test(t)) { out.eventKey = key; break; }
+
+  const yr = t.match(/\b(19\d{2}|20\d{2})\b/);
+  if (yr) out.sportYear = parseInt(yr[1], 10);
+
+  return out;
+}
+
+/** The form key a sports/science object comps ON: its sportsForm when it's a
+    sports slug, else the frozen classifyForm (science slugs). */
+function compFormKey(lot: AuctionLot): Form {
+  return sportsForm(lot) ?? classifyForm(lot);
+}
+
+/** W7 — the gated realized-comp band. Returns null for EVERY non-sports/
+    science-object lot (single choke point). Pool = same-slug sold lots that
+    share the comp form key, tightened by entity / eventKey+sportYear overlap
+    using the SAME overlap scorer signalWithPool uses. Same >=3 floor and same
+    (q3-q1)/median>2.5 dispersion guard as the frozen engine. Descriptive only:
+    { form, pool, median, low, high, n, confidence } — no label, no pct. */
+export function soldCompBand(lot: AuctionLot, allLots: AuctionLot[]): SoldComp | null {
+  if (!isSportsScienceObject(lot)) return null;
+  const form = compFormKey(lot);
+  if (form === 'unknown') return null;
+
+  // same-slug sold, same comp form key
+  const same = allLots.filter(l =>
+    l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id &&
+    isSportsScienceObject(l) && compFormKey(l) === form
+  );
+  if (same.length < 3) return null;
+
+  // tighten by entity / event overlap — reuse the exact scorer shape from
+  // signalWithPool (significant title words + tag matches), scored ONCE per lot.
+  const nt = normalizeTitle(cleanGoldinTitle(lot.title));
+  const words = new Set(nt.split(' ').filter(w => w.length > 3));
+  const anchorEntity = lot.entity ? lot.entity.toLowerCase() : null;
+  const anchorEvent = lot.eventKey ?? null;
+  const anchorYear = lot.sportYear ?? null;
+  const score = (l: AuctionLot) => {
+    let s = 0;
+    const w = normalizeTitle(cleanGoldinTitle(l.title)).split(' ');
+    for (const x of w) if (words.has(x)) s++;
+    if (anchorEntity && l.entity && l.entity.toLowerCase() === anchorEntity) s += 3;
+    if (anchorEvent && l.eventKey === anchorEvent) s += 2;
+    if (anchorYear && l.sportYear === anchorYear) s += 1;
+    return s;
+  };
+
+  // if a tight sub-pool (any tag/word overlap) clears the floor, prefer it;
+  // else fall back to the whole same-form pool (still honest, wider band).
+  let pool = same;
+  const overlapping = same.filter(l => score(l) > 0);
+  if (overlapping.length >= 3) {
+    pool = overlapping
+      .map(l => [score(l), new Date(l.saleDate).getTime(), l] as const)
+      .sort((a, b) => (b[0] - a[0]) || (b[1] - a[1]))
+      .slice(0, 24)
+      .map(s => s[2]);
+  } else if (pool.length > 24) {
+    pool = pool
+      .map(l => [new Date(l.saleDate).getTime(), l] as const)
+      .sort((a, b) => b[0] - a[0])
+      .slice(0, 24)
+      .map(s => s[1]);
+  }
+  if (pool.length < 3) return null;
+
+  const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
+  const med = median(prices);
+  const q1 = prices[Math.floor(prices.length * 0.25)];
+  const q3 = prices[Math.floor(prices.length * 0.75)];
+  // dispersion guard — same shape as the frozen engine
+  if (med > 0 && (q3 - q1) / med > 2.5) return null;
+
+  const iqrRatio = med > 0 ? (q3 - q1) / med : 99;
+  const confidence: SoldComp['confidence'] =
+    pool.length >= 8 && iqrRatio <= 1.0 ? 'high'
+    : pool.length >= 4 ? 'medium'
+    : 'low';
+
+  return { form, pool, median: med, low: prices[0], high: prices[prices.length - 1], n: pool.length, confidence };
 }

@@ -53,8 +53,22 @@ function gated(a: Prepped, b: Prepped): boolean {
   return true;
 }
 
-export function buildBacktest(dataDir: string): void {
-  const lots: AuctionLot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
+/** Full corpus: the crawler passes its in-memory allLots so nothing reads a
+ *  post-split truncated file. Standalone, the corpus is reassembled from
+ *  lots.json CONCAT sold-archive.json. Goldin lots carry no estimate and are
+ *  filtered by the `!l.estimateLow` guard below, so the output is byte-
+ *  identical either way — the concat exists only to prevent silent truncation
+ *  if the estimate gate is ever relaxed. */
+function readCorpus(dataDir: string): AuctionLot[] {
+  const main: AuctionLot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
+  const archivePath = path.join(dataDir, 'sold-archive.json');
+  if (!fs.existsSync(archivePath)) return main;
+  const archive: AuctionLot[] = JSON.parse(fs.readFileSync(archivePath, 'utf8'));
+  return main.concat(archive);
+}
+
+export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
+  const lots: AuctionLot[] = allLots ?? readCorpus(dataDir);
 
   // Precompute everything once — the replay is O(sum of group sizes squared)
   // within (artist × form) groups, which stays tractable.

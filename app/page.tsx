@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
-import { useRayData } from './hooks/useRayData';
+import { useRayData, useSoldArchive, retryArchiveLoad } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf } from './utils';
 import ArtistNav from './components/ArtistNav';
@@ -25,6 +25,10 @@ import Greeting from './components/Greeting';
 // Read it defensively — a stable empty fallback keeps memo deps quiet.
 type SavedMeta = Record<string, { savedAt: string; estMid: number | null; signalPct: number | null; bidCount: number | null }>;
 const EMPTY_SAVED_META: SavedMeta = {};
+
+// The eager recentSold slice (from upcoming.json) — lightweight Goldin closes
+// so the sports/science Recent-results row paints without the 10MB archive.
+type RecentSoldRow = { id: string; title: string; artist: string; priceUsd?: number; house?: string; saleDate?: string; url?: string; priceBasis?: string; category?: string; objectType?: string; eventKey?: string };
 
 // The default view's diversity cap: max 8 lots per maker per page window —
 // a greedy pass preserving date order, capped/overflow lots requeued in
@@ -53,12 +57,63 @@ function diversifyFeed(arr: AuctionLot[], windowSize: number): AuctionLot[] {
   return out;
 }
 
+// The full sports/science results table — mounted ONLY when the reader opens
+// "Show the archive". Mounting is what triggers useSoldArchive()'s phase-3
+// fetch, so a first paint on any market never pulls the 10MB sold-archive.
+function ArchiveResults({
+  mktSet,
+  savedIds,
+  onToggleSave,
+}: {
+  mktSet: Set<string>;
+  savedIds: string[];
+  onToggleSave: (id: string) => void;
+}) {
+  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
+  const archiveSold = useMemo(
+    () =>
+      allLotsWithArchive
+        .filter(l => l.status === 'sold' && l.priceUsd && mktSet.has(l.artist))
+        .sort((a, b) => (a.saleDate > b.saleDate ? -1 : a.saleDate < b.saleDate ? 1 : 0)),
+    [allLotsWithArchive, mktSet]
+  );
+
+  if (archiveError) {
+    return (
+      <div className="ray-recordband" style={{ marginTop: 24, textAlign: 'center', padding: '48px 20px' }}>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>
+          The sold archive didn&rsquo;t load. Check your connection and try again.
+        </p>
+        <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryArchiveLoad()}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+  if (!archiveLoaded) {
+    return <div className="ray-recordband" style={{ marginTop: 24 }}><RayLoading /></div>;
+  }
+  return (
+    <div className="ray-recordband" style={{ marginTop: 24 }}>
+      <PastResults lots={archiveSold} showArtist savedIds={savedIds} onToggleSave={onToggleSave} />
+    </div>
+  );
+}
+
 export default function RayPage() {
-  const { allLots, statsByArtist, demand, backtest, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
+  const ray = useRayData();
+  const { allLots, statsByArtist, demand, realized, recentSold, backtest, lastCrawl, loading, fullLoaded, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
   // Every market on the board is live — the picked market filters directly.
   const activeKey = market;
+  // Full-corpus counts precomputed at build time (meta.json) so the aggregate
+  // reads honest totals without the 10MB Goldin sold-archive on the wire.
+  const meta = ray as unknown as { totalLots?: number; totalSold?: number };
+  const totalLots = meta.totalLots ?? allLots.length;
+  // sports/science verticals are Goldin sold-archive lots — never in the eager
+  // payload. isSportsScience gates every archive-aware branch below.
+  const isSportsScience = activeKey === 'sports' || activeKey === 'science';
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const marketStats = useMemo(() => {
@@ -222,6 +277,25 @@ export default function RayPage() {
     return perf[Math.floor(perf.length / 2)];
   }, [sold]);
 
+  // Sports/science Recent-results ROW paints from the eager recentSold slice —
+  // the last ~40 Goldin closes precomputed into upcoming.json — so the row
+  // renders without the 10MB sold-archive. The full table lazy-loads it.
+  const recentRows = useMemo(
+    () => (isSportsScience ? ((recentSold[activeKey] as RecentSoldRow[] | undefined) || []) : []),
+    [isSportsScience, recentSold, activeKey]
+  );
+  // The recent-slice median realized price — an honest $ line, never a % vs
+  // estimate (Goldin publishes no estimates).
+  const recentMedian = useMemo(() => {
+    const prices = recentRows.map(r => r.priceUsd).filter((p): p is number => typeof p === 'number' && p > 0).sort((a, b) => a - b);
+    return prices.length ? prices[Math.floor(prices.length / 2)] : null;
+  }, [recentRows]);
+  const recentLatest = useMemo(() => {
+    let latest = '';
+    for (const r of recentRows) if (r.saleDate && r.saleDate > latest) latest = r.saleDate;
+    return latest;
+  }, [recentRows]);
+
   // All-time realized — the hero numeral (the "portfolio" of the market).
   const totalRealized = useMemo(
     () => Object.values(marketStats).reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0),
@@ -338,11 +412,24 @@ export default function RayPage() {
           <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
             <div className="ray-board-rail">
               <div className="ray-pane">
-                <BoardDemand
-                  allLots={marketLots}
-                  demand={demand[activeKey] || []}
-                  marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
-                />
+                {activeKey === 'sports' ? (
+                  /* Sports is Goldin realized: a $ cohort-median curve, never
+                     the % Demand Index. Science keeps the estimate path, which
+                     (no estimates) falls to BoardDemand's live-count fallback. */
+                  <BoardDemand
+                    allLots={marketLots}
+                    demand={realized['sports'] || []}
+                    marketLabel={marketMeta.label.toLowerCase()}
+                    mode="realized"
+                    cohortLabel="tickets & passes"
+                  />
+                ) : (
+                  <BoardDemand
+                    allLots={marketLots}
+                    demand={demand[activeKey] || []}
+                    marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
+                  />
+                )}
               </div>
               <aside aria-label="Today's call and your watchlist" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
                 <CallPlate
@@ -577,10 +664,41 @@ export default function RayPage() {
             </section>
           )}
 
-          {/* R7 · THE RECORD — one summary row on the total market (the full
-              archive mounts on demand); vertical landers keep the full,
-              scoped section where it earns its weight. */}
-          {sold.length > 0 && (activeKey === 'all' ? (
+          {/* R7 · THE RECORD — sports/science verticals are Goldin sold-archive
+              lots (split out of the eager payload): the row paints from the
+              lightweight recentSold slice, and only opening the archive mounts
+              ArchiveResults → useSoldArchive() → the 10MB fetch. */}
+          {isSportsScience ? (
+            recentRows.length > 0 && (
+              <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
+                <div className="ray-results-row">
+                  <span>
+                    {(meta.totalSold ?? recentRows.length).toLocaleString()} sold lots
+                    {recentMedian !== null && (
+                      <> · recent median <b>{formatPrice(recentMedian)}</b> realized</>
+                    )}
+                    {recentLatest && <> · latest {formatDate(recentLatest)}</>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowArchive(s => !s)}
+                    style={{
+                      background: 'none', border: '1px solid var(--color-border)', borderRadius: 100,
+                      padding: '7px 18px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
+                      color: 'var(--color-text-muted)', fontWeight: 600, cursor: 'pointer',
+                      fontFamily: 'var(--font-sans), sans-serif',
+                    }}
+                  >
+                    {showArchive ? 'Hide the archive' : 'Show the archive'}
+                  </button>
+                </div>
+                {/* mounting ArchiveResults is what fetches the archive — never before */}
+                {showArchive && (
+                  <ArchiveResults mktSet={mktSet} savedIds={savedIds} onToggleSave={toggle} />
+                )}
+              </section>
+            )
+          ) : sold.length > 0 && (activeKey === 'all' ? (
             <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
               <div className="ray-results-row">
                 <span>
@@ -621,7 +739,7 @@ export default function RayPage() {
 
           {/* R8 · THE COLOPHON — the provenance ring's closing clasp */}
           <Colophon
-            lotCount={allLots.length}
+            lotCount={totalLots}
             houseCount={new Set(allLots.map(l => l.auctionHouse)).size}
             record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.medianPerfPct } : null}
           />

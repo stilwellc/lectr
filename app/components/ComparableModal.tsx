@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle } from '../utils';
-import { areComparable, signalWithPool, FORM_LABEL } from '../lib/comps';
+import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL } from '../lib/comps';
+import { useSoldArchive } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
@@ -218,6 +219,21 @@ function scoreComparable(upcoming: AuctionLot, sold: AuctionLot): number {
 
 const MAX_COMPARABLES = 15;
 
+/**
+ * ArchiveLoader — the phase-3 sold-archive is the 10MB tier, and `useSoldArchive`
+ * fetches on mount (by contract). Hooks can't be called conditionally, so we
+ * isolate the trigger in a child that the modal renders ONLY for sports/science
+ * object lots. Art/watch/design modals never mount this, never pay the 10MB.
+ * Renders nothing; reports the merged corpus + load flag up via a callback.
+ */
+function ArchiveLoader({ onState }: { onState: (s: { allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean }) => void }) {
+  const { allLotsWithArchive, archiveLoaded } = useSoldArchive();
+  useEffect(() => {
+    onState({ allLotsWithArchive, archiveLoaded });
+  }, [allLotsWithArchive, archiveLoaded, onState]);
+  return null;
+}
+
 export default function ComparableModal({
   lot,
   allLots,
@@ -306,10 +322,39 @@ export default function ComparableModal({
   // modal fall back to the broader gated comps, clearly labeled as context.
   const called = useMemo(() => signalWithPool(lot, allLots), [lot, allLots]);
 
+  // The Goldin sold-archive is the 10MB tier — only sports/science object lots
+  // (with no estimate-based call) can build a realized band, and only they need
+  // the archive to fill the comp pool. Fetch on demand via <ArchiveLoader>
+  // (mounted below, only when wantsArchive); block the band until it lands so
+  // the pool isn't computed against a truncated corpus. Watches are also
+  // `object` but their frozen `called` path never touches the archive.
+  const wantsArchive = lot.category === 'object' && isSportsScienceObject(lot);
+  const [archive, setArchive] = useState<{ allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean }>({
+    allLotsWithArchive: allLots,
+    archiveLoaded: false,
+  });
+  const archiveLoaded = wantsArchive ? archive.archiveLoaded : true;
+  const bandPoolLots = wantsArchive && archive.archiveLoaded ? archive.allLotsWithArchive : allLots;
+
+  // No call, and this is a Goldin sports/science object → a descriptive
+  // realized band (median, range, n) — NEVER a below/above-market call.
+  // Goldin publishes no estimates, so there is nothing to call against.
+  const band = useMemo(
+    () => (called ? null : isSportsScienceObject(lot) ? soldCompBand(lot, bandPoolLots) : null),
+    [called, lot, bandPoolLots]
+  );
+
   const comparables = useMemo(() => {
     if (called) {
       // the call's own pool, most recent first — this IS the statistic
       return [...called.pool]
+        .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+        .map(l => ({ lot: l, score: 1 }));
+    }
+    if (band) {
+      // the realized band's own pool, most recent first — no similarity score,
+      // no ranking against an estimate that doesn't exist
+      return [...band.pool]
         .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
         .map(l => ({ lot: l, score: 1 }));
     }
@@ -327,10 +372,15 @@ export default function ComparableModal({
       return new Date(b.lot.saleDate).getTime() - new Date(a.lot.saleDate).getTime();
     });
     return scored.slice(0, MAX_COMPARABLES);
-  }, [lot, allLots, called]);
+  }, [lot, allLots, called, band]);
 
   const compStats = useMemo(() => {
     if (comparables.length === 0) return null;
+    // the realized band is descriptive: its own median/range/n, no estimate
+    // ratio (hammerVsEst null hides the "vs. Est." column and the % column)
+    if (band) {
+      return { median: band.median, low: band.low, high: band.high, aboveEst: 0, total: band.n, hammerVsEst: null };
+    }
     const prices = comparables.map(c => c.lot.priceUsd!).sort((a, b) => a - b);
     const low = prices[0];
     const high = prices[prices.length - 1];
@@ -344,7 +394,7 @@ export default function ComparableModal({
       : prices[Math.floor(prices.length / 2)]);
     const hammerVsEst = estMid ? median / estMid : null;
     return { median, low, high, aboveEst, total: prices.length, hammerVsEst };
-  }, [comparables, lot, called]);
+  }, [comparables, lot, called, band]);
 
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
   const catLabel = categoryLabels[lot.category] || null;
@@ -442,6 +492,9 @@ export default function ComparableModal({
           .comp-modal-price { min-width: 60px; }
         }
       `}</style>
+      {/* Mounted only for sports/science objects — its mount triggers the
+          10MB sold-archive fetch. Renders nothing. */}
+      {wantsArchive && <ArchiveLoader onState={setArchive} />}
       <div
         ref={panelRef}
         onClick={e => e.stopPropagation()}
@@ -664,14 +717,17 @@ export default function ComparableModal({
           </div>
         </div>
 
-        {/* The decision picture: comps plotted against this lot's estimate */}
+        {/* The decision picture: comps plotted against this lot's estimate.
+            For a Goldin realized band there IS no estimate to plot — pass null
+            band bounds and a null "below" so the median line stays neutral
+            (no red/green): realized prices are not a call. */}
         {compStats && (
           <PriceBand
             prices={comparables.map(c => c.lot.priceUsd!)}
             median={compStats.median}
-            estLow={lot.estimateLow}
-            estHigh={lot.estimateHigh}
-            below={compStats.hammerVsEst === null ? null : compStats.hammerVsEst >= 1.2 ? true : compStats.hammerVsEst <= 0.75 ? false : null}
+            estLow={band ? null : lot.estimateLow}
+            estHigh={band ? null : lot.estimateHigh}
+            below={band ? null : compStats.hammerVsEst === null ? null : compStats.hammerVsEst >= 1.2 ? true : compStats.hammerVsEst <= 0.75 ? false : null}
           />
         )}
 
@@ -729,16 +785,42 @@ export default function ComparableModal({
             textTransform: 'none',
             color: 'var(--color-text-muted)',
             fontWeight: 600,
-            marginBottom: 16,
+            marginBottom: band ? 6 : 16,
           }}>
             {called
               ? called.signal.kind === 'edition'
                 ? `The call — this exact work, sold ${comparables.length} times`
                 : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}`
-              : `Context — ${comparables.length} comparable sales (no call on this lot)`}
+              : band
+                ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
+                : `Context — ${comparables.length} comparable sales (no call on this lot)`}
           </div>
 
-          {comparables.length === 0 ? (
+          {/* Realized prices are hammer + premium, not an estimate call —
+              Goldin runs bid auctions and publishes no estimates, so there is
+              nothing to be above or below. Say so plainly. */}
+          {band && (
+            <div style={{
+              fontSize: 12,
+              letterSpacing: '-0.01em',
+              color: 'var(--color-text-faint)',
+              marginBottom: 16,
+              lineHeight: 1.45,
+            }}>
+              Realized prices — winning bid plus buyer&rsquo;s premium. Goldin publishes no estimates.
+            </div>
+          )}
+
+          {wantsArchive && !archiveLoaded ? (
+            <div style={{
+              padding: '40px 0',
+              textAlign: 'center',
+              color: 'var(--color-text-faint)',
+              fontSize: 13,
+            }}>
+              Loading comparable sales&hellip;
+            </div>
+          ) : comparables.length === 0 ? (
             <div style={{
               padding: '40px 0',
               textAlign: 'center',

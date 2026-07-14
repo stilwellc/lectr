@@ -9,7 +9,8 @@
  * prices, which makes over-estimate performance the LEADING demand signal —
  * price levels follow. Median (not mean) keeps single freak results out.
  */
-import { AuctionLot } from '../types';
+import { AuctionLot, RealizedPoint } from '../types';
+import { isSportsScienceObject, sportsForm, classifyForm } from './comps';
 
 export interface DemandPoint {
   date: string;
@@ -61,4 +62,89 @@ export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
 export function formatDemand(n: number): string {
   const r = Math.round(n);
   return `${r >= 0 ? '+' : ''}${r}%`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REALIZED-COHORT SERIES (W8) — the honest sports read.
+
+   Goldin publishes no estimates, so the Demand Index above (median % over
+   estimate) cannot run on sports — and a raw all-sports median is pure mix
+   noise (a $6 ticket and a $4M jersey in the same quarter). Instead: a
+   quarterly MEDIAN REALIZED PRICE inside a TIGHT like-for-like cohort (a
+   single object-slug + a price band), so every point compares the same kind
+   of object. Typed distinctly (RealizedPoint, a `$` level) from DemandPoint (a
+   `%`) so the two can never be rendered through the same caption.
+
+   This reuses demandSeries's trailing-calendar-window + quarter-key SHAPE but
+   does NOT call or edit demandSeries — it is a separate, additive path.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+export interface RealizedCohortOpts {
+  /** the object-slug the cohort is drawn from (carried as lot.artist), e.g.
+      'tickets-passes'. Required — a cohort is single-slug by construction. */
+  slug: string;
+  /** inclusive price band bounding the cohort, e.g. [100, 2000]. Points below
+      MIN_COHORT_QUARTER within-band sales are dropped. */
+  band: [number, number];
+  /** optional sports Form filter (e.g. 'sports-jersey') to tighten further. */
+  form?: string;
+  /** evaluation "now" — defaults to Date.now(). Sales after it are clamped out
+      (kills phantom future rows). */
+  now?: number;
+}
+
+const MIN_COHORT_QUARTER = 15;
+
+export function realizedCohortSeries(lots: AuctionLot[], opts: RealizedCohortOpts): RealizedPoint[] {
+  const now = opts.now ?? Date.now();
+  const [lo, hi] = opts.band;
+  const sales: { t: number; price: number }[] = [];
+  const quarterEnd: Record<string, number> = {};
+
+  for (const l of lots) {
+    if (l.status !== 'sold' || !l.priceUsd) continue;
+    if (l.artist !== opts.slug) continue;
+    // gate every cohort member through the single choke point
+    if (!isSportsScienceObject(l)) continue;
+    if (opts.form) {
+      const f = sportsForm(l) ?? classifyForm(l);
+      if (f !== opts.form) continue;
+    }
+    if (l.priceUsd < lo || l.priceUsd > hi) continue;
+    const d = new Date(l.saleDate);
+    if (isNaN(d.getTime())) continue;
+    const t = d.getTime();
+    if (t > now) continue; // clamp future/phantom rows
+    const q = Math.floor(d.getUTCMonth() / 3);
+    const key = `${d.getUTCFullYear()} Q${q + 1}`;
+    sales.push({ t, price: l.priceUsd });
+    quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
+  }
+
+  const quarters = Object.keys(quarterEnd).sort();
+  const points: RealizedPoint[] = [];
+  for (const qk of quarters) {
+    const end = quarterEnd[qk];
+    // trailing twelve CALENDAR months (same discipline as demandSeries — never
+    // adjacent array keys), clamped so we never read past 'now'
+    if (end - YEAR_MS > now) continue;
+    const window = sales
+      .filter(s => s.t < end && s.t >= end - YEAR_MS)
+      .map(s => s.price)
+      .sort((a, b) => a - b);
+    if (window.length < MIN_COHORT_QUARTER) continue;
+    const m = Math.floor(window.length / 2);
+    const med = window.length % 2 === 0 ? (window[m - 1] + window[m]) / 2 : window[m];
+    points.push({ date: qk, value: med, n: window.length });
+  }
+
+  // isStale gate: if the newest quarter's trailing window closed more than a
+  // year before 'now', the cohort has gone dark — emit nothing rather than a
+  // stale flat line pretending to be current.
+  if (points.length) {
+    const lastEnd = quarterEnd[points[points.length - 1].date];
+    if (now - lastEnd > YEAR_MS) return [];
+  }
+
+  return points;
 }
