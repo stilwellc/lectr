@@ -218,7 +218,7 @@ export default function BoardDemand({
             : isIndex ? (
                 idxPct !== 0 && (
                   <span className={idxPct > 0 ? 'up' : 'down'}>
-                    {idxPct > 0 ? '▲' : '▼'} {idxPct > 0 ? '+' : ''}{idxPct}% since {visible[0]?.date}
+                    {idxPct > 0 ? '▲' : '▼'} {idxPct > 0 ? '+' : ''}{idxPct}% {range === '1Y' ? 'past year' : `since ${visible[0]?.date}`}
                   </span>
                 )
               )
