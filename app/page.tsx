@@ -351,15 +351,15 @@ export default function RayPage() {
                 />
                 {watchStrip && (
                   <Link href="/saved" className="ray-watchstrip" aria-label={`Your watchlist — ${watchStrip.count} saved`}>
-                    <span className="ray-panel-k">Your watchlist</span>
-                    <span>
+                    <span className="ray-watchstrip-k">Your watchlist</span>
+                    <span className="ray-watchstrip-line">
                       {watchStrip.count} saved
                       {watchStrip.next && <> · next hammer {daysWord(watchStrip.next.saleDate)}</>}
                       {watchStrip.bestMove && (
                         <> · best move <b className="up">+{Math.round(watchStrip.bestMove.from)}% → +{Math.round(watchStrip.bestMove.to)}%</b></>
                       )}
                     </span>
-                    <span>Open saved <Flick size={12} /></span>
+                    <span className="ray-watchstrip-cta">Open saved <Flick size={12} /></span>
                   </Link>
                 )}
               </aside>

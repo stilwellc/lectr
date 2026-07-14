@@ -94,6 +94,7 @@ export function CallPlate({
               src={lot.imageUrl}
               alt=""
               loading="lazy"
+              referrerPolicy="no-referrer"
               onError={() => setFailedImgId(lot.id)}
               // cache hits never fire onError — complete with zero
               // naturalWidth at attach is a cached failure
