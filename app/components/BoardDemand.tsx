@@ -349,6 +349,20 @@ export default function BoardDemand({
           </ResponsiveContainer>
         </div>
       )}
+
+      {!isRealized && !isIndex && hasIndex && (
+        <p className="ray-demand-foot">
+          Each point is the median lot&rsquo;s hammer price against its own
+          estimate, over the prior twelve months. Above the dashed line, buyers
+          are paying <b>more</b> than the auction houses expected — demand is
+          running hot; below it, lots are clearing <b>under</b> estimate.{' '}
+          {Math.round(now) !== 0 && (
+            <>Right now the typical lot sells{' '}
+              <b className={now > 0 ? 'up' : 'down'}>{formatDemand(now)}</b>{' '}
+              {now > 0 ? 'above' : 'below'} its estimate.</>
+          )}
+        </p>
+      )}
     </div>
   );
 }
