@@ -115,12 +115,12 @@ export default function BoardDemand({
   // realized swaps the numeral/tick/scrub formatter to $; index shows the
   // rebased-100 level; estimate path is untouched (formatDemand, % Demand Index).
   const fmt = isIndex ? ((n: number) => Math.round(n).toString()) : isRealized ? formatRealized : formatDemand;
-  // 1Y default for the demand/realized boards: the lit numeral IS the
-  // trailing-12-month claim the kicker makes. The index/blend board defaults
-  // to the FULL history instead — a rebased price index only reads as a market
-  // when you can see its whole arc (like the analytics surface), not a 4-point
-  // stub that smooths to a featureless wave. The headline stays past-year.
-  const [range, setRange] = useState<Range>(mode === 'index' ? 'MAX' : '1Y');
+  // Default to the FULL history: the demand curve reaches back to the early
+  // 2000s for the majors, and that whole arc is the point — the numeral still
+  // reads the latest trailing-12-month value ("currently +27%"), the chart
+  // shows how the market got there. 1Y stays one click away. (Realized keeps
+  // its trailing-year default — Goldin cohorts are thin further back.)
+  const [range, setRange] = useState<Range>(mode === 'realized' ? '1Y' : 'MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
   const drawRef = useChartDraw();
 
@@ -187,7 +187,7 @@ export default function BoardDemand({
             </>
           ) : (
             <>
-              <span>Every lot at auction, called against its true comps · the {marketLabel} market, trailing 12 months</span>
+              <span>Market demand · the {marketLabel} market · typical sale vs its estimate, trailing 12 months</span>
               <MethodologyNote trigger="what is this?" />
             </>
           )}
