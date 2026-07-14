@@ -39,11 +39,11 @@ function Spark({ series }: { series: DemandPoint[] }) {
 // uniform; the objects carry the color.
 const MARKET_EMOJI: Record<string, string> = {
   all: '\u{1F3DB}\u{FE0F}',      // classical building — the auction house
-  art: '\u{1F5BC}\u{FE0F}',      // framed picture
+  art: '\u{1F3A8}',               // palette
   design: '\u{1FA91}',            // chair
-  watches: '\u{231A}',            // watch
-  sports: '\u{1F3C6}',            // trophy — game-used, trophies, never cards
-  science: '\u{1F996}',           // T-rex — the fossils lead the vertical
+  watches: '\u{1F570}\u{FE0F}',  // mantel clock — the reference-market face
+  sports: '\u{1F3C8}',            // football — game-used leads the vertical
+  science: '\u{1F9B4}',           // bone — the fossil
 };
 
 export default function MarketSwitch({
