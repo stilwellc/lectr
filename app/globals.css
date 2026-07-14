@@ -1954,14 +1954,14 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
    The footer is the identity's one display-scale moment: the sign writes
    itself in its own light over the provenance the product stands on. */
 .ray-close {
-  margin-top: 72px;
+  margin-top: 48px;
   border-top: 1px solid var(--hairline);
   background:
     radial-gradient(ellipse 640px 300px at 50% 120px, rgba(244, 246, 255, 0.045), transparent 70%),
     #060709;
   overflow: hidden;
 }
-.ray-close-in { padding: 84px 0 36px; }
+.ray-close-in { padding: 52px 0 26px; }
 .ray-close-sign { display: flex; justify-content: center; }
 .ray-close-mark {
   height: 118px;
@@ -1978,7 +1978,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-close-thesis {
   text-align: center;
-  margin: 34px 0 0;
+  margin: 20px 0 0;
   font-size: 15.5px;
   letter-spacing: -0.01em;
   color: var(--color-text-secondary);
@@ -1987,8 +1987,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   display: flex;
   justify-content: center;
   gap: 64px;
-  margin-top: 44px;
-  padding-top: 36px;
+  margin-top: 26px;
+  padding-top: 0;
 }
 .ray-close-ledger > div { text-align: center; }
 .ray-close-ledger b {
@@ -2005,8 +2005,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   grid-template-columns: 1fr 1fr 1.6fr;
   gap: 48px;
   max-width: 760px;
-  margin: 52px auto 0;
-  padding-top: 40px;
+  margin: 34px auto 0;
+  padding-top: 26px;
   border-top: 1px solid var(--hairline-soft, rgba(255,255,255,0.06));
 }
 .ray-close-k {
@@ -2032,14 +2032,14 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   display: flex;
   justify-content: space-between;
   gap: 24px;
-  margin-top: 64px;
-  padding-top: 20px;
+  margin-top: 34px;
+  padding-top: 16px;
   border-top: 1px solid var(--hairline-soft, rgba(255,255,255,0.06));
   font-size: 11px;
   color: var(--color-text-faint);
 }
 @media (max-width: 899px) {
-  .ray-close-in { padding: 64px 0 96px; }
+  .ray-close-in { padding: 44px 0 88px; }
   .ray-close-mark { height: 84px; }
   .ray-close-ledger { gap: 32px; }
   .ray-close-map { grid-template-columns: 1fr 1fr; gap: 32px; }
