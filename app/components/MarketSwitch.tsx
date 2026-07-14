@@ -43,7 +43,7 @@ const MARKET_EMOJI: Record<string, string> = {
   design: '\u{1FA91}',            // chair
   watches: '\u{23F1}\u{FE0F}',   // stopwatch
   sports: '\u{1F3C8}',            // football — game-used leads the vertical
-  science: '\u{1F4BB}',           // computer — the Apple-1 energy
+  science: '\u{1F996}',           // T-rex — the fossils lead the vertical
 };
 
 export default function MarketSwitch({
