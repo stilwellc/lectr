@@ -31,3 +31,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# full v2 corpus: commit the gz (source of truth), ignore the raw
+data/corpus/*.json
+!data/corpus/*.json.gz
