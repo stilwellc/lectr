@@ -3208,6 +3208,37 @@ body {
   border: 1px solid var(--hairline);
   align-items: stretch;
 }
+
+/* Appreciation — a stat panel to the right of the graph on desktop, seamed to
+   the chart with the same 1px hairline; collapses to a gray banner on mobile. */
+.ray-appr {
+  background: #0A0B0D;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 26px 28px;
+  min-width: 0;
+}
+.ray-appr-k { font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 14px; }
+.ray-appr-v { font-family: var(--font-sans), sans-serif; font-size: 46px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.ray-appr-v.up { color: var(--color-up); }
+.ray-appr-v.down { color: var(--color-down); }
+.ray-appr-s { font-size: 12px; color: var(--color-text-muted); margin-top: 14px; }
+.ray-appr-banner { display: none; }
+.ray-board-belowrow { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 899px) {
+  /* mobile: the panel becomes a one-line gray banner between chart and call */
+  .ray-appr {
+    background: rgba(255, 255, 255, 0.045);
+    padding: 13px 16px;
+    justify-content: flex-start;
+  }
+  .ray-appr-stat { display: none; }
+  .ray-appr-banner { display: block; font-size: 13.5px; line-height: 1.4; color: var(--color-text-secondary); }
+  .ray-appr-banner b { color: var(--color-fg); font-weight: 650; }
+  .ray-appr-banner b.up { color: var(--color-up); }
+  .ray-appr-banner b.down { color: var(--color-down); }
+}
 .ray-board-rail > * { min-width: 0; }
 /* the rail column fills its height intentionally: the call plate grows to
    meet the board's bottom edge instead of leaving raw grid ground exposed —
