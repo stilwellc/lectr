@@ -15,6 +15,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { readCorpus as readCorpusShared } from './corpus-io';
 import {
   computeDeepSignal, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
@@ -49,12 +50,9 @@ function fmtPrice(n: number): string {
  *  is reassembled from lots.json CONCAT sold-archive.json (never lots.json
  *  alone — after the split that file lacks Goldin sold, which would silently
  *  starve both the sports comp pool and the cohort series). */
-function readCorpus(dataDir: string): Lot[] {
-  const main: Lot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
-  const archivePath = path.join(dataDir, 'sold-archive.json');
-  if (!fs.existsSync(archivePath)) return main;
-  const archive: Lot[] = JSON.parse(fs.readFileSync(archivePath, 'utf8'));
-  return main.concat(archive);
+function readCorpus(_dataDir: string): Lot[] {
+  // full v2 corpus (gz) via the shared reader — never the slim served files
+  return (readCorpusShared() as unknown as Lot[]);
 }
 
 export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {

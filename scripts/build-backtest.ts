@@ -12,6 +12,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { readCorpus as readCorpusShared } from './corpus-io';
 import { classifyForm, modelKey, parseDims, normalizeTitle, Form } from '../app/lib/comps';
 import type { AuctionLot } from '../app/types';
 
@@ -59,12 +60,9 @@ function gated(a: Prepped, b: Prepped): boolean {
  *  filtered by the `!l.estimateLow` guard below, so the output is byte-
  *  identical either way — the concat exists only to prevent silent truncation
  *  if the estimate gate is ever relaxed. */
-function readCorpus(dataDir: string): AuctionLot[] {
-  const main: AuctionLot[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'lots.json'), 'utf8'));
-  const archivePath = path.join(dataDir, 'sold-archive.json');
-  if (!fs.existsSync(archivePath)) return main;
-  const archive: AuctionLot[] = JSON.parse(fs.readFileSync(archivePath, 'utf8'));
-  return main.concat(archive);
+function readCorpus(_dataDir: string): AuctionLot[] {
+  // full v2 corpus (gz) via the shared reader — never the slim served files
+  return (readCorpusShared() as unknown as AuctionLot[]);
 }
 
 export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {

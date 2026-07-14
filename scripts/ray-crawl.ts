@@ -3067,13 +3067,16 @@ async function main() {
   // minified (like upcoming.json): every first-visit client streams the whole
   // file, so indentation is pure waste.
   const isGoldinSold = (l: AuctionLot) => l.auctionHouse === 'Goldin' && l.status === 'sold';
-  const goldinSold = allLots.filter(isGoldinSold);
-  const mainLots = allLots.filter(l => !isGoldinSold(l));
-  const archivePath = path.join(DATA_DIR, 'sold-archive.json');
-  fs.writeFileSync(lotsPath, JSON.stringify(mainLots));
-  fs.writeFileSync(archivePath, JSON.stringify(goldinSold));
+  // Full v2 corpus (gz, source of truth) + slim served files (client). The
+  // corpus carries every engine field; the client gets a null-omitted display
+  // projection under Cloudflare's 25MB/file cap. See scripts/corpus-io.ts.
+  const { writeCorpusAndServed } = await import('./corpus-io');
+  const io = writeCorpusAndServed(
+    allLots as unknown as Record<string, unknown>[],
+    (l: Record<string, unknown>) => isGoldinSold(l as unknown as AuctionLot),
+  );
   const mb = (p: string) => (fs.statSync(p).size / (1024 * 1024)).toFixed(2);
-  console.log(`[Ray] Payload split: lots.json ${mainLots.length} lots ${mb(lotsPath)}MB | sold-archive.json ${goldinSold.length} Goldin sold ${mb(archivePath)}MB`);
+  console.log(`[Ray] Wrote corpus ${io.corpusMb}+${io.archiveMb}MB gz | served lots.json ${io.servedMb}MB (slim)`);
   fs.writeFileSync(statsPath, JSON.stringify(statsByArtist, null, 2));
   fs.writeFileSync(path.join(DATA_DIR, 'meta.json'), JSON.stringify({
     lastCrawl: new Date().toISOString(),
@@ -3087,7 +3090,7 @@ async function main() {
     version: 2,
   }, null, 2));
 
-  console.log(`\n[Ray] Done. ${allLots.length} total lots written (${mainLots.length} main + ${goldinSold.length} archived).`);
+  console.log(`\n[Ray] Done. ${allLots.length} total lots written (corpus gz + slim served).`);
 }
 
 main().catch(err => {
