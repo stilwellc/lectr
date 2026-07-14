@@ -1950,19 +1950,102 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 
 /* R8 · the colophon — provenance closes the page */
-.ray-colophon {
+/* ── THE FLOOR AT CLOSE ────────────────────────────────────────────────
+   The footer is the identity's one display-scale moment: the sign writes
+   itself in its own light over the provenance the product stands on. */
+.ray-close {
+  margin-top: 72px;
   border-top: 1px solid var(--hairline);
-  padding-block: 24px;
+  background:
+    radial-gradient(ellipse 640px 300px at 50% 120px, rgba(244, 246, 255, 0.045), transparent 70%),
+    #060709;
+  overflow: hidden;
 }
-.ray-colophon-in {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 48px;
-  font-size: 11.5px;
-  color: #7A8087;
+.ray-close-in { padding: 84px 0 36px; }
+.ray-close-sign { display: flex; justify-content: center; }
+.ray-close-mark {
+  height: 118px;
+  width: auto;
+  /* the write-on: clipped until the reader arrives, then the pen writes */
+  clip-path: inset(0 100% 0 0);
+  filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.12));
+}
+.ray-close-on .ray-close-mark { animation: lectrCloseWrite 1.5s var(--ease-draw) 200ms forwards; }
+@keyframes lectrCloseWrite { to { clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .ray-close-mark { clip-path: none; }
+  .ray-close-on .ray-close-mark { animation: none; }
+}
+.ray-close-thesis {
+  text-align: center;
+  margin: 34px 0 0;
+  font-size: 15.5px;
+  letter-spacing: -0.01em;
+  color: var(--color-text-secondary);
+}
+.ray-close-ledger {
+  display: flex;
+  justify-content: center;
+  gap: 64px;
+  margin-top: 44px;
+  padding-top: 36px;
+}
+.ray-close-ledger > div { text-align: center; }
+.ray-close-ledger b {
+  display: block;
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--color-fg);
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 900px) { .ray-colophon-in { grid-template-columns: 1fr; gap: 8px; } }
+.ray-close-ledger span { display: block; margin-top: 4px; font-size: 11.5px; color: var(--color-text-muted); }
+.ray-close-map {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.6fr;
+  gap: 48px;
+  max-width: 760px;
+  margin: 52px auto 0;
+  padding-top: 40px;
+  border-top: 1px solid var(--hairline-soft, rgba(255,255,255,0.06));
+}
+.ray-close-k {
+  display: block;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+.ray-close-col a {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  padding: 3px 0;
+  width: fit-content;
+}
+.ray-close-col a:hover { color: var(--color-fg); }
+.ray-close-record p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--color-text-secondary); }
+.ray-close-record b.up { color: var(--color-up); font-weight: 700; }
+.ray-close-cta { margin-top: 10px; font-weight: 600; color: var(--color-fg) !important; }
+.ray-close-base {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 64px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline-soft, rgba(255,255,255,0.06));
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+@media (max-width: 899px) {
+  .ray-close-in { padding: 64px 0 96px; }
+  .ray-close-mark { height: 84px; }
+  .ray-close-ledger { gap: 32px; }
+  .ray-close-map { grid-template-columns: 1fr 1fr; gap: 32px; }
+  .ray-close-record { grid-column: 1 / -1; }
+  .ray-close-base { flex-direction: column; gap: 6px; }
+}
 
 /* seam-draw + panel entrance choreography */
 @keyframes raySeamX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
