@@ -108,6 +108,17 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     router.push(path);
   }
 
+  // The primary sections — the same rooms the desktop top bar links to. On
+  // mobile they lead the full-screen menu so it is a real nav, not just a
+  // maker finder.
+  const sections = [
+    { label: 'Overview', path: homePath, active: activeSlug === null },
+    { label: 'Value', path: '/value', active: activeSlug === 'value' },
+    { label: 'Makers', path: '/artists', active: activeSlug === 'artists' },
+    { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
+    { label: `Saved${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' },
+  ];
+
   // Shared finder pieces — the filter input and the grouped maker list — reused
   // by the desktop dropdown and the mobile full-screen sheet.
   const filterInput = (
@@ -350,10 +361,28 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           outline: none;
         }
         .ray-artist-dropdown-filter::placeholder { color: var(--color-text-faint); }
+        .ray-nav-burger { display: none; }
         @media (max-width: 768px) {
           .ray-artist-nav { top: 0; }
-          /* a real tap target for the trigger on phones */
-          .ray-artist-select-btn { min-height: 42px; font-size: 13px; }
+          /* the maker-only trigger gives way to a real menu button on phones */
+          .ray-artist-select-wrap { display: none; }
+          .ray-nav-burger {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin-left: auto;
+            padding: 8px 12px;
+            min-height: 42px;
+            background: none;
+            border: none;
+            color: var(--color-fg);
+            font-family: var(--font-sans), sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+          }
+          .ray-nav-burger svg { width: 20px; height: 20px; }
         }
         /* Mobile maker finder — a full-screen sheet, portaled to body so it
            escapes the nav backdrop-filter. Large rows, a big search field,
@@ -440,6 +469,38 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           font-size: 13px;
           padding: 2px 9px;
         }
+        .ray-maker-sheet-nav {
+          display: flex;
+          flex-direction: column;
+          border-bottom: 1px solid var(--color-border);
+          padding: 4px 0 6px;
+        }
+        .ray-maker-navitem {
+          display: flex;
+          align-items: center;
+          width: 100%;
+          text-align: left;
+          padding: 15px 20px;
+          min-height: 54px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-family: var(--font-sans), sans-serif;
+          font-size: 17px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          color: var(--color-fg);
+        }
+        .ray-maker-navitem[data-active=true] { color: var(--color-up); }
+        .ray-maker-sheet-sub {
+          padding: 18px 20px 4px;
+          font-family: var(--font-sans), sans-serif;
+          font-size: 11.5px;
+          font-weight: 600;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--color-text-faint);
+        }
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
@@ -495,6 +556,21 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           </div>
         )}
         </div>
+
+        {/* Mobile-only menu button — opens the full-screen nav sheet (sections
+            + maker finder). Desktop uses the links + Find a maker above. */}
+        <button
+          className="ray-nav-burger"
+          aria-label="Open menu"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen(o => !o)}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+          <span>Menu</span>
+        </button>
       </div>
 
     </div>
@@ -545,15 +621,28 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             className="ray-maker-sheet"
             role="dialog"
             aria-modal="true"
-            aria-label="Find a maker"
+            aria-label="Menu"
             onClick={e => e.stopPropagation()}
           >
             <div className="ray-maker-sheet-head">
-              <span className="ray-maker-sheet-title">Find a maker</span>
+              <span className="ray-maker-sheet-title">Menu</span>
               <button className="ray-maker-sheet-close" onClick={() => setOpen(false)}>Done</button>
             </div>
-            {filterInput}
             <div className="ray-maker-sheet-list" ref={dropdownRef}>
+              <nav className="ray-maker-sheet-nav" aria-label="Sections">
+                {sections.map(s => (
+                  <button
+                    key={s.path}
+                    className="ray-maker-navitem"
+                    data-active={s.active ? 'true' : 'false'}
+                    onClick={() => navigate(s.path)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </nav>
+              <div className="ray-maker-sheet-sub">Find a maker</div>
+              {filterInput}
               {groupList}
             </div>
           </div>
