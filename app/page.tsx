@@ -373,6 +373,30 @@ export default function RayPage() {
     return { count: mine.length, next: live[0] || null, bestMove };
   }, [savedIds, savedMeta, allLots]);
 
+  // The call plate + watchlist strip, extracted so they can live either in the
+  // right rail (markets with no appreciation stat) or full-width below the
+  // board (markets that show the Appreciation panel to the right of the graph).
+  const callPlateEl = (
+    <CallPlate lots={marketLots} allLots={marketLots} market={activeKey} isSaved={isSaved} onToggleSave={toggle} />
+  );
+  const watchStripEl = watchStrip ? (
+    <Link href="/saved" className="ray-watchstrip" aria-label={`Your watchlist — ${watchStrip.count} saved`}>
+      <span className="ray-watchstrip-k">Your watchlist</span>
+      <span className="ray-watchstrip-line">
+        {watchStrip.count} saved
+        {watchStrip.next && <> · next hammer {daysWord(watchStrip.next.saleDate)}</>}
+        {watchStrip.bestMove && (
+          <> · best move <b className="up">+{Math.round(watchStrip.bestMove.from)}% → +{Math.round(watchStrip.bestMove.to)}%</b></>
+        )}
+      </span>
+      <span className="ray-watchstrip-cta">Open saved <Flick size={12} /></span>
+    </Link>
+  ) : null;
+  const marketName = activeKey === 'all' ? 'The total market' : marketMeta.label;
+  const hasAppr = appreciation != null;
+  const apprValue = hasAppr ? `${appreciation >= 0 ? '+' : ''}${appreciation.toFixed(1)}%` : '';
+  const apprTone = hasAppr && appreciation >= 0 ? 'up' : 'down';
+
   return (
     <>
     <Greeting />
@@ -436,12 +460,6 @@ export default function RayPage() {
                     allLots={marketLots}
                     demand={demand[activeKey]}
                     marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
-                    secondaryStat={appreciation != null ? {
-                      label: 'Appreciation',
-                      value: `${appreciation >= 0 ? '+' : ''}${appreciation.toFixed(1)}%`,
-                      sub: 'sales-weighted avg across artists',
-                      tone: appreciation >= 0 ? 'up' : 'down',
-                    } : null}
                   />
                 ) : activeKey === 'sports' ? (
                   /* Goldin publishes no estimates → realized cohort median */
@@ -460,29 +478,35 @@ export default function RayPage() {
                   />
                 )}
               </div>
-              <aside aria-label="Today's call and your watchlist" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-                <CallPlate
-                  lots={marketLots}
-                  allLots={marketLots}
-                  market={activeKey}
-                  isSaved={isSaved}
-                  onToggleSave={toggle}
-                />
-                {watchStrip && (
-                  <Link href="/saved" className="ray-watchstrip" aria-label={`Your watchlist — ${watchStrip.count} saved`}>
-                    <span className="ray-watchstrip-k">Your watchlist</span>
-                    <span className="ray-watchstrip-line">
-                      {watchStrip.count} saved
-                      {watchStrip.next && <> · next hammer {daysWord(watchStrip.next.saleDate)}</>}
-                      {watchStrip.bestMove && (
-                        <> · best move <b className="up">+{Math.round(watchStrip.bestMove.from)}% → +{Math.round(watchStrip.bestMove.to)}%</b></>
-                      )}
-                    </span>
-                    <span className="ray-watchstrip-cta">Open saved <Flick size={12} /></span>
-                  </Link>
-                )}
-              </aside>
+              {hasAppr ? (
+                /* Desktop: the Appreciation stat sits to the right of the graph.
+                   Mobile: the same element collapses under the chart as a gray
+                   banner ("<market> has an appreciation of X%"). */
+                <aside className="ray-appr" aria-label={`${marketName} appreciation`}>
+                  <div className="ray-appr-stat">
+                    <div className="ray-appr-k">Appreciation</div>
+                    <div className={`ray-appr-v ${apprTone}`}>{apprValue}</div>
+                    <div className="ray-appr-s">sales-weighted avg across artists</div>
+                  </div>
+                  <div className="ray-appr-banner">
+                    <span><b>{marketName}</b> has an appreciation of <b className={apprTone}>{apprValue}</b></span>
+                  </div>
+                </aside>
+              ) : (
+                <aside aria-label="Today's call and your watchlist" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+                  {callPlateEl}
+                  {watchStripEl}
+                </aside>
+              )}
             </div>
+            {hasAppr && (
+              /* Today's call bumped below both the graph and the appreciation
+                 panel, full width. */
+              <div className="ray-board-belowrow">
+                {callPlateEl}
+                {watchStripEl}
+              </div>
+            )}
             {backtest && backtest.flagged.n > 500 && (
               <a href="/value" className="ray-proofstrip">
                 Flagged calls beat their estimates by <b className="up">+{backtest.flagged.medianPerfPct}%</b> median
