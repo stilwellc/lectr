@@ -56,6 +56,7 @@ export default function MarketSwitch({
             role="tab"
             aria-selected={market === m.key}
             className={`ray-market-tab${market === m.key && lit ? ' lit' : ''}`}
+            data-market={m.key}
             data-active={market === m.key}
             data-live={m.live}
             onClick={() => setMarket(m.key)}

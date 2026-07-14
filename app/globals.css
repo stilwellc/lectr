@@ -3370,3 +3370,52 @@ body {
   /* feed header tighter */
   #on-the-block h2 { font-size: 22px; margin: 12px 0 4px; }
 }
+
+
+/* ── the categories POP: identity inks on the compact pills ─────────────
+   The photographic tiles' approved per-market hues live on as pill inks —
+   vertical materials, not brand (gold stays dead; red/green stay signals).
+   Inactive pills wear their market's ink; the active pill stays the one
+   white lit element of the view. */
+.ray-markets-compact .ray-market-tab {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--color-fg);
+  padding: 8px 15px;
+  border: 1px solid var(--pill-ink, var(--hairline));
+  background:
+    linear-gradient(180deg, var(--pill-ink, transparent), transparent 78%),
+    var(--color-bg-elevated);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.ray-markets-compact .ray-market-tab svg { opacity: 1; color: var(--pill-glyph, var(--color-text-secondary)); }
+.ray-markets-compact .ray-market-tab:hover { border-color: var(--pill-glyph, var(--color-text-secondary)); }
+.ray-markets-compact .ray-market-tab[data-market=all] { --pill-ink: rgba(244, 245, 246, 0.10); --pill-glyph: #D9DDE1; }
+.ray-markets-compact .ray-market-tab[data-market=art] { --pill-ink: rgba(232, 205, 160, 0.14); --pill-glyph: #E4CFA6; }
+.ray-markets-compact .ray-market-tab[data-market=design] { --pill-ink: rgba(200, 141, 82, 0.15); --pill-glyph: #D19A63; }
+.ray-markets-compact .ray-market-tab[data-market=watches] { --pill-ink: rgba(155, 178, 205, 0.15); --pill-glyph: #AEC3DA; }
+.ray-markets-compact .ray-market-tab[data-market=sports] { --pill-ink: rgba(208, 139, 107, 0.15); --pill-glyph: #D89A82; }
+.ray-markets-compact .ray-market-tab[data-market=science] { --pill-ink: rgba(138, 144, 240, 0.15); --pill-glyph: #A6ACF5; }
+/* active stays the lit white pill — ink yields to light */
+.ray-markets-compact .ray-market-tab[data-active=true] {
+  background: linear-gradient(180deg, #FFFFFF, #DFE1E5);
+  border-color: rgba(255, 255, 255, 0.85);
+  color: var(--color-bg);
+}
+.ray-markets-compact .ray-market-tab[data-active=true] svg { color: var(--color-bg); }
+
+/* mobile: no scroll — two rows of three, full width */
+@media (max-width: 899px) {
+  .ray-markets-fade { mask-image: none; -webkit-mask-image: none; overflow: visible; }
+  .ray-markets-compact {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    overflow: visible;
+  }
+  .ray-markets-compact .ray-market-tab {
+    justify-content: center;
+    padding: 10px 6px;
+    font-size: 12px;
+  }
+}
