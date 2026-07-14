@@ -14,6 +14,7 @@ import { formatDate, getUpcomingCounts } from '../utils';
 import PortfolioHeader from '../components/analytics/PortfolioHeader';
 import ArtistRankingsTable from '../components/analytics/ArtistRankingsTable';
 import TopSales from '../components/analytics/TopSales';
+import MarketIntelligence from '../components/analytics/MarketIntelligence';
 import RayHero from '../components/RayHero';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 
@@ -31,6 +32,7 @@ function AnalyticsGrid({
   marketLots,
   statsByArtist,
   activeKey,
+  marketSeries,
   fromCache,
   suppressDemand,
 }: {
@@ -40,8 +42,10 @@ function AnalyticsGrid({
   activeKey: Market;
   fromCache: boolean;
   suppressDemand: boolean;
+  marketSeries: import('../hooks/useRayData').MarketSeriesJson | null;
 }) {
   const nodes = [
+    marketSeries ? <MarketIntelligence key="mi" series={marketSeries} marketLabel={activeKey === 'all' ? 'the market' : activeKey} /> : null,
     <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
     // sports/science publish no estimates — the % Demand Index is suppressed
     // (the realized cohort curve lives on the home board, not here).
@@ -69,7 +73,7 @@ function AnalyticsGrid({
 }
 
 export default function AnalyticsPage() {
-  const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache } = useRayData();
+  const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache, market: marketData } = useRayData();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
@@ -118,6 +122,7 @@ export default function AnalyticsPage() {
           marketStats={marketStats}
           statsByArtist={statsByArtist}
           fromCache={fromCache}
+          marketSeries={marketData?.markets?.[activeKey] || null}
         />
       ) : !fullLoaded ? (
         <RayLoading />
@@ -129,6 +134,7 @@ export default function AnalyticsPage() {
           activeKey={activeKey}
           fromCache={fromCache}
           suppressDemand={false}
+          marketSeries={marketData?.markets?.[activeKey] || null}
         />
       )}
     </div>
@@ -145,12 +151,14 @@ function ArchiveAnalyticsBody({
   marketStats,
   statsByArtist,
   fromCache,
+  marketSeries,
 }: {
   activeKey: Market;
   mktSet: Set<string>;
   marketStats: Record<string, MarketStats>;
   statsByArtist: Record<string, MarketStats>;
   fromCache: boolean;
+  marketSeries: import('../hooks/useRayData').MarketSeriesJson | null;
 }) {
   const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
   const marketLots = useMemo(
@@ -182,6 +190,7 @@ function ArchiveAnalyticsBody({
       activeKey={activeKey}
       fromCache={fromCache}
       suppressDemand
+      marketSeries={marketSeries}
     />
   );
 }

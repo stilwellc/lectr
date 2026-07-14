@@ -13,6 +13,50 @@ import { useSoldArchive } from '../hooks/useRayData';
 // "$500–$500 EUR" where the card said "$500 est.").
 import { formatEstimate } from './LotCard';
 
+// ── LotValueBlock — the engine's under/over-valued read + the exact-item moment.
+// Reads the build-time `value` stamped on upcoming lots (app/lib/value.ts). Only
+// makes a claim the temporal holdout validated: a DIRECTIONAL "trading below/
+// above comparable market" call (not a fabricated price), and — where a genuine
+// repeat sale exists — "this exact item last sold for $Z".
+function usd(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${Math.round(n).toLocaleString()}`;
+}
+function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[] }) {
+  const v = (lot as AuctionLot & { value?: NonNullable<AuctionLot['value']> }).value;
+  if (!v) return null;
+  const exactLot = v.exact ? allLots.find(l => l.id === v.exact!.id) : null;
+  const dir = v.signal;
+  const under = dir && dir.label === 'below comparable market';
+  const over = dir && dir.label === 'above comparable market';
+  return (
+    <div className="ray-lv" style={{ margin: '10px 0 2px', padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel)' }}>
+      {v.exact && exactLot && (
+        <div style={{ fontSize: 13, color: 'var(--color-fg)', fontWeight: 600, marginBottom: dir || v.estimateUsd ? 8 : 0 }}>
+          {v.exact.cls === 'physicalMatch' ? 'This exact item' : 'This model'} last sold for{' '}
+          <b>{usd(v.exact.realizedUsd)}</b>{' '}
+          <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>· {formatDate(v.exact.saleDate, { month: 'short', year: 'numeric' })}</span>
+        </div>
+      )}
+      {dir && (
+        <div style={{ fontSize: 13 }}>
+          <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-down)' : 'var(--color-text-secondary)', fontWeight: 650 }}>
+            {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
+          </span>
+          <span style={{ color: 'var(--color-text-muted)' }}> · comparable sales carry a {dir.beatRatePct}% rate of beating estimates like this · {v.n} sales</span>
+        </div>
+      )}
+      {!dir && v.estimateUsd != null && (
+        <div style={{ fontSize: 13 }}>
+          <span style={{ color: 'var(--color-fg)', fontWeight: 650 }}>lectr value {usd(v.low)}–{usd(v.high)}</span>
+          <span style={{ color: 'var(--color-text-muted)' }}> · {v.confidence} confidence · from {v.n} comparable sales{v.vsBid ? ` · bid ${v.vsBid.pct >= 0 ? '+' : ''}${v.vsBid.pct}% vs comps` : ''}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * PriceBand — the decision picture. Every comparable sale plotted as a dot on
  * a log price axis, the median marked, and this lot's estimate drawn as a
@@ -685,6 +729,7 @@ export default function ComparableModal({
             <div style={{ fontSize: 16, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 3 }}>
               {formatEstimate(lot)}
             </div>
+            <LotValueBlock lot={lot} allLots={allLots} />
             <div style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
               {formatDate(lot.saleDate, { month: 'long', day: 'numeric', year: 'numeric' })}
               {lot.saleName ? ` · ${lot.saleName}` : ''}
