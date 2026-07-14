@@ -41,9 +41,9 @@ const MARKET_EMOJI: Record<string, string> = {
   all: '\u{1F3DB}\u{FE0F}',      // classical building — the auction house
   art: '\u{1F3A8}',               // palette
   design: '\u{1FA91}',            // chair
-  watches: '\u{1F570}\u{FE0F}',  // mantel clock — the reference-market face
+  watches: '\u{23F1}\u{FE0F}',   // stopwatch
   sports: '\u{1F3C8}',            // football — game-used leads the vertical
-  science: '\u{1F9B4}',           // bone — the fossil
+  science: '\u{1F4BB}',           // computer — the Apple-1 energy
 };
 
 export default function MarketSwitch({
