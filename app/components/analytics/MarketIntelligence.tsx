@@ -16,9 +16,13 @@ const DOWN = 'var(--color-down)';
 const INK = '#F4F5F6';
 const MUTED = '#7A8087';
 
+// Match the home board's default read: the past-year move (last 4 quarters),
+// so the same index never shows two different headline %s across surfaces.
 function pctChange(pts: { value: number }[]): number | null {
   if (pts.length < 2) return null;
-  return Math.round((pts[pts.length - 1].value / pts[0].value - 1) * 100);
+  const win = pts.slice(-4);
+  const base = win[0].value;
+  return base ? Math.round((pts[pts.length - 1].value / base - 1) * 100) : null;
 }
 const tickQ = (d: string) => { const m = /(\d{4}) Q(\d)/.exec(d); return m ? `${m[1].slice(2)} Q${m[2]}` : d; };
 
@@ -52,7 +56,7 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
             <span className="ray-mi-num">{series.index[series.index.length - 1].value}</span>
             {idxChange != null && (
               <span className="ray-mi-delta" style={{ color: idxChange >= 0 ? UP : DOWN }}>
-                {idxChange >= 0 ? '▲' : '▼'} {idxChange >= 0 ? '+' : ''}{idxChange}% since {tickQ(series.index[0].period)}
+                {idxChange >= 0 ? '▲' : '▼'} {idxChange >= 0 ? '+' : ''}{idxChange}% past year
               </span>
             )}
           </div>
