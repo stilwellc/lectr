@@ -25,7 +25,10 @@ export default function Flick({
       viewBox="0 0 16 11"
       fill="none"
       aria-hidden="true"
-      style={style}
+      // a global reset sets svg { display: block }, which would drop the
+      // Flick onto its own line after every CTA — force it inline, riding the
+      // text baseline, so it always sits with the words it punctuates.
+      style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 4, ...style }}
     >
       <polyline
         points="1,9 5.5,2.5 9.5,8 15,2"
