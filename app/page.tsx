@@ -102,11 +102,16 @@ function ArchiveResults({
 
 export default function RayPage() {
   const ray = useRayData();
-  const { allLots, statsByArtist, demand, realized, recentSold, backtest, lastCrawl, loading, fullLoaded, error, fromCache } = ray;
+  const { allLots, statsByArtist, demand, realized, recentSold, backtest, market: marketData, lastCrawl, loading, fullLoaded, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
   // Every market on the board is live — the picked market filters directly.
   const activeKey = market;
+  // the Part-2 engine's price index for the active market → the board hero
+  const marketIndexSeries = useMemo(() => {
+    const idx = marketData?.markets?.[activeKey]?.index || [];
+    return idx.map(p => ({ date: p.period, value: p.value }));
+  }, [marketData, activeKey]);
   // Full-corpus counts precomputed at build time (meta.json) so the aggregate
   // reads honest totals without the 10MB Goldin sold-archive on the wire.
   const meta = ray as unknown as { totalLots?: number; totalSold?: number };
@@ -412,10 +417,17 @@ export default function RayPage() {
           <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
             <div className="ray-board-rail">
               <div className="ray-pane">
-                {activeKey === 'sports' ? (
-                  /* Sports is Goldin realized: a $ cohort-median curve, never
-                     the % Demand Index. Science keeps the estimate path, which
-                     (no estimates) falls to BoardDemand's live-count fallback. */
+                {marketIndexSeries.length >= 4 ? (
+                  /* The Part-2 engine's validated like-for-like price index —
+                     the market's real move over time, rebased 100. */
+                  <BoardDemand
+                    allLots={marketLots}
+                    demand={marketIndexSeries}
+                    marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
+                    mode="index"
+                  />
+                ) : activeKey === 'sports' ? (
+                  /* thin index → Goldin realized cohort fallback */
                   <BoardDemand
                     allLots={marketLots}
                     demand={realized['sports'] || []}
