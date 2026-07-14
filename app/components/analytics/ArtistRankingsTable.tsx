@@ -6,6 +6,7 @@ import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice } from '../../utils';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import ArtistAvatar from '../ArtistAvatar';
+import Flick from '../Flick';
 import { ARTISTS, marketArtists, Market } from '../../constants';
 
 interface Props {
@@ -139,7 +140,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         }
       `}</style>
 
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
         <h2 style={{
           fontFamily: 'var(--font-sans), sans-serif',
           fontSize: 24,
@@ -148,6 +149,24 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         }}>
           Artist <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Rankings</span>
         </h2>
+        {/* rank-and-slice is this table's job; the roster itself lives on /artists */}
+        <Link
+          href="/artists"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--color-text-muted)',
+            textDecoration: 'none',
+            transition: 'color var(--duration-fast) var(--ease-signature)',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-fg)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+        >
+          The roster <Flick size={14} />
+        </Link>
       </div>
 
       {/* Glass frame; the table keeps its natural min width and scrolls

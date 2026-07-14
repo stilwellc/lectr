@@ -9,8 +9,10 @@ import MarketIcon from './MarketIcon';
  * MarketSwitch — the verticals as the lander's focal shelf. Each market is a
  * card: its glyph, its name, and for live markets its own demand reading with
  * a micro-sparkline (the same TTM series the hero draws). Coming markets show
- * their tagline under a gold "soon". The compact variant (inner pages) stays
- * a pill row, now with glyphs. The choice persists across every page.
+ * their tagline under a muted "soon" chip. The compact variant is THE one
+ * market switcher product-wide — a pill row with glyphs; on home its active
+ * pill carries the lit treatment (the view's single lit element). The choice
+ * persists across every page.
  */
 
 function Spark({ series }: { series: DemandPoint[] }) {
@@ -33,9 +35,14 @@ function Spark({ series }: { series: DemandPoint[] }) {
 
 export default function MarketSwitch({
   compact = false,
+  lit = false,
   demand,
 }: {
   compact?: boolean;
+  /** the active pill wears the view's single lit treatment — ONLY pass true
+      where the switch is that view's lit element (home). /value's lit element
+      is the call plate; two lit per view violates the marquee rule. */
+  lit?: boolean;
   demand?: Record<string, DemandPoint[]>;
 }) {
   const { market, setMarket } = useMarket();
@@ -48,7 +55,7 @@ export default function MarketSwitch({
             key={m.key}
             role="tab"
             aria-selected={market === m.key}
-            className="ray-market-tab"
+            className={`ray-market-tab${market === m.key && lit ? ' lit' : ''}`}
             data-active={market === m.key}
             data-live={m.live}
             onClick={() => setMarket(m.key)}

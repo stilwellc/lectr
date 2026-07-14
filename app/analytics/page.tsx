@@ -16,7 +16,6 @@ import RayHero from '../components/RayHero';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 
 const DemandChart = dynamic(() => import('../components/analytics/DemandChart'), { ssr: false });
-const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 const CategoryBreakdown = dynamic(() => import('../components/analytics/CategoryBreakdown'), { ssr: false });
 const AuctionHouseDistribution = dynamic(() => import('../components/analytics/AuctionHouseDistribution'), { ssr: false });
 const PriceDistribution = dynamic(() => import('../components/analytics/PriceDistribution'), { ssr: false });
@@ -68,7 +67,6 @@ export default function AnalyticsPage() {
           {[
             <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
             <DemandChart key="demand" allLots={marketLots} />,
-            <ArtistSparklines key="spark" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
             <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
             <CategoryBreakdown key="cat" allLots={marketLots} />,
             <AuctionHouseDistribution key="house" statsByArtist={statsByArtist} />,

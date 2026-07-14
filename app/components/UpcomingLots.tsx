@@ -14,6 +14,7 @@ export default function UpcomingLots({
   onToggleSave,
   mark,
   enterDelay = 0,
+  lastCrawl,
 }: {
   lots: AuctionLot[];
   showArtist?: boolean;
@@ -25,6 +26,8 @@ export default function UpcomingLots({
   mark?: string;
   /** base transition-delay (ms) for the arrival choreography */
   enterDelay?: number;
+  /** the last crawl's ISO date — lets cards mark lots first seen today */
+  lastCrawl?: string;
 }) {
   const [visible, setVisible] = useState(48);
   return (
@@ -77,6 +80,7 @@ export default function UpcomingLots({
               allLots={allLots}
               saved={savedIds.includes(lot.id)}
               onToggleSave={onToggleSave}
+              lastCrawl={lastCrawl}
             />
           </div>
         ))}

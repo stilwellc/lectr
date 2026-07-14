@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { ARTISTS } from '../constants';
+import { ARTISTS, MARKETS } from '../constants';
+import { useMarket, MARKET_PATH } from '../lib/market';
 import ArtistAvatar from './ArtistAvatar';
 
 interface Item {
   label: string;
   hint: string;
   path: string;
+  kind: 'section' | 'market' | 'maker';
 }
 
 /**
@@ -23,21 +25,43 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { market } = useMarket();
+  const homePath = MARKET_PATH[market] || '/';
 
-  const items = useMemo<Item[]>(() => [
-    { label: 'Overview', hint: 'the market', path: '/' },
-    { label: 'Value', hint: 'below-market lots', path: '/value' },
-    { label: 'Makers', hint: 'the roster, as demand curves', path: '/artists' },
-    { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics' },
-    { label: 'Saved', hint: 'your watchlist', path: '/saved' },
-    ...ARTISTS.map(a => ({
-      label: a.label,
-      hint: upcomingCounts[a.slug]
-        ? `${a.market} · ${upcomingCounts[a.slug]} live lots`
-        : `${a.market} artist`,
-      path: `/${a.slug}`,
-    })),
-  ], [upcomingCounts]);
+  const items = useMemo<Item[]>(() => {
+    // "On the block" is scoped to the current lander — the count says only
+    // what that feed will actually render.
+    const onBlockCount = ARTISTS
+      .filter(a => market === 'all' || a.market === market)
+      .reduce((s, a) => s + (upcomingCounts[a.slug] || 0), 0);
+    return [
+      { label: 'Overview', hint: 'the market', path: homePath, kind: 'section' as const },
+      { label: 'Value', hint: 'below-market lots', path: '/value', kind: 'section' as const },
+      { label: 'Makers', hint: 'the roster, as demand curves', path: '/artists', kind: 'section' as const },
+      { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics', kind: 'section' as const },
+      { label: 'Saved', hint: 'your watchlist', path: '/saved', kind: 'section' as const },
+      {
+        label: onBlockCount > 0 ? `On the block · ${onBlockCount}` : 'On the block',
+        hint: 'the live feed',
+        path: homePath === '/' ? '/#on-the-block' : `${homePath}#on-the-block`,
+        kind: 'section' as const,
+      },
+      ...MARKETS.map(m => ({
+        label: m.label,
+        hint: m.tagline,
+        path: MARKET_PATH[m.key],
+        kind: 'market' as const,
+      })),
+      ...ARTISTS.map(a => ({
+        label: a.label,
+        hint: upcomingCounts[a.slug]
+          ? `${a.market} · ${upcomingCounts[a.slug]} live lots`
+          : `${a.market} maker`,
+        path: `/${a.slug}`,
+        kind: 'maker' as const,
+      })),
+    ];
+  }, [upcomingCounts, market, homePath]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -88,7 +112,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
           className="ray-ck-input"
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Jump to an artist or section…"
+          placeholder="Jump to a maker, market or section…"
           aria-label="Search"
           onKeyDown={e => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, filtered.length - 1)); }
@@ -102,7 +126,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
           ) : (
             filtered.slice(0, 12).map((item, i) => (
               <button
-                key={item.path}
+                key={`${item.kind}-${item.label}-${item.path}`}
                 role="option"
                 aria-selected={i === idx}
                 className="ray-ck-item"
@@ -111,9 +135,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
                 onClick={() => go(item)}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-                  {item.path.length > 1 && !['/value', '/analytics', '/saved', '/artists'].includes(item.path) && (
-                    <ArtistAvatar label={item.label} size={20} />
-                  )}
+                  {item.kind === 'maker' && <ArtistAvatar label={item.label} size={20} />}
                   {item.label}
                 </span>
                 <span className="ray-ck-hint">{item.hint}</span>

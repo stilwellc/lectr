@@ -237,6 +237,61 @@ export function watchKey(lot: Pick<AuctionLot, 'title'>): string | null {
 
 const WATCHES = new Set<Form>(['wristwatch', 'pocket-watch']);
 
+/* ── object class & market form gates (W17) ─────────────────────────────
+   The watch-maker ambiguity: Cartier is a jeweler as much as a watchmaker,
+   so a maker crawl carries Panthère RINGS alongside Panthère watches. The
+   verticals gate on form class so a ring never headlines /watches — on the
+   call plate, in the feed pool, anywhere. */
+
+/** The coarse object class stamped on category 'object' lots at crawl time
+    (lot.objectClass). Derived from classifyForm — compute it here for
+    anything unstamped (older archive records). */
+export function objectClassOf(lot: Pick<AuctionLot, 'title' | 'medium' | 'category'>): 'watch' | 'jewelry' | 'object' {
+  const f = classifyForm(lot);
+  if (f === 'wristwatch' || f === 'pocket-watch' || f === 'clock') return 'watch';
+  if (f === 'jewelry') return 'jewelry';
+  return 'object';
+}
+
+// Per-market form sets. 'unknown' is deliberately INCLUDED in every set:
+// the gate exists to exclude known mismatches (jewelry inside watches), never
+// to punish a lot the classifier couldn't read — coverage honesty.
+const WATCH_FORMS = new Set<Form>(['wristwatch', 'pocket-watch', 'clock', 'unknown']);
+const SCIENCE_FORMS = new Set<Form>(['meteorite', 'fossil', 'mineral', 'space', 'instrument', 'tech', 'unknown']);
+const DESIGN_FORMS = new Set<Form>([...Array.from(FURNITURE), 'textile', 'object-edition', 'unknown']);
+const ART_FORMS = new Set<Form>([
+  'book', 'ephemera', 'poster', 'photograph', 'textile', 'object-edition',
+  'print', 'painting', 'work-on-paper', 'original-2d', 'sculpture', 'unknown',
+]);
+
+const MARKET_FORMS: Record<string, ReadonlySet<Form> | null> = {
+  all: null,     // the total market gates nothing
+  art: ART_FORMS,
+  design: DESIGN_FORMS,
+  watches: WATCH_FORMS,
+  science: SCIENCE_FORMS,
+  sports: null,  // sports objects classify by exclusion (no dedicated Forms) — no gate
+};
+
+/** The form-class set a market admits, or null when the market carries no
+    form doctrine ('all', 'sports', anything unrecognized). Consumed by
+    pickCall and the vertical feed pools:
+      const forms = formsForMarket(market);
+      const pool = forms ? lots.filter(l => forms.has(classifyForm(l))) : lots;
+    (or use lotFitsMarket below as the one-line predicate). */
+export function formsForMarket(market: string): ReadonlySet<Form> | null {
+  return MARKET_FORMS[market] ?? null;
+}
+
+/** Pool-side gate, page-friendly: does this lot belong in this vertical's
+    pool? A Cartier ring returns false for 'watches' and true for 'all'.
+    Reads the lot's text (classifyForm — cached per lot object), so it works
+    on archive records that predate crawl-time objectClass stamping. */
+export function lotFitsMarket(lot: Pick<AuctionLot, 'title' | 'medium' | 'category'>, market: string): boolean {
+  const forms = formsForMarket(market);
+  return !forms || forms.has(classifyForm(lot));
+}
+
 /** The hard gate, curried: classify/key/measure the ANCHOR once, then test
     many candidates — `sold.filter(comparableTo(lot))` instead of re-deriving
     the anchor's form, model/watch key and dims per candidate. */

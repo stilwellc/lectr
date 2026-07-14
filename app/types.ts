@@ -42,6 +42,17 @@ export interface AuctionLot {
       midpoint) so the feed can paint before the full history downloads.
       undefined = not precomputed (compute client-side from allLots). */
   signal?: { label: 'Below Market' | 'Above Market'; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string; confidence?: 'very-high' | 'high' | 'medium' | 'low' } | null;
+  /** ISO date (YYYY-MM-DD) the crawler first saw this lot id. Stamped once at
+      merge time on genuinely-new ids and carried forward on every later crawl.
+      Lots that predate the stamp never get one (they weren't "new" when the
+      feature shipped) — UI reads this defensively; it may be undefined. */
+  firstSeen?: string;
+  /** Coarse object class for the watch-maker ambiguity (a Cartier Panthère
+      ring is jewelry even though Panthère is a watch line): 'watch' |
+      'jewelry' | 'object'. Derived from classifyForm at crawl time on
+      category 'object' lots — see objectClassOf in app/lib/comps.ts.
+      Undefined on non-object lots and on pre-tag archive records. */
+  objectClass?: string;
 }
 
 export interface PricePoint {

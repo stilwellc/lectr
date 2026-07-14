@@ -1044,77 +1044,6 @@ h1 {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   MARKET TAPE — a full-bleed ribbon of the biggest recent hammers.
-   The page opens on money moving, not a static line. Edges fade,
-   hover pauses, reduced-motion stops it dead.
-   ══════════════════════════════════════════════════════════════ */
-.ray-tape {
-  position: relative;
-  overflow: hidden;
-  border-top: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-  padding: 13px 0;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--color-accent-wine) 4%, transparent),
-      transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
-}
-.ray-tape-track {
-  display: flex;
-  width: max-content;
-  animation: rayTape 72s linear infinite;
-}
-.ray-tape:hover .ray-tape-track { animation-play-state: paused; }
-.ray-tape-item {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0 30px;
-  white-space: nowrap;
-  font-family: var(--font-sans), sans-serif;
-  font-size: 12.5px;
-  letter-spacing: 0.01em;
-}
-.ray-tape-item::after {
-  content: '\2726'; /* ✦ */
-  margin-left: 30px;
-  color: var(--color-accent-wine);
-  opacity: 0.7;
-  font-size: 10px;
-  align-self: center;
-}
-.ray-tape-artist {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-weight: 600;
-  font-size: 11px;
-  color: var(--color-fg);
-}
-.ray-tape-title {
-  font-family: var(--font-serif), serif;
-  font-style: italic;
-  font-size: 15px;
-  color: var(--color-text-muted);
-}
-.ray-tape-price {
-  font-weight: 600;
-  color: var(--color-fg);
-  font-variant-numeric: tabular-nums;
-}
-.ray-tape-house {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-faint);
-}
-@keyframes rayTape { to { transform: translateX(-50%); } }
-@media (prefers-reduced-motion: reduce) {
-  .ray-tape-track { animation: none; }
-}
-
-/* ══════════════════════════════════════════════════════════════
    MARKET BLOCK — the dynamic island. A Week/Month toggle recomputes
    the read; the serif intel line auto-rotates through derived facts;
    the biggest upcoming lot is spotlit. Editorial, in Ray's register.
@@ -1707,8 +1636,10 @@ h1 {
   color-scheme: dark;
 }
 
-/* the marquee rule: exactly one element per view carries the halo —
-   --glow-lit has exactly one consumer in this file, this class */
+/* the marquee rule: exactly one element per view carries the halo.
+   --glow-lit keeps per-view singles: on home the one sign lit is the
+   active market pill (.ray-markets-compact, further down); on /value
+   it is the call plate, which wears this class. */
 .lit {
   border-color: rgba(255, 255, 255, 0.85) !important;
   box-shadow: var(--glow-lit);
@@ -1860,169 +1791,18 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
-/* R2 · the tape — the terminal's signature slot, directly under the bar */
-.ray-tapeband {
-  height: 34px;
-  background: #0A0B0E;
-  border-bottom: 1px solid var(--hairline);
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, black 48px, black calc(100% - 48px), transparent);
-  mask-image: linear-gradient(90deg, transparent, black 48px, black calc(100% - 48px), transparent);
-}
-.ray-tapeband .ray-tape { border: none; background: transparent; height: 34px; }
-.ray-tapeband .ray-tape-track { animation-duration: 90s; height: 34px; align-items: center; }
-.ray-tapeband .ray-tape-item {
-  font-size: 12.5px;
-  gap: 10px;
-  padding: 0 12px 0 0;
-  margin-right: 12px;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
-.ray-tapeband .ray-tape-artist { color: var(--color-fg); font-weight: 600; }
-.ray-tapeband .ray-tape-title { color: #7A8087; }
-.ray-tapeband .ray-tape-price { color: var(--color-fg); font-weight: 550; font-variant-numeric: tabular-nums; }
-.ray-tapeband .ray-tape-house { color: var(--color-text-faint); }
-@media (max-width: 768px) {
-  .ray-tapeband { height: 32px; }
-  .ray-tapeband .ray-tape-track { animation-duration: 110s; height: 32px; }
-  .ray-tapeband .ray-tape-item { font-size: 12px; }
-}
-
-/* THE STAR — the market tiles: the areas we cover, big and clickable,
-   fused to the chart in one pane. People click these first. */
+/* the pane — the board, fused under the compact market switch */
 .ray-pane { background: transparent; }
 .ray-pane .ray-board-demand {
   border: 1px solid var(--hairline);
   background: #0A0B0D;
 }
-.ray-mkttiles {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
-  padding-bottom: 14px;
-}
-.ray-mkttile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 118px;
-  padding: 16px;
-  background: linear-gradient(180deg, #14171B, #0E1013);
-  border: 1px solid color-mix(in srgb, var(--tile-glyph, #9AA0A6) 22%, transparent);
-  border-radius: 14px;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  text-align: left;
-  min-width: 0;
-  overflow: hidden;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  transition:
-    transform 180ms var(--ease-ui),
-    border-color 180ms var(--ease-ui),
-    box-shadow 180ms var(--ease-ui);
-}
-.ray-mkttile:hover[data-live=true] {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--tile-glyph, #9AA0A6) 48%, transparent);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
-}
-.ray-mkttile:active[data-live=true] { transform: translateY(-1px) scale(0.985); }
-/* each vertical wears its own material — an identity wash + glyph ink.
-   These are MATERIALS, not signals: deltas alone stay green/red. */
-.ray-mkttile::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.9;
-  transition: opacity 180ms var(--ease-ui);
-  background: radial-gradient(140% 110% at 18% 0%, var(--tile-ink, transparent), transparent 64%);
-}
-.ray-mkttile:hover[data-live=true]::before,
-.ray-mkttile[data-active=true]::before { opacity: 1.35; }
-.ray-mkttile[data-market=all] { --tile-ink: rgba(244, 245, 246, 0.14); --tile-glyph: #D9DDE1; }
-.ray-mkttile[data-market=art] { --tile-ink: rgba(232, 205, 160, 0.17); --tile-glyph: #E4CFA6; }
-.ray-mkttile[data-market=design] { --tile-ink: rgba(200, 141, 82, 0.18); --tile-glyph: #D19A63; }
-.ray-mkttile[data-market=watches] { --tile-ink: rgba(155, 178, 205, 0.18); --tile-glyph: #AEC3DA; }
-.ray-mkttile[data-market=sports] { --tile-ink: rgba(150, 150, 150, 0.06); --tile-glyph: #7A8087; }
-.ray-mkttile[data-market=science] { --tile-ink: rgba(138, 144, 240, 0.18); --tile-glyph: #A6ACF5; }
-.ray-mkttile-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.42;
-  transform: scale(1.02);
-  transition: opacity 220ms var(--ease-ui), transform 400ms var(--ease-ui);
-}
-.ray-mkttile-scrim {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(10, 11, 13, 0.32), rgba(10, 11, 13, 0.64) 48%, rgba(10, 11, 13, 0.94) 100%);
-}
-.ray-mkttile:hover[data-live=true] .ray-mkttile-bg { opacity: 0.55; transform: scale(1.06); }
-.ray-mkttile[data-active=true] .ray-mkttile-bg { opacity: 0.5; }
-.ray-mkttile > * { position: relative; }
-.ray-mkttile > .ray-mkttile-bg { position: absolute; }
-
-.ray-mkttile-ident { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.ray-mkttile-glyph { display: inline-flex; flex: none; color: var(--tile-glyph, #9AA0A6); }
-.ray-mkttile-glyph svg { width: 21px; height: 21px; }
-.ray-mkttile[data-active=true] {
-  border-color: color-mix(in srgb, var(--tile-glyph, #F4F5F6) 62%, transparent);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 color-mix(in srgb, var(--tile-glyph, #fff) 25%, transparent);
-}
-.ray-mkttile[data-live=false] { cursor: default; }
-.ray-mkttile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.ray-mkttile-name {
-  font-size: 15px;
-  font-weight: 750;
-  letter-spacing: -0.01em;
-  color: var(--color-text-secondary);
-  transition: color 140ms var(--ease-ui);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ray-mkttile:hover[data-live=true] .ray-mkttile-name,
-.ray-mkttile[data-active=true] .ray-mkttile-name { color: var(--color-fg); }
-.ray-mkttile[data-live=false] .ray-mkttile-name { color: #7A8087; }
-.ray-mkttile-spark { flex: none; opacity: 0.9; }
-.ray-mkttile[data-tone=up] .ray-mkttile-spark { color: var(--color-up); }
-.ray-mkttile[data-tone=down] .ray-mkttile-spark { color: var(--color-down); }
-.ray-mkttile-figs { display: flex; align-items: baseline; gap: 8px; width: 100%; }
-.ray-mkttile-figs .ray-mkttile-spark { margin-left: auto; align-self: center; }
-.ray-mkttile-val { font-size: 24px; font-weight: 650; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1; }
-.ray-mkttile-delta { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ray-mkttile[data-tone=up] .ray-mkttile-delta { color: var(--color-up); }
-.ray-mkttile[data-tone=down] .ray-mkttile-delta { color: var(--color-down); }
-.ray-mkttile-soon { font-size: 11px; font-weight: 500; color: #7A8087; }
 @media (max-width: 900px) {
-  .ray-mkttiles { grid-template-columns: repeat(2, 1fr); gap: 8px; padding-bottom: 12px; }
-  .ray-mkttile { min-height: 84px; padding: 13px 14px; gap: 8px; border-radius: 12px; }
-  .ray-mkttile-spark { display: none; }
-  .ray-mkttile-val { font-size: 20px; }
-  .ray-mkttile-name { font-size: 13.5px; }
-  .ray-mkttile-glyph svg { width: 17px; height: 17px; }
-  /* mobile hero stays clean: the tiles say what this is; the chart shows it */
+  /* mobile board stays tight: ranges right-align; the product sentence
+     lives in the nav freshness line and the switch above the board */
   .ray-pane .ray-demand-label { display: none; }
   .ray-pane .ray-demand-head { justify-content: flex-end; border-bottom: none; padding-bottom: 0; margin-bottom: 4px; }
 }
-
-/* the data band below the pane: call plate + hammers side by side */
-.ray-subdeck {
-  display: grid;
-  grid-template-columns: 396px minmax(0, 1fr);
-  gap: 1px;
-  background: var(--hairline);
-  border: 1px solid var(--hairline);
-  margin-top: 28px;
-}
-@media (max-width: 1000px) { .ray-subdeck { grid-template-columns: 1fr; } }
 
 /* R4 · the board — seamed 1fr/396px grid; the 1px gap IS the seam */
 .ray-board-wrap { padding: 20px 0 0; }
@@ -2145,98 +1925,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-deckcall .ray-deckcall-maker { font-size: 14px; font-weight: 650; }
 
-/* R5 · the desk — the maker matrix as two seamed tables */
-.ray-desk-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid var(--hairline);
-  margin-bottom: 2px;
-}
-.ray-desk-title { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--color-fg); }
-.ray-desk-sub { font-size: 12px; color: var(--color-text-faint); }
-.ray-desk-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
-.ray-deskrow {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  height: 40px;
-  border-bottom: 1px solid var(--hairline-soft);
-  text-decoration: none;
-  color: inherit;
-  transition: background 120ms var(--ease-ui);
-  padding: 0 6px;
-}
-.ray-deskrow:hover { background: rgba(255, 255, 255, 0.04); }
-.ray-deskrow-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ray-deskrow-spark { flex: none; }
-.ray-deskrow[data-tone=up] .ray-deskrow-spark { color: var(--color-up); }
-.ray-deskrow[data-tone=down] .ray-deskrow-spark { color: var(--color-down); }
-.ray-deskrow-idx { flex: none; width: 56px; text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-fg); }
-.ray-deskrow-delta { flex: none; width: 64px; text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.ray-deskrow[data-tone=up] .ray-deskrow-delta { color: var(--color-up); }
-.ray-deskrow[data-tone=down] .ray-deskrow-delta { color: var(--color-down); }
-.ray-deskrow-lots { flex: none; width: 44px; text-align: right; font-size: 12px; color: #7A8087; font-variant-numeric: tabular-nums; }
-.ray-deskrow-next { flex: none; width: 76px; text-align: right; font-size: 12px; color: #7A8087; font-variant-numeric: tabular-nums; }
-@media (max-width: 900px) {
-  .ray-desk-tables { grid-template-columns: 1fr; }
-  .ray-deskrow { height: 44px; }
-  .ray-deskrow-lots, .ray-deskrow-next { display: none; }
-}
-
-/* R6 · the film strip — the eye */
-.ray-filmstrip {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  scroll-snap-type: x proximity;
-  padding: 14px 0 6px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 48px), transparent);
-  mask-image: linear-gradient(90deg, transparent, black 24px, black calc(100% - 48px), transparent);
-}
-.ray-filmstrip::-webkit-scrollbar { display: none; }
-.ray-film {
-  flex: none;
-  scroll-snap-align: start;
-  width: 197px;
-  height: 148px;
-  position: relative;
-  border: 1px solid var(--hairline);
-  overflow: hidden;
-  text-decoration: none;
-}
-.ray-film::after {
-  content: '';
-  position: absolute;
-  inset: 6px;
-  outline: 1px solid rgba(255, 255, 255, 0.1);
-  pointer-events: none;
-}
-.ray-film img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ray-film-scrim {
-  position: absolute;
-  inset: auto 0 0 0;
-  padding: 22px 12px 9px;
-  background: linear-gradient(180deg, transparent, rgba(6, 7, 9, 0.88));
-}
-.ray-film-l1 { font-size: 11px; font-weight: 600; color: var(--color-fg); }
-.ray-film-l1 b { color: var(--color-up); font-weight: 700; }
-.ray-film-l2 { font-size: 10px; font-weight: 500; color: rgba(255, 255, 255, 0.62); font-variant-numeric: tabular-nums; margin-top: 1px; }
-@media (max-width: 768px) { .ray-film { width: 165px; height: 124px; } }
-
-/* R7 · the record band + backtest monument */
+/* R7 · the record band */
 .ray-recordband {
   background: #0C0D10;
   border-top: 1px solid var(--hairline);
@@ -2245,7 +1934,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-record-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 396px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1px;
   background: var(--hairline);
   border: 1px solid var(--hairline);
@@ -2253,36 +1942,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-record-left { background: #0C0D10; min-width: 0; padding: 4px 0 0; }
 .ray-record-left .ray-results { padding-block: 0 12px; }
 .ray-record-left .rail { padding-inline: 20px; max-width: none; }
-.ray-monument { background: var(--panel); padding: 24px 20px; }
-.ray-monu-in { position: sticky; top: 72px; }
-.ray-monu-fig { padding: 14px 0 16px; border-bottom: 1px solid var(--hairline-soft); }
-.ray-monu-fig:last-of-type { border-bottom: none; }
-.ray-monu-v { font-size: 56px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--color-fg); }
-.ray-monu-v.up { color: var(--color-up); }
-.ray-monu-k { font-size: 11px; font-weight: 600; color: #9AA0A6; margin-top: 6px; }
-.ray-monu-body { font-size: 13.5px; color: #9AA0A6; line-height: 1.55; margin-top: 14px; }
-.ray-monu-cta { display: inline-block; position: relative; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; text-decoration: none; }
-.ray-monu-cta:hover { color: var(--color-fg); }
-/* the pen-draw: the underline draws left-to-right */
-.ray-monu-cta::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  right: auto;
-  width: 100%;
-  height: 1px;
-  background: #F4F5F6;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 220ms var(--ease-ui);
-}
-.ray-monu-cta:hover::after { transform: scaleX(1); }
 @media (max-width: 1000px) {
   .ray-board { grid-template-columns: 1fr; }
-  .ray-record-grid { grid-template-columns: 1fr; }
   .ray-numrow .ray-hero2-value { font-size: 40px; }
-  .ray-monu-v { font-size: 40px; }
   .ray-ledger { grid-template-columns: 1fr 1fr; }
   .ray-ledger > div { padding-left: 14px; }
 }
@@ -2375,39 +2037,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   transition: transform 220ms var(--ease-ui);
 }
 .ray-deckcall:hover .ray-deckcall-cta::after { transform: scaleX(1); }
-.ray-hammers { display: flex; flex-direction: column; }
-.ray-hammer-row {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  padding: 9px 0;
-  border-top: 1px solid var(--color-border);
-  text-decoration: none;
-  color: inherit;
-}
-.ray-hammer-row:first-child { border-top: none; }
-.ray-hammer-row:hover .ray-hammer-title { color: var(--color-fg); }
-.ray-hammer-when {
-  flex: none;
-  width: 74px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-fg);
-  font-variant-numeric: tabular-nums;
-}
-.ray-hammer-body { min-width: 0; }
-.ray-hammer-title {
-  display: block;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color var(--duration-fast) var(--ease-signature);
-}
-.ray-hammer-meta { display: block; font-size: 11.5px; color: var(--color-text-faint); margin-top: 1px; }
-.ray-hammer-meta .up { color: var(--color-up); font-weight: 700; }
 
 /* the movers — every maker gets a pulse */
 .ray-movers-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
@@ -2550,15 +2179,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   transition: color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
 }
 .ray-seg-btn[data-active=true] { color: var(--color-bg); background: var(--color-fg); }
-
-/* ───────────────────────── tape, quieted ───────────────────────── */
-.ray-tape { padding: 10px 0; background: none; border-color: var(--color-border); }
-.ray-tape-item { font-size: 12.5px; gap: 8px; padding: 0 26px; }
-.ray-tape-item::after { content: '·'; color: var(--color-text-faint); margin-left: 26px; font-size: 12px; }
-.ray-tape-artist { text-transform: none; letter-spacing: -0.01em; font-weight: 600; font-size: 12.5px; color: var(--color-text-secondary); }
-.ray-tape-title { font-family: var(--font-sans); font-style: normal; font-size: 12.5px; color: var(--color-text-faint); }
-.ray-tape-price { color: var(--color-fg); font-weight: 600; }
-.ray-tape-house { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--color-text-faint); }
 
 /* ───────────────────────── on the block ───────────────────────── */
 .ray-block-card { border-radius: 20px; }
@@ -3109,11 +2729,11 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-feedtable .t-est { color: var(--color-fg); font-weight: 600; }
 .ray-feedtable .t-sig-up { color: var(--color-up); font-weight: 600; }
 .ray-feedtable .t-sig-down { color: var(--color-down); font-weight: 600; }
-@media (max-width: 899px) { .ray-viewtoggle { display: none; } }
+/* the toggle survives mobile: grid maps to the compact card, table to rows */
 
 /* ── freshness pulse ── */
 .ray-fresh {
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 7px;
   font-size: 12px;
@@ -3121,7 +2741,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   color: var(--color-text-faint);
   white-space: nowrap;
 }
-@media (min-width: 1000px) { .ray-fresh { display: inline-flex; } }
 .ray-fresh-dot { width: 7px; height: 7px; border-radius: 100px; background: var(--color-up); position: relative; }
 .ray-fresh-dot::after {
   content: '';
@@ -3313,6 +2932,23 @@ body {
 .ray-market-tab[data-active=true] .ray-market-soon { color: rgba(10, 11, 13, 0.7); }
 .ray-markets-compact .ray-market-tab { font-size: 12.5px; padding: 6px 13px; align-items: center; }
 .ray-markets-compact .ray-market-tab svg { opacity: 0.85; flex: none; }
+/* one sign lit: with the photographic tiles dead, the active pill is
+   the lit element on home — border ink + the halo, nothing gold */
+.ray-markets-compact .ray-market-tab[aria-selected=true],
+.ray-markets-compact .ray-market-tab[data-active=true] {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  padding: 5px 12px; /* absorbs the 1px border; the row never shifts */
+  box-shadow: var(--glow-lit), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* the pill row never clips invisibly — the right edge admits there's more */
+.ray-markets-fade {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
+}
+.ray-markets-fade::-webkit-scrollbar { display: none; }
 
 /* ── the verticals as a shelf: each market is a card with its own pulse ── */
 .ray-mkt-cards {
@@ -3461,4 +3097,276 @@ body {
 @media (max-width: 900px) {
   .ray-pane .ray-numrow .ray-hero2-value { font-size: 36px; }
   .ray-pane .ray-board-demand { padding: 14px 14px 10px; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   THE RESTRUCTURE — home is one route with one job: the board and the
+   live feed. Every killed surface's CSS is deleted above; these are the
+   surviving jobs' new homes. Sentence case, Inter, red=down / green=up.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* the board owns viewport 1: board left, call + watchlist rail right */
+.ray-board-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  align-items: stretch;
+}
+.ray-board-rail > * { min-width: 0; }
+/* the rail column fills its height intentionally: the call plate grows to
+   meet the board's bottom edge instead of leaving raw grid ground exposed —
+   DESKTOP ONLY (on mobile the rail stacks and growth just adds dead air) */
+@media (min-width: 900px) {
+  /* the plate fills the rail column; its content stacks with the CTA pinned
+     to the bottom edge — the mat space between belongs to the plate, not to
+     raw grid ground. display:flex on the Link is what makes flex-grow bite. */
+  .ray-board-rail > aside .ray-deckcall {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .ray-board-rail > aside .ray-deckcall .ray-deckcall-cta { margin-top: auto; padding-top: 14px; }
+}
+@media (max-width: 899px) {
+  .ray-board-rail { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* the watchlist strip — the rail answers "what changed" in one card */
+.ray-watchstrip {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  padding: 12px 16px 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 120ms var(--ease-ui);
+}
+.ray-watchstrip:hover { background: var(--color-hover-item); }
+.ray-watchstrip-k { font-size: 12px; font-weight: 600; color: #9AA0A6; margin-bottom: 8px; }
+.ray-watchstrip-stats { display: flex; align-items: baseline; gap: 20px; }
+.ray-watchstrip-stat { min-width: 0; }
+.ray-watchstrip-stat b {
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ray-watchstrip-stat b.up { color: var(--color-up); }
+.ray-watchstrip-stat b.down { color: var(--color-down); }
+.ray-watchstrip-stat span { font-size: 11px; color: #7A8087; white-space: nowrap; }
+.ray-watchstrip-link { display: inline-block; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; }
+.ray-watchstrip:hover .ray-watchstrip-link { color: var(--color-fg); }
+
+/* the record collapses to one honest sentence + a door to the archive */
+.ray-results-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border: 1px solid var(--hairline);
+  background: #0C0D10;
+  padding: 12px 20px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.ray-results-row b { color: var(--color-fg); font-weight: 600; }
+.ray-results-row b.up { color: var(--color-up); }
+.ray-results-row b.down { color: var(--color-down); }
+.ray-results-row button {
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-elevated);
+  border-radius: 10px;
+  padding: 8px 14px;
+  transition:
+    color var(--duration-fast) var(--ease-signature),
+    background var(--duration-fast) var(--ease-signature);
+}
+.ray-results-row button:hover { color: var(--color-fg); background: var(--glass-bg-hover); }
+
+/* "New today" — white ink only; freshness is a fact, not a signal */
+.ray-lot-img { position: relative; }
+.ray-newchip {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  pointer-events: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--color-fg);
+  background: rgba(8, 9, 11, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 100px;
+  padding: 3px 9px;
+}
+
+/* 44×44 answers the thumb — save and close never miss */
+.ray-touch44 {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* /value: one hero call plate, then the tape as compact rows */
+.ray-value-rows { display: flex; flex-direction: column; margin-top: 18px; }
+.ray-value-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 56px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  color: inherit;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--hairline-soft);
+  transition: background 120ms var(--ease-ui);
+}
+.ray-value-row:hover { background: var(--color-hover-item); }
+.ray-value-thumb {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--color-bg-elevated);
+}
+.ray-value-row-maker {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ray-value-row-maker span {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ray-value-row-sig {
+  flex: none;
+  min-width: 64px;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ray-value-row[data-tone=up] .ray-value-row-sig { color: var(--color-up); }
+.ray-value-row[data-tone=down] .ray-value-row-sig { color: var(--color-down); }
+.ray-value-row-est {
+  flex: none;
+  min-width: 104px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── mobile: density without loss — 900px is the fold ── */
+@media (max-width: 899px) {
+  /* compact card: the 12-a-page feed */
+  .ray-card-compact .ray-lot-img { height: 140px !important; }
+  .ray-card-compact .ray-lot-est { font-size: 14px; }
+  .ray-card-compact .ray-sigrow-pct { font-size: 20px; }
+  .ray-card-compact .ray-sigrow { margin-bottom: 4px; }
+  .ray-card-compact .ray-lot-footer { margin-top: 6px; }
+
+  /* the toolbar earns its chrome: one 44px row while the thumb scrolls */
+  .ray-toolbar {
+    max-height: 640px;
+    transition: max-height 220ms var(--ease-ui);
+  }
+  .ray-toolbar-collapsed {
+    max-height: 44px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .ray-toolbar-collapsed .ray-toolbar-search { padding: 6px 12px; }
+
+  /* touch: the save button meets the 44px floor */
+  .ray-lot-remind { min-height: 44px; }
+
+  /* the comps modal presents as a bottom sheet with a drag handle */
+  .ray-sheet {
+    position: fixed !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 88vh;
+    max-height: 88dvh;
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+    overflow-y: auto;
+    padding-top: 22px;
+    touch-action: pan-y;
+    transform: translateY(0);
+    transition: transform 260ms var(--ease-ui);
+    animation: raySheetUp 260ms var(--ease-ui);
+  }
+  .ray-sheet::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 100px;
+    background: rgba(255, 255, 255, 0.25);
+  }
+  .ray-sheet[data-closing=true] { transform: translateY(100%); }
+}
+@keyframes raySheetUp { from { transform: translateY(28px); opacity: 0.7; } to { transform: translateY(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ray-sheet { animation: none; transition: none; }
+  .ray-toolbar { transition: none; }
+}
+
+
+/* ── restructure: mobile budget (first lot ≤ ~1,000px) ───────────────── */
+.ray-demand-chartbox { height: 320px; }
+@media (max-width: 899px) {
+  /* the board pane: shorter chart */
+  .ray-demand-chartbox { height: 190px; }
+  /* compact call plate: the photo mat dies on mobile — two lines + the number */
+  .ray-deckcall .ray-plate-mat { display: none; }
+  .ray-deckcall { padding: 14px 16px; }
+  /* ledger: 2x2 tight */
+  .ray-ledger > * { padding: 10px 12px; }
+  .ray-ledger b, .ray-ledger strong { font-size: 20px; }
+  /* feed header tighter */
+  #on-the-block h2 { font-size: 22px; margin: 12px 0 4px; }
 }

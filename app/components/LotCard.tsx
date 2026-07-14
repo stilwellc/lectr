@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useMemo, useInsertionEffect, memo } from 'react';
+import Link from 'next/link';
 import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle } from '../utils';
 import ComparableModal from './ComparableModal';
 import { computeDeepSignal, FORM_LABEL } from '../lib/comps';
 
-function formatEstimate(lot: AuctionLot): string {
+export function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
     if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
@@ -72,8 +73,13 @@ const LOT_CARD_CSS = `
      initial sits in flow behind and reads instead */
   .ray-lot-img img[data-error=true] { opacity: 0; }
   .ray-save-btn:hover { opacity: 0.85; }
-  @media (max-width: 768px) {
-    .ray-lot-img { height: 170px; }
+  .ray-lot-card .ray-save-btn { width: 32px; height: 32px; }
+  .ray-lot-maker { position: relative; z-index: 2; }
+  .ray-lot-maker:hover { text-decoration: underline; }
+  @media (max-width: 900px) {
+    /* compact mobile card: shorter image, 44px touch target on save */
+    .ray-lot-img { height: 140px; }
+    .ray-lot-card .ray-save-btn { width: 44px; height: 44px; }
   }
 `;
 function useLotCardStyles() {
@@ -92,16 +98,26 @@ function LotCard({
   allLots = [],
   saved = false,
   onToggleSave,
+  lastCrawl,
 }: {
   lot: AuctionLot;
   showArtist?: boolean;
   allLots?: AuctionLot[];
   saved?: boolean;
   onToggleSave?: (lotId: string) => void;
+  /** the last crawl's ISO date — lets the card mark lots first seen today */
+  lastCrawl?: string;
 }) {
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
   const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
+
+  // firstSeen ships from the crawler diff — read defensively: older data
+  // files (and lots crawled before the stamp existed) don't carry it.
+  const firstSeen = (lot as AuctionLot & { firstSeen?: string }).firstSeen;
+  const isNewToday = Boolean(
+    firstSeen && lastCrawl && firstSeen.slice(0, 10) === lastCrawl.slice(0, 10)
+  );
 
   function handleAddToCalendar(e: React.MouseEvent) {
     e.preventDefault();
@@ -127,13 +143,19 @@ function LotCard({
   const catLabel = categoryLabels[lot.category] || null;
   const isUpcoming = lot.status === 'upcoming';
 
+  // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the maker
+  // label and the maker line already renders, the title says nothing twice.
+  const makerLabel = lot.artist ? (ARTIST_LABEL[lot.artist] || lot.artist) : '';
+  const titleText = craftTitle(lot.title);
+  const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;
+
   const buySignal = useMemo(() => {
     if (!isUpcoming) return null;
     return lotSignal(lot, allLots);
   }, [lot, allLots, isUpcoming]);
 
   const cardContent = (
-    <div className="ray-lot-card glass glass-quiet glass-noblur" style={{
+    <div className="ray-lot-card ray-card-compact glass glass-quiet glass-noblur" style={{
       overflow: 'hidden',
       cursor: 'pointer',
       height: '100%',
@@ -220,6 +242,13 @@ function LotCard({
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           />
         )}
+        {/* freshness, on the lot itself: stamped by the crawler diff, shown
+            only on the day it first appeared */}
+        {isNewToday && (
+          <span className="ray-newchip" style={{ position: 'absolute', top: 6, left: 6, zIndex: 2 }}>
+            New today
+          </span>
+        )}
         {/* the old corner pill died in the committee review — the signal row
             below leads with the number itself, once, unmissably */}
         {onToggleSave && (
@@ -230,8 +259,6 @@ function LotCard({
               position: 'absolute',
               top: 6,
               right: 6,
-              width: 32,
-              height: 32,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -259,28 +286,40 @@ function LotCard({
       <div style={{ padding: '13px 2px 4px', flex: 1, display: 'flex', flexDirection: 'column', zIndex: 'auto' }}>
 
         {showArtist && lot.artist && (
-          <div style={{
-            fontSize: 15,
-            letterSpacing: '-0.01em',
-            color: 'var(--color-fg)',
-            fontWeight: 600,
-            marginBottom: 2,
-          }}>
-            {ARTIST_LABEL[lot.artist] || lot.artist}
+          <div style={{ marginBottom: 2 }}>
+            {/* the maker's own book — an internal link, above the stretched
+                card action (the house URL stays on the card's primary action
+                only, never on the name) */}
+            <Link
+              href={`/${lot.artist}`}
+              className="ray-lot-maker"
+              onClick={e => e.stopPropagation()}
+              style={{
+                fontSize: 15,
+                letterSpacing: '-0.01em',
+                color: 'var(--color-fg)',
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              {makerLabel}
+            </Link>
           </div>
         )}
-        <h3 className="ray-lot-title" style={{
-          fontFamily: 'var(--font-sans), sans-serif',
-          fontSize: showArtist ? 14 : 15,
-          fontWeight: showArtist ? 400 : 600,
-          color: showArtist ? 'var(--color-text-muted)' : 'var(--color-fg)',
-          letterSpacing: '-0.01em',
-          margin: '0 0 3px',
-          lineHeight: 1.4,
-          flex: 1,
-        }}>
-          {craftTitle(lot.title)}
-        </h3>
+        {!titleDupesMaker && (
+          <h3 className="ray-lot-title" style={{
+            fontFamily: 'var(--font-sans), sans-serif',
+            fontSize: showArtist ? 14 : 15,
+            fontWeight: showArtist ? 400 : 600,
+            color: showArtist ? 'var(--color-text-muted)' : 'var(--color-fg)',
+            letterSpacing: '-0.01em',
+            margin: '0 0 3px',
+            lineHeight: 1.4,
+            flex: 1,
+          }}>
+            {titleText}
+          </h3>
+        )}
         <div style={{ fontSize: 13, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
           {lot.auctionHouse}
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
@@ -342,6 +381,8 @@ function LotCard({
           lot={lot}
           allLots={allLots}
           onClose={() => setModalOpen(false)}
+          saved={saved}
+          onToggleSave={onToggleSave}
         />
       )}
     </>
