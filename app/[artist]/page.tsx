@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ARTISTS, ARTIST_LABEL, marketOf } from '../constants';
-import type { LotCategory } from '../types';
-import { useRayData, retryFullLoad } from '../hooks/useRayData';
+import type { AuctionLot, LotCategory, MarketStats } from '../types';
+import { useRayData, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useMarket } from '../lib/market';
 import { getUpcomingCounts, formatDate } from '../utils';
@@ -22,6 +22,104 @@ const PriceChart = dynamic(() => import('../components/PriceChart'), { ssr: fals
 
 type CategoryFilter = 'all' | LotCategory;
 
+// A retry-able "the archive didn't load" panel — shared by the phase-2
+// (fullError) and phase-3 (archiveError) failure paths so a gated section
+// never stalls on an eternal skeleton.
+function ArchiveErrorPanel({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div style={{ padding: '120px 24px', textAlign: 'center' }}>
+      <h2 style={{
+        fontFamily: 'var(--font-sans), sans-serif',
+        fontSize: 32,
+        fontWeight: 700,
+        letterSpacing: '-0.02em',
+        marginBottom: 10,
+      }}>
+        The archive didn&rsquo;t load
+      </h2>
+      <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
+        The crawl couldn&rsquo;t fetch the full sale history. Check your connection and try again.
+      </p>
+      <button className="ray-call-btn ray-call-btn-primary" onClick={onRetry}>
+        Retry
+      </button>
+    </div>
+  );
+}
+
+// The gated sold/upcoming sections. `sold`/`chartLots` already carry any
+// merged archive rows; the hero re-renders with them too. Kept as a leaf so
+// both the standard (phase-2) and archive (phase-3) bodies reuse it verbatim.
+function MakerSections({
+  slug,
+  stats,
+  label,
+  chartLots,
+  upcoming,
+  sold,
+  allLots,
+  savedIds,
+  onToggleSave,
+  categoryFilter,
+  onCategoryChange,
+  fromCache,
+}: {
+  slug: string;
+  stats: MarketStats | null;
+  label: string;
+  chartLots: AuctionLot[];
+  upcoming: AuctionLot[];
+  sold: AuctionLot[];
+  allLots: AuctionLot[];
+  savedIds: string[];
+  onToggleSave: (id: string) => void;
+  categoryFilter: CategoryFilter;
+  onCategoryChange: (c: CategoryFilter) => void;
+  fromCache: boolean;
+}) {
+  return (
+    <RayEntrance animate={!fromCache}>
+      {sold.length > 0 && (
+        <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+          <PriceChart
+            lots={sold}
+            allLots={chartLots}
+            categoryFilter={categoryFilter}
+            onCategoryChange={onCategoryChange}
+            fallbackData={stats?.priceHistory}
+            mark="01"
+          />
+        </div>
+      )}
+      {upcoming.length > 0 && (
+        <div id="upcoming">
+          <UpcomingLots
+            lots={upcoming}
+            allLots={allLots}
+            stats={stats || undefined}
+            savedIds={savedIds}
+            onToggleSave={onToggleSave}
+            mark="02"
+            enterDelay={180}
+          />
+        </div>
+      )}
+      {sold.length > 0 && (
+        <div className="ray-enter" style={{ '--enter-delay': '270ms' } as React.CSSProperties}>
+          <PastResults
+            lots={sold}
+            categoryFilter={categoryFilter}
+            onCategoryChange={onCategoryChange}
+            savedIds={savedIds}
+            onToggleSave={onToggleSave}
+            mark="03"
+          />
+        </div>
+      )}
+    </RayEntrance>
+  );
+}
+
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.artist as string;
@@ -32,11 +130,16 @@ export default function ArtistDetailPage() {
 
   const label = ARTIST_LABEL[slug];
   const valid = ARTISTS.some(a => a.slug === slug);
+  // A sports/science maker's sold history lives in the phase-3 archive (split
+  // out of the eager + phase-2 payloads). Only these makers pay the 10MB —
+  // art/design/watches makers never mount useSoldArchive().
+  const market = marketOf(slug);
+  const isArchiveMaker = valid && (market === 'sports' || market === 'science');
 
   // A maker page IS its market: the switch under the nav lights the maker's
   // vertical, and the choice persists like landing on the vertical would.
   useEffect(() => {
-    if (valid) setMarket(marketOf(slug));
+    if (valid) setMarket(market);
     // once per maker — the user may still flip the switch afterwards
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, valid]);
@@ -52,7 +155,7 @@ export default function ArtistDetailPage() {
   // memoized on [allLots, slug]: the 32k filter + sort must not re-run on
   // every pill click / save toggle — and stable identities keep the memos
   // inside PriceChart/PastResults from re-aggregating the whole history
-  const { lots, upcoming, sold } = useMemo(() => {
+  const { lots, upcoming } = useMemo(() => {
     const lots = allLots.filter(l => l.artist === slug);
     const today = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD string
     const upcoming = lots
@@ -62,8 +165,7 @@ export default function ArtistDetailPage() {
         if (!b.saleDate) return -1;
         return new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime();
       });
-    const sold = lots.filter(l => l.status === 'sold');
-    return { lots, upcoming, sold };
+    return { lots, upcoming };
   }, [allLots, slug]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -99,83 +201,131 @@ export default function ArtistDetailPage() {
         <>
           {/* The hero is un-gated: it paints from phase-1 statsByArtist the
               moment the stats land — the 32k archive only gates the lot-level
-              sections below. */}
-          <RayEntrance animate={!fromCache}>
-            <div className="rail ray-enter" style={{ paddingTop: 16 }}>
-              <MarketSwitch compact />
-            </div>
-            <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-              <ArtistHero label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} />
-            </div>
-          </RayEntrance>
+              sections below. For archive makers it re-renders with merged
+              sold rows once phase 3 arrives (ArchiveMakerBody re-renders it). */}
+          {!isArchiveMaker && (
+            <RayEntrance animate={!fromCache}>
+              <div className="rail ray-enter" style={{ paddingTop: 16 }}>
+                <MarketSwitch compact />
+              </div>
+              <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
+                <ArtistHero label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} />
+              </div>
+            </RayEntrance>
+          )}
 
-          {!fullLoaded ? (
+          {isArchiveMaker ? (
+            <ArchiveMakerBody
+              slug={slug}
+              label={label}
+              stats={stats}
+              phaseLots={lots}
+              upcoming={upcoming}
+              savedIds={savedIds}
+              onToggleSave={toggleWithLot}
+              categoryFilter={categoryFilter}
+              onCategoryChange={setCategoryFilter}
+              fromCache={fromCache}
+            />
+          ) : !fullLoaded ? (
             fullError ? (
               // phase 2 (the full archive) failed after retries — say so and
               // offer a retry, never an eternal skeleton
-              <div style={{ padding: '120px 24px', textAlign: 'center' }}>
-                <h2 style={{
-                  fontFamily: 'var(--font-sans), sans-serif',
-                  fontSize: 32,
-                  fontWeight: 700,
-                  letterSpacing: '-0.02em',
-                  marginBottom: 10,
-                }}>
-                  The archive didn&rsquo;t load
-                </h2>
-                <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-                  The crawl couldn&rsquo;t fetch the full sale history. Check your connection and try again.
-                </p>
-                <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
-                  Retry
-                </button>
-              </div>
+              <ArchiveErrorPanel onRetry={() => retryFullLoad()} />
             ) : (
               <RayLoading />
             )
           ) : (
-            <RayEntrance animate={!fromCache}>
-              {sold.length > 0 && (
-                <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
-                  <PriceChart
-                    lots={sold}
-                    allLots={lots}
-                    categoryFilter={categoryFilter}
-                    onCategoryChange={setCategoryFilter}
-                    fallbackData={stats?.priceHistory}
-                    mark="01"
-                  />
-                </div>
-              )}
-              {upcoming.length > 0 && (
-                <div id="upcoming">
-                  <UpcomingLots
-                    lots={upcoming}
-                    allLots={allLots}
-                    stats={stats || undefined}
-                    savedIds={savedIds}
-                    onToggleSave={toggleWithLot}
-                    mark="02"
-                    enterDelay={180}
-                  />
-                </div>
-              )}
-              {sold.length > 0 && (
-                <div className="ray-enter" style={{ '--enter-delay': '270ms' } as React.CSSProperties}>
-                  <PastResults
-                    lots={sold}
-                    categoryFilter={categoryFilter}
-                    onCategoryChange={setCategoryFilter}
-                    savedIds={savedIds}
-                    onToggleSave={toggleWithLot}
-                    mark="03"
-                  />
-                </div>
-              )}
-            </RayEntrance>
+            <MakerSections
+              slug={slug}
+              label={label}
+              stats={stats}
+              chartLots={lots}
+              upcoming={upcoming}
+              sold={lots.filter(l => l.status === 'sold')}
+              allLots={allLots}
+              savedIds={savedIds}
+              onToggleSave={toggleWithLot}
+              categoryFilter={categoryFilter}
+              onCategoryChange={setCategoryFilter}
+              fromCache={fromCache}
+            />
           )}
         </>
       )}
     </div>
+  );
+}
+
+// Archive makers only: mounting this triggers useSoldArchive()'s phase-3
+// fetch. It merges the maker's archive sold rows into lots/sold and re-renders
+// the hero + the gated sections once the archive lands (RayLoading /
+// archiveError-retry until then, mirroring the phase-2 fullError pattern).
+function ArchiveMakerBody({
+  slug,
+  label,
+  stats,
+  phaseLots,
+  upcoming,
+  savedIds,
+  onToggleSave,
+  categoryFilter,
+  onCategoryChange,
+  fromCache,
+}: {
+  slug: string;
+  label: string;
+  stats: MarketStats | null;
+  phaseLots: AuctionLot[];
+  upcoming: AuctionLot[];
+  savedIds: string[];
+  onToggleSave: (id: string) => void;
+  categoryFilter: CategoryFilter;
+  onCategoryChange: (c: CategoryFilter) => void;
+  fromCache: boolean;
+}) {
+  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
+
+  // the maker's full lot set with archive sold rows merged in
+  const makerLots = useMemo(
+    () => (archiveLoaded ? allLotsWithArchive.filter(l => l.artist === slug) : phaseLots),
+    [archiveLoaded, allLotsWithArchive, slug, phaseLots]
+  );
+  const sold = useMemo(() => makerLots.filter(l => l.status === 'sold'), [makerLots]);
+
+  return (
+    <>
+      <RayEntrance animate={!fromCache}>
+        <div className="rail ray-enter" style={{ paddingTop: 16 }}>
+          <MarketSwitch compact />
+        </div>
+        <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
+          <ArtistHero label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} />
+        </div>
+      </RayEntrance>
+
+      {!archiveLoaded ? (
+        archiveError ? (
+          <ArchiveErrorPanel onRetry={() => retryArchiveLoad()} />
+        ) : (
+          <RayLoading />
+        )
+      ) : (
+        <MakerSections
+          slug={slug}
+          label={label}
+          stats={stats}
+          chartLots={makerLots}
+          upcoming={upcoming}
+          sold={sold}
+          allLots={makerLots}
+          savedIds={savedIds}
+          onToggleSave={onToggleSave}
+          categoryFilter={categoryFilter}
+          onCategoryChange={onCategoryChange}
+          fromCache={fromCache}
+        />
+      )}
+    </>
   );
 }

@@ -1406,6 +1406,11 @@ const GOLDIN_CARD_MAKERS = /\b(topps|panini|bowman|upper deck|fleer|donruss|priz
 const GOLDIN_GRADED = /\b(psa|bgs|sgc|cgc|slab|gem m(in)?t)\b/i;
 const GOLDIN_EXCLUDE_GAMES = /\b(video game|nintendo|playstation|\bps[1-5]\b|xbox|sega|atari|game ?boy|n64|game ?cube|wii|famicom|wata|vga\b|sealed game|arcade)\b/i;
 const GOLDIN_EXCLUDE_MISC = /\b(sports illustrated|magazine|newsstand|comic|shonen|disney(land)?|universal studios|concert|music festival|movie (prop|pass|premiere)|screening pass|production[- ]used)\b/i;
+// Leaked internal consignment notes that ride in on a lot title ("DO NOT LIST
+// IN AUCTION - PER Shaneeza/Wagner …"). These are private staff annotations,
+// never a public lot — filtered at both ingest paths so they can never reach
+// lots.json OR sold-archive.json, where a surface could render them verbatim.
+const GOLDIN_LEAK_NOTE = /\bdo not list\b|per shaneeza|per wagner|do not sell\b/i;
 
 const GOLDIN_GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|fight[- ]worn|tour[- ](used|worn)|warm[- ]?up[- ]worn|practice[- ]worn|game bat|game ball|photo[- ]?match(ed)?|mears\b)\b/i;
 const GOLDIN_TROPHY = /\b(trophy|award|championship ring|title belt|winners? medal|olympic medal|plaque|mvp\b|heisman|hall of fame ring|championship pendant)\b/i;
@@ -1419,8 +1424,10 @@ function goldinRoute(title: string): string | null {
   if (GOLDIN_CARD_MAKERS.test(t)) return 'blocked';     // never cards
   if (GOLDIN_EXCLUDE_GAMES.test(t)) return 'blocked';   // never video games
   if (GOLDIN_EXCLUDE_MISC.test(t)) return 'blocked';    // magazines, theme parks, props
-  // science first: an Apple-1 is science even in a sports house
-  if (/\b(apple[- ]?(1|i{1,3}|ii)|macintosh|steve jobs|wozniak|apple computer|commodore|ibm\b|altair|enigma)\b/.test(t)) return 'scientific-instruments';
+  // space first — Apollo/NASA artifacts head the science vertical's space slug
+  if (/\b(apollo|nasa|lunar|moon landing|astronaut|spacesuit|space suit|mercury (program|capsule)|gemini (program|capsule)|saturn v|cosmonaut|sputnik|space[- ]?flown)\b/.test(t)) return 'space-exploration';
+  // then computing/tech: an Apple-1 or a sealed iPhone is science even in a sports house
+  if (/\b(apple[- ]?(1|i{1,3}|ii)|iphone|ipod|macintosh|steve jobs|wozniak|apple computer|commodore|ibm\b|altair|enigma)\b/.test(t)) return 'scientific-instruments';
   if (/\b(meteorite|pallasite|tektite)\b/.test(t)) return 'meteorites';
   if (/\b(fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|amber with|t[- ]rex|raptor)\b/.test(t)) return 'fossils';
   // sports objects — a grading mark doesn't disqualify a real object
@@ -1440,6 +1447,22 @@ const GOLDIN_FACET_PASSES: { itemType: string; fallback: string | null }[] = [
   { itemType: 'Memorabilia', fallback: null }, // mixed — router only
 ];
 const GOLDIN_SCIENCE_QUERIES = ['apple computer', 'macintosh', 'steve jobs', 'fossil', 'meteorite', 'dinosaur', 'amber'];
+// RESULTS ARCHIVE — the buy page's `show_only:'Sold'` filter serves Goldin's
+// full sold history with realized prices (verified: Ohtani 50th-HR ball
+// current_price $3.6M × 1.22 premium = the $4.39M widely reported). These are
+// permanent facts; we pull them into lots.json as sold records. Game-Used and
+// Tickets are the clean, card-free sport buckets (~13k sold combined);
+// 'Awards and Trophies' returns 0 sold and 'Memorabilia' is 34k card-heavy —
+// both left to the live pass + router until they earn a dedicated gate.
+const GOLDIN_SOLD_PASSES: { label: string; scope: Record<string, unknown>; fallback: string | null }[] = [
+  // sport objects
+  { label: 'Game-Used', scope: { item_type: ['Game-Used Memorabilia'], category: ['Sport'] }, fallback: 'game-used' },
+  { label: 'Tickets', scope: { item_type: ['Tickets and Passes'], category: ['Sport'] }, fallback: 'tickets-passes' },
+  // science: NASA/space + Apple/computing (Collin's science sold sources)
+  { label: 'NASA', scope: { sub_category: ['NASA'], category: ['Non-Sport'] }, fallback: 'space-exploration' },
+  { label: 'iPhone', scope: { item_type: ['iPhone'], category: ['Non-Sport'] }, fallback: 'scientific-instruments' },
+  { label: 'Apple', scope: { item_type: ['Apple'], category: ['Non-Sport'] }, fallback: 'scientific-instruments' },
+];
 
 async function goldinQuery(body: object): Promise<{ lots: any[]; total: number }> {
   const res = await fetch(GOLDIN_API_V2, {
@@ -1456,12 +1479,11 @@ async function goldinQuery(body: object): Promise<{ lots: any[]; total: number }
   return { lots: j?.searchalgolia?.lots || [], total: j?.searchalgolia?.total || 0 };
 }
 
-// Goldin publishes no sold archive AND purges each lot from its live index the
-// instant its auction closes — so a completed auction serves ZERO lots (verified
-// against the API). The only way to log a final hammer is to track each live
-// lot's running bid and, when its auction flips to status 'Completed', promote
-// the last bid we saw to a sold record. This set carries the completed-auction
-// ids from the crawl to the merge/promotion step below.
+// Goldin's live index purges each lot the instant its auction closes, but the
+// buy page's show_only:'Sold' filter serves the full realized-price archive
+// (see GOLDIN_SOLD_PASSES) — that is the primary sold source. This set carries
+// the completed-auction ids to the merge as a SAME-CRAWL FALLBACK only, for the
+// freshest closes not yet in the sold index.
 let goldinCompletedAuctions = new Set<string>();
 // True only when the auctions-status fetch succeeded this run. When false the
 // merge must NOT touch tracked Goldin lots at all — with an empty Completed set
@@ -1477,6 +1499,12 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   const byId = new Map<string, AuctionLot>();
   console.log('  [Goldin] Fetching live auction lots (facet-driven: objects, never cards)...');
   let dropped = 0;
+  // Title-cleaner from the comps lib — strips a leaked-note prefix and the
+  // "Month DD, YYYY - " / "YYYY-YY - " date prefixes Goldin titles carry, so
+  // the stored title is the object, not the annotation. Imported here (not at
+  // module scope) to match the dynamic-import pattern the classification pass
+  // already uses for comps.
+  const { cleanGoldinTitle } = await import('../app/lib/comps');
 
   // ingest LIVE inventory only (upcoming, with the running bid + its auction id).
   // There is no ended branch on the live feed — sold is decided at merge time,
@@ -1487,6 +1515,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   const ingest = (lot: any, fallback: string | null) => {
     if (!lot.title || !lot.lot_id) return;
     const t = lot.title.toLowerCase();
+    if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return; }
     if (GOLDIN_CARD_MAKERS.test(t) || GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t)) { dropped++; return; }
     const routed = goldinRoute(lot.title);
     // 'blocked' is a hard exclusion (slab with no object signal, etc.) — the
@@ -1510,7 +1539,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     byId.set(lot.lot_id, {
       id: `goldin-${lot.lot_id}`,
       artist,
-      title: lot.title,
+      title: cleanGoldinTitle(lot.title),
       year: null, medium: null, dimensions: null,
       category: 'object',
       imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
@@ -1528,6 +1557,54 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       buyerPremium: bp,
       auctionId: lot.auction_id || undefined, // app type: string | undefined, never null
     } as unknown as AuctionLot);
+  };
+
+  // ingest a SOLD result (show_only:'Sold') — a permanent record at the
+  // realized price (winning bid + buyer's premium). Same gates as live; a
+  // zero-price row is unusable and skipped. Returns true when it logged one.
+  const ingestSold = (lot: any, fallback: string | null): boolean => {
+    if (!lot.title || !lot.lot_id) return false;
+    if (byId.has(lot.lot_id)) return false; // live pass or an earlier sold row won
+    const t = lot.title.toLowerCase();
+    if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return false; }
+    if (GOLDIN_CARD_MAKERS.test(t) || GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t)) { dropped++; return false; }
+    const routed = goldinRoute(lot.title);
+    if (routed === 'blocked') { dropped++; return false; }
+    const artist = routed || fallback;
+    if (!artist) { dropped++; return false; }
+    const bid = lot.current_price || 0;
+    if (bid <= 0) return false;
+    const bp = lot.buyer_premium || 22;
+    const end = lot.end_timestamp || lot.start_timestamp;
+    // Drop phantom future closes (a Goldin sold row dated 2050-01-01 slips
+    // through the archive feed). A "sold" record whose saleDate is more than a
+    // month out is bad data, not a realized sale — it would otherwise wear a
+    // fabricated "current quarter" in the realized series.
+    const endMs = new Date(end).getTime();
+    if (!isNaN(endMs) && endMs > Date.now() + 30 * 24 * 60 * 60 * 1000) { dropped++; return false; }
+    byId.set(lot.lot_id, {
+      id: `goldin-${lot.lot_id}`,
+      artist,
+      title: cleanGoldinTitle(lot.title),
+      year: null, medium: null, dimensions: null,
+      category: 'object',
+      imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
+      auctionHouse: 'Goldin',
+      saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
+      saleDate: end,
+      lotNumber: lot.lot_number || null,
+      estimateLow: null, estimateHigh: null,
+      priceUsd: Math.round(bid * (1 + bp / 100)), // realized: hammer + buyer's premium
+      priceBasis: 'goldin-final-bid',
+      currency: 'USD',
+      status: 'sold',
+      url: lot.meta_slug ? `https://goldin.co/item/${lot.meta_slug}` : 'https://goldin.co',
+      currentBid: bid,
+      bidCount: lot.number_of_bids || 0,
+      buyerPremium: bp,
+      auctionId: lot.auction_id || undefined,
+    } as unknown as AuctionLot);
+    return true;
   };
 
   // 1 · LIVE inventory — object facets + science keyword passes. A failed or
@@ -1563,12 +1640,38 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     }
   }
 
-  // 2 · COMPLETION — record which auctions have closed. Goldin purges a lot
-  // from lots_v2 the instant its auction completes (a completed auction serves
-  // zero lots — verified), so we can't fetch a final price after the fact. The
-  // merge step instead promotes each tracked lot's LAST bid to a hammer once its
-  // auction here flips to 'Completed'. That's the authoritative, time-based sold
-  // signal Ray uses — never a bid on a still-open lot.
+  // 2 · RESULTS ARCHIVE — show_only:'Sold' serves the full sold history with
+  // realized prices. Sold rows are permanent, so we pull DEEP once (the whole
+  // history) and a tail window daily. `Ending_Soonest` sorts oldest→newest, so
+  // the freshest closes sit at the tail (from ≈ total); the daily window reads
+  // just those. Skipping any lot already in byId keeps the live pass's own
+  // records authoritative.
+  let soldLogged = 0;
+  for (const pass of GOLDIN_SOLD_PASSES) {
+    try {
+      const scope = { queryType: 'Ending_Soonest', show_only: 'Sold', ...pass.scope };
+      const head = await goldinQuery({ ...scope, size: 1, from: 0 });
+      const total = head.total;
+      const windowN = DEEP ? total : 500; // daily: the last ~500 closes; DEEP: all of it
+      const start = Math.max(0, total - windowN);
+      for (let from = start; from < total; from += 100) {
+        const { lots } = await goldinQuery({ ...scope, size: 100, from });
+        if (!lots.length) break;
+        for (const l of lots) if (ingestSold(l, pass.fallback)) soldLogged++;
+        await sleep(400);
+      }
+    } catch (e) {
+      console.log(`  [Goldin] sold '${pass.label}' pass failed:`, e);
+    }
+  }
+  console.log(`  [Goldin] results archive: ${soldLogged} sold lots logged (${DEEP ? 'DEEP full-history' : 'daily tail window'})`);
+
+  // 3 · COMPLETION — a same-crawl fallback for the very freshest closes that
+  // haven't hit the sold index yet: record which auctions Goldin marks
+  // 'Completed' so the merge can promote a still-tracked lot's LAST bid to a
+  // sold record. The results archive above is the primary, authoritative source
+  // (true realized price); this only catches the tail between a lot's auction
+  // closing and its appearance under show_only:'Sold'. Never a bid on an open lot.
   try {
     const aRes = await fetch(GOLDIN_AUCTIONS_API, {
       method: 'POST',
@@ -1590,7 +1693,8 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     console.log('  [Goldin] auction-status fetch FAILED — promotion/eviction deferred to next run:', e);
   }
 
-  console.log(`  [Goldin] ${byId.size} live lots kept (${dropped} gated out)`);
+  const goldinSold = Array.from(byId.values()).filter(l => l.status === 'sold').length;
+  console.log(`  [Goldin] ${byId.size} lots kept — ${byId.size - goldinSold} live, ${goldinSold} sold results (${dropped} gated out)`);
   return Array.from(byId.values());
 }
 
@@ -2468,7 +2572,8 @@ async function main() {
   // Classify every lot. comps is imported once here (dynamically, matching
   // the buildUpcoming pattern) for the form/object-class work in this pass,
   // the watch filter below, and the W16 signal-scoped image check.
-  const { classifyForm, objectClassOf, computeDeepSignal } = await import('../app/lib/comps');
+  const { classifyForm, objectClassOf, computeDeepSignal, isSportsScienceObject, extractSportsTags } =
+    await import('../app/lib/comps');
   let categoryCounts: Record<string, number> = {};
   for (const lot of allLots) {
     lot.category = classifyLot(lot);
@@ -2479,6 +2584,22 @@ async function main() {
     // up the tag too; a stale tag is cleared if a lot reclassifies out.
     if (lot.category === 'object') lot.objectClass = objectClassOf(lot);
     else if (lot.objectClass) delete lot.objectClass;
+    // W2 — crawl-time sports/science tags (entity/objectType/eventKey/sportYear).
+    // Additive, gated on the sports/science object choke point, and mirrored on
+    // the objectClass cleanup: stamp when the lot qualifies, clear a stale tag
+    // when it reclassifies out. Short keys so the archive stays lean.
+    if (isSportsScienceObject(lot)) {
+      const tags = extractSportsTags(lot.title, lot.artist);
+      if (tags.entity !== undefined) lot.entity = tags.entity; else delete lot.entity;
+      if (tags.objectType !== undefined) lot.objectType = tags.objectType as AuctionLot['objectType']; else delete lot.objectType;
+      if (tags.eventKey !== undefined) lot.eventKey = tags.eventKey; else delete lot.eventKey;
+      if (tags.sportYear !== undefined) lot.sportYear = tags.sportYear; else delete lot.sportYear;
+    } else {
+      if (lot.entity !== undefined) delete lot.entity;
+      if (lot.objectType !== undefined) delete lot.objectType;
+      if (lot.eventKey !== undefined) delete lot.eventKey;
+      if (lot.sportYear !== undefined) delete lot.sportYear;
+    }
     categoryCounts[lot.category] = (categoryCounts[lot.category] || 0) + 1;
   }
   console.log(`[Ray] Category breakdown:`, categoryCounts);
@@ -2569,30 +2690,53 @@ async function main() {
     console.log(`[Ray] ${artist.displayName}: ${artistLots.length} lots, ${artistLots.filter(l => l.status === 'sold').length} sold`);
   }
 
-  // Write output — lots.json is minified (like upcoming.json): every
-  // first-visit client streams the whole file, so indentation is pure waste.
-  fs.writeFileSync(lotsPath, JSON.stringify(allLots));
+  // The eager payload + backtest run over the FULL in-memory corpus, BEFORE
+  // the payload split — so the sports/science sold-comp pool and the realized
+  // cohort see every Goldin sold row, not the truncated lots.json. Non-fatal:
+  // the CI workflow reruns both as their own steps, so a throw here must not
+  // take the crawl's lots.json down with it. Runs before the writes so a
+  // precompute pass (which stamps lot.soldComp in place) lands in the split.
+  try {
+    const { buildUpcoming } = await import('./build-upcoming');
+    buildUpcoming(DATA_DIR, allLots);
+  } catch (e) {
+    console.error('[Ray] buildUpcoming failed (crawl data intact):', e);
+  }
+  try {
+    const { buildBacktest } = await import('./build-backtest');
+    buildBacktest(DATA_DIR, allLots);
+  } catch (e) {
+    console.error('[Ray] buildBacktest failed (crawl data intact):', e);
+  }
+
+  // W3 · Payload split at write time. Goldin *sold* is ~35% of the corpus and
+  // no estimate engine ever reads it (signal/backtest/demand all require
+  // estimates Goldin never has), so it moves to a lazy sold-archive.json;
+  // lots.json keeps everything else (incl. Goldin *upcoming*). lots.json is
+  // minified (like upcoming.json): every first-visit client streams the whole
+  // file, so indentation is pure waste.
+  const isGoldinSold = (l: AuctionLot) => l.auctionHouse === 'Goldin' && l.status === 'sold';
+  const goldinSold = allLots.filter(isGoldinSold);
+  const mainLots = allLots.filter(l => !isGoldinSold(l));
+  const archivePath = path.join(DATA_DIR, 'sold-archive.json');
+  fs.writeFileSync(lotsPath, JSON.stringify(mainLots));
+  fs.writeFileSync(archivePath, JSON.stringify(goldinSold));
+  const mb = (p: string) => (fs.statSync(p).size / (1024 * 1024)).toFixed(2);
+  console.log(`[Ray] Payload split: lots.json ${mainLots.length} lots ${mb(lotsPath)}MB | sold-archive.json ${goldinSold.length} Goldin sold ${mb(archivePath)}MB`);
   fs.writeFileSync(statsPath, JSON.stringify(statsByArtist, null, 2));
   fs.writeFileSync(path.join(DATA_DIR, 'meta.json'), JSON.stringify({
     lastCrawl: new Date().toISOString(),
     artists: ARTISTS.map(a => ({ slug: a.slug, displayName: a.displayName })),
     // derived from the data so it never drifts as houses are added
     sources: Array.from(new Set(allLots.map(l => l.auctionHouse))).sort(),
+    // W4 · full-corpus totals so the home aggregate counts + Colophon read
+    // honest numbers without paying for the lazy sold-archive.json.
+    totalLots: allLots.length,
+    totalSold: allLots.filter(l => l.status === 'sold').length,
     version: 2,
   }, null, 2));
 
-  // The small eager payload (upcoming lots + precomputed signals + the tape)
-  // so the app paints before the full history downloads. Non-fatal: the CI
-  // workflow runs build-upcoming as its own step, so a throw here must not
-  // take the crawl's lots.json down with it.
-  try {
-    const { buildUpcoming } = await import('./build-upcoming');
-    buildUpcoming(DATA_DIR);
-  } catch (e) {
-    console.error('[Ray] buildUpcoming failed (crawl data intact):', e);
-  }
-
-  console.log(`\n[Ray] Done. ${allLots.length} total lots written.`);
+  console.log(`\n[Ray] Done. ${allLots.length} total lots written (${mainLots.length} main + ${goldinSold.length} archived).`);
 }
 
 main().catch(err => {

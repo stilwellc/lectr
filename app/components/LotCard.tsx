@@ -4,7 +4,7 @@ import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import Link from 'next/link';
 import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle } from '../utils';
+import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice } from '../utils';
 import ComparableModal from './ComparableModal';
 import { computeDeepSignal, FORM_LABEL } from '../lib/comps';
 
@@ -153,6 +153,12 @@ function LotCard({
     if (!isUpcoming) return null;
     return lotSignal(lot, allLots);
   }, [lot, allLots, isUpcoming]);
+
+  // The realized band precomputed at build time (soldCompBand over the full
+  // corpus). It rides on the lot like `signal` does, so the card grid never
+  // has to touch the 10MB sold-archive. It carries NO label and NO pct — it is
+  // descriptive only, and never lights the red/green call row.
+  const soldComp = lot.soldComp ?? null;
 
   const cardContent = (
     <div className="ray-lot-card ray-card-compact glass glass-quiet glass-noblur" style={{
@@ -343,6 +349,36 @@ function LotCard({
                 >
                   {confidenceMeter(buySignal.confidence).dots}
                 </span>
+              </span>
+            </div>
+          )}
+          {/* Goldin sports/science lots carry no estimate and no signal — no
+              red/green call is possible or honest. When a realized band exists
+              (>=3 comparable sold), show it as a NEUTRAL row: a description of
+              what similar objects have fetched, never a directional call. */}
+          {isUpcoming && !buySignal && soldComp && soldComp.n >= 3 && (
+            <div
+              className="ray-comprow"
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                flexWrap: 'wrap',
+                gap: 6,
+                fontSize: 12,
+                letterSpacing: '-0.01em',
+                color: 'var(--color-text-muted)',
+                marginBottom: 6,
+              }}
+            >
+              <span>
+                Similar sold {formatPrice(soldComp.low)}–{formatPrice(soldComp.high)} · median {formatPrice(soldComp.median)} · {soldComp.n} sales
+              </span>
+              <span
+                style={{ color: 'var(--color-text-faint)', letterSpacing: '0.06em' }}
+                title={`${confidenceMeter(soldComp.confidence).word} confidence`}
+                aria-label={`${confidenceMeter(soldComp.confidence).word} confidence`}
+              >
+                {confidenceMeter(soldComp.confidence).dots}
               </span>
             </div>
           )}
