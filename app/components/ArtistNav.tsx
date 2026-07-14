@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ARTISTS, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
@@ -10,6 +11,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   const [open, setOpen] = useState(false);
   const [lit, setLit] = useState(false);
   const [query, setQuery] = useState('');
+  // On phones the maker finder is a full-screen sheet (portaled to <body> to
+  // escape the nav's backdrop-filter containing block), not a cramped dropdown.
+  const [isMobile, setIsMobile] = useState(false);
   const router = useRouter();
   const { market } = useMarket();
   // Every "home" affordance resolves to the active market's lander — the
@@ -35,6 +39,22 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   const dropdownRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const on = () => setIsMobile(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+
+  // Lock the page behind the mobile sheet so the body doesn't scroll under it.
+  useEffect(() => {
+    if (!(open && isMobile)) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open, isMobile]);
+
   // Type-to-filter over the maker index. Group headers stay visible while
   // any of their makers match; empty groups drop out.
   const filteredGroups = useMemo(() => {
@@ -52,34 +72,101 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
 
   useEffect(() => {
     if (!open) return;
-    // Focus lands on the filter input — the menu is a finder now.
     setQuery('');
-    filterRef.current?.focus({ preventScroll: true });
     if (dropdownRef.current) dropdownRef.current.scrollTop = 0;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    function handleScroll() { setOpen(false); }
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setOpen(false);
         triggerRef.current?.focus();
       }
     }
-    document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
+    // Desktop dropdown: auto-focus the filter and close on outside-click / scroll.
+    // Mobile sheet: don't steal focus (no keyboard popping over the list) and
+    // let the scrim own dismissal — the sheet is portaled outside `ref`, so the
+    // outside-click test would fire on its own taps, and internal list scroll
+    // must not close it.
+    if (isMobile) {
+      return () => document.removeEventListener('keydown', handleKey);
+    }
+    filterRef.current?.focus({ preventScroll: true });
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function handleScroll() { setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   function navigate(path: string) {
     setOpen(false);
     router.push(path);
   }
+
+  // Shared finder pieces — the filter input and the grouped maker list — reused
+  // by the desktop dropdown and the mobile full-screen sheet.
+  const filterInput = (
+    <input
+      ref={filterRef}
+      className="ray-artist-dropdown-filter"
+      type="text"
+      value={query}
+      onChange={e => setQuery(e.target.value)}
+      placeholder="Filter makers…"
+      aria-label="Filter makers"
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          const first = filteredGroups[0]?.makers[0];
+          if (query.trim() && first) navigate(`/${first.slug}`);
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          dropdownRef.current
+            ?.querySelector<HTMLButtonElement>('.ray-artist-dropdown-item')
+            ?.focus({ preventScroll: true });
+        }
+      }}
+    />
+  );
+  const groupList = (
+    <>
+      {filteredGroups.length === 0 && (
+        <div className="ray-artist-dropdown-item" style={{ color: 'var(--color-text-faint)', cursor: 'default' }}>
+          No maker matches
+        </div>
+      )}
+      {filteredGroups.map(({ market: m, makers }) => (
+        <React.Fragment key={m.key}>
+          <button
+            role="menuitem"
+            className="ray-artist-dropdown-label"
+            onClick={() => navigate(MARKET_PATH[m.key])}
+          >
+            {m.label}
+          </button>
+          {makers.map(a => (
+            <button
+              key={a.slug}
+              role="menuitem"
+              className="ray-artist-dropdown-item"
+              data-active={activeSlug === a.slug ? 'true' : 'false'}
+              onClick={() => navigate(`/${a.slug}`)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <span>{a.label}</span>
+              {(upcomingCounts[a.slug] || 0) > 0 && (
+                <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
+              )}
+            </button>
+          ))}
+        </React.Fragment>
+      ))}
+    </>
+  );
 
   return (
     <>
@@ -265,6 +352,93 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-artist-dropdown-filter::placeholder { color: var(--color-text-faint); }
         @media (max-width: 768px) {
           .ray-artist-nav { top: 0; }
+          /* a real tap target for the trigger on phones */
+          .ray-artist-select-btn { min-height: 42px; font-size: 13px; }
+        }
+        /* Mobile maker finder — a full-screen sheet, portaled to body so it
+           escapes the nav backdrop-filter. Large rows, a big search field,
+           comfortable touch targets. NOTE: this block must stay free of
+           quotes, apostrophes and angle brackets (raw-text hydration). */
+        @keyframes rayScrimIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes raySheetIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+        .ray-maker-scrim {
+          position: fixed;
+          inset: 0;
+          z-index: 300;
+          background: rgba(6, 7, 9, 0.62);
+          -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+          animation: rayScrimIn 160ms var(--ease-signature) both;
+        }
+        .ray-maker-sheet {
+          position: fixed;
+          inset: 0;
+          z-index: 301;
+          display: flex;
+          flex-direction: column;
+          background: var(--color-bg);
+          animation: raySheetIn 240ms var(--ease-signature) both;
+        }
+        .ray-maker-sheet-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 18px calc(14px);
+          padding-top: calc(14px + env(safe-area-inset-top, 0px));
+          border-bottom: 1px solid var(--color-border);
+          flex: none;
+        }
+        .ray-maker-sheet-title {
+          font-family: var(--font-sans), sans-serif;
+          font-size: 17px;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+          color: var(--color-fg);
+        }
+        .ray-maker-sheet-close {
+          border: none;
+          background: none;
+          color: var(--color-up);
+          font-family: var(--font-sans), sans-serif;
+          font-size: 16px;
+          font-weight: 600;
+          padding: 8px 4px;
+          margin: -8px -4px;
+          min-height: 44px;
+          cursor: pointer;
+        }
+        .ray-maker-sheet .ray-artist-dropdown-filter {
+          position: static;
+          flex: none;
+          font-size: 16px;
+          padding: 15px 18px;
+          letter-spacing: 0;
+        }
+        .ray-maker-sheet-list {
+          flex: 1;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .ray-maker-sheet .ray-artist-dropdown-item {
+          font-size: 15px;
+          padding: 15px 20px;
+          min-height: 54px;
+          letter-spacing: 0;
+        }
+        .ray-maker-sheet .ray-artist-dropdown-label {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          font-size: 11.5px;
+          padding: 14px 20px 8px;
+          letter-spacing: 0.16em;
+          background: var(--color-bg);
+        }
+        .ray-maker-sheet .ray-artist-count {
+          font-size: 13px;
+          padding: 2px 9px;
         }
       `}</style>
 
@@ -314,59 +488,10 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           </span>
         </button>
 
-        {open && (
+        {open && !isMobile && (
           <div className="ray-artist-dropdown glass glass-noblur" role="menu" aria-label="Find a maker" ref={dropdownRef}>
-            <input
-              ref={filterRef}
-              className="ray-artist-dropdown-filter"
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Filter makers…"
-              aria-label="Filter makers"
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  const first = filteredGroups[0]?.makers[0];
-                  if (query.trim() && first) navigate(`/${first.slug}`);
-                } else if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  dropdownRef.current
-                    ?.querySelector<HTMLButtonElement>('.ray-artist-dropdown-item')
-                    ?.focus({ preventScroll: true });
-                }
-              }}
-            />
-            {filteredGroups.length === 0 && (
-              <div className="ray-artist-dropdown-item" style={{ color: 'var(--color-text-faint)', cursor: 'default' }}>
-                No maker matches
-              </div>
-            )}
-            {filteredGroups.map(({ market: m, makers }) => (
-              <React.Fragment key={m.key}>
-                <button
-                  role="menuitem"
-                  className="ray-artist-dropdown-label"
-                  onClick={() => navigate(MARKET_PATH[m.key])}
-                >
-                  {m.label}
-                </button>
-                {makers.map(a => (
-                  <button
-                    key={a.slug}
-                    role="menuitem"
-                    className="ray-artist-dropdown-item"
-                    data-active={activeSlug === a.slug ? 'true' : 'false'}
-                    onClick={() => navigate(`/${a.slug}`)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                  >
-                    <span>{a.label}</span>
-                    {(upcomingCounts[a.slug] || 0) > 0 && (
-                      <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
-                    )}
-                  </button>
-                ))}
-              </React.Fragment>
-            ))}
+            {filterInput}
+            {groupList}
           </div>
         )}
         </div>
@@ -413,6 +538,28 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
         </button>
       </nav>
+
+      {open && isMobile && typeof document !== 'undefined' && createPortal(
+        <div className="ray-maker-scrim" onClick={() => setOpen(false)} role="presentation">
+          <div
+            className="ray-maker-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Find a maker"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="ray-maker-sheet-head">
+              <span className="ray-maker-sheet-title">Find a maker</span>
+              <button className="ray-maker-sheet-close" onClick={() => setOpen(false)}>Done</button>
+            </div>
+            {filterInput}
+            <div className="ray-maker-sheet-list" ref={dropdownRef}>
+              {groupList}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <CommandK upcomingCounts={upcomingCounts} />
     </>
