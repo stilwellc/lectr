@@ -33,6 +33,19 @@ function Spark({ series }: { series: DemandPoint[] }) {
   );
 }
 
+// Each market's object, Airbnb-style: dimensional, instantly readable at
+// pill size. Apple's emoji renders ARE the reference aesthetic — crisper at
+// 18px than any photo cutout, zero asset pipeline. The pills themselves stay
+// uniform; the objects carry the color.
+const MARKET_EMOJI: Record<string, string> = {
+  all: '\u{1F3DB}\u{FE0F}',      // classical building — the auction house
+  art: '\u{1F5BC}\u{FE0F}',      // framed picture
+  design: '\u{1FA91}',            // chair
+  watches: '\u{231A}',            // watch
+  sports: '\u{1F3C6}',            // trophy — game-used, trophies, never cards
+  science: '\u{1F996}',           // T-rex — the fossils lead the vertical
+};
+
 export default function MarketSwitch({
   compact = false,
   lit = false,
@@ -61,7 +74,7 @@ export default function MarketSwitch({
             data-live={m.live}
             onClick={() => setMarket(m.key)}
           >
-            <MarketIcon market={m.key} size={14} />
+            <span className="ray-pill-obj" aria-hidden="true">{MARKET_EMOJI[m.key]}</span>
             {m.label}
             {!m.live && <span className="ray-market-soon">soon</span>}
           </button>

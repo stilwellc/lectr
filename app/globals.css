@@ -3393,16 +3393,26 @@ body {
 }
 .ray-markets-compact .ray-market-tab svg { opacity: 1; color: var(--pill-glyph, var(--color-text-secondary)); }
 .ray-markets-compact .ray-market-tab:hover { border-color: var(--pill-glyph, var(--color-text-secondary)); }
-/* five markets, five corners of the wheel — instantly tellable apart at a
-   glance (signal red and signal green remain data-only; none of these
-   inks approaches them): art violet · design burnt orange · watches azure
-   · sports pink · science cyan. Total market stays neutral white. */
-.ray-markets-compact .ray-market-tab[data-market=all] { --pill-ink: rgba(244, 245, 246, 0.12); --pill-glyph: #E8EAED; }
-.ray-markets-compact .ray-market-tab[data-market=art] { --pill-ink: rgba(167, 139, 250, 0.20); --pill-glyph: #B99CFF; }
-.ray-markets-compact .ray-market-tab[data-market=design] { --pill-ink: rgba(224, 122, 63, 0.20); --pill-glyph: #F09055; }
-.ray-markets-compact .ray-market-tab[data-market=watches] { --pill-ink: rgba(74, 168, 232, 0.20); --pill-glyph: #5FB8F5; }
-.ray-markets-compact .ray-market-tab[data-market=sports] { --pill-ink: rgba(224, 106, 168, 0.20); --pill-glyph: #F080BC; }
-.ray-markets-compact .ray-market-tab[data-market=science] { --pill-ink: rgba(53, 196, 215, 0.20); --pill-glyph: #4FD6E8; }
+/* Airbnb grammar: uniform quiet pills, the OBJECT carries the color — a
+   dimensional emoji render per market (crisper at this size than any photo
+   cutout). Micro-motion on hover/selection gives the pop; the active pill
+   stays the view's one lit white element. */
+.ray-pill-obj {
+  display: inline-block;
+  font-size: 17px;
+  line-height: 1;
+  transform-origin: 50% 80%;
+  transition: transform 180ms var(--ease-signature);
+}
+.ray-markets-compact .ray-market-tab:hover .ray-pill-obj { transform: scale(1.22) rotate(-6deg); }
+.ray-markets-compact .ray-market-tab[data-active=true] .ray-pill-obj { animation: lectrObjPop 340ms var(--ease-signature); }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes lectrObjPop {
+    0% { transform: scale(0.7); }
+    55% { transform: scale(1.28) rotate(-5deg); }
+    100% { transform: scale(1); }
+  }
+}
 /* active stays the lit white pill — ink yields to light */
 .ray-markets-compact .ray-market-tab[data-active=true] {
   background: linear-gradient(180deg, #FFFFFF, #DFE1E5);
