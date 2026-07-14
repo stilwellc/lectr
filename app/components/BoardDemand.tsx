@@ -115,9 +115,12 @@ export default function BoardDemand({
   // realized swaps the numeral/tick/scrub formatter to $; index shows the
   // rebased-100 level; estimate path is untouched (formatDemand, % Demand Index).
   const fmt = isIndex ? ((n: number) => Math.round(n).toString()) : isRealized ? formatRealized : formatDemand;
-  // 1Y default: the lit numeral IS the trailing-12-month claim the kicker
-  // makes — the chart shows the sentence. Max stays one click away.
-  const [range, setRange] = useState<Range>('1Y');
+  // 1Y default for the demand/realized boards: the lit numeral IS the
+  // trailing-12-month claim the kicker makes. The index/blend board defaults
+  // to the FULL history instead — a rebased price index only reads as a market
+  // when you can see its whole arc (like the analytics surface), not a 4-point
+  // stub that smooths to a featureless wave. The headline stays past-year.
+  const [range, setRange] = useState<Range>(mode === 'index' ? 'MAX' : '1Y');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
   const drawRef = useChartDraw();
 
@@ -145,15 +148,21 @@ export default function BoardDemand({
     return allLots.filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today).length;
   }, [allLots, hasIndex]);
 
+  // the index/blend board shows the full arc but headlines the past-year move
+  // (trailing 4 quarters), so the curve reads as a market while the numeral
+  // matches the analytics surface exactly ("+8% past year"), never the whole
+  // 6-year swing. Demand/realized keep their window-based reads.
+  const idxWin = isIndex ? series.slice(-5) : [];   // 5 pts → 4 quarters of change
+  const idxPct = isIndex && idxWin.length >= 2 && idxWin[0].value
+    ? Math.round((idxWin[idxWin.length - 1].value / idxWin[0].value - 1) * 100) : 0;
   // color says direction, never level. Realized keys on the YoY delta (the
-  // level is a $ price and must never be colored); estimate keeps its
-  // first-vs-last-of-window read byte-identically.
+  // level is a $ price and must never be colored); index keys on the past-year
+  // move; estimate keeps its first-vs-last-of-window read byte-identically.
   const dir = isRealized
     ? (delta ?? 0)
-    : (visible.length >= 2 ? visible[visible.length - 1].value - visible[0].value : 0);
-  // index change over the visible window, as a % of the window's first level
-  const idxPct = isIndex && visible.length >= 2 && visible[0].value
-    ? Math.round((visible[visible.length - 1].value / visible[0].value - 1) * 100) : 0;
+    : isIndex
+      ? idxPct
+      : (visible.length >= 2 ? visible[visible.length - 1].value - visible[0].value : 0);
   const lineColor = dir >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
   // the scrub chip's period context: the hovered quarter vs a year prior
@@ -223,7 +232,7 @@ export default function BoardDemand({
             : isIndex ? (
                 idxPct !== 0 && (
                   <span className={idxPct > 0 ? 'up' : 'down'}>
-                    {idxPct > 0 ? '▲' : '▼'} {idxPct > 0 ? '+' : ''}{idxPct}% {range === '1Y' ? 'past year' : `since ${visible[0]?.date}`}
+                    {idxPct > 0 ? '▲' : '▼'} {idxPct > 0 ? '+' : ''}{idxPct}% past year
                   </span>
                 )
               )
