@@ -291,7 +291,9 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                             fontSize={10.5}
                             letterSpacing="0.08em"
                           >
-                            {`RECORD ${formatAxis(record.highPrice)}`}
+                            {/* same formatPrice precision as the hero's record numeral —
+                                one fact, one rendering */}
+                            {`RECORD ${formatPrice(record.highPrice)}`}
                           </text>
                         </g>
                       )}

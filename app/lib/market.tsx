@@ -13,7 +13,7 @@ import { Market, MARKETS } from '../constants';
  */
 const KEY = 'ray-market';
 
-const MARKET_PATH: Record<Market, string> = {
+export const MARKET_PATH: Record<Market, string> = {
   all: '/',
   art: '/art',
   design: '/design',
@@ -57,9 +57,11 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     } catch { /* first visit */ }
   }, []);
 
-  // landing on /watches etc. remembers that as the choice
+  // landing on /watches etc. remembers that as the choice. Landing on /
+  // still DISPLAYS the total market (URL is truth for display) but no
+  // longer stomps the stored vertical choice.
   useEffect(() => {
-    if (urlMarket) {
+    if (urlMarket && urlMarket !== 'all') {
       setStored(urlMarket);
       try { localStorage.setItem(KEY, urlMarket); } catch { /* private mode */ }
     }

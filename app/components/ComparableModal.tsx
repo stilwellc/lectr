@@ -1,23 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle } from '../utils';
 import { areComparable, signalWithPool, FORM_LABEL } from '../lib/comps';
-
-function formatEstimate(lot: AuctionLot): string {
-  const fmt = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${n.toLocaleString()}`;
-  };
-  if (lot.estimateLow && lot.estimateHigh) {
-    return `${fmt(lot.estimateLow)}–${fmt(lot.estimateHigh)} ${lot.currency}`;
-  }
-  return 'Estimate on request';
-}
+// One formatter, one string: the card and the modal must print the same
+// estimate for the same lot (the modal's old local copy produced
+// "$500–$500 EUR" where the card said "$500 est.").
+import { formatEstimate } from './LotCard';
 
 /**
  * PriceBand — the decision picture. Every comparable sale plotted as a dot on
@@ -229,13 +222,35 @@ export default function ComparableModal({
   lot,
   allLots,
   onClose,
+  saved = false,
+  onToggleSave,
 }: {
   lot: AuctionLot;
   allLots: AuctionLot[];
   onClose: () => void;
+  saved?: boolean;
+  onToggleSave?: (lotId: string) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Bottom-sheet drag (under 900px): the handle tracks the finger, and a
+  // decisive pull down dismisses — the native sheet gesture.
+  const touchStartY = useRef<number | null>(null);
+  const [dragY, setDragY] = useState(0);
+  const onHandleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+  const onHandleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    setDragY(Math.max(0, dy));
+  };
+  const onHandleTouchEnd = () => {
+    if (dragY > 80) onClose();
+    else setDragY(0);
+    touchStartY.current = null;
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -390,7 +405,11 @@ export default function ComparableModal({
           height: 52px;
         }
         .comp-modal-price { text-align: right; }
-        @media (min-width: 769px) {
+        .comp-modal-maker:hover { text-decoration: underline !important; }
+        /* the sheet's drag handle only exists as a gesture surface on the
+           bottom-sheet presentation — desktop hides it */
+        .comp-modal-handle { display: none; }
+        @media (min-width: 901px) {
           .comp-modal-panel {
             align-self: center;
             border-radius: 20px;
@@ -398,7 +417,20 @@ export default function ComparableModal({
             max-height: calc(100vh - 40px);
           }
         }
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
+          .comp-modal-handle {
+            display: flex;
+            justify-content: center;
+            padding: 10px 0 2px;
+            touch-action: none;
+          }
+          .comp-modal-handle::before {
+            content: '';
+            width: 40px;
+            height: 4px;
+            border-radius: 100px;
+            background: var(--color-border-mid);
+          }
           .comp-modal-header { flex-direction: column !important; }
           .comp-modal-img { width: 100% !important; height: 180px !important; min-height: auto !important; }
           .comp-modal-header-info { padding: 20px 20px !important; }
@@ -413,14 +445,25 @@ export default function ComparableModal({
       <div
         ref={panelRef}
         onClick={e => e.stopPropagation()}
-        className="comp-modal-panel glass"
+        className="comp-modal-panel glass ray-sheet"
         role="dialog"
         aria-modal="true"
         aria-label={`Comparable sales for ${lot.title}`}
         style={{
           position: 'relative',
+          transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
+          transition: touchStartY.current === null ? 'transform 200ms var(--ease-signature)' : 'none',
         }}
       >
+        {/* Bottom-sheet drag handle — swipe down to dismiss (under 900px) */}
+        <div
+          className="comp-modal-handle"
+          aria-hidden="true"
+          onTouchStart={onHandleTouchStart}
+          onTouchMove={onHandleTouchMove}
+          onTouchEnd={onHandleTouchEnd}
+        />
+
         {/* Close button */}
         <button
           ref={closeBtnRef}
@@ -436,20 +479,56 @@ export default function ComparableModal({
             background: 'var(--color-bg-elevated)',
             border: '1px solid var(--color-border)',
             borderRadius: 100,
-            width: 32,
-            height: 32,
+            width: 44,
+            height: 44,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             color: 'var(--color-text-faint)',
-            fontSize: 16,
+            fontSize: 18,
             zIndex: 2,
             transition: 'color var(--duration-fast) var(--ease-signature)',
           }}
         >
           &times;
         </button>
+
+        {/* Save — a lot can be bookmarked without leaving the comps */}
+        {onToggleSave && (
+          <button
+            className="ray-save-btn"
+            onClick={() => onToggleSave(lot.id)}
+            aria-label={saved ? 'Remove from saved' : 'Save lot'}
+            style={{
+              position: 'sticky',
+              top: 12,
+              float: 'right',
+              marginRight: 8,
+              marginTop: 12,
+              background: saved ? 'var(--color-fg)' : 'var(--color-bg-elevated)',
+              border: saved ? 'none' : '1px solid var(--color-border)',
+              borderRadius: 100,
+              width: 44,
+              height: 44,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              padding: 0,
+              zIndex: 2,
+            }}
+          >
+            <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+              <path
+                d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+                fill={saved ? 'var(--color-bg)' : 'var(--color-text-faint)'}
+                stroke={saved ? 'var(--color-bg)' : 'var(--color-text-faint)'}
+                strokeWidth="0.8"
+              />
+            </svg>
+          </button>
+        )}
 
         {/* Header: image + lot info */}
         <div className="comp-modal-header" style={{
@@ -510,26 +589,39 @@ export default function ComparableModal({
               )}
             </div>
 
-            <div style={{
-              fontSize: 12,
-              letterSpacing: '-0.01em',
-              textTransform: 'none',
-              color: 'var(--color-text-muted)',
-              fontWeight: 600,
-              marginBottom: 4,
-            }}>
+            {/* the maker's own book — internal link; the house URL lives on
+                the "View lot" CTA only */}
+            <Link
+              href={`/${lot.artist}`}
+              className="comp-modal-maker"
+              onClick={e => e.stopPropagation()}
+              style={{
+                fontSize: 12,
+                letterSpacing: '-0.01em',
+                textTransform: 'none',
+                color: 'var(--color-text-muted)',
+                fontWeight: 600,
+                marginBottom: 4,
+                textDecoration: 'none',
+                alignSelf: 'flex-start',
+              }}
+            >
               {ARTIST_LABEL[lot.artist] || lot.artist}
-            </div>
+            </Link>
 
-            <h2 style={{
-              fontFamily: "var(--font-serif), serif",
-              fontSize: 22,
-              fontWeight: 400,
-              lineHeight: 1.25,
-              marginBottom: 4,
-            }}>
-              {craftTitle(lot.title)}
-            </h2>
+            {/* "Pablo Picasso / Pablo Picasso" — skip the title when it
+                merely repeats the maker line above it */}
+            {craftTitle(lot.title) !== (ARTIST_LABEL[lot.artist] || lot.artist) && (
+              <h2 style={{
+                fontFamily: "var(--font-serif), serif",
+                fontSize: 22,
+                fontWeight: 400,
+                lineHeight: 1.25,
+                marginBottom: 4,
+              }}>
+                {craftTitle(lot.title)}
+              </h2>
+            )}
 
             {lot.year && (
               <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 10 }}>

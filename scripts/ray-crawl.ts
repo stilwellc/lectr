@@ -1653,6 +1653,16 @@ async function crawlBonhams(artist: ArtistConfig): Promise<AuctionLot[]> {
 }
 
 function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
+  // W16 — resolve both ids BEFORE emitting: a missing auctionId interpolates
+  // into the URL as "auction/undefined/" (legacy records: "auction//") and a
+  // missing/zero lotId ends it "lot/0" — both 404 on bonhams.com. The same
+  // ids also form the composite lot id, so an unresolved record can't be
+  // deduped either. Never emit an unlinkable lot; a flag on a dead link is a
+  // lie the publish-time guard below would have to catch anyway.
+  const auctionId = doc.auctionId ?? doc.auction_id ?? doc.auction?.id ?? null;
+  const lotId = doc.lotId ?? doc.lot_id ?? doc.id ?? null;
+  if (!auctionId || !lotId) return null;
+
   const rawTitle = doc.title || '';
   // Extract a clean title from styledDescription if available
   let title = rawTitle;
@@ -1756,10 +1766,10 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
   else if (auctionEnded) status = 'bought_in';
 
   const imageUrl = doc.image?.url || null;
-  const lotUrl = `https://www.bonhams.com/auction/${doc.auctionId}/lot/${doc.lotId}`;
+  const lotUrl = `https://www.bonhams.com/auction/${auctionId}/lot/${lotId}`;
 
   return {
-    id: `bonhams-${doc.auctionId}-${doc.lotId}`,
+    id: `bonhams-${auctionId}-${lotId}`,
     artist: artistSlug,
     title,
     year,
@@ -2352,6 +2362,15 @@ async function main() {
   // fields the fresh list-page copy lacks (medium/dims/year/image are facts
   // about the object; wiping them re-burns the enrich budget on the same lots
   // forever). Fresh always wins for price/status/bid fields via the spread.
+  //
+  // firstSeen (W15): lotMap is seeded from the previous lots.json, so `prev`
+  // is undefined exactly when an id has never been seen before — those get
+  // stamped with today's ISO date. Previously-seen ids carry their stamp
+  // forward from the prior record (crawlers never set firstSeen on fresh
+  // copies, so without the carry the spread would wipe it every run). Lots
+  // that predate the feature stay unstamped — they were not new when first
+  // observed, and a fabricated date would be a lie ("New today" must mean it).
+  const todayIso = new Date().toISOString().split('T')[0];
   const lotMap = new Map<string, AuctionLot>();
   for (const lot of existingLots) lotMap.set(lot.id, lot);
   for (const lot of freshLots) {
@@ -2362,7 +2381,8 @@ async function main() {
       dimensions: lot.dimensions ?? prev.dimensions,
       year: lot.year ?? prev.year,
       imageUrl: lot.imageUrl ?? prev.imageUrl,
-    } : lot);
+      firstSeen: prev.firstSeen,
+    } : { ...lot, firstSeen: todayIso });
   }
 
   // Clean up stale/bad entries
@@ -2445,10 +2465,20 @@ async function main() {
   // Enrich lots missing medium/dimensions/year from detail pages
   await enrichLots(allLots);
 
-  // Classify every lot
+  // Classify every lot. comps is imported once here (dynamically, matching
+  // the buildUpcoming pattern) for the form/object-class work in this pass,
+  // the watch filter below, and the W16 signal-scoped image check.
+  const { classifyForm, objectClassOf, computeDeepSignal } = await import('../app/lib/comps');
   let categoryCounts: Record<string, number> = {};
   for (const lot of allLots) {
     lot.category = classifyLot(lot);
+    // W17 — object-class tag for the watch-maker ambiguity (a Cartier
+    // Panthère ring is jewelry, not a watch): stamped on 'object' lots so
+    // vertical pools and pickCall can gate without re-deriving forms
+    // client-side. Runs over the whole merged set, so archive records pick
+    // up the tag too; a stale tag is cleared if a lot reclassifies out.
+    if (lot.category === 'object') lot.objectClass = objectClassOf(lot);
+    else if (lot.objectClass) delete lot.objectClass;
     categoryCounts[lot.category] = (categoryCounts[lot.category] || 0) + 1;
   }
   console.log(`[Ray] Category breakdown:`, categoryCounts);
@@ -2460,7 +2490,6 @@ async function main() {
   // watch/clock or its text names a watch (movement, ref, a Cartier watch
   // line, etc). Everything without a watch signal is dropped.
   const WATCH_MAKERS = new Set(['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier']);
-  const { classifyForm } = await import('../app/lib/comps');
   const HOROLOGY = new Set(['wristwatch', 'pocket-watch', 'clock']);
   const WATCH_SIGNAL = /watch|montre|chronograph|chronometer|chronometre|tourbillon|calibre|caliber|\bref\.?\b|reference|automatic|self-?winding|manual wind|movement|\bdial\b|perpetual|minute repeat|moonphase|moon phase|day-?date|tank|santos|panth|ballon|pasha|tortue|baignoire|\bronde\b|roadster|\bdrive\b|cloche|oyster|cosmograph|datejust|submariner|seamaster|speedmaster|constellation|nautilus|aquanaut|calatrava|royal oak|cellini|de ville|must de|must 21|jaeger|reverso/i;
   const beforeWatch = allLots.length;
@@ -2474,6 +2503,63 @@ async function main() {
   }
   allLots.length = 0;
   allLots.push(...keptLots);
+
+  // ── W16 · dead-link guard (publish-time backstop) ──
+  // Catches URLs that predate the parse-time id resolution above: an empty/
+  // undefined auction segment ("auction//", "auction/undefined/") or a
+  // lot/0 tail 404s at the house. Upcoming lots are DROPPED — a bid link
+  // that can't be followed is not intelligence, and a flag must never sit on
+  // a dead link. Sold/bought-in records are the permanent archive and are
+  // never evicted here — their link is repaired to the house origin (a live
+  // page) instead.
+  const DEAD_URL = /auction\/(?:\/|undefined\/|null\/)|\/lot\/(?:0|undefined|null)(?:[/?#]|$)/;
+  let deadDropped = 0, deadRepaired = 0;
+  const linkedLots = allLots.filter(lot => {
+    if (!lot.url || !DEAD_URL.test(lot.url)) return true;
+    if (lot.status === 'upcoming') { deadDropped++; return false; }
+    try { lot.url = new URL(lot.url).origin; deadRepaired++; } catch { /* unparsable — keep the record as-is */ }
+    return true;
+  });
+  if (deadDropped || deadRepaired) {
+    console.log(`[Ray] Dead-link guard: dropped ${deadDropped} upcoming lots, repaired ${deadRepaired} archive URLs`);
+    allLots.length = 0;
+    allLots.push(...linkedLots);
+  }
+
+  // ── W16 · image liveness, scoped to signal-bearing lots ──
+  // SCOPE (deliberate): only UPCOMING lots that would carry a Below/Above
+  // Market flag are probed — those are the images the flag counts and the
+  // call surfaces stand on, and they run a few dozen per crawl. A full-corpus
+  // check would add minutes of network time for lots nothing renders. HEAD
+  // only, small concurrency, hard wall-clock budget so a stalled CDN can't
+  // eat the CI window. Only a definitive 404/410 clears imageUrl — timeouts,
+  // 403s and HEAD-rejecting CDNs are inconclusive, and absence of proof must
+  // never strip a live image (data honesty applies to absence too).
+  const IMG_CONCURRENCY = 6;
+  const IMG_BUDGET_MS = 90_000;
+  const flaggedLots = allLots.filter(l =>
+    l.status === 'upcoming' && l.imageUrl && computeDeepSignal(l, allLots) !== null);
+  if (flaggedLots.length > 0) {
+    console.log(`[Ray] Image check: probing ${flaggedLots.length} flagged upcoming lots (HEAD, ${IMG_CONCURRENCY}-wide)...`);
+    const imgStart = Date.now();
+    let imgCursor = 0, imgCleared = 0;
+    const probe = async () => {
+      while (imgCursor < flaggedLots.length && Date.now() - imgStart < IMG_BUDGET_MS) {
+        const lot = flaggedLots[imgCursor++];
+        try {
+          const res = await fetch(lot.imageUrl!, {
+            method: 'HEAD',
+            headers: { 'User-Agent': UA },
+            redirect: 'follow',
+            signal: AbortSignal.timeout(5000),
+          });
+          if (res.status === 404 || res.status === 410) { lot.imageUrl = null; imgCleared++; }
+        } catch { /* inconclusive — keep the image */ }
+      }
+    };
+    await Promise.all(Array.from({ length: IMG_CONCURRENCY }, probe));
+    console.log(`[Ray] Image check: cleared ${imgCleared} dead image URLs in ${Math.round((Date.now() - imgStart) / 1000)}s`);
+  }
 
   // Compute per-artist stats
   const statsByArtist: Record<string, MarketStats> = {};

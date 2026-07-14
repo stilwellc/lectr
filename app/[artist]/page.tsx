@@ -1,17 +1,19 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ARTISTS, ARTIST_LABEL } from '../constants';
+import { ARTISTS, ARTIST_LABEL, marketOf } from '../constants';
 import type { LotCategory } from '../types';
 import { useRayData, retryFullLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
+import { useMarket } from '../lib/market';
 import { getUpcomingCounts, formatDate } from '../utils';
 
 import ArtistNav from '../components/ArtistNav';
 import ArtistHero from '../components/ArtistHero';
+import MarketSwitch from '../components/MarketSwitch';
 import UpcomingLots from '../components/UpcomingLots';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -25,10 +27,26 @@ export default function ArtistDetailPage() {
   const slug = params.artist as string;
   const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache } = useRayData();
   const { toggle, savedIds } = useSavedLots();
+  const { setMarket } = useMarket();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
   const label = ARTIST_LABEL[slug];
   const valid = ARTISTS.some(a => a.slug === slug);
+
+  // A maker page IS its market: the switch under the nav lights the maker's
+  // vertical, and the choice persists like landing on the vertical would.
+  useEffect(() => {
+    if (valid) setMarket(marketOf(slug));
+    // once per maker — the user may still flip the switch afterwards
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, valid]);
+
+  // Saves made here carry their baseline (est mid, signal, bids) so /saved
+  // can say what changed since.
+  const toggleWithLot = useCallback(
+    (id: string) => toggle(id, allLots.find(l => l.id === id)),
+    [toggle, allLots]
+  );
 
   const stats = statsByArtist[slug] || null;
   // memoized on [allLots, slug]: the 32k filter + sort must not re-run on
@@ -79,6 +97,18 @@ export default function ArtistDetailPage() {
         </div>
       ) : (
         <>
+          {/* The hero is un-gated: it paints from phase-1 statsByArtist the
+              moment the stats land — the 32k archive only gates the lot-level
+              sections below. */}
+          <RayEntrance animate={!fromCache}>
+            <div className="rail ray-enter" style={{ paddingTop: 16 }}>
+              <MarketSwitch compact />
+            </div>
+            <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
+              <ArtistHero label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} />
+            </div>
+          </RayEntrance>
+
           {!fullLoaded ? (
             fullError ? (
               // phase 2 (the full archive) failed after retries — say so and
@@ -105,9 +135,6 @@ export default function ArtistDetailPage() {
             )
           ) : (
             <RayEntrance animate={!fromCache}>
-              <div className="ray-enter">
-                <ArtistHero label={label} stats={stats} lots={lots} />
-              </div>
               {sold.length > 0 && (
                 <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
                   <PriceChart
@@ -121,15 +148,17 @@ export default function ArtistDetailPage() {
                 </div>
               )}
               {upcoming.length > 0 && (
-                <UpcomingLots
-                  lots={upcoming}
-                  allLots={allLots}
-                  stats={stats || undefined}
-                  savedIds={savedIds}
-                  onToggleSave={toggle}
-                  mark="02"
-                  enterDelay={180}
-                />
+                <div id="upcoming">
+                  <UpcomingLots
+                    lots={upcoming}
+                    allLots={allLots}
+                    stats={stats || undefined}
+                    savedIds={savedIds}
+                    onToggleSave={toggleWithLot}
+                    mark="02"
+                    enterDelay={180}
+                  />
+                </div>
               )}
               {sold.length > 0 && (
                 <div className="ray-enter" style={{ '--enter-delay': '270ms' } as React.CSSProperties}>
@@ -138,7 +167,7 @@ export default function ArtistDetailPage() {
                     categoryFilter={categoryFilter}
                     onCategoryChange={setCategoryFilter}
                     savedIds={savedIds}
-                    onToggleSave={toggle}
+                    onToggleSave={toggleWithLot}
                     mark="03"
                   />
                 </div>

@@ -1,14 +1,20 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
+import { ARTISTS, MARKETS } from '../constants';
+import { useMarket, MARKET_PATH } from '../lib/market';
 import CommandK from './CommandK';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
   const [lit, setLit] = useState(false);
+  const [query, setQuery] = useState('');
   const router = useRouter();
+  const { market } = useMarket();
+  // Every "home" affordance resolves to the active market's lander — the
+  // watches user who bounces home never sees Picasso unless she asks.
+  const homePath = MARKET_PATH[market] || '/';
 
   // The switch-on ritual — once per session the mark warms from dim to full.
   // Client-only: sessionStorage guard, class added after mount so SSR markup
@@ -27,30 +33,29 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLInputElement>(null);
 
-  const activeLabel = activeSlug === 'saved'
-    ? `Saved${savedCount > 0 ? ` (${savedCount})` : ''}`
-    : activeSlug === 'analytics'
-      ? 'Analytics'
-      : activeSlug === 'value'
-      ? 'Value'
-      : activeSlug === 'artists'
-      ? 'Makers'
-      : activeSlug
-        ? (ARTIST_LABEL[activeSlug] || activeSlug)
-        : 'Overview';
+  // Type-to-filter over the maker index. Group headers stay visible while
+  // any of their makers match; empty groups drop out.
+  const filteredGroups = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return MARKETS
+      .filter(m => m.live && m.key !== 'all')
+      .map(m => ({
+        market: m,
+        makers: ARTISTS.filter(a =>
+          a.market === m.key && (!needle || a.label.toLowerCase().includes(needle))
+        ),
+      }))
+      .filter(g => g.makers.length > 0);
+  }, [query]);
 
   useEffect(() => {
     if (!open) return;
-    // Move focus into the menu — land on the active item (or the first one).
-    // preventScroll keeps the window from moving; scroll the menu container instead.
-    const item =
-      dropdownRef.current?.querySelector<HTMLButtonElement>('.ray-artist-dropdown-item[data-active="true"]') ||
-      dropdownRef.current?.querySelector<HTMLButtonElement>('.ray-artist-dropdown-item');
-    if (item && dropdownRef.current) {
-      item.focus({ preventScroll: true });
-      dropdownRef.current.scrollTop = Math.max(0, item.offsetTop - 48);
-    }
+    // Focus lands on the filter input — the menu is a finder now.
+    setQuery('');
+    filterRef.current?.focus({ preventScroll: true });
+    if (dropdownRef.current) dropdownRef.current.scrollTop = 0;
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
@@ -219,6 +224,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           border: none;
         }
         .ray-artist-dropdown-label {
+          display: block;
+          width: 100%;
           padding: 8px 16px 4px;
           font-family: var(--font-sans), sans-serif;
           font-size: 12px;
@@ -226,15 +233,43 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           letter-spacing: 0.15em;
           text-transform: uppercase;
           color: var(--color-text-faint);
+          border: none;
           border-bottom: 1px solid var(--color-border);
+          background: transparent;
+          text-align: left;
+          cursor: pointer;
+          transition: background var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature);
         }
+        .ray-artist-dropdown-label:hover,
+        .ray-artist-dropdown-label:focus-visible {
+          background: var(--color-hover-item);
+          color: var(--color-fg);
+        }
+        .ray-artist-dropdown-filter {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          display: block;
+          width: 100%;
+          padding: 10px 16px;
+          font-family: var(--font-sans), sans-serif;
+          font-size: 12px;
+          font-weight: 500;
+          letter-spacing: 0.04em;
+          color: var(--color-fg);
+          background: var(--color-bg-elevated);
+          border: none;
+          border-bottom: 1px solid var(--color-border);
+          outline: none;
+        }
+        .ray-artist-dropdown-filter::placeholder { color: var(--color-text-faint); }
         @media (max-width: 768px) {
           .ray-artist-nav { top: 0; }
         }
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
-        <a href="/" className="ray-wordmark" aria-label="lectr — home">
+        <a href={homePath} className="ray-wordmark" aria-label="lectr — home">
           {/* the script mark stands alone — the mark IS the name; its upward tilt is intentional */}
           <img className={`ray-mark-r${lit ? ' lectr-on' : ''}`} src="/brand/lectr-nav.png" alt="lectr" />
         </a>
@@ -242,7 +277,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         {/* Desktop quick links — one click to each room; the dropdown stays
             the artist index. Hidden on mobile where the dropdown covers all. */}
         <nav className="ray-nav-links" aria-label="Sections">
-          <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate('/')}>Overview</button>
+          <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>Overview</button>
           <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
           <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
@@ -263,7 +298,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           aria-label="Open jump palette (Command K)"
           onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
         >
-          &#8984;K
+          Search &#8984;K
         </button>
 
         <div className="ray-artist-select-wrap">
@@ -273,9 +308,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           onClick={() => setOpen(o => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={`Navigate lectr — currently: ${activeLabel}`}
         >
-          <span>{activeLabel}</span>
+          <span>Find a maker</span>
           <span style={{
             fontSize: 12,
             opacity: 0.4,
@@ -287,51 +321,42 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         </button>
 
         {open && (
-          <div className="ray-artist-dropdown glass glass-noblur" role="menu" aria-label="Navigate lectr" ref={dropdownRef}>
-            <button
-              role="menuitem"
-              className="ray-artist-dropdown-item"
-              data-active={activeSlug === null ? 'true' : 'false'}
-              onClick={() => navigate('/')}
-            >
-              Overview
-            </button>
-            <button
-              role="menuitem"
-              className="ray-artist-dropdown-item"
-              data-active={activeSlug === 'value' ? 'true' : 'false'}
-              onClick={() => navigate('/value')}
-            >
-              Value
-            </button>
-            <button
-              role="menuitem"
-              className="ray-artist-dropdown-item"
-              data-active={activeSlug === 'artists' ? 'true' : 'false'}
-              onClick={() => navigate('/artists')}
-            >
-              Artists
-            </button>
-            <button
-              role="menuitem"
-              className="ray-artist-dropdown-item"
-              data-active={activeSlug === 'saved' ? 'true' : 'false'}
-              onClick={() => navigate('/saved')}
-            >
-              Saved{savedCount > 0 ? ` (${savedCount})` : ''}
-            </button>
-            <button
-              role="menuitem"
-              className="ray-artist-dropdown-item"
-              data-active={activeSlug === 'analytics' ? 'true' : 'false'}
-              onClick={() => navigate('/analytics')}
-            >
-              Analytics
-            </button>
-            {MARKETS.filter(m => m.live && m.key !== 'all').map(m => (
+          <div className="ray-artist-dropdown glass glass-noblur" role="menu" aria-label="Find a maker" ref={dropdownRef}>
+            <input
+              ref={filterRef}
+              className="ray-artist-dropdown-filter"
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Filter makers…"
+              aria-label="Filter makers"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const first = filteredGroups[0]?.makers[0];
+                  if (query.trim() && first) navigate(`/${first.slug}`);
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  dropdownRef.current
+                    ?.querySelector<HTMLButtonElement>('.ray-artist-dropdown-item')
+                    ?.focus({ preventScroll: true });
+                }
+              }}
+            />
+            {filteredGroups.length === 0 && (
+              <div className="ray-artist-dropdown-item" style={{ color: 'var(--color-text-faint)', cursor: 'default' }}>
+                No maker matches
+              </div>
+            )}
+            {filteredGroups.map(({ market: m, makers }) => (
               <React.Fragment key={m.key}>
-                <div className="ray-artist-dropdown-label" role="presentation">{m.label}</div>
-                {ARTISTS.filter(a => a.market === m.key).map(a => (
+                <button
+                  role="menuitem"
+                  className="ray-artist-dropdown-label"
+                  onClick={() => navigate(MARKET_PATH[m.key])}
+                >
+                  {m.label}
+                </button>
+                {makers.map(a => (
                   <button
                     key={a.slug}
                     role="menuitem"
@@ -359,7 +384,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           nav would otherwise become the containing block for position:fixed
           and pin the bar to the top. */}
       <nav className="ray-tabbar" aria-label="Sections">
-        <button className="ray-tab" data-active={activeSlug === null} onClick={() => navigate('/')}>
+        <button className="ray-tab" data-active={activeSlug === null} onClick={() => navigate(homePath)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M3 16l5-6 4 4 6-8" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M3 21h18" strokeLinecap="round" />

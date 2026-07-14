@@ -25,10 +25,14 @@ export default function ArtistHero({
   label,
   stats,
   lots,
+  upcomingCount,
 }: {
   label: string;
   stats: MarketStats | null;
   lots: AuctionLot[];
+  /** the page's date-filtered live-lot count — the ONE number that must
+      equal the cards actually rendered in the Upcoming section below */
+  upcomingCount?: number;
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
@@ -83,9 +87,13 @@ export default function ArtistHero({
     const soldCount = concluded.filter(l => l.status === 'sold').length;
     const sellThrough = concluded.length >= 5 ? Math.round((soldCount / concluded.length) * 100) : null;
     const houses = new Set(lots.map(l => l.auctionHouse)).size;
-    const upcoming = lots.filter(l => l.status === 'upcoming').length;
-    return { sellThrough, houses, upcoming, total: lots.length };
+    return { sellThrough, houses, total: lots.length };
   }, [lots]);
+
+  // The live-lot count comes from the page (date-filtered, the same list the
+  // Upcoming section renders) — never a stale status count. The internal
+  // fallback survives only for callers that pass no count.
+  const liveCount = upcomingCount ?? lots.filter(l => l.status === 'upcoming').length;
 
   const recordYear = stats?.recordDate ? new Date(stats.recordDate).getUTCFullYear() : null;
   const lensWord = lens === 'original' ? 'unique work' : lens === 'print' ? 'edition' : 'sale';
@@ -117,7 +125,14 @@ export default function ArtistHero({
         <span className="ctx">
           {typicalSale !== null && <>typical {lensWord} {formatPrice(typicalSale)}</>}
           {stats?.recordPrice ? <> · record {formatPrice(stats.recordPrice)}{recordYear ? ` (${recordYear})` : ''}</> : null}
-          {facts.upcoming > 0 && <> · {facts.upcoming} live {facts.upcoming === 1 ? 'lot' : 'lots'}</>}
+          {liveCount > 0 && (
+            <>
+              {' · '}
+              <a href="#upcoming" style={{ color: 'inherit', textDecorationColor: 'var(--color-border-mid)', textUnderlineOffset: 3 }}>
+                {liveCount} live {liveCount === 1 ? 'lot' : 'lots'}
+              </a>
+            </>
+          )}
         </span>
       </p>
 
@@ -218,7 +233,11 @@ export default function ArtistHero({
         <div>
           <div className="ray-strip-k">Lots tracked</div>
           <div className="ray-strip-v"><CountUp to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} /></div>
-          <div className="ray-strip-s">{facts.upcoming} live right now</div>
+          <div className="ray-strip-s">
+            {liveCount > 0
+              ? <a href="#upcoming" style={{ color: 'inherit', textDecorationColor: 'var(--color-border-mid)', textUnderlineOffset: 3 }}>{liveCount} live right now</a>
+              : `${liveCount} live right now`}
+          </div>
         </div>
         <div>
           <div className="ray-strip-k">Auction houses</div>

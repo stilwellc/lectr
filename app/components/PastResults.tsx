@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { AuctionLot } from '../types';
 import type { LotCategory } from '../types';
 import { ARTIST_LABEL } from '../constants';
@@ -96,6 +97,9 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           transition: background var(--duration-fast) var(--ease-signature);
         }
         .ray-result-row:hover { background: var(--color-hover-item); }
+        .ray-result-maker { position: relative; z-index: 2; }
+        .ray-result-maker:hover { text-decoration: underline; }
+        .ray-result-row .ray-save-btn { width: 32px; height: 32px; }
         .ray-sort-pill {
           font-family: var(--font-sans), sans-serif;
           font-size: 12px;
@@ -129,6 +133,10 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
             padding: 14px 16px;
           }
           .ray-result-badges { display: none; }
+        }
+        @media (max-width: 900px) {
+          /* 44px touch target on the save control */
+          .ray-result-row .ray-save-btn { width: 44px; height: 44px; }
         }
       `}</style>
 
@@ -202,6 +210,11 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         {shown.map((lot, i) => {
           const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
           const catColor = (lot.category && lot.category !== 'unknown') ? categoryColors[lot.category] : null;
+          const makerLabel = lot.artist ? (ARTIST_LABEL[lot.artist] || lot.artist) : '';
+          const titleText = craftTitle(lot.title);
+          // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the
+          // maker label and the maker line renders, say it once
+          const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;
           return (
             <div
               key={lot.id}
@@ -220,28 +233,39 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               />
               <div style={{ minWidth: 0 }}>
                 {showArtist && lot.artist && (
-                  <div style={{
-                    fontSize: 12,
-                    letterSpacing: '-0.01em',
-                    textTransform: 'none',
-                    color: 'var(--color-text-muted)',
-                    fontWeight: 600,
-                    marginBottom: 2,
-                  }}>
-                    {ARTIST_LABEL[lot.artist] || lot.artist}
+                  <div style={{ marginBottom: 2 }}>
+                    {/* the maker's own book — an internal link above the
+                        stretched house anchor (which keeps the title/CTA) */}
+                    <Link
+                      href={`/${lot.artist}`}
+                      className="ray-result-maker"
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        fontSize: 12,
+                        letterSpacing: '-0.01em',
+                        textTransform: 'none',
+                        color: 'var(--color-text-muted)',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      {makerLabel}
+                    </Link>
                   </div>
                 )}
-                <div style={{
-                  fontFamily: "var(--font-serif), serif",
-                  fontSize: 17,
-                  fontWeight: 400,
-                  lineHeight: 1.3,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>
-                  {craftTitle(lot.title)}
-                </div>
+                {!titleDupesMaker && (
+                  <div style={{
+                    fontFamily: "var(--font-serif), serif",
+                    fontSize: 17,
+                    fontWeight: 400,
+                    lineHeight: 1.3,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    {titleText}
+                  </div>
+                )}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -331,8 +355,6 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   className="ray-save-btn"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id); }}
                   style={{
-                    width: 32,
-                    height: 32,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

@@ -37,7 +37,9 @@ export default function BoardDemand({
   /** optional — when absent the pane stays chart-pure and the ledger renders elsewhere */
   ledger?: LedgerItem[];
 }) {
-  const [range, setRange] = useState<Range>('MAX');
+  // 1Y default: the lit numeral IS the trailing-12-month claim the kicker
+  // makes — the chart shows the sentence. Max stays one click away.
+  const [range, setRange] = useState<Range>('1Y');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
   const drawRef = useChartDraw();
 
@@ -80,7 +82,7 @@ export default function BoardDemand({
     <div className="ray-board-demand" data-tone={dir >= 0 ? 'up' : 'down'}>
       <div className="ray-demand-head">
         <span className="ray-demand-label">
-          <span>The {marketLabel} market · typical sale vs its estimate, trailing 12 months</span>
+          <span>Every lot at auction, called against its true comps · the {marketLabel} market, trailing 12 months</span>
           <MethodologyNote trigger="what is this?" />
         </span>
         <span className="ray-ranges2" role="radiogroup" aria-label="Chart range">
@@ -150,8 +152,8 @@ export default function BoardDemand({
         <div
           key={range}
           ref={drawRef}
-          className="ray-chartfade ray-chart-draw"
-          style={{ height: 320, marginTop: 6 }}
+          className="ray-chartfade ray-chart-draw ray-demand-chartbox"
+          style={{ marginTop: 6 }}
           onMouseLeave={() => setHover(null)}
         >
           <ResponsiveContainer width="100%" height="100%">
@@ -175,7 +177,13 @@ export default function BoardDemand({
               <XAxis
                 dataKey="date"
                 tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }}
-                tickFormatter={(d: string) => d.split(' ')[0]}
+                tickFormatter={(d: string, i: number) => {
+                  // "2026 Q2" ticks: within a 1Y window every tick shares the
+                  // year, so bare years print "2026 2026 2026" — lead with the
+                  // year once, then quarters carry the axis.
+                  const [y, q] = d.split(' ');
+                  return i === 0 || !q ? y : q;
+                }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"

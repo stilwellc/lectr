@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ARTISTS, ARTIST_LABEL, MARKETS, marketArtists } from './constants';
+import Link from 'next/link';
+import { ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
 import { useRayData } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
@@ -13,16 +14,46 @@ import type { AuctionLot } from './types';
 import PastResults from './components/PastResults';
 import RayEntrance, { RayLoading } from './components/RayEntrance';
 import CountUp from './components/CountUp';
-import MarketTape from './components/MarketTape';
 import BoardDemand from './components/BoardDemand';
+import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
-import { MarketTiles, CallPlate, HammersPanel, DeskMatrix, FilmStrip, Monument, Colophon } from './components/Terminal';
+import { CallPlate, Colophon, daysWord } from './components/Terminal';
 import Flick from './components/Flick';
 
-const PAGE_SIZE = 48;
+// W13 contract: useSavedLots grows a savedMeta record (hook agent's edit).
+// Read it defensively — a stable empty fallback keeps memo deps quiet.
+type SavedMeta = Record<string, { savedAt: string; estMid: number | null; signalPct: number | null; bidCount: number | null }>;
+const EMPTY_SAVED_META: SavedMeta = {};
+
+// The default view's diversity cap: max 8 lots per maker per page window —
+// a greedy pass preserving date order, capped/overflow lots requeued in
+// order for the next window (deterministic; no random).
+const MAKER_CAP = 8;
+function diversifyFeed(arr: AuctionLot[], windowSize: number): AuctionLot[] {
+  if (arr.length <= MAKER_CAP || windowSize <= 0) return arr;
+  const out: AuctionLot[] = [];
+  let pool = arr;
+  while (pool.length) {
+    const counts: Record<string, number> = {};
+    const taken: AuctionLot[] = [];
+    const deferred: AuctionLot[] = [];
+    for (const l of pool) {
+      if (taken.length < windowSize && (counts[l.artist] || 0) < MAKER_CAP) {
+        taken.push(l);
+        counts[l.artist] = (counts[l.artist] || 0) + 1;
+      } else {
+        deferred.push(l); // keeps date order for the next window
+      }
+    }
+    if (taken.length === 0) { out.push(...deferred); break; } // safety — never loop
+    out.push(...taken);
+    pool = deferred;
+  }
+  return out;
+}
 
 export default function RayPage() {
-  const { allLots, statsByArtist, tape, demand, backtest, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
+  const { allLots, statsByArtist, demand, backtest, lastCrawl, loading, fullLoaded, error, fromCache } = useRayData();
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
   // Every market on the board is live — the picked market filters directly.
@@ -34,11 +65,42 @@ export default function RayPage() {
     for (const [k, v] of Object.entries(statsByArtist)) if (mktSet.has(k)) out[k] = v;
     return out;
   }, [statsByArtist, mktSet]);
-  const { toggle, isSaved, savedIds } = useSavedLots();
-  const [visibleUpcoming, setVisibleUpcoming] = useState(PAGE_SIZE);
+  const savedApi = useSavedLots();
+  const { toggle, isSaved, savedIds } = savedApi;
+  const savedMeta = (savedApi as unknown as { savedMeta?: SavedMeta }).savedMeta ?? EMPTY_SAVED_META;
+
+  // 24-card pages on desktop, 12 under 900px — matchMedia, SSR-safe default.
+  const [pageSize, setPageSize] = useState(24);
+  const [visibleUpcoming, setVisibleUpcoming] = useState(24);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 899px)');
+    const apply = () => {
+      const size = mq.matches ? 12 : 24;
+      setPageSize(size);
+      // page 1 tracks the breakpoint; a reader who already expanded keeps their place
+      setVisibleUpcoming(v => (v === 12 || v === 24 ? size : v));
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
   const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
-  const [feedView, setFeedView] = useState<'grid' | 'table'>('grid');
   const [tableLot, setTableLot] = useState<AuctionLot | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
+
+  // The layout choice persists — read after mount (SSR renders the default).
+  const [feedView, setFeedView] = useState<'grid' | 'table'>('grid');
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('ray-feedview');
+      if (v === 'grid' || v === 'table') setFeedView(v);
+    } catch { /* storage blocked — session default */ }
+  }, []);
+  const handleView = (v: 'grid' | 'table') => {
+    setFeedView(v);
+    try { localStorage.setItem('ray-feedview', v); } catch { /* storage blocked */ }
+  };
 
   // Lenses are scoped to the market they were picked in — a sport chosen in
   // Sports (or a maker in Watches) must not silently empty another market's
@@ -62,16 +124,19 @@ export default function RayPage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
-  // One shared below-market id set — the toolbar lens, its count, and the
-  // cards all read the same signal (computed once, not per keystroke).
-  const belowIds = useMemo(() => {
+  // One shared below-market pass — the toolbar lens, its count, the ledger
+  // button, the cards AND the biggest-gap sort all read the same signal
+  // (computed once, not per keystroke).
+  const belowSignal = useMemo(() => {
     const ids = new Set<string>();
+    const pct = new Map<string, number>();
     upcoming.forEach(l => {
       const s = lotSignal(l, marketLots);
-      if (s && s.label === 'Below Market') ids.add(l.id);
+      if (s && s.label === 'Below Market') { ids.add(l.id); pct.set(l.id, s.pct); }
     });
-    return ids;
+    return { ids, pct };
   }, [upcoming, marketLots]);
+  const belowIds = belowSignal.ids;
 
   // The feed the reader actually sees — search + lenses + sort applied.
   const feed = useMemo(() => {
@@ -96,11 +161,23 @@ export default function RayPage() {
     const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
     if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
     else if (f.sort === 'est-asc') arr = [...arr].sort((a, b) => est(a) - est(b));
-    return arr; // 'soonest' keeps the date order upcoming already has
-  }, [upcoming, feedFilters, belowIds]);
+    else if (f.sort === 'gap-desc') {
+      // biggest comps gap first — reuses the belowSignal pass, no second sweep
+      const pct = belowSignal.pct;
+      arr = [...arr].sort((a, b) => (pct.get(b.id) ?? -Infinity) - (pct.get(a.id) ?? -Infinity));
+    } else if (f.sort === 'newest') {
+      // firstSeen is crawl-stamped and may be absent on older data — unseen sinks
+      const seen = (l: AuctionLot) => l.firstSeen || '';
+      arr = [...arr].sort((a, b) => (seen(a) < seen(b) ? 1 : seen(a) > seen(b) ? -1 : 0));
+    } else if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly) {
+      // the default view ('soonest', no lenses) gets the maker diversity cap
+      arr = diversifyFeed(arr, pageSize);
+    }
+    return arr; // 'soonest' under a lens keeps the date order upcoming already has
+  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize]);
 
   // Lens changes re-run the card entrance. Search typing is deliberately NOT
-  // in the key: rekeying per keystroke would remount all 48 cards per
+  // in the key: rekeying per keystroke would remount all visible cards per
   // character — keyed reconciliation by lot.id handles search narrowing.
   const feedKey = useMemo(() => {
     const f = feedFilters;
@@ -108,7 +185,15 @@ export default function RayPage() {
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     setFeedFilters(next);
-    setVisibleUpcoming(PAGE_SIZE);
+    setVisibleUpcoming(pageSize);
+  };
+
+  // The ledger's flagged figure, the proofstrip flag stat and the toolbar
+  // pill all fire this one lens: below-market, biggest gap first, at the feed.
+  const openBelowLens = () => {
+    setFeedFilters(f => ({ ...f, belowOnly: true, sort: 'gap-desc' }));
+    setVisibleUpcoming(pageSize);
+    document.getElementById('on-the-block')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Recent Results (PastResults) round-robins these across houses itself so
@@ -122,6 +207,20 @@ export default function RayPage() {
     [marketLots]
   );
 
+  // The results row's one honest sentence: median hammer vs mid-estimate.
+  const soldMedianPct = useMemo(() => {
+    const perf: number[] = [];
+    for (const l of sold) {
+      const lo = l.estimateLow || 0;
+      const hi = l.estimateHigh || 0;
+      const mid = lo && hi ? (lo + hi) / 2 : lo || hi;
+      if (mid > 0 && l.priceUsd) perf.push(((l.priceUsd - mid) / mid) * 100);
+    }
+    if (!perf.length) return null;
+    perf.sort((a, b) => a - b);
+    return perf[Math.floor(perf.length / 2)];
+  }, [sold]);
+
   // All-time realized — the hero numeral (the "portfolio" of the market).
   const totalRealized = useMemo(
     () => Object.values(marketStats).reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0),
@@ -129,9 +228,6 @@ export default function RayPage() {
   );
 
   // The hero strip's lead line: the top maker by all-time realized revenue.
-  // (The old pulse sentence computed appreciation / week / flagged figures
-  // here too — the strip derives its own week count and reads belowIds for
-  // flags, so this stays the one figure the strip actually consumes.)
   const topArtist = useMemo(() => {
     const topEntry = Object.entries(marketStats)
       .sort((a, b) => (b[1].totalAuctionRevenue || 0) - (a[1].totalAuctionRevenue || 0))[0];
@@ -159,26 +255,31 @@ export default function RayPage() {
       { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
       { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
       { k: 'Hammers this week', to: thisWeek, format: asComma, s: `across ${liveHouses} houses` },
-      { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up' },
+      { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up', lens: true },
     ];
   }, [upcoming, belowIds, totalRealized, topArtist]);
 
-  // The tape ships precomputed PER MARKET in upcoming.json (instant); compute
-  // it only as a fallback for deploys that predate the per-market split.
-  const tapeItems = useMemo(() => {
-    const pre = tape[activeKey];
-    if (pre && pre.length) return pre;
-    return sold.slice(0, 160)
-      .filter(l => l.priceUsd && l.title)
-      .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
-      .slice(0, 18)
-      .map(l => ({
-        artist: ARTIST_LABEL[l.artist] || l.artist,
-        title: l.title.length > 44 ? l.title.slice(0, 42) + '…' : l.title,
-        price: formatPrice(l.priceUsd!),
-        house: l.auctionHouse,
-      }));
-  }, [tape, activeKey, sold]);
+  // The board rail's watchlist strip — what changed since you saved.
+  const watchStrip = useMemo(() => {
+    if (savedIds.length === 0) return null;
+    const idSet = new Set(savedIds);
+    const mine = allLots.filter(l => idSet.has(l.id));
+    if (mine.length === 0) return null;
+    const today = new Date().toISOString().split('T')[0];
+    const live = mine
+      .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
+      .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
+    let bestMove: { from: number; to: number } | null = null;
+    for (const l of live) {
+      const meta = savedMeta[l.id];
+      if (!meta || meta.signalPct == null) continue;
+      const s = lotSignal(l, allLots);
+      if (!s || s.label !== 'Below Market') continue;
+      const delta = s.pct - meta.signalPct;
+      if (delta > 0 && (!bestMove || delta > bestMove.to - bestMove.from)) bestMove = { from: meta.signalPct, to: s.pct };
+    }
+    return { count: mine.length, next: live[0] || null, bestMove };
+  }, [savedIds, savedMeta, allLots]);
 
   return (
     <div style={{
@@ -202,12 +303,13 @@ export default function RayPage() {
 
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {/* R2 · the tape — the terminal's signature slot, first proof of life */}
-      {tapeItems.length > 0 && (
-        <div className="ray-tapeband" aria-label="Recent hammers across the market">
-          <MarketTape items={tapeItems} />
+      {/* R2 · the one market switcher — a pill rail directly under the nav,
+          above the board it controls. The active pill is the lit element. */}
+      <div className="rail" style={{ paddingTop: 14 }}>
+        <div className="ray-markets-fade">
+          <MarketSwitch compact lit />
         </div>
-      )}
+      </div>
 
       {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12 }}>
@@ -228,31 +330,65 @@ export default function RayPage() {
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
-          {/* THE HERO PANE — the star is the areas we cover: six big market
-              tiles people click FIRST, fused to the demand curve in one pane.
-              Everything data-heavy waits below. */}
+          {/* THE BOARD OWNS VIEWPORT 1 — demand numeral + curve on the left,
+              today's call and the watchlist strip in the right rail. */}
           <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
-            <div className="ray-pane">
-              <MarketTiles demand={demand} active={market} onPick={setMarket} lots={allLots} />
-              <BoardDemand
-                allLots={marketLots}
-                demand={demand[activeKey] || []}
-                marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
-              />
+            <div className="ray-board-rail">
+              <div className="ray-pane">
+                <BoardDemand
+                  allLots={marketLots}
+                  demand={demand[activeKey] || []}
+                  marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
+                />
+              </div>
+              <aside aria-label="Today's call and your watchlist" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+                <CallPlate
+                  lots={marketLots}
+                  allLots={marketLots}
+                  market={activeKey}
+                  isSaved={isSaved}
+                  onToggleSave={toggle}
+                />
+                {watchStrip && (
+                  <Link href="/saved" className="ray-watchstrip" aria-label={`Your watchlist — ${watchStrip.count} saved`}>
+                    <span className="ray-panel-k">Your watchlist</span>
+                    <span>
+                      {watchStrip.count} saved
+                      {watchStrip.next && <> · next hammer {daysWord(watchStrip.next.saleDate)}</>}
+                      {watchStrip.bestMove && (
+                        <> · best move <b className="up">+{Math.round(watchStrip.bestMove.from)}% → +{Math.round(watchStrip.bestMove.to)}%</b></>
+                      )}
+                    </span>
+                    <span>Open saved <Flick size={12} /></span>
+                  </Link>
+                )}
+              </aside>
             </div>
             {backtest && backtest.flagged.n > 500 && (
               <a href="/value" className="ray-proofstrip">
                 Flagged calls beat their estimates by <b className="up">+{backtest.flagged.medianPerfPct}%</b> median
                 — vs +{backtest.unflagged.medianPerfPct}% unflagged — across {backtest.flagged.n.toLocaleString()} replayed
-                sales · the record <Flick size={12} />
+                sales{activeKey !== 'all' ? ' · all markets' : ''} · the record <Flick size={12} />
               </a>
             )}
           </div>
 
-          {/* Now the data: the market in four figures, then the call + hammers */}
+          {/* The market in four figures — the flagged figure IS the lens */}
           <section className="rail ray-enter" style={{ paddingTop: 26 }}>
             <div className="ray-ledger" style={{ margin: 0 }}>
-              {strip.map(item => (
+              {strip.map(item => item.lens ? (
+                <button
+                  key={item.k}
+                  type="button"
+                  onClick={openBelowLens}
+                  aria-label="See flagged lots on the block, biggest gap first"
+                  style={{ background: 'none', border: 'none', padding: 0, margin: 0, textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                >
+                  <div className="ray-ledger-k">{item.k}</div>
+                  <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
+                  <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
+                </button>
+              ) : (
                 <div key={item.k}>
                   <div className="ray-ledger-k">{item.k}</div>
                   <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
@@ -260,23 +396,10 @@ export default function RayPage() {
                 </div>
               ))}
             </div>
-            <div className="ray-subdeck">
-              <CallPlate lots={marketLots} allLots={marketLots} />
-              <HammersPanel lots={marketLots} allLots={marketLots} />
-            </div>
           </section>
 
-          {/* R5 · THE DESK — every maker as a bookable row */}
-          {fullLoaded && (
-            <div className="ray-enter">
-              <DeskMatrix lots={marketLots} market={activeKey} ready={fullLoaded} />
-            </div>
-          )}
-
           {upcoming.length > 0 && (
-            <section className="ray-upcoming-section rail">
-              {/* R6 · the eye — flagged lots, photographed by the houses */}
-              <FilmStrip lots={marketLots} allLots={marketLots} />
+            <section id="on-the-block" className="ray-upcoming-section rail">
               <div
                 className="ray-enter"
                 style={{
@@ -290,21 +413,11 @@ export default function RayPage() {
                 } as React.CSSProperties}
               >
                 <h2 className="ray-h2">On the block</h2>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 14 }}>
-                  {lastCrawl && (
-                    <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
-                      {upcoming.length.toLocaleString()} lots · updated {formatDate(lastCrawl)}
-                    </span>
-                  )}
-                  <span className="ray-viewtoggle" role="radiogroup" aria-label="Feed layout">
-                    <button role="radio" aria-checked={feedView === 'grid'} aria-label="Card view" data-active={feedView === 'grid'} onClick={() => setFeedView('grid')}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
-                    </button>
-                    <button role="radio" aria-checked={feedView === 'table'} aria-label="Table view" data-active={feedView === 'table'} onClick={() => setFeedView('table')}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    </button>
+                {upcoming[0] && (
+                  <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
+                    Next hammer: {daysWord(upcoming[0].saleDate)} · {upcoming[0].auctionHouse}
                   </span>
-                </span>
+                )}
               </div>
 
               <FeedToolbar
@@ -316,6 +429,9 @@ export default function RayPage() {
                 total={upcoming.length}
                 market={activeKey}
                 onMarketReset={() => setMarket('all')}
+                view={feedView}
+                onViewChange={handleView}
+                pageSize={pageSize}
               />
 
               {feedView === 'table' && feed.length > 0 ? (
@@ -420,6 +536,7 @@ export default function RayPage() {
                         allLots={marketLots}
                         saved={isSaved(lot.id)}
                         onToggleSave={toggle}
+                        lastCrawl={lastCrawl || undefined}
                       />
                     </div>
                   ))
@@ -434,7 +551,7 @@ export default function RayPage() {
               {visibleUpcoming < feed.length && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
                   <button
-                    onClick={() => setVisibleUpcoming(v => v + PAGE_SIZE)}
+                    onClick={() => setVisibleUpcoming(v => v + pageSize)}
                     style={{
                       background: 'none',
                       border: '1px solid var(--color-border)',
@@ -457,26 +574,52 @@ export default function RayPage() {
             </section>
           )}
 
-          {/* R7 · THE RECORD — what hammered against what was asked, beside
-              the backtest monument: proof under the promise at poster scale. */}
-          {sold.length > 0 && (
+          {/* R7 · THE RECORD — one summary row on the total market (the full
+              archive mounts on demand); vertical landers keep the full,
+              scoped section where it earns its weight. */}
+          {sold.length > 0 && (activeKey === 'all' ? (
+            <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
+              <div className="ray-results-row">
+                <span>
+                  {sold.length.toLocaleString()} sold lots
+                  {soldMedianPct !== null && (
+                    <> · median <b className={soldMedianPct >= 0 ? 'up' : 'down'}>
+                      {soldMedianPct >= 0 ? '+' : '−'}{Math.abs(Math.round(soldMedianPct))}%
+                    </b> vs estimate</>
+                  )}
+                  {sold[0].saleDate && <> · latest {formatDate(sold[0].saleDate)}</>}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowArchive(s => !s)}
+                  style={{
+                    background: 'none', border: '1px solid var(--color-border)', borderRadius: 100,
+                    padding: '7px 18px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    color: 'var(--color-text-muted)', fontWeight: 600, cursor: 'pointer',
+                    fontFamily: 'var(--font-sans), sans-serif',
+                  }}
+                >
+                  {showArchive ? 'Hide the archive' : 'Show the archive'}
+                </button>
+              </div>
+              {showArchive && (
+                <div className="ray-recordband" style={{ marginTop: 24 }}>
+                  <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
+                </div>
+              )}
+            </section>
+          ) : (
             <div className="ray-recordband ray-enter" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
               <div className="rail">
-                <div className="ray-record-grid">
-                  <div className="ray-record-left">
-                    <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
-                  </div>
-                  {backtest && backtest.flagged.n > 500 && <Monument backtest={backtest} />}
-                </div>
+                <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
               </div>
             </div>
-          )}
+          ))}
 
           {/* R8 · THE COLOPHON — the provenance ring's closing clasp */}
           <Colophon
             lotCount={allLots.length}
             houseCount={new Set(allLots.map(l => l.auctionHouse)).size}
-            lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined}
           />
         </RayEntrance>
       )}

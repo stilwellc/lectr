@@ -2,8 +2,9 @@
 
 import React, { useMemo } from 'react';
 import Link from 'next/link';
+import type { AuctionLot } from '../types';
 import { useRayData } from '../hooks/useRayData';
-import { useSavedLots } from '../hooks/useSavedLots';
+import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import LotCard, { lotSignal } from '../components/LotCard';
 import PastResults from '../components/PastResults';
@@ -19,6 +20,38 @@ function hammerWord(days: number): string {
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
 }
+function fmtPct(pct: number): string {
+  return `${pct >= 0 ? '+' : ''}${Math.round(pct)}%`;
+}
+
+/** What changed on a watched lot since the save — signal move and new bids.
+    Renders nothing when there's no baseline (pre-upgrade saves) or nothing
+    moved: absence of data is never dressed as a delta. */
+function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta; allLots: AuctionLot[] }) {
+  const cur = lotSignal(lot, allLots);
+  const signalMoved =
+    meta?.signalPct != null && cur !== null && Math.round(cur.pct) !== Math.round(meta.signalPct);
+  const newBids =
+    meta?.bidCount != null && (lot.bidCount || 0) > meta.bidCount
+      ? (lot.bidCount || 0) - meta.bidCount
+      : 0;
+  if (!signalMoved && newBids === 0) return null;
+  return (
+    <p className="ray-saved-delta">
+      {signalMoved && cur && meta && (
+        <span>
+          signal {fmtPct(meta.signalPct!)} →{' '}
+          <b style={{ color: cur.pct > meta.signalPct! ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
+            {fmtPct(cur.pct)}
+          </b>{' '}
+          since you saved
+        </span>
+      )}
+      {signalMoved && newBids > 0 && ' · '}
+      {newBids > 0 && <span>{newBids} new {newBids === 1 ? 'bid' : 'bids'}</span>}
+    </p>
+  );
+}
 
 /**
  * Saved — the watchlist. Answers "what am I watching and when must I act":
@@ -26,8 +59,8 @@ function hammerWord(days: number): string {
  * signal flags as cheap — then the lots in urgency order.
  */
 export default function SavedPage() {
-  const { allLots, statsByArtist, lastCrawl, loading, fromCache } = useRayData();
-  const { savedIds, toggle, isSaved } = useSavedLots();
+  const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
+  const { savedIds, savedMeta, toggle, isSaved } = useSavedLots();
 
   const savedLots = useMemo(() =>
     savedIds
@@ -35,6 +68,18 @@ export default function SavedPage() {
       .filter(Boolean) as typeof allLots,
     [savedIds, allLots]
   );
+
+  // Saved ids the crawl no longer carries — they render as stub rows, never
+  // as silence, and they never count toward the nav badge.
+  const orphanIds = useMemo(() => {
+    if (!fullLoaded) return [] as string[];
+    const have = new Set(allLots.map(l => l.id));
+    return savedIds.filter(id => !have.has(id));
+  }, [savedIds, allLots, fullLoaded]);
+
+  // The nav badge counts renderable lots only; before the full archive lands
+  // we can't yet judge orphans, so the raw count stands in.
+  const badgeCount = fullLoaded ? savedLots.length : savedIds.length;
 
   const upcoming = useMemo(() =>
     savedLots
@@ -65,6 +110,21 @@ export default function SavedPage() {
     return { totalEst, flagged, next };
   }, [upcoming, allLots]);
 
+  // Aggregate "what changed" for the hero sub-line: how many watched signals
+  // moved and how many new bids arrived since each lot was saved.
+  const changes = useMemo(() => {
+    let moved = 0;
+    let newBids = 0;
+    for (const lot of upcoming) {
+      const meta = savedMeta[lot.id];
+      if (!meta) continue;
+      const cur = lotSignal(lot, allLots);
+      if (meta.signalPct != null && cur !== null && Math.round(cur.pct) !== Math.round(meta.signalPct)) moved++;
+      if (meta.bidCount != null && (lot.bidCount || 0) > meta.bidCount) newBids += (lot.bidCount || 0) - meta.bidCount;
+    }
+    return { moved, newBids };
+  }, [upcoming, savedMeta, allLots]);
+
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   return (
@@ -81,17 +141,33 @@ export default function SavedPage() {
           gap: 30px 20px;
         }
         .ray-saved-section { padding-block: 40px 48px; }
+        .ray-saved-delta {
+          margin: 8px 2px 0;
+          font-size: 12.5px;
+          color: var(--color-text-muted);
+        }
+        .ray-saved-orphan {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          padding: 14px 16px;
+          border-bottom: 1px solid var(--color-border);
+          font-size: 13px;
+          color: var(--color-text-muted);
+        }
+        .ray-saved-orphan:last-child { border-bottom: none; }
         @media (max-width: 768px) {
           .ray-saved-grid { grid-template-columns: 1fr; gap: 26px; }
           .ray-saved-section { padding-block: 32px 32px; }
         }
       `}</style>
 
-      <ArtistNav activeSlug="saved" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+      <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {loading ? (
         <RayLoading />
-      ) : savedLots.length === 0 ? (
+      ) : savedLots.length === 0 && orphanIds.length === 0 ? (
         <RayEntrance animate={!fromCache}>
           <section className="ray-hero2 rail ray-enter">
             <p className="ray-hero2-label">Your watchlist</p>
@@ -135,6 +211,13 @@ export default function SavedPage() {
                 {summary.flagged > 0 && <> · {summary.flagged} below market</>}
                 {sold.length > 0 && <> · {sold.length} concluded</>}
               </span>
+              {(changes.moved > 0 || changes.newBids > 0) && (
+                <span className="ctx" style={{ display: 'block', marginTop: 4 }}>
+                  since you saved
+                  {changes.moved > 0 && <> · {changes.moved} {changes.moved === 1 ? 'signal' : 'signals'} moved</>}
+                  {changes.newBids > 0 && <> · {changes.newBids} new {changes.newBids === 1 ? 'bid' : 'bids'}</>}
+                </span>
+              )}
             </p>
 
             <div className="ray-strip" style={{ marginTop: 22 }}>
@@ -182,8 +265,9 @@ export default function SavedPage() {
                       showArtist
                       allLots={allLots}
                       saved={isSaved(lot.id)}
-                      onToggleSave={toggle}
+                      onToggleSave={id => toggle(id, lot)}
                     />
+                    <SavedDelta lot={lot} meta={savedMeta[lot.id]} allLots={allLots} />
                   </div>
                 ))}
               </div>
@@ -219,6 +303,40 @@ export default function SavedPage() {
               })()}
               <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
             </div>
+          )}
+
+          {orphanIds.length > 0 && (
+            <section className="rail ray-enter" style={{ paddingBlock: '34px 64px' }}>
+              <h2 className="ray-h2" style={{ marginBottom: 6 }}>No longer on the block</h2>
+              <p style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 14px' }}>
+                Saved lots the crawl no longer carries — withdrawn, relisted or purged by the house.
+              </p>
+              <div className="glass glass-quiet">
+                {orphanIds.map(id => {
+                  const meta = savedMeta[id];
+                  return (
+                    <div key={id} className="ray-saved-orphan">
+                      <span>
+                        No longer listed — removed from the block
+                        {meta && (
+                          <span style={{ color: 'var(--color-text-faint)' }}>
+                            {' '}· saved {formatDate(meta.savedAt)}
+                            {meta.estMid != null && <> · was est. {formatPrice(meta.estMid)}</>}
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        className="ray-call-btn ray-call-btn-quiet"
+                        style={{ flexShrink: 0 }}
+                        onClick={() => toggle(id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           )}
         </RayEntrance>
       )}
