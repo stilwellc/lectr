@@ -286,12 +286,6 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           </button>
         </nav>
 
-        {lastCrawl && (
-          <span className="ray-fresh" title="Data refreshes with the daily crawl">
-            <span className="ray-fresh-dot" aria-hidden="true" />
-            Live · updated {lastCrawl}
-          </span>
-        )}
 
         <button
           className="ray-ck-hintbtn"
