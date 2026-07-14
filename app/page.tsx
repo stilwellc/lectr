@@ -117,23 +117,27 @@ export default function RayPage() {
   // when EITHER prices appreciate OR the market beats estimates (demand heat),
   // so the lander's hero reads the market's true strength, not one dimension.
   const blendedSeries = useMemo(() => {
-    const price = marketData?.markets?.[activeKey]?.index || [];   // rebased-100 price index
-    const dem = demand[activeKey] || [];                            // % over estimate, quarterly
-    if (price.length < 4 || dem.length < 2) return [];
-    const demByQ = new Map(dem.map(d => [d.date, d.value]));
-    // demand as a level (100 + %), rebased to 100 at the first quarter present
-    // in BOTH series; blend = geomean(priceRebased, demandRebased).
-    const firstWithDemand = price.find(pt => demByQ.has(pt.period));
-    if (!firstWithDemand) return [];
-    const demBase = 100 + (demByQ.get(firstWithDemand.period) as number);
-    const priceBase = firstWithDemand.value;
+    const price = marketData?.markets?.[activeKey]?.index || [];   // rebased-100 price index (recent)
+    const dem = demand[activeKey] || [];                            // % over estimate, quarterly — FULL history
+    if (dem.length < 4) return [];
+    // The curve spans the DEMAND history end-to-end (it reaches back furthest —
+    // 2000-era for the majors), so the board shows the deep arc the demand chart
+    // always did. Where the price index also exists (2020→now) the point is the
+    // geomean of the two rebased dimensions; before that, the price index has no
+    // data, so the curve is the demand history alone. One continuous line.
+    const priceByQ = new Map(price.map(p => [p.period, p.value]));
+    // anchor = first quarter present in BOTH — rebase price and demand to 100
+    // there so the two dimensions are comparable and the blend joins seamlessly.
+    const anchor = dem.find(d => priceByQ.has(d.date));
+    const demBase = anchor ? 100 + anchor.value : 100 + dem[0].value;
+    const priceBase = anchor ? (priceByQ.get(anchor.date) as number) : 100;
     const out: { date: string; value: number }[] = [];
-    for (const pt of price) {
-      const dv = demByQ.get(pt.period);
-      const priceReb = pt.value / priceBase * 100;
-      if (dv === undefined) { out.push({ date: pt.period, value: Math.round(priceReb) }); continue; }
-      const demReb = (100 + dv) / demBase * 100;
-      out.push({ date: pt.period, value: Math.round(Math.sqrt(priceReb * demReb)) });
+    for (const d of dem) {
+      const demReb = (100 + d.value) / demBase * 100;
+      const pv = priceByQ.get(d.date);
+      if (pv === undefined) { out.push({ date: d.date, value: Math.round(demReb) }); continue; }
+      const priceReb = pv / priceBase * 100;
+      out.push({ date: d.date, value: Math.round(Math.sqrt(priceReb * demReb)) });
     }
     return out;
   }, [marketData, demand, activeKey]);
