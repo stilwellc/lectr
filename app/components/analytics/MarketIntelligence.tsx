@@ -16,11 +16,12 @@ const DOWN = 'var(--color-down)';
 const INK = '#F4F5F6';
 const MUTED = '#7A8087';
 
-// Match the home board's default read: the past-year move (last 4 quarters),
-// so the same index never shows two different headline %s across surfaces.
+// Match the home board's read: the true past-year move — a year ago to now is
+// four quarters apart, i.e. five points — so both surfaces measure the same
+// span and label it "past year" honestly.
 function pctChange(pts: { value: number }[]): number | null {
   if (pts.length < 2) return null;
-  const win = pts.slice(-4);
+  const win = pts.slice(-5);
   const base = win[0].value;
   return base ? Math.round((pts[pts.length - 1].value / base - 1) * 100) : null;
 }
