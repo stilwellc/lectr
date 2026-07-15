@@ -34,6 +34,12 @@ jobs:
       # build-og pre-renders the 33 artist share cards, then next exports
       # the whole site to out/ (50 static pages + data)
       - name: Build static export
+        # Supabase keys are inlined at build time to enable auth + per-user saved
+        # lots. Public-safe (RLS protects the data), so repo Variables not Secrets.
+        # Absent → auth stays dormant and the build still succeeds.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Deploy to Cloudflare Pages

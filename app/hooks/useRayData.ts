@@ -31,6 +31,10 @@ interface RayData {
   market: MarketData | null;
   lastCrawl: string;
   sources: string[];
+  /** honest full-corpus counts from meta.json (incl. the Goldin sold-archive
+      the slim lots.json omits). page reads these before falling back to length. */
+  totalLots?: number;
+  totalSold?: number;
   loading: boolean;
   /** the full sold history has arrived (comps, analytics, artist pages) */
   fullLoaded: boolean;
@@ -67,6 +71,10 @@ interface RayPayload {
   backtest: Backtest | null;
   lastCrawl: string;
   sources: string[];
+  // Full-corpus counts from meta.json — the honest aggregate incl. the Goldin
+  // sold-archive that the slim lots.json omits. Falls back to allLots.length.
+  totalLots?: number;
+  totalSold?: number;
   fullLoaded: boolean;
   fullError: boolean;
   error: string | null;
@@ -146,7 +154,7 @@ function loadRayData(): Promise<RayPayload> {
     ]);
     const market = mkR.status === 'fulfilled' ? (mkR.value as MarketData) : null;
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
-    const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[] };
+    const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[]; totalLots?: number; totalSold?: number };
     const backtest = btR.status === 'fulfilled' ? (btR.value as Backtest) : null;
     const up = upR.status === 'fulfilled'
       ? (upR.value as {
@@ -170,6 +178,8 @@ function loadRayData(): Promise<RayPayload> {
         market,
         lastCrawl: metaData.lastCrawl || '',
         sources: metaData.sources || [],
+        totalLots: metaData.totalLots,
+        totalSold: metaData.totalSold,
         fullLoaded: false,
         fullError: false,
         error: null,
@@ -325,6 +335,8 @@ export function useRayData(): RayData {
     market: data?.market || null,
     lastCrawl: data?.lastCrawl || '',
     sources: data?.sources || [],
+    totalLots: data?.totalLots,
+    totalSold: data?.totalSold,
     loading: data === null,
     fullLoaded: data?.fullLoaded || false,
     fullError: data?.fullError || false,

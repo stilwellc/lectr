@@ -68,6 +68,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   const upcoming = lots
     .filter(l => {
       if (l.status !== 'upcoming') return false;
+      // A just-closed lot awaiting results is held 'upcoming' with a past sale
+      // date — keep it visible even though it is past the stale cutoff.
+      if ((l as { resultsPending?: boolean }).resultsPending) return true;
       const t = new Date(l.saleDate).getTime();
       return !isNaN(t) && t >= staleCutoff;
     })

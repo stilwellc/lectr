@@ -129,6 +129,10 @@ export interface AuctionLot {
       only sold signal is the auction flipping to status 'Completed' */
   auctionId?: string;
   status: LotStatus;
+  /** True when a lot's sale has closed but the house has not posted a hammer
+      yet — held as 'upcoming' and kept visible until results publish (then it
+      flips to 'sold', or drops once the results window lapses). */
+  resultsPending?: boolean;
   url: string;
   /** Precomputed at crawl time for upcoming lots (comps median vs estimate
       midpoint) so the feed can paint before the full history downloads.

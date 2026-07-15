@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
+import { AccountProvider } from './lib/account';
 import { ARTISTS } from './constants';
 
 // One voice. Inter carries everything — display numerals, labels, body —
@@ -76,7 +77,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main" className="skip-link">Skip to content</a>
         <ThemeProvider>
           <MarketProvider>
-            <main id="main" className="ray-shell">{children}</main>
+            <AccountProvider>
+              <main id="main" className="ray-shell">{children}</main>
+            </AccountProvider>
           </MarketProvider>
         </ThemeProvider>
       </body>

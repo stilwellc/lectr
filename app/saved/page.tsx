@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
+import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import LotCard, { lotSignal } from '../components/LotCard';
 import PastResults from '../components/PastResults';
@@ -61,6 +62,7 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
 export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
   const { savedIds, savedMeta, toggle, isSaved } = useSavedLots();
+  const { authEnabled, user, authReady, openLogin } = useAuth();
 
   const savedLots = useMemo(() =>
     savedIds
@@ -91,6 +93,16 @@ export default function SavedPage() {
   const sold = useMemo(() =>
     savedLots
       .filter(l => l.status === 'sold')
+      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
+    [savedLots]
+  );
+
+  // Anything you saved that is neither upcoming nor sold (bought-in, withdrawn,
+  // results-pending-that-lapsed, etc.) — it must STILL appear. A saved lot never
+  // silently vanishes from your watchlist just because its status changed.
+  const other = useMemo(() =>
+    savedLots
+      .filter(l => l.status !== 'upcoming' && l.status !== 'sold')
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
     [savedLots]
   );
@@ -165,7 +177,26 @@ export default function SavedPage() {
 
       <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {loading ? (
+      {authEnabled && authReady && !user ? (
+        /* The ONLY auth-gated surface — saved lots are scoped to a user. */
+        <RayEntrance animate>
+          <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
+            <p className="ray-hero2-label">Your watchlist</p>
+            <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>Sign in</h1>
+            <p className="ray-hero2-delta">
+              <span className="ctx">
+                Saved lots are private to you and follow you across devices. Sign in to
+                start a watchlist — lectr tracks each lot&rsquo;s hammer, comps, and how your eye did.
+              </span>
+            </p>
+          </section>
+          <div className="ray-enter" style={{ textAlign: 'center', padding: '32px 20px 120px' }}>
+            <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={openLogin}>
+              Sign in to save lots
+            </button>
+          </div>
+        </RayEntrance>
+      ) : loading ? (
         <RayLoading />
       ) : savedLots.length === 0 && orphanIds.length === 0 ? (
         <RayEntrance animate={!fromCache}>
@@ -303,6 +334,32 @@ export default function SavedPage() {
               })()}
               <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
             </div>
+          )}
+
+          {other.length > 0 && (
+            <section className="ray-saved-section rail">
+              <h2 className="ray-h2 ray-enter" style={{ marginBottom: 6 }}>Concluded &amp; other</h2>
+              <p className="ray-enter" style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 18px' }}>
+                Saved lots that closed without a published hammer, were bought in, or are awaiting results.
+              </p>
+              <div className="ray-saved-grid">
+                {other.map((lot, i) => (
+                  <div
+                    key={lot.id}
+                    className="ray-enter-card"
+                    style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}
+                  >
+                    <LotCard
+                      lot={lot}
+                      showArtist
+                      allLots={allLots}
+                      saved={isSaved(lot.id)}
+                      onToggleSave={id => toggle(id, lot)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {orphanIds.length > 0 && (

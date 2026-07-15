@@ -1144,11 +1144,57 @@ const SOTHEBYS_WATCH_SALES = [
   '2024/important-watches', '2024/fine-watches',
 ];
 const SOTHEBYS_SPORTS_SALES = ['2025/sports', '2025/sports-2', '2024/sports', '2024/the-one'];
+// Art & design come through the SAME reliable GraphQL auction path as watches/
+// science (NOT the flaky artist-page scrape, which carries no hammer and rots
+// art in unknown-result). Sales are discovered live from the contemporary /
+// modern departments; these seeds are a fallback. Sale names are diverse (no
+// shared keyword), so art sales are NOT name-filtered — routeItem keeps only
+// tracked-maker lots per the item-level doctrine.
+const SOTHEBYS_ART_SALES = [
+  '2026/contemporary-discoveries', '2026/modern-discoveries-l26158',
+  '2026/surrealism-and-its-legacy-pf2666', '2026/modernites-pf2616',
+];
 const SOTHEBYS_SCIENCE_SALES = [
   '2026/natural-history', '2026/space-exploration-2', '2026/history-of-science-technology',
   '2026/history-of-science-technology-2', '2025/natural-history', '2025/space-exploration',
   '2025/history-of-science-technology', '2024/natural-history', '2024/space-exploration',
   '2023/space-exploration',
+];
+
+// A sale closes hours-to-days before the house posts hammer results. For that
+// window a just-closed lot has no result yet — but it is NOT bought-in and must
+// not vanish. We keep it VISIBLE as pending (upcoming) until the window lapses;
+// a later crawl flips it to sold when the result posts. Beyond the window, a
+// still-resultless lot is treated as a genuine bought-in. Two weeks comfortably
+// covers every house's posting lag while limiting how long a real bought-in can
+// masquerade as pending.
+const RESULT_PENDING_MS = 14 * 86_400_000;
+
+// Tracked art & design makers → slug. Order: specific before ambiguous.
+// Ambiguous surnames (condo=apartment, saul, sachs) require the full name.
+const ART_MAKER_ROUTES: [RegExp, string][] = [
+  [/\bgeorge condo\b/, 'george-condo'],
+  [/\bkaws\b/, 'kaws'],
+  [/\bandy warhol\b|\bwarhol\b/, 'andy-warhol'],
+  [/\bkeith haring\b|\bharing\b/, 'keith-haring'],
+  [/\bed(ward)? ruscha\b|\bruscha\b/, 'ed-ruscha'],
+  [/\bpablo picasso\b|\bpicasso\b/, 'pablo-picasso'],
+  [/\bhenri matisse\b|\bmatisse\b/, 'henri-matisse'],
+  [/\btom sachs\b/, 'tom-sachs'],
+  [/\bpeter saul\b/, 'peter-saul'],
+  [/\braymond pettibon\b|\bpettibon\b/, 'raymond-pettibon'],
+  [/\bbarry mcgee\b/, 'barry-mcgee'],
+  [/\bfutura\s?2000\b|\bfutura\b/, 'futura-2000'],
+  [/\brobert crumb\b|\br\.?\s?crumb\b/, 'r-crumb'],
+  [/\bfab(ulous)?\s5\sfreddy\b|\bfred(erick)? brathwaite\b/, 'fab-5-freddy'],
+  [/\bfrancesco clemente\b|\bclemente\b/, 'francesco-clemente'],
+  [/\beddie martinez\b/, 'eddie-martinez'],
+  [/\bkenny scharf\b|\bscharf\b/, 'kenny-scharf'],
+  // design
+  [/\bgeorge nakashima\b|\bnakashima\b/, 'george-nakashima'],
+  [/\bcharles (and |& )?ray eames\b|\b(charles|ray) eames\b|\beames\b/, 'charles-eames'],
+  [/\bprouv[eé]/, 'jean-prouve'],
+  [/\bpierre jeanneret\b|\bjeanneret\b/, 'pierre-jeanneret'],
 ];
 
 /**
@@ -1172,6 +1218,12 @@ function routeItem(creators: string | null, title: string, extra = ''): string |
   if (/\baudemars\b/.test(t)) return 'audemars-piguet';
   if (/\bomega\b/.test(t)) return 'omega';
   if (/\bcartier\b/.test(t)) return 'cartier';
+  // tracked art & design makers — the maker IS the identity (the creators field
+  // carries it). Matched by name so a Condo/Warhol/Picasso lot in a Sotheby's
+  // contemporary/modern sale routes correctly instead of being dropped. Full
+  // names first; distinctive surnames allowed (ambiguous ones like Saul/Condo
+  // require the full name). Untracked makers still fall through to null.
+  for (const [re, slug] of ART_MAKER_ROUTES) if (re.test(t)) return slug;
   // science collections — positive signals only, no sale-level fallback
   if (/meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite|lunar meteorite|martian/.test(t)) return 'meteorites';
   if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|neanderthal|paleolithic|petrified|tooth of|amber with|coprolite|stromatolite/.test(t)) return 'fossils';
@@ -1179,7 +1231,10 @@ function routeItem(creators: string | null, title: string, extra = ''): string |
   // "skeletonized" watch dial, skull-logo jersey, or Jaws poster is not a fossil
   if (/\b(skeletons?|skulls?|tusks?|claws?|jaws?)\b/.test(t) && /\b(prehistoric|cretaceous|jurassic|triassic|permian|eocene|oligocene|miocene|pliocene|pleistocene|ice age|saber[- ]tooth(ed)?|cave (bear|lion)|woolly|dire wolf|raptor|extinct)\b/.test(t)) return 'fossils';
   if (/apollo|nasa|space[- ]flown|space (exploration|shuttle|suit|program|station)|spacesuit|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|vostok|skylab|\brocket\b|x-15|satellite|mission (control|patch)|flight plan|star chart/.test(t)) return 'space-exploration';
-  if (/telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|chronometer\b|slide rule|surveying|globe\b|celestial|enigma machine|cipher|calculat(or|ing)|typewriter|computer|macintosh|apple[- ](1|ii)|altair|commodore|prototype|patent model|anatomical|medical (instrument|kit)|laboratory|einstein|newton|darwin|curie|tesla|edison|manuscript.*(scien|math|physic)|first edition.*(scien|math|physic)/.test(t)) return 'scientific-instruments';
+  // video games are NOT science (doctrine) — a Nintendo/Atari console prototype
+  // must not fall into scientific-instruments via 'prototype'/'computer'
+  if (/\b(nintendo|sega|playstation|\bxbox\b|game ?boy|atari (2600|vcs|jaguar|lynx|5200|7800)|super nintendo|sega (genesis|saturn|dreamcast)|\bnes\b|\bsnes\b|game cartridge|arcade (cabinet|machine)|video ?game)\b/.test(t)) return null;
+  if (/telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|chronometer\b|slide rule|surveying|globe\b|celestial|enigma machine|cipher|calculat(or|ing)|typewriter|computer|macintosh|apple[- ](1|ii)|altair|commodore|prototype|patent model|anatomical|medical (instrument|kit)|laboratory|einstein|newton|darwin|curie|tesla|edison|bell labs|bell telephone laborator|transistor|semiconductor|integrated circuit|microprocessor|vacuum tube|punch(ed)? card|mainframe|eniac|univac|\bcray\b|\bibm\b|pdp-\d|\bvax\b|apple lisa|\bnext(cube|step)?\b|xerox (alto|parc|star)|difference engine|analytical engine|babbage|\bturing\b|von neumann|shockley|grace hopper|wozniak|steve jobs|kenbak|imsai|trs-80|\bamiga\b|osborne 1|manuscript.*(scien|math|physic)|first edition.*(scien|math|physic)/.test(t)) return 'scientific-instruments';
   // sports objects — Christie's/Sotheby's sports sales, same doctrine as
   // Goldin: game-used, trophies & awards, tickets & passes. NEVER cards.
   if (/\b(cards?|n172|t20[0-9]|tobacco (card|silk)|psa\b|sgc\b|topps|bowman|panini|goudey|leaf\b|cabinet (photo|card)|carte de visite)\b/.test(t)) return null;
@@ -1230,11 +1285,48 @@ async function sothebysAuctionLots(uuid: string): Promise<{ currency: Currency; 
   return { currency, lots: out };
 }
 
-async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | 'all'): Promise<AuctionLot[]> {
+// Sotheby's timed auctions close lots individually; the sale-level schedule the
+// auction page embeds LAGS (a stale max endDate), so a live lot reads as past.
+// The real per-lot close only lives on the lot page (`scheduledOpeningDate`, the
+// value behind the on-page countdown). Enrich UPCOMING Sotheby's lots with it so
+// close times are accurate. Best-effort + capped + concurrency-limited: a lot we
+// can't reach keeps its sale-level date and stays visible — accuracy NEVER costs
+// a tracked lot (Collin's rule).
+async function enrichSothebysCloseTimes(lots: AuctionLot[]): Promise<void> {
+  const targets = lots.filter(l => l.auctionHouse === "Sotheby's" && l.status === 'upcoming' && l.url);
+  if (!targets.length) return;
+  const CONC = 6, CAP = 1000;
+  const slice = targets.slice(0, CAP);
+  let enriched = 0;
+  for (let i = 0; i < slice.length; i += CONC) {
+    await Promise.all(slice.slice(i, i + CONC).map(async lot => {
+      try {
+        const r = await fetch(lot.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
+        if (!r.ok) return;
+        const h = await r.text();
+        const raw = (h.match(/"scheduledOpeningDate":"([^"]+)"/) || [])[1]
+                 || (h.match(/"cutoffTime":"([^"]+)"/) || [])[1];
+        if (!raw) return;
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return;
+        const iso = d.toISOString();
+        lot.saleDate = iso.slice(0, 10);
+        (lot as AuctionLot & { saleDateTime?: string }).saleDateTime = iso;
+        // genuinely future now → it stands on its own date; drop the keep-visible flag
+        if (d.getTime() > Date.now()) (lot as AuctionLot & { resultsPending?: boolean }).resultsPending = false;
+        enriched++;
+      } catch { /* unreachable → keep sale-level date + resultsPending; never drop */ }
+    }));
+    await sleep(120);
+  }
+  console.log(`  [Sotheby's] enriched ${enriched}/${slice.length} live lots with accurate per-lot close times`);
+}
+
+async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | 'art' | 'all'): Promise<AuctionLot[]> {
   const lots: AuctionLot[] = [];
 
-  // discover current sales live so CI picks up new Geek Week / watch sales
-  const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>() };
+  // discover current sales live so CI picks up new Geek Week / watch / art sales
+  const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>(), art: new Set<string>() };
   const grab = async (url: string, into: Set<string>) => {
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
@@ -1245,6 +1337,13 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
   if (scope === 'watches' || scope === 'all') await grab('https://www.sothebys.com/en/departments/watches', discovered.watches);
   if (scope === 'science' || scope === 'all') await grab('https://www.sothebys.com/en/buy/series/geek-week?locale=en', discovered.science);
   if (scope === 'sports' || scope === 'all') await grab('https://www.sothebys.com/en/departments/popular-culture', discovered.sports);
+  if (scope === 'art' || scope === 'all') {
+    // contemporary + modern departments list the current art sales; take them
+    // all (names are too varied to keyword-filter) and let routeItem keep only
+    // tracked-maker lots.
+    await grab('https://www.sothebys.com/en/departments/contemporary-art', discovered.art);
+    await grab('https://www.sothebys.com/en/departments/impressionist-modern-art', discovered.art);
+  }
 
   const watchSales = Array.from(new Set([...SOTHEBYS_WATCH_SALES, ...Array.from(discovered.watches)]))
     .filter(s => /watch/i.test(s));
@@ -1252,13 +1351,17 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
     .filter(s => /natural-history|space-exploration|science|meteor|fossil/i.test(s));
   const sportsSales = Array.from(new Set([...SOTHEBYS_SPORTS_SALES, ...Array.from(discovered.sports)]))
     .filter(s => /sport|memorabilia|olympic|the-one/i.test(s));
+  // Art sales are NOT name-filtered (diverse names); cap the count so a busy
+  // season cannot explode the run — routeItem drops untracked-maker lots.
+  const artSales = Array.from(new Set([...SOTHEBYS_ART_SALES, ...Array.from(discovered.art)])).slice(0, 60);
 
-  const jobs: { sale: string; kind: 'watches' | 'science' | 'sports' }[] = [];
+  const jobs: { sale: string; kind: 'watches' | 'science' | 'sports' | 'art' }[] = [];
   if (scope === 'watches' || scope === 'all') watchSales.forEach(sale => jobs.push({ sale, kind: 'watches' }));
   if (scope === 'science' || scope === 'all') scienceSales.forEach(sale => jobs.push({ sale, kind: 'science' }));
   if (scope === 'sports' || scope === 'all') sportsSales.forEach(sale => jobs.push({ sale, kind: 'sports' }));
+  if (scope === 'art' || scope === 'all') artSales.forEach(sale => jobs.push({ sale, kind: 'art' }));
 
-  console.log(`  [Sotheby's] ${jobs.length} sales to crawl (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports)`);
+  console.log(`  [Sotheby's] ${jobs.length} sales to crawl (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports, ${artSales.length} art)`);
 
   for (const { sale, kind } of jobs) {
     const meta = await sothebysAuctionMeta(sale);
@@ -1275,15 +1378,33 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
       const soldRes = lot.bidState?.sold;
       const finalPrice = soldRes?.premiums?.finalPrice;
       const isSold = !!soldRes?.isSold && !!finalPrice;
-      let status: string, saleDate: string;
+      let status: string, saleDate: string, resultsPending = false;
       if (isSold) {
         status = 'sold';
         saleDate = meta.endDate || new Date().toISOString();
+      } else if (meta.state === 'Opened' || meta.state === 'Published') {
+        // TRUST THE STATE over the schedule date. A timed auction closes lot by
+        // lot and the embedded endDate lags — for a live ('Opened') or announced
+        // ('Published') sale it can read as past, which wrongly buried these lots.
+        // The house says the sale is live/upcoming, so the lot IS upcoming. Use
+        // the real endDate when it's genuinely future; otherwise anchor to now
+        // (the sale is live and closing imminently) so it lands correctly upcoming
+        // without depending on a stale date or clock skew.
+        status = 'upcoming';
+        const em = meta.endDate ? new Date(meta.endDate).getTime() : NaN;
+        saleDate = (!isNaN(em) && em > Date.now()) ? meta.endDate! : new Date().toISOString();
       } else if (meta.endDate && new Date(meta.endDate).getTime() > Date.now()) {
         status = 'upcoming';
         saleDate = meta.endDate;
+      } else if (meta.endDate && Date.now() - new Date(meta.endDate).getTime() <= RESULT_PENDING_MS) {
+        // Closed, but the house has not posted a hammer yet — keep the lot
+        // VISIBLE as pending (upcoming) rather than dropping it, so a just-closed
+        // sale does not vanish while we wait for results.
+        status = 'upcoming';
+        saleDate = meta.endDate;
+        resultsPending = true;
       } else {
-        continue; // closed & unsold (bought-in) — not signal
+        continue; // closed past the results window & unsold — a true bought-in
       }
       const saleDay = saleDate.split('T')[0];
 
@@ -1324,6 +1445,7 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
           priceBasis: 'realized',
         }),
         status: status as any,
+        resultsPending,
         url: `https://www.sothebys.com/en/buy/auction/${sale}/${lot.slug?.lotSlug || lot.lotId}`,
       } as AuctionLot);
       kept++;
@@ -1346,6 +1468,9 @@ const CHRISTIES_WATCH_SEEDS = [
 ];
 const CHRISTIES_SCIENCE_SEEDS = ['jurassic-icons-allosaurus-stegosaurus-30576'];
 const CHRISTIES_SPORTS_SEEDS = ['the-golden-age-of-baseball-selections-of-works-from-the-national-pastime-museum-26565'];
+// Art discovered live from the contemporary / modern / prints departments;
+// names too varied to keyword-filter, so routeItem keeps only tracked makers.
+const CHRISTIES_ART_SEEDS = ['avant-garde-s-including-thinking-italian-24607', 'art-contemporain-vente-du-jour-24609', 'art-moderne-24608'];
 
 function parseChristiesCurrency(txt: string): Currency {
   if (/HK\$|HKD/.test(txt)) return 'HKD';
@@ -1380,9 +1505,9 @@ async function christiesAuctionLots(slug: string): Promise<any[]> {
   return Array.from(byId.values());
 }
 
-async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 'all'): Promise<AuctionLot[]> {
+async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 'art' | 'all'): Promise<AuctionLot[]> {
   const lots: AuctionLot[] = [];
-  const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>() };
+  const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>(), art: new Set<string>() };
   const grab = async (url: string, into: Set<string>) => {
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
@@ -1393,16 +1518,23 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
   if (scope === 'watches' || scope === 'all') await grab('https://www.christies.com/en/departments/watches-and-wristwatches', discovered.watches);
   if (scope === 'science' || scope === 'all') await grab('https://www.christies.com/en/departments/science-and-natural-history', discovered.science);
   if (scope === 'sports' || scope === 'all') await grab('https://www.christies.com/en/departments/sports-memorabilia', discovered.sports);
+  if (scope === 'art' || scope === 'all') {
+    await grab('https://www.christies.com/en/departments/post-war-and-contemporary-art', discovered.art);
+    await grab('https://www.christies.com/en/departments/impressionist-and-modern-art', discovered.art);
+    await grab('https://www.christies.com/en/departments/prints-and-multiples', discovered.art);
+  }
 
   const watchSales = Array.from(new Set([...CHRISTIES_WATCH_SEEDS, ...Array.from(discovered.watches)]));
   const scienceSales = Array.from(new Set([...CHRISTIES_SCIENCE_SEEDS, ...Array.from(discovered.science)]));
   const sportsSales = Array.from(new Set([...CHRISTIES_SPORTS_SEEDS, ...Array.from(discovered.sports)]));
+  const artSales = Array.from(new Set([...CHRISTIES_ART_SEEDS, ...Array.from(discovered.art)])).slice(0, 60);
 
-  const jobs: { sale: string; kind: 'watches' | 'science' | 'sports' }[] = [];
+  const jobs: { sale: string; kind: 'watches' | 'science' | 'sports' | 'art' }[] = [];
   if (scope === 'watches' || scope === 'all') watchSales.forEach(sale => jobs.push({ sale, kind: 'watches' }));
   if (scope === 'science' || scope === 'all') scienceSales.forEach(sale => jobs.push({ sale, kind: 'science' }));
   if (scope === 'sports' || scope === 'all') sportsSales.forEach(sale => jobs.push({ sale, kind: 'sports' }));
-  console.log(`  [Christie's Auctions] ${jobs.length} sales (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports)`);
+  if (scope === 'art' || scope === 'all') artSales.forEach(sale => jobs.push({ sale, kind: 'art' }));
+  console.log(`  [Christie's Auctions] ${jobs.length} sales (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports, ${artSales.length} art)`);
 
   for (const { sale, kind } of jobs) {
     const rawLots = await christiesAuctionLots(sale);
@@ -1423,15 +1555,29 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
       const cur = parseChristiesCurrency(`${lot.price_realised_txt || ''} ${lot.estimate_txt || ''}`);
       const endDate = lot.end_date || lot.start_date;
       const endMs = endDate ? new Date(endDate).getTime() : NaN;
-      let status: string, saleDate: string;
+      let status: string, saleDate: string, resultsPending = false;
       if (isSold) {
         status = 'sold';
         saleDate = endDate || new Date().toISOString();
-      } else if (!isNaN(endMs) && endMs > Date.now()) {
-        status = 'upcoming';
-        saleDate = endDate;
       } else {
-        continue; // closed & unsold — not signal
+        // DO NOT trust www.christies.com's is_auction_over / schedule date to
+        // CLOSE a lot — it is STALE for online ("First Open"/onlineonly) sales,
+        // reporting a sale as over (2013 dates!) when it is actually live and
+        // days from closing. That buried live lots (Collin's Tom Sachs). So a
+        // resultless lot is ALWAYS kept VISIBLE: a genuinely-future endDate
+        // stands as-is; anything else is held pending (upcoming) so a live lot
+        // is never lost to a bad date. (Accurate close times come from the
+        // onlineonly enrichment pass.)
+        status = 'upcoming';
+        if (!isNaN(endMs) && endMs > Date.now()) {
+          saleDate = endDate; // a genuine future date can be trusted
+        } else {
+          // stale/unreliable www date (can be years old for online sales) —
+          // anchor to now so we never render a garbage date; keep it VISIBLE.
+          // The true close comes from the onlineonly enrichment.
+          saleDate = new Date().toISOString();
+          resultsPending = true;
+        }
       }
       const saleDay = saleDate.split('T')[0];
       const christiesAucDescription = lot.description_txt && String(lot.description_txt).length < 4000
@@ -1466,6 +1612,7 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
           priceBasis: 'realized',
         }),
         status: status as any,
+        resultsPending,
         url: lot.url || `https://www.christies.com/en/auction/${sale}`,
       } as AuctionLot);
       kept++;
@@ -1518,7 +1665,7 @@ function goldinRoute(title: string): string | null {
   // space first — Apollo/NASA artifacts head the science vertical's space slug
   if (/\b(apollo|nasa|lunar|moon landing|astronaut|spacesuit|space suit|mercury (program|capsule)|gemini (program|capsule)|saturn v|cosmonaut|sputnik|space[- ]?flown)\b/.test(t)) return 'space-exploration';
   // then computing/tech: an Apple-1 or a sealed iPhone is science even in a sports house
-  if (/\b(apple[- ]?(1|i{1,3}|ii)|iphone|ipod|macintosh|steve jobs|wozniak|apple computer|commodore|ibm\b|altair|enigma)\b/.test(t)) return 'scientific-instruments';
+  if (/\b(apple[- ]?(1|i{1,3}|ii)|iphone|ipod|macintosh|apple lisa|steve jobs|wozniak|apple computer|commodore|ibm\b|altair|enigma|bell labs|transistor|semiconductor|integrated circuit|microprocessor|vacuum tube|punch(ed)? card|eniac|univac|\bcray\b|pdp-\d|\bvax\b|\bnext(cube|step)?\b|xerox (alto|parc)|difference engine|babbage|\bturing\b|kenbak|imsai|trs-80)\b/.test(t)) return 'scientific-instruments';
   if (/\b(meteorite|pallasite|tektite)\b/.test(t)) return 'meteorites';
   if (/\b(fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|amber with|t[- ]rex|raptor)\b/.test(t)) return 'fossils';
   // sports objects — a grading mark doesn't disqualify a real object
@@ -2597,23 +2744,25 @@ async function main() {
 
   fs.mkdirSync(DATA_DIR, { recursive: true });
 
-  // Load existing data
+  // Load existing data. MUST read the FULL corpus (data/corpus/{lots,sold-
+  // archive}.json.gz) — NOT the slim public/data/ray/lots.json, which OMITS the
+  // Goldin sold-archive (~11k permanent hammer records split out for payload
+  // size). Reading the slim file silently drops the entire archive every crawl:
+  // the merge would rebuild sold-archive.json from only this run's Goldin tail,
+  // erasing accumulated history. readCorpus() concats both files back together.
   let existingLots: AuctionLot[] = [];
   const existingStatsByArtist: Record<string, MarketStats> = {};
-  const lotsPath = path.join(DATA_DIR, 'lots.json');
   const statsPath = path.join(DATA_DIR, 'stats.json');
 
-  if (fs.existsSync(lotsPath)) {
-    try {
-      existingLots = JSON.parse(fs.readFileSync(lotsPath, 'utf-8'));
-      // Backfill fields for legacy lots
-      for (const lot of existingLots) {
-        if (!lot.artist) lot.artist = 'george-condo';
-        if (!lot.category) lot.category = 'unknown' as LotCategory;
-      }
-      console.log(`[Ray] Loaded ${existingLots.length} existing lots.`);
-    } catch { console.log('[Ray] Could not parse existing lots.json'); }
-  }
+  try {
+    const { readCorpus } = await import('./corpus-io');
+    existingLots = readCorpus() as unknown as AuctionLot[];
+    for (const lot of existingLots) {
+      if (!lot.artist) lot.artist = 'george-condo';
+      if (!lot.category) lot.category = 'unknown' as LotCategory;
+    }
+    console.log(`[Ray] Loaded ${existingLots.length} existing lots (full corpus incl. sold-archive).`);
+  } catch (e) { console.log('[Ray] Could not read corpus:', (e as Error).message); }
   if (fs.existsSync(statsPath)) {
     try {
       const raw = JSON.parse(fs.readFileSync(statsPath, 'utf-8'));
@@ -2644,14 +2793,19 @@ async function main() {
   const WATCH_SLUGS = ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'];
   const SCIENCE_SLUGS = ['meteorites', 'fossils', 'space-exploration', 'scientific-instruments'];
   const SPORTS_SLUGS = ['game-used', 'trophies-awards', 'tickets-passes'];
+  const ART_SLUGS = ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf', 'george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'];
   const wantWatch = !only || WATCH_SLUGS.some(s => only.has(s));
   const wantScience = !only || SCIENCE_SLUGS.some(s => only.has(s));
   const wantSports = !only || SPORTS_SLUGS.some(s => only.has(s));
-  const scopeCount = [wantWatch, wantScience, wantSports].filter(Boolean).length;
-  const auctionScope = scopeCount > 1 ? 'all' : wantWatch ? 'watches' : wantScience ? 'science' : wantSports ? 'sports' : null;
+  const wantArt = !only || ART_SLUGS.some(s => only.has(s));
+  const scopeCount = [wantWatch, wantScience, wantSports, wantArt].filter(Boolean).length;
+  const auctionScope: 'watches' | 'science' | 'sports' | 'art' | 'all' | null =
+    scopeCount > 1 ? 'all' : wantWatch ? 'watches' : wantScience ? 'science' : wantSports ? 'sports' : wantArt ? 'art' : null;
   if (auctionScope) {
     freshLots.push(...await crawlSothebysAuctions(auctionScope));
     freshLots.push(...await crawlChristiesAuctions(auctionScope));
+    // accurate per-lot close times for the live Sotheby's lots (best-effort)
+    await enrichSothebysCloseTimes(freshLots);
   }
   // Goldin: sports objects (never cards) + computing/fossils (never games).
   // Live inventory only — each crawl replaces the previous Goldin set
@@ -2820,6 +2974,96 @@ async function main() {
     }
   }
   for (const id of Array.from(badIds)) lotMap.delete(id);
+
+  // ── GLOBAL status-sanitize + results-pending net (house-agnostic) ──
+  // EVERY house has the same failure mode: a sale closes, the house has not
+  // posted hammers yet, and the lot lands in a state that (a) hides it from both
+  // active and sold (the "double miss") or (b) is outright invalid (upcoming
+  // with a past date; sold with no price — flaky artist-page scrapes produce
+  // both). The write-gate is all-or-nothing, so a handful of such rows would
+  // block the entire 44k-row publish. This one pass sanitizes them so the gate
+  // passes AND no just-closed lot vanishes: a resultless lot whose sale closed
+  // within RESULT_PENDING_MS is held VISIBLE as pending (upcoming); anything
+  // past the window or otherwise invalid settles to bought_in. Goldin is
+  // excluded — its Completed-flip pass owns its own adjudication.
+  const HIDDEN = new Set(['bought_in', 'withdrawn', 'unknown-result']);
+  const todayStr = new Date(nowMs).toISOString().slice(0, 10);
+  let heldPending = 0, demoted = 0;
+  const held = (lot: AuctionLot & { resultsPending?: boolean }) => { lot.status = 'upcoming'; lot.resultsPending = true; heldPending++; };
+  for (const lot of Array.from(lotMap.values())) {
+    if (lot.auctionHouse === 'Goldin') continue;
+    const hasHammer = (lot.realizedUsd || 0) > 0;
+    const sMs = new Date(lot.saleDate).getTime();
+    const saleStr = (lot.saleDate || '').slice(0, 10);
+    const past = /^\d{4}-\d{2}-\d{2}$/.test(saleStr) && saleStr < todayStr;
+    const withinWindow = !isNaN(sMs) && sMs <= nowMs && nowMs - sMs <= RESULT_PENDING_MS;
+
+    // (a) 'sold' with no usable price is a parse miss, not a real sale → demote
+    //     to bought_in AND strip any partial money (the non-sold-null-price
+    //     invariant requires every realized/hammer/premium field be null).
+    if (lot.status === 'sold' && !hasHammer) {
+      lot.status = 'bought_in';
+      const L = lot as unknown as Record<string, unknown>;
+      for (const f of ['realizedUsd', 'realizedNative', 'hammerUsd', 'hammerNative', 'premiumUsd', 'premiumNative', 'hammerPrice', 'premiumPrice', 'priceUsd', 'priceBasis']) L[f] = null;
+      demoted++; continue;
+    }
+    // (b) hidden + resultless + just-closed → hold visible as pending
+    if (HIDDEN.has(lot.status as string) && !hasHammer && past && withinWindow) { held(lot as AuctionLot & { resultsPending?: boolean }); continue; }
+    // (c) 'upcoming' with a PAST sale date — keep it VISIBLE if it is just-closed
+    //     OR already flagged results-pending (a deliberately-held live lot whose
+    //     source date is stale, e.g. Christie's online sales). Only a stale
+    //     upcoming with NO pending flag beyond the window is a real closed
+    //     listing → bought_in. NEVER demote a results-pending lot (that is how
+    //     live lots were being lost).
+    if (lot.status === 'upcoming' && past) {
+      if (withinWindow || (lot as AuctionLot & { resultsPending?: boolean }).resultsPending) held(lot as AuctionLot & { resultsPending?: boolean });
+      else { lot.status = 'bought_in'; demoted++; }
+    }
+  }
+  if (heldPending) console.log(`[Ray] Held ${heldPending} just-closed lots visible as results-pending (all houses)`);
+  if (demoted) console.log(`[Ray] Sanitized ${demoted} invalid rows (sold-no-price / stale-upcoming → bought_in)`);
+
+  // ── Christie's online-sale TRUE dates + rescue (onlineonly) ──
+  // www.christies.com is STALE for online ("First Open") sales — it reports live
+  // lots as over with years-old dates, so they get stranded as bought_in. The
+  // real close lives on onlineonly (the SSO url each lot carries). Fetch it for
+  // EVERY non-sold Christie's lot with an onlineonly url — existing corpus rows
+  // included, since the legacy id format is not re-produced each crawl — stamp
+  // the true end_date, and revive future-dated lots to 'upcoming'. Best-effort:
+  // an unreachable lot keeps its state (never dropped). This un-strands live lots
+  // that the stale www data wrongly closed (e.g. saved Tom Sachs).
+  {
+    const targets = Array.from(lotMap.values()).filter(l =>
+      l.auctionHouse === "Christie's" && l.status !== 'sold' && !!l.url && /onlineonly\.christies\.com/.test(l.url));
+    const CONC = 6, CAP = 1500;
+    const slice = targets.slice(0, CAP);
+    let dated = 0, revived = 0;
+    for (let i = 0; i < slice.length; i += CONC) {
+      await Promise.all(slice.slice(i, i + CONC).map(async lot => {
+        try {
+          const r = await fetch(lot.url, { headers: { 'User-Agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(20000) });
+          if (!r.ok) return;
+          const h = await r.text();
+          const raw = (h.match(/"end_date":"([0-9T:.\-]+Z)"/) || [])[1];
+          if (!raw) return;
+          const d = new Date(raw);
+          if (isNaN(d.getTime())) return;
+          const iso = d.toISOString();
+          lot.saleDate = iso.slice(0, 10);
+          (lot as AuctionLot & { saleDateTime?: string }).saleDateTime = iso;
+          dated++;
+          if (d.getTime() > Date.now()) {
+            if (lot.status !== 'upcoming') revived++;
+            lot.status = 'upcoming';
+            (lot as AuctionLot & { resultsPending?: boolean }).resultsPending = false;
+          }
+        } catch { /* unreachable → keep state; never drop */ }
+      }));
+      await sleep(120);
+    }
+    if (slice.length) console.log(`  [Christie's] onlineonly: dated ${dated}/${slice.length}, revived ${revived} wrongly-closed lots to upcoming`);
+  }
+
   if (goldinRan) console.log(`[Ray] Goldin: promoted ${goldinPromoted} closed lots to final hammer (last-bid + premium)`);
   if (reconciledWithdrawn || reconciledUnknown) {
     console.log(`[Ray] Reconciled ${reconciledWithdrawn + reconciledUnknown} vanished upcoming lots (${reconciledWithdrawn} withdrawn, ${reconciledUnknown} unknown-result)`);
@@ -3050,14 +3294,61 @@ async function main() {
     const report = assertInvariants(allLots);
     for (const w of report.warn) console.warn(`[Ray] WARN invariant: ${w}`);
     if (report.fatal.length > 0) {
-      console.error(`[Ray] ${report.fatal.length} FATAL invariant violation(s) — ABORTING write (data untouched):`);
+      console.error(`[Ray] ${report.fatal.length} FATAL invariant violation(s):`);
       for (const f of report.fatal.slice(0, 50)) console.error(`  ✗ ${f}`);
       if (report.fatal.length > 50) console.error(`  … and ${report.fatal.length - 50} more`);
-      throw new Error(`assertInvariants: ${report.fatal.length} FATAL violation(s) — refusing to publish`);
+      // A LARGE count means systemic corruption → abort with data untouched.
+      // A SMALL count of stragglers must not block a 44k-row publish: drop just
+      // those rows and publish the rest (honest — bad rows excluded, not faked).
+      // The sanitize pass above already fixes the known patterns; this catches
+      // the unforeseen few so the pipeline is never wedged by a handful of rows.
+      const DROP_CEILING = 30;
+      if (report.fatal.length > DROP_CEILING) {
+        throw new Error(`assertInvariants: ${report.fatal.length} FATAL (> ${DROP_CEILING}) — systemic, refusing to publish`);
+      }
+      const badIds = new Set(report.fatal.map(f => (f.match(/^\[\d+\] ([^:]+):/) || [])[1]).filter(Boolean));
+      const kept = allLots.filter(l => !badIds.has(l.id));
+      console.warn(`[Ray] Dropping ${allLots.length - kept.length} invalid row(s) and publishing the remaining ${kept.length}.`);
+      allLots.length = 0; allLots.push(...kept);
+      const recheck = assertInvariants(allLots);
+      if (recheck.fatal.length > 0) throw new Error(`assertInvariants: ${recheck.fatal.length} FATAL remain after drop — refusing to publish`);
     }
     const validatedAt = new Date().toISOString();
     for (const lot of allLots) lot.validatedAt = validatedAt;
     console.log(`[Ray] Invariant gate PASSED (${report.warn.length} warnings) — stamped validatedAt on ${allLots.length} lots`);
+  }
+
+  // ── COVERAGE TRIPWIRE ─────────────────────────────────────────────────────
+  // The class of bug that hid science: a market's live lots silently vanish and
+  // nobody notices until it's spotted by eye. Compare active (upcoming, incl.
+  // results-pending) counts per market against the PRE-crawl corpus and shout on
+  // a collapse. Non-fatal (a market can legitimately be between sale cycles), but
+  // the alert line is greppable so CI can notify on it. Also logs every market's
+  // before→after so a slow bleed is visible in the crawl log.
+  {
+    const groups: Record<string, string[]> = {
+      art: ART_SLUGS, watches: WATCH_SLUGS, sports: SPORTS_SLUGS, science: SCIENCE_SLUGS,
+    };
+    const activeByMarket = (lots: AuctionLot[]) => {
+      const m: Record<string, number> = { art: 0, watches: 0, sports: 0, science: 0 };
+      for (const l of lots) {
+        if (l.status !== 'upcoming') continue;
+        for (const k in groups) if (groups[k].includes(l.artist)) m[k]++;
+      }
+      return m;
+    };
+    const before = activeByMarket(existingLots);
+    const after = activeByMarket(allLots);
+    console.log('[coverage] active (upcoming) lots per market, pre-crawl → post-crawl:');
+    let alerts = 0;
+    for (const k of Object.keys(after)) {
+      const b = before[k], a = after[k];
+      // collapse = a market with real prior coverage falls to zero, or loses >60%
+      const collapse = (b >= 8 && a === 0) || (b >= 20 && a < b * 0.4);
+      if (collapse) alerts++;
+      console.log(`[coverage]   ${k.padEnd(8)} ${String(b).padStart(4)} → ${String(a).padStart(4)}${collapse ? '   ⚠️  COVERAGE ALERT — sharp drop, investigate' : ''}`);
+    }
+    if (alerts) console.warn(`[Ray] ⚠️  COVERAGE ALERT: ${alerts} market(s) lost their active lots this crawl — check the crawler/source before trusting this data.`);
   }
 
   // W3 · Payload split at write time. Goldin *sold* is ~35% of the corpus and

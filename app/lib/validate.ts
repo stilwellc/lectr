@@ -135,7 +135,10 @@ export function assertInvariants(lots: AuctionLot[], now: number = Date.now()): 
     // "future" is measured against the START of today, not the current instant:
     // a lot hammering TODAY is legitimately still upcoming, and saleDate has day
     // granularity. Comparing to `now` fails every same-day auction.
-    if (l.status === 'upcoming' && l.saleDate) {
+    // resultsPending lots are DELIBERATELY upcoming with a past saleDate — a
+    // just-closed sale held visible until the house posts hammers — so they are
+    // exempt from this invariant (see RESULT_PENDING_MS in ray-crawl.ts).
+    if (l.status === 'upcoming' && l.saleDate && !(l as { resultsPending?: boolean }).resultsPending) {
       // compare as YYYY-MM-DD strings — timezone-proof for day-granularity
       // dates (new Date('2026-07-14') is UTC midnight and would read as
       // "yesterday" in a US-local comparison). A same-day sale is allowed.

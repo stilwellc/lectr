@@ -215,11 +215,11 @@ export function makeAuctionIcs(lot: {
   ].join('\r\n');
 }
 
-export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; artist: string }>): Record<string, number> {
+export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; artist: string; resultsPending?: boolean }>): Record<string, number> {
   const today = new Date().toISOString().split('T')[0];
   const counts: Record<string, number> = {};
   for (const lot of lots) {
-    if (lot.status === 'upcoming' && lot.saleDate && lot.saleDate >= today) {
+    if (lot.status === 'upcoming' && lot.saleDate && (lot.saleDate >= today || lot.resultsPending)) {
       counts[lot.artist] = (counts[lot.artist] || 0) + 1;
     }
   }

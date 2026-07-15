@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import CommandK from './CommandK';
+import { useAuth } from '../lib/account';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
   const [lit, setLit] = useState(false);
   const [query, setQuery] = useState('');
+  const { authEnabled, user, signOut, openLogin } = useAuth();
   // On phones the maker finder is a full-screen sheet (portaled to <body> to
   // escape the nav's backdrop-filter containing block), not a cramped dropdown.
   const [isMobile, setIsMobile] = useState(false);
@@ -519,6 +521,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
             Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
           </button>
+          {authEnabled && (user ? (
+            <button className="ray-nav-link" onClick={() => signOut()} title={user.email || 'Signed in'}>
+              {(user.email || 'account').split('@')[0]} · Sign out
+            </button>
+          ) : (
+            <button className="ray-nav-link" onClick={openLogin}>Sign in</button>
+          ))}
         </nav>
 
 
@@ -640,6 +649,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     {s.label}
                   </button>
                 ))}
+                {authEnabled && (
+                  <button
+                    className="ray-maker-navitem"
+                    onClick={() => { if (user) signOut(); else openLogin(); setOpen(false); }}
+                  >
+                    {user ? `Sign out · ${(user.email || 'account').split('@')[0]}` : 'Sign in'}
+                  </button>
+                )}
               </nav>
               <div className="ray-maker-sheet-sub">Find a maker</div>
               {filterInput}

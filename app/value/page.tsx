@@ -41,7 +41,7 @@ export default function ValuePage() {
   const deals = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return marketLots
-      .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
       .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
       .sort((a, b) => (b.signal!.pct - a.signal!.pct));

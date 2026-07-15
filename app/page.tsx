@@ -190,7 +190,10 @@ export default function RayPage() {
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return marketLots
-      .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
+      // resultsPending lots are held visible (live/just-closed) even though the
+      // parsed sale date can read as past — a timed auction closes lots per-day
+      // and the sale-level date lags, so a live lot must not be filtered out.
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
       // ISO date strings order lexicographically — no Date per comparison
       .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
   }, [marketLots]);
@@ -359,7 +362,10 @@ export default function RayPage() {
     if (mine.length === 0) return null;
     const today = new Date().toISOString().split('T')[0];
     const live = mine
-      .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
+      // resultsPending lots are held visible (live/just-closed) even though the
+      // parsed sale date can read as past — a timed auction closes lots per-day
+      // and the sale-level date lags, so a live lot must not be filtered out.
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
       .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
     let bestMove: { from: number; to: number } | null = null;
     for (const l of live) {
