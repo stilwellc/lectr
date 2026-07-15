@@ -42,7 +42,24 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
+      # GUARD 1 — never DEPLOY a broken build. Every JS chunk the exported HTML
+      # references must actually exist in out/. A build that emits HTML pointing
+      # at a missing chunk (the "Refused to execute script" break) fails here,
+      # before it can reach production.
+      - name: Verify build self-consistency
+        run: |
+          test -f out/index.html || { echo "::error::out/index.html missing — build did not export"; exit 1; }
+          missing=0
+          for f in out/*.html; do
+            for c in $(grep -oE '/_next/static/chunks/[a-z0-9/_.-]+\.js' "$f" | sort -u); do
+              [ -f "out$c" ] || { echo "::error::$f references missing chunk $c"; missing=$((missing+1)); }
+            done
+          done
+          if [ "$missing" -gt 0 ]; then echo "::error::$missing missing chunk reference(s) — refusing to deploy broken code"; exit 1; fi
+          echo "✓ build self-consistent — all referenced chunks present in out/"
+
       - name: Deploy to Cloudflare Pages
+        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -51,4 +68,35 @@ jobs:
             echo "::error::CLOUDFLARE_API_TOKEN secret is not set — create a token at dash.cloudflare.com/profile/api-tokens (Custom: Account → Cloudflare Pages → Edit) and add it with: gh secret set CLOUDFLARE_API_TOKEN"
             exit 1
           fi
-          npx wrangler pages deploy out --project-name collectr --branch main --commit-dirty=true
+          out=$(npx wrangler pages deploy out --project-name collectr --branch main --commit-dirty=true 2>&1)
+          echo "$out"
+          url=$(echo "$out" | grep -oE 'https://[a-z0-9]+\.collectr-2ks\.pages\.dev' | head -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # GUARD 2 — never LEAVE a broken deploy live. Hit the exact deployment URL
+      # (no propagation lag on the unique host) and confirm the home HTML's JS
+      # chunk actually serves as executable JavaScript. If it 404s or serves the
+      # wrong content-type, the job FAILS loudly so a broken deploy is caught,
+      # not left in production silently.
+      - name: Verify deploy serves executable JS
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          [ -n "$url" ] || { echo "::error::could not capture deploy URL"; exit 1; }
+          echo "verifying $url"
+          for i in $(seq 1 8); do
+            html=$(curl -s "$url/?cb=$i" || true)
+            chunk=$(echo "$html" | grep -oE '/_next/static/chunks/app/page-[a-z0-9]+\.js' | head -1)
+            if [ -n "$chunk" ]; then
+              code=$(curl -s -o /dev/null -w '%{http_code}' "$url$chunk")
+              ctype=$(curl -s -o /dev/null -w '%{content_type}' "$url$chunk")
+              echo "attempt $i: $chunk -> $code $ctype"
+              if [ "$code" = "200" ] && echo "$ctype" | grep -qi javascript; then
+                echo "✓ deploy verified — home JS resolves and executes"; exit 0
+              fi
+            else
+              echo "attempt $i: no page chunk in HTML yet"
+            fi
+            sleep 8
+          done
+          echo "::error::Deploy verification FAILED — the deployed home JS chunk does not resolve as JavaScript. Production build is broken; investigate before trusting this deploy."
+          exit 1
