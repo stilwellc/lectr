@@ -2816,7 +2816,11 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-feedtable .thumb-plate {
   width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-  background: var(--color-bg-elevated); color: var(--color-text-faint); font-weight: 700; font-size: 15px;
+  position: relative; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent-gold) 8%, transparent), transparent 72%), var(--color-bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--color-accent-gold) 13%, transparent);
+  color: color-mix(in srgb, var(--color-accent-gold) 58%, var(--color-text-faint));
+  font-family: var(--font-serif), serif; font-style: italic; font-weight: 300; font-size: 21px; line-height: 1;
 }
 .ray-feedtable .t-artist { color: var(--color-fg); font-weight: 600; }
 .ray-feedtable .t-title { color: var(--color-text-muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis; }

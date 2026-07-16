@@ -929,28 +929,24 @@ export default function ComparableModal({
                         {i + 1}
                       </span>
 
-                      {/* Thumbnail */}
+                      {/* Thumbnail — matte plate always behind, photo overlays;
+                          on a hotlink-block the plate shows through, never a gap */}
                       <div className="comp-modal-thumb" style={{
+                        position: 'relative',
                         borderRadius: 8,
                         overflow: 'hidden',
                         flexShrink: 0,
-                        background: 'var(--color-bg-elevated)',
+                        background: 'radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent-gold) 8%, transparent), transparent 72%), var(--color-bg-elevated)',
+                        border: '1px solid color-mix(in srgb, var(--color-accent-gold) 13%, transparent)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}>
-                        {comp.imageUrl ? (
-                          <img src={httpsImg(comp.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.currentTarget.remove()} />
-                        ) : (
-                          <span style={{
-                            fontFamily: "var(--font-serif), serif",
-                            fontSize: 18,
-                            color: 'var(--color-text-faint)',
-                            opacity: 0.3,
-                            fontStyle: 'normal',
-                          }}>
-                            {comp.title.charAt(0)}
-                          </span>
+                        <span style={{ fontFamily: 'var(--font-serif), serif', fontStyle: 'italic', fontWeight: 300, fontSize: 20, lineHeight: 1, color: 'color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint))' }}>
+                          {(craftTitle(comp.title) || '?').charAt(0)}
+                        </span>
+                        {comp.imageUrl && (
+                          <img src={httpsImg(comp.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.currentTarget.remove()} />
                         )}
                       </div>
 
