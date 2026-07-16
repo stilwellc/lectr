@@ -78,13 +78,19 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
   }).filter(p => p.n >= 6);
 
   // ── house accuracy ──
+  // HAMMER basis: estimates are hammer-basis while realized is premium-inclusive
+  // (~1.25×), so realized/mid ran ~1.18 from premium alone and could never say
+  // the houses "missed". hammerUsd where published, else realized/1.25.
   const accByQ = new Map<string, number[]>();
   for (const l of soldPriced) {
     if (!l.estLowUsd || !l.estHighUsd) continue;
     const mid = (l.estLowUsd + l.estHighUsd) / 2;
     if (!(mid > 0)) continue; // guard against corrupt (negative/zero) estimates
     const q = QUARTER(l.saleDate); if (!q) continue;
-    (accByQ.get(q) || accByQ.set(q, []).get(q)!).push(l.realizedUsd! / mid);
+    const hammer = ((l as { hammerUsd?: number | null }).hammerUsd || 0) > 0
+      ? (l as { hammerUsd?: number | null }).hammerUsd!
+      : l.realizedUsd! / 1.25;
+    (accByQ.get(q) || accByQ.set(q, []).get(q)!).push(hammer / mid);
   }
   const houseAccuracy = Array.from(accByQ.entries()).filter(([, v]) => v.length >= MIN_PER_QUARTER)
     .map(([q, v]) => ({ period: q, value: +median(v).toFixed(2), n: v.length }))

@@ -501,7 +501,11 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
     : 'low';
 
   const ratio = med / estMid;
-  if (ratio >= 1.2) return { signal: { label: 'Below Market', pct: Math.round((ratio - 1) * 100), basis: pool.length, med, kind, form, confidence }, pool };
+  // 1.3 threshold (raised from 1.2): sold prices are premium-inclusive (~1.25×
+  // hammer) while estimates are hammer-basis, so a pool trading exactly AT its
+  // estimates reads ~1.25 — flags in the 1.2–1.3 band were pure buyer's premium,
+  // not edge. Matches the validated engine threshold.
+  if (ratio >= 1.3) return { signal: { label: 'Below Market', pct: Math.round((ratio - 1) * 100), basis: pool.length, med, kind, form, confidence }, pool };
   if (ratio <= 0.75) return { signal: { label: 'Above Market', pct: Math.round((1 - ratio) * 100), basis: pool.length, med, kind, form, confidence }, pool };
   return null;
 }

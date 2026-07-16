@@ -80,7 +80,21 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     })
     .map(l => {
       const lot = l as unknown as AuctionLot;
-      const withSignal = { ...l, signal: computeDeepSignal(lot, lots as unknown as AuctionLot[]) };
+      let signal = computeDeepSignal(lot, lots as unknown as AuctionLot[]);
+      // CONTRADICTION GUARD (measured): when the backtested engine (lot.value,
+      // stamped by build-market) and the client card signal DISAGREE on
+      // direction, the card flag carries zero information — the contradiction
+      // bucket realized exactly at the unflagged baseline (+17%/49%) in a
+      // 25k-target head-to-head. Suppress the card flag; never show a green
+      // "below market" beside a modal that says "above comparable market".
+      const engineLabel = (lot as { value?: { signal?: { label?: string } | null } | null }).value?.signal?.label;
+      if (signal && engineLabel) {
+        const cardBelow = signal.label === 'Below Market';
+        const engineBelow = engineLabel.startsWith('below');
+        const engineAbove = engineLabel.startsWith('above');
+        if ((cardBelow && engineAbove) || (!cardBelow && engineBelow)) signal = null;
+      }
+      const withSignal = { ...l, signal };
       // W5 · precompute soldComp for upcoming sports/science lots, analogous to
       // signal — so a card/modal can paint the realized band before the archive
       // loads. soldCompBand returns null for every non-sports/science-object lot

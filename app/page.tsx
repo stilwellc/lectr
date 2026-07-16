@@ -526,8 +526,8 @@ export default function RayPage() {
             )}
             {backtest && backtest.flagged.n > 500 && (
               <a href="/value" className="ray-proofstrip">
-                Flagged calls beat their estimates by <b className="up">+{backtest.flagged.medianPerfPct}%</b> median
-                — vs +{backtest.unflagged.medianPerfPct}% unflagged — across {backtest.flagged.n.toLocaleString()} replayed
+                Flagged calls hammered <b className="up">+{backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct}%</b> over
+                their estimates — unflagged hammered {(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct) >= 0 ? '+' : ''}{backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct}% — across {backtest.flagged.n.toLocaleString()} replayed
                 sales{activeKey !== 'all' ? ' · all markets' : ''} · the record <Flick size={12} />
               </a>
             )}
@@ -823,7 +823,7 @@ export default function RayPage() {
           <Colophon
             lotCount={totalLots}
             houseCount={new Set(allLots.map(l => l.auctionHouse)).size}
-            record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.medianPerfPct } : null}
+            record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct } : null}
           />
         </RayEntrance>
       )}

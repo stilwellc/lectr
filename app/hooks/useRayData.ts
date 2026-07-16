@@ -14,10 +14,22 @@ export type DemandByMarket = Record<string, DemandPoint[]>;
 export type RealizedByMarket = Record<string, RealizedPoint[]>;
 export type RecentSoldByMarket = Record<string, unknown[]>;
 export interface Backtest {
-  flagged: { n: number; medianPerfPct: number; beatHighPct: number };
-  unflagged: { n: number; medianPerfPct: number; beatHighPct: number };
-  above: { n: number; medianPerfPct: number; beatHighPct: number };
+  flagged: BacktestBucket;
+  unflagged: BacktestBucket;
+  above: BacktestBucket;
   series: { year: number; flaggedMedianPct: number | null; unflaggedMedianPct: number | null; nFlagged: number }[];
+}
+export interface BacktestBucket {
+  n: number;
+  medianPerfPct: number;   // all-in (premium-inclusive) realized vs estimate-mid
+  beatHighPct: number;     // sold-only, all-in basis
+  /** hammer basis — estimates are hammer-basis, so this is the honest beat */
+  hammerMedianPct?: number;
+  hammerBeatPct?: number;
+  /** bought-in outcomes */
+  nBoughtIn?: number;
+  failToSellPct?: number;
+  beatHighHonestPct?: number;
 }
 
 interface RayData {

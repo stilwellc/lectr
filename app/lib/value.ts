@@ -116,7 +116,18 @@ export function estimateValue(
   if (pool.length < 3) return null;
 
   const top = pool.slice(0, TOP_K);
-  const compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2)]));
+  // Recency decay (validated ADOPT, halflife 2y): a comp's weight halves every
+  // 2 years of age relative to the lot's own sale (or now for a live lot).
+  // Measured on temporal holdout: identical coverage, edge 23.9→25.0pt, +199
+  // flags with clean churn (removed flags realize like unflagged).
+  const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
+  const decay = (c: Comp) => {
+    const t = new Date(c.saleDate || '').getTime();
+    if (isNaN(t)) return 1;
+    const ageYears = Math.max(0, (refMs - t) / 31_557_600_000);
+    return Math.pow(0.5, ageYears / 2);
+  };
+  const compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
   // Displayed band widened to q0.15..q0.85 (lerp) so it honestly covers ~50% of
   // realized outcomes; the round q1..q3 only covered ~37% and mislabeled the

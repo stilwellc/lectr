@@ -196,7 +196,7 @@ export function Colophon({ lotCount, houseCount, record }: {
             <span className="ray-close-k">The record</span>
             {record && record.n > 500 ? (
               <p>
-                Flagged calls beat their estimates by <b className="up">+{record.medianPerfPct}% median</b> across {record.n.toLocaleString()} replayed sales.
+                Flagged calls hammered <b className="up">+{record.medianPerfPct}% median</b> over their estimates across {record.n.toLocaleString()} replayed sales.
               </p>
             ) : (
               <p>Every call is replayed against what the lot really hammered for.</p>

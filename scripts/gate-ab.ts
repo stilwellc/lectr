@@ -27,7 +27,10 @@ const median = (a: number[]) => {
   return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 
-const PRIOR_CAP = 500; // cap same-maker priors per target — keeps the replay tractable; identical for both gates
+// NO prior cap — production build-market feeds the engine the FULL same-maker
+// roster; a 500 cap was measured to understate shipped coverage by ~7pp (64.9%
+// of targets saturated it) and acted as a hidden recency filter in A/Bs.
+const PRIOR_CAP = Infinity;
 
 console.log('[gate-ab] reading corpus…');
 const all = readGz('lots.json').concat(readGz('sold-archive.json')) as L[];

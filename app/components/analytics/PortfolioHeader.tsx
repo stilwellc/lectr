@@ -32,16 +32,20 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
     const lotsWithEstimate = allLots.filter(l =>
       l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0
     );
+    // HAMMER basis: estimates are hammer-basis while priceUsd includes the
+    // buyer's premium (~1.25×) — comparing them raw overstated "over estimate"
+    // by ~25pts. Served lots don't carry hammerUsd, so divide by the measured
+    // flat premium factor.
     const avgOverEstimate = lotsWithEstimate.length
       ? lotsWithEstimate.reduce((s, l) =>
-          s + ((l.priceUsd! - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / lotsWithEstimate.length
+          s + ((l.priceUsd! / 1.25 - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / lotsWithEstimate.length
       : 0;
 
     return [
       { label: 'Total sales value', value: formatPrice(totalRevenue), sub: 'aggregate realized prices, all makers', tone: '' },
       { label: 'Total lots', value: allLots.length.toLocaleString(), sub: `${ARTISTS.length} makers tracked`, tone: '' },
       { label: 'Appreciation', value: `${weightedAppreciation >= 0 ? '+' : ''}${weightedAppreciation.toFixed(1)}%`, sub: 'sales-weighted avg across makers', tone: '' },
-      { label: 'Avg. over estimate', value: `${avgOverEstimate >= 0 ? '+' : ''}${avgOverEstimate.toFixed(1)}%`, sub: `${lotsWithEstimate.length.toLocaleString()} lots with estimates`, tone: '' },
+      { label: 'Avg. hammer vs estimate', value: `${avgOverEstimate >= 0 ? '+' : ''}${avgOverEstimate.toFixed(1)}%`, sub: `${lotsWithEstimate.length.toLocaleString()} lots · hammer basis`, tone: '' },
     ];
   }, [statsByArtist, allLots]);
 

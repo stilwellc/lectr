@@ -108,7 +108,7 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
 
         {/* HOUSE ACCURACY */}
         {series.houseAccuracy.length >= 3 && accLatest != null && (
-          <Panel title="house estimate accuracy" method="median realized ÷ estimate mid, quarterly">
+          <Panel title="house estimate accuracy" method="median hammer ÷ estimate mid, quarterly · hammer basis">
             <div className="ray-mi-hero">
               <span className="ray-mi-num sm">{accLatest > 1 ? '+' : ''}{Math.round((accLatest - 1) * 100)}%</span>
               <span className="ray-mi-sub">lots {accLatest >= 1 ? 'beat' : 'missed'} the houses&rsquo; estimates, latest quarter</span>

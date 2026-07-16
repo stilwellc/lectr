@@ -188,8 +188,9 @@ export default function AboutPage() {
           <p style={p}>
             That same harness is how engine changes ship: any tweak to the gate or scorer runs through
             the A/B before it goes live. The current gate broadening, for example, was adopted because it
-            valued <strong>+5% more lots with an identical predictive edge</strong> (flagged median +40%,
-            beat-high 63%, a 24-point edge over unflagged) — and the model hard-gate was <em>rejected</em>
+            valued <strong>+5% more lots with an identical predictive edge</strong> (flagged lots hammer
+            +12% over their estimates vs −7% unflagged — +40% vs +15% including buyer&rsquo;s premium —
+            and fail to sell far less often) — and the model hard-gate was <em>rejected</em>
             because it cost coverage for zero edge gain.
           </p>
         </section>
