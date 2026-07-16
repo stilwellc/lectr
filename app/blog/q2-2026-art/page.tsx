@@ -19,6 +19,14 @@ export default function Q2Art() {
         { label: 'Sell-through', value: '56%', sub: 'the quarter’s real story', tone: 'down' },
         { label: 'Hammer vs estimate', value: '1.00×', sub: 'median · 33% beat the high' },
       ]}
+      headline={{
+        image: 'https://www.christies.com/img/lotimages/2026/NYR/2026_NYR_24923_0002A_000(pablo_picasso_tete_de_femme014524).jpg?mode=max',
+        caption: 'Pablo Picasso — Tête de femme (Fernande)',
+        priceUsd: 48_360_000,
+        house: "Christie's",
+        saleLine: 'May 18, 2026 · New York',
+        para: <>The lot of the quarter. Picasso&rsquo;s 1909 bronze of Fernande Olivier is proto-Cubism you can walk around — the moment the fractured planes of <em>Les Demoiselles</em> left the canvas and entered three dimensions. Casts of this head sit in MoMA and the Tate, and when one reaches the block the market treats it as infrastructure, not inventory: $48.4M, the top price of Q2 across every market we track, and nearly a fifth of the art quarter&rsquo;s entire value in a single hammer.</>,
+      }}
       topSales={[
         { title: 'Pablo Picasso — Tête de femme (Fernande)', priceUsd: 48_360_000, house: "Christie's", date: '2026-05-18', maker: 'pablo-picasso' },
         { title: 'Pablo Picasso — Homme à la guitare', priceUsd: 40_885_000, house: "Christie's", date: '2026-05-18', maker: 'pablo-picasso' },

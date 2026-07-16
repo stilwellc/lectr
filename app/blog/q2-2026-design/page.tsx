@@ -19,6 +19,14 @@ export default function Q2Design() {
         { label: 'Sell-through', value: '82%', sub: 'buyers showed up' },
         { label: 'Beat the high estimate', value: '43%', sub: 'best of any market · 1.13× median', tone: 'up' },
       ]}
+      headline={{
+        image: 'https://www.christies.com/img/lotimages/2026/NYR/2026_NYR_24313_0089_000(pierre_jeanneret_illuminated_library_table_model_no_pj-tat-10-b_design103750).jpg?mode=max',
+        caption: 'Pierre Jeanneret — Illuminated Library Table, model PJ-TAT-10-B',
+        priceUsd: 355_600,
+        house: "Christie's",
+        saleLine: 'June 10, 2026 · New York',
+        para: <>Chandigarh furniture usually trades in the tens of thousands — chairs and desks made by the hundreds for Le Corbusier and Jeanneret&rsquo;s planned city. The illuminated library table is the other end of that market: a rare, architectural fixture built for the city&rsquo;s institutions, with far fewer survivors. At $355,600 it set the quarter&rsquo;s design ceiling and outran the typical Jeanneret lot by more than twentyfold — proof that within &ldquo;production&rdquo; furniture, scarcity of the specific model is everything.</>,
+      }}
       topSales={[
         { title: 'Pierre Jeanneret — Illuminated Library Table, PJ-TAT-10-B', priceUsd: 355_600, house: "Christie's", date: '2026-06-10', maker: 'pierre-jeanneret' },
         { title: "George Nakashima — 'Frenchman's Cove II' Dining Table, 1968", priceUsd: 330_200, house: "Christie's", date: '2026-06-10', maker: 'george-nakashima' },

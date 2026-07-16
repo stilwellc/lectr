@@ -21,8 +21,18 @@ export function B({ children }: { children: React.ReactNode }) { return <span st
 
 /** Shared frame for the quarterly market notes — a stat band, the narrative
  *  sections, the top-sales table, movers, and the standing honesty footnote. */
+export interface HeadlineLot {
+  image: string;
+  /** short display title for the caption */
+  caption: string;
+  priceUsd: number;
+  house: string;
+  saleLine: string;      // e.g. "May 18, 2026 · New York"
+  para: React.ReactNode; // the lot's own paragraph
+}
+
 export default function QuarterInsight({
-  market, title, dek, date, stats, children, topSales, movers, coolers, footnote,
+  market, title, dek, date, stats, children, topSales, movers, coolers, footnote, headline,
 }: {
   market: string;
   title: string;
@@ -34,6 +44,7 @@ export default function QuarterInsight({
   movers?: Mover[];
   coolers?: Mover[];
   footnote?: string;
+  headline?: HeadlineLot;
 }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
@@ -61,6 +72,41 @@ export default function QuarterInsight({
         </div>
 
         <article style={wrap}>
+          {headline && (
+            <figure style={{ margin: '30px 0 34px' }}>
+              {/* the lot of the quarter, presented as a catalogue plate: matted
+                  photo with the settle vignette, caption rule, its own paragraph */}
+              <div style={{
+                position: 'relative', borderRadius: 14, overflow: 'hidden',
+                border: '1px solid var(--hairline)', background: 'var(--color-bg-elevated)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 220, maxHeight: 460,
+              }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={headline.image}
+                  alt={headline.caption}
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  style={{ width: '100%', maxHeight: 460, objectFit: 'contain', display: 'block', padding: 18 }}
+                />
+                <span aria-hidden style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none',
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 -46px 60px -34px rgba(8,9,11,0.55), inset 0 34px 44px -38px rgba(8,9,11,0.35)',
+                }} />
+              </div>
+              <figcaption style={{
+                display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px',
+                padding: '12px 2px 0', fontSize: 13, color: 'var(--color-text-muted)',
+              }}>
+                <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{headline.caption}</span>
+                <span>{headline.house} · {headline.saleLine}</span>
+                <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', fontWeight: 700 }}>{formatPrice(headline.priceUsd)}</span>
+              </figcaption>
+              <div style={{ marginTop: 14 }}>
+                <p style={{ ...p, margin: 0 }}>{headline.para}</p>
+              </div>
+            </figure>
+          )}
           {children}
 
           <h2 style={h2}>The top of the market</h2>

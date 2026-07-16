@@ -19,6 +19,14 @@ export default function Q2Science() {
         { label: 'On the block now', value: '241 lots', sub: 'closing in Q3 — the real season', tone: 'up' },
         { label: 'Top sale', value: '$18,910', sub: 'Apollo 11 Type I photograph' },
       ]}
+      headline={{
+        image: 'https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202602-0514-5819-e0456ff9-b1c4-4f4f-98bb-1bcf5f9254ee/SF00002634015copy__496bbefb-821d-4844-8756-87738a0f0b24@1x',
+        caption: 'Buzz Aldrin on the lunar surface — Type I photograph by Neil Armstrong',
+        priceUsd: 18_910,
+        house: 'Goldin',
+        saleLine: 'April 5, 2026',
+        para: <>July 20, 1969: Neil Armstrong points the Hasselblad at Buzz Aldrin, and takes the most famous portrait ever made off-planet — visor reflecting the photographer, the LM, and most of human ambition. This Type I print (made from the original film within about a year) led science&rsquo;s quiet quarter at $18,910. Nearly every image of the first landing shows Aldrin, for a simple reason collectors love: Armstrong held the camera.</>,
+      }}
       topSales={[
         { title: 'Buzz Aldrin, Apollo 11 — Type I original photograph by Neil Armstrong (Jul. 20, 1969)', priceUsd: 18_910, house: 'Goldin', date: '2026-04-05', maker: 'space-exploration' },
         { title: 'A rare two-day marine chronometer, single-barrel', priceUsd: 16_640, house: "Sotheby's", date: '2026-06-17', maker: 'scientific-instruments' },

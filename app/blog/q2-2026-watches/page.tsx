@@ -19,6 +19,14 @@ export default function Q2Watches() {
         { label: 'Sell-through', value: '96%', sub: 'deepest liquidity we track', tone: 'up' },
         { label: 'Hammer vs estimate', value: '1.08×', sub: 'median · 32% beat the high' },
       ]}
+      headline={{
+        image: 'https://dist.phillips.com/auction-assets/NY080126/233450_001.jpg?bg-color=ffffff&pad=0&fit=bounds&height=550&optimize=medium&width=605',
+        caption: 'Patek Philippe — the quarter’s top watch',
+        priceUsd: 3_992_000,
+        house: 'Phillips',
+        saleLine: 'June 13, 2026 · New York',
+        para: <>In a quarter where the average Rolex, Cartier and AP repriced down ~30%, the top of the Patek market did the opposite. This exceptionally preserved example brought $3,992,000 at Phillips&rsquo; June sale — the largest watch price of the quarter and the clearest statement of the sorting underway: condition-and-rarity trophies are detaching from the reference market beneath them. Phillips sold four of the quarter&rsquo;s five biggest watches; this one led them all.</>,
+      }}
       topSales={[
         { title: 'Patek Philippe — an exceptionally well-preserved, highly important wristwatch', priceUsd: 3_992_000, house: 'Phillips', date: '2026-06-13', maker: 'patek-philippe' },
         { title: 'Patek Philippe — an extremely important and rare 18K wristwatch', priceUsd: 2_759_000, house: "Christie's", date: '2026-06-12', maker: 'patek-philippe' },

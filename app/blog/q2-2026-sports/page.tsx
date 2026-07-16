@@ -19,6 +19,14 @@ export default function Q2Sports() {
         { label: 'Game-used median', value: '+154%', sub: 'vs Q2 2025 · 275 sales', tone: 'up' },
         { label: 'Basis', value: 'Bid sales', sub: 'no estimates published' },
       ]}
+      headline={{
+        image: 'https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202605-1915-2628-8b9d16a0-a668-42d2-b387-b0f4f5068910/700e6d0d-1f0c-4ffc-a621-e28b4b6a4c8b@1x',
+        caption: 'Kobe Bryant / LeBron James / Stephen Curry / Luka Dončić — game-used group',
+        priceUsd: 1_342_000,
+        house: 'Goldin',
+        saleLine: 'June 29, 2026',
+        para: <>Four eras of the NBA in one lot: game-used material spanning Kobe, LeBron, Curry and Dončić, sold as a single group for $1,342,000 — more than a quarter of the entire sports market&rsquo;s Q2 value in one bid. It&rsquo;s also a snapshot of how this market now prices: not by player nostalgia but by documented, photo-matched game use, bundled into generational narratives that trade like portfolios.</>,
+      }}
       topSales={[
         { title: 'Kobe Bryant / LeBron James / Stephen Curry / Luka Dončić — game-used group', priceUsd: 1_342_000, house: 'Goldin', date: '2026-06-29', maker: 'game-used' },
         { title: 'LeBron James — 17 game-used, photo-matched Cavaliers items', priceUsd: 207_400, house: 'Goldin', date: '2026-06-29', maker: 'game-used' },
