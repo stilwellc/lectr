@@ -20,7 +20,7 @@ export default function Q2Art() {
         { label: 'Hammer vs estimate', value: '1.00×', sub: 'median · 33% beat the high' },
       ]}
       headline={{
-        image: 'https://www.christies.com/img/lotimages/2026/NYR/2026_NYR_24923_0002A_000(pablo_picasso_tete_de_femme014524).jpg?mode=max',
+        image: '/blog/q2-2026-picasso-fernande.jpg',
         caption: 'Pablo Picasso — Tête de femme (Fernande)',
         priceUsd: 48_360_000,
         house: "Christie's",

@@ -20,7 +20,7 @@ export default function Q2Design() {
         { label: 'Beat the high estimate', value: '43%', sub: 'best of any market · 1.13× median', tone: 'up' },
       ]}
       headline={{
-        image: 'https://www.christies.com/img/lotimages/2026/NYR/2026_NYR_24313_0089_000(pierre_jeanneret_illuminated_library_table_model_no_pj-tat-10-b_design103750).jpg?mode=max',
+        image: '/blog/q2-2026-jeanneret-library-table.jpg',
         caption: 'Pierre Jeanneret — Illuminated Library Table, model PJ-TAT-10-B',
         priceUsd: 355_600,
         house: "Christie's",
