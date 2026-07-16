@@ -534,7 +534,10 @@ export default function RayPage() {
           </div>
 
           {/* The market in four figures — the flagged figure IS the lens */}
-          <section className="rail ray-enter" style={{ paddingTop: 26 }}>
+          {/* the numbers layer rides the warm band — a visible break between
+              the hero board above and the live feed below */}
+          <div className="ray-band" style={{ marginTop: 30, paddingBlock: '26px 30px' }}>
+          <section className="rail ray-enter" style={{ paddingTop: 0 }}>
             <div className="ray-ledger" style={{ margin: 0 }}>
               {strip.map(item => item.lens && item.to > 0 ? (
                 <button
@@ -557,6 +560,7 @@ export default function RayPage() {
               ))}
             </div>
           </section>
+          </div>
 
           {upcoming.length > 0 && (
             <section id="on-the-block" className="ray-upcoming-section rail">
@@ -752,7 +756,7 @@ export default function RayPage() {
               ArchiveResults → useSoldArchive() → the 10MB fetch. */}
           {isSportsScience ? (
             recentRows.length > 0 && (
-              <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
+              <section className="ray-band rail-band-pad ray-enter" style={{ paddingBlock: '26px 40px', marginTop: 26, '--enter-delay': '180ms' } as React.CSSProperties}>
                 <div className="ray-results-row">
                   <span>
                     {(meta.totalSold ?? recentRows.length).toLocaleString()} sold lots
@@ -781,7 +785,7 @@ export default function RayPage() {
               </section>
             )
           ) : sold.length > 0 && (activeKey === 'all' ? (
-            <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
+            <section className="ray-band rail-band-pad ray-enter" style={{ paddingBlock: '26px 40px', marginTop: 26, '--enter-delay': '180ms' } as React.CSSProperties}>
               <div className="ray-results-row">
                 <span>
                   {sold.length.toLocaleString()} sold lots

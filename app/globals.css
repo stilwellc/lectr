@@ -1342,6 +1342,35 @@ h1 {
 /* keep content off the fixed mobile tab bar */
 @media (max-width: 899px) { .ray-mobnav-pad { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); } }
 
+/* ── THE WARM BAND — beige breaks between logical layers of a scroll ──
+   The scroll was one uninterrupted black column; these full-bleed bands lift
+   the "numbers/record" layers on a warm paper-tinted ground (drawn from the
+   matte-plate ink #E8D5BC) with warmed hairline edges. Perceptible warmth,
+   never a color block — the terminal stays dark, the layers gain seams. */
+:root {
+  --color-beige: #E8D5BC;
+  --color-beige-text: #CFC0A8;
+}
+.ray-band {
+  background:
+    radial-gradient(130% 130% at 50% 0%, color-mix(in srgb, var(--color-beige) 13%, transparent), transparent 64%),
+    color-mix(in srgb, var(--color-beige) 6.5%, var(--color-bg));
+  border-top: 1px solid color-mix(in srgb, var(--color-beige) 26%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-beige) 13%, transparent);
+}
+/* inside a band, the section label warms to the beige family (kickers only —
+   numerals and body stay in the standard ramp; green/red stay directional) */
+.ray-band .ray-ledger-k,
+.ray-band .ray-strip-k { color: var(--color-beige-text); }
+/* full-bleed band whose direct children keep the content rail's geometry */
+.rail-band-pad > * {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-inline: clamp(24px, 5vw, 56px);
+}
+
+
 .ray-toolbar-pill {
   display: inline-flex;
   align-items: baseline;

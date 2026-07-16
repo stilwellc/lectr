@@ -260,7 +260,8 @@ export default function ValuePage() {
           )}
 
           {backtest && backtest.flagged.n >= 100 && (
-            <section className="rail ray-enter" style={{ '--enter-delay': '90ms', paddingTop: 34 } as React.CSSProperties}>
+            <div className="ray-band" style={{ marginTop: 34, paddingBlock: '28px 34px' }}>
+            <section className="rail ray-enter" style={{ '--enter-delay': '90ms', paddingTop: 0 } as React.CSSProperties}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
                 <h2 className="ray-h2">The record</h2>
                 <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
@@ -311,9 +312,9 @@ export default function ValuePage() {
                 )}
               </div>
             </section>
+            <RecordByYear backtest={backtest} />
+            </div>
           )}
-
-          {backtest && backtest.flagged.n >= 100 && <RecordByYear backtest={backtest} />}
 
           <section className="ray-value-section rail">
             {deals.length === 0 ? (
