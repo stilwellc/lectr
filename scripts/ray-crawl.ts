@@ -354,52 +354,80 @@ function sleep(ms: number) {
 async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
   if (!artist.phillips) return [];
   const lots: AuctionLot[] = [];
-  const url = `https://www.phillips.com/artist/${artist.phillips.id}/${artist.phillips.slug}`;
   console.log(`  [Phillips] Fetching ${artist.displayName}...`);
 
+  // ── primary: the paginated maker-lots API — 100% estimate-bearing, ~99%
+  // sold-priced, and the ONLY way past the newest slice of a maker's history
+  // (the artist page's hydration blob exposes one page, which is why only ~3%
+  // of Phillips history had been captured). Nightly runs walk the first 2
+  // pages (fresh sales); PHILLIPS_DEEP=1 walks the full history (backfill).
+  let lotData: any[] = [];
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(30000)
+    const per = 100;
+    const first = await fetch(`https://api.phillips.com/api/maker/${artist.phillips.id}/lots?page=1&resultsPerPage=${per}`, {
+      headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(45000),
     });
-    if (!res.ok) {
-      console.log(`  [Phillips] HTTP ${res.status}`);
-      return lots;
-    }
-    const html = await res.text();
-    const $ = cheerio.load(html);
-
-    // Find the script containing ArtistLanding hydration with the maker prop
-    let makerData: any = null;
-    $('script').each((_, script) => {
-      if (makerData) return;
-      const text = $(script).html() || '';
-      if (!text.includes('ArtistLanding')) return;
-
-      // The maker prop uses \u0022 unicode escapes for quotes (not \")
-      const makerMatch = text.match(/"maker":"([^"]*)"/);
-      if (makerMatch) {
+    if (first.ok) {
+      const j = await first.json();
+      lotData = Array.isArray(j.data) ? j.data : [];
+      const totalPages = j.totalPages || 1;
+      const deep = process.env.PHILLIPS_DEEP === '1';
+      const lastPage = deep ? totalPages : Math.min(totalPages, 2);
+      console.log(`  [Phillips] API: ${j.totalCount || lotData.length} lots, walking ${lastPage}/${totalPages} pages${deep ? ' (deep)' : ''}`);
+      for (let p = 2; p <= lastPage; p++) {
+        await sleep(400);
         try {
-          const innerJson = JSON.parse('"' + makerMatch[1] + '"');
-          makerData = JSON.parse(innerJson);
-          console.log(`  [Phillips] Found maker data with ${makerData?.pastLots?.totalCount || 0} past lots, ${makerData?.upcomingLots?.totalCount || 0} upcoming lots`);
-        } catch (e) {
-          console.log('  [Phillips] Failed to parse maker prop:', (e as Error).message?.substring(0, 100));
-        }
+          const r = await fetch(`https://api.phillips.com/api/maker/${artist.phillips.id}/lots?page=${p}&resultsPerPage=${per}`, {
+            headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(45000),
+          });
+          if (!r.ok) { console.warn(`  [Phillips] page ${p}: HTTP ${r.status}`); break; }
+          const jp = await r.json();
+          if (!Array.isArray(jp.data) || jp.data.length === 0) break;
+          lotData.push(...jp.data);
+        } catch (e) { console.warn(`  [Phillips] page ${p} failed: ${(e as Error).message}`); break; }
       }
-    });
+    } else {
+      console.warn(`  [Phillips] maker API HTTP ${first.status} — falling back to page scrape`);
+    }
+  } catch (e) { console.warn(`  [Phillips] maker API failed: ${(e as Error).message} — falling back to page scrape`); }
 
-    const pastData = makerData?.pastLots?.data || [];
-    const upcomingData = makerData?.upcomingLots?.data || [];
-    if (pastData.length === 0 && upcomingData.length === 0) {
-      console.log('  [Phillips] No structured lot data found');
+  // ── fallback: the artist page's hydration blob (legacy path)
+  if (lotData.length === 0) {
+    try {
+      const res = await fetch(`https://www.phillips.com/artist/${artist.phillips.id}/${artist.phillips.slug}`, {
+        headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) { console.log(`  [Phillips] HTTP ${res.status}`); return lots; }
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      let makerData: any = null;
+      $('script').each((_, script) => {
+        if (makerData) return;
+        const text = $(script).html() || '';
+        if (!text.includes('ArtistLanding')) return;
+        // the maker prop uses \u0022 unicode escapes for quotes
+        const makerMatch = text.match(/"maker":"([^"]*)"/);
+        if (makerMatch) {
+          try {
+            const innerJson = JSON.parse('"' + makerMatch[1] + '"');
+            makerData = JSON.parse(innerJson);
+          } catch (e) {
+            console.log('  [Phillips] Failed to parse maker prop:', (e as Error).message?.substring(0, 100));
+          }
+        }
+      });
+      lotData = [...(makerData?.upcomingLots?.data || []), ...(makerData?.pastLots?.data || [])];
+    } catch (err) {
+      console.error('  [Phillips] Error:', err);
       return lots;
     }
+  }
+  if (lotData.length === 0) { console.log('  [Phillips] No structured lot data found'); return lots; }
+  console.log(`  [Phillips] Parsing ${lotData.length} lots…`);
 
-    const lotData = [...upcomingData, ...pastData];
-    console.log(`  [Phillips] Parsing ${upcomingData.length} upcoming + ${pastData.length} past lots...`);
-
+  try {
     for (const lot of lotData) {
+      if (lot.isNoLot) continue;
       const title = lot.description || lot.title || lot.lotTitle || 'Untitled';
       const saleNum = lot.saleNumber || '';
       const lotNum = lot.lotNumber || '';
