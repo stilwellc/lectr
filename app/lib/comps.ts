@@ -435,9 +435,19 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
   const nt = normalizeTitle(lot.title);
   let pool: AuctionLot[] = [];
   let kind: 'edition' | 'form' = 'form';
-  if (nt.length >= 6) {
+  // Require ≥2 distinctive tokens so a short/generic normalized title (e.g. a
+  // truncated "apollo 14" collection tag) can't collide unrelated lots into a
+  // false "very-high" edition.
+  const distinctiveTokens = nt.split(' ').filter(w => w.length >= 3).length;
+  if (nt.length >= 8 && distinctiveTokens >= 2) {
     const sameTitle = sold.filter(l => normalizeTitle(l.title) === nt && formOf(l) === form);
-    if (sameTitle.length >= 3) { pool = sameTitle; kind = 'edition'; }
+    if (sameTitle.length >= 3) {
+      // Estimate-band sanity: a real edition clears near the lot's own estimate;
+      // a collision pool of different objects will sit wildly outside it.
+      const estMid = lot.estimateLow && lot.estimateHigh ? (lot.estimateLow + lot.estimateHigh) / 2 : 0;
+      const m = median(sameTitle.map(l => l.priceUsd!).slice().sort((a, b) => a - b));
+      if (!estMid || (m <= estMid * 5 && m >= estMid / 5)) { pool = sameTitle; kind = 'edition'; }
+    }
   }
 
   // 2 · same-form comps through the hard gates (curried: anchor derived once)
