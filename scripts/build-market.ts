@@ -15,7 +15,7 @@ import * as zlib from 'zlib';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
-import { buildIdf, CandidateIndex, buildVectors } from '../app/lib/similarity';
+import { buildIdf, CandidateIndex, buildVectors, similarity } from '../app/lib/similarity';
 import { resolveComps, estimateValue, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
 
@@ -57,14 +57,14 @@ export function runMarketBuild() {
   console.log(`[market] ${all.length} lots · ${sold.length} priced sold · vocab ${Object.keys(tbl.df).length}`);
 
   // ── 1 · value every UPCOMING lot (the live product) ──
+  // bucket sold lots by maker ONCE (time-order preserved from soldSorted) so each
+  // upcoming lot reads its same-maker pool in O(1) instead of rescanning all 36k.
+  const soldByArtist = new Map<string, AuctionLot[]>();
+  for (const s of soldSorted) (soldByArtist.get(s.artist) || soldByArtist.set(s.artist, []).get(s.artist)!).push(s);
   const upcoming = all.filter(l => l.status === 'upcoming');
   let valued = 0;
   for (const lot of upcoming) {
-    const cands = idx.candidates.length ? [] : [];   // placeholder — upcoming aren't in the sold index
-    // block upcoming against sold: use the lot's rare tokens + same maker
-    const pool: AuctionLot[] = [];
-    // same-maker sold
-    for (const s of soldSorted) if (s.artist === lot.artist) pool.push(s);
+    const pool = soldByArtist.get(lot.artist) || [];
     const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl);
     const v = estimateValue(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
     if (v) { (lot as AuctionLot & { value?: ValueResult }).value = v; valued++; }
@@ -84,7 +84,6 @@ export function runMarketBuild() {
     const cands = idx.candidates(i).map(j => soldSorted[j]);
     for (const c of cands) {
       if (c.id <= lot.id) continue;   // dedup pair direction
-      const { similarity } = require('../app/lib/similarity');
       const m = similarity(lot, c, tbl);
       if (m.cls === 'physicalMatch') {
         // price-sanity: the same physical object shouldn't swing >3x between two

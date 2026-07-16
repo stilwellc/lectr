@@ -203,7 +203,8 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) return;
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/saved' } });
   }, []);
-  const signOut = useCallback(async () => { if (supabase) await supabase.auth.signOut(); setEntries([]); migratedRef.current = false; }, []);
+  // Only meaningful in auth mode — never blow away the localStorage-mode list.
+  const signOut = useCallback(async () => { if (!supabase) return; await supabase.auth.signOut(); setEntries([]); migratedRef.current = false; }, []);
 
   const value: AccountValue = {
     authEnabled, user, authReady,

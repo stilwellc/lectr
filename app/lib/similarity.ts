@@ -153,8 +153,7 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
 /** Decide which identity claim the score justifies. */
 function classify(a: AuctionLot, b: AuctionLot, cos: number, bonus: number, reasons: string[]): MatchClass {
   const strong = cos + bonus;
-  if (strong < 0.6) return 'similar';        // comp-worthy at best; caller may still drop it
-  if (strong < 0.75) return 'similar';
+  if (strong < 0.75) return 'similar';       // comp-worthy at best; caller may still drop it
 
   // Watches/instruments are category 'object' too, but they carry entityClass
   // 'maker' and a real serial — they must take the serial branch below, NOT the
@@ -214,16 +213,19 @@ function classify(a: AuctionLot, b: AuctionLot, cos: number, bonus: number, reas
 export class CandidateIndex {
   private byToken = new Map<string, number[]>();   // token → lot indices
   private byMaker = new Map<string, number[]>();
-  constructor(private lots: AuctionLot[], private tbl: IdfTable, topRare = 6) {
+  private rareTokens: string[][] = [];             // per-lot top-IDF tokens, computed ONCE
+  constructor(private lots: AuctionLot[], private tbl: IdfTable, private topRare = 6) {
     lots.forEach((l, i) => {
       (this.byMaker.get(l.artist) || this.byMaker.set(l.artist, []).get(l.artist)!).push(i);
-      if (!l.titleTokens) return;
-      // index the `topRare` highest-IDF tokens of this lot
+      if (!l.titleTokens) { this.rareTokens[i] = []; return; }
+      // the `topRare` highest-IDF tokens of this lot — cached so candidates()
+      // doesn't re-derive (O(T log T) per call) the same list on the hot path
       const rare = Array.from(new Set(l.titleTokens))
         .map(t => [t, idf(t, tbl)] as [string, number])
         .sort((x, y) => y[1] - x[1])
         .slice(0, topRare)
         .map(x => x[0]);
+      this.rareTokens[i] = rare;
       for (const t of rare) (this.byToken.get(t) || this.byToken.set(t, []).get(t)!).push(i);
     });
   }
@@ -231,12 +233,10 @@ export class CandidateIndex {
   candidates(i: number): number[] {
     const l = this.lots[i];
     const set = new Set<number>(this.byMaker.get(l.artist) || []);
-    if (l.titleTokens) {
-      const rare = Array.from(new Set(l.titleTokens))
-        .map(t => [t, idf(t, this.tbl)] as [string, number])
-        .sort((x, y) => y[1] - x[1]).slice(0, 6).map(x => x[0]);
-      for (const t of rare) for (const j of this.byToken.get(t) || []) set.add(j);
-    }
+    // reuse the SAME rare-token set the constructor indexed with (topRare), so
+    // retrieval recall matches indexing — the old hardcoded slice(0,6) silently
+    // diverged from a non-default topRare.
+    for (const t of this.rareTokens[i] || []) for (const j of this.byToken.get(t) || []) set.add(j);
     set.delete(i);
     return Array.from(set);
   }

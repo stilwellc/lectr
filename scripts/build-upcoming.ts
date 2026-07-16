@@ -64,15 +64,19 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // The feed filters saleDate >= today, so anything more than a day past can
   // never render — drop it here instead of paying a computeDeepSignal pass
   // and doubling the eager payload with dead weight.
-  const staleCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  // Use the SAME timezone-safe day-string compare the client feed uses
+  // (saleDate >= today), not a numeric Date.now()-24h window — the two disagreed
+  // at the UTC-day boundary, shipping lots the client always hides (and mis-
+  // parsing 'YYYY-MM-DD' as UTC midnight). The build always precedes the client
+  // load, so `>= today` here never drops a lot the client would still show.
+  const today = new Date().toISOString().slice(0, 10);
   const upcoming = lots
     .filter(l => {
       if (l.status !== 'upcoming') return false;
       // A just-closed lot awaiting results is held 'upcoming' with a past sale
-      // date — keep it visible even though it is past the stale cutoff.
+      // date — keep it visible even though its sale date is in the past.
       if ((l as { resultsPending?: boolean }).resultsPending) return true;
-      const t = new Date(l.saleDate).getTime();
-      return !isNaN(t) && t >= staleCutoff;
+      return !!l.saleDate && l.saleDate.slice(0, 10) >= today;
     })
     .map(l => {
       const lot = l as unknown as AuctionLot;

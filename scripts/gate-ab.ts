@@ -90,8 +90,14 @@ function run(label: string, gate: { cosFloor: number; minScore: number }) {
   return { valued, f, u, a };
 }
 
+// COMP_GATE is a shared mutable singleton — snapshot and restore it so running
+// this harness can never leave the engine's gate mutated for a later in-process
+// caller (build-market/build-backtest import the same module).
+const gate0 = { ...COMP_GATE };
 const base = run('BASELINE raw-cosine', { cosFloor: 0.65, minScore: 0 });
 const wide = run('BROADENED cos-floor+score', { cosFloor: 0.50, minScore: 65 });
+COMP_GATE.cosFloor = gate0.cosFloor;
+COMP_GATE.minScore = gate0.minScore;
 
 console.log('\n══════════ VERDICT ══════════');
 console.log(`coverage:        ${base.valued} → ${wide.valued}  (${wide.valued - base.valued >= 0 ? '+' : ''}${wide.valued - base.valued} lots valued)`);

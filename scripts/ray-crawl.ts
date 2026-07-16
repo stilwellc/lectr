@@ -29,6 +29,13 @@ import {
 // Classifies a lot as original, print, photograph, sculpture, design, or unknown
 // based on medium, title, sale name, URL, and artist context.
 
+/** True if a YYYY-MM-DD saleDate is strictly BEFORE today (UTC day). Same-day
+ *  counts as NOT past — matching validate.ts + the sanitize net. Using
+ *  `new Date('YYYY-MM-DD') < new Date()` here (UTC midnight vs the now-instant)
+ *  wrongly buries a still-live same-day lot as bought_in for the whole UTC day. */
+const isSaleDayPast = (saleDate: string): boolean =>
+  saleDate.slice(0, 10) < new Date().toISOString().slice(0, 10);
+
 const DESIGN_ARTISTS = new Set(['george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret']);
 // Watches makers + science collections: their lots are objects, never
 // paintings/prints — pattern classifiers ("printed dial") must not touch them.
@@ -808,7 +815,7 @@ function parseChristiesJson(jsonStr: string, artistSlug: string): AuctionLot[] {
       }
 
       const saleDate = lot.start_date ? lot.start_date.split('T')[0] : '';
-      const auctionInPast = saleDate ? new Date(saleDate) < new Date() : true; // default to past if no date
+      const auctionInPast = saleDate ? isSaleDayPast(saleDate) : true; // default to past if no date
       const isSold = priceRealized != null && priceRealized > 0;
       const imageUrl = lot.image?.image_src || null;
       const saleNum = lot.sale?.number || '';
@@ -982,7 +989,7 @@ function parseWrightBasicItem(item: any, session: any, sessionKey: string, artis
     } catch { /* skip */ }
   }
 
-  const auctionInPast = saleDate ? new Date(saleDate) < new Date() : false;
+  const auctionInPast = saleDate ? isSaleDayPast(saleDate) : false;
   const isSold = result != null && result > 0;
   const imageUrl = item.primary_index_image || null;
 
@@ -1047,7 +1054,7 @@ function parseWrightAdvancedItem(item: any, artistSlug: string): AuctionLot {
     saleDate = item.session.start_date.split('T')[0];
   }
 
-  const auctionInPast = saleDate ? new Date(saleDate) < new Date() : false;
+  const auctionInPast = saleDate ? isSaleDayPast(saleDate) : false;
 
   // Build image URL
   let imageUrl: string | null = null;
@@ -2131,7 +2138,7 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
 
   const isSold = doc.status === 'SOLD';
   const isBoughtIn = doc.status === 'BI';
-  const auctionEnded = doc.flags?.isAuctionEnded ?? (saleDate ? new Date(saleDate) < new Date() : true); // default to ended if no date
+  const auctionEnded = doc.flags?.isAuctionEnded ?? (saleDate ? isSaleDayPast(saleDate) : true); // default to ended if no date
 
   let status: LotStatus = 'upcoming';
   if (isSold) status = 'sold';
@@ -2907,7 +2914,7 @@ async function main() {
   const RECONCILE_GRACE_MS = 3 * 86_400_000; // 3-day grace after sale close
   let reconciledWithdrawn = 0, reconciledUnknown = 0;
   for (const [id, lot] of Array.from(lotMap.entries())) {
-    if (lot.title.match(/^Lot\.\d+/i)) badIds.add(id);
+    if (lot.title?.match(/^Lot\.\d+/i)) badIds.add(id);
     if (id === 'sothebys-upcoming-boy-white-hat' && lotMap.has('sothebys-george-condo-qiao-zhikang-duo-the-boy-with-white')) {
       badIds.add(id);
     }
@@ -3095,7 +3102,12 @@ async function main() {
 
   if (goldinRan) console.log(`[Ray] Goldin: promoted ${goldinPromoted} closed lots to final hammer (last-bid + premium)`);
   if (reconciledWithdrawn || reconciledUnknown) {
-    console.log(`[Ray] Reconciled ${reconciledWithdrawn + reconciledUnknown} vanished upcoming lots (${reconciledWithdrawn} withdrawn, ${reconciledUnknown} unknown-result)`);
+    // NOTE: the global sanitize net below RE-HOLDS any of these still within the
+    // 14-day RESULT_PENDING window as upcoming+resultsPending (the safe, don't-
+    // lose-a-lot direction), so only the >14-day 'unknown-result' ones actually
+    // publish in that state. These counts are the reconcile-pass tallies, not the
+    // final published statuses.
+    console.log(`[Ray] Reconcile pass flagged ${reconciledWithdrawn + reconciledUnknown} vanished upcoming lots (${reconciledWithdrawn} recent→withdrawn, ${reconciledUnknown} old→unknown-result); recent ones are re-held as results-pending below`);
   }
 
   const allLots = Array.from(lotMap.values()).sort((a, b) => {
