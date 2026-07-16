@@ -48,6 +48,21 @@ export interface ValueResult {
 const MIN_COS = 0.65;   // comp-pool inclusion (calibrated: below this is a different object)
 const TOP_K = 10;
 
+// Comp-pool inclusion gate. Admits a comp when its title cosine clears a floor
+// AND cos+bonus (score) clears a bar — so comps whose wording dips just under the
+// old 0.65 floor but whose STRUCTURED agreement (same reference/model/entity →
+// bonus) lifts score to ≥65 are kept (the engine already calls them the same
+// object). Validated via scripts/gate-ab.ts temporal-holdout A/B: vs the old raw
+// 0.65 floor this values +5% more lots and +172 below-market calls with IDENTICAL
+// predictive edge (+40% flagged median, 63% beatHigh, 24-pt edge — all unchanged).
+// Mutable so the A/B harness can flip it. score = round((cosine+bonus)*100).
+export const COMP_GATE = { cosFloor: 0.50, minScore: 65 };
+function passesGate(m: { cls: string; cosine: number; score: number }): boolean {
+  return m.cls !== 'none'
+    && m.cosine >= COMP_GATE.cosFloor
+    && (COMP_GATE.minScore === 0 || m.score >= COMP_GATE.minScore);
+}
+
 function weightedMedian(pairs: [number, number][]): number {
   const s = [...pairs].sort((a, b) => a[0] - b[0]);
   const total = s.reduce((t, p) => t + p[1], 0);
@@ -87,7 +102,7 @@ export function estimateValue(
 ): ValueResult | null {
   // rank by match score; keep the comp-worthy pool
   const pool = comps
-    .filter(c => c.match.cosine >= MIN_COS && c.realizedUsd > 0)
+    .filter(c => passesGate(c.match) && c.realizedUsd > 0)
     .sort((a, b) => b.match.score - a.match.score);
   if (pool.length < 3) return null;
 
@@ -167,7 +182,7 @@ export function resolveComps(
     if (priorTo && !(c.saleDate < priorTo)) continue;
     if (c.status !== 'sold' || !(c.realizedUsd! > 0)) continue;
     const m = similarity(lot, c, tbl);
-    if (m.cls === 'none' || m.cosine < MIN_COS) continue;
+    if (!passesGate(m)) continue;
     out.push({ id: c.id, match: m, realizedUsd: c.realizedUsd!, saleDate: c.saleDate });
   }
   return out;
