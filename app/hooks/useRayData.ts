@@ -209,9 +209,10 @@ function loadRayData(): Promise<RayPayload> {
       // re-downloading the multi-MB archive; a new crawl is a new URL.
       // Failures retry with backoff, then surface fullError — the eager
       // payload keeps the app alive, but gated pages get a real error state.
-      const lotsUrl = metaData.lastCrawl
-        ? `/data/ray/lots.json?v=${encodeURIComponent(metaData.lastCrawl)}`
-        : '/data/ray/lots.json';
+      // lots.json is SHARDED (lots-0.json, lots-1.json, …) — a single file
+      // outgrew Cloudflare Pages' 25 MiB/file hard cap. lots-index.json says
+      // how many shards; they download in parallel and concat in order.
+      const ver = metaData.lastCrawl ? `?v=${encodeURIComponent(metaData.lastCrawl)}` : '';
       const loadFull = () => {
         if (inflightFull || cached?.fullLoaded) return;
         inflightFull = true;
@@ -223,8 +224,13 @@ function loadRayData(): Promise<RayPayload> {
             try {
               // first try trusts the cache; retries bypass it in case the
               // cached body itself was the problem (truncated download)
-              const lotsData = await fetchJson(lotsUrl, { cache: attempt === 0 ? 'force-cache' : 'reload' });
-              const full = lotsData as AuctionLot[];
+              const cacheMode: RequestCache = attempt === 0 ? 'force-cache' : 'reload';
+              const idx = await fetchJson(`/data/ray/lots-index.json${ver}`, { cache: cacheMode }) as { shards: number };
+              const shardArrs = await Promise.all(
+                Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) =>
+                  fetchJson(`/data/ray/lots-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>)
+              );
+              const full = ([] as AuctionLot[]).concat(...shardArrs);
               const signals = new Map((up.lots || []).map(l => [l.id, l.signal]));
               // soldComp is precomputed onto the SAME eager upcoming lots (sports/
               // science bands); re-attach it here too, or the feed cards — which
@@ -251,7 +257,11 @@ function loadRayData(): Promise<RayPayload> {
     }
 
     // ── fallback: no upcoming.json yet (older deploy) — the classic single load
-    const lotsR = await Promise.allSettled([fetchJson('/data/ray/lots.json')]);
+    const lotsR = await Promise.allSettled([(async () => {
+      const idx = await fetchJson('/data/ray/lots-index.json') as { shards: number };
+      const arrs = await Promise.all(Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) => fetchJson(`/data/ray/lots-${i}.json`) as Promise<AuctionLot[]>));
+      return ([] as AuctionLot[]).concat(...arrs);
+    })()]);
     const lotsData = (lotsR[0].status === 'fulfilled' ? lotsR[0].value : []) as AuctionLot[];
     const lotsOk = lotsR[0].status === 'fulfilled';
     const statsOk = statsR.status === 'fulfilled';
