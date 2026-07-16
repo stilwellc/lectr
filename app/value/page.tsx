@@ -12,6 +12,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { lotSignal, confidenceMeter, formatEstimate } from '../components/LotCard';
 import ComparableModal, { PriceBand } from '../components/ComparableModal';
+import RecordByYear from '../components/RecordByYear';
 import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
@@ -311,6 +312,8 @@ export default function ValuePage() {
               </div>
             </section>
           )}
+
+          {backtest && backtest.flagged.n >= 100 && <RecordByYear backtest={backtest} />}
 
           <section className="ray-value-section rail">
             {deals.length === 0 ? (

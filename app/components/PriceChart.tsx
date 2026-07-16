@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot } from 'recharts';
 import { PricePoint, AuctionLot } from '../types';
 import type { LotCategory } from '../types';
-import { formatPrice, categoryLabels, categoryColors } from '../utils';
+import { formatPrice, categoryLabels, categoryColors, formatMoneyAxis } from '../utils';
 import { useChartDraw } from '../hooks/useChartDraw';
 import SectionMark from './SectionMark';
 
@@ -17,12 +17,7 @@ interface CategoryPricing {
   recordPrice: number;
 }
 
-function formatAxis(value: number): string {
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value}`;
-}
+const formatAxis = formatMoneyAxis;
 
 const tooltipColors: Record<string, string> = { avgPrice: 'var(--color-fg)', highPrice: 'var(--color-accent-gold-text)', trendline: 'var(--color-accent-wine-text)' };
 const tooltipLabels: Record<string, string> = { avgPrice: 'Avg', highPrice: 'High', trendline: 'Trend' };
@@ -101,6 +96,19 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
       return { ...p, trendline: avg };
     });
   }, [lots, categoryFilter, fallbackData]);
+
+  // Winsorized y-domain: one record quarter (a single $1.8M Rolex) was
+  // flattening 25 years of real movement into a floor-line. Cap the axis near
+  // the p92 of quarterly highs (min 2.5× the median high) — the spike clips
+  // deliberately; the record itself is still annotated on the chart.
+  const yMax = useMemo(() => {
+    const highs = data.map(p => p.highPrice || 0).filter(v => v > 0).sort((a, b) => a - b);
+    if (highs.length < 8) return undefined;
+    const p92 = highs[Math.floor(highs.length * 0.92)];
+    const med = highs[Math.floor(highs.length * 0.5)];
+    const cap = Math.max(p92, med * 2.5);
+    return cap < highs[highs.length - 1] ? cap : undefined;
+  }, [data]);
 
   const catPricing = useMemo(() => {
     const source = allLots || lots;
@@ -239,6 +247,8 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     axisLine={false}
                     tickLine={false}
                     width={50}
+                    domain={yMax ? [0, yMax] : undefined}
+                    allowDataOverflow={!!yMax}
                   />
                   <Tooltip
                     content={<CustomTooltip />}

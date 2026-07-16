@@ -22,6 +22,7 @@ const DemandChart = dynamic(() => import('../components/analytics/DemandChart'),
 const CategoryBreakdown = dynamic(() => import('../components/analytics/CategoryBreakdown'), { ssr: false });
 const AuctionHouseDistribution = dynamic(() => import('../components/analytics/AuctionHouseDistribution'), { ssr: false });
 const PriceDistribution = dynamic(() => import('../components/analytics/PriceDistribution'), { ssr: false });
+const CalibrationCurve = dynamic(() => import('../components/analytics/CalibrationCurve'), { ssr: false });
 
 // The market's analytics grid. `marketLots` already carries any merged archive
 // rows; `suppressDemand` drops the estimate-based Demand Index for the
@@ -35,7 +36,9 @@ function AnalyticsGrid({
   marketSeries,
   fromCache,
   suppressDemand,
+  backtest,
 }: {
+  backtest?: import('../hooks/useRayData').Backtest | null;
   marketStats: Record<string, MarketStats>;
   marketLots: AuctionLot[];
   statsByArtist: Record<string, MarketStats>;
@@ -51,6 +54,7 @@ function AnalyticsGrid({
     // (the realized cohort curve lives on the home board, not here).
     suppressDemand ? null : <DemandChart key="demand" allLots={marketLots} />,
     <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
+    backtest ? <CalibrationCurve key="cal" backtest={backtest} /> : null,
     <CategoryBreakdown key="cat" allLots={marketLots} />,
     <AuctionHouseDistribution key="house" statsByArtist={statsByArtist} />,
     <TopSales key="top" allLots={marketLots} />,
@@ -73,7 +77,7 @@ function AnalyticsGrid({
 }
 
 export default function AnalyticsPage() {
-  const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache, market: marketData } = useRayData();
+  const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache, market: marketData, backtest } = useRayData();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
@@ -135,6 +139,7 @@ export default function AnalyticsPage() {
           fromCache={fromCache}
           suppressDemand={false}
           marketSeries={marketData?.markets?.[activeKey] || null}
+          backtest={backtest}
         />
       )}
     </div>

@@ -18,6 +18,15 @@ export interface Backtest {
   unflagged: BacktestBucket;
   above: BacktestBucket;
   series: { year: number; flaggedMedianPct: number | null; unflaggedMedianPct: number | null; nFlagged: number }[];
+  /** per-tier flagged records (main strict gate vs tier-b fallback) */
+  flaggedTiers?: { main: BacktestBucket; fallback: BacktestBucket };
+  /** auto-calibration emitted from the replay (beatRate steps + conformal bands) */
+  calibration?: {
+    edges: number[];
+    beatRate: Record<string, number[]>;
+    band: Record<string, { lo: number; hi: number }>;
+    n?: number;
+  };
 }
 export interface BacktestBucket {
   n: number;

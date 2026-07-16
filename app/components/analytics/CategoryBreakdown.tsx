@@ -3,18 +3,14 @@
 import { useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LabelList } from 'recharts';
 import { AuctionLot } from '../../types';
-import { formatPrice, categoryLabels, categoryColorsHex } from '../../utils';
+import { formatPrice, categoryLabels, categoryColorsHex, formatMoneyAxis } from '../../utils';
 import { useTheme } from '../ThemeProvider';
 
 interface Props {
   allLots: AuctionLot[];
 }
 
-function formatAxis(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value}`;
-}
+const formatAxis = formatMoneyAxis;
 
 function CategoryTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { category: string; revenue: number; count: number; soldCount: number } }> }) {
   if (!active || !payload?.length) return null;

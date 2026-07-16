@@ -135,6 +135,17 @@ export function httpsImg(u?: string | null): string | undefined {
   return u ? u.replace(/^http:\/\//i, 'https://') : undefined;
 }
 
+/** ONE money-axis formatter for every chart — rolls to B, trims trailing .0,
+ *  so "$1700.0M" and "$4.97B" can never coexist on adjacent panels. */
+export function formatMoneyAxis(n: number): string {
+  const v = Math.abs(n); const sign = n < 0 ? '−' : '';
+  const trim = (s: string) => s.replace(/\.0$/, '');
+  if (v >= 1_000_000_000) return `${sign}$${trim((v / 1_000_000_000).toFixed(v >= 10_000_000_000 ? 0 : 1))}B`;
+  if (v >= 1_000_000) return `${sign}$${trim((v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1))}M`;
+  if (v >= 1_000) return `${sign}$${Math.round(v / 1000)}K`;
+  return `${sign}$${Math.round(v)}`;
+}
+
 export function formatPrice(n: number): string {
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;

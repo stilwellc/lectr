@@ -118,9 +118,9 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
                 <LineChart data={series.houseAccuracy} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: MUTED }} width={34} tickFormatter={(v: number) => `${v.toFixed(1)}×`} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: MUTED }} width={34} domain={[0, (max: number) => Math.ceil(max * 2) / 2]} ticks={[0, 0.5, 1, 1.5, 2]} allowDataOverflow={false} tickFormatter={(v: number) => `${v.toFixed(1)}×`} axisLine={false} tickLine={false} />
                   <ReferenceLine y={1} stroke="rgba(255,255,255,0.14)" strokeDasharray="3 3" />
-                  <Tooltip contentStyle={{ background: '#0D0F12', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v.toFixed(2)}× estimate`, 'realized']} />
+                  <Tooltip contentStyle={{ background: '#0D0F12', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v.toFixed(2)}× estimate`, 'hammer']} />
                   <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={1.8} dot={false} />
                 </LineChart>
               </ResponsiveContainer>

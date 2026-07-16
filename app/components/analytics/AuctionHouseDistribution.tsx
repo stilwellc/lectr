@@ -3,20 +3,14 @@
 import { useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LabelList } from 'recharts';
 import { MarketStats } from '../../types';
-import { formatPrice, houseColorsHex } from '../../utils';
+import { formatPrice, houseColorsHex, formatMoneyAxis } from '../../utils';
 import { useTheme } from '../ThemeProvider';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
 }
 
-function formatAxis(value: number): string {
-  const trim = (s: string) => s.replace(/\.0$/, '');
-  if (value >= 1_000_000_000) return `$${trim((value / 1_000_000_000).toFixed(1))}B`;
-  if (value >= 1_000_000) return `$${trim((value / 1_000_000).toFixed(0))}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value}`;
-}
+const formatAxis = formatMoneyAxis;
 
 function HouseTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { house: string; totalValue: number; count: number } }> }) {
   if (!active || !payload?.length) return null;
