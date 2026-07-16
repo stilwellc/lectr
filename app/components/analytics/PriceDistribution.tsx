@@ -76,7 +76,7 @@ export default function PriceDistribution({ allLots }: Props) {
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Price <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Distribution</span>
+          Price <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
         </h2>
       </div>
 

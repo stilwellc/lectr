@@ -82,7 +82,7 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Auction House <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Distribution</span>
+          Auction house <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
         </h2>
       </div>
 

@@ -38,10 +38,10 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
       : 0;
 
     return [
-      { label: 'Total sales value', value: formatPrice(totalRevenue), sub: 'aggregate realized prices, all artists', tone: '' },
-      { label: 'Total Lots', value: allLots.length.toLocaleString(), sub: `${ARTISTS.length} artists tracked`, tone: '' },
-      { label: 'Appreciation', value: `${weightedAppreciation >= 0 ? '+' : ''}${weightedAppreciation.toFixed(1)}%`, sub: 'sales-weighted avg across artists', tone: weightedAppreciation >= 0 ? 'up' : 'down' },
-      { label: 'Avg. % Over Estimate', value: `${avgOverEstimate >= 0 ? '+' : ''}${avgOverEstimate.toFixed(1)}%`, sub: `${lotsWithEstimate.length.toLocaleString()} lots with estimates`, tone: avgOverEstimate >= 0 ? 'up' : 'down' },
+      { label: 'Total sales value', value: formatPrice(totalRevenue), sub: 'aggregate realized prices, all makers', tone: '' },
+      { label: 'Total lots', value: allLots.length.toLocaleString(), sub: `${ARTISTS.length} makers tracked`, tone: '' },
+      { label: 'Appreciation', value: `${weightedAppreciation >= 0 ? '+' : ''}${weightedAppreciation.toFixed(1)}%`, sub: 'sales-weighted avg across makers', tone: '' },
+      { label: 'Avg. over estimate', value: `${avgOverEstimate >= 0 ? '+' : ''}${avgOverEstimate.toFixed(1)}%`, sub: `${lotsWithEstimate.length.toLocaleString()} lots with estimates`, tone: '' },
     ];
   }, [statsByArtist, allLots]);
 

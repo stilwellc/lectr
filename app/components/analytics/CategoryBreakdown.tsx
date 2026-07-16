@@ -85,7 +85,7 @@ export default function CategoryBreakdown({ allLots }: Props) {
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Breakdown</span>
+          Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>breakdown</span>
         </h2>
       </div>
 

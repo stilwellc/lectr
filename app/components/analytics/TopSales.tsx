@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { AuctionLot } from '../../types';
-import { formatDate, formatPrice, houseColors } from '../../utils';
+import { formatDate, formatPrice, houseColors, craftTitle } from '../../utils';
 import { ARTIST_LABEL } from '../../constants';
 
 interface Props {
@@ -49,7 +49,7 @@ export default function TopSales({ allLots }: Props) {
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Sales</span>
+          Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
         </h2>
       </div>
 
@@ -93,7 +93,7 @@ export default function TopSales({ allLots }: Props) {
                 padding: '14px 16px 10px', textAlign: 'right',
                 borderBottom: '1px solid var(--color-border)',
               }}>
-                % Over Est.
+                % over est.
               </th>
               <th className="ray-top-hide-mobile" style={{
                 fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
@@ -115,7 +115,8 @@ export default function TopSales({ allLots }: Props) {
           </thead>
           <tbody>
             {topSales.map((lot, i) => {
-              const title = lot.title.length > 50 ? lot.title.substring(0, 47) + '...' : lot.title;
+              const ct = craftTitle(lot.title);
+              const title = ct.length > 50 ? ct.slice(0, 47) + '…' : ct;
               const hasEstimate = lot.estimateHigh && lot.estimateHigh > 0 && lot.priceUsd;
               const overEst = hasEstimate
                 ? ((lot.priceUsd! - lot.estimateHigh!) / lot.estimateHigh!) * 100
@@ -177,7 +178,7 @@ export default function TopSales({ allLots }: Props) {
                     whiteSpace: 'nowrap',
                     color: overEst === null
                       ? 'var(--color-text-muted)'
-                      : 'var(--color-text-secondary)',
+                      : overEst >= 0 ? 'var(--color-up)' : 'var(--color-down)',
                   }}>
                     {overEst === null
                       ? '\u2014'

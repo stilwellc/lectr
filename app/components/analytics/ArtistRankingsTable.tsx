@@ -147,7 +147,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Artist <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Rankings</span>
+          Maker <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>rankings</span>
         </h2>
         {/* rank-and-slice is this table's job; the roster itself lives on /artists */}
         <Link
@@ -181,12 +181,12 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
             <tr>
               <th style={thStyle('name', 'left')} aria-sort={ariaSort('name')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('name')}>
-                  Artist {sortKey === 'name' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Maker {sortKey === 'name' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
                 </button>
               </th>
-              <th className="ray-rankings-hide-mobile" style={thStyle('totalRevenue')} aria-sort={ariaSort('totalRevenue')}>
+              <th style={thStyle('totalRevenue')} aria-sort={ariaSort('totalRevenue')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('totalRevenue')}>
-                  Sales Value {sortKey === 'totalRevenue' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Sales value {sortKey === 'totalRevenue' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
                 </button>
               </th>
               <th style={thStyle('avgPrice')} aria-sort={ariaSort('avgPrice')}>
@@ -206,7 +206,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               </th>
               <th style={thStyle('overEstimate')} aria-sort={ariaSort('overEstimate')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('overEstimate')}>
-                  % Over Est. {sortKey === 'overEstimate' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  % over est. {sortKey === 'overEstimate' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
                 </button>
               </th>
               <th style={thStyle('totalLots')} aria-sort={ariaSort('totalLots')}>
@@ -242,7 +242,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                     {row.label}
                   </Link>
                 </td>
-                <td className="ray-rankings-td ray-rankings-hide-mobile" style={{ textAlign: 'right', color: 'var(--color-fg)' }}>
+                <td className="ray-rankings-td" style={{ textAlign: 'right', color: 'var(--color-fg)' }}>
                   {formatPrice(row.totalRevenue)}
                 </td>
                 <td className="ray-rankings-td" style={{ textAlign: 'right', color: 'var(--color-fg)' }}>
