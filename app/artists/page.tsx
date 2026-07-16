@@ -61,7 +61,7 @@ export default function ArtistsPage() {
               <CountUp to={rosterCount} format={n => `${Math.round(n)} ${rosterNoun(activeKey, Math.round(n))}`} duration={900} />
             </h1>
             <p className="ray-hero2-delta">
-              <span className="ctx">
+              <span>
                 {summary.live} live lots on the block
                 {summary.marketNow !== null && (
                   <>
