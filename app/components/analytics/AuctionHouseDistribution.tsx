@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LabelList } from 'recharts';
 import { MarketStats } from '../../types';
 import { formatPrice, houseColorsHex } from '../../utils';
 import { useTheme } from '../ThemeProvider';
@@ -11,7 +11,9 @@ interface Props {
 }
 
 function formatAxis(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  const trim = (s: string) => s.replace(/\.0$/, '');
+  if (value >= 1_000_000_000) return `$${trim((value / 1_000_000_000).toFixed(1))}B`;
+  if (value >= 1_000_000) return `$${trim((value / 1_000_000).toFixed(0))}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
   return `$${value}`;
 }
@@ -71,7 +73,7 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
         .ray-house-chart { height: 300px; }
         @media (max-width: 768px) {
           .ray-house-dist { padding-block: 32px 32px; }
-          .ray-house-chart { height: 220px; }
+          .ray-house-chart { height: 290px; }
         }
       `}</style>
 
@@ -84,6 +86,7 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
         }}>
           Auction house <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
         </h2>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Ranked by total sales value</p>
       </div>
 
       <div className="glass glass-quiet" style={{
@@ -92,27 +95,30 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
         <div style={{ padding: '20px 8px 0 0' }}>
           <div className="ray-house-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={houseData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+              <BarChart data={houseData} layout="vertical" margin={{ top: 4, right: 56, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
                 <XAxis
-                  dataKey="house"
-                  tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
-                  axisLine={{ stroke: 'var(--color-border)' }}
-                  tickLine={false}
-                  interval={0}
-                />
-                <YAxis
+                  type="number"
                   tickFormatter={formatAxis}
-                  tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                  tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
                   axisLine={false}
                   tickLine={false}
-                  width={55}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="house"
+                  tick={{ fontSize: 12, fill: 'var(--color-text-secondary)', fontFamily: "var(--font-sans), sans-serif" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={82}
+                  interval={0}
                 />
                 <Tooltip content={<HouseTooltip />} cursor={{ fill: 'var(--color-hover-item)' }} />
-                <Bar dataKey="totalValue" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="totalValue" radius={[0, 4, 4, 0]} barSize={16}>
                   {houseData.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} fillOpacity={0.7} />
+                    <Cell key={i} fill={entry.fill} fillOpacity={0.75} />
                   ))}
+                  <LabelList dataKey="totalValue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-muted)', fontSize: 11, fontFamily: 'var(--font-sans), sans-serif' }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
