@@ -25,6 +25,9 @@ const STRIP = new Set([
   'buyerPremiumPct','hammerNative','premiumNative','realizedNative','hammerUsd',
   'premiumUsd','estLowNative','estHighNative','nativeCurrency','makerSlug',
   'entityClass','formKey','imageHash',
+  // engine-only USD twins — the client renders the estimateLow/estimateHigh/
+  // priceUsd aliases (which carry USD), so these are pure duplicate weight.
+  'estLowUsd','estHighUsd','realizedUsd',
 ]);
 
 export function slimForClient<T extends Record<string, unknown>>(lot: T): Record<string, unknown> {
