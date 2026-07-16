@@ -2877,6 +2877,15 @@ async function main() {
       dimensions: lot.dimensions ?? prev.dimensions,
       year: lot.year ?? prev.year,
       imageUrl: lot.imageUrl ?? prev.imageUrl,
+      // estimates are facts about the lot: some crawl paths (Wright/Rago
+      // artist search) return copies WITHOUT them — never let an estimate-less
+      // fresh copy wipe an enriched estimate (fresh still wins when it has one)
+      estimateLow: (lot.estimateLow ?? null) !== null ? lot.estimateLow : prev.estimateLow,
+      estimateHigh: (lot.estimateHigh ?? null) !== null ? lot.estimateHigh : prev.estimateHigh,
+      estLowUsd: (lot.estLowUsd ?? null) !== null ? lot.estLowUsd : prev.estLowUsd,
+      estHighUsd: (lot.estHighUsd ?? null) !== null ? lot.estHighUsd : prev.estHighUsd,
+      estLowNative: (lot.estLowNative ?? null) !== null ? lot.estLowNative : prev.estLowNative,
+      estHighNative: (lot.estHighNative ?? null) !== null ? lot.estHighNative : prev.estHighNative,
       firstSeen: prev.firstSeen,
     } : { ...lot, firstSeen: todayIso });
   }
