@@ -98,10 +98,32 @@ function lerpQuantile(sortedVals: number[], q: number): number {
 }
 
 /**
- * Calibrated beat-high rate as a function of compRatio (comps / estimate-mid).
- * From the corpus holdout (n=5,215): monotonic 42% → 69%.
+ * AUTO-CALIBRATION (set at build time by build-market from the previous
+ * backtest's emitted calibration block — per-market, recency-weighted,
+ * shrunk, refit every corpus build so it can never go stale the way the
+ * original hand-fit constants did). The hardcoded steps below are the
+ * fallback when no calibration is loaded.
  */
-function beatRate(compRatio: number): number {
+export interface EngineCalibration {
+  edges: number[];
+  beatRate: Record<string, number[]>;
+  band: Record<string, { lo: number; hi: number }>;
+  marketBySlug?: Record<string, string>;
+}
+let CAL: EngineCalibration | null = null;
+export function setCalibration(cal: EngineCalibration | null) { CAL = cal; }
+
+/** Calibrated beat-high rate as a function of compRatio (comps / estimate-mid).
+ *  Falls back to the original holdout fit (n=5,215, monotonic 42% → 69%). */
+function beatRate(compRatio: number, market?: string): number {
+  if (CAL) {
+    const row = (market && CAL.beatRate[market]) || CAL.beatRate.global;
+    if (row && row.length === CAL.edges.length + 1) {
+      let b = 0;
+      for (const e of CAL.edges) { if (compRatio < e) break; b++; }
+      return row[b];
+    }
+  }
   if (compRatio < 0.6) return 42;
   if (compRatio < 0.9) return 48;
   if (compRatio < 1.3) return 55;
@@ -143,11 +165,15 @@ export function estimateValue(
   // Measured on temporal holdout: identical coverage, edge 23.9→25.0pt, +199
   // flags with clean churn (removed flags realize like unflagged).
   const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
+  // hl=2y for estimate lots (directional signal); hl=1y on the no-estimate
+  // (Goldin absolute) path — memorabilia cycles faster, and the uncapped
+  // holdout measured MdAPE 41.2%→38.8% at hl≈1y there.
+  const halflife = (lot.estLowUsd && lot.estHighUsd) ? 2 : 1;
   const decay = (c: Comp) => {
     const t = new Date(c.saleDate || '').getTime();
     if (isNaN(t)) return 1;
     const ageYears = Math.max(0, (refMs - t) / 31_557_600_000);
-    return Math.pow(0.5, ageYears / 2);
+    return Math.pow(0.5, ageYears / halflife);
   };
   const compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
@@ -171,6 +197,17 @@ export function estimateValue(
   // a relaxed-gate pool never claims the top tier
   if (tier === 'fallback' && confidence === 'high') confidence = 'medium';
 
+  // SPLIT-CONFORMAL band (when calibration is loaded): compValue × the
+  // per-tier 15/85 quantiles of realized/compValue from the holdout — an
+  // honest ~70% outcome band (the comp-price quantile band only covered
+  // ~42-51%, and "high" confidence was the LEAST honest at 41.8%).
+  let bandLow = low, bandHigh = high;
+  const bandCal = CAL?.band?.[confidence];
+  if (bandCal && compValueUsd > 0) {
+    bandLow = compValueUsd * bandCal.lo;
+    bandHigh = compValueUsd * bandCal.hi;
+  }
+
   // strongest identity match → "this exact item sold for $Z"
   const exactC = top.find(c => c.match.cls === 'physicalMatch') || top.find(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
   const exact = exactC ? { id: exactC.id, realizedUsd: exactC.realizedUsd, saleDate: exactC.saleDate, cls: exactC.match.cls as 'physicalMatch' | 'modelMatch' } : null;
@@ -182,7 +219,7 @@ export function estimateValue(
   let compRatio: number | null = null;
   if (estMid && estMid > 0) {
     compRatio = compValueUsd / estMid;
-    const br = beatRate(compRatio);
+    const br = beatRate(compRatio, CAL?.marketBySlug?.[lot.artist]);
     const label = compRatio >= 1.3 ? 'below comparable market'      // lot priced under where comps trade → likely undervalued
       : compRatio <= 0.75 ? 'above comparable market'
         : 'at comparable market';
@@ -207,8 +244,8 @@ export function estimateValue(
     poolIds: top.map(c => c.id),
     n: pool.length,
     compValueUsd: Math.round(compValueUsd),
-    low: Math.round(low),
-    high: Math.round(high),
+    low: Math.round(bandLow),
+    high: Math.round(bandHigh),
     compRatio,
     signal,
     estimateUsd: estimateUsd != null ? Math.round(estimateUsd) : null,

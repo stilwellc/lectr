@@ -16,8 +16,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
 import { buildIdf, CandidateIndex, buildVectors, similarity } from '../app/lib/similarity';
-import { resolveComps, estimateValue, type ValueResult } from '../app/lib/value';
+import { resolveComps, estimateValue, setCalibration, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
+import { sportOf } from '../app/utils';
 
 const CORPUS = path.join(process.cwd(), 'data', 'corpus');
 const SERVED = path.join(process.cwd(), 'public', 'data', 'ray');
@@ -44,6 +45,19 @@ export function runMarketBuild() {
   const archive = readGz('sold-archive.json');
   const all = lots.concat(archive);
 
+  // load the auto-calibration the previous backtest emitted (per-market
+  // beatRate relevel + conformal band multipliers) — displayed figures only,
+  // never the signal label, so there is no feedback loop into the record.
+  try {
+    const bt = JSON.parse(fs.readFileSync(path.join(SERVED, 'backtest.json'), 'utf8'));
+    if (bt.calibration?.beatRate?.global) {
+      const marketBySlug: Record<string, string> = {};
+      for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) marketBySlug[s] = mkt;
+      setCalibration({ ...bt.calibration, marketBySlug });
+      console.log(`[market] calibration loaded (n=${bt.calibration.n})`);
+    }
+  } catch { /* no backtest yet — hardcoded fallbacks apply */ }
+
   // clear any prior stamps so a re-run is idempotent (never inherits a looser
   // pass's groups)
   for (const l of all) { delete (l as AuctionLot & { repeatSaleGroupId?: unknown }).repeatSaleGroupId; delete (l as AuctionLot & { value?: unknown }).value; }
@@ -63,8 +77,28 @@ export function runMarketBuild() {
   for (const s of soldSorted) (soldByArtist.get(s.artist) || soldByArtist.set(s.artist, []).get(s.artist)!).push(s);
   const upcoming = all.filter(l => l.status === 'upcoming');
   let valued = 0;
+  // sports lots: restrict priors to comps sharing the extracted sport/entity —
+  // measured on the Goldin holdout: coverage +44% relative with a paired
+  // accuracy WIN (p≈0.003). Unrestricted fallback when the restriction can't
+  // seat 3 priors. Sport-of is cached per comp id (regex battery is not free).
+  const SPORTS_SET = new Set(MARKETS.sports);
+  const sportCache = new Map<string, string | null>();
+  const sportOfCached = (l: AuctionLot) => {
+    let s = sportCache.get(l.id);
+    if (s === undefined) { s = sportOf(l.title || ''); sportCache.set(l.id, s); }
+    return s;
+  };
   for (const lot of upcoming) {
-    const pool = soldByArtist.get(lot.artist) || [];
+    let pool = soldByArtist.get(lot.artist) || [];
+    if (SPORTS_SET.has(lot.artist)) {
+      const ent = (lot as { entity?: string | null }).entity || null;
+      const sp = sportOfCached(lot);
+      if (ent || sp) {
+        const restricted = pool.filter(c =>
+          (ent && (c as { entity?: string | null }).entity === ent) || (sp && sportOfCached(c) === sp));
+        if (restricted.length >= 3) pool = restricted;
+      }
+    }
     const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl);
     const v = estimateValue(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
     if (v) { (lot as AuctionLot & { value?: ValueResult }).value = v; valued++; }

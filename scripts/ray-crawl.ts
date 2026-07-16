@@ -2897,8 +2897,25 @@ async function main() {
   const todayIso = new Date().toISOString().split('T')[0];
   const lotMap = new Map<string, AuctionLot>();
   for (const lot of existingLots) lotMap.set(lot.id, lot);
+  // bid snapshots: nightly {d,b,n} appended per live bid-auction lot — the raw
+  // material for a future bid-momentum feature (final bidCount already
+  // stratifies outcomes 0.74×→1.00×, but last-write-wins was discarding the
+  // trajectory). Corpus-only (STRIPped from served).
+  type Snap = { d: string; b: number; n: number };
+  const withSnaps = (fresh: AuctionLot, prev?: AuctionLot): Snap[] | undefined => {
+    const hist: Snap[] = ((prev as { bidHistory?: Snap[] } | undefined)?.bidHistory || []).slice(-59);
+    const bid = fresh.currentBid || 0;
+    const n = fresh.bidCount || 0;
+    if (fresh.status === 'upcoming' && (bid > 0 || n > 0)) {
+      const last = hist[hist.length - 1];
+      if (!last || last.b !== bid || last.n !== n) hist.push({ d: todayIso, b: bid, n });
+    }
+    return hist.length ? hist : undefined;
+  };
   for (const lot of freshLots) {
     const prev = lotMap.get(lot.id);
+    const bidHistory = lot.auctionHouse === 'Goldin' ? withSnaps(lot, prev) : undefined;
+    if (bidHistory) (lot as AuctionLot & { bidHistory?: Snap[] }).bidHistory = bidHistory;
     lotMap.set(lot.id, prev ? {
       ...lot,
       medium: lot.medium ?? prev.medium,

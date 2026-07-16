@@ -21,6 +21,7 @@ import * as path from 'path';
 import { readCorpus as readCorpusShared } from './corpus-io';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { resolveComps, estimateValue } from '../app/lib/value';
+import { ARTISTS } from '../app/constants';
 import type { AuctionLot } from '../app/types';
 
 type L = AuctionLot & { _v?: Record<string, number>; estLowUsd?: number; estHighUsd?: number; realizedUsd?: number; hammerUsd?: number | null };
@@ -58,6 +59,13 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
   // per-tier flagged rows — the headline stays truthful only unblended
   const flaggedMain = mk(), flaggedFallback = mk();
   const byYear = new Map<number, { flagged: number[]; unflagged: number[] }>();
+  // per-target calibration observations (auto-calibration emission — the
+  // displayed beatRate + band are refit from the replay at EVERY build, so
+  // they can never go stale the way the hand-fit n=5,215 constants did)
+  const marketBySlug: Record<string, string> = {};
+  for (const a of ARTISTS) marketBySlug[a.slug] = a.market;
+  const calObs: { m: string; cr: number; beat: boolean; r: number; conf: string; ageY: number }[] = [];
+  const nowMs = Date.now();
 
   const valueOne = (lot: L) => {
     const roster = byArtist.get(lot.artist) || [];
@@ -93,6 +101,17 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
     };
     push(bucket);
     if (isBelow) push(v.tier === 'fallback' ? flaggedFallback : flaggedMain);
+
+    if (v.compRatio != null && v.compValueUsd > 0) {
+      calObs.push({
+        m: marketBySlug[lot.artist] || 'all',
+        cr: v.compRatio,
+        beat: realized > lot.estHighUsd!,
+        r: realized / v.compValueUsd,
+        conf: v.confidence,
+        ageY: Math.max(0, (nowMs - new Date(lot.saleDate).getTime()) / 31_557_600_000),
+      });
+    }
 
     const y = +lot.saleDate.slice(0, 4);
     if (y >= 2000) {
@@ -144,6 +163,51 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
     })
     .filter(p => p.flaggedMedianPct !== null || p.unflaggedMedianPct !== null);
 
+  // ── AUTO-CALIBRATION ──
+  // (a) beatRate step levels per market, recency-weighted (halflife 3y) with
+  //     shrinkage toward the global level (k=60) and a min-n guard; monotone
+  //     non-decreasing enforced over the normal buckets — the final cr>=10
+  //     bucket is ALLOWED to drop (measured: extreme ratios under-deliver).
+  // (b) split-conformal band multipliers per confidence tier: the 15/85
+  //     quantiles of realized/compValue — an honest ~70% outcome band
+  //     (the q1..q3 comp-price band only covered ~42-51%).
+  const EDGES = [0.6, 0.9, 1.3, 2.0, 10];
+  const bucketOf = (cr: number) => { let b = 0; for (const e of EDGES) { if (cr < e) break; b++; } return b; }; // 0..5
+  const wOf = (o: { ageY: number }) => Math.pow(0.5, o.ageY / 3);
+  const rate = (obs: typeof calObs) => {
+    const acc = Array.from({ length: 6 }, () => ({ w: 0, wb: 0, n: 0 }));
+    for (const o of obs) { const b = bucketOf(o.cr); const w = wOf(o); acc[b].w += w; acc[b].wb += o.beat ? w : 0; acc[b].n++; }
+    return acc;
+  };
+  const globalAcc = rate(calObs);
+  const globalLevels = globalAcc.map(a => (a.w > 0 ? a.wb / a.w : 0.55));
+  const K = 60;
+  const levelsFor = (mkt: string) => {
+    const acc = rate(calObs.filter(o => o.m === mkt));
+    const lv = acc.map((a, b) => {
+      if (a.n < 100) return globalLevels[b];
+      return (a.wb + K * globalLevels[b]) / (a.w + K);
+    });
+    // monotone over buckets 0..4; bucket 5 (cr>=10) may drop below
+    for (let b = 1; b <= 4; b++) lv[b] = Math.max(lv[b], lv[b - 1]);
+    return lv.map(x => Math.round(Math.min(0.85, Math.max(0.3, x)) * 100));
+  };
+  const bandFor = (conf: string) => {
+    const rs = calObs.filter(o => o.conf === conf).map(o => o.r).sort((a, b) => a - b);
+    const src = rs.length >= 150 ? rs : calObs.map(o => o.r).sort((a, b) => a - b);
+    const q = (p: number) => src[Math.min(src.length - 1, Math.max(0, Math.floor(p * (src.length - 1))))];
+    return { lo: Math.round(Math.min(1, Math.max(0.3, q(0.15))) * 1000) / 1000, hi: Math.round(Math.min(4, Math.max(1, q(0.85))) * 1000) / 1000 };
+  };
+  const calibration = {
+    edges: EDGES,
+    beatRate: {
+      global: levelsFor('__none__').map((_, b) => Math.round(Math.min(0.85, Math.max(0.3, globalLevels[b])) * 100)),
+      art: levelsFor('art'), design: levelsFor('design'), watches: levelsFor('watches'),
+    },
+    band: { high: bandFor('high'), medium: bandFor('medium'), low: bandFor('low') },
+    n: calObs.length,
+  };
+
   const out = {
     generatedAt: new Date().toISOString().slice(0, 10),
     flagged: summarize(flagged),
@@ -151,6 +215,7 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
     above: summarize(above),
     // per-tier flagged records (main = strict gate; fallback = relaxed tier-b)
     flaggedTiers: { main: summarize(flaggedMain), fallback: summarize(flaggedFallback) },
+    calibration,
     series,
   };
   fs.writeFileSync(path.join(dataDir, 'backtest.json'), JSON.stringify(out));

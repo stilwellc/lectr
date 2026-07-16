@@ -28,6 +28,8 @@ const STRIP = new Set([
   // engine-only USD twins — the client renders the estimateLow/estimateHigh/
   // priceUsd aliases (which carry USD), so these are pure duplicate weight.
   'estLowUsd','estHighUsd','realizedUsd',
+  // nightly bid snapshots (corpus-only raw material for bid momentum)
+  'bidHistory',
 ]);
 
 export function slimForClient<T extends Record<string, unknown>>(lot: T): Record<string, unknown> {

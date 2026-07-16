@@ -362,11 +362,34 @@ export default function ComparableModal({
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // ONE LOT, ONE NUMBER: when the engine made a call on this lot, the modal
-  // shows exactly the pool that made it — same sales, same median, same
-  // percentage as the card sentence. Only when there is NO call does the
-  // modal fall back to the broader gated comps, clearly labeled as context.
-  const called = useMemo(() => signalWithPool(lot, allLots), [lot, allLots]);
+  // ONE LOT, ONE NUMBER: the card signal is stamped from the BACKTESTED engine
+  // (lot.value) at build time — so when the engine made the call, the modal
+  // renders the ENGINE's numbers (same median, same pct, poolIds resolved to
+  // rows). Only for engine-declined lots does the client signalWithPool make
+  // the call; 'at comparable market' means the engine looked and called it
+  // fair — no call, no client second-guessing.
+  const called = useMemo(() => {
+    const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; compValueUsd?: number; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
+    if (ev && ev.signal && ev.compRatio != null) {
+      if (ev.signal.label.startsWith('at')) return null;
+      const below = ev.signal.label.startsWith('below');
+      const byId = new Map(allLots.map(l => [l.id, l]));
+      const pool = (ev.poolIds || []).map(id => byId.get(id)).filter((x): x is AuctionLot => !!x);
+      return {
+        signal: {
+          label: (below ? 'Below Market' : 'Above Market') as 'Below Market' | 'Above Market',
+          pct: Math.round((below ? ev.compRatio - 1 : 1 - ev.compRatio) * 100),
+          basis: ev.n || pool.length,
+          med: ev.compValueUsd,
+          kind: 'form' as const,
+          form: ((lot as { formKey?: string }).formKey || 'unknown') as ReturnType<typeof signalWithPool> extends { signal: { form: infer F } } | null ? F : never,
+          confidence: (ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low') as 'high' | 'medium' | 'low',
+        },
+        pool,
+      };
+    }
+    return signalWithPool(lot, allLots);
+  }, [lot, allLots]);
 
   // The Goldin sold-archive is the 10MB tier — only sports/science object lots
   // (with no estimate-based call) can build a realized band, and only they need

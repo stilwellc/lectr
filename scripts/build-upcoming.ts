@@ -80,19 +80,36 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     })
     .map(l => {
       const lot = l as unknown as AuctionLot;
-      let signal = computeDeepSignal(lot, lots as unknown as AuctionLot[]);
-      // CONTRADICTION GUARD (measured): when the backtested engine (lot.value,
-      // stamped by build-market) and the client card signal DISAGREE on
-      // direction, the card flag carries zero information — the contradiction
-      // bucket realized exactly at the unflagged baseline (+17%/49%) in a
-      // 25k-target head-to-head. Suppress the card flag; never show a green
-      // "below market" beside a modal that says "above comparable market".
-      const engineLabel = (lot as { value?: { signal?: { label?: string } | null } | null }).value?.signal?.label;
-      if (signal && engineLabel) {
-        const cardBelow = signal.label === 'Below Market';
-        const engineBelow = engineLabel.startsWith('below');
-        const engineAbove = engineLabel.startsWith('above');
-        if ((cardBelow && engineAbove) || (!cardBelow && engineBelow)) signal = null;
+      // THE ENGINE OWNS THE CARD SIGNAL (measured head-to-head on 25k targets:
+      // engine flags realized +40%/63% vs the never-backtested client
+      // algorithm's +28%/57%). When build-market stamped a value with an
+      // opinion, the card renders the ENGINE's call — same pool, same number
+      // as the modal and the published record. The client computeDeepSignal
+      // remains only as a fallback for lots the engine declined (its flags
+      // still beat unflagged), with the contradiction guard as before.
+      type EngineValue = { signal?: { label: string; beatRatePct: number } | null; compRatio?: number | null; compValueUsd?: number; n?: number; confidence?: 'high' | 'medium' | 'low' } | null;
+      const ev = (lot as { value?: EngineValue }).value;
+      let signal = null as ReturnType<typeof computeDeepSignal>;
+      if (ev && ev.signal) {
+        if (ev.signal.label.startsWith('below') && ev.compRatio != null) {
+          signal = {
+            label: 'Below Market', pct: Math.round((ev.compRatio - 1) * 100),
+            basis: ev.n || 0, med: ev.compValueUsd, kind: 'form',
+            form: (lot as { formKey?: string }).formKey || 'unknown',
+            confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
+          } as NonNullable<ReturnType<typeof computeDeepSignal>>;
+        } else if (ev.signal.label.startsWith('above') && ev.compRatio != null) {
+          signal = {
+            label: 'Above Market', pct: Math.round((1 - ev.compRatio) * 100),
+            basis: ev.n || 0, med: ev.compValueUsd, kind: 'form',
+            form: (lot as { formKey?: string }).formKey || 'unknown',
+            confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
+          } as NonNullable<ReturnType<typeof computeDeepSignal>>;
+        }
+        // 'at comparable market' → no flag, and no client fallback either:
+        // the engine looked and called it fairly priced.
+      } else {
+        signal = computeDeepSignal(lot, lots as unknown as AuctionLot[]);
       }
       const withSignal = { ...l, signal };
       // W5 · precompute soldComp for upcoming sports/science lots, analogous to
