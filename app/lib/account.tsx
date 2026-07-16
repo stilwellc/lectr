@@ -288,17 +288,30 @@ export function useAuth() {
 // ── The login sheet — Google-only ──
 function LoginModal() {
   const { signInWithGoogle, closeLogin } = useAccount();
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLogin(); };
+    const prevFocus = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden'; // scroll-lock the page behind
+    cardRef.current?.querySelector<HTMLElement>('button, a[href], input')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeLogin(); return; }
+      if (e.key !== 'Tab' || !cardRef.current) return;
+      const f = Array.from(cardRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])'));
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1], active = document.activeElement;
+      const inside = active instanceof Node && cardRef.current.contains(active);
+      if (e.shiftKey ? (active === first || !inside) : (active === last || !inside)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow; prevFocus?.focus(); };
   }, [closeLogin]);
 
   if (typeof document === 'undefined') return null;
   return createPortal(
     <div className="ray-auth-scrim" role="presentation" onClick={closeLogin}>
-      <div className="ray-auth-card" role="dialog" aria-modal="true" aria-label="Sign in" onClick={e => e.stopPropagation()}>
+      <div ref={cardRef} className="ray-auth-card" role="dialog" aria-modal="true" aria-label="Sign in" onClick={e => e.stopPropagation()}>
         <div className="ray-auth-head">
           <span className="ray-auth-title">Sign in to save lots</span>
           <button className="ray-auth-x" aria-label="Close" onClick={closeLogin}>✕</button>

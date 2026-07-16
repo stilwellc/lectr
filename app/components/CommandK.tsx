@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { ARTISTS, MARKETS } from '../constants';
+import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
+import { useRayData } from '../hooks/useRayData';
+import { craftTitle } from '../utils';
 import ArtistAvatar from './ArtistAvatar';
 
 interface Item {
   label: string;
   hint: string;
   path: string;
-  kind: 'section' | 'market' | 'maker';
+  kind: 'section' | 'market' | 'maker' | 'lot';
 }
 
 /**
@@ -27,6 +29,8 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
   const router = useRouter();
   const { market } = useMarket();
   const homePath = MARKET_PATH[market] || '/';
+  const { allLots } = useRayData();
+  const upcomingLots = useMemo(() => allLots.filter(l => l.status === 'upcoming' && l.title), [allLots]);
 
   const items = useMemo<Item[]>(() => {
     // "On the block" is scoped to the current lander — the count says only
@@ -66,8 +70,19 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return items;
-    return items.filter(i => `${i.label} ${i.hint}`.toLowerCase().includes(needle));
-  }, [items, q]);
+    const itemMatches = items.filter(i => `${i.label} ${i.hint}`.toLowerCase().includes(needle));
+    // Search the live lots too — a collector arrives with a work in mind.
+    const lotMatches: Item[] = upcomingLots
+      .filter(l => `${craftTitle(l.title)} ${ARTIST_LABEL[l.artist] || l.artist}`.toLowerCase().includes(needle))
+      .slice(0, 8)
+      .map(l => ({
+        label: craftTitle(l.title),
+        hint: `${ARTIST_LABEL[l.artist] || l.artist} · on the block`,
+        path: `/${l.artist}#on-the-block`,
+        kind: 'lot' as const,
+      }));
+    return [...itemMatches, ...lotMatches];
+  }, [items, q, upcomingLots]);
   // only the first 12 are rendered — keyboard nav + Enter must index into the
   // SAME list, or the highlight vanishes and Enter fires an unseen item.
   const shown = filtered.slice(0, 12);
@@ -115,7 +130,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
           className="ray-ck-input"
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Jump to a maker, market or section…"
+          placeholder="Search a maker, market, or lot…"
           aria-label="Search"
           onKeyDown={e => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, shown.length - 1)); }

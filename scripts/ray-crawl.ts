@@ -733,7 +733,7 @@ async function crawlChristies(artist: ArtistConfig): Promise<AuctionLot[]> {
         let fresh = 0;
         pageLots.forEach(lot => { if (!seen.has(lot.id)) { seen.add(lot.id); lots.push(lot); fresh++; } });
         if (fresh === 0) break;
-      } catch { break; }
+      } catch (e) { console.warn(`  [Christie's] deep-page fetch failed: ${(e as Error).message}`); break; }
     }
     if (lots.length) console.log(`  [Christie's] Deep pages added ${lots.length} lots`);
   }
@@ -1254,7 +1254,7 @@ function routeItem(creators: string | null, title: string, extra = ''): string |
 async function sothebysAuctionMeta(slug: string): Promise<{ uuid: string; endDate: string | null; state: string; title: string } | null> {
   try {
     const res = await fetch(`https://www.sothebys.com/en/buy/auction/${slug}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
-    if (!res.ok) return null;
+    if (!res.ok) { console.warn(`[Sotheby's] meta ${slug}: HTTP ${res.status}`); return null; }
     const html = await res.text();
     const uuid = (html.match(/"auctionId":"([0-9a-f-]{36})"/) || [])[1];
     if (!uuid) return null;
