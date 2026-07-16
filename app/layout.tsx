@@ -11,7 +11,8 @@ import { ARTISTS } from './constants';
 // with tabular figures for anything that counts money.
 const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+  // load the VARIABLE font (no fixed weight list) so every weight renders,
+  // including the 650/750 used on prominent numerals (static cuts snapped them).
   variable: '--font-inter',
   display: 'swap',
 });
