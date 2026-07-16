@@ -185,18 +185,21 @@ export default function SavedPage() {
         <RayEntrance animate>
           <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
             <p className="ray-hero2-label">Your watchlist</p>
-            <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>Sign in</h1>
+            <h1 className="ray-hero2-value">Track the lots you&rsquo;re watching</h1>
             <p className="ray-hero2-delta">
-              <span className="ctx">
-                Saved lots are private to you and follow you across devices. Sign in to
-                start a watchlist — lectr tracks each lot&rsquo;s hammer, comps, and how your eye did.
+              <span style={{ maxWidth: 460 }}>
+                Private to you, synced across every device. lectr follows each saved lot&rsquo;s hammer,
+                its comps, and how your call played out.
               </span>
             </p>
           </section>
-          <div className="ray-enter" style={{ textAlign: 'center', padding: '32px 20px 120px' }}>
+          <div className="ray-enter" style={{ textAlign: 'center', padding: '28px 20px 72px' }}>
             <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={openLogin}>
-              Sign in to save lots
+              Sign in with Google
             </button>
+            <p style={{ fontSize: 12.5, color: 'var(--color-text-faint)', margin: '14px 0 0' }}>
+              Free · one tap · nothing else on lectr is gated.
+            </p>
           </div>
         </RayEntrance>
       ) : loading ? (
