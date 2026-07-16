@@ -347,6 +347,16 @@ export default function RayPage() {
       return !isNaN(d.getTime()) && d >= now && d <= weekAhead;
     }).length;
     const priceOrDash = (n: number) => (n > 0 ? formatPrice(n) : '—');
+    // Estimate-less verticals (sports = Goldin bid sales) have no mid-estimate
+    // total and nothing to flag — show real figures instead of a dead "—" / "0".
+    if (estValue === 0 && active.length > 0) {
+      return [
+        { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
+        { k: 'On the block', to: active.length, format: asComma, s: 'live lots — bid sales, no estimates' },
+        { k: 'Hammers this week', to: thisWeek, format: asComma, s: `across ${liveHouses} houses` },
+        { k: 'Live houses', to: liveHouses, format: asComma, s: 'sourcing this market' },
+      ];
+    }
     return [
       { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
       { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
