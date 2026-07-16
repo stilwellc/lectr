@@ -6,6 +6,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceL
 import { AuctionLot } from '../types';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
+import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
 
@@ -238,7 +239,7 @@ export default function BoardDemand({
             : isIndex ? (
                 idxPct !== 0 && (
                   <span className={idxPct > 0 ? 'up' : 'down'}>
-                    {idxPct > 0 ? '▲' : '▼'} {idxPct > 0 ? '+' : ''}{idxPct}% past year
+                    <Flick size={10} style={{ transform: idxPct > 0 ? undefined : 'scaleY(-1)' }} /> {idxPct > 0 ? '+' : ''}{idxPct}% past year
                   </span>
                 )
               )
@@ -246,12 +247,12 @@ export default function BoardDemand({
               isRealized
                 ? (yearAgo !== null && yearAgo !== 0 && (
                     <span className={delta > 0 ? 'up' : 'down'}>
-                      {delta > 0 ? '▲ up' : '▼ down'} · {delta > 0 ? '+' : '−'}{Math.abs(Math.round((delta / yearAgo) * 100))}% vs a year ago
+                      <Flick size={10} style={{ transform: delta > 0 ? undefined : 'scaleY(-1)' }} /> {delta > 0 ? 'up' : 'down'} · {delta > 0 ? '+' : '−'}{Math.abs(Math.round((delta / yearAgo) * 100))}% vs a year ago
                     </span>
                   ))
                 : (
                     <span className={delta > 0 ? 'up' : 'down'}>
-                      {delta > 0 ? '▲ heating' : '▼ cooling'} · {delta > 0 ? '+' : '−'}{Math.abs(Math.round(delta))} pts vs a year ago
+                      <Flick size={10} style={{ transform: delta > 0 ? undefined : 'scaleY(-1)' }} /> {delta > 0 ? 'heating' : 'cooling'} · {delta > 0 ? '+' : '−'}{Math.abs(Math.round(delta))} pts vs a year ago
                     </span>
                   )
             )}
@@ -344,7 +345,7 @@ export default function BoardDemand({
                   y={0}
                   stroke="rgba(255,255,255,0.16)"
                   strokeDasharray="4 4"
-                  label={{ value: 'sells at estimate', position: 'insideTopLeft', fill: '#7A8087', fontSize: 10.5, fontFamily: 'var(--font-sans), sans-serif', dy: -3, dx: 2 }}
+                  label={{ value: 'sells at estimate', position: 'insideBottomRight', fill: '#7A8087', fontSize: 10.5, fontFamily: 'var(--font-sans), sans-serif', dy: 12, dx: -2 }}
                 />
               )}
               <Tooltip content={() => null} cursor={{ stroke: 'rgba(255,255,255,0.3)', strokeWidth: 1 }} />

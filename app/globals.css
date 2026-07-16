@@ -1348,15 +1348,17 @@ h1 {
    matte-plate ink #E8D5BC) with warmed hairline edges. Perceptible warmth,
    never a color block — the terminal stays dark, the layers gain seams. */
 :root {
-  --color-beige: #E8D5BC;
-  --color-beige-text: #CFC0A8;
+  /* TRUE beige — grayed, not gold. (The first cut used the plate ink #E8D5BC,
+     which reads amber over the blue-black ground.) */
+  --color-beige: #D8CFC0;
+  --color-beige-text: #C9C1B2;
 }
 .ray-band {
   background:
-    radial-gradient(130% 130% at 50% 0%, color-mix(in srgb, var(--color-beige) 13%, transparent), transparent 64%),
-    color-mix(in srgb, var(--color-beige) 6.5%, var(--color-bg));
-  border-top: 1px solid color-mix(in srgb, var(--color-beige) 26%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-beige) 13%, transparent);
+    radial-gradient(130% 130% at 50% 0%, color-mix(in srgb, var(--color-beige) 14%, transparent), transparent 64%),
+    color-mix(in srgb, var(--color-beige) 7%, var(--color-bg));
+  border-top: 1px solid color-mix(in srgb, var(--color-beige) 28%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-beige) 14%, transparent);
 }
 /* inside a band, the section label warms to the beige family (kickers only —
    numerals and body stay in the standard ramp; green/red stay directional) */
@@ -1888,7 +1890,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   border-bottom: 1px solid var(--hairline-soft);
   margin-bottom: 14px;
 }
-.ray-demand-label { font-size: 12px; font-weight: 600; color: #9AA0A6; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ray-demand-label { font-size: 12px; font-weight: 600; color: var(--color-beige-text); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ray-demand-foot { margin: 12px 2px 2px; font-size: 12px; line-height: 1.55; color: #8A9099; max-width: 62ch; }
 .ray-demand-foot b { font-weight: 650; color: #C9CDD2; }
 .ray-demand-foot b.up { color: var(--color-up); }
@@ -3079,9 +3081,10 @@ body {
 .ray-market-tab:hover { color: var(--color-fg); }
 .ray-market-tab:active { transform: scale(0.96); }
 .ray-market-tab[data-active=true] {
-  background: linear-gradient(180deg, #FFFFFF, #DFE1E5);
+  /* the active market is the beige-lit pill — the secondary color's home */
+  background: linear-gradient(180deg, #E9E2D4, #CFC7B7);
   color: var(--color-bg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 14px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 .ray-market-tab[data-live=false] { color: var(--color-text-faint); }
 .ray-market-tab[data-live=false][data-active=true] { color: var(--color-bg); }
@@ -3296,8 +3299,8 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
-  text-align: center;
+  align-items: stretch;
+  text-align: left;
   padding: 26px 28px;
   min-width: 0;
 }
@@ -3318,7 +3321,13 @@ body {
     text-align: center;
   }
   .ray-appr-stat { display: none; }
-  .ray-appr-banner { display: block; font-size: 13.5px; line-height: 1.4; color: var(--color-text-secondary); }
+  .ray-appr-banner {
+    display: block; font-size: 13.5px; line-height: 1.4; color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--color-beige) 8%, var(--color-bg));
+    border: 1px solid color-mix(in srgb, var(--color-beige) 22%, transparent);
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
   .ray-appr-banner b { color: var(--color-fg); font-weight: 650; }
   .ray-appr-banner b.up { color: var(--color-up); }
   .ray-appr-banner b.down { color: var(--color-down); }
@@ -3628,10 +3637,10 @@ body {
     100% { transform: scale(1); }
   }
 }
-/* active stays the lit white pill — ink yields to light */
+/* active is the beige-lit pill — ink yields to warm light */
 .ray-markets-compact .ray-market-tab[data-active=true] {
-  background: linear-gradient(180deg, #FFFFFF, #DFE1E5);
-  border-color: rgba(255, 255, 255, 0.85);
+  background: linear-gradient(180deg, #E9E2D4, #CFC7B7);
+  border-color: color-mix(in srgb, var(--color-beige) 80%, transparent);
   color: var(--color-bg);
 }
 .ray-markets-compact .ray-market-tab[data-active=true] svg { color: var(--color-bg); }

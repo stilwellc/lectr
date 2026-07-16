@@ -284,6 +284,16 @@ export default function RayPage() {
     [marketLots]
   );
 
+  // Companions for the appreciation column (typical 12-month sale + record) —
+  // the lone floating numeral read as a void beside the chart.
+  const soldMedian12 = useMemo(() => {
+    const cutoff = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+    const px = sold.filter(l => l.saleDate >= cutoff).map(l => l.priceUsd!).sort((a, b) => a - b);
+    if (px.length < 5) return null;
+    return px.length % 2 ? px[px.length >> 1] : (px[px.length / 2 - 1] + px[px.length / 2]) / 2;
+  }, [sold]);
+  const recordSale = useMemo(() => (sold.length ? sold.reduce((b, l) => ((l.priceUsd || 0) > (b.priceUsd || 0) ? l : b), sold[0]) : null), [sold]);
+
   // The results row's one honest sentence: median hammer vs mid-estimate.
   const soldMedianPct = useMemo(() => {
     const perf: number[] = [];
@@ -503,7 +513,22 @@ export default function RayPage() {
                   <div className="ray-appr-stat">
                     <div className="ray-appr-k">Appreciation</div>
                     <div className={`ray-appr-v ${apprTone}`}>{apprValue}</div>
-                    <div className="ray-appr-s">sales-weighted avg across artists</div>
+                    <div className="ray-appr-s">sales-weighted avg across makers</div>
+                    {/* context rows — the column was a void with one floating
+                        numeral; give the number companions to live with */}
+                    {sold.length > 0 && (
+                      <div style={{ marginTop: 26, borderTop: '1px solid var(--hairline)', paddingTop: 18, display: 'flex', flexDirection: 'column', gap: 14, textAlign: 'left' }}>
+                        <div>
+                          <div className="ray-appr-k" style={{ fontSize: 11 }}>Typical sale, past year</div>
+                          <div style={{ fontSize: 19, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{soldMedian12 != null ? formatPrice(soldMedian12) : '—'}</div>
+                        </div>
+                        <div>
+                          <div className="ray-appr-k" style={{ fontSize: 11 }}>Record sale</div>
+                          <div style={{ fontSize: 19, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{recordSale ? formatPrice(recordSale.priceUsd || 0) : '—'}</div>
+                          {recordSale && <div className="ray-appr-s" style={{ marginTop: 2 }}>{ARTIST_LABEL[recordSale.artist] || recordSale.artist}</div>}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="ray-appr-banner">
                     <span><b>{marketName}</b> has an appreciation of <b className={apprTone}>{apprValue}</b></span>
