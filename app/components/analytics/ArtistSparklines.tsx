@@ -278,7 +278,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
           {market && market !== 'all' ? rosterNoun(market).charAt(0).toUpperCase() + rosterNoun(market).slice(1) : 'Roster'} <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>performance</span>
         </h2>
         <a
-          href="#artist-rankings"
+          href="/analytics#artist-rankings"
           style={{
             fontFamily: 'var(--font-mono), monospace',
             fontSize: 12,

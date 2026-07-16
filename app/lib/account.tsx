@@ -141,7 +141,24 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       // On a query error `data` is null — do NOT blank the user's saves; keep
       // whatever is already in state and let the next run retry.
       if (error) { console.error('[account] load saved lots failed:', error.message); return; }
-      if (!cancelled) setEntries((data || []).map(rowToEntry));
+      if (cancelled) return;
+      const loaded = (data || []).map(rowToEntry);
+      setEntries(loaded);
+      // Replay a save the user queued before signing in (they clicked the star
+      // while logged out; we sent them through auth and back here). Completes
+      // the intent instead of dropping it.
+      try {
+        const raw = localStorage.getItem('lectr-pending-save');
+        if (raw) {
+          localStorage.removeItem('lectr-pending-save');
+          const pend = JSON.parse(raw) as SavedEntry;
+          if (pend?.id && !loaded.some(e => e.id === pend.id)) {
+            setEntries(prev => (prev.some(p => p.id === pend.id) ? prev : [...prev, pend]));
+            supabase!.from('saved_lots').upsert(entryToRow(user.id, pend), { onConflict: 'user_id,lot_id' })
+              .then(({ error: e2 }) => { if (e2) console.error('[account] pending-save replay failed:', e2.message); });
+          }
+        }
+      } catch { /* private mode / bad json */ }
     })();
     return () => { cancelled = true; };
     // depend on the stable user id, not the User object — token refresh emits a
@@ -159,8 +176,14 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       });
       return;
     }
-    // auth on → saving requires a session
-    if (!user) { setLoginOpen(true); return; }
+    // auth on → saving requires a session. Remember what they were trying to
+    // save (survives the OAuth full-page redirect via localStorage) so it
+    // completes automatically once they're signed in — the click isn't lost.
+    if (!user) {
+      if (lot) { try { localStorage.setItem('lectr-pending-save', JSON.stringify(entryFromLot(lotId, lot))); } catch { /* private mode */ } }
+      setLoginOpen(true);
+      return;
+    }
     // Supabase query builders are LAZY — they only run when awaited or .then()'d.
     // (`void builder` builds the request but never sends it — the original bug
     // where saves never persisted.) Fire the write with .then() so it executes,
@@ -194,14 +217,17 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   }, [entries]);
   const isSaved = useCallback((id: string) => entries.some(e => e.id === id), [entries]);
 
+  // Return the user to the page they were ON (not always /saved) so a save
+  // started from the home feed or an artist page lands them back in context.
+  const returnTo = () => (typeof window !== 'undefined' ? window.location.href : '/');
   const signInWithEmail = useCallback(async (email: string) => {
     if (!supabase) return { ok: false, message: 'Sign-in is not configured yet.' };
-    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: window.location.origin + '/saved' } });
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: returnTo() } });
     return error ? { ok: false, message: error.message } : { ok: true, message: 'Check your email for the sign-in link.' };
   }, []);
   const signInWithGoogle = useCallback(async () => {
     if (!supabase) return;
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/saved' } });
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: returnTo() } });
   }, []);
   // Only meaningful in auth mode — never blow away the localStorage-mode list.
   const signOut = useCallback(async () => { if (!supabase) return; await supabase.auth.signOut(); setEntries([]); migratedRef.current = false; }, []);

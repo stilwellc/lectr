@@ -5,9 +5,9 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle } from '../utils';
+import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL } from '../lib/comps';
-import { useSoldArchive } from '../hooks/useRayData';
+import { useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
@@ -270,11 +270,11 @@ const MAX_COMPARABLES = 15;
  * object lots. Art/watch/design modals never mount this, never pay the 10MB.
  * Renders nothing; reports the merged corpus + load flag up via a callback.
  */
-function ArchiveLoader({ onState }: { onState: (s: { allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean }) => void }) {
-  const { allLotsWithArchive, archiveLoaded } = useSoldArchive();
+function ArchiveLoader({ onState }: { onState: (s: { allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }) => void }) {
+  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
   useEffect(() => {
-    onState({ allLotsWithArchive, archiveLoaded });
-  }, [allLotsWithArchive, archiveLoaded, onState]);
+    onState({ allLotsWithArchive, archiveLoaded, archiveError });
+  }, [allLotsWithArchive, archiveLoaded, archiveError, onState]);
   return null;
 }
 
@@ -375,11 +375,13 @@ export default function ComparableModal({
   // the pool isn't computed against a truncated corpus. Watches are also
   // `object` but their frozen `called` path never touches the archive.
   const wantsArchive = lot.category === 'object' && isSportsScienceObject(lot);
-  const [archive, setArchive] = useState<{ allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean }>({
+  const [archive, setArchive] = useState<{ allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }>({
     allLotsWithArchive: allLots,
     archiveLoaded: false,
+    archiveError: false,
   });
   const archiveLoaded = wantsArchive ? archive.archiveLoaded : true;
+  const archiveFailed = wantsArchive && archive.archiveError && !archive.archiveLoaded;
   const bandPoolLots = wantsArchive && archive.archiveLoaded ? archive.allLotsWithArchive : allLots;
 
   // No call, and this is a Goldin sports/science object → a descriptive
@@ -643,9 +645,10 @@ export default function ComparableModal({
           }}>
             {lot.imageUrl ? (
               <img
-                src={lot.imageUrl}
+                src={httpsImg(lot.imageUrl)}
                 alt={lot.title}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => e.currentTarget.remove()}
               />
             ) : (
               <div style={{
@@ -858,7 +861,17 @@ export default function ComparableModal({
             </div>
           )}
 
-          {wantsArchive && !archiveLoaded ? (
+          {archiveFailed ? (
+            <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--color-text-faint)', fontSize: 13 }}>
+              Comparable sales couldn&rsquo;t be loaded.
+              <button
+                onClick={() => { setArchive(a => ({ ...a, archiveError: false })); retryArchiveLoad(); }}
+                style={{ display: 'block', margin: '12px auto 0', background: 'none', border: '1px solid var(--hairline)', color: 'var(--color-text-secondary)', padding: '7px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Try again
+              </button>
+            </div>
+          ) : wantsArchive && !archiveLoaded ? (
             <div style={{
               padding: '40px 0',
               textAlign: 'center',
@@ -927,7 +940,7 @@ export default function ComparableModal({
                         justifyContent: 'center',
                       }}>
                         {comp.imageUrl ? (
-                          <img src={comp.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={httpsImg(comp.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <span style={{
                             fontFamily: "var(--font-serif), serif",

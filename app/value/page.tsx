@@ -15,7 +15,7 @@ import ComparableModal, { PriceBand } from '../components/ComparableModal';
 import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
-import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle, httpsImg } from '../utils';
 import { FORM_LABEL, signalWithPool } from '../lib/comps';
 
 const ROWS_PAGE = 12;
@@ -250,7 +250,7 @@ export default function ValuePage() {
                     <span className="ray-lot-plate-rule" />
                   </div>
                   {call.lot.imageUrl && (
-                    <img src={call.lot.imageUrl} alt={call.lot.title} referrerPolicy="no-referrer"
+                    <img src={httpsImg(call.lot.imageUrl)} alt={call.lot.title} referrerPolicy="no-referrer"
                       onError={e => e.currentTarget.remove()} />
                   )}
                 </div>
@@ -324,7 +324,7 @@ export default function ValuePage() {
                     >
                       <span className="ray-value-row-thumb" aria-hidden="true">
                         {d.lot.imageUrl
-                          ? <img src={d.lot.imageUrl} alt="" referrerPolicy="no-referrer" loading="lazy"
+                          ? <img src={httpsImg(d.lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
                               onError={e => e.currentTarget.remove()} />
                           : d.lot.title.charAt(0)}
                       </span>

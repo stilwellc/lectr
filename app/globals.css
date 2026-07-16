@@ -3590,6 +3590,9 @@ body {
     radial-gradient(ellipse 560px 280px at 50% 50%, rgba(244, 246, 255, 0.05), transparent 70%),
     #060709;
   transition: opacity 520ms var(--ease-ui);
+  /* decorative splash only — never intercept the first 1.75s of taps/clicks on
+     the live page underneath (it's aria-hidden and purely visual). */
+  pointer-events: none;
 }
 .ray-greeting-out { opacity: 0; pointer-events: none; }
 .ray-greeting-mark {

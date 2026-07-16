@@ -110,6 +110,12 @@ export function formatDate(
   return d.toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' });
 }
 
+/** Upgrade http:// image URLs to https:// so they don't trip mixed-content on
+ *  our HTTPS pages (all our image hosts serve https). Undefined-safe. */
+export function httpsImg(u?: string | null): string | undefined {
+  return u ? u.replace(/^http:\/\//i, 'https://') : undefined;
+}
+
 export function formatPrice(n: number): string {
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;

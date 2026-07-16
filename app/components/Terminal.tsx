@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
-import { craftTitle, formatDate } from '../utils';
+import { craftTitle, formatDate, httpsImg } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { lotFitsMarket } from '../lib/comps';
 import Flick from './Flick';
@@ -16,7 +16,9 @@ import Flick from './Flick';
  */
 
 export function daysWord(dateStr: string): string {
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000);
+  const t = new Date(dateStr).getTime();
+  if (isNaN(t)) return 'scheduled';          // never render "in NaNd" on a bad date
+  const days = Math.ceil((t - Date.now()) / 86_400_000);
   if (days <= 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days}d`;
@@ -91,7 +93,7 @@ export function CallPlate({
         <div className="ray-plate-mat">
           <div className="ray-plate-img">
             <img
-              src={lot.imageUrl}
+              src={httpsImg(lot.imageUrl)}
               alt=""
               loading="lazy"
               referrerPolicy="no-referrer"

@@ -506,7 +506,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
-        <a href={homePath} className="ray-wordmark" aria-label="lectr — home">
+        <a href={homePath} onClick={e => { e.preventDefault(); navigate(homePath); }} className="ray-wordmark" aria-label="lectr — home">
           {/* the script mark stands alone — the mark IS the name; its upward tilt is intentional */}
           <img className={`ray-mark-r${lit ? ' lectr-on' : ''}`} src="/brand/lectr-nav.png" alt="lectr" />
         </a>

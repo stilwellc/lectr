@@ -6,7 +6,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf } from './utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg } from './utils';
 import ArtistNav from './components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from './components/LotCard';
 import ComparableModal from './components/ComparableModal';
@@ -611,7 +611,7 @@ export default function RayPage() {
                                 {lot.imageUrl && (
                                   <img
                                     className="thumb"
-                                    src={lot.imageUrl}
+                                    src={httpsImg(lot.imageUrl)}
                                     alt=""
                                     loading="lazy"
                                     decoding="async"

@@ -79,6 +79,16 @@ function MakerSections({
 }) {
   return (
     <RayEntrance animate={!fromCache}>
+      {sold.length === 0 && upcoming.length === 0 && (
+        <div className="rail ray-enter" style={{ padding: '72px 24px', textAlign: 'center' }}>
+          <p style={{ fontSize: 16, color: 'var(--color-text-secondary)', margin: 0 }}>
+            No lots tracked for {label} right now.
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
+            The desk refreshes daily as auction houses post new sales and results.
+          </p>
+        </div>
+      )}
       {sold.length > 0 && (
         <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
           <PriceChart

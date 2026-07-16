@@ -4,7 +4,7 @@ import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import Link from 'next/link';
 import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice } from '../utils';
+import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg } from '../utils';
 import ComparableModal from './ComparableModal';
 import { computeDeepSignal, FORM_LABEL } from '../lib/comps';
 
@@ -227,7 +227,7 @@ function LotCard({
         </div>
         {lot.imageUrl && (
           <img
-            src={lot.imageUrl}
+            src={httpsImg(lot.imageUrl)}
             alt={lot.title}
             // the grid mounts 48 cards a page — lazy-load so below-fold house
             // photography doesn't race the phase-2 data stream at first paint

@@ -14,9 +14,12 @@ import CountUp from '../components/CountUp';
 import { getUpcomingCounts, formatPrice, formatDate } from '../utils';
 
 function daysUntil(dateStr: string): number {
-  return Math.max(0, Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000));
+  const t = new Date(dateStr).getTime();
+  if (isNaN(t)) return NaN;
+  return Math.max(0, Math.ceil((t - Date.now()) / 86_400_000));
 }
 function hammerWord(days: number): string {
+  if (isNaN(days)) return 'scheduled';   // never render "in NaN days"
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
