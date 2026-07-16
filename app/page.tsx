@@ -509,7 +509,7 @@ export default function RayPage() {
                 /* Desktop: the Appreciation stat sits to the right of the graph.
                    Mobile: the same element collapses under the chart as a gray
                    banner ("<market> has an appreciation of X%"). */
-                <aside className="ray-appr" aria-label={`${marketName} appreciation`}>
+                <aside className="ray-appr ray-paper" aria-label={`${marketName} appreciation`}>
                   <div className="ray-appr-stat">
                     <div className="ray-appr-k">Appreciation</div>
                     <div className={`ray-appr-v ${apprTone}`}>{apprValue}</div>
@@ -781,7 +781,7 @@ export default function RayPage() {
               ArchiveResults → useSoldArchive() → the 10MB fetch. */}
           {isSportsScience ? (
             recentRows.length > 0 && (
-              <section className="ray-band rail-band-pad ray-enter" style={{ paddingBlock: '26px 40px', marginTop: 26, '--enter-delay': '180ms' } as React.CSSProperties}>
+              <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
                 <div className="ray-results-row">
                   <span>
                     {(meta.totalSold ?? recentRows.length).toLocaleString()} sold lots
@@ -810,7 +810,7 @@ export default function RayPage() {
               </section>
             )
           ) : sold.length > 0 && (activeKey === 'all' ? (
-            <section className="ray-band rail-band-pad ray-enter" style={{ paddingBlock: '26px 40px', marginTop: 26, '--enter-delay': '180ms' } as React.CSSProperties}>
+            <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
               <div className="ray-results-row">
                 <span>
                   {sold.length.toLocaleString()} sold lots

@@ -1342,28 +1342,50 @@ h1 {
 /* keep content off the fixed mobile tab bar */
 @media (max-width: 899px) { .ray-mobnav-pad { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); } }
 
-/* ── THE WARM BAND — beige breaks between logical layers of a scroll ──
-   The scroll was one uninterrupted black column; these full-bleed bands lift
-   the "numbers/record" layers on a warm paper-tinted ground (drawn from the
-   matte-plate ink #E8D5BC) with warmed hairline edges. Perceptible warmth,
-   never a color block — the terminal stays dark, the layers gain seams. */
+/* ── THE PAPER BAND — solid beige banners between logical layers ──
+   Full flat blocks, no gradients: a true paper ground with dark ink sitting
+   DIRECTLY on it. Nothing dark may float inside a band (no boxes-on-beige),
+   so every child surface goes transparent and the type ramp flips to ink.
+   Green/red stay directional but drop to print-density variants for
+   contrast on the light ground. */
 :root {
-  /* TRUE beige — grayed, not gold. (The first cut used the plate ink #E8D5BC,
-     which reads amber over the blue-black ground.) */
-  --color-beige: #D8CFC0;
-  --color-beige-text: #C9C1B2;
+  --color-beige: #D8CFC0;        /* accents on the DARK ground (pills, captions) */
+  --color-beige-text: #C9C1B2;   /* beige type on the dark ground */
+  --paper: #DED6C6;              /* the banner block itself */
+  --paper-ink: #191612;          /* primary ink on paper */
+  --paper-muted: #6E6656;        /* secondary ink on paper */
+  --paper-line: rgba(25, 22, 18, 0.16);
+  --paper-up: #1B7A48;           /* print-density green */
+  --paper-down: #B23A31;         /* print-density red */
 }
-.ray-band {
-  background:
-    radial-gradient(130% 130% at 50% 0%, color-mix(in srgb, var(--color-beige) 14%, transparent), transparent 64%),
-    color-mix(in srgb, var(--color-beige) 7%, var(--color-bg));
-  border-top: 1px solid color-mix(in srgb, var(--color-beige) 28%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-beige) 14%, transparent);
+.ray-band, .ray-paper {
+  /* TOKEN FLIP: everything inside inherits the paper ramp — inline var()
+     styles, CountUp classes, Flick strokes, hairlines — no dark survivors. */
+  --color-fg: var(--paper-ink);
+  --color-text-secondary: #3D3830;
+  --color-text-muted: var(--paper-muted);
+  --color-text-faint: #857D6C;
+  --color-up: var(--paper-up);
+  --color-down: var(--paper-down);
+  --color-border: var(--paper-line);
+  --hairline: var(--paper-line);
+  --hairline-soft: var(--paper-line);
+  --color-bg-elevated: transparent;
+  background: var(--paper);
+  color: var(--paper-ink);
 }
-/* inside a band, the section label warms to the beige family (kickers only —
-   numerals and body stay in the standard ramp; green/red stay directional) */
-.ray-band .ray-ledger-k,
-.ray-band .ray-strip-k { color: var(--color-beige-text); }
+.ray-band { border-block: 1px solid rgba(25, 22, 18, 0.25); }
+/* two-class specificity: .ray-appr's own dark background is declared later
+   in the sheet — the paper must win on the composed element */
+.ray-appr.ray-paper { background: var(--paper); }
+/* the ledger's dark cells go transparent — ink sits DIRECTLY on the paper */
+.ray-band .ray-ledger { background: var(--paper-line); }
+.ray-band .ray-ledger > * { background: var(--paper) !important; }
+.ray-band .ray-ledger-k { color: var(--paper-muted); }
+.ray-band .ray-ledger-v { color: var(--paper-ink); }
+.ray-band .ray-ledger-v.up { color: var(--paper-up); }
+.ray-band .ray-ledger-s { color: var(--paper-muted); }
+.ray-band .ray-h2 { color: var(--paper-ink); }
 /* full-bleed band whose direct children keep the content rail's geometry */
 .rail-band-pad > * {
   width: 100%;
@@ -3321,13 +3343,9 @@ body {
     text-align: center;
   }
   .ray-appr-stat { display: none; }
-  .ray-appr-banner {
-    display: block; font-size: 13.5px; line-height: 1.4; color: var(--color-text-secondary);
-    background: color-mix(in srgb, var(--color-beige) 8%, var(--color-bg));
-    border: 1px solid color-mix(in srgb, var(--color-beige) 22%, transparent);
-    border-radius: 10px;
-    padding: 12px 16px;
-  }
+  /* the aside itself is the solid paper banner (.ray-paper) — the inner
+     element carries only type */
+  .ray-appr-banner { display: block; font-size: 13.5px; line-height: 1.4; color: var(--color-text-secondary); }
   .ray-appr-banner b { color: var(--color-fg); font-weight: 650; }
   .ray-appr-banner b.up { color: var(--color-up); }
   .ray-appr-banner b.down { color: var(--color-down); }

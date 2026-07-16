@@ -31,8 +31,7 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
   }));
 
   return (
-    <div className="ray-band" style={{ marginBlock: '8px 8px' }}>
-    <section className="ray-calibration rail" style={{ paddingBlock: '36px 44px' }}>
+    <section className="ray-calibration rail" style={{ paddingBlock: '40px 48px' }}>
       <div style={{ marginBottom: 4 }}>
         <h2 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
           What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>
@@ -79,6 +78,5 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
         </div>
       </div>
     </section>
-    </div>
   );
 }

@@ -312,9 +312,10 @@ export default function ValuePage() {
                 )}
               </div>
             </section>
-            <RecordByYear backtest={backtest} />
             </div>
           )}
+
+          {backtest && backtest.flagged.n >= 100 && <RecordByYear backtest={backtest} />}
 
           <section className="ray-value-section rail">
             {deals.length === 0 ? (
