@@ -6,7 +6,7 @@ import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
 import { craftTitle, formatDate, httpsImg } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
-import { lotFitsMarket } from '../lib/comps';
+import { lotFitsMarket, signalMagnitude } from '../lib/comps';
 import Flick from './Flick';
 
 /**
@@ -33,8 +33,11 @@ const CONF_RANK: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, 
     never headlines watches) — lotFitsMarket gates by form class. */
 export function pickCall(lots: AuctionLot[], allLots: AuctionLot[], market: Market = 'all') {
   const today = new Date().toISOString().split('T')[0];
+  // Today's call must be ACTIONABLE — only lots still open (saleDate today or
+  // later). Results-pending lots have already hammered; they belong in the feed,
+  // never headlining the call as if you could still bid.
   const deals = lots
-    .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
+    .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today && !l.resultsPending)
     .filter(l => market === 'all' || lotFitsMarket(l, market))
     .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
     .filter(d => d.signal && d.signal.label === 'Below Market' && CONF_RANK[d.signal.confidence || 'low'] >= 1)
@@ -58,7 +61,7 @@ export function CallPlate({
   allLots: AuctionLot[];
   market?: Market;
   isSaved?: (id: string) => boolean;
-  onToggleSave?: (id: string) => void;
+  onToggleSave?: (id: string, lot?: AuctionLot) => void;
 }) {
   const call = useMemo(() => pickCall(lots, allLots, market), [lots, allLots, market]);
   // the mat unmounts (real conditional render) when its photograph fails —
@@ -77,7 +80,7 @@ export function CallPlate({
         {onToggleSave && (
           <button
             className="ray-save-btn"
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id); }}
+            onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
             aria-label={saved ? 'Remove from saved' : 'Save lot'}
             style={{ width: 44, height: 44, margin: '-14px -12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
           >
@@ -112,7 +115,7 @@ export function CallPlate({
       <div className="ray-deckcall-title">{craftTitle(lot.title)}</div>
       <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 4 }}>{formatEstimate(lot)}</div>
       <div className="ray-sigrow" data-tone="up" style={{ marginTop: 9 }}>
-        <span className="ray-sigrow-pct" style={{ fontSize: 26 }}>+{signal!.pct}%</span>
+        <span className="ray-sigrow-pct" style={{ fontSize: 26 }}>{signalMagnitude(signal!.label, signal!.pct)}</span>
         <span className="ray-sigrow-ctx">
           comps over ask · {signal!.basis} sales
           <span className="ray-sigrow-dots" title={`${meter.word} confidence`}>{meter.dots}</span>

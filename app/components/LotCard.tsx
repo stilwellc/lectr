@@ -6,7 +6,7 @@ import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg } from '../utils';
 import ComparableModal from './ComparableModal';
-import { computeDeepSignal, FORM_LABEL } from '../lib/comps';
+import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -108,7 +108,7 @@ function LotCard({
   showArtist?: boolean;
   allLots?: AuctionLot[];
   saved?: boolean;
-  onToggleSave?: (lotId: string) => void;
+  onToggleSave?: (lotId: string, lot?: AuctionLot) => void;
   /** the last crawl's ISO date — lets the card mark lots first seen today */
   lastCrawl?: string;
 }) {
@@ -268,7 +268,7 @@ function LotCard({
         {onToggleSave && (
           <button
             className="ray-save-btn"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id); }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
             style={{
               position: 'absolute',
               top: 6,
@@ -344,7 +344,7 @@ function LotCard({
           {buySignal && (
             <div className="ray-sigrow" data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'}>
               <span className="ray-sigrow-pct">
-                {buySignal.label === 'Below Market' ? '+' : '−'}{buySignal.pct}%
+                {signalMagnitude(buySignal.label, buySignal.pct)}
               </span>
               <span className="ray-sigrow-ctx">
                 {buySignal.kind === 'edition'

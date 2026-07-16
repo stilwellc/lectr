@@ -51,9 +51,28 @@ export const houseColorsHex: Record<'dark' | 'light', Record<string, string>> = 
  * trim the tail. The data stays untouched — this is presentation craft.
  */
 const MAKER_PREFIX = /^(rolex|patek philippe|audemars piguet|omega|cartier|vacheron constantin|jaeger[- ]lecoultre)\s*[.,:]\s*/i;
+// design/maker name(s) that lead a catalogue title and duplicate the maker line
+const DESIGN_MAKER_PREFIX = /^(charles (?:&|and) ray eames|charles eames|ray eames|george nakashima|pierre jeanneret|jean prouv[eé]|le corbusier)\s*[.,:]\s*/i;
+// "Charles Eames, Ray Eames: <title>" — a comma-joined name duo ending in a colon
+const DUO_PREFIX = /^[A-ZÀ-Ý][\wÀ-ÿ.'-]+(?:\s+[A-ZÀ-Ý][\wÀ-ÿ.'-]+){0,3}(?:,\s*[A-ZÀ-Ý][\wÀ-ÿ.'-]+(?:\s+[A-ZÀ-Ý][\wÀ-ÿ.'-]+){0,3})+\s*:\s+/;
+const HTML_TAG = /<\/?[a-z][^>]*>/gi;
+const ENTITY: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ', '&mdash;': '—', '&ndash;': '–', '&hellip;': '…' };
+
+/** Strip HTML tags + decode common entities + collapse whitespace. Auction feeds
+ *  leak raw markup ("</p><p>") and entities into title/medium fields. */
+export function cleanText(raw?: string | null): string {
+  let t = (raw || '').replace(HTML_TAG, ' ');
+  t = t.replace(/&[a-z#0-9]+;/gi, m => ENTITY[m.toLowerCase()] ?? ' ');
+  return t.replace(/\s+/g, ' ').trim();
+}
 export function craftTitle(raw: string): string {
-  let t = (raw || '').trim();
+  let t = cleanText(raw);
+  t = t.replace(/^\[(.+?)\]$/, '$1').trim();          // unwrap a fully-bracketed title  [Apollo 14] → Apollo 14
+  t = t.replace(/^\[[^\]]{1,40}\]\s*/, '').trim();     // drop a leading [collection tag]
+  t = t.replace(/\s*\(\d{1,3}\)\s*$/, '');             // drop trailing catalogue quantity  "…chairs (7)"
   t = t.replace(MAKER_PREFIX, '');
+  t = t.replace(DESIGN_MAKER_PREFIX, '');              // "George Nakashima: Conoid" → "Conoid"
+  t = t.replace(DUO_PREFIX, '');                       // "Charles Eames, Ray Eames: …" → "…"
   const letters = t.replace(/[^a-zA-Z]/g, '');
   if (letters.length > 8) {
     const shouting = t.replace(/[^A-Z]/g, '').length / letters.length > 0.7;
@@ -62,7 +81,7 @@ export function craftTitle(raw: string): string {
     }
   }
   t = t.replace(/\s*[.,;]+\s*$/, '');
-  return t.charAt(0).toUpperCase() + t.slice(1);
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 }
 
 /**

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg } from '../utils';
+import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL } from '../lib/comps';
 import { useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
@@ -727,7 +727,7 @@ export default function ComparableModal({
 
             {lot.year && (
               <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 10 }}>
-                {lot.year}{lot.medium ? ` · ${lot.medium}` : ''}
+                {lot.year}{lot.medium ? ` · ${cleanText(lot.medium)}` : ''}
               </div>
             )}
 
@@ -940,7 +940,7 @@ export default function ComparableModal({
                         justifyContent: 'center',
                       }}>
                         {comp.imageUrl ? (
-                          <img src={httpsImg(comp.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={httpsImg(comp.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.currentTarget.remove()} />
                         ) : (
                           <span style={{
                             fontFamily: "var(--font-serif), serif",
@@ -982,7 +982,7 @@ export default function ComparableModal({
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
-                              }}>{comp.medium}</span>
+                              }}>{cleanText(comp.medium)}</span>
                             </>
                           )}
                           {comp.dimensions && (

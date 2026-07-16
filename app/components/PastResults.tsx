@@ -35,7 +35,7 @@ interface Props {
   categoryFilter?: CategoryFilter;
   onCategoryChange?: (cat: CategoryFilter) => void;
   savedIds?: string[];
-  onToggleSave?: (lotId: string) => void;
+  onToggleSave?: (lotId: string, lot?: AuctionLot) => void;
   /** ghost ordinal behind the h2 band (headers only) */
   mark?: string;
 }
@@ -378,7 +378,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               {onToggleSave && (
                 <button
                   className="ray-save-btn"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id); }}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

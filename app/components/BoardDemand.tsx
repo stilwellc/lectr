@@ -81,9 +81,11 @@ export interface LedgerItem {
  *  — never a % Demand Index. Compact so the numeral reads at display scale. */
 function formatRealized(n: number): string {
   const v = Math.round(n);
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)}M`;
+  const trim = (s: string) => s.replace(/\.0$/, '');
+  if (v >= 1_000_000_000) return `$${trim((v / 1_000_000_000).toFixed(v >= 10_000_000_000 ? 0 : 1))}B`;
+  if (v >= 1_000_000) return `$${trim((v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1))}M`;
   if (v >= 10_000) return `$${Math.round(v / 1000)}K`;
-  if (v >= 1000) return `$${(v / 1000).toFixed(1)}K`;
+  if (v >= 1000) return `$${trim((v / 1000).toFixed(1))}K`;
   return `$${v.toLocaleString()}`;
 }
 
@@ -312,17 +314,16 @@ export default function BoardDemand({
               <XAxis
                 dataKey="date"
                 tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }}
-                tickFormatter={(d: string, i: number) => {
-                  // "2026 Q2" ticks: within a 1Y window every tick shares the
-                  // year, so bare years print "2026 2026 2026" — lead with the
-                  // year once, then quarters carry the axis.
+                tickFormatter={(d: string) => {
+                  // Always date the tick ("2026 Q2"); recharts thins to fit via
+                  // minTickGap. A bare "Q3 Q3 Q3" axis with no year is unreadable.
                   const [y, q] = d.split(' ');
-                  return i === 0 || !q ? y : q;
+                  return q ? `${y} ${q}` : y;
                 }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
-                minTickGap={90}
+                minTickGap={64}
                 padding={{ left: 4, right: 4 }}
               />
               <YAxis

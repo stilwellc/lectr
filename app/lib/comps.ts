@@ -496,6 +496,15 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
   return null;
 }
 
+/** The magnitude token shown on a signal. A below-market gap of, say, +888%
+ *  reads as broken; past 2× we reframe it as a clean multiple ("9.9× ask") so
+ *  the flagship number stays coherent and authoritative. Above-market is
+ *  bounded to <100% (comps can't be more than 100% under the ask). */
+export function signalMagnitude(label: string, pct: number): string {
+  if (label === 'Below Market') return pct > 100 ? `${(pct / 100 + 1).toFixed(1)}×` : `+${pct}%`;
+  return `−${Math.min(pct, 99)}%`;
+}
+
 export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepSignal | null {
   return signalWithPool(lot, allLots)?.signal ?? null;
 }

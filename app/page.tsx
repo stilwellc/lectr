@@ -9,6 +9,7 @@ import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg } from './utils';
 import ArtistNav from './components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from './components/LotCard';
+import { signalMagnitude } from './lib/comps';
 import ComparableModal from './components/ComparableModal';
 import type { AuctionLot } from './types';
 import PastResults from './components/PastResults';
@@ -640,12 +641,16 @@ export default function RayPage() {
                             <td>{lot.auctionHouse}</td>
                             <td>{formatDate(lot.saleDate)}</td>
                             <td className="num t-est">
-                              {lot.estimateLow && lot.estimateHigh ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}` : '—'}
+                              {lot.estimateLow && lot.estimateHigh
+                                ? (formatPrice(lot.estimateLow) === formatPrice(lot.estimateHigh)
+                                    ? formatPrice(lot.estimateLow)
+                                    : `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}`)
+                                : '—'}
                             </td>
                             <td>
                               {sig
                                 ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
-                                    {sig.label === 'Below Market' ? `+${sig.pct}% under comps` : `${sig.pct}% over comps`}
+                                    {signalMagnitude(sig.label, sig.pct)}<span style={{ color: 'var(--color-text-faint)', marginLeft: 5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
                                     <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 8.5, letterSpacing: 1, opacity: 0.8 }}>
                                       {confidenceMeter(sig.confidence).dots}
                                     </span>
@@ -655,7 +660,7 @@ export default function RayPage() {
                             <td style={{ width: 44 }}>
                               <button
                                 className="ray-save-btn ray-tbl-save"
-                                onClick={e => { e.stopPropagation(); toggle(lot.id); }}
+                                onClick={e => { e.stopPropagation(); toggle(lot.id, lot); }}
                                 aria-label={isSaved(lot.id) ? 'Remove from saved' : 'Save lot'}
                                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-fg)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
                               >
