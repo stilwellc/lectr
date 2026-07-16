@@ -75,6 +75,15 @@ function quantile(sortedVals: number[], q: number): number {
   const i = Math.min(sortedVals.length - 1, Math.max(0, Math.round(q * (sortedVals.length - 1))));
   return sortedVals[i];
 }
+/** Linear-interpolation quantile for the DISPLAYED band — the round-index one
+ *  makes an n=3 band [median, max] (shows the median as "low"). */
+function lerpQuantile(sortedVals: number[], q: number): number {
+  if (!sortedVals.length) return 0;
+  const pos = q * (sortedVals.length - 1);
+  const lo = Math.floor(pos), hi = Math.ceil(pos);
+  if (lo === hi) return sortedVals[lo];
+  return sortedVals[lo] + (sortedVals[hi] - sortedVals[lo]) * (pos - lo);
+}
 
 /**
  * Calibrated beat-high rate as a function of compRatio (comps / estimate-mid).
@@ -109,15 +118,23 @@ export function estimateValue(
   const top = pool.slice(0, TOP_K);
   const compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2)]));
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
-  const low = quantile(vals, 0.25);
-  const high = quantile(vals, 0.75);
+  // Displayed band widened to q0.15..q0.85 (lerp) so it honestly covers ~50% of
+  // realized outcomes; the round q1..q3 only covered ~37% and mislabeled the
+  // median as "low" on tiny pools. (Measured: scripts/gate-ab band experiment.)
+  const low = lerpQuantile(vals, 0.15);
+  const high = lerpQuantile(vals, 0.85);
 
-  // confidence from pool size, best-match strength, and dispersion
+  // confidence from pool size, best-match strength, and dispersion. disp stays
+  // on the tight q1..q3 (unchanged from the tier experiment); thresholds
+  // tightened (2.2→1.5, 4→2.5) so the tiers order strictly by accuracy —
+  // "high" now earns its label (medAbsErr 31%→27%, holds in split-half).
   const bestCos = top[0].match.cosine;
-  const disp = high > 0 ? high / Math.max(low, 1) : 99;
+  const dLow = quantile(vals, 0.25);
+  const dHigh = quantile(vals, 0.75);
+  const disp = dHigh > 0 ? dHigh / Math.max(dLow, 1) : 99;
   let confidence: ValueResult['confidence'] = 'low';
-  if (pool.length >= 6 && bestCos >= 0.85 && disp <= 2.2) confidence = 'high';
-  else if (pool.length >= 4 && bestCos >= 0.72 && disp <= 4) confidence = 'medium';
+  if (pool.length >= 6 && bestCos >= 0.85 && disp <= 1.5) confidence = 'high';
+  else if (pool.length >= 4 && bestCos >= 0.72 && disp <= 2.5) confidence = 'medium';
 
   // strongest identity match → "this exact item sold for $Z"
   const exactC = top.find(c => c.match.cls === 'physicalMatch') || top.find(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
