@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LabelList } from 'recharts';
 import { AuctionLot } from '../../types';
 import { formatPrice, categoryLabels, categoryColorsHex } from '../../utils';
 import { useTheme } from '../ThemeProvider';
@@ -87,6 +87,7 @@ export default function CategoryBreakdown({ allLots }: Props) {
         }}>
           Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>breakdown</span>
         </h2>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = share of lots</p>
       </div>
 
       <div className="glass glass-quiet" style={{
@@ -112,10 +113,11 @@ export default function CategoryBreakdown({ allLots }: Props) {
               tickLine={false}
             />
             <Tooltip content={<CategoryTooltip />} cursor={{ fill: 'var(--color-hover-item)' }} />
-            <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
+            <Bar dataKey="revenue" radius={[0, 4, 4, 0]} minPointSize={2}>
               {categoryData.map((entry, i) => (
                 <Cell key={i} fill={entry.fill} fillOpacity={0.7} />
               ))}
+              <LabelList dataKey="revenue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-faint)', fontSize: 11, fontFamily: 'var(--font-sans), sans-serif' }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

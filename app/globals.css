@@ -1339,6 +1339,8 @@ h1 {
 @media (prefers-reduced-motion: reduce) { .ray-spark-card:hover { transform: none; } }
 /* Disabled toolbar pills should read disabled, not clickable. */
 .ray-toolbar-pill:disabled, .ray-toolbar-pill[aria-disabled="true"] { opacity: 0.38; cursor: default; pointer-events: none; }
+/* keep content off the fixed mobile tab bar */
+@media (max-width: 899px) { .ray-mobnav-pad { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); } }
 
 .ray-toolbar-pill {
   display: inline-flex;

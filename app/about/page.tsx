@@ -22,7 +22,8 @@ function Flow({ children }: { children: React.ReactNode }) {
 function Node({ title, sub, mono, tone, style }: { title: string; sub?: string; mono?: boolean; tone?: 'accent'; style?: React.CSSProperties }) {
   return (
     <div style={{
-      border: `1px solid ${tone === 'accent' ? 'var(--color-text-muted)' : 'var(--hairline)'}`,
+      border: `1px solid ${tone === 'accent' ? 'color-mix(in srgb, var(--color-accent-gold) 50%, var(--hairline))' : 'var(--hairline)'}`,
+      boxShadow: tone === 'accent' ? '0 0 0 1px color-mix(in srgb, var(--color-accent-gold) 12%, transparent), 0 6px 24px -14px color-mix(in srgb, var(--color-accent-gold) 40%, transparent)' : undefined,
       borderRadius: 10, padding: '12px 15px', background: 'var(--color-bg-elevated)', ...style,
     }}>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-fg)', lineHeight: 1.35 }}>{title}</div>

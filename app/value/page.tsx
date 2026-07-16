@@ -89,7 +89,7 @@ export default function ValuePage() {
   const callMedian = callPool?.signal.med ?? null;
 
   return (
-    <div style={{
+    <div className="ray-mobnav-pad" style={{
       minHeight: '100vh',
       background: 'var(--color-bg)',
       color: 'var(--color-fg)',
