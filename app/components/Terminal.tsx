@@ -191,6 +191,7 @@ export function Colophon({ lotCount, houseCount, record }: {
             <Link href="/analytics">Analytics</Link>
             <Link href="/saved">Saved</Link>
             <Link href="/about">How it works</Link>
+            <Link href="/blog">Notes from the desk</Link>
           </div>
           <div className="ray-close-col ray-close-record">
             <span className="ray-close-k">The record</span>
