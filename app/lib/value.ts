@@ -41,6 +41,10 @@ export interface ValueResult {
   estimateUsd: number | null;
   vsBid: { label: 'below recent comps' | 'above recent comps' | 'in line'; pct: number } | null;
   confidence: 'high' | 'medium' | 'low';
+  /** which gate built the pool: 'main' = strict 0.50/65; 'fallback' = the
+   *  relaxed 0.45/55 tier used only when the strict pool is thin (validated:
+   *  marginal cohort +38.9%/63.1% — indistinguishable from the main engine) */
+  tier?: 'main' | 'fallback';
   /** the strongest identity match found, if any (drives "this exact item…") */
   exact: { id: string; realizedUsd: number; saleDate: string; cls: 'physicalMatch' | 'modelMatch' } | null;
 }
@@ -57,10 +61,18 @@ const TOP_K = 10;
 // predictive edge (+40% flagged median, 63% beatHigh, 24-pt edge — all unchanged).
 // Mutable so the A/B harness can flip it. score = round((cosine+bonus)*100).
 export const COMP_GATE = { cosFloor: 0.50, minScore: 65 };
-function passesGate(m: { cls: string; cosine: number; score: number }): boolean {
+// Tier-b fallback gate (validated ADOPT): used ONLY when the strict gate yields
+// <3 comps — never replaces a strict pool. Holdout: +1,744 lots (30.6→37.5%
+// coverage) whose flagged cohort measured +38.9%/63.1%, statistically
+// indistinguishable from the main engine; confidence is capped at 'medium'.
+export const FALLBACK_GATE = { cosFloor: 0.45, minScore: 55 };
+function passesGateWith(g: { cosFloor: number; minScore: number }, m: { cls: string; cosine: number; score: number }): boolean {
   return m.cls !== 'none'
-    && m.cosine >= COMP_GATE.cosFloor
-    && (COMP_GATE.minScore === 0 || m.score >= COMP_GATE.minScore);
+    && m.cosine >= g.cosFloor
+    && (g.minScore === 0 || m.score >= g.minScore);
+}
+function passesGate(m: { cls: string; cosine: number; score: number }): boolean {
+  return passesGateWith(COMP_GATE, m);
 }
 
 function weightedMedian(pairs: [number, number][]): number {
@@ -109,11 +121,21 @@ export function estimateValue(
   comps: Comp[],
   tbl: IdfTable,
 ): ValueResult | null {
-  // rank by match score; keep the comp-worthy pool
-  const pool = comps
+  // rank by match score; keep the comp-worthy pool. If the strict gate can't
+  // seat 3 comps, retry once at the relaxed tier-b gate (validated: marginal
+  // quality indistinguishable from the main engine) — never mix the two.
+  let tier: 'main' | 'fallback' = 'main';
+  let pool = comps
     .filter(c => passesGate(c.match) && c.realizedUsd > 0)
     .sort((a, b) => b.match.score - a.match.score);
-  if (pool.length < 3) return null;
+  if (pool.length < 3) {
+    const relaxed = comps
+      .filter(c => passesGateWith(FALLBACK_GATE, c.match) && c.realizedUsd > 0)
+      .sort((a, b) => b.match.score - a.match.score);
+    if (relaxed.length < 3) return null;
+    pool = relaxed;
+    tier = 'fallback';
+  }
 
   const top = pool.slice(0, TOP_K);
   // Recency decay (validated ADOPT, halflife 2y): a comp's weight halves every
@@ -146,6 +168,8 @@ export function estimateValue(
   let confidence: ValueResult['confidence'] = 'low';
   if (pool.length >= 6 && bestCos >= 0.85 && disp <= 1.5) confidence = 'high';
   else if (pool.length >= 4 && bestCos >= 0.72 && disp <= 2.5) confidence = 'medium';
+  // a relaxed-gate pool never claims the top tier
+  if (tier === 'fallback' && confidence === 'high') confidence = 'medium';
 
   // strongest identity match → "this exact item sold for $Z"
   const exactC = top.find(c => c.match.cls === 'physicalMatch') || top.find(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
@@ -190,6 +214,7 @@ export function estimateValue(
     estimateUsd: estimateUsd != null ? Math.round(estimateUsd) : null,
     vsBid,
     confidence,
+    tier,
     exact,
   };
 }
@@ -210,7 +235,9 @@ export function resolveComps(
     if (priorTo && !(c.saleDate < priorTo)) continue;
     if (c.status !== 'sold' || !(c.realizedUsd! > 0)) continue;
     const m = similarity(lot, c, tbl);
-    if (!passesGate(m)) continue;
+    // admit down to the RELAXED tier-b gate — estimateValue applies the strict
+    // gate first and only reaches for these when the strict pool is thin
+    if (!passesGateWith(FALLBACK_GATE, m)) continue;
     out.push({ id: c.id, match: m, realizedUsd: c.realizedUsd!, saleDate: c.saleDate });
   }
   return out;

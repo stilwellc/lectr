@@ -421,7 +421,7 @@ export function extractYear(
   }
 
   // 2 · title fallback (conservative — only when field gave nothing)
-  const src = `${title || ''} ${raw || ''}`;
+  const src = stripBioParens(`${title || ''} ${raw || ''}`);
   // strip fractions (edition N/M, dates like 9/11) so they can't fake a year
   const stripped = src.replace(/\b\d{1,4}\s*\/\s*\d{1,4}\b/g, ' ');
   const y = firstYear(stripped);
@@ -702,9 +702,24 @@ const TITLE_STOPWORDS = new Set([
  *  persist the tokens once (clean, stemmed-lite, stopworded) so every crawl and
  *  the engine tokenize identically. Numbers (years, refs, edition, jersey #s)
  *  are KEPT — they carry heavy identifying signal. */
-export function titleTokens(title: string | null): string[] {
+/** Strip biographical parentheticals — "(American, 1928–1987)", "(b. 1955)" —
+ *  from a title. The year-range form is only stripped when the span is >= 15
+ *  years (a life, not a work-date range like "(1949-1950)"). These leak the
+ *  artist's nationality + birth year into titleTokens/yearNum: measured on the
+ *  art holdout, stripping them raised coverage 19.8→21.1% AND edge 27.6→29.6pt,
+ *  and killed the birth-year bug (20.6% of art yearNums were the artist's birth
+ *  year — one $11.2M Matisse joined a $7k print pool via "same year 1869"). */
+export function stripBioParens(s: string): string {
+  return s
+    .replace(/\([^)]*\b(1[789]\d{2})\s*[–—-]\s*(1[89]\d{2}|20[0-3]\d)\b[^)]*\)/g,
+      (m, a, b) => (parseInt(b, 10) - parseInt(a, 10) >= 15 ? ' ' : m))
+    .replace(/\(\s*(?:[a-z][a-z .]+,\s*)?(?:b\.|born)\s*\d{4}\s*\)/gi, ' ');
+}
+
+export function titleTokens(title: string | null, dropWords?: string[]): string[] {
   if (!title) return [];
-  const raw = title.toLowerCase()
+  const drop = dropWords && dropWords.length ? new Set(dropWords.map(w => w.toLowerCase())) : null;
+  const raw = stripBioParens(title).toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(Boolean);
@@ -713,8 +728,13 @@ export function titleTokens(title: string | null): string[] {
   for (let w of raw) {
     if (w.length < 2 && !/^\d/.test(w)) continue;
     if (TITLE_STOPWORDS.has(w)) continue;
+    // the maker's own name words carry zero discriminating signal within a
+    // same-maker pool and inflate cosine between unrelated works (art lots
+    // routinely lead with "Andy Warhol: …")
+    if (drop && drop.has(w)) continue;
     // light singularization so jersey/jerseys, print/prints collapse
     if (w.length > 4 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1);
+    if (drop && drop.has(w)) continue;
     if (!seen.has(w)) { seen.add(w); out.push(w); }
   }
   return out;

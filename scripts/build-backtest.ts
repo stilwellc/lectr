@@ -55,6 +55,8 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
   type Bucket = { perfs: number[]; hammerPerfs: number[]; beat: number; hammerBeat: number; n: number; boughtIn: number };
   const mk = (): Bucket => ({ perfs: [], hammerPerfs: [], beat: 0, hammerBeat: 0, n: 0, boughtIn: 0 });
   const flagged = mk(), unflagged = mk(), above = mk();
+  // per-tier flagged rows — the headline stays truthful only unblended
+  const flaggedMain = mk(), flaggedFallback = mk();
   const byYear = new Map<number, { flagged: number[]; unflagged: number[] }>();
 
   const valueOne = (lot: L) => {
@@ -82,11 +84,15 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
     const isBelow = v.signal.label.startsWith('below');
     const isAbove = v.signal.label.startsWith('above');
     const bucket = isBelow ? flagged : isAbove ? above : unflagged;
-    bucket.perfs.push(realized / estMid - 1);
-    bucket.hammerPerfs.push(hammer / estMid - 1);
-    if (realized > lot.estHighUsd!) bucket.beat++;
-    if (hammer > lot.estHighUsd!) bucket.hammerBeat++;
-    bucket.n++;
+    const push = (b: Bucket) => {
+      b.perfs.push(realized / estMid - 1);
+      b.hammerPerfs.push(hammer / estMid - 1);
+      if (realized > lot.estHighUsd!) b.beat++;
+      if (hammer > lot.estHighUsd!) b.hammerBeat++;
+      b.n++;
+    };
+    push(bucket);
+    if (isBelow) push(v.tier === 'fallback' ? flaggedFallback : flaggedMain);
 
     const y = +lot.saleDate.slice(0, 4);
     if (y >= 2000) {
@@ -143,6 +149,8 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
     flagged: summarize(flagged),
     unflagged: summarize(unflagged),
     above: summarize(above),
+    // per-tier flagged records (main = strict gate; fallback = relaxed tier-b)
+    flaggedTiers: { main: summarize(flaggedMain), fallback: summarize(flaggedFallback) },
     series,
   };
   fs.writeFileSync(path.join(dataDir, 'backtest.json'), JSON.stringify(out));

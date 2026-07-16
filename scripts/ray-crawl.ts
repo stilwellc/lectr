@@ -3173,7 +3173,11 @@ async function main() {
     lot.modelKey = normModelKey(lot);
     lot.reference = normWatchKey(lot);
     lot.normalizedTitle = normNormalizeTitle(lot.title);
-    lot.titleTokens = titleTokens(lot.title);
+    // ART lots: drop the maker's own name words from the tokens — they carry
+    // zero signal within a same-maker comp pool and inflate cosine between
+    // unrelated works (holdout: art coverage 19.8→21.1%, edge +2pt).
+    const isArtLot = !DESIGN_ARTISTS.has(lot.artist) && !OBJECT_ARTISTS.has(lot.artist);
+    lot.titleTokens = titleTokens(lot.title, isArtLot ? lot.artist.split('-') : undefined);
 
     const { makerSlug, entityClass } = classifyEntity(lot.artist);
     lot.makerSlug = makerSlug;

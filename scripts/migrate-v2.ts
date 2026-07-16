@@ -26,6 +26,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import type { AuctionLot, Currency, PriceBasis } from '../app/types';
+import { ARTISTS } from '../app/constants';
 import {
   fxRateFor, normalizeDimensions, extractYear, canonMedium,
   extractEdition, extractSerial, extractCollectibleTags, classifyEntity,
@@ -390,7 +391,9 @@ function migrateRow(src: Record<string, unknown>, stats: RowStats): AuctionLot {
   lot.modelKey = modelKey({ title });
   lot.reference = watchKey({ title });
   lot.normalizedTitle = normalizeTitle(title);
-  lot.titleTokens = titleTokens(title);
+  // art lots drop the maker's own name words (zero signal in a same-maker pool)
+  const isArtLot = ARTISTS.some(a => a.slug === String(lot.artist) && a.market === 'art');
+  lot.titleTokens = titleTokens(title, isArtLot ? String(lot.artist).split('-') : undefined);
 
   // dims
   const dims = normalizeDimensions((lot.dimensions as string | null) ?? null);
