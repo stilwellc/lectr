@@ -1556,6 +1556,7 @@ h1 {
   cursor: pointer;
   padding: 7px 11px;
   border-radius: 100px;
+  white-space: nowrap;
   font-family: var(--font-sans), sans-serif;
   font-size: 11px;
   font-weight: 600;
@@ -1667,10 +1668,12 @@ h1 {
 body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 
 /* flat cards do not levitate — hover is a fill shift, images may breathe */
-.ray-stat-card, .ray-portfolio-card, .ray-lot-card {
+.ray-stat-card, .ray-portfolio-card {
   transition: background var(--duration-fast) var(--ease-signature);
 }
-.ray-stat-card:hover, .ray-portfolio-card:hover, .ray-lot-card:hover {
+/* lot cards keep their real hover (lift + border + shadow, defined at :1027) —
+   only the static stat/portfolio cards are held flat here. */
+.ray-stat-card:hover, .ray-portfolio-card:hover {
   transform: none !important;
   box-shadow: none !important;
   border-color: transparent !important;

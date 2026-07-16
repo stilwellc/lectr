@@ -139,7 +139,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
                   <stop offset="100%" stopColor={tint} stopOpacity={0.01} />
                 </linearGradient>
               </defs>
-              <YAxis hide domain={['dataMin', 'dataMax']} />
+              <YAxis hide domain={[(min: number) => min - Math.abs(min) * 0.18 - 1, (max: number) => max + Math.abs(max) * 0.18 + 1]} />
               <Tooltip content={<SparkTooltip />} />
               <Area
                 type="monotone"

@@ -10,6 +10,7 @@
 import React, { useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
 import type { MarketSeriesJson } from '../../hooks/useRayData';
+import Flick from '../Flick';
 
 const UP = 'var(--color-up)';
 const DOWN = 'var(--color-down)';
@@ -57,7 +58,7 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
             <span className="ray-mi-num">{series.index[series.index.length - 1].value}</span>
             {idxChange != null && (
               <span className="ray-mi-delta" style={{ color: idxChange >= 0 ? UP : DOWN }}>
-                {idxChange >= 0 ? '▲' : '▼'} {idxChange >= 0 ? '+' : ''}{idxChange}% past year
+                <Flick size={11} style={{ verticalAlign: 'baseline', transform: idxChange >= 0 ? undefined : 'scaleY(-1)' }} /> {idxChange >= 0 ? '+' : ''}{idxChange}% past year
               </span>
             )}
           </div>

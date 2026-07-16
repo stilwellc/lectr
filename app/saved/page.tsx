@@ -193,7 +193,7 @@ export default function SavedPage() {
               </span>
             </p>
           </section>
-          <div className="ray-enter" style={{ textAlign: 'center', padding: '28px 20px 72px' }}>
+          <div className="rail ray-enter" style={{ padding: '26px 0 72px' }}>
             <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={openLogin}>
               Sign in with Google
             </button>
