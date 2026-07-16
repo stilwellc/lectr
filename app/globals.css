@@ -3538,12 +3538,18 @@ body {
    cutout). Micro-motion on hover/selection gives the pop; the active pill
    stays the view's one lit white element. */
 .ray-pill-obj {
-  display: inline-block;
-  font-size: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
+  margin-right: 6px;
+  vertical-align: middle;
+  opacity: 0.62;
   transform-origin: 50% 80%;
-  transition: transform 180ms var(--ease-signature);
+  transition: transform 180ms var(--ease-signature), opacity 180ms var(--ease-ui);
 }
+.ray-markets-compact .ray-market-tab[data-active=true] .ray-pill-obj,
+.ray-markets-compact .ray-market-tab:hover .ray-pill-obj { opacity: 1; }
 .ray-markets-compact .ray-market-tab:hover .ray-pill-obj { transform: scale(1.22) rotate(-6deg); }
 .ray-markets-compact .ray-market-tab[data-active=true] .ray-pill-obj { animation: lectrObjPop 340ms var(--ease-signature); }
 @media (prefers-reduced-motion: no-preference) {
