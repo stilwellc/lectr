@@ -38,8 +38,10 @@ function card(label: string, s: ArtistStats) {
   const appr = s.appreciationRate || 0;
   const hist = (s.priceHistory || []).map(p => p.avgPrice);
   const W = 1080, H = 200;
-  const max = Math.max(...hist, 1);
-  const min = Math.min(...hist, 0);
+  // true series min/max (an empty series falls back to a flat 0..1) — seeding
+  // min with 0 previously flattened real price variation into the top sliver.
+  const max = hist.length ? Math.max(...hist) : 1;
+  const min = hist.length ? Math.min(...hist) : 0;
   const line = hist
     .map((v, i) => `${((i / Math.max(hist.length - 1, 1)) * W).toFixed(1)},${(H - ((v - min) / Math.max(max - min, 1)) * H + 8).toFixed(1)}`)
     .join(' ');

@@ -1,7 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint } from '../types';
+
+// Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
+// would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
+const EMPTY_LOTS: AuctionLot[] = [];
 
 export interface TapeItem { artist: string; title: string; price: string; house: string }
 export type TapeByMarket = Record<string, TapeItem[]>;
@@ -326,7 +330,7 @@ export function useRayData(): RayData {
 
   return {
     statsByArtist: data?.statsByArtist || {},
-    allLots: data?.allLots || [],
+    allLots: data?.allLots || EMPTY_LOTS,
     tape: data?.tape || {},
     demand: data?.demand || {},
     realized: data?.realized || {},
@@ -377,12 +381,16 @@ export function useSoldArchive(): SoldArchive {
     return () => { active = false; archiveListeners.delete(listener); };
   }, []);
 
+  // Memoized so identity is stable across renders — an un-memoized new array
+  // each render drives ArchiveLoader's effect into an infinite setState loop.
+  const allLotsWithArchive = useMemo(
+    () => (state.soldArchive.length ? [...base.allLots, ...state.soldArchive] : base.allLots),
+    [base.allLots, state.soldArchive],
+  );
   return {
     soldArchive: state.soldArchive,
     archiveLoaded: state.archiveLoaded,
     archiveError: state.archiveError,
-    allLotsWithArchive: state.soldArchive.length
-      ? [...base.allLots, ...state.soldArchive]
-      : base.allLots,
+    allLotsWithArchive,
   };
 }

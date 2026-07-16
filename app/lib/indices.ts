@@ -34,7 +34,8 @@ const QUARTER = (d: string) => {
 const median = (a: number[]) => {
   if (!a.length) return 0;
   const s = [...a].sort((x, y) => x - y);
-  return s[s.length >> 1];
+  const n = s.length;
+  return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 
 /** A tight like-for-like cohort key: same maker + form + coarse size band. */
@@ -80,8 +81,10 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
   const accByQ = new Map<string, number[]>();
   for (const l of soldPriced) {
     if (!l.estLowUsd || !l.estHighUsd) continue;
+    const mid = (l.estLowUsd + l.estHighUsd) / 2;
+    if (!(mid > 0)) continue; // guard against corrupt (negative/zero) estimates
     const q = QUARTER(l.saleDate); if (!q) continue;
-    (accByQ.get(q) || accByQ.set(q, []).get(q)!).push(l.realizedUsd! / ((l.estLowUsd + l.estHighUsd) / 2));
+    (accByQ.get(q) || accByQ.set(q, []).get(q)!).push(l.realizedUsd! / mid);
   }
   const houseAccuracy = Array.from(accByQ.entries()).filter(([, v]) => v.length >= MIN_PER_QUARTER)
     .map(([q, v]) => ({ period: q, value: +median(v).toFixed(2), n: v.length }))

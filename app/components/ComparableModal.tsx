@@ -354,10 +354,12 @@ export default function ComparableModal({
     };
   }, []);
 
-  // Lock body scroll
+  // Lock body scroll — restore the PRIOR value (not ''), so stacked overlays
+  // don't leave the page scrollable when the inner one closes.
   useEffect(() => {
+    const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    return () => { document.body.style.overflow = prev; };
   }, []);
 
   // ONE LOT, ONE NUMBER: when the engine made a call on this lot, the modal

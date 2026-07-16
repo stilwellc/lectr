@@ -139,7 +139,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         } else if (e.key === 'ArrowDown') {
           e.preventDefault();
           dropdownRef.current
-            ?.querySelector<HTMLButtonElement>('.ray-artist-dropdown-item')
+            ?.querySelector<HTMLButtonElement>('button.ray-artist-dropdown-item')
             ?.focus({ preventScroll: true });
         }
       }}

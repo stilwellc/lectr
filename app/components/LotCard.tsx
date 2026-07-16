@@ -8,6 +8,10 @@ import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, fo
 import ComparableModal from './ComparableModal';
 import { computeDeepSignal, FORM_LABEL } from '../lib/comps';
 
+// stable empty-array identity — a fresh `[]` default each render would defeat
+// the buySignal useMemo and the memo() wrapper below.
+const EMPTY_LOTS: AuctionLot[] = [];
+
 export function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
     if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -95,7 +99,7 @@ function useLotCardStyles() {
 function LotCard({
   lot,
   showArtist = false,
-  allLots = [],
+  allLots = EMPTY_LOTS,
   saved = false,
   onToggleSave,
   lastCrawl,

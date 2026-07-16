@@ -195,7 +195,10 @@ const MODEL_STOPWORDS = new Set([
   'occasional', 'freeform', 'free-form', 'upholstered', 'illuminated', 'unique',
   'special', 'signed', 'vintage', 'original',
 ]);
-const CODE_BLACKLIST = new Set(['no', 'ca', 'vol', 'lot', 'est', 'circa']);
+// prepositions/articles that precede a number in prose ("in 2 parts", "of 3",
+// "circa 1960") — never a real model prefix, and minting a key from them
+// silently fragments an otherwise-matching comp pool.
+const CODE_BLACKLIST = new Set(['no', 'ca', 'vol', 'lot', 'est', 'circa', 'in', 'of', 'at', 'to', 'by', 'as', 'for', 'and', 'the']);
 const FORM_NOUNS = /(sofa|couch|settee|bench|daybed|stool|ottoman|chair|rocker|table|cabinet|chest|dresser|sideboard|credenza|desk|bed|headboard|lamp|sconce|chandelier|mirror|shelf|shelves|bookcase)/;
 
 export function modelKey(lot: Pick<AuctionLot, 'title'>): string | null {

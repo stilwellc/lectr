@@ -125,20 +125,28 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     if (!user) { setEntries([]); return; }
     let cancelled = false;
     (async () => {
-      // one-time: lift any localStorage saves into the account, then clear them
+      // one-time: lift any localStorage saves into the account, then clear them.
+      // Only clear localStorage AFTER a clean upsert — a failed upload followed by
+      // an unconditional clear would wipe the saves from both places (data loss).
       if (!migratedRef.current) {
         migratedRef.current = true;
         const local = readStored();
         if (local.length) {
-          await supabase!.from('saved_lots').upsert(local.map(e => entryToRow(user.id, e)), { onConflict: 'user_id,lot_id', ignoreDuplicates: true });
-          writeStored([]);
+          const { error } = await supabase!.from('saved_lots').upsert(local.map(e => entryToRow(user.id, e)), { onConflict: 'user_id,lot_id', ignoreDuplicates: true });
+          if (!error) writeStored([]);
+          else { console.error('[account] migration upsert failed, keeping local:', error.message); migratedRef.current = false; }
         }
       }
-      const { data } = await supabase!.from('saved_lots').select('*').eq('user_id', user.id);
+      const { data, error } = await supabase!.from('saved_lots').select('*').eq('user_id', user.id);
+      // On a query error `data` is null — do NOT blank the user's saves; keep
+      // whatever is already in state and let the next run retry.
+      if (error) { console.error('[account] load saved lots failed:', error.message); return; }
       if (!cancelled) setEntries((data || []).map(rowToEntry));
     })();
     return () => { cancelled = true; };
-  }, [user]);
+    // depend on the stable user id, not the User object — token refresh emits a
+    // fresh User instance each time and would otherwise re-fetch on a timer.
+  }, [user?.id]);
 
   const toggle = useCallback((lotId: string, lot?: AuctionLot) => {
     // no auth configured → localStorage, exactly like before
@@ -157,16 +165,23 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     // (`void builder` builds the request but never sends it — the original bug
     // where saves never persisted.) Fire the write with .then() so it executes,
     // and log any error instead of failing silently. Optimistic UI regardless.
+    // Optimistic UI, but roll the state change back if the write fails so the
+    // star never lies about what's actually persisted.
     const exists = entriesRef.current.some(e => e.id === lotId);
     if (exists) {
+      const removed = entriesRef.current.find(e => e.id === lotId);
       setEntries(prev => prev.filter(e => e.id !== lotId));
       supabase.from('saved_lots').delete().eq('user_id', user.id).eq('lot_id', lotId)
-        .then(({ error }) => { if (error) console.error('[account] unsave failed:', error.message); });
+        .then(({ error }) => {
+          if (error) { console.error('[account] unsave failed:', error.message); if (removed) setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, removed])); }
+        });
     } else {
       const e = entryFromLot(lotId, lot);
       setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, e]));
       supabase.from('saved_lots').upsert(entryToRow(user.id, e), { onConflict: 'user_id,lot_id' })
-        .then(({ error }) => { if (error) console.error('[account] save failed:', error.message); });
+        .then(({ error }) => {
+          if (error) { console.error('[account] save failed:', error.message); setEntries(prev => prev.filter(p => p.id !== lotId)); }
+        });
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
     }
   }, [user]);

@@ -68,6 +68,9 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
     if (!needle) return items;
     return items.filter(i => `${i.label} ${i.hint}`.toLowerCase().includes(needle));
   }, [items, q]);
+  // only the first 12 are rendered — keyboard nav + Enter must index into the
+  // SAME list, or the highlight vanishes and Enter fires an unseen item.
+  const shown = filtered.slice(0, 12);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -115,16 +118,16 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
           placeholder="Jump to a maker, market or section…"
           aria-label="Search"
           onKeyDown={e => {
-            if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, filtered.length - 1)); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, shown.length - 1)); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
-            else if (e.key === 'Enter' && filtered[idx]) go(filtered[idx]);
+            else if (e.key === 'Enter' && shown[idx]) go(shown[idx]);
           }}
         />
         <div className="ray-ck-list" role="listbox">
           {filtered.length === 0 ? (
             <div className="ray-ck-empty">Nothing matches.</div>
           ) : (
-            filtered.slice(0, 12).map((item, i) => (
+            shown.map((item, i) => (
               <button
                 key={`${item.kind}-${item.label}-${item.path}`}
                 role="option"

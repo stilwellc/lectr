@@ -32,7 +32,7 @@ const CONF_RANK: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, 
 export function pickCall(lots: AuctionLot[], allLots: AuctionLot[], market: Market = 'all') {
   const today = new Date().toISOString().split('T')[0];
   const deals = lots
-    .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today)
+    .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
     .filter(l => market === 'all' || lotFitsMarket(l, market))
     .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
     .filter(d => d.signal && d.signal.label === 'Below Market' && CONF_RANK[d.signal.confidence || 'low'] >= 1)
@@ -201,7 +201,7 @@ export function Colophon({ lotCount, houseCount, record }: {
 
         {/* baseline */}
         <div className="ray-close-base">
-          <span>© {new Date().getFullYear()} lectr · auction intelligence</span>
+          <span suppressHydrationWarning>© {new Date().getFullYear()} lectr · auction intelligence</span>
           <span>Comps: same maker, same form, size-banded — medians, never means.</span>
           <span>Data from public auction results.</span>
         </div>

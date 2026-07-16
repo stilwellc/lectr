@@ -156,7 +156,11 @@ function classify(a: AuctionLot, b: AuctionLot, cos: number, bonus: number, reas
   if (strong < 0.6) return 'similar';        // comp-worthy at best; caller may still drop it
   if (strong < 0.75) return 'similar';
 
-  const isSportsSci = SPORTS_SCIENCE.has(a.artist) || a.category === 'object';
+  // Watches/instruments are category 'object' too, but they carry entityClass
+  // 'maker' and a real serial — they must take the serial branch below, NOT the
+  // sports photo-match branch (else two listings of the same physical watch can
+  // never be a physicalMatch). Only NON-maker objects are the sports/science kind.
+  const isSportsSci = (SPORTS_SCIENCE.has(a.artist) || a.category === 'object') && a.entityClass !== 'maker';
 
   // PHYSICAL MATCH — the same physical object. Deliberately STRICT: on this data
   // the same-model and the same-object read identically in text (22 Eames 670/671

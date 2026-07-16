@@ -1485,7 +1485,11 @@ function parseChristiesCurrency(txt: string): Currency {
 async function christiesAuctionLots(slug: string): Promise<any[]> {
   const byId = new Map<string, any>();
   let total = Infinity;
-  for (let page = 1; page <= 12 && byId.size < total; page++) {
+  // Cap high enough to cover flagship sales (hundreds of lots) — a hard 12 could
+  // silently truncate a large sale. The `byId.size < total` guard stops early on
+  // normal sales; this is just the runaway ceiling.
+  const MAX_PAGES = 60;
+  for (let page = 1; page <= MAX_PAGES && byId.size < total; page++) {
     try {
       const res = await fetch(`https://www.christies.com/en/auction/${slug}?sortby=lotnumber&page=${page}`, {
         headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
@@ -1495,13 +1499,16 @@ async function christiesAuctionLots(slug: string): Promise<any[]> {
       const m = html.match(/window\.chrComponents\.lots\s*=\s*(\{[\s\S]*?\});\s*(?:window\.|<\/script>)/);
       if (!m) break;
       const d = JSON.parse(m[1]);
-      total = d.data.total_hits_filtered || d.data.lots.length;
+      const lots = d?.data?.lots;
+      if (!Array.isArray(lots)) break; // malformed/empty page — don't throw
+      total = d.data.total_hits_filtered || lots.length;
       const before = byId.size;
-      for (const lot of d.data.lots) byId.set(lot.object_id, lot);
+      for (const lot of lots) byId.set(lot.object_id, lot);
       if (byId.size === before) break; // no new lots
       await sleep(400);
     } catch { break; }
   }
+  if (byId.size < total && total !== Infinity) console.warn(`[Christie's] ${slug}: paginated ${byId.size}/${total} lots — sale may be truncated (raise MAX_PAGES?)`);
   return Array.from(byId.values());
 }
 
@@ -2302,7 +2309,7 @@ function computeStats(lots: AuctionLot[], existingStats: MarketStats | null): Ma
 
   const prices = recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
   const avg = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : existingStats?.avgPriceLast12Months || 0;
-  const median = prices.length ? prices[Math.floor(prices.length / 2)] : existingStats?.medianPriceLast12Months || 0;
+  const median = prices.length ? (prices.length % 2 ? prices[prices.length >> 1] : Math.round((prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2)) : existingStats?.medianPriceLast12Months || 0;
 
   const record = sold.reduce((best, l) =>
     (l.priceUsd || 0) > (best?.priceUsd || 0) ? l : best, sold[0]);
@@ -2322,7 +2329,9 @@ function computeStats(lots: AuctionLot[], existingStats: MarketStats | null): Ma
     .map(([date, pxs]) => ({
       date,
       avgPrice: Math.round(pxs.reduce((a, b) => a + b, 0) / pxs.length),
-      medianPrice: pxs.sort((a, b) => a - b)[Math.floor(pxs.length / 2)],
+      // sort a COPY (avoid mutating the map's array) and average the two middles
+      // on even counts (the bare floor-index was biased to the upper-middle).
+      medianPrice: (() => { const s = [...pxs].sort((a, b) => a - b); const n = s.length; return n % 2 ? s[n >> 1] : Math.round((s[n / 2 - 1] + s[n / 2]) / 2); })(),
       totalSales: pxs.length,
       highPrice: Math.max(...pxs),
     }));
@@ -2812,6 +2821,19 @@ async function main() {
   // wholesale, so gate refinements purge immediately.
   const GOLDIN_SLUGS = ['game-used', 'trophies-awards', 'tickets-passes', 'meteorites', 'fossils', 'scientific-instruments'];
   let goldinRan = false;
+
+  // Coverage baseline — captured NOW, before reconcile/sanitize mutate lot.status
+  // in place on the existingLots objects (they're shared by reference with lotMap).
+  // Computing "before" from existingLots at the end would read post-crawl status
+  // and silently mask a collapse — the exact failure the tripwire guards against.
+  const coverageBefore: Record<string, number> = { art: 0, watches: 0, sports: 0, science: 0 };
+  {
+    const g: Record<string, string[]> = { art: ART_SLUGS, watches: WATCH_SLUGS, sports: SPORTS_SLUGS, science: SCIENCE_SLUGS };
+    for (const l of existingLots) {
+      if (l.status !== 'upcoming') continue;
+      for (const k in g) if (g[k].includes(l.artist)) coverageBefore[k]++;
+    }
+  }
   let freshGoldinIds = new Set<string>();
   if (!only || GOLDIN_SLUGS.some(s => only.has(s))) {
     const goldinLots = await crawlGoldin();
@@ -2871,9 +2893,11 @@ async function main() {
   // Completed-flip pass above owns Goldin adjudication).
   const freshNonGoldinIds = new Set<string>();
   const crawledArtists = new Set<string>();
+  const houseOk = new Set<string>(); // houses that returned ≥1 lot this run
   for (const l of freshLots) {
     if (l.auctionHouse !== 'Goldin') freshNonGoldinIds.add(l.id);
     crawledArtists.add(l.artist);
+    houseOk.add(l.auctionHouse);
   }
   // A house appears in this run's fresh set → we have authority to reconcile
   // its still-upcoming past-sale lots. (A house crawled but returning zero
@@ -2960,7 +2984,12 @@ async function main() {
       const salePassed = !isNaN(saleMs) && saleMs < nowMs;
       const scopeCrawled = crawledArtists.has(lot.artist);
       const reappeared = freshNonGoldinIds.has(id);
-      if (salePassed && scopeCrawled && !reappeared) {
+      // Only reconcile if the lot's OWN house actually returned lots this run —
+      // if its house's fetch failed transiently (0 lots), a same-artist lot from
+      // another house must NOT authorize withdrawing it (that's the silent
+      // live-lot-loss under a flaky source).
+      const houseCrawled = houseOk.has(lot.auctionHouse);
+      if (salePassed && scopeCrawled && houseCrawled && !reappeared) {
         // vanished from a scope we crawled, after its sale — never resolved.
         // Recently past → a clean withdrawal; long past → unknown result.
         if (nowMs - saleMs <= RECONCILE_GRACE_MS) {
@@ -3337,7 +3366,7 @@ async function main() {
       }
       return m;
     };
-    const before = activeByMarket(existingLots);
+    const before = coverageBefore; // pre-crawl snapshot (before in-place mutation)
     const after = activeByMarket(allLots);
     console.log('[coverage] active (upcoming) lots per market, pre-crawl → post-crawl:');
     let alerts = 0;

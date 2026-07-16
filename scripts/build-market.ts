@@ -154,5 +154,8 @@ export function runMarketBuild() {
   console.log(`[market] done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 }
 
-// standalone entry
-if (require.main === module) runMarketBuild();
+// standalone entry — fail loud with a clear message + non-zero exit rather than
+// a raw stack, so a failed rebuild is never mistaken for a successful one.
+if (require.main === module) {
+  try { runMarketBuild(); } catch (err) { console.error('[market] build failed:', err); process.exit(1); }
+}
