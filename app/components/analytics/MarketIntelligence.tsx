@@ -97,7 +97,7 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
                 <LineChart data={series.sellThrough} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: MUTED }} width={30} domain={[0, 100]} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: MUTED }} width={30} domain={['dataMin - 8', 'dataMax + 4']} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ background: '#0D0F12', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v}%`, 'sell-through']} />
                   <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={1.8} dot={false} />
                 </LineChart>

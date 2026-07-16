@@ -344,7 +344,7 @@ export default function BoardDemand({
                   y={0}
                   stroke="rgba(255,255,255,0.16)"
                   strokeDasharray="4 4"
-                  label={{ value: '0 — sells at estimate', position: 'insideBottomLeft', fill: '#7A8087', fontSize: 11, fontFamily: 'var(--font-sans), sans-serif', dy: -4 }}
+                  label={{ value: 'sells at estimate', position: 'insideTopLeft', fill: '#7A8087', fontSize: 10.5, fontFamily: 'var(--font-sans), sans-serif', dy: -3, dx: 2 }}
                 />
               )}
               <Tooltip content={() => null} cursor={{ stroke: 'rgba(255,255,255,0.3)', strokeWidth: 1 }} />
