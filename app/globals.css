@@ -1332,6 +1332,14 @@ h1 {
 }
 .ray-toolbar-clearq:hover { color: var(--color-fg); }
 .ray-toolbar-sorts { display: inline-flex; gap: 6px; margin-left: auto; }
+/* Makers sparkline cards — glass-quiet suppresses .glass:hover, so give them
+   their own lift on hover for real feedback. */
+.ray-spark-card { transition: transform 160ms var(--ease-signature), border-color 160ms var(--ease-ui), box-shadow 160ms var(--ease-ui); }
+.ray-spark-card:hover { transform: translateY(-2px); border-color: var(--color-border-mid); box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.5); }
+@media (prefers-reduced-motion: reduce) { .ray-spark-card:hover { transform: none; } }
+/* Disabled toolbar pills should read disabled, not clickable. */
+.ray-toolbar-pill:disabled, .ray-toolbar-pill[aria-disabled="true"] { opacity: 0.38; cursor: default; pointer-events: none; }
+
 .ray-toolbar-pill {
   display: inline-flex;
   align-items: baseline;

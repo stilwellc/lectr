@@ -85,8 +85,12 @@ interface ArtistCardData {
 function ArtistCard({ artist }: { artist: ArtistCardData }) {
   const drawRef = useChartDraw();
   const hasChart = artist.sparkData.length >= 2;
-  // the list reads like a watchlist: line tinted by the year's movement
-  const tint = artist.appreciation > 0 ? 'var(--color-up)' : artist.appreciation < 0 ? 'var(--color-down)' : 'var(--color-fg)';
+  // Reserve saturated up/down for STRONG movers only — tinting all 33 lines
+  // green makes "up" stop meaning up (breaks one-lit-element). Calm neutral
+  // otherwise; the delta chip still carries the exact direction.
+  const strongMove = Math.abs(artist.appreciation) >= 25;
+  const tint = !strongMove ? 'var(--color-text-muted)'
+    : artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)';
 
   return (
     <Link
