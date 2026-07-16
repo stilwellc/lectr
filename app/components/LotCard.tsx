@@ -114,6 +114,7 @@ function LotCard({
 }) {
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
+  const [reminded, setReminded] = useState(false);
   const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
 
   // firstSeen ships from the crawler diff — read defensively: older data
@@ -143,6 +144,9 @@ function LotCard({
       document.body.removeChild(a);
     }
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // brief confirmation so the user knows the .ics fired (esp. desktop download)
+    setReminded(true);
+    setTimeout(() => setReminded(false), 2500);
   }
   const catLabel = categoryLabels[lot.category] || null;
   const isUpcoming = lot.status === 'upcoming';
@@ -396,13 +400,19 @@ function LotCard({
               className="ray-lot-remind"
               aria-label={`Add ${lot.title} auction to calendar`}
             >
-              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.25" fill="none"/>
-                <line x1="4" y1="1" x2="4" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-                <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-                <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" strokeWidth="1.25"/>
-              </svg>
-              Remind me
+              {reminded ? (
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              ) : (
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.25" fill="none"/>
+                  <line x1="4" y1="1" x2="4" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+                  <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+                  <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" strokeWidth="1.25"/>
+                </svg>
+              )}
+              {reminded ? 'Added to calendar' : 'Remind me'}
             </button>
             <span className="ray-lot-comps" aria-hidden="true">
               Comps <span style={{ fontSize: 12 }}>→</span>

@@ -107,6 +107,17 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const entriesRef = useRef<SavedEntry[]>([]);
   entriesRef.current = entries;
 
+  // Non-blocking toast — so a failed save/unsave says WHY instead of the star
+  // silently snapping back. setState identity is stable, so callbacks can call
+  // flash() without depending on it.
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = useCallback((msg: string) => {
+    setNotice(msg);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3400);
+  }, []);
+
   // ── auth session ──
   useEffect(() => {
     if (!supabase) { setEntries(readStored()); return; } // localStorage-only mode
@@ -196,14 +207,14 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       setEntries(prev => prev.filter(e => e.id !== lotId));
       supabase.from('saved_lots').delete().eq('user_id', user.id).eq('lot_id', lotId)
         .then(({ error }) => {
-          if (error) { console.error('[account] unsave failed:', error.message); if (removed) setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, removed])); }
+          if (error) { console.error('[account] unsave failed:', error.message); if (removed) setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, removed])); flash("Couldn't update your watchlist — try again."); }
         });
     } else {
       const e = entryFromLot(lotId, lot);
       setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, e]));
       supabase.from('saved_lots').upsert(entryToRow(user.id, e), { onConflict: 'user_id,lot_id' })
         .then(({ error }) => {
-          if (error) { console.error('[account] save failed:', error.message); setEntries(prev => prev.filter(p => p.id !== lotId)); }
+          if (error) { console.error('[account] save failed:', error.message); setEntries(prev => prev.filter(p => p.id !== lotId)); flash("Couldn't save the lot — try again."); }
         });
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
     }
@@ -243,6 +254,21 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     <Ctx.Provider value={value}>
       {children}
       {loginOpen && <LoginModal />}
+      {notice && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed', left: '50%', bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+            transform: 'translateX(-50%)', zIndex: 300, maxWidth: 'min(92vw, 360px)',
+            background: 'rgba(20,22,26,0.96)', color: 'var(--color-fg)', border: '1px solid var(--hairline)',
+            borderRadius: 10, padding: '11px 16px', fontSize: 13.5, lineHeight: 1.35, textAlign: 'center',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
+          }}
+        >
+          {notice}
+        </div>
+      )}
     </Ctx.Provider>
   );
 }

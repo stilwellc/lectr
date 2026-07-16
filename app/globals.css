@@ -3603,3 +3603,8 @@ body {
   filter: drop-shadow(0 0 26px rgba(255, 255, 255, 0.14));
 }
 @media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }
+
+/* Table-view save button: compact on desktop (mouse), a 40px touch target on
+   mobile so it clears the ~44px tap-target guidance. */
+.ray-tbl-save { width: 30px; height: 30px; }
+@media (max-width: 899px) { .ray-tbl-save { width: 40px; height: 40px; } }

@@ -525,7 +525,7 @@ export default function RayPage() {
           {/* The market in four figures — the flagged figure IS the lens */}
           <section className="rail ray-enter" style={{ paddingTop: 26 }}>
             <div className="ray-ledger" style={{ margin: 0 }}>
-              {strip.map(item => item.lens ? (
+              {strip.map(item => item.lens && item.to > 0 ? (
                 <button
                   key={item.k}
                   type="button"
@@ -601,7 +601,15 @@ export default function RayPage() {
                       {feed.slice(0, visibleUpcoming).map(lot => {
                         const sig = lotSignal(lot, marketLots);
                         return (
-                          <tr key={lot.id} onClick={() => setTableLot(lot)}>
+                          <tr
+                            key={lot.id}
+                            onClick={() => setTableLot(lot)}
+                            onKeyDown={e => { if (e.key === 'Enter') setTableLot(lot); }}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Comps for ${craftTitle(lot.title)}`}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <td style={{ width: 56 }}>
                               {/* the plate paints behind the img — the honest fallback
                                   when a house hotlink-blocks; hide, never outerHTML
@@ -646,10 +654,10 @@ export default function RayPage() {
                             </td>
                             <td style={{ width: 44 }}>
                               <button
-                                className="ray-save-btn"
+                                className="ray-save-btn ray-tbl-save"
                                 onClick={e => { e.stopPropagation(); toggle(lot.id); }}
                                 aria-label={isSaved(lot.id) ? 'Remove from saved' : 'Save lot'}
-                                style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-fg)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-fg)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
                               >
                                 <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
                                   <path d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z" fill={isSaved(lot.id) ? 'var(--color-bg)' : 'var(--color-text-faint)'} />
