@@ -11,6 +11,36 @@ export const metadata: Metadata = {
 
 const POSTS = [
   {
+    slug: 'q2-2026-art',
+    date: '2026-07-16',
+    title: 'Art in Q2: a two-speed market',
+    dek: 'A $240M quarter carried by one Christie’s evening — masterpieces cleared, the middle got picky (56% sell-through), and KAWS kept repricing.',
+  },
+  {
+    slug: 'q2-2026-watches',
+    date: '2026-07-16',
+    title: 'Watches in Q2: everything sells, the middle repriced',
+    dek: '96% sell-through across 728 lots — but the median fell 19% while Patek Philippe ran +67%. A sorting, not a downturn.',
+  },
+  {
+    slug: 'q2-2026-design',
+    date: '2026-07-16',
+    title: 'Design in Q2: small money, real heat',
+    dek: 'The smallest market we track posted the strongest demand of the quarter: 43% of lots beat their high estimate, and Eames woke up.',
+  },
+  {
+    slug: 'q2-2026-sports',
+    date: '2026-07-16',
+    title: 'Sports in Q2: game-used doubled',
+    dek: 'A $1.34M four-player jersey group on top, Messi debut shirts behind it, and the typical sale up 73% — broad participation, not two whales.',
+  },
+  {
+    slug: 'q2-2026-science',
+    date: '2026-07-16',
+    title: 'Science in Q2: the quiet quarter',
+    dek: 'Ten sales — the honest number. Apollo photographs led, and the real season (241 lots on the block) closes in Q3.',
+  },
+  {
     slug: 'how-we-built-the-pricing-engine',
     date: '2026-07-16',
     title: 'How we built the pricing engine — and everything it got wrong first',
