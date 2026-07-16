@@ -13,120 +13,35 @@ const kicker: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace',
 const p: React.CSSProperties = { fontSize: 15, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 14px' };
 const li: React.CSSProperties = { fontSize: 15, lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: '0 0 8px' };
 const code: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace', fontSize: 13, background: 'var(--color-bg-elevated)', padding: '1px 6px', borderRadius: 5, color: 'var(--color-fg)' };
-const pre: React.CSSProperties = {
-  fontFamily: 'var(--font-mono), monospace', fontSize: 12.5, lineHeight: 1.5,
-  color: 'var(--color-text-secondary)', background: 'var(--color-bg-elevated)',
-  border: '1px solid var(--hairline)', borderRadius: 12, padding: '18px 20px',
-  overflowX: 'auto', margin: '4px 0 8px', whiteSpace: 'pre',
-};
-const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '0 0 26px', fontStyle: 'italic' };
+const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '2px 0 26px', fontStyle: 'italic' };
 
-const DIAG_SYSTEM = String.raw`
-  AUCTION HOUSES                DAILY CRAWL  (GitHub Actions cron)
-  ──────────────                scripts/ray-crawl.ts
-  Sotheby's · Christie's        ┌──────────────────────────────────────────┐
-  Goldin · Bonhams              │ per-house adapter → item-level routing →   │
-  Phillips · Wright             │ status lifecycle → reconcile → sanitize →  │
-  Rago · Heritage       ─────►  │ coverage tripwire → write-gate (validate)  │
-  Bruun Rasmussen               └───────────────────────┬────────────────────┘
-                                                         │ writeCorpusAndServed()
-                                                         ▼
-                        ┌───────────────────────────────────────────────┐
-                        │ CORPUS   data/corpus/{lots,sold-archive}.json.gz│
-                        │ full v2, ~76 fields/lot, gzipped — source of    │
-                        │ truth. Never served to the client.              │
-                        └───────────────────────┬─────────────────────────┘
-                                                │  engine build pass
-                     ┌──────────────────────────┼──────────────────────────┐
-                     ▼                          ▼                          ▼
-              build-market.ts           build-upcoming.ts          build-backtest.ts
-              values every lot,         eager client payload       temporal-holdout
-              market index series       (signals precomputed)      replay of the engine
-                     └──────────────────────────┼──────────────────────────┘
-                                                │  slim projection (engine fields stripped)
-                                                ▼
-                        ┌───────────────────────────────────────────────┐
-                        │ SERVED   public/data/ray/*.json   (<25MB/file) │
-                        └───────────────────────┬─────────────────────────┘
-                                                │ git push → CI guards → Cloudflare Pages
-                                                ▼
-                        ┌───────────────────────────────────────────────┐
-                        │ STATIC CLIENT   Next.js export, no server      │
-                        │ 3-phase progressive load (see below)           │
-                        └───────────────────────────────────────────────┘
-`;
-
-const DIAG_LIFECYCLE = String.raw`
-        new lot ingested
-             │
-             ▼
-       ┌────────────┐   sale date passes, house posts hammer    ┌──────────┐
-       │  upcoming  │ ─────────────────────────────────────────►│   sold   │  terminal
-       └─────┬──────┘                                           └──────────┘
-             │  sale closed, house has NOT posted a result yet
-             ▼
-   ┌──────────────────────────┐   within RESULT_PENDING_MS (14 days):
-   │  resultsPending = true    │   HELD VISIBLE as 'upcoming' so a just-closed
-   │  (still renders as live)  │   lot never vanishes ── next crawl finds the
-   └───────────┬───────────────┘   hammer → promotes to 'sold'
-               │  > 14 days, still no result
-               ▼
-     bought_in / unknown-result        ← a lot is never SILENTLY dropped;
-     (withdrawn if it just vanished)      reconcile + sanitize adjudicate it
-`;
-
-const DIAG_ENGINE = String.raw`
-   a lot to value  (upcoming lot, or a held-out sold lot in the backtest)
-        │
-        ▼
-   ┌─────────────────────┐   same-maker sold history; in the backtest,
-   │ candidate blocking  │   restricted to sales dated < the lot (no leak)
-   └──────────┬──────────┘
-              ▼
-   ┌──────────────────────────────────────────────────────┐
-   │ similarity(lot, comp)              app/lib/similarity │
-   │   cosine( IDF-weighted title-token vectors )   0..1   │  lexical match
-   │   + structured agreement bonus:                       │
-   │       same model / reference     +0.06 / +0.08        │
-   │       same entity / event        +0.05 / +0.04        │
-   │       dims / year agreement       +0.04 / +0.04       │
-   │   score = round( (cosine + bonus) × 100 )      0..100 │
-   │   class = physicalMatch | modelMatch | similar        │
-   └──────────┬───────────────────────────────────────────┘
-              ▼
-   ┌──────────────────────────────────────────────────────┐
-   │ COMP-POOL GATE            app/lib/value  COMP_GATE     │
-   │   keep comp iff   cosine ≥ 0.50   AND   score ≥ 65     │
-   │   (calibrated by the backtest A/B — see Validation)   │
-   └──────────┬───────────────────────────────────────────┘
-              ▼
-   ┌──────────────────────────────────────────────────────┐
-   │ weightedMedian( top-K comps, weight = cosine² )       │ = compValueUsd
-   │ + dispersion (q1..q3) → confidence tier               │
-   └──────────┬───────────────────────────────────────────┘
-              ▼
-   ┌──────────────────────────────────────────────────────┐
-   │ DIRECTIONAL SIGNAL                                     │
-   │   compRatio = compValueUsd / estimate-mid             │
-   │       ≥ 1.30  →  "below comparable market"  (cheap)   │
-   │       ≤ 0.75  →  "above comparable market"           │
-   │       else    →  "at comparable market"              │
-   │   confidence = f(pool size, best-match, dispersion)  │
-   └──────────────────────────────────────────────────────┘
-`;
-
-const DIAG_CLIENT = String.raw`
-   t0  first paint ── phase 1 ──►  upcoming.json (+ meta / stats / demand)   ~400 KB
-                                   signals are PRECOMPUTED at build time
-                                   → the feed is interactive immediately
-        │
-        ├─ background ── phase 2 ─►  lots.json          ~9 MB   full sold history
-        │                           merges in, re-attaches signal / soldComp by id
-        │
-        └─ on demand ── phase 3 ─►  sold-archive.json   ~10 MB  Goldin sold archive
-                                    fetched ONLY when a sports/science comps modal
-                                    opens (art/watch/design never pay for it)
-`;
+/* ── responsive flow-diagram primitives — reflow to any width, never scroll ── */
+function Flow({ children }: { children: React.ReactNode }) {
+  return <div style={{ maxWidth: 560, margin: '10px auto 22px', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>{children}</div>;
+}
+function Node({ title, sub, mono, tone, style }: { title: string; sub?: string; mono?: boolean; tone?: 'accent'; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      border: `1px solid ${tone === 'accent' ? 'var(--color-text-muted)' : 'var(--hairline)'}`,
+      borderRadius: 10, padding: '12px 15px', background: 'var(--color-bg-elevated)', ...style,
+    }}>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-fg)', lineHeight: 1.35 }}>{title}</div>
+      {sub && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, fontFamily: mono ? 'var(--font-mono), monospace' : undefined, lineHeight: 1.5 }}>{sub}</div>}
+    </div>
+  );
+}
+function Down({ label }: { label?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '7px 0' }}>
+      {label && <span style={{ fontSize: 10.5, color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono), monospace', letterSpacing: '0.02em' }}>{label}</span>}
+      <span aria-hidden style={{ color: 'var(--color-text-faint)', fontSize: 15, lineHeight: 1 }}>↓</span>
+    </div>
+  );
+}
+function Branch({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{children}</div>;
+}
+const branchItem: React.CSSProperties = { flex: '1 1 150px', minWidth: 0 };
 
 export default function AboutPage() {
   return (
@@ -139,7 +54,7 @@ export default function AboutPage() {
           <h1 style={{ fontSize: 'clamp(30px, 4vw, 40px)', fontWeight: 700, letterSpacing: '-0.025em', margin: '0 0 12px' }}>
             The architecture, the pipeline, and the price engine
           </h1>
-          <p style={{ ...p, fontSize: 16, color: 'var(--color-text-secondary)' }}>
+          <p style={{ ...p, fontSize: 16 }}>
             lectr reads every auction estimate against every hammer. It ingests live and historical
             lots from the major houses, scores each against comparable sales, and calls whether a lot
             is trading below or above where its comps actually clear. This page is the engineering
@@ -156,7 +71,23 @@ export default function AboutPage() {
             bundle on Cloudflare Pages. All intelligence is computed ahead of time by a nightly crawl +
             build, baked into JSON, and shipped as static assets. The client is a pure reader.
           </p>
-          <pre style={pre}>{DIAG_SYSTEM}</pre>
+          <Flow>
+            <Node title="Auction houses" sub="Sotheby’s · Christie’s · Goldin · Bonhams · Phillips · Wright · Rago · Heritage · Bruun Rasmussen" />
+            <Down label="ingest" />
+            <Node tone="accent" title="Daily crawl — scripts/ray-crawl.ts" sub="per-house adapter → item-level routing → status lifecycle → reconcile → sanitize → coverage tripwire → write-gate" />
+            <Down label="writeCorpusAndServed()" />
+            <Node title="Corpus — data/corpus/*.json.gz" sub="full v2, ~76 fields/lot, gzipped. The source of truth. Never served to the client." />
+            <Down label="engine build pass" />
+            <Branch>
+              <Node style={branchItem} title="build-market" sub="values every lot + market index series" />
+              <Node style={branchItem} title="build-upcoming" sub="eager client payload, signals precomputed" />
+              <Node style={branchItem} title="build-backtest" sub="temporal-holdout replay" />
+            </Branch>
+            <Down label="slim projection (engine fields stripped)" />
+            <Node title="Served — public/data/ray/*.json" sub="< 25 MB / file (Cloudflare cap)" />
+            <Down label="git push → CI guards → Cloudflare Pages" />
+            <Node title="Static client — Next.js export" sub="no server; 3-phase progressive load" />
+          </Flow>
           <p style={caption}>The daily crawl is the only writer. A data commit to <code style={code}>main</code> triggers the same deploy pipeline as a code change.</p>
         </section>
 
@@ -165,19 +96,27 @@ export default function AboutPage() {
           <h2 style={h2}>The crawl, and the status lifecycle</h2>
           <p style={p}>
             Each house has its own adapter (Sotheby&apos;s GraphQL, Christie&apos;s <code style={code}>chrComponents</code> JSON,
-            Goldin&apos;s faceted <code style={code}>lots_v2</code> API, and HTML scrapers for the rest). Routing is
+            Goldin&apos;s faceted <code style={code}>lots_v2</code> API, HTML scrapers for the rest). Routing is
             strictly <em>item-level</em> — a lot is classified by its own attributes, never by the sale it
             came from — with hard doctrine gates: auctions only (never buy-now), sports means objects
             (never cards), science excludes video games.
           </p>
           <p style={p}>
             The hard part isn&apos;t fetching — it&apos;s the lifecycle. Houses close a sale hours before they post
-            results, and some purge lots the instant an auction ends. So the crawler treats
+            results, and some purge lots the instant an auction ends. So the crawler holds
             <strong> &ldquo;never silently lose a tracked lot&rdquo;</strong> as the invariant:
           </p>
-          <pre style={pre}>{DIAG_LIFECYCLE}</pre>
+          <Flow>
+            <Node title="upcoming" sub="a live or scheduled lot" />
+            <Down label="sale date passes, no result yet" />
+            <Node tone="accent" title="results-pending" sub="house hasn’t posted a hammer — HELD VISIBLE as upcoming for 14 days (RESULT_PENDING_MS) so a just-closed lot never vanishes" />
+            <Down label="resolves to one of" />
+            <Branch>
+              <Node style={branchItem} title="sold" sub="hammer posted → terminal" />
+              <Node style={branchItem} title="bought_in / unknown-result" sub="> 14 days, still no result (withdrawn if it just disappeared)" />
+            </Branch>
+          </Flow>
           <ul style={{ paddingLeft: 20, margin: '0 0 14px' }}>
-            <li style={li}><strong>results-pending window</strong> — a lot whose sale just closed with no posted result is held visible as <code style={code}>upcoming</code> for 14 days rather than dropped, then settles.</li>
             <li style={li}><strong>reconcile + sanitize passes</strong> — house-agnostic nets that resolve zombie states and demote genuinely-stale rows, gated so a transient fetch failure can&apos;t withdraw a live lot.</li>
             <li style={li}><strong>coverage tripwire</strong> — snapshots active-lots-per-market before the crawl mutates anything, and alerts if a market&apos;s live inventory collapses.</li>
             <li style={li}><strong>write-gate</strong> — <code style={code}>assertInvariants()</code> refuses to publish a corpus that violates the schema (e.g. a sold lot with no price).</li>
@@ -213,11 +152,20 @@ export default function AboutPage() {
             loses to expert estimates on one-of-a-kind art. What <em>is</em> validated is the
             <strong> direction</strong>: is this lot cheap or dear relative to where its comps clear?
           </p>
-          <pre style={pre}>{DIAG_ENGINE}</pre>
+          <Flow>
+            <Node title="A lot to value" sub="an upcoming lot — or a held-out sold lot in the backtest" />
+            <Down label="candidate blocking: same-maker sold (backtest: dated < the lot, no leak)" />
+            <Node title="similarity(lot, comp)" mono sub="cosine( IDF-weighted title-token vectors ) 0..1  +  structured bonus (model / reference / entity / dims / year).  score = round((cos + bonus) × 100)" />
+            <Down label="for each comp" />
+            <Node tone="accent" title="comp-pool gate — COMP_GATE" mono sub="keep comp iff  cosine ≥ 0.50  AND  score ≥ 65  (calibrated by the backtest A/B)" />
+            <Down />
+            <Node title="weightedMedian( top-K, weight = cosine² )" mono sub="= compValueUsd.  pool dispersion (q1..q3) → confidence tier" />
+            <Down />
+            <Node tone="accent" title="directional signal" mono sub="compRatio = compValueUsd / estimate-mid.  ≥ 1.30 → below comparable market (cheap) · ≤ 0.75 → above · else at" />
+          </Flow>
           <ul style={{ paddingLeft: 20, margin: '0 0 14px' }}>
-            <li style={li}><strong>Similarity</strong> is an IDF-weighted cosine over title tokens, plus a structured bonus for agreement on model/reference/entity/dimensions/year. The two combine into a 0–100 <code style={code}>score</code>.</li>
+            <li style={li}><strong>Similarity</strong> is an IDF-weighted cosine over title tokens, plus a structured bonus for agreement on model/reference/entity/dimensions/year, combined into a 0–100 <code style={code}>score</code>.</li>
             <li style={li}><strong>The comp-pool gate</strong> keeps a comp when <code style={code}>cosine ≥ 0.50 AND score ≥ 65</code> — so a comp whose wording dips just under the old raw-cosine floor but whose structured agreement (same reference, same model) is strong is still counted.</li>
-            <li style={li}><strong>The value</strong> is a cosine²-weighted median of the top-K comps; dispersion across the pool sets a confidence tier (very-high / high / medium / low).</li>
             <li style={li}><strong>The signal</strong> is <code style={code}>compRatio = compValue / estimate-mid</code>. Above 1.30 the lot is trading below its comps (a &ldquo;below comparable market&rdquo; flag); below 0.75 it&apos;s dear.</li>
           </ul>
           <p style={p}>
@@ -237,11 +185,11 @@ export default function AboutPage() {
             after it. The call is then scored against what the lot actually hammered for.
           </p>
           <p style={p}>
-            That same harness is how engine changes ship: any tweak to the gate or the scorer is run
-            through the A/B before it goes live. The current gate broadening, for example, was adopted
-            because it valued <strong>+5% more lots with an identical predictive edge</strong>
-            (flagged median +40%, beat-high 63%, a 24-point edge over unflagged) — and the model
-            hard-gate was <em>rejected</em> because it cost coverage for zero edge gain.
+            That same harness is how engine changes ship: any tweak to the gate or scorer runs through
+            the A/B before it goes live. The current gate broadening, for example, was adopted because it
+            valued <strong>+5% more lots with an identical predictive edge</strong> (flagged median +40%,
+            beat-high 63%, a 24-point edge over unflagged) — and the model hard-gate was <em>rejected</em>
+            because it cost coverage for zero edge gain.
           </p>
         </section>
 
@@ -254,8 +202,13 @@ export default function AboutPage() {
             The first paint is driven by a small precomputed payload; the heavy history streams in behind
             it, and the 10&nbsp;MB sold archive is fetched only when a surface that needs it mounts.
           </p>
-          <pre style={pre}>{DIAG_CLIENT}</pre>
-          <p style={caption}>Signals are computed at build time and baked into <code style={code}>upcoming.json</code>, so the feed renders its buy calls before the 9&nbsp;MB history arrives.</p>
+          <Flow>
+            <Node tone="accent" title="Phase 1 — first paint" sub="upcoming.json (+ meta / stats / demand) ~400 KB. Signals are PRECOMPUTED at build time → the feed is interactive immediately." />
+            <Down label="in the background" />
+            <Node title="Phase 2 — full history" sub="lots.json ~9 MB. Merges in and re-attaches signal / soldComp to each lot by id." />
+            <Down label="on demand" />
+            <Node title="Phase 3 — sold archive" sub="sold-archive.json ~10 MB. Fetched ONLY when a sports/science comps modal opens; art/watch/design never pay for it." />
+          </Flow>
         </section>
 
         <section style={wrap}>
