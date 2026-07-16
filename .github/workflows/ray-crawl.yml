@@ -46,11 +46,16 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/data/ray/
+          # commit BOTH the served payloads AND the source-of-truth corpus —
+          # without data/corpus the gzipped corpus reverts to the last manual
+          # commit every run: enrichment is re-burned, firstSeen lies, and the
+          # sold-archive tail can silently regress.
+          git add public/data/ray/ data/corpus/
           git diff --staged --quiet && echo "no data changes" && exit 0
           # keep a copy of the freshly built artifacts — the conflict-recovery
           # path below hard-resets the worktree, which would wipe them
           cp -R public/data/ray "$RUNNER_TEMP/ray-data"
+          cp -R data/corpus "$RUNNER_TEMP/ray-corpus"
           git commit -m "chore(ray): update auction data"
           # the crawl takes ~15 min — if anything landed on main meanwhile,
           # rebase our data commit on top and retry rather than fail. A clean
@@ -67,9 +72,10 @@ jobs:
             git rebase --abort 2>/dev/null || true
             git fetch origin main
             git reset --hard origin/main
-            rm -rf public/data/ray
+            rm -rf public/data/ray data/corpus
             cp -R "$RUNNER_TEMP/ray-data" public/data/ray
-            git add public/data/ray/
+            cp -R "$RUNNER_TEMP/ray-corpus" data/corpus
+            git add public/data/ray/ data/corpus/
             if git diff --staged --quiet; then echo "no data changes after reset"; exit 0; fi
             git commit -m "chore(ray): update auction data"
             sleep $((i * 5))

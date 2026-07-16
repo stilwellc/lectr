@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /saved
+
+Sitemap: https://lectr.bid/sitemap.xml

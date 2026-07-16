@@ -1,9 +1,14 @@
 'use client';
 
+import { useEffect } from 'react';
+
 /** Root error boundary — a last resort so an uncaught client exception shows a
  *  branded, recoverable screen instead of Next's unstyled "Application error"
  *  white page. Must render its own <html>/<body> (it replaces the layout). */
-export default function GlobalError({ reset }: { error: Error; reset: () => void }) {
+export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
+  // Surface the crash instead of swallowing it — the only place we'd learn a
+  // real user hit a fatal error. (Wire to a RUM beacon here when one is added.)
+  useEffect(() => { console.error('[lectr] fatal:', error?.message, error?.stack); }, [error]);
   return (
     <html lang="en">
       <body style={{ margin: 0, background: '#08090B', color: '#F4F6FF', fontFamily: 'Inter, system-ui, sans-serif' }}>

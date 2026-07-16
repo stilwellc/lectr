@@ -18,11 +18,12 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://lectr.bid'),
+  alternates: { canonical: './' },
   title: {
     default: 'lectr — auction intelligence',
     template: '%s — lectr',
   },
-  description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
+  description: `Auction intelligence for the collectibles market — ${ARTISTS.length} makers tracked across major houses, crawled nightly.`,
   openGraph: {
     title: 'lectr — auction intelligence',
     description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
