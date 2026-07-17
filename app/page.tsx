@@ -16,6 +16,7 @@ import PastResults from './components/PastResults';
 import RayEntrance, { RayLoading } from './components/RayEntrance';
 import CountUp from './components/CountUp';
 import BoardDemand from './components/BoardDemand';
+import ApprBarometer from './components/ApprBarometer';
 import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
 import { CallPlate, Colophon, daysWord } from './components/Terminal';
@@ -510,25 +511,14 @@ export default function RayPage() {
                    Mobile: the same element collapses under the chart as a gray
                    banner ("<market> has an appreciation of X%"). */
                 <aside className="ray-appr ray-paper" aria-label={`${marketName} appreciation`}>
-                  <div className="ray-appr-stat">
-                    <div className="ray-appr-k">Appreciation</div>
-                    <div className={`ray-appr-v ${apprTone}`}>{apprValue}</div>
-                    <div className="ray-appr-s">sales-weighted avg across makers</div>
-                    {/* context rows — the column was a void with one floating
-                        numeral; give the number companions to live with */}
-                    {sold.length > 0 && (
-                      <div style={{ marginTop: 26, borderTop: '1px solid var(--hairline)', paddingTop: 18, display: 'flex', flexDirection: 'column', gap: 14, textAlign: 'left' }}>
-                        <div>
-                          <div className="ray-appr-k" style={{ fontSize: 11 }}>Typical sale, past year</div>
-                          <div style={{ fontSize: 19, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{soldMedian12 != null ? formatPrice(soldMedian12) : '—'}</div>
-                        </div>
-                        <div>
-                          <div className="ray-appr-k" style={{ fontSize: 11 }}>Record sale</div>
-                          <div style={{ fontSize: 19, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{recordSale ? formatPrice(recordSale.priceUsd || 0) : '—'}</div>
-                          {recordSale && <div className="ray-appr-s" style={{ marginTop: 2 }}>{ARTIST_LABEL[recordSale.artist] || recordSale.artist}</div>}
-                        </div>
-                      </div>
-                    )}
+                  <div className="ray-appr-stat" style={{ width: '100%' }}>
+                    {/* the printed instrument card — an ink barometer on the paper */}
+                    <ApprBarometer
+                      value={appreciation}
+                      marketName={marketName}
+                      typical={soldMedian12}
+                      record={recordSale ? { priceUsd: recordSale.priceUsd || 0, maker: ARTIST_LABEL[recordSale.artist] || recordSale.artist } : null}
+                    />
                   </div>
                   <div className="ray-appr-banner">
                     <span><b>{marketName}</b> has an appreciation of <b className={apprTone}>{apprValue}</b></span>
