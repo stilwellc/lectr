@@ -26,8 +26,15 @@ const arch: Lot[] = readGz('sold-archive.json');
 let rerouted = 0, evicted = 0;
 const keep = (arr: Lot[]) => arr.filter(l => {
   if (!SCI.has(l.artist)) return true;
+  // NASA Viking-program material swept into meteorites → space-exploration
+  if (/\bviking (project|lander|orbiter|program)\b/i.test(l.title || '') && l.artist === 'meteorites') {
+    l.artist = 'space-exploration'; rerouted++; return true;
+  }
   const t = `${l.title || ''} ${l.medium || ''}`;
-  if (!WATCHY.test(t) || SCICTX.test(t)) return true;
+  // the form classifier is the stronger detector — a science-slug lot whose
+  // FORM is a wristwatch is a misroute regardless of title wording
+  const isWatchForm = (l as { formKey?: string }).formKey === 'wristwatch';
+  if (!isWatchForm && (!WATCHY.test(t) || SCICTX.test(t))) return true;
   const tracked = TRACKED.find(([re]) => re.test(t));
   if (tracked) { l.artist = tracked[1]; rerouted++; return true; }
   evicted++; return false;

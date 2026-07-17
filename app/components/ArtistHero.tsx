@@ -6,6 +6,7 @@ import { AuctionLot, MarketStats } from '../types';
 import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
+import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
 import ArtistAvatar from './ArtistAvatar';
@@ -26,6 +27,7 @@ export default function ArtistHero({
   stats,
   lots,
   upcomingCount,
+  bidMarket = false,
 }: {
   label: string;
   stats: MarketStats | null;
@@ -33,6 +35,11 @@ export default function ArtistHero({
   /** the page's date-filtered live-lot count — the ONE number that must
       equal the cards actually rendered in the Upcoming section below */
   upcomingCount?: number;
+  /** sports/science: bid sales with NO house estimates — the vs-estimate
+      Demand Index is meaningless there (it was reading a handful of ancient
+      estimate-bearing rows and headlining a stale −45%). These heroes read
+      the REALIZED tape instead: quarterly median sale price. */
+  bidMarket?: boolean;
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
@@ -53,8 +60,41 @@ export default function ArtistHero({
     return lots.filter(l => l.category === lens);
   }, [lots, lens, showLens]);
 
-  // The Demand Index for this artist (per lens).
-  const series = useMemo(() => demandSeries(lensLots), [lensLots]);
+  // The headline series: Demand Index (vs estimate) for estimate markets;
+  // quarterly MEDIAN REALIZED for bid markets (no estimates exist to divide by).
+  const series = useMemo(() => {
+    if (!bidMarket) return demandSeries(lensLots);
+    const byQ = new Map<string, { end: number; prices: number[] }>();
+    for (const l of lensLots) {
+      if (l.status !== 'sold' || !l.priceUsd) continue;
+      const d = new Date(l.saleDate);
+      if (isNaN(d.getTime()) || d.getTime() > Date.now()) continue;
+      const q = Math.floor(d.getUTCMonth() / 3);
+      const key = `${d.getUTCFullYear()} Q${q + 1}`;
+      const cur = byQ.get(key) || { end: Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1), prices: [] };
+      cur.prices.push(l.priceUsd);
+      byQ.set(key, cur);
+    }
+    return Array.from(byQ.entries())
+      .filter(([, v]) => v.prices.length >= 5)
+      .sort((a, b) => a[1].end - b[1].end)
+      .map(([date, v]) => {
+        const s = v.prices.sort((a, b) => a - b);
+        const m = Math.floor(s.length / 2);
+        return { date, value: s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 };
+      });
+  }, [lensLots, bidMarket]);
+
+  // STALE GATE: a series whose newest quarter is >13 months old must never
+  // headline as "trailing 12 months" — the hero falls back to price facts.
+  const fresh = useMemo(() => {
+    if (!series.length) return false;
+    const last = series[series.length - 1].date; // "YYYY Qn"
+    const y = parseInt(last.slice(0, 4), 10);
+    const q = parseInt(last.slice(-1), 10);
+    const endMs = Date.UTC(y, q * 3, 1);
+    return Date.now() - endMs < 13 * 30.44 * 86_400_000;
+  }, [series]);
 
   const visible = useMemo(() => {
     if (range === '1Y') return series.slice(-4);
@@ -103,31 +143,44 @@ export default function ArtistHero({
       <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
           <ArtistAvatar label={label} size={26} />
-          {hover
-            ? `${label} · typical ${lensWord} vs estimate · 12 months to ${hover.date}`
-            : `${label} · typical ${lensWord} vs its estimate, trailing 12 months`}
+          {bidMarket
+            ? (hover ? `${label} · median realized sale · ${hover.date}` : `${label} · median realized sale, by quarter`)
+            : hover
+              ? `${label} · typical ${lensWord} vs estimate · 12 months to ${hover.date}`
+              : fresh
+                ? `${label} · typical ${lensWord} vs its estimate, trailing 12 months`
+                : `${label} · recent sales`}
         </span>
         <MethodologyNote trigger="what is this?" />
       </p>
       {hover ? (
-        <h1 className="ray-hero2-value">{formatDemand(hover.value)}</h1>
+        <h1 className="ray-hero2-value">{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</h1>
       ) : (
         <h1 className="ray-hero2-value">
-          {series.length ? <CountUp to={now} format={formatDemand} duration={1000} /> : '—'}
+          {series.length && fresh
+            ? <CountUp to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
+            : typicalSale !== null
+              ? <CountUp to={typicalSale} format={formatPrice} duration={1000} />
+              : stats?.recordPrice
+                ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1000} />
+                : '—'}
         </h1>
       )}
       <p className="ray-hero2-delta">
-        {delta !== null && Math.round(delta) !== 0 && yearAgo !== null && (
-          <span className={delta > 0 ? 'up' : 'down'}>
-            {delta > 0 ? '▲ heating' : '▼ cooling'} · was {formatDemand(yearAgo)} a year ago
+        {fresh && delta !== null && Math.round(delta) !== 0 && yearAgo !== null && (
+          <span className={delta > 0 ? 'up' : 'down'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Flick size={10} style={{ transform: delta > 0 ? undefined : 'scaleY(-1)' }} />
+            {delta > 0 ? 'heating' : 'cooling'} · was {bidMarket ? formatPrice(yearAgo) : formatDemand(yearAgo)} a year ago
           </span>
         )}
         <span className="ctx">
-          {typicalSale !== null && <>typical {lensWord} {formatPrice(typicalSale)}</>}
-          {stats?.recordPrice ? <> · record {formatPrice(stats.recordPrice)}{recordYear ? ` (${recordYear})` : ''}</> : null}
+          {[
+            !fresh && !series.length && typicalSale !== null ? null : typicalSale !== null ? `typical ${lensWord} ${formatPrice(typicalSale)}` : null,
+            stats?.recordPrice ? `record ${formatPrice(stats.recordPrice)}${recordYear ? ` (${recordYear})` : ''}` : null,
+          ].filter(Boolean).join(' · ')}
           {liveCount > 0 && (
             <>
-              {' · '}
+              {(typicalSale !== null || stats?.recordPrice) ? ' · ' : ''}
               <a href="#upcoming" style={{ color: 'inherit', textDecorationColor: 'var(--color-border-mid)', textUnderlineOffset: 3 }}>
                 {liveCount} live {liveCount === 1 ? 'lot' : 'lots'}
               </a>
@@ -155,8 +208,8 @@ export default function ArtistHero({
                     <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <YAxis hide domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} />
-                <ReferenceLine y={0} stroke="var(--color-border-mid)" strokeDasharray="4 4" />
+                <YAxis hide domain={bidMarket ? [(min: number) => min * 0.85, (max: number) => max * 1.05] : [(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} />
+                {!bidMarket && <ReferenceLine y={0} stroke="var(--color-border-mid)" strokeDasharray="4 4" />}
                 <Tooltip content={() => null} cursor={{ stroke: 'var(--color-border-mid)', strokeWidth: 1 }} />
                 <Area
                   type="monotone"
@@ -173,7 +226,7 @@ export default function ArtistHero({
           </div>
           <div className="ray-hero2-span" aria-hidden="true">
             <span>{visible[0].date}</span>
-            <span style={{ color: 'var(--color-text-faint)' }}>0% = sells at estimate</span>
+            <span style={{ color: 'var(--color-text-faint)' }}>{bidMarket ? 'median realized per quarter' : '0% = sells at estimate'}</span>
             <span>{visible[visible.length - 1].date}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>

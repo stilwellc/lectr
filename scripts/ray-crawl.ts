@@ -3267,6 +3267,21 @@ async function main() {
   }
   console.log(`[Ray] Category breakdown:`, categoryCounts);
 
+  // A science slug must never hold a wristwatch-form lot — the router vetoes
+  // them at intake; this form-level gate catches anything older data or a new
+  // source slips through (a $150K Richard Mille was briefly the meteorites
+  // "record sale" before this class of row was purged). In-place: allLots is
+  // const and shared with everything downstream.
+  {
+    const SCI_GUARD = new Set(['meteorites', 'fossils', 'space-exploration', 'scientific-instruments']);
+    let evictedSciWatch = 0;
+    for (let i = allLots.length - 1; i >= 0; i--) {
+      const l = allLots[i];
+      if (SCI_GUARD.has(l.artist) && l.formKey === 'wristwatch') { allLots.splice(i, 1); evictedSciWatch++; }
+    }
+    if (evictedSciWatch) console.warn(`[Ray] evicted ${evictedSciWatch} wristwatch-form lots from science slugs`);
+  }
+
   // The watches vertical trades WATCHES only. Cartier especially is a jeweler
   // as much as a watchmaker — maker crawls drag in thermometer cases, lipstick
   // holders, earclips, pearl sets, bracelets. A blocklist is whack-a-mole, so

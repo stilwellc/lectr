@@ -310,7 +310,7 @@ function ArchiveMakerBody({
           <MarketSwitch compact />
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-          <ArtistHero label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} />
+          <ArtistHero label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket />
         </div>
       </RayEntrance>
 

@@ -494,6 +494,12 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   const q3 = prices[Math.floor(prices.length * 0.75)];
   if (med > 0 && (q3 - q1) / med > 2.5) return null;
 
+  // FORM-pool sanity (same ×5 band the edition path enforces): a same-form
+  // pool whose median sits 5× outside the lot's own estimate band is nearly
+  // always a collision of unrelated objects (a $145 lot "flagged" 60× below
+  // market was the class); the edition path already carries this guard.
+  if (kind === 'form' && med > 0 && (med > estMid * 5 || med < estMid / 5)) return null;
+
   // Confidence from the pool itself: what kind of comps, how many, how
   // tightly they agree (IQR/median), and how much the titles match — the
   // same exact work having sold repeatedly is the strongest evidence there is,
@@ -544,7 +550,13 @@ export function appraiseLot(lot: AuctionLot, allLots: AuctionLot[]): { value: nu
  *  the flagship number stays coherent and authoritative. Above-market is
  *  bounded to <100% (comps can't be more than 100% under the ask). */
 export function signalMagnitude(label: string, pct: number): string {
-  if (label === 'Below Market') return pct > 100 ? `${(pct / 100 + 1).toFixed(1)}×` : `+${pct}%`;
+  // past 5× the ask the precise multiple stops being credible (extreme ratios
+  // are where data faults live, and the measured beat-rate DROPS out there) —
+  // print the honest floor instead of a broken-looking "60.8×"
+  if (label === 'Below Market') {
+    if (pct > 400) return '5×+';
+    return pct > 100 ? `${(pct / 100 + 1).toFixed(1)}×` : `+${pct}%`;
+  }
   return `−${Math.min(pct, 99)}%`;
 }
 

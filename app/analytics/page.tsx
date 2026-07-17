@@ -56,7 +56,7 @@ function AnalyticsGrid({
     <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
     backtest ? <CalibrationCurve key="cal" backtest={backtest} /> : null,
     <CategoryBreakdown key="cat" allLots={marketLots} />,
-    <AuctionHouseDistribution key="house" statsByArtist={statsByArtist} />,
+    <AuctionHouseDistribution key="house" statsByArtist={marketStats} />,
     <TopSales key="top" allLots={marketLots} />,
     <PriceDistribution key="dist" allLots={marketLots} />,
   ].filter((n): n is React.ReactElement => n !== null);

@@ -41,11 +41,19 @@ export default function ValuePage() {
 
   const deals = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
+    // Rank by the CALIBRATED odds first (the engine's measured beat-rate,
+    // which drops on extreme ratios where they measurably under-deliver),
+    // then by the gap capped at 400% — a +5976% data fault can never again
+    // outrank a clean 2× flag with 70% measured odds.
+    const score = (d: { lot: AuctionLot; signal: { pct: number } | null }) => {
+      const br = (d.lot as { value?: { signal?: { beatRatePct?: number } | null } | null }).value?.signal?.beatRatePct ?? 50;
+      return br * 1000 + Math.min(d.signal!.pct, 400);
+    };
     return marketLots
       .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
       .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
-      .sort((a, b) => (b.signal!.pct - a.signal!.pct));
+      .sort((a, b) => score(b) - score(a));
   }, [marketLots]);
 
   const summary = useMemo(() => {
