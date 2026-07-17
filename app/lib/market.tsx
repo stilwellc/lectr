@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Market, MARKETS } from '../constants';
 
 /**
@@ -41,10 +41,24 @@ export function useMarket() {
   return useContext(MarketContext);
 }
 
+// The lander titles, mirrored from each route's metadata — pushState market
+// switches move the URL under the mounted board, so the document title has to
+// be kept honest by hand (a real navigation would have Next do it).
+const MARKET_TITLE: Record<Market, string> = {
+  all: 'lectr — auction intelligence',
+  art: 'Art — lectr',
+  design: 'Design — lectr',
+  watches: 'Watches — lectr',
+  science: 'Science — lectr',
+  sports: 'Sports — lectr',
+};
+
 export function MarketProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const urlMarket = PATH_MARKET[pathname]; // defined only on a lander route
+  // static hosting can surface the file path (/watches.html) or a trailing
+  // slash — normalize so a deep link still reads as its market
+  const normPath = pathname.replace(/\.html$/, '').replace(/\/+$/, '') || '/';
+  const urlMarket = PATH_MARKET[normPath]; // defined only on a lander route
   const onLander = urlMarket !== undefined;
 
   const [stored, setStored] = useState<Market>('all');
@@ -69,11 +83,24 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
 
   const market = onLander ? urlMarket : stored;
 
+  // THE TAPE PRINTS — a pushState'd market switch leaves the title behind, so
+  // keep it read true (covers back/forward too; harmlessly re-asserts the
+  // metadata title on a real navigation).
+  useEffect(() => {
+    if (onLander) document.title = MARKET_TITLE[urlMarket];
+  }, [onLander, urlMarket]);
+
   const setMarket = (m: Market) => {
     setStored(m);
     try { localStorage.setItem(KEY, m); } catch { /* private mode */ }
-    // on a lander, the market is the URL — navigate so it stays shareable
-    if (onLander && m !== market) router.push(MARKET_PATH[m] || '/');
+    // On a lander, the market is the URL — but every market route re-exports
+    // the same page component, so a router.push would remount the whole board
+    // for nothing (needle re-parks at −80°, numerals restart from 0, the call
+    // plate blanks). Instead the URL moves UNDER the mounted board: Next 14.1
+    // patches history.pushState to sync the app router (usePathname updates,
+    // the segment tree is untouched, popstate restores the same way), so the
+    // switch lands as a prop change and every instrument re-reads in place.
+    if (onLander && m !== market) window.history.pushState(null, '', MARKET_PATH[m] || '/');
   };
 
   return (
