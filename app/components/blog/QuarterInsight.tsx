@@ -3,9 +3,10 @@ import ArtistNav from '../ArtistNav';
 import Flick from '../Flick';
 import { Colophon } from '../Terminal';
 import { formatPrice } from '../../utils';
+import meta from '../../../public/data/ray/meta.json';
 
 export interface TopSale { title: string; priceUsd: number; house: string; date: string; maker: string }
-export interface Mover { label: string; chgPct: number; n: number }
+export interface Mover { label: string; chgPct: number; n: number; slug?: string }
 
 const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
 const h2: React.CSSProperties = { fontSize: 21, fontWeight: 700, letterSpacing: '-0.02em', margin: '42px 0 10px' };
@@ -116,7 +117,7 @@ export default function QuarterInsight({
             <tbody>
               {topSales.map(s => (
                 <tr key={s.title + s.priceUsd}>
-                  <td style={td}>{s.title}</td>
+                  <td style={td}><Link href={`/${s.maker}`} style={{ color: 'inherit', textDecorationColor: 'var(--hairline)', textUnderlineOffset: 3 }}>{s.title}</Link></td>
                   <td style={td}>{s.house}</td>
                   <td style={tdNum}>{formatPrice(s.priceUsd)}</td>
                 </tr>
@@ -132,7 +133,7 @@ export default function QuarterInsight({
                 <tbody>
                   {[...(movers || []), ...(coolers || [])].map(m => (
                     <tr key={m.label}>
-                      <td style={td}>{m.label}</td>
+                      <td style={td}>{m.slug ? <Link href={`/${m.slug}`} style={{ color: 'inherit', textDecorationColor: 'var(--hairline)', textUnderlineOffset: 3 }}>{m.label}</Link> : m.label}</td>
                       <td style={{ ...tdNum, color: m.chgPct >= 0 ? 'var(--color-up)' : 'var(--color-down)' }}>{m.chgPct >= 0 ? '+' : '−'}{Math.abs(Math.round(m.chgPct))}%</td>
                       <td style={tdNum}>{m.n}</td>
                     </tr>
@@ -153,7 +154,7 @@ export default function QuarterInsight({
           </p>
         </article>
       </main>
-      <Colophon lotCount={53129} houseCount={9} record={null} />
+      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
     </div>
   );
 }

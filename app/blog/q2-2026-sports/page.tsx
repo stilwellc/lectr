@@ -35,9 +35,9 @@ export default function Q2Sports() {
         { title: 'Aaron Judge — 51st HR of the AL-record 62-HR season, game-used', priceUsd: 111_020, house: 'Goldin', date: '2026-06-29', maker: 'game-used' },
       ]}
       movers={[
-        { label: 'Game-used memorabilia', chgPct: 154, n: 275 },
-        { label: 'Trophies & awards', chgPct: 54, n: 18 },
-        { label: 'Tickets & passes', chgPct: 47, n: 336 },
+        { label: 'Game-used memorabilia', slug: 'game-used', chgPct: 154, n: 275 },
+        { label: 'Trophies & awards', slug: 'trophies-awards', chgPct: 54, n: 18 },
+        { label: 'Tickets & passes', slug: 'tickets-passes', chgPct: 47, n: 336 },
       ]}
       footnote="Sports runs on bid auctions with no published estimates, so there is no vs-estimate read here; prices are final bid plus premium."
     >

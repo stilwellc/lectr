@@ -35,12 +35,12 @@ export default function Q2Design() {
         { title: 'George Nakashima — Special-order Triple Sliding Door cabinet', priceUsd: 102_400, house: 'Wright', date: '2026-05-13', maker: 'george-nakashima' },
       ]}
       movers={[
-        { label: 'Charles & Ray Eames', chgPct: 284, n: 17 },
-        { label: 'George Nakashima', chgPct: 40, n: 42 },
-        { label: 'Pierre Jeanneret', chgPct: 3, n: 36 },
+        { label: 'Charles & Ray Eames', slug: 'charles-eames', chgPct: 284, n: 17 },
+        { label: 'George Nakashima', slug: 'george-nakashima', chgPct: 40, n: 42 },
+        { label: 'Pierre Jeanneret', slug: 'pierre-jeanneret', chgPct: 3, n: 36 },
       ]}
       coolers={[
-        { label: 'Jean Prouvé (small sample)', chgPct: -47, n: 7 },
+        { label: 'Jean Prouvé (small sample)', slug: 'jean-prouve', chgPct: -47, n: 7 },
       ]}
       footnote="Prouvé traded only 7 times in the quarter — the drop is a mix shift, not a verdict."
     >

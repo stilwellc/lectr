@@ -35,13 +35,13 @@ export default function Q2Watches() {
         { title: 'Audemars Piguet — an extraordinary, historical stainless example', priceUsd: 1_256_030, house: 'Phillips', date: '2026-05-09', maker: 'audemars-piguet' },
       ]}
       movers={[
-        { label: 'Patek Philippe', chgPct: 67, n: 193 },
+        { label: 'Patek Philippe', slug: 'patek-philippe', chgPct: 67, n: 193 },
       ]}
       coolers={[
-        { label: 'Omega', chgPct: -34, n: 46 },
-        { label: 'Rolex', chgPct: -31, n: 244 },
-        { label: 'Cartier', chgPct: -30, n: 132 },
-        { label: 'Audemars Piguet', chgPct: -27, n: 113 },
+        { label: 'Omega', slug: 'omega', chgPct: -34, n: 46 },
+        { label: 'Rolex', slug: 'rolex', chgPct: -31, n: 244 },
+        { label: 'Cartier', slug: 'cartier', chgPct: -30, n: 132 },
+        { label: 'Audemars Piguet', slug: 'audemars-piguet', chgPct: -27, n: 113 },
       ]}
     >
       <H>Liquidity is not the question</H>

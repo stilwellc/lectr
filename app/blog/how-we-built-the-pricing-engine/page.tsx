@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import ArtistNav from '../../components/ArtistNav';
+import meta from '../../../public/data/ray/meta.json';
 import { Colophon } from '../../components/Terminal';
 
 export const metadata: Metadata = {
@@ -188,7 +189,7 @@ export default function PricingEnginePost() {
           </p>
         </article>
       </main>
-      <Colophon lotCount={53129} houseCount={9} record={null} />
+      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
     </div>
   );
 }

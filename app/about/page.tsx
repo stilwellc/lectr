@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
 import { Colophon } from '../components/Terminal';
+import meta from '../../public/data/ray/meta.json';
 
 export const metadata: Metadata = {
   title: 'How lectr works — architecture & the price engine',
@@ -229,7 +230,7 @@ export default function AboutPage() {
         </section>
       </main>
 
-      <Colophon lotCount={43436} houseCount={9} record={null} />
+      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
     </div>
   );
 }

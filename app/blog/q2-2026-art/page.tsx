@@ -35,14 +35,14 @@ export default function Q2Art() {
         { title: 'Andy Warhol — Do It Yourself (Violin)', priceUsd: 25_935_000, house: "Christie's", date: '2026-05-18', maker: 'andy-warhol' },
       ]}
       movers={[
-        { label: 'Pablo Picasso', chgPct: 30, n: 151 },
-        { label: 'Raymond Pettibon (small sample)', chgPct: 1412, n: 9 },
-        { label: 'Kenny Scharf (small sample)', chgPct: 525, n: 5 },
+        { label: 'Pablo Picasso', slug: 'pablo-picasso', chgPct: 30, n: 151 },
+        { label: 'Raymond Pettibon (small sample)', slug: 'raymond-pettibon', chgPct: 1412, n: 9 },
+        { label: 'Kenny Scharf (small sample)', slug: 'kenny-scharf', chgPct: 525, n: 5 },
       ]}
       coolers={[
-        { label: 'Andy Warhol', chgPct: -26, n: 89 },
-        { label: 'KAWS', chgPct: -79, n: 24 },
-        { label: 'George Condo (small sample)', chgPct: -78, n: 7 },
+        { label: 'Andy Warhol', slug: 'andy-warhol', chgPct: -26, n: 89 },
+        { label: 'KAWS', slug: 'kaws', chgPct: -79, n: 24 },
+        { label: 'George Condo (small sample)', slug: 'george-condo', chgPct: -78, n: 7 },
       ]}
       footnote="Pettibon, Scharf and Condo medians come from single-digit sale counts — treat those moves as anecdotes, not trends."
     >

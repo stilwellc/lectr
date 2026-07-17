@@ -3,6 +3,7 @@ import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import Flick from '../components/Flick';
+import meta from '../../public/data/ray/meta.json';
 
 export const metadata: Metadata = {
   title: 'Notes from the desk',
@@ -64,11 +65,12 @@ export default function BlogIndex() {
           </p>
         </header>
 
-        <section style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px' }}>
+        <section style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {POSTS.map(p => (
             <Link
               key={p.slug}
               href={`/blog/${p.slug}`}
+              className="ray-blog-card"
               style={{ display: 'block', textDecoration: 'none', color: 'inherit', border: '1px solid var(--hairline)', borderRadius: 12, padding: '22px 24px', background: 'var(--color-bg-elevated)' }}
             >
               <div style={{ fontFamily: 'var(--font-mono), monospace', fontSize: 11.5, color: 'var(--color-text-faint)', marginBottom: 8 }}>
@@ -81,7 +83,7 @@ export default function BlogIndex() {
           ))}
         </section>
       </main>
-      <Colophon lotCount={53129} houseCount={9} record={null} />
+      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
     </div>
   );
 }
