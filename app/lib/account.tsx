@@ -85,6 +85,9 @@ interface AccountValue {
   authEnabled: boolean;
   user: User | null;
   authReady: boolean;
+  /** the initial saved-lots load has resolved (cloud fetch done; immediate in
+   *  localStorage mode and when signed out) — gates the /saved empty state */
+  savedReady: boolean;
   signInWithEmail: (email: string) => Promise<{ ok: boolean; message: string }>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -108,6 +111,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState<boolean>(!authEnabled); // ready immediately when auth is off
   const [entries, setEntries] = useState<SavedEntry[]>([]);
+  const [savedReady, setSavedReady] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const migratedRef = useRef(false);
   // mirror of entries for reads inside stable callbacks (toggle) without making
@@ -128,7 +132,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
 
   // ── auth session ──
   useEffect(() => {
-    if (!supabase) { setEntries(readStored()); return; } // localStorage-only mode
+    if (!supabase) { setEntries(readStored()); setSavedReady(true); return; } // localStorage-only mode
     supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user ?? null); setAuthReady(true); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
@@ -141,7 +145,8 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   // ── saved lots follow the user ──
   useEffect(() => {
     if (!supabase) return; // localStorage mode already loaded above
-    if (!user) { setEntries([]); return; }
+    if (!user) { setEntries([]); setSavedReady(true); return; }
+    setSavedReady(false); // a fresh session's saves are in flight
     let cancelled = false;
     (async () => {
       // one-time: lift any localStorage saves into the account, then clear them.
@@ -159,10 +164,13 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase!.from('saved_lots').select('*').eq('user_id', user.id);
       // On a query error `data` is null — do NOT blank the user's saves; keep
       // whatever is already in state and let the next run retry.
-      if (error) { console.error('[account] load saved lots failed:', error.message); return; }
+      // the fetch RESOLVED either way — even on error the gate must open, or
+      // a failed query would hold /saved on the loading state forever
+      if (error) { console.error('[account] load saved lots failed:', error.message); if (!cancelled) setSavedReady(true); return; }
       if (cancelled) return;
       const loaded = (data || []).map(rowToEntry);
       setEntries(loaded);
+      setSavedReady(true);
       // Replay a save the user queued before signing in (they clicked the star
       // while logged out; we sent them through auth and back here). Completes
       // the intent instead of dropping it.
@@ -276,7 +284,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => { if (!supabase) return; await supabase.auth.signOut(); setEntries([]); migratedRef.current = false; }, []);
 
   const value: AccountValue = {
-    authEnabled, user, authReady,
+    authEnabled, user, authReady, savedReady,
     signInWithEmail, signInWithGoogle, signOut,
     savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned,
     loginOpen, openLogin: () => setLoginOpen(true), closeLogin: () => setLoginOpen(false),
@@ -313,8 +321,8 @@ export function useAccount(): AccountValue {
 
 /** Auth-only slice, for the nav + gates. */
 export function useAuth() {
-  const { authEnabled, user, authReady, signInWithEmail, signInWithGoogle, signOut, loginOpen, openLogin, closeLogin } = useAccount();
-  return { authEnabled, user, authReady, signInWithEmail, signInWithGoogle, signOut, loginOpen, openLogin, closeLogin };
+  const { authEnabled, user, authReady, savedReady, signInWithEmail, signInWithGoogle, signOut, loginOpen, openLogin, closeLogin } = useAccount();
+  return { authEnabled, user, authReady, savedReady, signInWithEmail, signInWithGoogle, signOut, loginOpen, openLogin, closeLogin };
 }
 
 // ── The login sheet — Google-only ──
@@ -346,7 +354,11 @@ function LoginModal() {
       <div ref={cardRef} className="ray-auth-card" role="dialog" aria-modal="true" aria-label="Sign in" onClick={e => e.stopPropagation()}>
         <div className="ray-auth-head">
           <span className="ray-auth-title">Sign in to save lots</span>
-          <button className="ray-auth-x" aria-label="Close" onClick={closeLogin}>✕</button>
+          <button className="ray-auth-x" aria-label="Close" onClick={closeLogin}>
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ display: 'block' }}>
+              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
         <p className="ray-auth-lede">Your saved lots follow you across devices — and only you can see them.</p>
 

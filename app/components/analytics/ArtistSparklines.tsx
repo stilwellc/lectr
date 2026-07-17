@@ -4,11 +4,12 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip } from 'recharts';
 import { MarketStats, AuctionLot } from '../../types';
-import { formatPrice } from '../../utils';
+import { formatPrice, fmtSignedPct, toneOf } from '../../utils';
 import { ARTISTS, marketArtists, Market, rosterNoun } from '../../constants';
 import { useChartDraw } from '../../hooks/useChartDraw';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import ArtistAvatar from '../ArtistAvatar';
+import Flick from '../Flick';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -44,12 +45,6 @@ function computeSparkData(lots: AuctionLot[]): SparkPoint[] {
     }));
 }
 
-function formatAxis(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value}`;
-}
-
 function SparkTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: SparkPoint }> }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -64,8 +59,8 @@ function SparkTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
         {d.date}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: d.avgPrice >= 0 ? 'var(--color-up)' : 'var(--color-down)' }}>
-        {`${d.avgPrice >= 0 ? '+' : ''}${Math.round(d.avgPrice)}% vs estimate`}
+      <div style={{ fontSize: 12, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down)' }}>
+        {`${fmtSignedPct(Math.round(d.avgPrice))} vs estimate`}
       </div>
     </div>
   );
@@ -117,14 +112,14 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
         }}>
           {artist.label}
         </div>
-        {artist.appreciation !== 0 && (
+        {toneOf(artist.appreciation) !== 'flat' && (
           <div style={{
             fontSize: 12,
             fontWeight: 600,
             color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)',
             whiteSpace: 'nowrap',
           }}>
-            {artist.appreciation > 0 ? '\u25B2' : '\u25BC'} {formatDemand(artist.appreciation)}
+            <Flick size={10} style={{ marginLeft: 0, transform: artist.appreciation > 0 ? undefined : 'scaleY(-1)' }} /> {formatDemand(artist.appreciation)}
           </div>
         )}
       </div>
@@ -196,13 +191,13 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           <div style={{
             fontSize: 14,
             fontWeight: 500,
-            color: artist.overEstimate <= -999
+            color: artist.overEstimate <= -999 || toneOf(artist.overEstimate) === 'flat'
               ? 'var(--color-text-muted)'
-              : artist.overEstimate >= 0 ? 'var(--color-up)' : 'var(--color-down)',
+              : toneOf(artist.overEstimate) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
           }}>
             {artist.overEstimate <= -999
               ? '\u2014'
-              : `${artist.overEstimate >= 0 ? '+' : ''}${artist.overEstimate.toFixed(1)}%`}
+              : fmtSignedPct(artist.overEstimate, 1)}
           </div>
         </div>
       </div>

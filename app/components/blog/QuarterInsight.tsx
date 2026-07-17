@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import ArtistNav from '../ArtistNav';
+import Flick from '../Flick';
 import { Colophon } from '../Terminal';
 import { formatPrice } from '../../utils';
 
@@ -148,7 +149,7 @@ export default function QuarterInsight({
             where they occur.{footnote ? ` ${footnote}` : ''}
           </p>
           <p style={{ marginTop: 22 }}>
-            <Link href="/blog" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>← All notes</Link>
+            <Link href="/blog" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}><Flick size={11} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 2 }} /> All notes</Link>
           </p>
         </article>
       </main>

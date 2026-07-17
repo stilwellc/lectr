@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ArtistNav from '../components/ArtistNav';
+import Flick from '../components/Flick';
 import { Colophon } from '../components/Terminal';
 
 export const metadata: Metadata = {
@@ -35,7 +36,9 @@ function Down({ label }: { label?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '7px 0' }}>
       {label && <span style={{ fontSize: 10.5, color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono), monospace', letterSpacing: '0.02em' }}>{label}</span>}
-      <span aria-hidden style={{ color: 'var(--color-text-faint)', fontSize: 15, lineHeight: 1 }}>↓</span>
+      <span aria-hidden style={{ color: 'var(--color-text-faint)', lineHeight: 1 }}>
+        <Flick size={12} style={{ transform: 'scaleY(-1)', marginLeft: 0, display: 'block' }} />
+      </span>
     </div>
   );
 }

@@ -11,9 +11,11 @@ import React, { useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
 import type { MarketSeriesJson } from '../../hooks/useRayData';
 import Flick from '../Flick';
+import { toneOf, fmtSignedPct } from '../../utils';
 
 const UP = 'var(--color-up)';
 const DOWN = 'var(--color-down)';
+const FLAT = 'var(--color-text-muted)';
 const INK = '#F4F5F6';
 const MUTED = '#7A8087';
 
@@ -47,6 +49,16 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
 
   const hasIndex = series.index.length >= 4;
 
+  // zero is FLAT — muted, no glyph, never green
+  const idxTone = idxChange != null ? toneOf(idxChange) : 'flat';
+  const idxColor = idxTone === 'up' ? UP : idxTone === 'down' ? DOWN : FLAT;
+
+  const showSellThrough = series.sellThrough.length >= 3;
+  const showAccuracy = series.houseAccuracy.length >= 3 && accLatest != null;
+  // when one panel is suppressed the survivor spans the whole band instead of
+  // leaving a vacant half
+  const soloPanel = showSellThrough !== showAccuracy;
+
   return (
     <section className="ray-mi">
       <MarketStyles />
@@ -57,8 +69,8 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
           <div className="ray-mi-hero">
             <span className="ray-mi-num">{series.index[series.index.length - 1].value}</span>
             {idxChange != null && (
-              <span className="ray-mi-delta" style={{ color: idxChange >= 0 ? UP : DOWN }}>
-                <Flick size={11} style={{ verticalAlign: 'baseline', transform: idxChange >= 0 ? undefined : 'scaleY(-1)' }} /> {idxChange >= 0 ? '+' : ''}{idxChange}% past year
+              <span className="ray-mi-delta" style={{ color: idxColor }}>
+                {idxTone !== 'flat' && <Flick size={11} style={{ verticalAlign: 'baseline', marginLeft: 0, marginRight: 4, transform: idxTone === 'up' ? undefined : 'scaleY(-1)' }} />}{fmtSignedPct(idxChange)} past year
               </span>
             )}
           </div>
@@ -67,8 +79,8 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
               <AreaChart data={series.index} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="miIdx" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={(idxChange || 0) >= 0 ? UP : DOWN} stopOpacity={0.18} />
-                    <stop offset="100%" stopColor={(idxChange || 0) >= 0 ? UP : DOWN} stopOpacity={0} />
+                    <stop offset="0%" stopColor={idxColor} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={idxColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -76,7 +88,7 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
                 <YAxis tick={{ fontSize: 11, fill: MUTED }} width={38} axisLine={false} tickLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
                 <ReferenceLine y={100} stroke="rgba(255,255,255,0.14)" strokeDasharray="3 3" />
                 <Tooltip contentStyle={{ background: '#0D0F12', border: '1px solid var(--hairline)', fontSize: 12 }} labelStyle={{ color: MUTED }} formatter={(v: number, _n, p) => [`${v} · ${(p.payload.n || 0)} sales`, 'index']} />
-                <Area type="monotone" dataKey="value" stroke={(idxChange || 0) >= 0 ? UP : DOWN} strokeWidth={2} fill="url(#miIdx)" />
+                <Area type="monotone" dataKey="value" stroke={idxColor} strokeWidth={2} fill="url(#miIdx)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -87,9 +99,9 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
         </Panel>
       )}
 
-      <div className="ray-mi-row">
+      <div className="ray-mi-row" style={soloPanel ? { gridTemplateColumns: '1fr' } : undefined}>
         {/* SELL-THROUGH */}
-        {series.sellThrough.length >= 3 && (
+        {showSellThrough && (
           <Panel title="sell-through rate" method="sold ÷ (sold + bought-in), quarterly">
             <div className="ray-mi-hero"><span className="ray-mi-num sm">{stLatest}%</span><span className="ray-mi-sub">of lots found a buyer, latest quarter</span></div>
             <div style={{ height: 130 }}>
@@ -107,11 +119,15 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
         )}
 
         {/* HOUSE ACCURACY */}
-        {series.houseAccuracy.length >= 3 && accLatest != null && (
+        {showAccuracy && accLatest != null && (
           <Panel title="house estimate accuracy" method="median hammer ÷ estimate mid, quarterly · hammer basis">
             <div className="ray-mi-hero">
-              <span className="ray-mi-num sm">{accLatest > 1 ? '+' : ''}{Math.round((accLatest - 1) * 100)}%</span>
-              <span className="ray-mi-sub">lots {accLatest >= 1 ? 'beat' : 'missed'} the houses&rsquo; estimates, latest quarter</span>
+              <span className="ray-mi-num sm">{fmtSignedPct(Math.round((accLatest - 1) * 100))}</span>
+              <span className="ray-mi-sub">
+                {toneOf(Math.round((accLatest - 1) * 100)) === 'flat'
+                  ? <>lots landed right on the houses&rsquo; estimates, latest quarter</>
+                  : <>lots {accLatest > 1 ? 'beat' : 'missed'} the houses&rsquo; estimates, latest quarter</>}
+              </span>
             </div>
             <div style={{ height: 130 }}>
               <ResponsiveContainer width="100%" height="100%">

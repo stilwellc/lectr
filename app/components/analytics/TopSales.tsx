@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { AuctionLot } from '../../types';
-import { formatDate, formatPrice, houseColors, craftTitle } from '../../utils';
+import { formatDate, formatPrice, houseColors, craftTitle, overEstimatePct, toneOf, fmtSignedPct } from '../../utils';
 import { ARTIST_LABEL } from '../../constants';
 
 interface Props {
@@ -42,7 +42,7 @@ export default function TopSales({ allLots }: Props) {
         }
       `}</style>
 
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{
           fontFamily: 'var(--font-sans), sans-serif',
           fontSize: 24,
@@ -51,6 +51,9 @@ export default function TopSales({ allLots }: Props) {
         }}>
           Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
         </h2>
+        <span style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
+          % over est. on hammer basis — buyer&rsquo;s premium divided out
+        </span>
       </div>
 
       {/* Glass frame; the table keeps its natural min width and scrolls
@@ -117,10 +120,9 @@ export default function TopSales({ allLots }: Props) {
             {topSales.map((lot, i) => {
               const ct = craftTitle(lot.title);
               const title = ct.length > 50 ? ct.slice(0, 47) + '…' : ct;
-              const hasEstimate = lot.estimateHigh && lot.estimateHigh > 0 && lot.priceUsd;
-              const overEst = hasEstimate
-                ? ((lot.priceUsd! - lot.estimateHigh!) / lot.estimateHigh!) * 100
-                : null;
+              // hammer basis — the premium is divided out before comparing to
+              // the estimate mid (null when the lot carries no estimate)
+              const overEst = overEstimatePct(lot);
               return (
                 <tr key={lot.id} className="ray-top-row">
                   {/* Rank 1 is the single wine record marker for this view */}
@@ -176,13 +178,13 @@ export default function TopSales({ allLots }: Props) {
                     fontWeight: 500,
                     fontSize: 13,
                     whiteSpace: 'nowrap',
-                    color: overEst === null
+                    color: overEst === null || toneOf(overEst) === 'flat'
                       ? 'var(--color-text-muted)'
-                      : overEst >= 0 ? 'var(--color-up)' : 'var(--color-down)',
+                      : toneOf(overEst) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
                   }}>
                     {overEst === null
                       ? '\u2014'
-                      : `${overEst >= 0 ? '+' : ''}${overEst.toFixed(0)}%`}
+                      : fmtSignedPct(overEst)}
                   </td>
                   <td className="ray-top-td ray-top-hide-mobile">
                     <span style={{

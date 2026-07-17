@@ -2,8 +2,7 @@
 
 import { useMemo } from 'react';
 import { MarketStats, AuctionLot } from '../../types';
-import { formatPrice } from '../../utils';
-import { ARTISTS } from '../../constants';
+import { formatPrice, fmtSignedPct } from '../../utils';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -41,11 +40,32 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
           s + ((l.priceUsd! / 1.25 - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / lotsWithEstimate.length
       : 0;
 
+    // makers tracked in THIS market — derived from the filtered stats passed
+    // in, never the global roster
+    const makerCount = Object.keys(statsByArtist).length;
+
+    // estimate coverage: on markets where almost no sold lot carries an
+    // estimate (sports/science) the vs-estimate KPI would be fake — show the
+    // honest realized figure instead.
+    const soldLots = allLots.filter(l => l.status === 'sold' && l.priceUsd);
+    const estimateCoverage = soldLots.length ? lotsWithEstimate.length / soldLots.length : 0;
+    const estimateCard = estimateCoverage >= 0.05
+      ? { label: 'Avg. hammer vs estimate', value: fmtSignedPct(avgOverEstimate, 1), sub: `${lotsWithEstimate.length.toLocaleString()} lots · hammer basis`, tone: '' }
+      : (() => {
+          const prices = recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
+          const median = prices.length
+            ? (prices.length % 2
+                ? prices[(prices.length - 1) / 2]
+                : (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2)
+            : 0;
+          return { label: 'Median sale, past year', value: formatPrice(median), sub: 'realized · no house estimates in this market', tone: '' };
+        })();
+
     return [
       { label: 'Total sales value', value: formatPrice(totalRevenue), sub: 'aggregate realized prices, all makers', tone: '' },
-      { label: 'Total lots', value: allLots.length.toLocaleString(), sub: `${ARTISTS.length} makers tracked`, tone: '' },
-      { label: 'Appreciation', value: `${weightedAppreciation >= 0 ? '+' : ''}${weightedAppreciation.toFixed(1)}%`, sub: 'sales-weighted avg across makers', tone: '' },
-      { label: 'Avg. hammer vs estimate', value: `${avgOverEstimate >= 0 ? '+' : ''}${avgOverEstimate.toFixed(1)}%`, sub: `${lotsWithEstimate.length.toLocaleString()} lots · hammer basis`, tone: '' },
+      { label: 'Total lots', value: allLots.length.toLocaleString(), sub: `${makerCount} makers tracked`, tone: '' },
+      { label: 'Appreciation', value: fmtSignedPct(weightedAppreciation, 1), sub: 'sales-weighted avg across makers', tone: '' },
+      estimateCard,
     ];
   }, [statsByArtist, allLots]);
 

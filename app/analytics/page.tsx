@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { ARTISTS, MARKETS, marketArtists } from '../constants';
+import { MARKETS, marketArtists } from '../constants';
 import type { Market } from '../constants';
 import type { AuctionLot, MarketStats } from '../types';
 import { useMarket } from '../lib/market';
@@ -113,7 +113,7 @@ export default function AnalyticsPage() {
         title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Analytics</span>}
         sub={!fullLoaded
           ? ' ' /* reserve the line — no zero-count flash while the crawl delivers */
-          : <>Market-level intelligence across {ARTISTS.length} artists and {houseCount} auction houses.</>}
+          : <>Market-level intelligence across {Object.keys(marketStats).length} artists and {houseCount} auction houses.</>}
         timestamp={lastCrawl ? formatDate(lastCrawl) : undefined}
       />
 

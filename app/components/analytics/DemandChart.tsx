@@ -5,6 +5,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceL
 import { AuctionLot } from '../../types';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import { useChartDraw } from '../../hooks/useChartDraw';
+import { toneOf } from '../../utils';
 
 /**
  * DemandChart — the market's Demand Index as the analytics lead chart. Same
@@ -24,7 +25,7 @@ function Tip({ active, payload, label }: { active?: boolean; payload?: Array<{ p
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>12 months to {label}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: p.value >= 0 ? 'var(--color-up)' : 'var(--color-down)' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: toneOf(p.value) === 'flat' ? 'var(--color-text-muted)' : toneOf(p.value) === 'up' ? 'var(--color-up)' : 'var(--color-down)' }}>
         {formatDemand(p.value)} vs estimate
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 2 }}>{p.n.toLocaleString()} sales in window</div>
@@ -37,7 +38,9 @@ export default function DemandChart({ allLots }: { allLots: AuctionLot[] }) {
   const [hovered, setHovered] = useState(false);
   const drawRef = useChartDraw();
   const now = series.length ? series[series.length - 1].value : 0;
-  const lineColor = now >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+  // zero is FLAT — the line goes muted, never signal-green
+  const nowTone = toneOf(now);
+  const lineColor = nowTone === 'flat' ? 'var(--color-text-muted)' : nowTone === 'up' ? 'var(--color-up)' : 'var(--color-down)';
 
   if (series.length < 2) return null;
 

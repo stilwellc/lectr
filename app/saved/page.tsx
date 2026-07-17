@@ -12,7 +12,8 @@ import { appraiseLot, soldCompBand, isSportsScienceObject } from '../lib/comps';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle } from '../utils';
+import Flick from '../components/Flick';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct } from '../utils';
 import { ARTIST_LABEL } from '../constants';
 
 function daysUntil(dateStr: string): number {
@@ -26,10 +27,6 @@ function hammerWord(days: number): string {
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
 }
-function fmtPct(pct: number): string {
-  return `${pct >= 0 ? '+' : ''}${Math.round(pct)}%`;
-}
-
 /** What changed on a watched lot since the save — signal move and new bids.
     Renders nothing when there's no baseline (pre-upgrade saves) or nothing
     moved: absence of data is never dressed as a delta. */
@@ -46,9 +43,9 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
     <p className="ray-saved-delta">
       {signalMoved && cur && meta && (
         <span>
-          signal {fmtPct(meta.signalPct!)} →{' '}
+          signal {fmtSignedPct(meta.signalPct!)} <Flick size={10} style={{ marginLeft: 0 }} />{' '}
           <b style={{ color: cur.pct > meta.signalPct! ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
-            {fmtPct(cur.pct)}
+            {fmtSignedPct(cur.pct)}
           </b>{' '}
           since you saved
         </span>
@@ -67,7 +64,7 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
 export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
-  const { authEnabled, user, authReady, openLogin } = useAuth();
+  const { authEnabled, user, authReady, savedReady, signInWithGoogle } = useAuth();
 
   const savedLots = useMemo(() =>
     savedIds
@@ -220,8 +217,10 @@ export default function SavedPage() {
               </span>
             </p>
           </section>
-          <div className="rail ray-enter" style={{ padding: '26px 0 72px' }}>
-            <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={openLogin}>
+          {/* paddingBlock, not the padding shorthand — the shorthand zeroes the
+              inline padding and kills the .rail clamp */}
+          <div className="rail ray-enter" style={{ paddingBlock: '26px 72px' }}>
+            <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
               Sign in with Google
             </button>
             <p style={{ fontSize: 12.5, color: 'var(--color-text-faint)', margin: '14px 0 0' }}>
@@ -229,7 +228,9 @@ export default function SavedPage() {
             </p>
           </div>
         </RayEntrance>
-      ) : loading ? (
+      ) : loading || !authReady || !savedReady ? (
+        /* hold the loading state until the saved-lots load has RESOLVED — a
+           signed-in user must never flash the "0" empty state mid-fetch */
         <RayLoading />
       ) : savedLots.length === 0 && orphanIds.length === 0 ? (
         <RayEntrance animate={!fromCache}>
@@ -416,7 +417,7 @@ export default function SavedPage() {
                       {judged.length} watched {judged.length === 1 ? 'lot' : 'lots'} concluded ·{' '}
                       {formatPrice(hammered)} hammered · your picks went{' '}
                       <b style={{ color: medianPct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
-                        {medianPct >= 0 ? '+' : ''}{medianPct}%
+                        {fmtSignedPct(medianPct)}
                       </b>{' '}
                       vs estimate, median
                     </p>

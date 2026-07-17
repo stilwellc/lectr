@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { MarketStats, AuctionLot } from '../../types';
-import { formatPrice } from '../../utils';
+import { formatPrice, fmtSignedPct, toneOf, overEstimatePct } from '../../utils';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import ArtistAvatar from '../ArtistAvatar';
 import Flick from '../Flick';
@@ -43,12 +43,18 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         ? Math.round((soldCount / concluded.length) * 100)
         : -1;
 
-      const withEstimate = artistLots.filter(l =>
-        l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0
-      );
-      const overEstimate = withEstimate.length >= 3
-        ? withEstimate.reduce((s, l) =>
-            s + ((l.priceUsd! - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / withEstimate.length
+      // hammer basis: overEstimatePct divides the buyer's premium out before
+      // comparing to the (hammer-basis) estimate mid — median over the
+      // maker's sold lots that carry estimates.
+      const overPcts = artistLots
+        .filter(l => l.status === 'sold')
+        .map(l => overEstimatePct(l))
+        .filter((v): v is number => v != null)
+        .sort((x, y) => x - y);
+      const overEstimate = overPcts.length >= 3
+        ? (overPcts.length % 2
+            ? overPcts[(overPcts.length - 1) / 2]
+            : (overPcts[overPcts.length / 2 - 1] + overPcts[overPcts.length / 2]) / 2)
         : -999;
 
       return {
@@ -86,17 +92,25 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
     }
   }
 
+  // active sort wears BEIGE (neutral accent) — gold stays brand-only
   const thStyle = (key: SortKey, align: 'left' | 'right' = 'right'): React.CSSProperties => ({
     fontSize: 12,
     letterSpacing: '-0.01em',
     textTransform: 'none',
-    color: sortKey === key ? 'var(--color-accent-gold)' : 'var(--color-text-faint)',
+    color: sortKey === key ? 'var(--color-beige-text)' : 'var(--color-text-faint)',
     fontWeight: 600,
     padding: '14px 16px 10px',
     textAlign: align,
     whiteSpace: 'nowrap',
-    borderBottom: '1px solid var(--color-border)',
+    borderBottom: sortKey === key ? '2px solid var(--color-beige)' : '1px solid var(--color-border)',
   });
+
+  // sort-direction glyph: the Flick, not a dingbat triangle — up = asc,
+  // flipped for desc
+  const sortGlyph = (key: SortKey) =>
+    sortKey === key
+      ? <Flick size={10} style={sortDir === 'desc' ? { transform: 'scaleY(-1)' } : undefined} />
+      : null;
 
   // Real buttons inside the th, styled to inherit, so sorting is
   // focusable and keyboard-operable.
@@ -132,6 +146,15 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           font-size: 13px;
           border-bottom: 1px solid var(--color-border);
           white-space: nowrap;
+        }
+        /* the maker column stays pinned while the table scrolls sideways so
+           rows remain identifiable — solid ground + a right hairline seam */
+        .ray-rankings-sticky {
+          position: sticky;
+          left: 0;
+          z-index: 2;
+          background: var(--color-bg-elevated);
+          border-right: 1px solid var(--color-border);
         }
         @media (max-width: 768px) {
           .ray-rankings { padding-block: 32px 32px; }
@@ -179,44 +202,44 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 600 }}>
           <thead>
             <tr>
-              <th style={thStyle('name', 'left')} aria-sort={ariaSort('name')}>
+              <th className="ray-rankings-sticky" style={thStyle('name', 'left')} aria-sort={ariaSort('name')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('name')}>
-                  Maker {sortKey === 'name' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Maker {sortGlyph('name')}
                 </button>
               </th>
               <th style={thStyle('totalRevenue')} aria-sort={ariaSort('totalRevenue')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('totalRevenue')}>
-                  Sales value {sortKey === 'totalRevenue' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Sales value {sortGlyph('totalRevenue')}
                 </button>
               </th>
               <th style={thStyle('avgPrice')} aria-sort={ariaSort('avgPrice')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('avgPrice')}>
-                  Avg (12mo) {sortKey === 'avgPrice' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Avg (12mo) {sortGlyph('avgPrice')}
                 </button>
               </th>
               <th className="ray-rankings-hide-mobile" style={thStyle('recordPrice')} aria-sort={ariaSort('recordPrice')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('recordPrice')}>
-                  Record {sortKey === 'recordPrice' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Record {sortGlyph('recordPrice')}
                 </button>
               </th>
               <th style={thStyle('demand')} aria-sort={ariaSort('demand')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('demand')}>
-                  Demand {sortKey === 'demand' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Demand {sortGlyph('demand')}
                 </button>
               </th>
-              <th style={thStyle('overEstimate')} aria-sort={ariaSort('overEstimate')}>
+              <th style={thStyle('overEstimate')} aria-sort={ariaSort('overEstimate')} title="Hammer basis \u2014 buyer's premium divided out; median across the maker's sold lots with estimates">
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('overEstimate')}>
-                  % over est. {sortKey === 'overEstimate' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  % over est. {sortGlyph('overEstimate')}
                 </button>
               </th>
               <th style={thStyle('totalLots')} aria-sort={ariaSort('totalLots')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('totalLots')}>
-                  Lots {sortKey === 'totalLots' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Lots {sortGlyph('totalLots')}
                 </button>
               </th>
               <th className="ray-rankings-hide-mobile" style={thStyle('sellThrough')} aria-sort={ariaSort('sellThrough')}>
                 <button type="button" style={sortBtnStyle} onClick={() => handleSort('sellThrough')}>
-                  Sell-through {sortKey === 'sellThrough' && (sortDir === 'asc' ? '\u25B2' : '\u25BC')}
+                  Sell-through {sortGlyph('sellThrough')}
                 </button>
               </th>
             </tr>
@@ -224,7 +247,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           <tbody>
             {sorted.map((row) => (
               <tr key={row.slug} className="ray-rankings-row">
-                <td className="ray-rankings-td" style={{ fontWeight: 500 }}>
+                <td className="ray-rankings-td ray-rankings-sticky" style={{ fontWeight: 500 }}>
                   <Link
                     href={`/${row.slug}`}
                     style={{
@@ -254,20 +277,20 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                 <td className="ray-rankings-td" style={{
                   textAlign: 'right',
                   fontWeight: 500,
-                  color: row.demand <= -9999
+                  color: row.demand <= -9999 || toneOf(row.demand) === 'flat'
                     ? 'var(--color-text-muted)'
-                    : row.demand >= 0 ? 'var(--color-up)' : 'var(--color-down)',
+                    : toneOf(row.demand) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
                 }}>
                   {row.demand <= -9999 ? '\u2014' : formatDemand(row.demand)}
                 </td>
                 <td className="ray-rankings-td" style={{
                   textAlign: 'right',
                   fontWeight: 500,
-                  color: row.overEstimate <= -999
+                  color: row.overEstimate <= -999 || toneOf(row.overEstimate) === 'flat'
                     ? 'var(--color-text-muted)'
-                    : row.overEstimate >= 0 ? 'var(--color-up)' : 'var(--color-down)',
+                    : toneOf(row.overEstimate) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
                 }}>
-                  {row.overEstimate <= -999 ? '\u2014' : `${row.overEstimate >= 0 ? '+' : ''}${row.overEstimate.toFixed(1)}%`}
+                  {row.overEstimate <= -999 ? '\u2014' : fmtSignedPct(row.overEstimate, 1)}
                 </td>
                 <td className="ray-rankings-td" style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>
                   {row.totalLots.toLocaleString()}
@@ -281,6 +304,9 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         </table>
         </div>
       </div>
+      <p style={{ marginTop: 10, fontSize: 11.5, color: 'var(--color-text-faint)' }}>
+        % over est. is hammer basis — the buyer&rsquo;s premium is divided out before comparing to the estimate mid; median across each maker&rsquo;s sold lots with estimates.
+      </p>
     </section>
   );
 }

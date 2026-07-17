@@ -123,6 +123,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
         role="dialog"
         aria-modal="true"
         aria-label="Jump to"
+        style={{ fontVariantNumeric: 'tabular-nums' }}
         onClick={e => e.stopPropagation()}
       >
         <input

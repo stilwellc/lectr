@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AuctionLot } from '../types';
 import { categoryLabels, sportOf } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
+import Flick from './Flick';
 
 export type FeedSort = 'soonest' | 'gap-desc' | 'newest' | 'est-desc' | 'est-asc';
 
@@ -164,7 +165,9 @@ export default function FeedToolbar({
           />
           {filters.query && (
             <button className="ray-toolbar-clearq" onClick={() => set({ query: '' })} aria-label="Clear search">
-              ×
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
             </button>
           )}
         </div>
@@ -196,7 +199,7 @@ export default function FeedToolbar({
               onClick={() => set({ sort: estActive ? (filters.sort === 'est-desc' ? 'est-asc' : 'est-desc') : 'est-desc' })}
               aria-label={`Sort by estimate, ${filters.sort === 'est-asc' ? 'lowest' : 'highest'} first`}
             >
-              Estimate {filters.sort === 'est-asc' ? '↑' : '↓'}
+              Estimate {filters.sort === 'est-asc' ? <Flick size={10} /> : <Flick size={10} style={{ transform: 'scaleY(-1)' }} />}
             </button>
           </div>
         )}
@@ -236,7 +239,7 @@ export default function FeedToolbar({
         {market !== 'all' && onMarketReset && (
           <>
             <button className="ray-toolbar-pill" onClick={onMarketReset}>
-              ‹ Total market
+              <Flick size={10} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 5 }} /> Total market
             </button>
             <span className="ray-toolbar-divider" aria-hidden="true" />
           </>
@@ -289,19 +292,22 @@ export default function FeedToolbar({
           </button>
         ))}
 
-        <span className="ray-toolbar-count">
-          {isFiltered ? (
-            <>
-              {shown.toLocaleString()} of {total.toLocaleString()}
-              <button className="ray-toolbar-reset" onClick={() => onChange({ ...FEED_DEFAULTS, sort: filters.sort })}>
-                Clear
-              </button>
-            </>
-          ) : (
-            <>{total.toLocaleString()} lots</>
-          )}
-        </span>
       </div>
+
+      {/* Count + Clear live OUTSIDE the masked scroll row — the fade mask
+          must never dissolve the one control that undoes a filter. */}
+      <span className="ray-toolbar-count">
+        {isFiltered ? (
+          <>
+            {shown.toLocaleString()} of {total.toLocaleString()}
+            <button className="ray-toolbar-reset" onClick={() => onChange({ ...FEED_DEFAULTS, sort: filters.sort })}>
+              Clear
+            </button>
+          </>
+        ) : (
+          <>{total.toLocaleString()} lots</>
+        )}
+      </span>
     </div>
   );
 }

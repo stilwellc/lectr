@@ -358,20 +358,24 @@ export default function RayPage() {
       return !isNaN(d.getTime()) && d >= now && d <= weekAhead;
     }).length;
     const priceOrDash = (n: number) => (n > 0 ? formatPrice(n) : '—');
+    // "across 1 houses" reads like a bug; a 0-count week says so in words.
+    const hammersSub = thisWeek === 0
+      ? 'none scheduled this week'
+      : `across ${liveHouses} ${liveHouses === 1 ? 'house' : 'houses'}`;
     // Estimate-less verticals (sports = Goldin bid sales) have no mid-estimate
     // total and nothing to flag — show real figures instead of a dead "—" / "0".
     if (estValue === 0 && active.length > 0) {
       return [
         { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
         { k: 'On the block', to: active.length, format: asComma, s: 'live lots — bid sales, no estimates' },
-        { k: 'Hammers this week', to: thisWeek, format: asComma, s: `across ${liveHouses} houses` },
+        { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
         { k: 'Live houses', to: liveHouses, format: asComma, s: 'sourcing this market' },
       ];
     }
     return [
       { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
       { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
-      { k: 'Hammers this week', to: thisWeek, format: asComma, s: `across ${liveHouses} houses` },
+      { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
       { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up', lens: true },
     ];
   }, [upcoming, belowIds, totalRealized, topArtist]);
@@ -516,7 +520,11 @@ export default function RayPage() {
                     <ApprBarometer
                       value={appreciation}
                       marketName={marketName}
-                      typical={soldMedian12}
+                      /* bid markets (sports/science) carry no eager sold archive —
+                         fall back to the precomputed recent-slice median so the
+                         dotted-leader row prints a real figure, not a dash */
+                      typical={soldMedian12 ?? recentMedian}
+                      typicalLabel={soldMedian12 == null && recentMedian != null ? 'Typical sale, recent' : undefined}
                       record={recordSale ? { priceUsd: recordSale.priceUsd || 0, maker: ARTIST_LABEL[recordSale.artist] || recordSale.artist } : null}
                     />
                   </div>

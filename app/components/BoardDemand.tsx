@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
 import { AuctionLot } from '../types';
 import { demandSeries, formatDemand } from '../lib/demand';
+import { formatMoneyAxis } from '../utils';
 import CountUp from './CountUp';
 import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
@@ -79,14 +80,13 @@ export interface LedgerItem {
  */
 /** Realized-price formatter for the sports variant. Goldin publishes no
  *  estimates, so the tile shows a $ median (a like-for-like realized level)
- *  — never a % Demand Index. Compact so the numeral reads at display scale. */
+ *  — never a % Demand Index. Thin wrapper over the shared formatMoneyAxis:
+ *  identical from $10K up; below that the tape keeps its one-decimal K
+ *  ($1.5K) so thin cohorts still read at display scale. */
 function formatRealized(n: number): string {
   const v = Math.round(n);
-  const trim = (s: string) => s.replace(/\.0$/, '');
-  if (v >= 1_000_000_000) return `$${trim((v / 1_000_000_000).toFixed(v >= 10_000_000_000 ? 0 : 1))}B`;
-  if (v >= 1_000_000) return `$${trim((v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1))}M`;
-  if (v >= 10_000) return `$${Math.round(v / 1000)}K`;
-  if (v >= 1000) return `$${trim((v / 1000).toFixed(1))}K`;
+  if (v >= 10_000) return formatMoneyAxis(v);
+  if (v >= 1000) return `$${((v / 1000).toFixed(1)).replace(/\.0$/, '')}K`;
   return `$${v.toLocaleString()}`;
 }
 

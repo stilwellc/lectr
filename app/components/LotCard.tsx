@@ -6,6 +6,7 @@ import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg } from '../utils';
 import ComparableModal from './ComparableModal';
+import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
@@ -415,7 +416,7 @@ function LotCard({
               {reminded ? 'Added to calendar' : 'Remind me'}
             </button>
             <span className="ray-lot-comps" aria-hidden="true">
-              Comps <span style={{ fontSize: 12 }}>→</span>
+              Comps <Flick size={10} />
             </span>
           </div>
         )}

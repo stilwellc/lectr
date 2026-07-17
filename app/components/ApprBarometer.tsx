@@ -13,12 +13,13 @@ import { formatPrice } from '../utils';
  * paper band's token flip supplies every color.
  */
 export default function ApprBarometer({
-  value, marketName, typical, record,
+  value, marketName, typical, record, typicalLabel = 'Typical sale, past year',
 }: {
   value: number;                                 // appreciation %, e.g. 21.7
   marketName: string;
   typical: number | null;                        // 12-month median sale
   record: { priceUsd: number; maker: string } | null;
+  typicalLabel?: string;                         // bid markets pass 'Typical sale, recent'
 }) {
   // needle: clamp ±40% → ±80° from vertical; start parked at the low stop
   const clamped = Math.max(-40, Math.min(40, value));
@@ -99,7 +100,7 @@ export default function ApprBarometer({
       {/* printed stat rows with dotted leaders */}
       <div style={{ marginTop: 18, borderTop: '1px solid var(--paper-line)', paddingTop: 4 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '9px 0', fontSize: 13 }}>
-          <span style={{ color: 'var(--paper-muted)' }}>Typical sale, past year</span>
+          <span style={{ color: 'var(--paper-muted)' }}>{typicalLabel}</span>
           <span aria-hidden style={{ flex: 1, borderBottom: '1px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
           <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{typical != null ? formatPrice(typical) : '—'}</span>
         </div>

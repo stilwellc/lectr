@@ -135,6 +135,33 @@ export function httpsImg(u?: string | null): string | undefined {
   return u ? u.replace(/^http:\/\//i, 'https://') : undefined;
 }
 
+/** ONE signed-percent formatter: '+' for gains, a TRUE MINUS (U+2212) for
+ *  losses, no sign at zero — replaces ~10 inline `>= 0 ? '+' : ''` sites that
+ *  printed hyphen-minus and green zeros. */
+export function fmtSignedPct(n: number, digits = 0): string {
+  const r = +n.toFixed(digits);
+  if (r === 0) return `${(0).toFixed(digits)}%`;
+  return `${r > 0 ? '+' : '\u2212'}${Math.abs(r).toFixed(digits)}%`;
+}
+
+/** Direction tone for a signed reading: zero is FLAT (muted), not a gain.
+ *  Use for classNames/colors so a 0% never paints signal-green. */
+export function toneOf(n: number): 'up' | 'down' | 'flat' {
+  return Math.round(n) === 0 ? 'flat' : n > 0 ? 'up' : 'down';
+}
+
+/** Hammer-basis % over estimate for a SOLD lot: realized prices are
+ *  premium-inclusive (~1.25x) while estimates are hammer-basis — divide out
+ *  the premium before comparing, or every figure overstates by ~25pts. */
+export function overEstimatePct(l: { priceUsd?: number | null; hammerUsd?: number | null; estimateLow?: number | null; estimateHigh?: number | null }): number | null {
+  const lo = l.estimateLow || l.estimateHigh || 0;
+  const hi = l.estimateHigh || l.estimateLow || 0;
+  const mid = (lo + hi) / 2;
+  if (!(mid > 0) || !l.priceUsd) return null;
+  const hammer = (l.hammerUsd || 0) > 0 ? l.hammerUsd! : l.priceUsd / 1.25;
+  return (hammer / mid - 1) * 100;
+}
+
 /** ONE money-axis formatter for every chart — rolls to B, trims trailing .0,
  *  so "$1700.0M" and "$4.97B" can never coexist on adjacent panels. */
 export function formatMoneyAxis(n: number): string {

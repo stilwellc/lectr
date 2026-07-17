@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import CommandK from './CommandK';
+import Flick from './Flick';
 import { useAuth } from '../lib/account';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
@@ -429,7 +430,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-maker-sheet-close {
           border: none;
           background: none;
-          color: var(--color-up);
+          color: var(--color-fg);
           font-family: var(--font-sans), sans-serif;
           font-size: 16px;
           font-weight: 600;
@@ -493,7 +494,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           letter-spacing: -0.01em;
           color: var(--color-fg);
         }
-        .ray-maker-navitem[data-active=true] { color: var(--color-up); }
+        .ray-maker-navitem[data-active=true] { color: var(--color-fg); }
         .ray-maker-sheet-sub {
           padding: 18px 20px 4px;
           font-family: var(--font-sans), sans-serif;
@@ -549,12 +550,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         >
           <span>Find a maker</span>
           <span style={{
-            fontSize: 12,
             opacity: 0.4,
             transform: open ? 'rotate(180deg)' : 'rotate(0)',
             transition: 'transform var(--duration-fast) var(--ease-signature)',
           }}>
-            &#9660;
+            <Flick size={10} style={{ transform: 'scaleY(-1)', marginLeft: 0 }} />
           </span>
         </button>
 

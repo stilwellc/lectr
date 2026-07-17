@@ -12,6 +12,7 @@ import { useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
 import { formatEstimate } from './LotCard';
+import Flick from './Flick';
 
 // ── LotValueBlock — the engine's under/over-valued read + the exact-item moment.
 // Reads the build-time `value` stamped on upcoming lots (app/lib/value.ts). Only
@@ -478,6 +479,7 @@ export default function ComparableModal({
     <div
       onClick={onClose}
       role="presentation"
+      className="comp-modal-overlay"
       style={{
         position: 'fixed',
         inset: 0,
@@ -487,9 +489,19 @@ export default function ComparableModal({
         alignItems: 'flex-end',
         justifyContent: 'center',
         padding: 0,
+        fontVariantNumeric: 'tabular-nums',
       }}
     >
       <style>{`
+        @keyframes compModalFade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes compModalRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+        @media (prefers-reduced-motion: no-preference) {
+          .comp-modal-overlay { animation: compModalFade 160ms cubic-bezier(0.22, 0.9, 0.24, 1) both; }
+        }
+        /* desktop only — under 901px the .ray-sheet bottom-sheet entrance owns the motion */
+        @media (min-width: 901px) and (prefers-reduced-motion: no-preference) {
+          .comp-modal-panel { animation: compModalRise 220ms cubic-bezier(0.22, 0.9, 0.24, 1) backwards; }
+        }
         .comp-modal-row:hover { background: var(--color-bg-elevated) !important; }
         .comp-modal-close:hover { color: var(--color-fg) !important; }
         .comp-modal-panel {
@@ -785,7 +797,7 @@ export default function ComparableModal({
                 alignSelf: 'flex-start',
               }}
             >
-              View lot &#8599;
+              View lot <Flick size={10} style={{ marginLeft: 0 }} />
             </a>
           </div>
         </div>

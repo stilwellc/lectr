@@ -16,7 +16,8 @@ import RecordByYear from '../components/RecordByYear';
 import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
-import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle, httpsImg } from '../utils';
+import Flick from '../components/Flick';
+import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle, httpsImg, fmtSignedPct } from '../utils';
 import { FORM_LABEL, signalWithPool } from '../lib/comps';
 
 const ROWS_PAGE = 12;
@@ -249,7 +250,7 @@ export default function ValuePage() {
                       See the comps
                     </button>
                     <a className="ray-call-btn ray-call-btn-quiet" href={call.lot.url} target="_blank" rel="noopener noreferrer">
-                      View lot ↗
+                      View lot <Flick size={10} style={{ marginLeft: 5 }} />
                     </a>
                   </div>
                 </div>
@@ -285,13 +286,13 @@ export default function ValuePage() {
                 <div>
                   <div className="ray-strip-k">Flagged lots hammered</div>
                   <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>
-                    <CountUp to={backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct} format={n => `${n >= 0 ? '+' : ''}${Math.round(n)}%`} duration={1200} />
+                    <CountUp to={backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct} format={n => fmtSignedPct(n)} duration={1200} />
                   </div>
                   <div className="ray-strip-s">median hammer vs estimate · {backtest.flagged.n.toLocaleString()} calls{backtest.flagged.hammerMedianPct != null ? ` · +${backtest.flagged.medianPerfPct}% with premium` : ''}</div>
                 </div>
                 <div>
                   <div className="ray-strip-k">Unflagged hammered</div>
-                  <div className="ray-strip-v"><CountUp to={backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct} format={n => `${n >= 0 ? '+' : ''}${Math.round(n)}%`} duration={1200} /></div>
+                  <div className="ray-strip-v"><CountUp to={backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct} format={n => fmtSignedPct(n)} duration={1200} /></div>
                   <div className="ray-strip-s">the signal&rsquo;s edge: {(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct) - (backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} pts</div>
                 </div>
                 <div>
@@ -313,7 +314,7 @@ export default function ValuePage() {
                   <div>
                     <div className="ray-strip-k">&ldquo;Above market&rdquo; calls</div>
                     <div className="ray-strip-v" style={{ color: 'var(--color-down)' }}>
-                      <CountUp to={backtest.above.hammerMedianPct ?? backtest.above.medianPerfPct} format={n => `${n >= 0 ? '+' : ''}${Math.round(n)}%`} duration={1200} />
+                      <CountUp to={backtest.above.hammerMedianPct ?? backtest.above.medianPerfPct} format={n => fmtSignedPct(n)} duration={1200} />
                     </div>
                     <div className="ray-strip-s">underperformed both — the ordering holds</div>
                   </div>
@@ -330,7 +331,7 @@ export default function ValuePage() {
               <div className="ray-enter" style={{ textAlign: 'center', padding: '40px 20px 100px', color: 'var(--color-text-faint)' }}>
                 <p style={{ fontSize: 14, marginBottom: 20 }}>Check back after the next crawl, or browse everything live.</p>
                 <Link href="/" className="link-action" style={{ color: 'var(--color-fg)' }}>
-                  Browse upcoming lots <span className="arrow">&#8594;</span>
+                  Browse upcoming lots <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
                 </Link>
               </div>
             ) : (
@@ -350,11 +351,20 @@ export default function ValuePage() {
                       onClick={() => setModalLot(d.lot)}
                       aria-label={`${ARTIST_LABEL[d.lot.artist] || d.lot.artist} — see the comps`}
                     >
-                      <span className="ray-value-row-thumb" aria-hidden="true">
-                        {d.lot.imageUrl
-                          ? <img src={httpsImg(d.lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
-                              onError={e => e.currentTarget.remove()} />
-                          : d.lot.title.charAt(0)}
+                      {/* Thumbnail — serif-initial plate always behind, photo overlays;
+                          on a hotlink-block the plate shows through, never a gap */}
+                      <span className="ray-value-row-thumb" aria-hidden="true" style={{
+                        position: 'relative',
+                        background: 'radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent-gold) 8%, transparent), transparent 72%), var(--color-bg-elevated)',
+                      }}>
+                        <span style={{ fontFamily: 'var(--font-serif), serif', fontStyle: 'italic', fontWeight: 300, fontSize: 18, lineHeight: 1, color: 'color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint))' }}>
+                          {(ARTIST_LABEL[d.lot.artist] || d.lot.artist).charAt(0)}
+                        </span>
+                        {d.lot.imageUrl && (
+                          <img src={httpsImg(d.lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={e => e.currentTarget.remove()} />
+                        )}
                       </span>
                       <span style={{ minWidth: 0 }}>
                         <span className="ray-value-row-maker" style={{ display: 'block' }}>

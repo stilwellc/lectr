@@ -9,6 +9,14 @@ import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, c
 import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
 import SectionMark from './SectionMark';
 
+/** Known irregular plurals the naive strip-s would mangle ("wristwatches" →
+ *  "wristwatche"). Checked before the default rule. */
+const SINGULAR: Record<string, string> = {
+  wristwatches: 'wristwatch',
+  benches: 'bench',
+  tables: 'table',
+};
+
 /** For a sports/science object lot, a human sub-label ("game-worn jersey",
  *  "ticket") in place of the raw "Object" category badge. sportsForm covers
  *  the sports slugs; science slugs fall back to the frozen classifyForm form.
@@ -23,6 +31,9 @@ function objectSubLabel(lot: AuctionLot): string | null {
   // "jersey"). Multi-word forms ("tickets & passes", "trophies & awards")
   // stay as-is rather than mangle a compound.
   if (/[ &]/.test(label)) return label;
+  if (SINGULAR[label]) return SINGULAR[label];
+  // an unmapped -ches/-ses plural keeps its plural rather than lose the -e
+  if (label.endsWith('ches') || label.endsWith('ses')) return label;
   return label.endsWith('s') && !label.endsWith('ss') ? label.slice(0, -1) : label;
 }
 
@@ -392,7 +403,14 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     border: ownedIds.includes(lot.id) ? '1px solid var(--color-beige)' : '1px solid var(--color-border)',
                   }}
                 >
-                  {ownedIds.includes(lot.id) ? 'Owned ✓' : 'Own it?'}
+                  {ownedIds.includes(lot.id) ? (
+                    <>
+                      Owned{' '}
+                      <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 1 }}>
+                        <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </svg>
+                    </>
+                  ) : 'Own it?'}
                 </button>
               )}
               {onToggleSave && (
