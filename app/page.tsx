@@ -549,10 +549,18 @@ export default function RayPage() {
           </div>
 
           {/* The market in four figures — the flagged figure IS the lens */}
-          {/* the numbers layer rides the warm band — a visible break between
-              the hero board above and the live feed below */}
-          <div className="ray-band" style={{ marginTop: 30, paddingBlock: '26px 30px' }}>
+          {/* the numbers layer rides the paper band — THE LEDGER LINE, ruled
+              and centered like a catalogue's front-matter table, in the same
+              certificate language as the barometer beside the chart */}
+          <div className="ray-band" style={{ marginTop: 30, paddingBlock: '22px 18px' }}>
           <section className="rail ray-enter" style={{ paddingTop: 0 }}>
+            {/* certificate double rule + title line */}
+            <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
+            <div style={{ borderTop: '1px solid var(--paper-line)', marginBottom: 10 }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 10 }}>
+              <span>The ledger</span>
+              <span style={{ color: 'var(--paper-muted)', fontWeight: 600 }}>{marketName}</span>
+            </div>
             <div className="ray-ledger" style={{ margin: 0 }}>
               {strip.map(item => item.lens && item.to > 0 ? (
                 <button
@@ -560,7 +568,7 @@ export default function RayPage() {
                   type="button"
                   onClick={openBelowLens}
                   aria-label="See flagged lots on the block, biggest gap first"
-                  style={{ background: 'none', border: 'none', padding: 0, margin: 0, textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                  style={{ background: 'none', border: 'none', margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
                 >
                   <div className="ray-ledger-k">{item.k}</div>
                   <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
@@ -573,6 +581,11 @@ export default function RayPage() {
                   <div className="ray-ledger-s">{item.s}</div>
                 </div>
               ))}
+            </div>
+            {/* microtype footer, dated like the barometer's certificate */}
+            <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
+              <span>every estimate, read against every hammer</span>
+              <span>no. {(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}</span>
             </div>
           </section>
           </div>
