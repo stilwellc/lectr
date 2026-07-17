@@ -6,7 +6,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg } from './utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct } from './utils';
 import ArtistNav from './components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from './components/LotCard';
 import { signalMagnitude } from './lib/comps';
@@ -17,6 +17,7 @@ import RayEntrance, { RayLoading } from './components/RayEntrance';
 import CountUp from './components/CountUp';
 import BoardDemand from './components/BoardDemand';
 import ApprBarometer from './components/ApprBarometer';
+import SettlementSlip from './components/SettlementSlip';
 import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
 import { CallPlate, Colophon, daysWord } from './components/Terminal';
@@ -792,65 +793,47 @@ export default function RayPage() {
               ArchiveResults → useSoldArchive() → the 10MB fetch. */}
           {isSportsScience ? (
             recentRows.length > 0 && (
-              <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
-                <div className="ray-results-row">
-                  <span>
-                    {(meta.totalSold ?? recentRows.length).toLocaleString()} sold lots
-                    {recentMedian !== null && (
-                      <> · recent median <b>{formatPrice(recentMedian)}</b> realized</>
-                    )}
-                    {recentLatest && <> · latest {formatDate(recentLatest)}</>}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowArchive(s => !s)}
-                    style={{
-                      background: 'none', border: '1px solid var(--color-border)', borderRadius: 100,
-                      padding: '7px 18px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
-                      color: 'var(--color-text-muted)', fontWeight: 600, cursor: 'pointer',
-                      fontFamily: 'var(--font-sans), sans-serif',
-                    }}
-                  >
-                    {showArchive ? 'Hide the archive' : 'Show the archive'}
-                  </button>
-                </div>
-                {/* mounting ArchiveResults is what fetches the archive — never before */}
+              <div className="ray-enter" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
+                <SettlementSlip
+                  marketName={marketName}
+                  serial={(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}
+                  archiveOpen={showArchive}
+                  onToggleArchive={() => setShowArchive(s => !s)}
+                  lines={[
+                    { k: 'Sold lots on the book', v: (meta.totalSold ?? recentRows.length).toLocaleString() },
+                    ...(recentMedian !== null ? [{ k: 'Recent median, realized', v: formatPrice(recentMedian) }] : []),
+                    ...(recentLatest ? [{ k: 'Latest hammer', v: formatDate(recentLatest) }] : []),
+                  ]}
+                />
+                {/* the archive is a dark table — it renders BELOW the paper, never on it */}
                 {showArchive && (
-                  <ArchiveResults mktSet={mktSet} savedIds={savedIds} onToggleSave={toggle} />
+                  <section className="rail" style={{ paddingBlock: '8px 40px' }}>
+                    <ArchiveResults mktSet={mktSet} savedIds={savedIds} onToggleSave={toggle} />
+                  </section>
                 )}
-              </section>
+              </div>
             )
           ) : sold.length > 0 && (activeKey === 'all' ? (
-            <section className="rail ray-enter" style={{ paddingBlock: '8px 40px', '--enter-delay': '180ms' } as React.CSSProperties}>
-              <div className="ray-results-row">
-                <span>
-                  {sold.length.toLocaleString()} sold lots
-                  {soldMedianPct !== null && (
-                    <> · median <b className={soldMedianPct >= 0 ? 'up' : 'down'}>
-                      {soldMedianPct >= 0 ? '+' : '−'}{Math.abs(Math.round(soldMedianPct))}%
-                    </b> vs estimate</>
-                  )}
-                  {sold[0].saleDate && <> · latest {formatDate(sold[0].saleDate)}</>}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowArchive(s => !s)}
-                  style={{
-                    background: 'none', border: '1px solid var(--color-border)', borderRadius: 100,
-                    padding: '7px 18px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: 'var(--color-text-muted)', fontWeight: 600, cursor: 'pointer',
-                    fontFamily: 'var(--font-sans), sans-serif',
-                  }}
-                >
-                  {showArchive ? 'Hide the archive' : 'Show the archive'}
-                </button>
-              </div>
+            <div className="ray-enter" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
+              <SettlementSlip
+                marketName={marketName}
+                serial={(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}
+                archiveOpen={showArchive}
+                onToggleArchive={() => setShowArchive(s => !s)}
+                lines={[
+                  { k: 'Sold lots on the book', v: sold.length.toLocaleString() },
+                  ...(soldMedianPct !== null ? [{ k: 'Median hammer vs estimate', v: fmtSignedPct(soldMedianPct), signed: soldMedianPct }] : []),
+                  ...(sold[0].saleDate ? [{ k: 'Latest hammer', v: formatDate(sold[0].saleDate) }] : []),
+                ]}
+              />
               {showArchive && (
-                <div className="ray-recordband" style={{ marginTop: 24 }}>
-                  <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
-                </div>
+                <section className="rail" style={{ paddingBlock: '8px 40px' }}>
+                  <div className="ray-recordband" style={{ marginTop: 0 }}>
+                    <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
+                  </div>
+                </section>
               )}
-            </section>
+            </div>
           ) : (
             <div className="ray-recordband ray-enter" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
               <div className="rail">
