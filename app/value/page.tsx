@@ -15,7 +15,7 @@ import ComparableModal, { PriceBand } from '../components/ComparableModal';
 import RecordByYear from '../components/RecordByYear';
 import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import CountUp from '../components/CountUp';
+import RecordBand from '../components/RecordBand';
 import Flick from '../components/Flick';
 import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle, httpsImg, fmtSignedPct } from '../utils';
 import { FORM_LABEL, signalWithPool } from '../lib/comps';
@@ -271,55 +271,48 @@ export default function ValuePage() {
           {backtest && backtest.flagged.n >= 100 && (
             <div className="ray-band" style={{ marginTop: 34, paddingBlock: '28px 34px' }}>
             <section className="rail ray-enter" style={{ '--enter-delay': '90ms', paddingTop: 0 } as React.CSSProperties}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
-                <h2 className="ray-h2">The record</h2>
-                <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
-                  every historical call replayed with only the data lectr had that day
-                </span>
-              </div>
               {/* HAMMER BASIS leads — estimates are hammer-basis while realized
                   prices include the buyer's premium (~25%), so the hammer read
                   is the honest "beat the estimate" test. The all-in figure stays
                   as context. Falls back to all-in when an old cached backtest.json
                   lacks the hammer fields. */}
-              <div className="ray-strip">
-                <div>
-                  <div className="ray-strip-k">Flagged lots hammered</div>
-                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>
-                    <CountUp to={backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct} format={n => fmtSignedPct(n)} duration={1200} />
-                  </div>
-                  <div className="ray-strip-s">median hammer vs estimate · {backtest.flagged.n.toLocaleString()} calls{backtest.flagged.hammerMedianPct != null ? ` · +${backtest.flagged.medianPerfPct}% with premium` : ''}</div>
-                </div>
-                <div>
-                  <div className="ray-strip-k">Unflagged hammered</div>
-                  <div className="ray-strip-v"><CountUp to={backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct} format={n => fmtSignedPct(n)} duration={1200} /></div>
-                  <div className="ray-strip-s">the signal&rsquo;s edge: {(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct) - (backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} pts</div>
-                </div>
-                <div>
-                  <div className="ray-strip-k">Beat their high estimate</div>
-                  <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>
-                    <CountUp to={backtest.flagged.hammerBeatPct ?? backtest.flagged.beatHighPct} format={n => `${Math.round(n)}%`} duration={1200} />
-                  </div>
-                  <div className="ray-strip-s">at the hammer · vs {backtest.unflagged.hammerBeatPct ?? backtest.unflagged.beatHighPct}% unflagged</div>
-                </div>
-                {backtest.flagged.failToSellPct != null && backtest.above.failToSellPct != null ? (
-                  <div>
-                    <div className="ray-strip-k">Failed to sell</div>
-                    <div className="ray-strip-v" style={{ color: 'var(--color-up)' }}>
-                      <CountUp to={backtest.flagged.failToSellPct} format={n => `${n.toFixed(1)}%`} duration={1200} />
-                    </div>
-                    <div className="ray-strip-s">of flagged lots · vs {backtest.above.failToSellPct}% of &ldquo;above market&rdquo;</div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="ray-strip-k">&ldquo;Above market&rdquo; calls</div>
-                    <div className="ray-strip-v" style={{ color: 'var(--color-down)' }}>
-                      <CountUp to={backtest.above.hammerMedianPct ?? backtest.above.medianPerfPct} format={n => fmtSignedPct(n)} duration={1200} />
-                    </div>
-                    <div className="ray-strip-s">underperformed both — the ordering holds</div>
-                  </div>
-                )}
-              </div>
+              <RecordBand
+                title="The record"
+                context="every call replayed against history"
+                serial={(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}
+                footer="hammer basis · refit nightly from the full replay"
+                cells={[
+                  {
+                    k: 'Flagged lots hammered',
+                    v: fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct),
+                    signed: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct,
+                    sub: `median hammer vs estimate · ${backtest.flagged.n.toLocaleString()} calls${backtest.flagged.hammerMedianPct != null ? ` · +${backtest.flagged.medianPerfPct}% with premium` : ''}`,
+                  },
+                  {
+                    k: 'Unflagged hammered',
+                    v: fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct),
+                    signed: backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct,
+                    sub: <>the signal&rsquo;s edge: {(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct) - (backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} pts</>,
+                  },
+                  {
+                    k: 'Beat their high estimate',
+                    v: `${Math.round(backtest.flagged.hammerBeatPct ?? backtest.flagged.beatHighPct)}%`,
+                    sub: `at the hammer · vs ${backtest.unflagged.hammerBeatPct ?? backtest.unflagged.beatHighPct}% unflagged`,
+                  },
+                  backtest.flagged.failToSellPct != null && backtest.above.failToSellPct != null
+                    ? {
+                        k: 'Failed to sell',
+                        v: `${backtest.flagged.failToSellPct.toFixed(1)}%`,
+                        sub: <>of flagged lots · vs {backtest.above.failToSellPct}% of &ldquo;above market&rdquo;</>,
+                      }
+                    : {
+                        k: '“Above market” calls',
+                        v: fmtSignedPct(backtest.above.hammerMedianPct ?? backtest.above.medianPerfPct),
+                        signed: backtest.above.hammerMedianPct ?? backtest.above.medianPerfPct,
+                        sub: 'underperformed both — the ordering holds',
+                      },
+                ]}
+              />
             </section>
             </div>
           )}

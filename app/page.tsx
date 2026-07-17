@@ -512,26 +512,22 @@ export default function RayPage() {
                 )}
               </div>
               {hasAppr ? (
-                /* Desktop: the Appreciation stat sits to the right of the graph.
-                   Mobile: the same element collapses under the chart as a gray
-                   banner ("<market> has an appreciation of X%"). */
+                /* Desktop: the Appreciation instrument sits to the right of the
+                   graph. Mobile: the same component shows its landscape POCKET
+                   BAROMETER face under the chart — the barometer's internal
+                   media classes pick the face, the aside just supplies paper. */
                 <aside className="ray-appr ray-paper" aria-label={`${marketName} appreciation`}>
-                  <div className="ray-appr-stat" style={{ width: '100%' }}>
-                    {/* the printed instrument card — an ink barometer on the paper */}
-                    <ApprBarometer
-                      value={appreciation}
-                      marketName={marketName}
-                      /* bid markets (sports/science) carry no eager sold archive —
-                         fall back to the precomputed recent-slice median so the
-                         dotted-leader row prints a real figure, not a dash */
-                      typical={soldMedian12 ?? recentMedian}
-                      typicalLabel={soldMedian12 == null && recentMedian != null ? 'Typical sale, recent' : undefined}
-                      record={recordSale ? { priceUsd: recordSale.priceUsd || 0, maker: ARTIST_LABEL[recordSale.artist] || recordSale.artist } : null}
-                    />
-                  </div>
-                  <div className="ray-appr-banner">
-                    <span><b>{marketName}</b> has an appreciation of <b className={apprTone}>{apprValue}</b></span>
-                  </div>
+                  {/* the printed instrument card — an ink barometer on the paper */}
+                  <ApprBarometer
+                    value={appreciation}
+                    marketName={marketName}
+                    /* bid markets (sports/science) carry no eager sold archive —
+                       fall back to the precomputed recent-slice median so the
+                       dotted-leader row prints a real figure, not a dash */
+                    typical={soldMedian12 ?? recentMedian}
+                    typicalLabel={soldMedian12 == null && recentMedian != null ? 'Typical sale, recent' : undefined}
+                    record={recordSale ? { priceUsd: recordSale.priceUsd || 0, maker: ARTIST_LABEL[recordSale.artist] || recordSale.artist } : null}
+                  />
                 </aside>
               ) : (
                 <aside aria-label="Today's call and your watchlist" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>

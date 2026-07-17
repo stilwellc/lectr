@@ -6,6 +6,7 @@ import { AuctionLot, MarketStats } from '../types';
 import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
+import RecordBand from './RecordBand';
 import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
@@ -264,39 +265,44 @@ export default function ArtistHero({
         </>
       )}
 
-      <div className="ray-strip">
-        <div>
-          <div className="ray-strip-k">Record sale</div>
-          <div className="ray-strip-v">
-            {stats?.recordPrice ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1200} /> : '—'}
-          </div>
-          <div className="ray-strip-s">
-            {stats?.recordTitle
-              ? `${stats.recordTitle.length > 34 ? stats.recordTitle.slice(0, 32) + '…' : stats.recordTitle}${recordYear ? `, ${recordYear}` : ''}`
-              : 'no concluded sales yet'}
-          </div>
-        </div>
-        <div>
-          <div className="ray-strip-k">Sell-through</div>
-          <div className="ray-strip-v">
-            {facts.sellThrough !== null ? <CountUp to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—'}
-          </div>
-          <div className="ray-strip-s">of concluded lots found buyers</div>
-        </div>
-        <div>
-          <div className="ray-strip-k">Lots tracked</div>
-          <div className="ray-strip-v"><CountUp to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} /></div>
-          <div className="ray-strip-s">
-            {liveCount > 0
-              ? <a href="#upcoming" style={{ color: 'inherit', textDecorationColor: 'var(--color-border-mid)', textUnderlineOffset: 3 }}>{liveCount} live right now</a>
-              : `${liveCount} live right now`}
-          </div>
-        </div>
-        <div>
-          <div className="ray-strip-k">Auction houses</div>
-          <div className="ray-strip-v"><CountUp to={facts.houses} format={n => `${Math.round(n)}`} duration={1200} /></div>
-          <div className="ray-strip-s">selling this artist</div>
-        </div>
+      {/* the maker's record as a printed certificate CARD — the hero sits
+          inside .rail, so the paper can't run full-bleed here; .ray-paper
+          flips the tokens and the drawn border stands in for the band rule */}
+      <div
+        className="ray-paper"
+        style={{ marginTop: 28, border: '1px solid rgba(25, 22, 18, 0.25)', borderRadius: 12, padding: '18px 20px 12px' }}
+      >
+        <RecordBand
+          title={'The maker’s record'}
+          context={label}
+          footer="read nightly from the tape"
+          cells={[
+            {
+              k: 'Record sale',
+              v: stats?.recordPrice ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1200} /> : '—',
+              sub: stats?.recordTitle
+                ? `${stats.recordTitle.length > 34 ? stats.recordTitle.slice(0, 32) + '…' : stats.recordTitle}${recordYear ? `, ${recordYear}` : ''}`
+                : 'no concluded sales yet',
+            },
+            {
+              k: 'Sell-through',
+              v: facts.sellThrough !== null ? <CountUp to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—',
+              sub: 'of concluded lots found buyers',
+            },
+            {
+              k: 'Lots tracked',
+              v: <CountUp to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+              sub: liveCount > 0
+                ? <a href="#upcoming" style={{ color: 'inherit', textUnderlineOffset: 3 }}>{liveCount} live right now</a>
+                : `${liveCount} live right now`,
+            },
+            {
+              k: 'Auction houses',
+              v: <CountUp to={facts.houses} format={n => `${Math.round(n)}`} duration={1200} />,
+              sub: 'selling this maker',
+            },
+          ]}
+        />
       </div>
     </section>
   );
