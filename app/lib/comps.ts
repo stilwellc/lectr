@@ -420,7 +420,19 @@ function median(sorted: number[]): number {
  * the number (card sentence, Today's Call band, comps modal) must render this
  * same pool and this same median — one lot, one statistic, no second math.
  */
-export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal: DeepSignal; pool: AuctionLot[] } | null {
+interface CompRead {
+  pool: AuctionLot[];
+  med: number;
+  kind: 'edition' | 'form';
+  form: Form;
+  confidence: DeepSignal['confidence'];
+  estMid: number;
+}
+
+/** The shared comp-pool read: same pools, same guards, same confidence as the
+ *  card signal — but it returns the MEDIAN unconditionally, so an appraisal
+ *  exists even when the lot sits between the signal thresholds. */
+function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   const est = estUsdBand(lot);
   if (!est.low || !est.high) return null;
   const form = formOf(lot);
@@ -500,6 +512,13 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
     : pool.length >= 6 && spread <= 1.8 ? 'medium'
     : 'low';
 
+  return { pool, med, kind, form, confidence, estMid };
+}
+
+export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal: DeepSignal; pool: AuctionLot[] } | null {
+  const read = compPoolRead(lot, allLots);
+  if (!read) return null;
+  const { pool, med, kind, form, confidence, estMid } = read;
   const ratio = med / estMid;
   // 1.3 threshold (raised from 1.2): sold prices are premium-inclusive (~1.25×
   // hammer) while estimates are hammer-basis, so a pool trading exactly AT its
@@ -508,6 +527,16 @@ export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal
   if (ratio >= 1.3) return { signal: { label: 'Below Market', pct: Math.round((ratio - 1) * 100), basis: pool.length, med, kind, form, confidence }, pool };
   if (ratio <= 0.75) return { signal: { label: 'Above Market', pct: Math.round((1 - ratio) * 100), basis: pool.length, med, kind, form, confidence }, pool };
   return null;
+}
+
+/** lectr's APPRAISAL of a lot — the median its comparable pool currently
+ *  trades at, through the exact same pools/guards as the card signal, but
+ *  returned unconditionally (a lot trading in line with its comps still has a
+ *  value). Estimate-less sports/science lots should go through soldCompBand
+ *  instead; callers fall back accordingly. */
+export function appraiseLot(lot: AuctionLot, allLots: AuctionLot[]): { value: number; n: number; kind: 'edition' | 'form'; confidence: DeepSignal['confidence'] } | null {
+  const read = compPoolRead(lot, allLots);
+  return read ? { value: read.med, n: read.pool.length, kind: read.kind, confidence: read.confidence } : null;
 }
 
 /** The magnitude token shown on a signal. A below-market gap of, say, +888%

@@ -8,7 +8,7 @@ import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import LotCard, { lotSignal } from '../components/LotCard';
-import { computeDeepSignal } from '../lib/comps';
+import { appraiseLot, soldCompBand, isSportsScienceObject } from '../lib/comps';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
@@ -112,23 +112,29 @@ export default function SavedPage() {
     [savedLots]
   );
 
-  // YOUR COLLECTION — saved past lots the user marked as owned, carried at an
-  // assumed value: the current comp median when the engine has a clear read,
-  // else what the lot hammered for (the honest fallback).
+  // YOUR COLLECTION — saved past lots the user marked as owned. Each piece
+  // carries TWO figures: the BOUGHT price (what it realized on the block) and
+  // lectr's APPRAISAL — the median its comparable pool currently trades at
+  // (same pools and guards as the card signal, returned unconditionally);
+  // estimate-less sports/science pieces appraise off the realized comp band.
   const collection = useMemo(() => {
     const ownedSet = new Set(ownedIds);
     const rows = savedLots
       .filter(l => ownedSet.has(l.id))
       .map(l => {
         const paid = l.priceUsd || null;
-        const sig = computeDeepSignal(l, allLots);
-        const assumed = (sig && sig.med) || paid;
-        return { lot: l, paid, assumed, marked: !!(sig && sig.med) };
+        const appr = appraiseLot(l, allLots);
+        const band = !appr && isSportsScienceObject(l) ? soldCompBand(l, allLots) : null;
+        const appraised = appr?.value ?? band?.median ?? null;
+        const basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
+        const deltaPct = paid && appraised ? Math.round((appraised / paid - 1) * 100) : null;
+        return { lot: l, paid, appraised, basis, deltaPct };
       })
-      .sort((a, b) => (b.assumed || 0) - (a.assumed || 0));
+      .sort((a, b) => (b.appraised ?? b.paid ?? 0) - (a.appraised ?? a.paid ?? 0));
     const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
-    const totalAssumed = rows.reduce((s, r) => s + (r.assumed || 0), 0);
-    return { rows, totalPaid, totalAssumed };
+    // the collection total carries un-appraisable pieces at their bought price
+    const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
+    return { rows, totalPaid, totalAppraised };
   }, [savedLots, ownedIds, allLots]);
 
   const summary = useMemo(() => {
@@ -336,21 +342,29 @@ export default function SavedPage() {
             /* the collection rides the paper banner — pure type + numerals */
             <div className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
               <section className="rail" aria-label="Your collection">
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 6 }}>
                   <h2 className="ray-h2" style={{ margin: 0 }}>Your collection</h2>
                   <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · assumed value{' '}
-                    <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAssumed)}</b>
-                    {collection.totalPaid > 0 && collection.totalAssumed !== collection.totalPaid && (
-                      <>
-                        {' '}· {collection.totalAssumed >= collection.totalPaid ? '+' : '−'}
-                        {Math.abs(Math.round((collection.totalAssumed / collection.totalPaid - 1) * 100))}% vs what they hammered for
-                      </>
+                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · bought{' '}
+                    <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalPaid)}</b>
+                    {' '}· lectr appraisal{' '}
+                    <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAppraised)}</b>
+                    {collection.totalPaid > 0 && collection.totalAppraised !== collection.totalPaid && (
+                      <b style={{ color: collection.totalAppraised >= collection.totalPaid ? 'var(--color-up)' : 'var(--color-down)', fontVariantNumeric: 'tabular-nums' }}>
+                        {' '}· {collection.totalAppraised >= collection.totalPaid ? '+' : '−'}
+                        {Math.abs(Math.round((collection.totalAppraised / collection.totalPaid - 1) * 100))}%
+                      </b>
                     )}
                   </span>
                 </div>
+                {/* column heads */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '8px 0 6px', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+                  <div style={{ flex: 1 }}>Piece</div>
+                  <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
+                  <div style={{ width: 118, textAlign: 'right' }}>lectr appraisal</div>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {collection.rows.map(({ lot, paid, assumed, marked }) => (
+                  {collection.rows.map(({ lot, paid, appraised, basis, deltaPct }) => (
                     <div key={lot.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0', borderTop: '1px solid var(--hairline)' }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
@@ -358,17 +372,25 @@ export default function SavedPage() {
                           {ARTIST_LABEL[lot.artist] || lot.artist} · {lot.auctionHouse}{lot.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{assumed != null ? formatPrice(assumed) : '—'}</div>
-                        <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-                          {marked ? 'marked to comps' : 'at the hammer'}{paid != null && marked && paid !== assumed ? ` · paid ${formatPrice(paid)}` : ''}
+                      <div style={{ width: 92, textAlign: 'right', flexShrink: 0, fontSize: 14.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {paid != null ? formatPrice(paid) : '—'}
+                      </div>
+                      <div style={{ width: 118, textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                          {appraised != null ? formatPrice(appraised) : '—'}
+                          {deltaPct != null && deltaPct !== 0 && (
+                            <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down)' }}>
+                              {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
+                            </span>
+                          )}
                         </div>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{basis ?? 'no comps yet'}</div>
                       </div>
                     </div>
                   ))}
                 </div>
                 <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
-                  Assumed values are lectr&rsquo;s read, not appraisals — current comparable-sale medians where the engine has a clear one, otherwise the realized price.
+                  The lectr appraisal is the median its comparable sales currently trade at — our read from the data, not a formal appraisal. Pieces without a usable comp pool carry at their bought price in the total.
                 </p>
               </section>
             </div>
