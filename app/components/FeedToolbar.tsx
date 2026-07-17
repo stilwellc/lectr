@@ -19,6 +19,8 @@ export interface FeedFilters {
   category: string | null;
   belowOnly: boolean;
   sort: FeedSort;
+  /** the Hammer Week strip's lens: one hammer day (YYYY-MM-DD) */
+  saleDay?: string | null;
 }
 
 export const FEED_DEFAULTS: FeedFilters = {
@@ -29,6 +31,7 @@ export const FEED_DEFAULTS: FeedFilters = {
   category: null,
   belowOnly: false,
   sort: 'soonest',
+  saleDay: null,
 };
 
 /**
@@ -140,7 +143,7 @@ export default function FeedToolbar({
 
   const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch });
   const isFiltered =
-    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly;
+    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null;
 
   // Chrome earns its keep: a single-page feed (watches' 21 lots) doesn't
   // need sort pills or a view toggle — search + the below-market lens only.

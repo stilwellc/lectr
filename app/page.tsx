@@ -20,6 +20,7 @@ import ApprBarometer from './components/ApprBarometer';
 import SettlementSlip from './components/SettlementSlip';
 import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
+import HammerWeek from './components/HammerWeek';
 import { CallPlate, Colophon, daysWord } from './components/Terminal';
 import Flick from './components/Flick';
 import Greeting from './components/Greeting';
@@ -184,9 +185,9 @@ export default function RayPage() {
   // query, sort and the below-market lens travel with the reader.
   useEffect(() => {
     setFeedFilters(f =>
-      f.vertical === null && f.maker === null && f.sport === null && f.category === null
+      f.vertical === null && f.maker === null && f.sport === null && f.category === null && f.saleDay == null
         ? f
-        : { ...f, vertical: null, maker: null, sport: null, category: null }
+        : { ...f, vertical: null, maker: null, sport: null, category: null, saleDay: null }
     );
   }, [activeKey]);
 
@@ -229,6 +230,7 @@ export default function RayPage() {
     if (f.maker) arr = arr.filter(l => l.artist === f.maker);
     if (f.sport) arr = arr.filter(l => (sportOf(l.title) || 'Other') === f.sport);
     if (f.category) arr = arr.filter(l => l.category === f.category);
+    if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
     if (q) {
       arr = arr.filter(l =>
@@ -248,7 +250,7 @@ export default function RayPage() {
       // firstSeen is crawl-stamped and may be absent on older data — unseen sinks
       const seen = (l: AuctionLot) => l.firstSeen || '';
       arr = [...arr].sort((a, b) => (seen(a) < seen(b) ? 1 : seen(a) > seen(b) ? -1 : 0));
-    } else if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly) {
+    } else if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
       // the default view ('soonest', no lenses) gets the maker diversity cap
       arr = diversifyFeed(arr, pageSize);
     }
@@ -260,10 +262,17 @@ export default function RayPage() {
   // character — keyed reconciliation by lot.id handles search narrowing.
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}`;
+    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     setFeedFilters(next);
+    setVisibleUpcoming(pageSize);
+  };
+
+  // THE HAMMER WEEK's lens — click a day, see that day's hammers; click the
+  // active day (or the toolbar's Clear) and the calendar view returns.
+  const handleSaleDay = (day: string | null) => {
+    setFeedFilters(f => ({ ...f, saleDay: day }));
     setVisibleUpcoming(pageSize);
   };
 
@@ -629,6 +638,15 @@ export default function RayPage() {
                 view={feedView}
                 onViewChange={handleView}
                 pageSize={pageSize}
+              />
+
+              {/* THE HAMMER WEEK — the "hammers this week" count, given a
+                  shape: a ruled seven-day strip. Self-gates: renders nothing
+                  when no lot hammers inside the current Mon–Sun week. */}
+              <HammerWeek
+                lots={upcoming}
+                activeDay={feedFilters.saleDay}
+                onSelectDay={handleSaleDay}
               />
 
               {feedView === 'table' && feed.length > 0 ? (
