@@ -9,6 +9,6 @@ import { useAccount, type SavedMeta } from '../lib/account';
 export type { SavedMeta };
 
 export function useSavedLots() {
-  const { savedIds, savedMeta, toggle, isSaved } = useAccount();
-  return { savedIds, savedMeta, toggle, isSaved };
+  const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useAccount();
+  return { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned };
 }

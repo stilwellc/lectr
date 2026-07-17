@@ -21,6 +21,8 @@ export interface SavedMeta {
   estMid: number | null;
   signalPct: number | null;
   bidCount: number | null;
+  /** the user marked this past lot as one they OWN — it joins their collection */
+  owned?: boolean;
 }
 interface SavedEntry extends SavedMeta { id: string; }
 
@@ -33,6 +35,7 @@ function entryFromLot(id: string, lot?: AuctionLot): SavedEntry {
     estMid: lo || hi ? (lo + hi) / 2 : null,
     signalPct: lot?.signal?.pct ?? null,
     bidCount: lot?.bidCount ?? null,
+    owned: false,
   };
 }
 
@@ -55,6 +58,7 @@ function readStored(): SavedEntry[] {
         estMid: typeof e.estMid === 'number' ? e.estMid : null,
         signalPct: typeof e.signalPct === 'number' ? e.signalPct : null,
         bidCount: typeof e.bidCount === 'number' ? e.bidCount : null,
+        owned: e.owned === true,
       });
     }
     return entries;
@@ -70,10 +74,11 @@ function rowToEntry(r: Record<string, unknown>): SavedEntry {
     estMid: (r.est_mid as number) ?? null,
     signalPct: (r.signal_pct as number) ?? null,
     bidCount: (r.bid_count as number) ?? null,
+    owned: r.owned === true,
   };
 }
 function entryToRow(userId: string, e: SavedEntry) {
-  return { user_id: userId, lot_id: e.id, saved_at: e.savedAt, est_mid: e.estMid, signal_pct: e.signalPct, bid_count: e.bidCount };
+  return { user_id: userId, lot_id: e.id, saved_at: e.savedAt, est_mid: e.estMid, signal_pct: e.signalPct, bid_count: e.bidCount, owned: e.owned ?? false };
 }
 
 interface AccountValue {
@@ -88,6 +93,9 @@ interface AccountValue {
   savedMeta: Record<string, SavedMeta>;
   isSaved: (id: string) => boolean;
   toggle: (id: string, lot?: AuctionLot) => void;
+  /** ids of saved lots the user marked as OWNED (their collection) */
+  ownedIds: string[];
+  toggleOwned: (id: string) => void;
   // login UI
   loginOpen: boolean;
   openLogin: () => void;
@@ -223,10 +231,34 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const savedIds = useMemo(() => entries.map(e => e.id), [entries]);
   const savedMeta = useMemo<Record<string, SavedMeta>>(() => {
     const out: Record<string, SavedMeta> = {};
-    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount };
+    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned };
     return out;
   }, [entries]);
   const isSaved = useCallback((id: string) => entries.some(e => e.id === id), [entries]);
+  const ownedIds = useMemo(() => entries.filter(e => e.owned).map(e => e.id), [entries]);
+
+  // Mark/unmark a saved past lot as OWNED — optimistic, rolled back on a
+  // failed write, mirrored to localStorage in no-auth mode.
+  const toggleOwned = useCallback((lotId: string) => {
+    const cur = entriesRef.current.find(e => e.id === lotId);
+    if (!cur) return;
+    const next = !cur.owned;
+    setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, owned: next } : e)));
+    if (!supabase) {
+      const updated = entriesRef.current.map(e => (e.id === lotId ? { ...e, owned: next } : e));
+      writeStored(updated);
+      return;
+    }
+    if (!user) return; // entries only exist when signed in under auth mode
+    supabase.from('saved_lots').update({ owned: next }).eq('user_id', user.id).eq('lot_id', lotId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[account] toggleOwned failed:', error.message);
+          setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, owned: !next } : e)));
+          flash("Couldn't update your collection — try again.");
+        }
+      });
+  }, [user, flash]);
 
   // Return the user to the page they were ON (not always /saved) so a save
   // started from the home feed or an artist page lands them back in context.
@@ -246,7 +278,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const value: AccountValue = {
     authEnabled, user, authReady,
     signInWithEmail, signInWithGoogle, signOut,
-    savedIds, savedMeta, isSaved, toggle,
+    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned,
     loginOpen, openLogin: () => setLoginOpen(true), closeLogin: () => setLoginOpen(false),
   };
 

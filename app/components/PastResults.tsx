@@ -36,11 +36,14 @@ interface Props {
   onCategoryChange?: (cat: CategoryFilter) => void;
   savedIds?: string[];
   onToggleSave?: (lotId: string, lot?: AuctionLot) => void;
+  /** collection mode (the authed /saved view only): mark past lots as OWNED */
+  ownedIds?: string[];
+  onToggleOwned?: (lotId: string) => void;
   /** ghost ordinal behind the h2 band (headers only) */
   mark?: string;
 }
 
-export default function PastResults({ lots, showArtist = false, categoryFilter: externalFilter, onCategoryChange, savedIds = [], onToggleSave, mark }: Props) {
+export default function PastResults({ lots, showArtist = false, categoryFilter: externalFilter, onCategoryChange, savedIds = [], onToggleSave, ownedIds = [], onToggleOwned, mark }: Props) {
   const [visible, setVisible] = useState(20);
   const [sortBy, setSortBy] = useState<SortMode>('date');
   const [internalFilter, setInternalFilter] = useState<CategoryFilter>('all');
@@ -375,6 +378,23 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 </span>
               </div>
 
+              {onToggleOwned && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleOwned(lot.id); }}
+                  aria-pressed={ownedIds.includes(lot.id)}
+                  aria-label={ownedIds.includes(lot.id) ? 'Remove from your collection' : 'Mark as owned'}
+                  style={{
+                    flexShrink: 0, position: 'relative', zIndex: 2, cursor: 'pointer',
+                    fontFamily: 'var(--font-sans), sans-serif', fontSize: 11.5, fontWeight: 600,
+                    padding: '5px 12px', borderRadius: 100, whiteSpace: 'nowrap',
+                    background: ownedIds.includes(lot.id) ? 'var(--color-beige)' : 'transparent',
+                    color: ownedIds.includes(lot.id) ? '#191612' : 'var(--color-text-muted)',
+                    border: ownedIds.includes(lot.id) ? '1px solid var(--color-beige)' : '1px solid var(--color-border)',
+                  }}
+                >
+                  {ownedIds.includes(lot.id) ? 'Owned ✓' : 'Own it?'}
+                </button>
+              )}
               {onToggleSave && (
                 <button
                   className="ray-save-btn"

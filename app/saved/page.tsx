@@ -8,10 +8,12 @@ import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import LotCard, { lotSignal } from '../components/LotCard';
+import { computeDeepSignal } from '../lib/comps';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
-import { getUpcomingCounts, formatPrice, formatDate } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle } from '../utils';
+import { ARTIST_LABEL } from '../constants';
 
 function daysUntil(dateStr: string): number {
   const t = new Date(dateStr).getTime();
@@ -64,7 +66,7 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
  */
 export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
-  const { savedIds, savedMeta, toggle, isSaved } = useSavedLots();
+  const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
   const { authEnabled, user, authReady, openLogin } = useAuth();
 
   const savedLots = useMemo(() =>
@@ -109,6 +111,25 @@ export default function SavedPage() {
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
     [savedLots]
   );
+
+  // YOUR COLLECTION — saved past lots the user marked as owned, carried at an
+  // assumed value: the current comp median when the engine has a clear read,
+  // else what the lot hammered for (the honest fallback).
+  const collection = useMemo(() => {
+    const ownedSet = new Set(ownedIds);
+    const rows = savedLots
+      .filter(l => ownedSet.has(l.id))
+      .map(l => {
+        const paid = l.priceUsd || null;
+        const sig = computeDeepSignal(l, allLots);
+        const assumed = (sig && sig.med) || paid;
+        return { lot: l, paid, assumed, marked: !!(sig && sig.med) };
+      })
+      .sort((a, b) => (b.assumed || 0) - (a.assumed || 0));
+    const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
+    const totalAssumed = rows.reduce((s, r) => s + (r.assumed || 0), 0);
+    return { rows, totalPaid, totalAssumed };
+  }, [savedLots, ownedIds, allLots]);
 
   const summary = useMemo(() => {
     const withEst = upcoming.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
@@ -311,6 +332,48 @@ export default function SavedPage() {
             </section>
           )}
 
+          {collection.rows.length > 0 && (
+            /* the collection rides the paper banner — pure type + numerals */
+            <div className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
+              <section className="rail" aria-label="Your collection">
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 16 }}>
+                  <h2 className="ray-h2" style={{ margin: 0 }}>Your collection</h2>
+                  <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · assumed value{' '}
+                    <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAssumed)}</b>
+                    {collection.totalPaid > 0 && collection.totalAssumed !== collection.totalPaid && (
+                      <>
+                        {' '}· {collection.totalAssumed >= collection.totalPaid ? '+' : '−'}
+                        {Math.abs(Math.round((collection.totalAssumed / collection.totalPaid - 1) * 100))}% vs what they hammered for
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {collection.rows.map(({ lot, paid, assumed, marked }) => (
+                    <div key={lot.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0', borderTop: '1px solid var(--hairline)' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          {ARTIST_LABEL[lot.artist] || lot.artist} · {lot.auctionHouse}{lot.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{assumed != null ? formatPrice(assumed) : '—'}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+                          {marked ? 'marked to comps' : 'at the hammer'}{paid != null && marked && paid !== assumed ? ` · paid ${formatPrice(paid)}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
+                  Assumed values are lectr&rsquo;s read, not appraisals — current comparable-sale medians where the engine has a clear one, otherwise the realized price.
+                </p>
+              </section>
+            </div>
+          )}
+
           {sold.length > 0 && (
             <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               {/* The outcome — how your eye did once the hammer fell */}
@@ -338,7 +401,7 @@ export default function SavedPage() {
                   </section>
                 );
               })()}
-              <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
+              <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} ownedIds={ownedIds} onToggleOwned={toggleOwned} />
             </div>
           )}
 
