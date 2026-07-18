@@ -110,7 +110,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     { label: 'Value', path: '/value', active: activeSlug === 'value' },
     { label: 'Makers', path: '/artists', active: activeSlug === 'artists' },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
-    { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' },
+    // ONE identity entry: signed in (or auth unconfigured) → My profile;
+    // signed out → the sheet's Sign in row stands alone instead.
+    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' }] : []),
     { label: 'Blog', path: '/blog', active: activeSlug === 'blog' },
   ];
 
@@ -480,17 +482,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Blog</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
-            My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
-          </button>
-          {authEnabled && (user ? (
-            /* signed in → the account button opens the profile; sign-out lives THERE now */
-            <button className="ray-nav-link" onClick={() => navigate('/saved')} title={user.email || 'Signed in'}>
-              {(user.email || 'account').split('@')[0]}
+          {(!authEnabled || user) ? (
+            <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')} title={user?.email || undefined}>
+              My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
             </button>
           ) : (
             <button className="ray-nav-link" onClick={openLogin}>Sign in</button>
-          ))}
+          )}
         </nav>
 
 
