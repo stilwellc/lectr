@@ -1362,7 +1362,6 @@ h1 {
    up 3.81 / down 4.22 (LARGE numerals only) · up-text 5.41 / down-text 5.85 ── */
 :root {
   --paper: #E2D9C4;              /* the banner block itself — chords with butter, seam vs ground 13.75:1 */
-  --paper-butter: #E8DAB6;       /* brighter butter card face — NOT token-flipped, survives inside .ray-paper */
   --paper-ink: #1C1712;          /* primary ink on paper — matches the warm-black family */
   --paper-secondary: #3D3830;    /* secondary ink on paper */
   --paper-muted: #5A5240;        /* muted ink on paper (AA on --paper at small sizes) */
@@ -3822,5 +3821,5 @@ body {
 @media (max-width: 899px) { .ray-tbl-save { width: 40px; height: 40px; } }
 
 /* blog index cards — hairline lift on hover */
-.ray-blog-card { transition: border-color 180ms var(--ease-signature), transform 180ms var(--ease-signature), box-shadow 180ms var(--ease-signature); box-shadow: 0 1px 0 rgba(28,23,18,0.04); }
-.ray-blog-card:hover { border-color: var(--paper-ink); transform: translateY(-2px); box-shadow: 0 10px 24px -14px rgba(8,6,3,0.7); }
+.ray-blog-card { transition: border-color 180ms var(--ease-signature), transform 180ms var(--ease-signature), box-shadow 180ms var(--ease-signature), background 180ms var(--ease-signature); }
+.ray-blog-card:hover { border-color: color-mix(in srgb, var(--color-butter) 40%, transparent); transform: translateY(-2px); box-shadow: 0 10px 24px -16px rgba(8,6,3,0.8); background: color-mix(in srgb, var(--color-butter) 13%, var(--color-bg-elevated)); }
