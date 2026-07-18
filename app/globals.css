@@ -1362,6 +1362,7 @@ h1 {
    up 3.81 / down 4.22 (LARGE numerals only) · up-text 5.41 / down-text 5.85 ── */
 :root {
   --paper: #E2D9C4;              /* the banner block itself — chords with butter, seam vs ground 13.75:1 */
+  --paper-butter: #E8DAB6;       /* brighter butter card face — NOT token-flipped, survives inside .ray-paper */
   --paper-ink: #1C1712;          /* primary ink on paper — matches the warm-black family */
   --paper-secondary: #3D3830;    /* secondary ink on paper */
   --paper-muted: #5A5240;        /* muted ink on paper (AA on --paper at small sizes) */
