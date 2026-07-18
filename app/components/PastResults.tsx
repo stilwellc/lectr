@@ -399,7 +399,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     fontFamily: 'var(--font-sans), sans-serif', fontSize: 11.5, fontWeight: 600,
                     padding: '5px 12px', borderRadius: 100, whiteSpace: 'nowrap',
                     background: ownedIds.includes(lot.id) ? 'var(--color-beige)' : 'transparent',
-                    color: ownedIds.includes(lot.id) ? '#191612' : 'var(--color-text-muted)',
+                    color: ownedIds.includes(lot.id) ? 'var(--paper-ink)' : 'var(--color-text-muted)',
                     border: ownedIds.includes(lot.id) ? '1px solid var(--color-beige)' : '1px solid var(--color-border)',
                   }}
                 >

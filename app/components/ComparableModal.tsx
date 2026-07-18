@@ -42,7 +42,7 @@ function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[
       )}
       {dir && (
         <div style={{ fontSize: 13 }}>
-          <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-down)' : 'var(--color-text-secondary)', fontWeight: 650 }}>
+          <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-down-text)' : 'var(--color-text-secondary)', fontWeight: 650 }}>
             {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
           </span>
           <span style={{ color: 'var(--color-text-muted)' }}> · comparable sales carry a {dir.beatRatePct}% rate of beating estimates like this · {v.n} sales</span>
@@ -484,7 +484,7 @@ export default function ComparableModal({
         position: 'fixed',
         inset: 0,
         zIndex: 1000,
-        background: 'rgba(0, 0, 0, 0.7)',
+        background: 'rgba(8, 6, 3, 0.7)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',

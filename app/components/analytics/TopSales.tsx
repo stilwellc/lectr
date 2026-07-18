@@ -180,7 +180,7 @@ export default function TopSales({ allLots }: Props) {
                     whiteSpace: 'nowrap',
                     color: overEst === null || toneOf(overEst) === 'flat'
                       ? 'var(--color-text-muted)'
-                      : toneOf(overEst) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
+                      : toneOf(overEst) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)',
                   }}>
                     {overEst === null
                       ? '\u2014'

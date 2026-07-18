@@ -16,8 +16,8 @@ import { toneOf, fmtSignedPct } from '../../utils';
 const UP = 'var(--color-up)';
 const DOWN = 'var(--color-down)';
 const FLAT = 'var(--color-text-muted)';
-const INK = '#F4F5F6';
-const MUTED = '#7A8087';
+const INK = '#F2EEE3';
+const MUTED = '#8F887A';
 
 // Match the home board's read: the true past-year move — a year ago to now is
 // four quarters apart, i.e. five points — so both surfaces measure the same
@@ -83,11 +83,11 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
                     <stop offset="100%" stopColor={idxColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                 <XAxis dataKey="period" tick={{ fontSize: 11, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={70} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: MUTED }} width={38} axisLine={false} tickLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
-                <ReferenceLine y={100} stroke="rgba(255,255,255,0.14)" strokeDasharray="3 3" />
-                <Tooltip contentStyle={{ background: '#0D0F12', border: '1px solid var(--hairline)', fontSize: 12 }} labelStyle={{ color: MUTED }} formatter={(v: number, _n, p) => [`${v} · ${(p.payload.n || 0)} sales`, 'index']} />
+                <ReferenceLine y={100} stroke="var(--chart-ref)" strokeDasharray="3 3" />
+                <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} labelStyle={{ color: MUTED }} formatter={(v: number, _n, p) => [`${v} · ${(p.payload.n || 0)} sales`, 'index']} />
                 <Area type="monotone" dataKey="value" stroke={idxColor} strokeWidth={2} fill="url(#miIdx)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -107,10 +107,10 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
             <div style={{ height: 130 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={series.sellThrough} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                   <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: MUTED }} width={30} domain={['dataMin - 8', 'dataMax + 4']} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: '#0D0F12', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v}%`, 'sell-through']} />
+                  <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v}%`, 'sell-through']} />
                   <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={1.8} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -132,11 +132,11 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
             <div style={{ height: 130 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={series.houseAccuracy} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                   <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: MUTED }} width={34} domain={[0, (max: number) => Math.ceil(max * 2) / 2]} ticks={[0, 0.5, 1, 1.5, 2]} allowDataOverflow={false} tickFormatter={(v: number) => `${v.toFixed(1)}×`} axisLine={false} tickLine={false} />
-                  <ReferenceLine y={1} stroke="rgba(255,255,255,0.14)" strokeDasharray="3 3" />
-                  <Tooltip contentStyle={{ background: '#0D0F12', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v.toFixed(2)}× estimate`, 'hammer']} />
+                  <ReferenceLine y={1} stroke="var(--chart-ref)" strokeDasharray="3 3" />
+                  <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v.toFixed(2)}× estimate`, 'hammer']} />
                   <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={1.8} dot={false} />
                 </LineChart>
               </ResponsiveContainer>

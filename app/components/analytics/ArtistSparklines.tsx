@@ -59,7 +59,7 @@ function SparkTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
         {d.date}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down)' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
         {`${fmtSignedPct(Math.round(d.avgPrice))} vs estimate`}
       </div>
     </div>
@@ -116,7 +116,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           <div style={{
             fontSize: 12,
             fontWeight: 600,
-            color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)',
+            color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down-text)',
             whiteSpace: 'nowrap',
           }}>
             <Flick size={10} style={{ marginLeft: 0, transform: artist.appreciation > 0 ? undefined : 'scaleY(-1)' }} /> {formatDemand(artist.appreciation)}

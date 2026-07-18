@@ -301,9 +301,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           style={{
             position: 'fixed', left: '50%', bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
             transform: 'translateX(-50%)', zIndex: 300, maxWidth: 'min(92vw, 360px)',
-            background: 'rgba(20,22,26,0.96)', color: 'var(--color-fg)', border: '1px solid var(--hairline)',
+            background: 'rgba(28,26,20,0.96)', color: 'var(--color-fg)', border: '1px solid var(--hairline)',
             borderRadius: 10, padding: '11px 16px', fontSize: 13.5, lineHeight: 1.35, textAlign: 'center',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
+            boxShadow: '0 8px 30px rgba(12,10,6,0.5)', backdropFilter: 'blur(6px)',
           }}
         >
           {notice}
@@ -374,7 +374,7 @@ function LoginModal() {
 }
 
 const AUTH_CSS = `
-.ray-auth-scrim { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(6,7,9,0.66); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: rayAuthIn 160ms var(--ease-signature) both; }
+.ray-auth-scrim { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,14,10,0.66); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: rayAuthIn 160ms var(--ease-signature) both; }
 .ray-auth-card { width: 100%; max-width: 380px; background: var(--color-bg-elevated); border: 1px solid var(--color-border); border-radius: 16px; padding: 22px 22px 24px; animation: rayAuthUp 220ms var(--ease-signature) both; }
 .ray-auth-head { display: flex; align-items: center; justify-content: space-between; }
 .ray-auth-title { font-size: 16px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
@@ -387,10 +387,10 @@ const AUTH_CSS = `
 .ray-auth-form { display: flex; flex-direction: column; gap: 10px; }
 .ray-auth-input { width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-fg); font-family: var(--font-sans), sans-serif; font-size: 16px; outline: none; }
 .ray-auth-input:focus { border-color: var(--color-text-muted); }
-.ray-auth-submit { width: 100%; padding: 11px; border-radius: 10px; border: none; background: var(--color-up); color: #05140c; font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; }
+.ray-auth-submit { width: 100%; padding: 11px; border-radius: 10px; border: none; background: var(--color-butter); color: var(--color-butter-ink); font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; }
 .ray-auth-submit:disabled { opacity: 0.6; cursor: default; }
-.ray-auth-sent { padding: 12px; border-radius: 10px; background: rgba(47,191,113,0.12); color: var(--color-up); font-size: 13.5px; text-align: center; font-weight: 600; }
-.ray-auth-err { font-size: 12.5px; color: var(--color-down); }
+.ray-auth-sent { padding: 12px; border-radius: 10px; background: var(--color-butter-subtle); color: var(--color-butter-text); font-size: 13.5px; text-align: center; font-weight: 600; }
+.ray-auth-err { font-size: 12.5px; color: var(--color-down-text); }
 @keyframes rayAuthIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rayAuthUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 `;

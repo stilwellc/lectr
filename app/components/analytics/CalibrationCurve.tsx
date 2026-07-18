@@ -5,10 +5,10 @@ import type { Backtest } from '../../hooks/useRayData';
 
 const BUCKET_LABELS = ['<0.6×', '0.6–0.9×', '0.9–1.3×', '1.3–2×', '2–10×', '10×+'];
 const MARKET_COLORS: Record<string, string> = {
-  global: '#F4F6FF',
-  art: '#9AA0A6',
-  design: '#6E7681',
-  watches: '#565C64',
+  global: '#F2EEE3',
+  art: '#A19B8D',
+  design: '#8A8477',
+  watches: '#6B6558',
 };
 
 /**
@@ -45,11 +45,11 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
         <div style={{ height: 230 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 6, right: 18, left: 0, bottom: 2 }}>
-              <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} interval={0} />
-              <YAxis domain={[30, 85]} tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} width={40} />
+              <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+              <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} interval={0} />
+              <YAxis domain={[30, 85]} tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} width={40} />
               <Tooltip
-                cursor={{ stroke: 'rgba(255,255,255,0.25)', strokeWidth: 1 }}
+                cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1 }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   return (

@@ -50,9 +50,9 @@ function card(label: string, s: ArtistStats) {
 
   return new ImageResponse(
     (
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', background: '#060709', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', background: '#0B0A07', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
         {/* mat frame — holds the edge in an iMessage dark-mode bubble */}
-        <div style={{ position: 'absolute', top: 24, left: 24, right: 24, bottom: 24, border: '1px solid rgba(255,255,255,0.14)' }} />
+        <div style={{ position: 'absolute', top: 24, left: 24, right: 24, bottom: 24, border: '1px solid rgba(242,238,227,0.14)' }} />
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           {/* the light the sign casts on the wall */}
           <div
@@ -62,15 +62,15 @@ function card(label: string, s: ArtistStats) {
               justifyContent: 'center',
               padding: 36,
               margin: -36,
-              background: 'radial-gradient(closest-side, rgba(244,246,255,0.07), transparent 70%)',
+              background: 'radial-gradient(closest-side, rgba(242,238,227,0.07), transparent 70%)',
             }}
           >
             <img src={'data:image/png;base64,' + mark} width={150} height={96} alt="" />
           </div>
-          <div style={{ fontSize: 20, color: '#7A8087' }}>artist market page · lectr.bid</div>
+          <div style={{ fontSize: 20, color: '#8A8477' }}>artist market page · lectr.bid</div>
         </div>
-        <div style={{ display: 'flex', fontSize: 62, fontWeight: 800, color: '#F4F5F6', letterSpacing: -2.5, marginTop: 22 }}>{label}</div>
-        <div style={{ display: 'flex', gap: 40, marginTop: 10, fontSize: 24, color: '#9AA0A6' }}>
+        <div style={{ display: 'flex', fontSize: 62, fontWeight: 800, color: '#F2EEE3', letterSpacing: -2.5, marginTop: 22 }}>{label}</div>
+        <div style={{ display: 'flex', gap: 40, marginTop: 10, fontSize: 24, color: '#A19B8D' }}>
           <div style={{ display: 'flex' }}>{`avg sale ${fmt(s.avgPriceLast12Months || 0)}`}</div>
           <div style={{ display: 'flex' }}>{`record ${fmt(s.recordPrice || 0)}`}</div>
           <div style={{ display: 'flex', color: appr >= 0 ? '#2FBF71' : '#E5544B', fontWeight: 700 }}>

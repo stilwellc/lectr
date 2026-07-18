@@ -25,20 +25,20 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
         <div style={{ height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 6, right: 18, left: 0, bottom: 2 }}>
-              <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+              <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis
                 dataKey="year"
-                tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 axisLine={false} tickLine={false} minTickGap={36}
               />
               <YAxis
                 tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`}
-                tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 axisLine={false} tickLine={false} width={46}
               />
-              <ReferenceLine y={0} stroke="rgba(255,255,255,0.16)" strokeDasharray="4 4" />
+              <ReferenceLine y={0} stroke="var(--chart-ref)" strokeDasharray="4 4" />
               <Tooltip
-                cursor={{ stroke: 'rgba(255,255,255,0.25)', strokeWidth: 1 }}
+                cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1 }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload as { flaggedMedianPct: number; unflaggedMedianPct: number; nFlagged: number };
@@ -51,14 +51,14 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                   );
                 }}
               />
-              <Line type="monotone" dataKey="unflaggedMedianPct" stroke="#7A8087" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="unflaggedMedianPct" stroke="var(--chart-line-2)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="flaggedMedianPct" stroke="var(--color-up)" strokeWidth={1.75} dot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
         <div style={{ display: 'flex', gap: 18, padding: '8px 0 10px 18px', fontSize: 12, color: 'var(--color-text-faint)' }}>
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--color-up)', verticalAlign: 'middle', marginRight: 6 }} />flagged below market</span>
-          <span><span style={{ display: 'inline-block', width: 14, height: 2, background: '#7A8087', verticalAlign: 'middle', marginRight: 6 }} />unflagged</span>
+          <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--chart-line-2)', verticalAlign: 'middle', marginRight: 6 }} />unflagged</span>
           <span>· premium-inclusive, as bought</span>
         </div>
       </div>

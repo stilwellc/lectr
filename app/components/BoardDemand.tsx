@@ -311,10 +311,10 @@ export default function BoardDemand({
                   <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+              <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 tickFormatter={(d: string) => {
                   // Always date the tick ("2026 Q2"); recharts thins to fit via
                   // minTickGap. A bare "Q3 Q3 Q3" axis with no year is unreadable.
@@ -330,7 +330,7 @@ export default function BoardDemand({
               <YAxis
                 orientation="right"
                 width={isRealized ? 48 : 40}
-                tick={{ fontSize: 11, fill: '#7A8087', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 tickFormatter={isIndex ? (v: number) => `${Math.round(v)}` : isRealized ? (v: number) => formatRealized(v) : (v: number) => `${v > 0 ? '+' : ''}${v}%`}
                 axisLine={false}
                 tickLine={false}
@@ -343,12 +343,12 @@ export default function BoardDemand({
               {!isRealized && !isIndex && (
                 <ReferenceLine
                   y={0}
-                  stroke="rgba(255,255,255,0.16)"
+                  stroke="var(--chart-ref)"
                   strokeDasharray="4 4"
-                  label={{ value: 'sells at estimate', position: 'insideBottomRight', fill: '#7A8087', fontSize: 10.5, fontFamily: 'var(--font-sans), sans-serif', dy: 12, dx: -2 }}
+                  label={{ value: 'sells at estimate', position: 'insideBottomRight', fill: 'var(--chart-tick)', fontSize: 10.5, fontFamily: 'var(--font-sans), sans-serif', dy: 12, dx: -2 }}
                 />
               )}
-              <Tooltip content={() => null} cursor={{ stroke: 'rgba(255,255,255,0.3)', strokeWidth: 1 }} />
+              <Tooltip content={() => null} cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1 }} />
               <Area
                 type="monotone"
                 dataKey="value"
@@ -356,7 +356,7 @@ export default function BoardDemand({
                 strokeWidth={1.75}
                 fill="url(#boardGrad)"
                 dot={false}
-                activeDot={{ r: 3.5, fill: lineColor, stroke: '#0A0B0D', strokeWidth: 2 }}
+                activeDot={{ r: 3.5, fill: lineColor, stroke: 'var(--color-bg-board)', strokeWidth: 2 }}
                 isAnimationActive={false}
                 style={{ filter: `drop-shadow(0 0 6px ${dir >= 0 ? 'rgba(47,191,113,0.35)' : 'rgba(229,84,75,0.3)'})` }}
               />

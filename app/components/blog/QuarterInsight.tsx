@@ -93,7 +93,7 @@ export default function QuarterInsight({
                 />
                 <span aria-hidden style={{
                   position: 'absolute', inset: 0, pointerEvents: 'none',
-                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 -46px 60px -34px rgba(8,9,11,0.55), inset 0 34px 44px -38px rgba(8,9,11,0.35)',
+                  boxShadow: 'inset 0 0 0 1px rgba(242,238,227,0.05), inset 0 -46px 60px -34px rgba(12,10,6,0.55), inset 0 34px 44px -38px rgba(12,10,6,0.35)',
                 }} />
               </div>
               <figcaption style={{
@@ -134,7 +134,7 @@ export default function QuarterInsight({
                   {[...(movers || []), ...(coolers || [])].map(m => (
                     <tr key={m.label}>
                       <td style={td}>{m.slug ? <Link href={`/${m.slug}`} style={{ color: 'inherit', textDecorationColor: 'var(--hairline)', textUnderlineOffset: 3 }}>{m.label}</Link> : m.label}</td>
-                      <td style={{ ...tdNum, color: m.chgPct >= 0 ? 'var(--color-up)' : 'var(--color-down)' }}>{m.chgPct >= 0 ? '+' : '−'}{Math.abs(Math.round(m.chgPct))}%</td>
+                      <td style={{ ...tdNum, color: m.chgPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>{m.chgPct >= 0 ? '+' : '−'}{Math.abs(Math.round(m.chgPct))}%</td>
                       <td style={tdNum}>{m.n}</td>
                     </tr>
                   ))}

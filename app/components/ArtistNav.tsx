@@ -399,7 +399,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           position: fixed;
           inset: 0;
           z-index: 300;
-          background: rgba(6, 7, 9, 0.62);
+          background: rgba(15, 14, 10, 0.62);
           -webkit-backdrop-filter: blur(6px);
           backdrop-filter: blur(6px);
           animation: rayScrimIn 160ms var(--ease-signature) both;

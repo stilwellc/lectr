@@ -44,7 +44,7 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
       {signalMoved && cur && meta && (
         <span>
           signal {fmtSignedPct(meta.signalPct!)} <Flick size={10} style={{ marginLeft: 0 }} />{' '}
-          <b style={{ color: cur.pct > meta.signalPct! ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
+          <b style={{ color: cur.pct > meta.signalPct! ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700 }}>
             {fmtSignedPct(cur.pct)}
           </b>{' '}
           since you saved
@@ -351,7 +351,7 @@ export default function SavedPage() {
                     {' '}· lectr appraisal{' '}
                     <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAppraised)}</b>
                     {collection.totalPaid > 0 && collection.totalAppraised !== collection.totalPaid && (
-                      <b style={{ color: collection.totalAppraised >= collection.totalPaid ? 'var(--color-up)' : 'var(--color-down)', fontVariantNumeric: 'tabular-nums' }}>
+                      <b style={{ color: collection.totalAppraised >= collection.totalPaid ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
                         {' '}· {collection.totalAppraised >= collection.totalPaid ? '+' : '−'}
                         {Math.abs(Math.round((collection.totalAppraised / collection.totalPaid - 1) * 100))}%
                       </b>
@@ -380,7 +380,7 @@ export default function SavedPage() {
                         <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                           {appraised != null ? formatPrice(appraised) : '—'}
                           {deltaPct != null && deltaPct !== 0 && (
-                            <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down)' }}>
+                            <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                               {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
                             </span>
                           )}

@@ -53,7 +53,7 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
         count: d.count,
         totalValue: d.totalValue,
         // Recharts fills need concrete hexes, swapped per theme.
-        fill: houseColorsHex[theme][house] || (theme === 'light' ? '#6D685E' : '#9F9991'),
+        fill: houseColorsHex[theme][house] || (theme === 'light' ? '#6D685E' : '#A69B86'),
       }))
       .sort((a, b) => b.totalValue - a.totalValue);
   }, [statsByArtist, theme]);

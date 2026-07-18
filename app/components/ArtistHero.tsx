@@ -270,7 +270,7 @@ export default function ArtistHero({
           flips the tokens and the drawn border stands in for the band rule */}
       <div
         className="ray-paper"
-        style={{ marginTop: 28, border: '1px solid rgba(25, 22, 18, 0.25)', borderRadius: 12, padding: '18px 20px 12px' }}
+        style={{ marginTop: 28, border: '1px solid var(--paper-edge)', borderRadius: 12, padding: '18px 20px 12px' }}
       >
         <RecordBand
           title={'The maker’s record'}

@@ -277,7 +277,7 @@ function LotCard({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: saved ? 'var(--color-fg)' : 'rgba(0,0,0,0.45)',
+              background: saved ? 'var(--color-fg)' : 'rgba(12,10,6,0.5)',
               border: 'none',
               borderRadius: 100,
               cursor: 'pointer',
@@ -289,8 +289,8 @@ function LotCard({
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
               <path
                 d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
-                fill={saved ? 'var(--color-bg)' : '#F0EDE8'}
-                stroke={saved ? 'var(--color-bg)' : '#F0EDE8'}
+                fill={saved ? 'var(--color-bg)' : 'var(--color-fg)'}
+                stroke={saved ? 'var(--color-bg)' : 'var(--color-fg)'}
                 strokeWidth="0.8"
               />
             </svg>

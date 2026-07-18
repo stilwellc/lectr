@@ -160,7 +160,7 @@ body {
 }
 
 ::selection {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--selection-bg, rgba(232, 218, 182, 0.22));
   color: var(--color-fg);
 }
 
@@ -178,18 +178,18 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(242, 238, 227, 0.5);
 }
 
 :focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline: var(--focus-ring, 2px solid rgba(232, 218, 182, 0.9));
   outline-offset: 3px;
 }
 
 /* on the paper bands the white ring vanishes — ring in ink instead */
 .ray-band :focus-visible,
 .ray-paper :focus-visible {
-  outline: 2px solid var(--paper-ink);
+  outline: var(--focus-ring-paper, 2px solid var(--paper-ink));
   outline-offset: 3px;
 }
 
@@ -999,7 +999,7 @@ h1 {
   border-color: color-mix(in srgb, var(--color-accent-wine) 32%, var(--glass-border));
   box-shadow:
     0 1px 0 0 rgba(232, 213, 188, 0.06) inset,
-    0 18px 40px rgba(0, 0, 0, 0.30);
+    0 18px 40px rgba(8, 6, 3, 0.30);
 }
 [data-theme="light"] .ray-stat-card:hover,
 [data-theme="light"] .ray-portfolio-card:hover {
@@ -1036,7 +1036,7 @@ h1 {
   border-color: color-mix(in srgb, var(--color-accent-wine) 26%, var(--glass-border));
   box-shadow:
     0 1px 0 0 rgba(232, 213, 188, 0.06) inset,
-    0 18px 40px rgba(0, 0, 0, 0.32);
+    0 18px 40px rgba(8, 6, 3, 0.32);
 }
 [data-theme="light"] .ray-lot-card:hover {
   box-shadow:
@@ -1312,7 +1312,7 @@ h1 {
   padding: 6px 2px 8px;
   transition: border-color var(--duration-fast) var(--ease-signature);
 }
-.ray-toolbar-search:focus-within { border-color: rgba(255, 255, 255, 0.6); }
+.ray-toolbar-search:focus-within { border-color: rgba(232, 218, 182, 0.6); }
 .ray-toolbar-search svg { width: 15px; height: 15px; color: var(--color-text-faint); flex: none; }
 .ray-toolbar-search input {
   flex: 1;
@@ -1342,7 +1342,7 @@ h1 {
 /* Makers sparkline cards — glass-quiet suppresses .glass:hover, so give them
    their own lift on hover for real feedback. */
 .ray-spark-card { transition: transform 160ms var(--ease-signature), border-color 160ms var(--ease-ui), box-shadow 160ms var(--ease-ui); }
-.ray-spark-card:hover { transform: translateY(-2px); border-color: var(--color-border-mid); box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.5); }
+.ray-spark-card:hover { transform: translateY(-2px); border-color: var(--color-border-mid); box-shadow: 0 8px 24px -12px rgba(8, 6, 3, 0.5); }
 @media (prefers-reduced-motion: reduce) { .ray-spark-card:hover { transform: none; } }
 /* Disabled toolbar pills should read disabled, not clickable. */
 .ray-toolbar-pill:disabled, .ray-toolbar-pill[aria-disabled="true"] { opacity: 0.38; cursor: default; pointer-events: none; }
@@ -1355,13 +1355,19 @@ h1 {
    so every child surface goes transparent and the type ramp flips to ink.
    Green/red stay directional but drop to print-density variants for
    contrast on the light ground. */
+/* ── PAPER — the certificate instrument, warmed a half-step toward butter.
+   Solid blocks only; no gradients; nothing dark floats on paper; butter
+   NEVER sits on paper (1.01:1) — butter roles flip to ink inside bands.
+   ink 12.67 · secondary 8.28 · muted 5.51 · faint 4.53 (now AA all sizes) ·
+   up 3.81 / down 4.22 (LARGE numerals only) · up-text 5.41 / down-text 5.85 ── */
 :root {
-  --color-beige: #D8CFC0;        /* accents on the DARK ground (pills, captions) */
-  --color-beige-text: #C9C1B2;   /* beige type on the dark ground */
-  --paper: #DED6C6;              /* the banner block itself */
-  --paper-ink: #191612;          /* primary ink on paper */
-  --paper-muted: #57504A;        /* secondary ink on paper (AA on --paper at small sizes) */
-  --paper-line: rgba(25, 22, 18, 0.16);
+  --paper: #E2D9C4;              /* the banner block itself — chords with butter, seam vs ground 13.75:1 */
+  --paper-ink: #1C1712;          /* primary ink on paper — matches the warm-black family */
+  --paper-secondary: #3D3830;    /* secondary ink on paper */
+  --paper-muted: #5A5240;        /* muted ink on paper (AA on --paper at small sizes) */
+  --paper-faint: #665F4B;        /* faint ink on paper — 4.53:1, AA all sizes */
+  --paper-line: rgba(28, 23, 18, 0.16);
+  --paper-edge: rgba(28, 23, 18, 0.25);   /* .ray-band border-block */
   --paper-up: #1B7A48;           /* print-density green — LARGE numerals only (3:1) */
   --paper-down: #B23A31;         /* print-density red — LARGE numerals only (3:1) */
   --paper-up-text: #14603A;      /* green deep enough for small text (4.5:1) */
@@ -1371,13 +1377,19 @@ h1 {
   /* TOKEN FLIP: everything inside inherits the paper ramp — inline var()
      styles, CountUp classes, Flick strokes, hairlines — no dark survivors. */
   --color-fg: var(--paper-ink);
-  --color-text-secondary: #3D3830;
+  --color-text-secondary: var(--paper-secondary);
   --color-text-muted: var(--paper-muted);
-  --color-text-faint: #857D6C;
+  --color-text-faint: var(--paper-faint);
   /* small green/red text inherits the deep small-text inks; the LARGE
      numeral classes below reach for --paper-up/--paper-down directly */
   --color-up: var(--paper-up-text);
   --color-down: var(--paper-down-text);
+  --color-down-text: var(--paper-down-text);
+  /* butter NEVER sits on paper (1.01:1) — butter roles flip to ink */
+  --color-butter: var(--paper-ink);
+  --color-butter-text: var(--paper-ink);
+  --color-butter-deep: var(--paper-ink);
+  --color-butter-subtle: rgba(28, 23, 18, 0.09);
   --color-border: var(--paper-line);
   --hairline: var(--paper-line);
   --hairline-soft: var(--paper-line);
@@ -1385,7 +1397,7 @@ h1 {
   background: var(--paper);
   color: var(--paper-ink);
 }
-.ray-band { border-block: 1px solid rgba(25, 22, 18, 0.25); }
+.ray-band { border-block: 1px solid var(--paper-edge); }
 /* two-class specificity: .ray-appr's own dark background is declared later
    in the sheet — the paper must win on the composed element */
 .ray-appr.ray-paper { background: var(--paper); }
@@ -1485,7 +1497,7 @@ h1 {
   text-transform: uppercase;
   color: var(--color-text-secondary);
   padding: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(242, 238, 227, 0.35);
 }
 .ray-toolbar-reset:hover { color: var(--color-fg); }
 
@@ -1663,12 +1675,11 @@ h1 {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   RAY 2.0 — THE REBUILD.
-   A market app with an Apple/Airbnb lens: one typeface (Inter), a true
-   neutral dark ground, flat borderless surfaces, giant confident numerals,
-   sentence case everywhere. Green is the market's voice (gains/live),
-   red only ever means a fall, gold is reserved for the brand mark.
-   This layer overrides everything editorial that came before it.
+   RAY 2.1 — HEARTH TERMINAL. The fresh-eyes palette rebuild.
+   Warm near-blacks in the claude.com register (olive-brown undertone,
+   R≥G>B at every step), warm ivory text, one butter accent family,
+   green/red as verbs only. This layer overrides everything editorial
+   that came before it — earlier golden-hour blocks are dead layers.
    ════════════════════════════════════════════════════════════════════════ */
 :root,
 [data-theme="light"],
@@ -1678,59 +1689,100 @@ h1 {
   --font-serif: var(--font-sans);
   --font-mono: var(--font-sans);
 
-  /* neutral ground */
-  --color-bg: #08090B;
-  --color-bg-elevated: #131518;
-  --color-fg: #F4F5F6;
-  --color-text-secondary: #C6CACF;
-  --color-text-muted: #9AA0A6;
-  /* 4.6:1 on both bg and elevated — #63686E failed WCAG AA at the 10.5–13px
-     sizes this token is used at everywhere (card meta, chart dates, hints) */
-  --color-text-faint: #7A8087;
-  --color-border: rgba(255, 255, 255, 0.07);
-  --color-border-mid: rgba(255, 255, 255, 0.14);
-  --color-nav-bg: rgba(8, 9, 11, 0.88);
-  --color-hover-item: rgba(255, 255, 255, 0.04);
-  --color-overlay-light: rgba(255, 255, 255, 0.04);
-
-  /* roles — gold retires completely; legacy accent slots collapse to ink */
-  --color-accent-gold: #FFFFFF;
-  --color-accent-gold-text: #F4F5F6;
-  --color-accent-wine: #FFFFFF;
-  --color-accent-wine-text: #F4F5F6;
-  --color-accent-coral: #FFFFFF;
-  --color-lit: #FFFFFF;                /* signal white, the sign's own ink */
-  --glow-lit: 0 0 2px rgba(255, 255, 255, 0.45), 0 0 16px rgba(255, 255, 255, 0.14);
-  --color-up: #2FBF71;
-  --color-up-soft: rgba(47, 191, 113, 0.13);
-  --color-down: #E5544B;
-  --color-down-soft: rgba(229, 84, 75, 0.13);
-
-  /* flat surfaces: the glass system collapses to fills */
-  --glass-bg: #15171A;
-  --glass-bg-hover: #1B1E22;
+  /* ── SURFACES — warm depth ladder, same hierarchy as before ─────────── */
+  --color-bg: #0F0E0A;            /* ground. was #08090B */
+  --color-bg-deep: #0B0A07;       /* greeting splash / deepest wells */
+  --color-bg-board: #141209;      /* chart wells, board/ledger/appr fills */
+  --panel: #17150F;               /* board side panels, tooltips */
+  --color-bg-elevated: #1C1A14;   /* cards, dropdowns, chips */
+  --panel-mat: #1C1A14;           /* image mats = elevated; NEVER #000 (warm seam vs photos) */
+  --glass-bg: #1C1A14;
+  --glass-bg-hover: #232017;      /* hover fill */
   --glass-border: transparent;
   --glass-border-top: transparent;
   --glass-specular: transparent;
   --glass-caustic: transparent;
   --glass-shadow: none;
   --glass-shadow-hover: none;
+  --color-nav-bg: rgba(15, 14, 10, 0.88);
+  --color-hover-item: rgba(242, 238, 227, 0.045);
+  --color-overlay-light: rgba(242, 238, 227, 0.045);
 
-  /* houses/categories: quiet inks that sit on neutral dark */
-  --ray-house-phillips: #7FA3C8;
-  --ray-house-sothebys: #C8B183;
-  --ray-house-christies: #A9ADB3;
+  /* ── TEXT — warm ivory ramp. Ratios verified (ground/elevated):
+     fg 16.66/15.00 · secondary 11.34/10.22 · muted 6.98/6.29 ·
+     faint 5.19/4.68 (AA at its 10.5–13px uses; keep faint OFF
+     hover-raised fills — 4.38 on #232017). Tabular data stays on fg. ── */
+  --color-fg: #F2EEE3;
+  --color-text-secondary: #CCC6B8;
+  --color-text-muted: #A19B8D;
+  --color-text-faint: #8A8477;
+
+  /* ── HAIRLINES & BORDERS — ivory-alpha, never pure white ───────────── */
+  --hairline: rgba(242, 238, 227, 0.09);
+  --hairline-soft: rgba(242, 238, 227, 0.065);
+  --color-border: rgba(242, 238, 227, 0.08);
+  --color-border-mid: rgba(242, 238, 227, 0.16);
+
+  /* ── BUTTER — THE accent. One family, four jobs. Replaces beige AND gold.
+     butter 13.92/12.54 · butter-text 12.17/10.96 · butter-deep 8.98/8.09 ── */
+  --color-butter: #E8DAB6;        /* active market pill fill, non-directional hero lines, .lit, brand mark */
+  --color-butter-text: #DECC9E;   /* text-safe butter: captions, active nav, linked emphasis */
+  --color-butter-deep: #C9AE6F;   /* the quiet "gold note": icons/strokes where full butter shouts */
+  --color-butter-subtle: rgba(232, 218, 182, 0.09);  /* selected/active wash */
+  --color-butter-ink: #0F0E0A;    /* text ON butter fills (13.92:1) */
+  /* legacy aliases — nothing in 3,700 lines breaks */
+  --color-beige: var(--color-butter);
+  --color-beige-text: var(--color-butter-text);
+  --color-accent-gold: var(--color-butter);
+  --color-accent-gold-text: var(--color-butter-text);
+  --color-accent-wine: var(--color-butter);
+  --color-accent-wine-text: var(--color-butter-text);
+  --color-accent-coral: var(--color-butter);
+  --color-lit: var(--color-butter);
+  --glow-lit: 0 0 2px rgba(232, 218, 182, 0.45), 0 0 16px rgba(232, 218, 182, 0.14);
+
+  /* ── DIRECTION — up/down ONLY, never decorative ─────────────────────
+     up 8.10/7.30 (AA any size) · down 5.24/4.72 (≥14px-bold numerals) ·
+     down-text 6.59/5.94 (the ≤13px loss color — REQUIRED on elevated) ── */
+  --color-up: #2FBF71;
+  --color-up-soft: rgba(47, 191, 113, 0.12);
+  --color-down: #E5544B;          /* large/bold numerals */
+  --color-down-text: #EC7266;     /* small losses on any surface */
+  --color-down-soft: rgba(229, 84, 75, 0.12);
+
+  /* ── CHARTS — one hero line per chart, warm-neutral chrome ──────────
+     tick 5.49/4.95/5.33-on-board · line-2 4.60 on elevated (≥3:1 graphics) ── */
+  --chart-hero: var(--color-butter);      /* non-directional heroes; directional charts use up/down by sign */
+  --chart-grid: rgba(242, 238, 227, 0.06);
+  --chart-ref: rgba(242, 238, 227, 0.15); /* dashed baselines/reference lines */
+  --chart-tick: #8F887A;                  /* axis ticks/labels */
+  --chart-line-2: #8A8070;                /* comparison series — never competes with hero */
+  --chart-ink: var(--color-text-muted);   /* chart captions */
+  --chart-cursor: rgba(232, 218, 182, 0.30);
+
+  /* ── HOUSES / CATEGORIES — categorical only, warm inks, chroma-cut slates.
+     All ≥6.2:1 on elevated for 12px legends. ── */
+  --ray-house-sothebys: #D2BC8C;
+  --ray-house-christies: #B3AC9E;
+  --ray-house-phillips: #C6907E;
   --ray-house-rago: #B99F72;
-  --ray-house-wright: #86A6C2;
-  --ray-house-heritage: #8FA9BC;
+  --ray-house-wright: #8C9DAF;
+  --ray-house-heritage: #9AA8B4;
   --ray-house-bonhams: #C2A868;
-  --ray-house-hindman: #9AA0A6;
-  --ray-cat-original: #C8B183;
-  --ray-cat-print: #7FA3C8;
-  --ray-cat-photograph: #86A6C2;
+  --ray-house-hindman: #A69B86;
+  --ray-cat-original: #D2BC8C;
+  --ray-cat-print: #C6907E;
+  --ray-cat-photograph: #8C9DAF;
   --ray-cat-sculpture: #B99F72;
-  --ray-cat-design: #A9ADB3;
-  --ray-cat-unknown: #9AA0A6;
+  --ray-cat-design: #B3AC9E;
+  --ray-cat-unknown: #A69B86;
+
+  /* ── FOCUS / SELECTION / SHADOWS — warm-black only, terminal stays flat ── */
+  --focus-ring: 2px solid rgba(232, 218, 182, 0.9);  /* :focus-visible outline on dark */
+  --focus-ring-paper: 2px solid var(--paper-ink);    /* inside .ray-band/.ray-paper */
+  --selection-bg: rgba(232, 218, 182, 0.22);         /* ::selection */
+  --shadow-pop: 0 12px 32px rgba(8, 6, 3, 0.45);     /* dropdowns, cmd-k */
+  --shadow-modal: 0 24px 64px rgba(8, 6, 3, 0.60), 0 4px 16px rgba(8, 6, 3, 0.40);
 
   --grain-opacity: 0;
   color-scheme: dark;
@@ -1741,7 +1793,7 @@ h1 {
    active market pill (.ray-markets-compact, further down); on /value
    it is the call plate, which wears this class. */
 .lit {
-  border-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(232, 218, 182, 0.85) !important;
   box-shadow: var(--glow-lit);
 }
 
@@ -1885,10 +1937,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
    One grid, one seam grammar (1px hairlines), one type scale, two curves.
    ═══════════════════════════════════════════════════════════════════ */
 :root {
-  --hairline: rgba(255, 255, 255, 0.08);
-  --hairline-soft: rgba(255, 255, 255, 0.06);
-  --panel: #0D0F12;
-  --panel-mat: #131518;
+  /* hairline/panel tokens live in the HEARTH TERMINAL block above */
   --ease-ui: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
 }
@@ -1897,7 +1946,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-pane { background: transparent; }
 .ray-pane .ray-board-demand {
   border: 1px solid var(--hairline);
-  background: #0A0B0D;
+  background: var(--color-bg-board);
 }
 @media (max-width: 900px) {
   /* mobile board stays tight: ranges right-align; the product sentence
@@ -1917,13 +1966,13 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   background: var(--hairline);
   border: 1px solid var(--hairline);
 }
-.ray-board-demand { background: #0A0B0D; padding: 20px 24px 14px; min-width: 0; }
+.ray-board-demand { background: var(--color-bg-board); padding: 20px 24px 14px; min-width: 0; }
 .ray-board-panel { background: var(--panel); padding: 16px 18px; min-width: 0; }
 .ray-panel-k {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: #9AA0A6;
+  color: var(--color-text-muted);
   margin-bottom: 10px;
 }
 /* the proof strip under the board */
@@ -1951,10 +2000,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   margin-bottom: 14px;
 }
 .ray-demand-label { font-size: 12px; font-weight: 600; color: var(--color-beige-text); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.ray-demand-foot { margin: 12px 2px 2px; font-size: 12px; line-height: 1.55; color: #8A9099; max-width: 62ch; }
-.ray-demand-foot b { font-weight: 650; color: #C9CDD2; }
+.ray-demand-foot { margin: 12px 2px 2px; font-size: 12px; line-height: 1.55; color: var(--color-text-muted); max-width: 62ch; }
+.ray-demand-foot b { font-weight: 650; color: var(--color-text-secondary); }
 .ray-demand-foot b.up { color: var(--color-up); }
-.ray-demand-foot b.down { color: var(--color-down); }
+.ray-demand-foot b.down { color: var(--color-down-text); }
 .ray-ranges2 { display: flex; gap: 14px; }
 .ray-range2 {
   border: none;
@@ -1963,7 +2012,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-family: var(--font-sans);
   font-size: 11.5px;
   font-weight: 600;
-  color: #7A8087;
+  color: var(--color-text-faint);
   padding: 0 0 10px;
   margin-bottom: -11px;
   position: relative;
@@ -1980,12 +2029,12 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-numrow .ray-hero2-value { font-size: 64px; font-weight: 700; letter-spacing: -0.035em; }
 .ray-numrow-delta { font-size: 13px; font-weight: 600; }
 .ray-numrow-delta .up { color: var(--color-up); }
-.ray-numrow-delta .down { color: var(--color-down); }
+.ray-numrow-delta .down { color: var(--color-down-text); }
 .ray-numrow-aux { margin-left: auto; align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; }
-.ray-numrow-aux-v { font-size: 13px; font-weight: 600; color: #9AA0A6; white-space: nowrap; }
+.ray-numrow-aux-v { font-size: 13px; font-weight: 600; color: var(--color-text-muted); white-space: nowrap; }
 .ray-numrow-aux-v b { font-weight: 700; color: var(--color-fg); }
 .ray-numrow-aux-v b.up { color: var(--color-up); }
-.ray-numrow-aux-v b.down { color: var(--color-down); }
+.ray-numrow-aux-v b.down { color: var(--color-down-text); }
 .ray-numrow-aux-s { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }
 @media (max-width: 520px) { .ray-numrow-aux { margin-left: 0; align-items: flex-start; text-align: left; } }
 .ray-scrubchip {
@@ -2002,16 +2051,16 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(242, 238, 227, 0.08);
   border-block: 1px solid var(--hairline-soft);
   margin: 16px 0 4px;
 }
-.ray-ledger > div { background: #0A0B0D; padding: 10px 14px 12px; min-width: 0; }
+.ray-ledger > div { background: var(--color-bg-board); padding: 10px 14px 12px; min-width: 0; }
 .ray-ledger > div:first-child { padding-left: 0; }
-.ray-ledger-k { font-size: 12px; font-weight: 600; color: #9AA0A6; margin-bottom: 4px; }
+.ray-ledger-k { font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 4px; }
 .ray-ledger-v { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1.1; }
 .ray-ledger-v.up { color: var(--color-up); }
-.ray-ledger-s { font-size: 11px; color: #7A8087; margin-top: 3px; }
+.ray-ledger-s { font-size: 11px; color: var(--color-text-faint); margin-top: 3px; }
 
 /* the matted plate — catalogue-grade image treatment */
 .ray-plate-mat {
@@ -2024,7 +2073,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   position: relative;
   height: 150px;
   overflow: hidden;
-  outline: 1px solid rgba(255, 255, 255, 0.1);
+  outline: 1px solid rgba(242, 238, 227, 0.1);
   outline-offset: -1px;
   background: var(--color-bg);
 }
@@ -2034,13 +2083,13 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  box-shadow: inset 0 -40px 54px -32px rgba(8, 9, 11, 0.6), inset 0 30px 40px -34px rgba(8, 9, 11, 0.4);
+  box-shadow: inset 0 -40px 54px -32px rgba(12, 10, 6, 0.6), inset 0 30px 40px -34px rgba(12, 10, 6, 0.4);
 }
 .ray-plate-cap {
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: #7A8087;
+  color: var(--color-text-faint);
   font-variant-numeric: tabular-nums;
   padding-top: 9px;
   text-align: center;
@@ -2049,7 +2098,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 
 /* R7 · the record band */
 .ray-recordband {
-  background: #0C0D10;
+  background: var(--panel);
   border-top: 1px solid var(--hairline);
   padding: 48px 0 56px;
   margin-top: 48px;
@@ -2061,7 +2110,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   background: var(--hairline);
   border: 1px solid var(--hairline);
 }
-.ray-record-left { background: #0C0D10; min-width: 0; padding: 4px 0 0; }
+.ray-record-left { background: var(--panel); min-width: 0; padding: 4px 0 0; }
 .ray-record-left .ray-results { padding-block: 0 12px; }
 .ray-record-left .rail { padding-inline: 20px; max-width: none; }
 @media (max-width: 1000px) {
@@ -2079,8 +2128,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   margin-top: 48px;
   border-top: 1px solid var(--hairline);
   background:
-    radial-gradient(ellipse 640px 300px at 50% 120px, rgba(244, 246, 255, 0.045), transparent 70%),
-    #060709;
+    radial-gradient(ellipse 640px 300px at 50% 120px, rgba(242, 238, 227, 0.045), transparent 70%),
+    var(--color-bg-deep);
   overflow: hidden;
 }
 .ray-close-in { padding: 52px 0 26px; }
@@ -2090,7 +2139,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   width: auto;
   /* the write-on: clipped until the reader arrives, then the pen writes */
   clip-path: inset(0 100% 0 0);
-  filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.12));
+  filter: drop-shadow(0 0 24px rgba(242, 238, 227, 0.12));
 }
 .ray-close-on .ray-close-mark { animation: lectrCloseWrite 1.5s var(--ease-draw) 200ms forwards; }
 @keyframes lectrCloseWrite { to { clip-path: inset(0 0 0 0); } }
@@ -2129,7 +2178,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   max-width: 760px;
   margin: 34px auto 0;
   padding-top: 26px;
-  border-top: 1px solid var(--hairline-soft, rgba(255,255,255,0.06));
+  border-top: 1px solid var(--hairline-soft, rgba(242, 238, 227, 0.065));
 }
 .ray-close-k {
   display: block;
@@ -2156,7 +2205,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   gap: 24px;
   margin-top: 34px;
   padding-top: 16px;
-  border-top: 1px solid var(--hairline-soft, rgba(255,255,255,0.06));
+  border-top: 1px solid var(--hairline-soft, rgba(242, 238, 227, 0.065));
   font-size: 11px;
   color: var(--color-text-faint);
 }
@@ -2190,8 +2239,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   display: block;
   border-radius: 16px;
   padding: 16px 18px;
-  background: linear-gradient(180deg, #15181C, #101215);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
   text-decoration: none;
   color: inherit;
 }
@@ -2205,7 +2254,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-deckcall { transition: transform 160ms var(--ease-signature), box-shadow var(--duration-fast) var(--ease-signature); }
 .ray-deckcall:hover {
   transform: translateY(-2px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.08), 0 12px 32px rgba(8, 6, 3, 0.4);
 }
 .ray-deckcall-img {
   height: 150px;
@@ -2236,7 +2285,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   right: auto;
   width: 100%;
   height: 1px;
-  background: #F4F5F6;
+  background: var(--color-fg);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 220ms var(--ease-ui);
@@ -2261,8 +2310,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   width: 168px;
   border-radius: 14px;
   padding: 13px 14px;
-  background: linear-gradient(180deg, #15181C, #101215);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
   text-decoration: none;
   color: inherit;
   transition: transform 160ms var(--ease-signature);
@@ -2284,7 +2333,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-mover-now { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--color-fg); }
 .ray-mover-delta { font-size: 10.5px; font-weight: 700; }
 .ray-mover[data-tone=up] .ray-mover-delta { color: var(--color-up); }
-.ray-mover[data-tone=down] .ray-mover-delta { color: var(--color-down); }
+.ray-mover[data-tone=down] .ray-mover-delta { color: var(--color-down-text); }
 
 @media (max-width: 1000px) {
   .ray-deck { grid-template-columns: 1fr; gap: 8px; }
@@ -2461,7 +2510,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-toolbar-pill[data-active=true] { background: var(--color-fg); border: none; color: var(--color-bg); }
 .ray-toolbar-pill-signal { color: var(--color-up); background: var(--color-up-soft); }
 .ray-toolbar-pill-signal:hover { color: var(--color-up); }
-.ray-toolbar-pill-signal[data-active=true] { background: var(--color-up); color: #fff; }
+.ray-toolbar-pill-signal[data-active=true] { background: var(--color-up); color: var(--color-bg); }
 .ray-toolbar-count { font-family: var(--font-sans); font-size: 13px; color: var(--color-text-faint); }
 .ray-toolbar-reset {
   text-transform: none;
@@ -2500,9 +2549,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   pointer-events: none;
   border-radius: inherit;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-    inset 0 -46px 60px -34px rgba(8, 9, 11, 0.6),
-    inset 0 34px 44px -38px rgba(8, 9, 11, 0.4);
+    inset 0 0 0 1px rgba(242, 238, 227, 0.05),
+    inset 0 -46px 60px -34px rgba(12, 10, 6, 0.6),
+    inset 0 34px 44px -38px rgba(12, 10, 6, 0.4);
 }
 .ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.035); }
 .ray-lot-plate { background: var(--color-bg-elevated); }
@@ -2627,7 +2676,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .lectr-lead {
   width: 120px;
   height: 1px;
-  background: #F4F5F6;
+  background: var(--color-fg);
   transform: scaleX(0.2);
   transform-origin: left;
   animation: lectrLead 1.2s var(--ease-draw) infinite;
@@ -2654,7 +2703,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.045), transparent);
+  background: linear-gradient(90deg, transparent, rgba(242, 238, 227, 0.045), transparent);
   animation: raySkShimmer 1.6s var(--ease-signature) infinite;
 }
 @keyframes raySkShimmer { to { transform: translateX(100%); } }
@@ -2720,9 +2769,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-tab svg { width: 21px; height: 21px; }
 .ray-tab[data-active=true] { color: var(--color-fg); }
 .ray-tab:active { transform: scale(0.94); }
-/* Value link gets the up-green tick when active */
-.ray-nav-link-value[data-active=true] { color: var(--color-up) !important; }
-.ray-tab[data-active=true]:nth-child(2) { color: var(--color-up); }
+/* Value link lights butter when active — green is reserved for direction */
+.ray-nav-link-value[data-active=true] { color: var(--color-butter-text) !important; }
+.ray-tab[data-active=true]:nth-child(2) { color: var(--color-butter-text); }
 
 /* ── command palette ── */
 .ray-ck-hintbtn {
@@ -2745,7 +2794,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(8, 6, 3, 0.6);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -2759,7 +2808,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   border: 1px solid var(--color-border-mid);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 30px 80px rgba(8, 6, 3, 0.5);
 }
 .ray-ck-input {
   width: 100%;
@@ -2819,7 +2868,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   border: 1px solid var(--color-border-mid);
   border-radius: 16px;
   padding: 26px 28px 22px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 30px 80px rgba(8, 6, 3, 0.5);
   max-height: 80vh;
   overflow-y: auto;
 }
@@ -2862,7 +2911,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--color-up);
+  color: var(--color-butter-text); /* label, not a directional number — butter, never green */
   margin-bottom: 14px;
 }
 .ray-call-artist { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); }
@@ -3013,7 +3062,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* the sign warming when touched — the only interactive glow in the chrome */
 .ray-wordmark:hover .ray-mark-r,
 .ray-wordmark:focus-visible .ray-mark-r {
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+  filter: drop-shadow(0 0 10px rgba(242, 238, 227, 0.3));
 }
 
 /* the switch-on ritual — once per session, the mark warms with one dip */
@@ -3036,16 +3085,16 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* canvas: not dead-flat — a faint top light like every terminal */
 body {
   background:
-    radial-gradient(1200px 500px at 50% -100px, rgba(255, 255, 255, 0.028), transparent 70%),
+    radial-gradient(1200px 500px at 50% -100px, rgba(242, 238, 227, 0.03), transparent 70%),
     var(--color-bg);
 }
 
 /* surfaces: luminous gradient + inner top highlight + real shadow */
 .glass, .glass-quiet, .glass-noblur, .glass-pill {
-  background: linear-gradient(180deg, #17191D 0%, #101215 100%) !important;
+  background: linear-gradient(180deg, var(--glass-bg-hover) 0%, var(--panel) 100%) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.045),
-    0 8px 28px rgba(0, 0, 0, 0.35) !important;
+    inset 0 1px 0 rgba(242, 238, 227, 0.045),
+    0 8px 28px rgba(8, 6, 3, 0.35) !important;
 }
 .ray-lot-card,
 .ray-lot-card.glass,
@@ -3054,10 +3103,10 @@ body {
   box-shadow: none !important;
 }
 .ray-lot-img {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.04), 0 10px 30px rgba(8, 6, 3, 0.35);
 }
 .ray-strip {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.016), transparent);
+  background: linear-gradient(180deg, rgba(242, 238, 227, 0.02), transparent);
   border-radius: 14px 14px 0 0;
 }
 
@@ -3082,27 +3131,27 @@ body {
 
 /* buttons & chips with presence */
 .ray-call-btn-primary {
-  background: linear-gradient(180deg, #FFFFFF, #DDDFE3);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 6px 18px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, var(--color-fg), #DCD5C4);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.9), 0 6px 18px rgba(8, 6, 3, 0.4);
 }
 .ray-toolbar-pill[data-active=true],
 .ray-seg-btn[data-active=true],
 .ray-block-toggle-btn[data-active=true] {
-  background: linear-gradient(180deg, #FFFFFF, #DFE1E5) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 12px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(180deg, var(--color-fg), #DCD5C4) !important;
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.9), 0 4px 12px rgba(8, 6, 3, 0.35);
 }
 .ray-toolbar-pill-signal[data-active=true] {
   background: linear-gradient(180deg, #3BD186, #27A863) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 14px rgba(47, 191, 113, 0.3);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.25), 0 4px 14px rgba(47, 191, 113, 0.3);
 }
 .ray-range-btn[data-active=true] {
-  background: linear-gradient(180deg, #1E2126, #16181C);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(180deg, var(--glass-bg-hover), var(--color-bg-elevated));
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.06), 0 2px 8px rgba(8, 6, 3, 0.3);
 }
 
 /* lot cards regain a whisper of lift */
 .ray-lot-card:hover .ray-lot-img {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 16px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05), 0 16px 40px rgba(8, 6, 3, 0.5);
 }
 
 /* artist avatars — the Coinbase list anchor */
@@ -3116,18 +3165,18 @@ body {
   letter-spacing: -0.02em;
   color: var(--color-text-secondary);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.015)),
-    var(--av-bg, #1C1F24);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 2px 8px rgba(0, 0, 0, 0.35);
+    linear-gradient(145deg, rgba(242, 238, 227, 0.09), rgba(242, 238, 227, 0.015)),
+    var(--av-bg, var(--color-bg-elevated));
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.07), 0 2px 8px rgba(8, 6, 3, 0.35);
 }
 
 /* nav gets a hair of glass depth back (still sober) */
 .ray-artist-nav {
-  background: linear-gradient(180deg, rgba(13, 14, 17, 0.92), rgba(8, 9, 11, 0.88));
+  background: linear-gradient(180deg, rgba(23, 21, 15, 0.92), rgba(15, 14, 10, 0.88));
 }
 .ray-tabbar {
-  background: linear-gradient(0deg, rgba(13, 14, 17, 0.92), rgba(8, 9, 11, 0.88));
-  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(0deg, rgba(23, 21, 15, 0.92), rgba(15, 14, 10, 0.88));
+  box-shadow: 0 -8px 30px rgba(8, 6, 3, 0.4);
 }
 
 /* ── the verticals: market tabs on the lander ── */
@@ -3158,18 +3207,18 @@ body {
     color var(--duration-fast) var(--ease-signature),
     background var(--duration-fast) var(--ease-signature),
     transform 120ms var(--ease-signature);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.04);
 }
 .ray-market-tab:hover { color: var(--color-fg); }
 .ray-market-tab:active { transform: scale(0.96); }
 .ray-market-tab[data-active=true] {
-  /* the active market is the beige-lit pill — the secondary color's home */
-  background: linear-gradient(180deg, #E9E2D4, #CFC7B7);
-  color: var(--color-bg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 4px 14px rgba(0, 0, 0, 0.35);
+  /* the active market is the butter-lit pill — solid block, no gradient */
+  background: var(--color-butter);
+  color: var(--color-butter-ink);
+  box-shadow: 0 4px 14px rgba(8, 6, 3, 0.35);
 }
 .ray-market-tab[data-live=false] { color: var(--color-text-faint); }
-.ray-market-tab[data-live=false][data-active=true] { color: var(--color-bg); }
+.ray-market-tab[data-live=false][data-active=true] { color: var(--color-butter-ink); }
 .ray-market-soon {
   font-size: 9.5px;
   font-weight: 700;
@@ -3177,16 +3226,16 @@ body {
   text-transform: none;
   color: var(--color-text-muted);
 }
-.ray-market-tab[data-active=true] .ray-market-soon { color: rgba(10, 11, 13, 0.7); }
+.ray-market-tab[data-active=true] .ray-market-soon { color: rgba(15, 14, 10, 0.7); }
 .ray-markets-compact .ray-market-tab { font-size: 12.5px; padding: 6px 13px; align-items: center; }
 .ray-markets-compact .ray-market-tab svg { opacity: 0.85; flex: none; }
 /* one sign lit: with the photographic tiles dead, the active pill is
    the lit element on home — border ink + the halo, nothing gold */
 .ray-markets-compact .ray-market-tab[aria-selected=true],
 .ray-markets-compact .ray-market-tab[data-active=true] {
-  border: 1px solid rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(232, 218, 182, 0.85);
   padding: 5px 12px; /* absorbs the 1px border; the row never shifts */
-  box-shadow: var(--glow-lit), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: var(--glow-lit), inset 0 1px 0 rgba(242, 238, 227, 0.9);
 }
 
 /* the pill row never clips invisibly — the right edge admits there's more */
@@ -3227,8 +3276,8 @@ body {
   font-family: var(--font-sans);
   border-radius: 16px;
   padding: 15px 16px 14px;
-  background: linear-gradient(180deg, #17191D, #121417);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
   color: var(--color-text-muted);
   transition:
     background var(--duration-fast) var(--ease-signature),
@@ -3237,7 +3286,7 @@ body {
 }
 .ray-mkt-card:hover {
   transform: translateY(-2px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.08), 0 10px 28px rgba(8, 6, 3, 0.35);
 }
 .ray-mkt-card:active { transform: scale(0.97); }
 .ray-mkt-card-top {
@@ -3264,7 +3313,7 @@ body {
 .ray-mkt-card[data-tone=up] .ray-mkt-card-stat,
 .ray-mkt-card[data-tone=up] .ray-mkt-spark { color: var(--color-up); }
 .ray-mkt-card[data-tone=down] .ray-mkt-card-stat,
-.ray-mkt-card[data-tone=down] .ray-mkt-spark { color: var(--color-down); }
+.ray-mkt-card[data-tone=down] .ray-mkt-spark { color: var(--color-down-text); }
 .ray-mkt-card-tag {
   font-size: 11.5px;
   line-height: 1.35;
@@ -3272,16 +3321,16 @@ body {
 }
 .ray-mkt-card[data-live=false] .ray-mkt-ic { color: var(--color-text-faint); }
 
-/* the chosen market goes to white — Ray's active signature */
+/* the chosen market goes to butter — Ray's active signature, solid block */
 .ray-mkt-card[data-active=true] {
-  background: linear-gradient(180deg, #FFFFFF, #DFE1E5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 12px 34px rgba(0, 0, 0, 0.45);
+  background: var(--color-butter);
+  box-shadow: 0 12px 34px rgba(8, 6, 3, 0.45);
 }
-.ray-mkt-card[data-active=true] .ray-mkt-card-label { color: #0A0B0D; }
-.ray-mkt-card[data-active=true] .ray-mkt-ic { color: #0A0B0D; }
-.ray-mkt-card[data-active=true] .ray-mkt-card-tag { color: #5A5F66; }
-.ray-mkt-card[data-active=true] .ray-mkt-card-stat span { color: #82868D; }
-.ray-mkt-card[data-active=true] .ray-market-soon { color: rgba(10, 11, 13, 0.7); }
+.ray-mkt-card[data-active=true] .ray-mkt-card-label { color: var(--color-butter-ink); }
+.ray-mkt-card[data-active=true] .ray-mkt-ic { color: var(--color-butter-ink); }
+.ray-mkt-card[data-active=true] .ray-mkt-card-tag { color: var(--paper-muted); }
+.ray-mkt-card[data-active=true] .ray-mkt-card-stat span { color: var(--paper-muted); }
+.ray-mkt-card[data-active=true] .ray-market-soon { color: rgba(15, 14, 10, 0.7); }
 
 /* mobile: the shelf becomes pillars — every market visible, one thin row each */
 @media (max-width: 900px) {
@@ -3324,9 +3373,9 @@ body {
   border-radius: 20px;
   text-align: left;
   background:
-    radial-gradient(600px 220px at 20% 0%, rgba(255, 255, 255, 0.05), transparent 70%),
-    linear-gradient(180deg, #17191D, #121417);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 60px rgba(0, 0, 0, 0.4);
+    radial-gradient(600px 220px at 20% 0%, rgba(242, 238, 227, 0.05), transparent 70%),
+    linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05), 0 20px 60px rgba(8, 6, 3, 0.4);
 }
 .ray-soon-k {
   font-size: 13px;
@@ -3377,7 +3426,7 @@ body {
 /* Appreciation — a stat panel to the right of the graph on desktop, seamed to
    the chart with the same 1px hairline; collapses to a gray banner on mobile. */
 .ray-appr {
-  background: #0A0B0D;
+  background: var(--color-bg-board);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -3396,7 +3445,7 @@ body {
 @media (max-width: 899px) {
   /* mobile: the panel becomes a one-line gray banner between chart and call */
   .ray-appr {
-    background: rgba(255, 255, 255, 0.045);
+    background: rgba(242, 238, 227, 0.045);
     padding: 13px 16px;
     justify-content: center;
     align-items: center;
@@ -3457,7 +3506,7 @@ body {
 }
 .ray-watchstrip-stat b.up { color: var(--color-up); }
 .ray-watchstrip-stat b.down { color: var(--color-down); }
-.ray-watchstrip-stat span { font-size: 11px; color: #7A8087; white-space: nowrap; }
+.ray-watchstrip-stat span { font-size: 11px; color: var(--color-text-faint); white-space: nowrap; }
 .ray-watchstrip-link { display: inline-block; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; }
 .ray-watchstrip:hover .ray-watchstrip-link { color: var(--color-fg); }
 
@@ -3469,7 +3518,7 @@ body {
   gap: 16px;
   flex-wrap: wrap;
   border: 1px solid var(--hairline);
-  background: #0C0D10;
+  background: var(--panel);
   padding: 12px 20px;
   font-size: 13px;
   color: var(--color-text-muted);
@@ -3477,7 +3526,7 @@ body {
 }
 .ray-results-row b { color: var(--color-fg); font-weight: 600; }
 .ray-results-row b.up { color: var(--color-up); }
-.ray-results-row b.down { color: var(--color-down); }
+.ray-results-row b.down { color: var(--color-down-text); }
 .ray-results-row button {
   border: none;
   cursor: pointer;
@@ -3507,8 +3556,8 @@ body {
   font-weight: 600;
   letter-spacing: 0;
   color: var(--color-fg);
-  background: rgba(8, 9, 11, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(15, 14, 10, 0.72);
+  border: 1px solid rgba(242, 238, 227, 0.22);
   border-radius: 100px;
   padding: 3px 9px;
 }
@@ -3644,7 +3693,7 @@ body {
     width: 40px;
     height: 4px;
     border-radius: 100px;
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(242, 238, 227, 0.25);
   }
   .ray-sheet[data-closing=true] { transform: translateY(100%); }
 }
@@ -3685,7 +3734,7 @@ body {
   background:
     linear-gradient(180deg, var(--pill-ink, transparent), transparent 78%),
     var(--color-bg-elevated);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
 }
 .ray-markets-compact .ray-market-tab svg { opacity: 1; color: var(--pill-glyph, var(--color-text-secondary)); }
 .ray-markets-compact .ray-market-tab:hover { border-color: var(--pill-glyph, var(--color-text-secondary)); }
@@ -3715,13 +3764,13 @@ body {
     100% { transform: scale(1); }
   }
 }
-/* active is the beige-lit pill — ink yields to warm light */
+/* active is the butter-lit pill — solid block, ink yields to warm light */
 .ray-markets-compact .ray-market-tab[data-active=true] {
-  background: linear-gradient(180deg, #E9E2D4, #CFC7B7);
-  border-color: color-mix(in srgb, var(--color-beige) 80%, transparent);
-  color: var(--color-bg);
+  background: var(--color-butter);
+  border-color: color-mix(in srgb, var(--color-butter) 80%, transparent);
+  color: var(--color-butter-ink);
 }
-.ray-markets-compact .ray-market-tab[data-active=true] svg { color: var(--color-bg); }
+.ray-markets-compact .ray-market-tab[data-active=true] svg { color: var(--color-butter-ink); }
 
 /* mobile: no scroll — two rows of three, full width */
 @media (max-width: 899px) {
@@ -3749,8 +3798,8 @@ body {
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(ellipse 560px 280px at 50% 50%, rgba(244, 246, 255, 0.05), transparent 70%),
-    #060709;
+    radial-gradient(ellipse 560px 280px at 50% 50%, rgba(242, 238, 227, 0.05), transparent 70%),
+    var(--color-bg-deep);
   transition: opacity 520ms var(--ease-ui);
   /* decorative splash only — never intercept the first 1.75s of taps/clicks on
      the live page underneath (it's aria-hidden and purely visual). */
@@ -3762,7 +3811,7 @@ body {
   width: auto;
   clip-path: inset(0 100% 0 0);
   animation: lectrCloseWrite 1.4s var(--ease-draw) 150ms forwards;
-  filter: drop-shadow(0 0 26px rgba(255, 255, 255, 0.14));
+  filter: drop-shadow(0 0 26px rgba(242, 238, 227, 0.14));
 }
 @media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }
 

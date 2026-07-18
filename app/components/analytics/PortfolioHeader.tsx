@@ -92,7 +92,7 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
           full-bleed band rule the rail can't give us here */}
       <div
         className="ray-paper"
-        style={{ border: '1px solid rgba(25, 22, 18, 0.25)', borderRadius: 12, padding: '18px 20px 12px' }}
+        style={{ border: '1px solid var(--paper-edge)', borderRadius: 12, padding: '18px 20px 12px' }}
       >
         <RecordBand
           title="The book"

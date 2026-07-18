@@ -58,7 +58,7 @@ export default function CategoryBreakdown({ allLots }: Props) {
         count: d.count,
         soldCount: d.soldCount,
         // Recharts fills need concrete hexes, swapped per theme.
-        fill: categoryColorsHex[theme][cat] || (theme === 'light' ? '#6D685E' : '#9F9991'),
+        fill: categoryColorsHex[theme][cat] || (theme === 'light' ? '#6D685E' : '#A69B86'),
       }))
       .sort((a, b) => b.revenue - a.revenue);
   }, [allLots, theme]);

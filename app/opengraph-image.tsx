@@ -53,7 +53,7 @@ export default function OG() {
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
-          background: '#060709',
+          background: '#0B0A07',
           padding: '40px 60px 36px',
           fontFamily: 'sans-serif',
         }}
@@ -66,7 +66,7 @@ export default function OG() {
             left: 24,
             right: 24,
             bottom: 24,
-            border: '1px solid rgba(255,255,255,0.14)',
+            border: '1px solid rgba(242,238,227,0.14)',
           }}
         />
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -78,28 +78,28 @@ export default function OG() {
               justifyContent: 'center',
               padding: 80,
               margin: -80,
-              background: 'radial-gradient(closest-side, rgba(244,246,255,0.07), transparent 70%)',
+              background: 'radial-gradient(closest-side, rgba(242,238,227,0.07), transparent 70%)',
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={'data:image/png;base64,' + mark} width={340} height={218} alt="" />
           </div>
-          <div style={{ fontSize: 22, color: '#7A8087' }}>auction intelligence · lectr.bid</div>
+          <div style={{ fontSize: 22, color: '#8A8477' }}>auction intelligence · lectr.bid</div>
         </div>
-        <div style={{ display: 'flex', fontSize: 26, color: '#9AA0A6', marginTop: 8 }}>
+        <div style={{ display: 'flex', fontSize: 26, color: '#A19B8D', marginTop: 8 }}>
           The collectibles market · art, design, watches &amp; science · total realized, all time
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 26 }}>
-          <div style={{ fontSize: 110, fontWeight: 800, color: '#F4F5F6', letterSpacing: -4 }}>{totalLabel}</div>
+          <div style={{ fontSize: 110, fontWeight: 800, color: '#F2EEE3', letterSpacing: -4 }}>{totalLabel}</div>
           <div style={{ fontSize: 30, fontWeight: 700, color: appr >= 0 ? '#2FBF71' : '#E5544B' }}>
             {`prices ${appr >= 0 ? 'up' : 'down'} ${Math.abs(appr).toFixed(1)}% this year`}
           </div>
         </div>
         <svg width={W} height={H + 16} style={{ marginTop: 8 }}>
-          <polyline points={line} fill="none" stroke="#FFFFFF" strokeWidth={5} strokeLinejoin="round" strokeLinecap="round" />
+          <polyline points={line} fill="none" stroke="#E8DAB6" strokeWidth={5} strokeLinejoin="round" strokeLinecap="round" />
         </svg>
         {backtest.flagged.n > 500 && (
-          <div style={{ display: 'flex', fontSize: 21, color: '#9AA0A6', marginTop: 'auto', gap: 7 }}>
+          <div style={{ display: 'flex', fontSize: 21, color: '#A19B8D', marginTop: 'auto', gap: 7 }}>
             <span>flagged calls hammered</span>
             <span style={{ color: '#2FBF71', fontWeight: 700 }}>{`+${(backtest.flagged as { hammerMedianPct?: number }).hammerMedianPct ?? backtest.flagged.medianPerfPct}% median`}</span>
             <span>{`over estimates · ${backtest.flagged.n.toLocaleString()} replayed sales`}</span>
