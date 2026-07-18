@@ -120,7 +120,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     { label: 'Makers', path: '/artists', active: activeSlug === 'artists' },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
     { label: `Saved${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' },
-    { label: 'Notes', path: '/blog', active: activeSlug === 'blog' },
+    { label: 'Blog', path: '/blog', active: activeSlug === 'blog' },
     { label: 'How it works', path: '/about', active: activeSlug === 'about' },
   ];
 
@@ -521,7 +521,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
           <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Notes</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Blog</button>
           <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
             Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
           </button>

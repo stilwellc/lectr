@@ -44,7 +44,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
       { label: 'Makers', hint: 'the roster, as demand curves', path: '/artists', kind: 'section' as const },
       { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics', kind: 'section' as const },
       { label: 'Saved', hint: 'your watchlist', path: '/saved', kind: 'section' as const },
-      { label: 'Notes from the desk', hint: 'quarterly market notes + how we built the engine', path: '/blog', kind: 'section' as const },
+      { label: 'Blog', hint: 'quarterly market notes + how we built the engine', path: '/blog', kind: 'section' as const },
       { label: 'How it works', hint: 'the engine, for engineers', path: '/about', kind: 'section' as const },
       {
         label: onBlockCount > 0 ? `On the block · ${onBlockCount}` : 'On the block',
