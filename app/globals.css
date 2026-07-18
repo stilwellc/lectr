@@ -3821,5 +3821,5 @@ body {
 @media (max-width: 899px) { .ray-tbl-save { width: 40px; height: 40px; } }
 
 /* blog index cards — hairline lift on hover */
-.ray-blog-card { transition: border-color 180ms var(--ease-signature), transform 180ms var(--ease-signature), box-shadow 180ms var(--ease-signature), background 180ms var(--ease-signature); }
-.ray-blog-card:hover { border-color: color-mix(in srgb, var(--color-butter) 40%, transparent); transform: translateY(-2px); box-shadow: 0 10px 24px -16px rgba(8,6,3,0.8); background: color-mix(in srgb, var(--color-butter) 13%, var(--color-bg-elevated)); }
+.ray-blog-card { transition: border-color 180ms var(--ease-signature), transform 180ms var(--ease-signature); }
+.ray-blog-card:hover { border-color: var(--color-border-mid); transform: translateY(-1px); }
