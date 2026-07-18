@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AuctionLot } from '../../types';
 import { formatDate, formatPrice, houseColors, craftTitle, overEstimatePct, toneOf, fmtSignedPct } from '../../utils';
 import { ARTIST_LABEL } from '../../constants';
@@ -9,7 +9,10 @@ interface Props {
   allLots: AuctionLot[];
 }
 
+const COLLAPSED_ROWS = 5;
+
 export default function TopSales({ allLots }: Props) {
+  const [expanded, setExpanded] = useState(false);
   const topSales = useMemo(() => {
     return allLots
       .filter(l => l.status === 'sold' && l.priceUsd)
@@ -18,6 +21,8 @@ export default function TopSales({ allLots }: Props) {
   }, [allLots]);
 
   if (topSales.length === 0) return null;
+
+  const shown = expanded ? topSales : topSales.slice(0, COLLAPSED_ROWS);
 
   return (
     <section className="ray-top-sales rail">
@@ -117,7 +122,7 @@ export default function TopSales({ allLots }: Props) {
             </tr>
           </thead>
           <tbody>
-            {topSales.map((lot, i) => {
+            {shown.map((lot, i) => {
               const ct = craftTitle(lot.title);
               const title = ct.length > 50 ? ct.slice(0, 47) + '…' : ct;
               // hammer basis — the premium is divided out before comparing to
@@ -218,6 +223,29 @@ export default function TopSales({ allLots }: Props) {
         </table>
         </div>
       </div>
+      {!expanded && topSales.length > COLLAPSED_ROWS && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+          <button
+            onClick={() => setExpanded(true)}
+            style={{
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: 100,
+              padding: '10px 32px',
+              fontSize: 12,
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
+              color: 'var(--color-text-muted)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans), sans-serif',
+              transition: 'border-color var(--duration-fast) var(--ease-signature)',
+            }}
+          >
+            Show all {topSales.length}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

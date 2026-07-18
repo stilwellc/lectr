@@ -17,6 +17,8 @@ import MarketSwitch from '../components/MarketSwitch';
 import UpcomingLots from '../components/UpcomingLots';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
+import { Colophon } from '../components/Terminal';
+import meta from '../../public/data/ray/meta.json';
 
 const PriceChart = dynamic(() => import('../components/PriceChart'), { ssr: false });
 
@@ -60,6 +62,8 @@ function MakerSections({
   allLots,
   savedIds,
   onToggleSave,
+  ownedIds,
+  onToggleOwned,
   categoryFilter,
   onCategoryChange,
   fromCache,
@@ -73,6 +77,8 @@ function MakerSections({
   allLots: AuctionLot[];
   savedIds: string[];
   onToggleSave: (id: string) => void;
+  ownedIds: string[];
+  onToggleOwned: (id: string) => void;
   categoryFilter: CategoryFilter;
   onCategoryChange: (c: CategoryFilter) => void;
   fromCache: boolean;
@@ -122,6 +128,8 @@ function MakerSections({
             onCategoryChange={onCategoryChange}
             savedIds={savedIds}
             onToggleSave={onToggleSave}
+            ownedIds={ownedIds}
+            onToggleOwned={onToggleOwned}
             mark="03"
           />
         </div>
@@ -134,7 +142,7 @@ export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.artist as string;
   const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache } = useRayData();
-  const { toggle, savedIds } = useSavedLots();
+  const { toggle, savedIds, ownedIds, toggleOwned } = useSavedLots();
   const { setMarket } = useMarket();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
@@ -219,7 +227,7 @@ export default function ArtistDetailPage() {
                 <MarketSwitch compact />
               </div>
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-                <ArtistHero label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} />
+                <ArtistHero label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
               </div>
             </RayEntrance>
           )}
@@ -233,6 +241,8 @@ export default function ArtistDetailPage() {
               upcoming={upcoming}
               savedIds={savedIds}
               onToggleSave={toggleWithLot}
+              ownedIds={ownedIds}
+              onToggleOwned={toggleOwned}
               categoryFilter={categoryFilter}
               onCategoryChange={setCategoryFilter}
               fromCache={fromCache}
@@ -256,11 +266,16 @@ export default function ArtistDetailPage() {
               allLots={allLots}
               savedIds={savedIds}
               onToggleSave={toggleWithLot}
+              ownedIds={ownedIds}
+              onToggleOwned={toggleOwned}
               categoryFilter={categoryFilter}
               onCategoryChange={setCategoryFilter}
               fromCache={fromCache}
             />
           )}
+
+          {/* the closing colophon — corpus counts from meta.json */}
+          <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
         </>
       )}
     </div>
@@ -279,6 +294,8 @@ function ArchiveMakerBody({
   upcoming,
   savedIds,
   onToggleSave,
+  ownedIds,
+  onToggleOwned,
   categoryFilter,
   onCategoryChange,
   fromCache,
@@ -290,6 +307,8 @@ function ArchiveMakerBody({
   upcoming: AuctionLot[];
   savedIds: string[];
   onToggleSave: (id: string) => void;
+  ownedIds: string[];
+  onToggleOwned: (id: string) => void;
   categoryFilter: CategoryFilter;
   onCategoryChange: (c: CategoryFilter) => void;
   fromCache: boolean;
@@ -310,7 +329,7 @@ function ArchiveMakerBody({
           <MarketSwitch compact />
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-          <ArtistHero label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket />
+          <ArtistHero label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
         </div>
       </RayEntrance>
 
@@ -331,6 +350,8 @@ function ArchiveMakerBody({
           allLots={makerLots}
           savedIds={savedIds}
           onToggleSave={onToggleSave}
+          ownedIds={ownedIds}
+          onToggleOwned={onToggleOwned}
           categoryFilter={categoryFilter}
           onCategoryChange={onCategoryChange}
           fromCache={fromCache}

@@ -11,6 +11,8 @@ import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
 import ArtistAvatar from './ArtistAvatar';
+import DeskNote from './analytics/DeskNote';
+import type { Market } from '../constants';
 
 type Range = '1Y' | '5Y' | 'MAX';
 
@@ -29,6 +31,7 @@ export default function ArtistHero({
   lots,
   upcomingCount,
   bidMarket = false,
+  market,
 }: {
   label: string;
   stats: MarketStats | null;
@@ -41,6 +44,8 @@ export default function ArtistHero({
       estimate-bearing rows and headlining a stale −45%). These heroes read
       the REALIZED tape instead: quarterly median sale price. */
   bidMarket?: boolean;
+  /** the maker's market — the current-quarter desk-note cross-link */
+  market?: Market;
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
@@ -128,7 +133,13 @@ export default function ArtistHero({
     const soldCount = concluded.filter(l => l.status === 'sold').length;
     const sellThrough = concluded.length >= 5 ? Math.round((soldCount / concluded.length) * 100) : null;
     const houses = new Set(lots.map(l => l.auctionHouse)).size;
-    return { sellThrough, houses, total: lots.length };
+    // bid markets: every no-reserve lot concludes 'sold', so sell-through is
+    // a constant 100% — count the past year's sales instead
+    const cutoff = Date.now() - 365 * 86_400_000;
+    const sold12mo = lots.filter(l =>
+      l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff
+    ).length;
+    return { sellThrough, houses, total: lots.length, sold12mo };
   }, [lots]);
 
   // The live-lot count comes from the page (date-filtered, the same list the
@@ -174,21 +185,33 @@ export default function ArtistHero({
             {delta > 0 ? 'heating' : 'cooling'} · was {bidMarket ? formatPrice(yearAgo) : formatDemand(yearAgo)} a year ago
           </span>
         )}
+        {/* price context stays ONE token: the typical sale. The record lives
+            on THE MAKER'S RECORD card just below — never printed twice. */}
         <span className="ctx">
-          {[
-            !fresh && !series.length && typicalSale !== null ? null : typicalSale !== null ? `typical ${lensWord} ${formatPrice(typicalSale)}` : null,
-            stats?.recordPrice ? `record ${formatPrice(stats.recordPrice)}${recordYear ? ` (${recordYear})` : ''}` : null,
-          ].filter(Boolean).join(' · ')}
-          {liveCount > 0 && (
-            <>
-              {(typicalSale !== null || stats?.recordPrice) ? ' · ' : ''}
-              <a href="#upcoming" style={{ color: 'inherit', textDecorationColor: 'var(--color-border-mid)', textUnderlineOffset: 3 }}>
-                {liveCount} live {liveCount === 1 ? 'lot' : 'lots'}
-              </a>
-            </>
-          )}
+          {(() => {
+            // suppressed when the big numeral IS the typical sale already
+            const typicalToken = !fresh && !series.length && typicalSale !== null
+              ? null
+              : typicalSale !== null ? `typical ${lensWord} ${formatPrice(typicalSale)}` : null;
+            return (
+              <>
+                {typicalToken}
+                {liveCount > 0 && (
+                  <>
+                    {typicalToken ? ' · ' : ''}
+                    <a href="#upcoming" style={{ color: 'inherit', textDecorationColor: 'var(--color-border-mid)', textUnderlineOffset: 3 }}>
+                      {liveCount} live {liveCount === 1 ? 'lot' : 'lots'}
+                    </a>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </span>
       </p>
+
+      {/* the market's current-quarter note from the desk */}
+      {market && <DeskNote market={market} style={{ marginTop: 6 }} />}
 
       {visible.length >= 2 && (
         <>
@@ -284,11 +307,19 @@ export default function ArtistHero({
                 ? `${stats.recordTitle.length > 34 ? stats.recordTitle.slice(0, 32) + '…' : stats.recordTitle}${recordYear ? `, ${recordYear}` : ''}`
                 : 'no concluded sales yet',
             },
-            {
-              k: 'Sell-through',
-              v: facts.sellThrough !== null ? <CountUp to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—',
-              sub: 'of concluded lots found buyers',
-            },
+            // no-reserve bid markets conclude every lot 'sold' — a constant
+            // "Sell-through 100%" cell says nothing, so count the year instead
+            bidMarket
+              ? {
+                  k: 'Sales, past 12 mo',
+                  v: <CountUp to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+                  sub: 'sold, trailing 12 months',
+                }
+              : {
+                  k: 'Sell-through',
+                  v: facts.sellThrough !== null ? <CountUp to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—',
+                  sub: 'of concluded lots found buyers',
+                },
             {
               k: 'Lots tracked',
               v: <CountUp to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} />,

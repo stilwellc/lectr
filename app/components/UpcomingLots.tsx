@@ -1,9 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AuctionLot, MarketStats } from '../types';
 import LotCard from './LotCard';
 import SectionMark from './SectionMark';
+
+const COLLAPSED_CARDS = 12;
+
+/** a lot's asking level for the price sort — estimate mid, else any bound,
+ *  else the tracked bid */
+function askOf(l: AuctionLot): number {
+  if (l.estimateLow && l.estimateHigh) return (l.estimateLow + l.estimateHigh) / 2;
+  return l.estimateLow || l.estimateHigh || l.priceUsd || 0;
+}
 
 export default function UpcomingLots({
   lots,
@@ -29,7 +38,17 @@ export default function UpcomingLots({
   /** the last crawl's ISO date — lets cards mark lots first seen today */
   lastCrawl?: string;
 }) {
-  const [visible, setVisible] = useState(48);
+  const [expanded, setExpanded] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'price'>('date');
+
+  // 'date' keeps the caller's order (the page already sorts by sale date);
+  // 'price' ranks by estimate mid, highest ask first
+  const sorted = useMemo(
+    () => (sortBy === 'price' ? [...lots].sort((a, b) => askOf(b) - askOf(a)) : lots),
+    [lots, sortBy]
+  );
+  const shown = expanded ? sorted : sorted.slice(0, COLLAPSED_CARDS);
+
   return (
     <section className="ray-upcoming rail">
       <style>{`
@@ -38,6 +57,31 @@ export default function UpcomingLots({
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 16px;
+        }
+        .ray-upcoming .ray-sort-pill {
+          font-family: var(--font-sans), sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          padding: 6px 16px;
+          border-radius: 100px;
+          border: 1px solid var(--color-border);
+          background: transparent;
+          color: var(--color-text-muted);
+          cursor: pointer;
+          transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
+        }
+        .ray-upcoming .ray-sort-pill:hover {
+          border-color: var(--color-border-mid);
+          color: var(--color-fg);
+        }
+        /* Quote-free selector on purpose - quotes in server-rendered style
+           text get HTML-escaped and break hydration. */
+        .ray-upcoming .ray-sort-pill[data-active=true] {
+          background: var(--color-fg);
+          border-color: var(--color-fg);
+          color: var(--color-bg);
         }
         @media (max-width: 768px) {
           .ray-upcoming { padding-block: 32px 32px; }
@@ -51,24 +95,48 @@ export default function UpcomingLots({
       {/* Ghost ordinal clipped to the header band — never under the cards */}
       <div style={{ position: 'relative', overflow: 'hidden', marginBottom: 16 }}>
         {mark && <SectionMark n={mark} style={{ fontSize: 'clamp(96px, 12vw, 150px)' }} />}
-        <h2
+        <div
           className="ray-enter"
           style={{
             '--enter-delay': `${enterDelay}ms`,
             position: 'relative',
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 16,
+            padding: '16px 0 12px',
+          } as React.CSSProperties}
+        >
+          <h2 style={{
             fontFamily: 'var(--font-sans), sans-serif',
             fontSize: 24,
             fontWeight: 700,
             letterSpacing: '-0.02em',
-            padding: '16px 0 12px',
-          } as React.CSSProperties}
-        >
-          Upcoming <span style={{ fontStyle: 'normal' }}>lots</span>
-        </h2>
+          }}>
+            Upcoming <span style={{ fontStyle: 'normal' }}>lots</span>
+          </h2>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              className="ray-sort-pill"
+              data-active={sortBy === 'date' ? 'true' : 'false'}
+              onClick={() => setSortBy('date')}
+            >
+              Date
+            </button>
+            <button
+              className="ray-sort-pill"
+              data-active={sortBy === 'price' ? 'true' : 'false'}
+              onClick={() => setSortBy('price')}
+            >
+              Price
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="ray-upcoming-grid">
-        {lots.slice(0, visible).map((lot, i) => (
+        {shown.map((lot, i) => (
           <div
             key={lot.id}
             className="ray-enter-card"
@@ -86,10 +154,10 @@ export default function UpcomingLots({
         ))}
       </div>
 
-      {visible < lots.length && (
+      {!expanded && sorted.length > COLLAPSED_CARDS && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
           <button
-            onClick={() => setVisible(v => v + 48)}
+            onClick={() => setExpanded(true)}
             style={{
               background: 'none',
               border: '1px solid var(--color-border)',
@@ -105,7 +173,7 @@ export default function UpcomingLots({
               transition: 'border-color var(--duration-fast) var(--ease-signature)',
             }}
           >
-            Show more
+            Show all {sorted.length}
           </button>
         </div>
       )}

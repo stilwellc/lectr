@@ -13,6 +13,8 @@ import { formatDate, getUpcomingCounts } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
+import { Colophon } from '../components/Terminal';
+import meta from '../../public/data/ray/meta.json';
 
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 
@@ -88,6 +90,9 @@ export default function ArtistsPage() {
           <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
             <ArtistSparklines statsByArtist={statsByArtist} allLots={allLots} limit={ARTISTS.length} market={activeKey} />
           </div>
+
+          {/* the closing colophon — corpus counts from meta.json */}
+          <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
         </RayEntrance>
       )}
     </div>

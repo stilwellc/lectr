@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ARTISTS, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
-import CommandK from './CommandK';
+import CommandK, { OPEN_CK_EVENT } from './CommandK';
 import Flick from './Flick';
 import { useAuth } from '../lib/account';
 
@@ -37,8 +37,6 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       // sessionStorage unavailable (private mode edge cases) — skip the ritual.
     }
   }, []);
-  const ref = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
 
@@ -73,38 +71,28 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       .filter(g => g.makers.length > 0);
   }, [query]);
 
+  // The sheet's resting state — the five busiest makers by live lots. When
+  // nothing is live the list is empty and only "Browse all makers" renders.
+  const topMakers = useMemo(() =>
+    ARTISTS
+      .filter(a => (upcomingCounts[a.slug] || 0) > 0)
+      .sort((a, b) => (upcomingCounts[b.slug] || 0) - (upcomingCounts[a.slug] || 0))
+      .slice(0, 5),
+    [upcomingCounts]);
+
+  // The sheet (the only surface `open` still gates — the desktop finder now
+  // opens CommandK): reset the filter, and let Escape or the scrim dismiss.
+  // No focus-steal on open — the keyboard must not pop over the list.
   useEffect(() => {
     if (!open) return;
     setQuery('');
     if (dropdownRef.current) dropdownRef.current.scrollTop = 0;
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
+      if (e.key === 'Escape') setOpen(false);
     }
     document.addEventListener('keydown', handleKey);
-    // Desktop dropdown: auto-focus the filter and close on outside-click / scroll.
-    // Mobile sheet: don't steal focus (no keyboard popping over the list) and
-    // let the scrim own dismissal — the sheet is portaled outside `ref`, so the
-    // outside-click test would fire on its own taps, and internal list scroll
-    // must not close it.
-    if (isMobile) {
-      return () => document.removeEventListener('keydown', handleKey);
-    }
-    filterRef.current?.focus({ preventScroll: true });
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    function handleScroll() { setOpen(false); }
-    document.addEventListener('mousedown', handleClick);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, [open, isMobile]);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [open]);
 
   function navigate(path: string) {
     setOpen(false);
@@ -186,7 +174,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
 
   return (
     <>
-    <div className="ray-artist-nav" ref={ref}>
+    <div className="ray-artist-nav">
       <style>{`
         .ray-artist-nav {
           position: sticky;
@@ -253,32 +241,6 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           letter-spacing: 0.04em;
           cursor: pointer;
         }
-        /* Higher specificity on purpose - position must beat the
-           position: relative from .glass regardless of stylesheet order.
-           NOTE: keep this style block free of quotes, apostrophes and
-           angle brackets; React escapes them server-side and hydration
-           of raw-text elements then fails. */
-        @keyframes rayDropIn {
-          from { opacity: 0; transform: translateY(-6px); }
-          to { opacity: 1; transform: none; }
-        }
-        .ray-artist-select-wrap .ray-artist-dropdown {
-          animation: rayDropIn 200ms var(--ease-signature) both;
-          position: absolute;
-          left: 0;
-          right: 0;
-          top: 100%;
-          margin-top: 4px;
-          max-height: 400px;
-          overflow-y: auto;
-          scrollbar-width: none;
-          z-index: 100;
-          /* Opaque on purpose. backdrop-filter cannot work here - the
-             sticky nav above is itself a backdrop root, so glass blur
-             samples nothing and page text would ghost through the menu. */
-          background: var(--color-bg-elevated);
-        }
-        .ray-artist-dropdown::-webkit-scrollbar { display: none; }
         .ray-artist-dropdown-item {
           display: block;
           width: 100%;
@@ -319,12 +281,6 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           border-radius: 100px;
           padding: 1px 7px;
           margin-left: 8px;
-        }
-        .ray-artist-dropdown-divider {
-          height: 1px;
-          background: var(--color-border);
-          margin: 0;
-          border: none;
         }
         .ray-artist-dropdown-label {
           display: block;
@@ -538,35 +494,25 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         <button
           className="ray-ck-hintbtn"
           aria-label="Open jump palette (Command K)"
-          onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+          onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
         >
           Search &#8984;K
         </button>
 
+        {/* ONE search — the pill opens the same CommandK palette as ⌘K,
+            which browses the full roster grouped by market when the query
+            is empty. The old bespoke dropdown was a strict subset of it. */}
         <div className="ray-artist-select-wrap">
         <button
-          ref={triggerRef}
           className="ray-artist-select-btn glass glass-pill glass-quiet"
-          onClick={() => setOpen(o => !o)}
-          aria-haspopup="menu"
-          aria-expanded={open}
+          onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
+          aria-haspopup="dialog"
         >
           <span>Find a maker</span>
-          <span style={{
-            opacity: 0.4,
-            transform: open ? 'rotate(180deg)' : 'rotate(0)',
-            transition: 'transform var(--duration-fast) var(--ease-signature)',
-          }}>
+          <span style={{ opacity: 0.4 }}>
             <Flick size={10} style={{ transform: 'scaleY(-1)', marginLeft: 0 }} />
           </span>
         </button>
-
-        {open && !isMobile && (
-          <div className="ray-artist-dropdown glass glass-noblur" role="menu" aria-label="Find a maker" ref={dropdownRef}>
-            {filterInput}
-            {groupList}
-          </div>
-        )}
         </div>
 
         {/* Mobile-only menu button — opens the full-screen nav sheet (sections
@@ -626,7 +572,34 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
               </nav>
               <div className="ray-maker-sheet-sub">Find a maker</div>
               {filterInput}
-              {groupList}
+              {/* the full ~38-row roster only unrolls once the user TYPES —
+                  the resting sheet stays two screens shorter. Empty state:
+                  the five busiest makers by live lots, then the full index. */}
+              {query.trim() ? groupList : (
+                <>
+                  {topMakers.map(a => (
+                    <button
+                      key={a.slug}
+                      role="menuitem"
+                      className="ray-artist-dropdown-item"
+                      data-active={activeSlug === a.slug ? 'true' : 'false'}
+                      onClick={() => navigate(`/${a.slug}`)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                    >
+                      <span>{a.label}</span>
+                      <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
+                    </button>
+                  ))}
+                  <button
+                    role="menuitem"
+                    className="ray-artist-dropdown-item"
+                    onClick={() => navigate('/artists')}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, color: 'var(--color-fg)' }}
+                  >
+                    Browse all makers <Flick size={11} style={{ marginLeft: 0 }} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>,

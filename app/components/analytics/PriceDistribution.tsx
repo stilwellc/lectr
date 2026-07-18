@@ -42,7 +42,7 @@ function DistributionTooltip({ active, payload }: { active?: boolean; payload?: 
   );
 }
 
-export default function PriceDistribution({ allLots }: Props) {
+export default function PriceDistribution({ allLots, embedded = false }: Props & { embedded?: boolean }) {
   const buckets = useMemo(() => {
     const sold = allLots.filter(l => l.status === 'sold' && l.priceUsd);
     return RANGES.map(r => {
@@ -58,28 +58,16 @@ export default function PriceDistribution({ allLots }: Props) {
   const hasData = buckets.some(b => b.count > 0);
   if (!hasData) return null;
 
-  return (
-    <section className="ray-price-dist rail">
+  // the chart card itself — reused verbatim by the embedded (Distributions
+  // tab) rendering, which supplies its own section frame and header
+  const card = (
+    <>
       <style>{`
-        .ray-price-dist { padding-block: 40px 48px; }
         .ray-price-dist-chart { height: 280px; }
         @media (max-width: 768px) {
-          .ray-price-dist { padding-block: 32px 32px; }
           .ray-price-dist-chart { height: 200px; }
         }
       `}</style>
-
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
-          fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-        }}>
-          Price <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
-        </h2>
-      </div>
-
       <div className="glass glass-quiet" style={{
         overflow: 'hidden',
         padding: '20px 8px 16px 0',
@@ -107,6 +95,32 @@ export default function PriceDistribution({ allLots }: Props) {
           </ResponsiveContainer>
         </div>
       </div>
+    </>
+  );
+
+  if (embedded) return card;
+
+  return (
+    <section className="ray-price-dist rail">
+      <style>{`
+        .ray-price-dist { padding-block: 40px 48px; }
+        @media (max-width: 768px) {
+          .ray-price-dist { padding-block: 32px 32px; }
+        }
+      `}</style>
+
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+        }}>
+          Price <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
+        </h2>
+      </div>
+
+      {card}
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
 import { Colophon } from '../components/Terminal';
@@ -11,8 +12,7 @@ export const metadata: Metadata = {
 };
 
 const wrap: React.CSSProperties = { maxWidth: 860, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '52px 0 6px' };
-const kicker: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 14px' };
+const kicker: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 6px' };
 const p: React.CSSProperties = { fontSize: 15, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 14px' };
 const li: React.CSSProperties = { fontSize: 15, lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: '0 0 8px' };
 const code: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace', fontSize: 13, background: 'var(--color-bg-elevated)', padding: '1px 6px', borderRadius: 5, color: 'var(--color-fg)' };
@@ -49,13 +49,61 @@ function Branch({ children }: { children: React.ReactNode }) {
 }
 const branchItem: React.CSSProperties = { flex: '1 1 150px', minWidth: 0 };
 
+/* ── the walk-through as a certificate index — each section a disclosure row.
+      Native details/summary: kicker + title on the clasp, prose inside. ── */
+function Section({ ord, label, title, defaultOpen, children }: {
+  ord: string; label: string; title: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <details className="ray-about-sec" open={defaultOpen} style={wrap}>
+      <summary className="ray-about-sum">
+        <span style={{ minWidth: 0 }}>
+          <span style={{ ...kicker, display: 'block' }}>{ord} · {label}</span>
+          <span style={{ display: 'block', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-fg)', lineHeight: 1.3 }}>{title}</span>
+        </span>
+        <span className="ray-about-flick" aria-hidden>
+          <Flick size={13} style={{ transform: 'scaleY(-1)', marginLeft: 0, display: 'block' }} />
+        </span>
+      </summary>
+      <div className="ray-about-body">{children}</div>
+    </details>
+  );
+}
+
 export default function AboutPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      {/* NOTE: keep this style block free of quotes, apostrophes and angle
+          brackets — React escapes them in server-rendered raw-text elements
+          and the browser keeps the entity literally. */}
+      <style>{`
+        .ray-about-sec { border-bottom: 1px solid var(--hairline); }
+        .ray-about-sec:first-of-type { border-top: 1px solid var(--hairline); }
+        .ray-about-sum {
+          list-style: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 20px 0;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ray-about-sum::-webkit-details-marker { display: none; }
+        .ray-about-sum::marker { content: none; }
+        .ray-about-flick {
+          flex: none;
+          color: var(--color-text-faint);
+          transition: transform var(--duration-fast) var(--ease-signature);
+        }
+        .ray-about-sec[open] .ray-about-flick { transform: rotate(180deg); }
+        .ray-about-sum:hover .ray-about-flick { color: var(--color-fg); }
+        .ray-about-body { padding: 4px 0 28px; }
+      `}</style>
       <ArtistNav activeSlug="about" />
 
       <main id="main" style={{ paddingTop: 28, paddingBottom: 40 }}>
-        <div style={{ ...wrap, marginBottom: 8 }}>
+        <div style={{ ...wrap, marginBottom: 26 }}>
           {/* the certificate masthead — dated from the last crawl on the book */}
           <Masthead
             kicker="The machine"
@@ -68,18 +116,15 @@ export default function AboutPage() {
               {' '}— the architecture, the pipeline, and the price engine, end to end.
             </>}
           />
-          <p style={{ ...p, fontSize: 16, marginTop: 18 }}>
+          <p style={{ ...p, fontSize: 16, marginTop: 18, marginBottom: 0 }}>
             lectr reads every auction estimate against every hammer. It ingests live and historical
             lots from the major houses, scores each against comparable sales, and calls whether a lot
-            is trading below or above where its comps actually clear. This page is the engineering
-            walk-through: the data flow, the storage split, the value engine, and how the signal is
-            validated. It assumes you read code.
+            is trading below or above where its comps actually clear. Seven sections, engineering
+            depth — open what you came for. It assumes you read code.
           </p>
         </div>
 
-        <section style={wrap}>
-          <p style={kicker}>01 · System</p>
-          <h2 style={h2}>A static site with a nightly build</h2>
+        <Section ord="01" label="System" title="A static site with a nightly build" defaultOpen>
           <p style={p}>
             There is no application server. The entire product is a Next.js 14 <code style={code}>output: &apos;export&apos;</code> static
             bundle on Cloudflare Pages. All intelligence is computed ahead of time by a nightly crawl +
@@ -103,11 +148,9 @@ export default function AboutPage() {
             <Node title="Static client — Next.js export" sub="no server; 3-phase progressive load" />
           </Flow>
           <p style={caption}>The daily crawl is the only writer. A data commit to <code style={code}>main</code> triggers the same deploy pipeline as a code change.</p>
-        </section>
+        </Section>
 
-        <section style={wrap}>
-          <p style={kicker}>02 · Ingestion</p>
-          <h2 style={h2}>The crawl, and the status lifecycle</h2>
+        <Section ord="02" label="Ingestion" title="The crawl, and the status lifecycle">
           <p style={p}>
             Each house has its own adapter (Sotheby&apos;s GraphQL, Christie&apos;s <code style={code}>chrComponents</code> JSON,
             Goldin&apos;s faceted <code style={code}>lots_v2</code> API, HTML scrapers for the rest). Routing is
@@ -135,11 +178,9 @@ export default function AboutPage() {
             <li style={li}><strong>coverage tripwire</strong> — snapshots active-lots-per-market before the crawl mutates anything, and alerts if a market&apos;s live inventory collapses.</li>
             <li style={li}><strong>write-gate</strong> — <code style={code}>assertInvariants()</code> refuses to publish a corpus that violates the schema (e.g. a sold lot with no price).</li>
           </ul>
-        </section>
+        </Section>
 
-        <section style={wrap}>
-          <p style={kicker}>03 · Data model</p>
-          <h2 style={h2}>The corpus / served split, and money as a fact</h2>
+        <Section ord="03" label="Data model" title="The corpus / served split, and money as a fact">
           <p style={p}>
             The v2 schema carries ~76 fields per lot, which blows past Cloudflare&apos;s 25&nbsp;MB/file cap. So
             storage is split: the <strong>corpus</strong> (<code style={code}>data/corpus/*.json.gz</code>) is the full
@@ -154,63 +195,43 @@ export default function AboutPage() {
             title-tokens + structured attributes scored as a percentage — never an image hash (different
             houses shoot the same object differently), never raw title equality.
           </p>
-        </section>
+        </Section>
 
-        <section style={wrap}>
-          <p style={kicker}>04 · The price engine</p>
-          <h2 style={h2}>From comparable sales to a directional call</h2>
+        <Section ord="04" label="The price engine" title="From comparable sales to a directional call">
           <p style={p}>
-            The engine (<code style={code}>app/lib/similarity.ts</code>, <code style={code}>value.ts</code>,
-            <code style={code}> indices.ts</code>) values a lot against its own maker&apos;s sold history. It does
-            not try to out-price the house on a unique work — measurement showed absolute comp valuation
-            loses to expert estimates on one-of-a-kind art. What <em>is</em> validated is the
-            <strong> direction</strong>: is this lot cheap or dear relative to where its comps clear?
+            The engine values a lot against its own maker&apos;s sold history: an IDF-weighted title-token
+            cosine plus structured agreement (model / reference / entity / dims / year) selects the
+            comparable pool, a weighted median prices it, and the ratio against the estimate-mid becomes
+            the directional call — below, at, or above the comparable market. It deliberately does not
+            try to out-price the house on a one-of-a-kind work; what&apos;s validated is the <strong>direction</strong>.
           </p>
-          <Flow>
-            <Node title="A lot to value" sub="an upcoming lot — or a held-out sold lot in the backtest" />
-            <Down label="candidate blocking: same-maker sold (backtest: dated < the lot, no leak)" />
-            <Node title="similarity(lot, comp)" mono sub="cosine( IDF-weighted title-token vectors ) 0..1  +  structured bonus (model / reference / entity / dims / year).  score = round((cos + bonus) × 100)" />
-            <Down label="for each comp" />
-            <Node tone="accent" title="comp-pool gate — COMP_GATE" mono sub="keep comp iff  cosine ≥ 0.50  AND  score ≥ 65  (calibrated by the backtest A/B)" />
-            <Down />
-            <Node title="weightedMedian( top-K, weight = cosine² )" mono sub="= compValueUsd.  pool dispersion (q1..q3) → confidence tier" />
-            <Down />
-            <Node tone="accent" title="directional signal" mono sub="compRatio = compValueUsd / estimate-mid.  ≥ 1.30 → below comparable market (cheap) · ≤ 0.75 → above · else at" />
-          </Flow>
-          <ul style={{ paddingLeft: 20, margin: '0 0 14px' }}>
-            <li style={li}><strong>Similarity</strong> is an IDF-weighted cosine over title tokens, plus a structured bonus for agreement on model/reference/entity/dimensions/year, combined into a 0–100 <code style={code}>score</code>.</li>
-            <li style={li}><strong>The comp-pool gate</strong> keeps a comp when <code style={code}>cosine ≥ 0.50 AND score ≥ 65</code> — so a comp whose wording dips just under the old raw-cosine floor but whose structured agreement (same reference, same model) is strong is still counted.</li>
-            <li style={li}><strong>The signal</strong> is <code style={code}>compRatio = compValue / estimate-mid</code>. Above 1.30 the lot is trading below its comps (a &ldquo;below comparable market&rdquo; flag); below 0.75 it&apos;s dear.</li>
-          </ul>
           <p style={p}>
-            Goldin sports/science lots carry no house estimate, so there the engine value <em>is</em> the
-            estimate, shown against the live high bid.
+            The full math — the similarity scorer, the comp-pool gate, and how both were calibrated —
+            is written up in{' '}
+            <Link href="/blog/how-we-built-the-pricing-engine" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
+              How we built the pricing engine <Flick size={11} />
+            </Link>.
           </p>
-        </section>
+        </Section>
 
-        <section style={wrap}>
-          <p style={kicker}>05 · Validation</p>
-          <h2 style={h2}>Temporal-holdout backtest — no hindsight</h2>
+        <Section ord="05" label="Validation" title="Temporal-holdout backtest — no hindsight">
           <p style={p}>
-            The claim on <code style={code}>/value</code> (&ldquo;flagged calls beat their estimates by +X%&rdquo;) is
-            produced by <code style={code}>build-backtest.ts</code>, which replays the <em>real</em> production
-            engine over every concluded sale that carried an estimate. For each lot, the comp pool is
-            restricted to sales dated strictly before it — a lot never sees its own result, or anything
-            after it. The call is then scored against what the lot actually hammered for.
+            Every claim the signal makes is scored by <code style={code}>build-backtest.ts</code>, which replays
+            the real production engine over each concluded sale with its comp pool restricted to sales
+            dated strictly before it — a lot never sees its own result, or anything after it. Engine
+            changes ship only through that A/B harness: a tweak is adopted when it adds coverage at the
+            same predictive edge, and rejected when it trades coverage for nothing.
           </p>
           <p style={p}>
-            That same harness is how engine changes ship: any tweak to the gate or scorer runs through
-            the A/B before it goes live. The current gate broadening, for example, was adopted because it
-            valued <strong>+5% more lots with an identical predictive edge</strong> (flagged lots hammer
-            +12% over their estimates vs −7% unflagged — +40% vs +15% including buyer&rsquo;s premium —
-            and fail to sell far less often) — and the model hard-gate was <em>rejected</em>
-            because it cost coverage for zero edge gain.
+            The live record — how flagged calls actually hammered against their estimates, refreshed by
+            every crawl — is printed on{' '}
+            <Link href="/value" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
+              /value <Flick size={11} />
+            </Link>.
           </p>
-        </section>
+        </Section>
 
-        <section style={wrap}>
-          <p style={kicker}>06 · Client</p>
-          <h2 style={h2}>Three-phase progressive load</h2>
+        <Section ord="06" label="Client" title="Three-phase progressive load">
           <p style={p}>
             Because the client is a static reader with a ~19&nbsp;MB tail of history, it loads in phases
             behind a module-level cache and listener fan-out (<code style={code}>app/hooks/useRayData.ts</code>).
@@ -224,11 +245,9 @@ export default function AboutPage() {
             <Down label="on demand" />
             <Node title="Phase 3 — sold archive" sub="sold-archive.json ~10 MB. Fetched ONLY when a sports/science comps modal opens; art/watch/design never pay for it." />
           </Flow>
-        </section>
+        </Section>
 
-        <section style={wrap}>
-          <p style={kicker}>07 · Deploy</p>
-          <h2 style={h2}>Two guards, no broken deploys</h2>
+        <Section ord="07" label="Deploy" title="Two guards, no broken deploys">
           <p style={p}>
             Every push to <code style={code}>main</code> runs the export and two gates before it can leave a
             broken build live: <strong>Guard&nbsp;1</strong> verifies every JS chunk the exported HTML
@@ -236,7 +255,7 @@ export default function AboutPage() {
             unique deployment URL after publish and confirms the home page&apos;s JS resolves as executable
             JavaScript. If either fails, the job fails loudly rather than leaving production broken.
           </p>
-        </section>
+        </Section>
       </main>
 
       <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />

@@ -560,6 +560,16 @@ export function signalMagnitude(label: string, pct: number): string {
   return `−${Math.min(pct, 99)}%`;
 }
 
+/** THE ONE FLAGGED RANKING — calibrated odds first (the engine's measured
+ *  beat-rate, which drops on extreme ratios where they under-deliver), then
+ *  the gap capped at 400% so a data-fault +5976% can never outrank a clean
+ *  2x flag with 70% measured odds. Every surface that ranks flagged lots
+ *  (the /value list, the lander's gap lens) MUST use this. */
+export function dealScore(lot: AuctionLot, signalPct: number): number {
+  const br = (lot as { value?: { signal?: { beatRatePct?: number } | null } | null }).value?.signal?.beatRatePct ?? 50;
+  return br * 1000 + Math.min(signalPct, 400);
+}
+
 export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepSignal | null {
   return signalWithPool(lot, allLots)?.signal ?? null;
 }

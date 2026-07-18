@@ -16,16 +16,23 @@ interface Item {
   kind: 'section' | 'market' | 'maker' | 'lot';
 }
 
+/** Any surface can open the palette by dispatching this window event —
+ *  the nav's Find-a-maker pill and the ⌘K hint button both use it. */
+export const OPEN_CK_EVENT = 'lectr:open-ck';
+
 /**
- * CommandK — jump anywhere. ⌘K / Ctrl-K opens a palette over sections and
- * every tracked artist (with live-lot counts); type to filter, arrows to
- * move, Enter to go. Rendered in a portal above everything.
+ * CommandK — jump anywhere. ⌘K / Ctrl-K (or the OPEN_CK_EVENT window event)
+ * opens a palette over sections and every tracked artist (with live-lot
+ * counts); type to filter, arrows to move, Enter to go. With an empty query
+ * it is a grouped BROWSE — the full maker roster under microcap market
+ * headers. Rendered in a portal above everything.
  */
 export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<string, number> }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { market } = useMarket();
   const homePath = MARKET_PATH[market] || '/';
@@ -69,9 +76,28 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
     ];
   }, [upcomingCounts, market, homePath]);
 
+  // Empty-query BROWSE: sections first, then each live market as a microcap
+  // header row followed by its makers — the grouped index the nav dropdown
+  // used to carry. The market row itself navigates to the lander.
+  const browseItems = useMemo<Item[]>(() => {
+    const sections = items.filter(i => i.kind === 'section');
+    const grouped: Item[] = [];
+    for (const m of MARKETS.filter(m => m.live && m.key !== 'all')) {
+      const makers = ARTISTS
+        .filter(a => a.market === m.key)
+        .map(a => items.find(i => i.kind === 'maker' && i.path === `/${a.slug}`))
+        .filter(Boolean) as Item[];
+      if (!makers.length) continue;
+      const marketItem = items.find(i => i.kind === 'market' && i.path === MARKET_PATH[m.key]);
+      if (marketItem) grouped.push(marketItem);
+      grouped.push(...makers);
+    }
+    return [...sections, ...grouped];
+  }, [items]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return items;
+    if (!needle) return browseItems;
     const itemMatches = items.filter(i => `${i.label} ${i.hint}`.toLowerCase().includes(needle));
     // Search the live lots too — a collector arrives with a work in mind.
     const lotMatches: Item[] = upcomingLots
@@ -84,10 +110,13 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
         kind: 'lot' as const,
       }));
     return [...itemMatches, ...lotMatches];
-  }, [items, q, upcomingLots]);
-  // only the first 12 are rendered — keyboard nav + Enter must index into the
-  // SAME list, or the highlight vanishes and Enter fires an unseen item.
-  const shown = filtered.slice(0, 12);
+  }, [items, browseItems, q, upcomingLots]);
+  // While searching, only the first 12 are rendered — keyboard nav + Enter
+  // must index into the SAME list, or the highlight vanishes and Enter fires
+  // an unseen item. The empty-query browse renders the whole grouped roster
+  // (the list scrolls, and the active row is kept in view).
+  const browsing = q.trim() === '';
+  const shown = browsing ? filtered : filtered.slice(0, 12);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -98,8 +127,13 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
         setOpen(false);
       }
     }
+    const onOpenEvent = () => setOpen(true);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener(OPEN_CK_EVENT, onOpenEvent);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(OPEN_CK_EVENT, onOpenEvent);
+    };
   }, []);
 
   useEffect(() => {
@@ -111,6 +145,14 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
   }, [open]);
 
   useEffect(() => { setIdx(0); }, [q]);
+
+  // the browse roster overflows the list viewport — keep the keyboard
+  // highlight visible as the arrows walk it
+  useEffect(() => {
+    listRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [idx]);
 
   function go(item: Item) {
     setOpen(false);
@@ -141,27 +183,41 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
             else if (e.key === 'Enter' && shown[idx]) go(shown[idx]);
           }}
         />
-        <div className="ray-ck-list" role="listbox">
+        <div className="ray-ck-list" role="listbox" ref={listRef}>
           {filtered.length === 0 ? (
             <div className="ray-ck-empty">Nothing matches.</div>
           ) : (
-            shown.map((item, i) => (
-              <button
-                key={`${item.kind}-${item.label}-${item.path}`}
-                role="option"
-                aria-selected={i === idx}
-                className="ray-ck-item"
-                data-active={i === idx}
-                onMouseEnter={() => setIdx(i)}
-                onClick={() => go(item)}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-                  {item.kind === 'maker' && <ArtistAvatar label={item.label} size={20} />}
-                  {item.label}
-                </span>
-                <span className="ray-ck-hint">{item.hint}</span>
-              </button>
-            ))
+            shown.map((item, i) => {
+              // browse mode renders each market row as a microcap group header
+              // — still a real option (it opens the lander), still in the
+              // keyboard order, just set in the certificate's label voice
+              const isHeader = browsing && item.kind === 'market';
+              return (
+                <button
+                  key={`${item.kind}-${item.label}-${item.path}`}
+                  role="option"
+                  aria-selected={i === idx}
+                  className="ray-ck-item"
+                  data-active={i === idx}
+                  onMouseEnter={() => setIdx(i)}
+                  onClick={() => go(item)}
+                  style={isHeader ? {
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: 'var(--color-text-faint)',
+                    marginTop: 6,
+                  } : undefined}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+                    {item.kind === 'maker' && <ArtistAvatar label={item.label} size={20} />}
+                    {item.label}
+                  </span>
+                  <span className="ray-ck-hint">{item.hint}</span>
+                </button>
+              );
+            })
           )}
         </div>
       </div>

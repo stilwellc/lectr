@@ -167,6 +167,30 @@ export default function SavedPage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
+  // The verdict — how your eye did once the hammer fell. Rendered as the sub
+  // line of the results table rather than a standalone section.
+  const verdict = useMemo<React.ReactNode>(() => {
+    const judged = sold.filter(l => l.priceUsd && l.estimateLow && l.estimateHigh);
+    if (!judged.length) return undefined;
+    const pcts = judged
+      .map(l => (l.priceUsd! / ((l.estimateLow! + l.estimateHigh!) / 2) - 1) * 100)
+      .sort((a, b) => a - b);
+    const medianPct = Math.round(pcts.length % 2 === 0
+      ? (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2
+      : pcts[Math.floor(pcts.length / 2)]);
+    const hammered = judged.reduce((s, l) => s + l.priceUsd!, 0);
+    return (
+      <>
+        How your eye did: {judged.length} watched {judged.length === 1 ? 'lot' : 'lots'} concluded ·{' '}
+        {formatPrice(hammered)} hammered · your picks went{' '}
+        <b style={{ color: medianPct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
+          {fmtSignedPct(medianPct)}
+        </b>{' '}
+        vs estimate, median
+      </>
+    );
+  }, [sold]);
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -300,33 +324,6 @@ export default function SavedPage() {
                 </>
               }
             />
-
-            <div className="ray-strip" style={{ marginTop: 22 }}>
-              <div>
-                <div className="ray-strip-k">Watching</div>
-                <div className="ray-strip-v"><CountUp to={upcoming.length} format={n => `${Math.round(n)}`} duration={1000} /></div>
-                <div className="ray-strip-s">live lots on the block</div>
-              </div>
-              <div>
-                <div className="ray-strip-k">Total estimate</div>
-                <div className="ray-strip-v">{summary.totalEst > 0 ? formatPrice(summary.totalEst) : '—'}</div>
-                <div className="ray-strip-s">aggregate mid-estimates</div>
-              </div>
-              <div>
-                <div className="ray-strip-k">Below market</div>
-                <div className="ray-strip-v" style={summary.flagged > 0 ? { color: 'var(--color-up)' } : undefined}>
-                  <CountUp to={summary.flagged} format={n => `${Math.round(n)}`} duration={1000} />
-                </div>
-                <div className="ray-strip-s">flagged against comps</div>
-              </div>
-              <div>
-                <div className="ray-strip-k">Next hammer</div>
-                <div className="ray-strip-v">{summary.next ? formatDate(summary.next.saleDate) : '—'}</div>
-                <div className="ray-strip-s">
-                  {summary.next ? hammerWord(daysUntil(summary.next.saleDate)) : 'nothing scheduled'}
-                </div>
-              </div>
-            </div>
           </section>
 
           {upcoming.length > 0 && (
@@ -415,32 +412,7 @@ export default function SavedPage() {
 
           {sold.length > 0 && (
             <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
-              {/* The outcome — how your eye did once the hammer fell */}
-              {(() => {
-                const judged = sold.filter(l => l.priceUsd && l.estimateLow && l.estimateHigh);
-                if (!judged.length) return null;
-                const pcts = judged
-                  .map(l => (l.priceUsd! / ((l.estimateLow! + l.estimateHigh!) / 2) - 1) * 100)
-                  .sort((a, b) => a - b);
-                const medianPct = Math.round(pcts.length % 2 === 0
-                  ? (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2
-                  : pcts[Math.floor(pcts.length / 2)]);
-                const hammered = judged.reduce((s, l) => s + l.priceUsd!, 0);
-                return (
-                  <section className="rail" style={{ paddingTop: 34 }}>
-                    <h2 className="ray-h2" style={{ marginBottom: 6 }}>How your eye did</h2>
-                    <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0 }}>
-                      {judged.length} watched {judged.length === 1 ? 'lot' : 'lots'} concluded ·{' '}
-                      {formatPrice(hammered)} hammered · your picks went{' '}
-                      <b style={{ color: medianPct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
-                        {fmtSignedPct(medianPct)}
-                      </b>{' '}
-                      vs estimate, median
-                    </p>
-                  </section>
-                );
-              })()}
-              <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} ownedIds={ownedIds} onToggleOwned={toggleOwned} />
+              <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} ownedIds={ownedIds} onToggleOwned={toggleOwned} sub={verdict} />
             </div>
           )}
 
@@ -482,12 +454,28 @@ export default function SavedPage() {
                   return (
                     <div key={id} className="ray-saved-orphan">
                       <span>
-                        No longer listed — removed from the block
-                        {meta && (
-                          <span style={{ color: 'var(--color-text-faint)' }}>
-                            {' '}· saved {formatDate(meta.savedAt)}
-                            {meta.estMid != null && <> · was est. {formatPrice(meta.estMid)}</>}
-                          </span>
+                        {meta?.title ? (
+                          /* the save carried a snapshot — say WHAT the lot was */
+                          <>
+                            <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
+                              was: {meta.title}
+                              {meta.artist && <>, {ARTIST_LABEL[meta.artist] || meta.artist}</>}
+                            </span>
+                            <span style={{ color: 'var(--color-text-faint)' }}>
+                              {meta.estMid != null && <> · est. {formatPrice(meta.estMid)}</>}
+                              {' '}· saved {formatDate(meta.savedAt)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            No longer listed — removed from the block
+                            {meta && (
+                              <span style={{ color: 'var(--color-text-faint)' }}>
+                                {' '}· saved {formatDate(meta.savedAt)}
+                                {meta.estMid != null && <> · was est. {formatPrice(meta.estMid)}</>}
+                              </span>
+                            )}
+                          </>
                         )}
                       </span>
                       <button

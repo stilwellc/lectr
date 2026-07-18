@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText } from '../utils';
-import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL } from '../lib/comps';
+import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
@@ -468,6 +468,20 @@ export default function ComparableModal({
     return { median, low, high, aboveEst, total: prices.length, hammerVsEst };
   }, [comparables, lot, called, band]);
 
+  // PROOF SURFACE HONESTY: when the printed median is the ENGINE's number
+  // (called.signal.med) and it differs >10% from the median of the pool the
+  // reader can actually see below, calling it "Median" is a self-contradiction
+  // — label it "lectr value" (the LotValueBlock term) instead.
+  const medianLabel = useMemo(() => {
+    if (!compStats || comparables.length === 0) return 'Median';
+    const prices = comparables.map(c => c.lot.priceUsd).filter((p): p is number => !!p).sort((a, b) => a - b);
+    if (prices.length === 0) return 'Median';
+    const poolMed = prices.length % 2 === 0
+      ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
+      : prices[Math.floor(prices.length / 2)];
+    return poolMed > 0 && Math.abs(compStats.median - poolMed) / poolMed > 0.1 ? 'lectr value' : 'Median';
+  }, [compStats, comparables]);
+
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
   const catLabel = categoryLabels[lot.category] || null;
   const catColor = categoryColors[lot.category] || 'var(--color-text-faint)';
@@ -829,7 +843,7 @@ export default function ComparableModal({
                 {formatPrice(compStats.median)}
               </div>
               <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
-                Median
+                {medianLabel}
               </div>
             </div>
             <div style={{ width: 1, background: 'var(--color-border)', margin: '0 4px' }} />
@@ -851,7 +865,10 @@ export default function ComparableModal({
                     fontFamily: "var(--font-serif), serif",
                     color: 'var(--color-fg)',
                   }}>
-                    {compStats.hammerVsEst >= 1 ? '+' : ''}{((compStats.hammerVsEst - 1) * 100).toFixed(0)}%
+                    {/* signalMagnitude caps broken percents — never "+5976%" */}
+                    {compStats.hammerVsEst >= 1
+                      ? signalMagnitude('Below Market', Math.round((compStats.hammerVsEst - 1) * 100))
+                      : signalMagnitude('Above Market', Math.round((1 - compStats.hammerVsEst) * 100))}
                   </div>
                   <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
                     vs. Est.
@@ -1040,7 +1057,9 @@ export default function ComparableModal({
                             color: 'var(--color-text-secondary)',
                             fontWeight: 500,
                           }}>
-                            {ratio >= 1 ? '+' : ''}{((ratio - 1) * 100).toFixed(0)}% est.
+                            {ratio >= 1
+                              ? signalMagnitude('Below Market', Math.round((ratio - 1) * 100))
+                              : signalMagnitude('Above Market', Math.round((1 - ratio) * 100))} est.
                           </div>
                         )}
                       </div>

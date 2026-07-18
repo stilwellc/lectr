@@ -90,7 +90,15 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       type EngineValue = { signal?: { label: string; beatRatePct: number } | null; compRatio?: number | null; compValueUsd?: number; n?: number; confidence?: 'high' | 'medium' | 'low' } | null;
       const ev = (lot as { value?: EngineValue }).value;
       let signal = null as ReturnType<typeof computeDeepSignal>;
-      if (ev && ev.signal) {
+      // ×5 ESTIMATE-BAND SANITY (mirrors the comps.ts form-pool guard): a
+      // compRatio implying the comp median sits more than 5× outside the lot's
+      // own estimate band is nearly always a collision of unrelated objects /
+      // a data fault — stamp NO signal at the source, and no client fallback
+      // either (the engine's inputs are the fault; recomputing won't fix it).
+      const evSane = !ev || ev.compRatio == null || (ev.compRatio <= 5 && ev.compRatio >= 1 / 5);
+      if (ev && ev.signal && !evSane) {
+        // data-fault flag killed at the source — the card carries no signal
+      } else if (ev && ev.signal) {
         if (ev.signal.label.startsWith('below') && ev.compRatio != null) {
           signal = {
             label: 'Below Market', pct: Math.round((ev.compRatio - 1) * 100),

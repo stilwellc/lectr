@@ -30,6 +30,36 @@ function pctChange(pts: { value: number }[]): number | null {
 }
 const tickQ = (d: string) => { const m = /(\d{4}) Q(\d)/.exec(d); return m ? `${m[1].slice(2)} Q${m[2]}` : d; };
 
+/** the quarter we are currently inside — its point is a PARTIAL read */
+function currentQuarter(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()} Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+}
+
+/**
+ * The sell-through headline: the last COMPLETE quarter with a real base
+ * (n ≥ 30 lots, else fall back one quarter) — never the noisy partial
+ * quarter, which was printing three different rates across surfaces in one
+ * session. Returns null when no complete quarter exists.
+ */
+function headlineSellThrough(pts: { period: string; value: number; n: number }[]): { period: string; value: number } | null {
+  const nowQ = currentQuarter();
+  const complete = pts.filter(p => p.period !== nowQ);
+  if (!complete.length) return null;
+  for (let i = complete.length - 1; i >= 0; i--) {
+    if (complete[i].n >= 30) return complete[i];
+  }
+  return complete[complete.length - 1];
+}
+
+/** 3-quarter trailing average — the same smoothing the price index uses */
+function smooth3(pts: { period: string; value: number; n: number }[]) {
+  return pts.map((p, i, arr) => {
+    const win = arr.slice(Math.max(0, i - 2), i + 1);
+    return { ...p, value: Math.round(win.reduce((s, q) => s + q.value, 0) / win.length) };
+  });
+}
+
 function Panel({ title, method, n, children }: { title: string; method: string; n?: number; children: React.ReactNode }) {
   return (
     <div className="ray-mi-panel">
@@ -44,7 +74,8 @@ function Panel({ title, method, n, children }: { title: string; method: string; 
 
 export default function MarketIntelligence({ series, marketLabel }: { series: MarketSeriesJson; marketLabel: string }) {
   const idxChange = useMemo(() => pctChange(series.index), [series.index]);
-  const stLatest = series.sellThrough.length ? series.sellThrough[series.sellThrough.length - 1].value : null;
+  const stHead = useMemo(() => headlineSellThrough(series.sellThrough), [series.sellThrough]);
+  const stSmooth = useMemo(() => smooth3(series.sellThrough), [series.sellThrough]);
   const accLatest = series.houseAccuracy.length ? series.houseAccuracy[series.houseAccuracy.length - 1].value : null;
 
   const hasIndex = series.index.length >= 4;
@@ -53,7 +84,7 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
   const idxTone = idxChange != null ? toneOf(idxChange) : 'flat';
   const idxColor = idxTone === 'up' ? UP : idxTone === 'down' ? DOWN : FLAT;
 
-  const showSellThrough = series.sellThrough.length >= 3;
+  const showSellThrough = series.sellThrough.length >= 3 && stHead !== null;
   const showAccuracy = series.houseAccuracy.length >= 3 && accLatest != null;
   // when one panel is suppressed the survivor spans the whole band instead of
   // leaving a vacant half
@@ -101,12 +132,12 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
 
       <div className="ray-mi-row" style={soloPanel ? { gridTemplateColumns: '1fr' } : undefined}>
         {/* SELL-THROUGH */}
-        {showSellThrough && (
-          <Panel title="sell-through rate" method="sold ÷ (sold + bought-in), quarterly">
-            <div className="ray-mi-hero"><span className="ray-mi-num sm">{stLatest}%</span><span className="ray-mi-sub">of lots found a buyer, latest quarter</span></div>
+        {showSellThrough && stHead && (
+          <Panel title="sell-through rate" method="sold ÷ (sold + bought-in), quarterly · 3-quarter smoothed">
+            <div className="ray-mi-hero"><span className="ray-mi-num sm">{stHead.value}%</span><span className="ray-mi-sub">of lots found a buyer, latest complete quarter ({tickQ(stHead.period)})</span></div>
             <div style={{ height: 130 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series.sellThrough} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+                <LineChart data={stSmooth} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                   <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: MUTED }} width={30} domain={['dataMin - 8', 'dataMax + 4']} axisLine={false} tickLine={false} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import type { LotCategory } from '../types';
@@ -52,9 +52,11 @@ interface Props {
   onToggleOwned?: (lotId: string) => void;
   /** ghost ordinal behind the h2 band (headers only) */
   mark?: string;
+  /** small verdict line under the header (e.g. /saved's "how your eye did") */
+  sub?: React.ReactNode;
 }
 
-export default function PastResults({ lots, showArtist = false, categoryFilter: externalFilter, onCategoryChange, savedIds = [], onToggleSave, ownedIds = [], onToggleOwned, mark }: Props) {
+export default function PastResults({ lots, showArtist = false, categoryFilter: externalFilter, onCategoryChange, savedIds = [], onToggleSave, ownedIds = [], onToggleOwned, mark, sub }: Props) {
   const [visible, setVisible] = useState(20);
   const [sortBy, setSortBy] = useState<SortMode>('date');
   const [internalFilter, setInternalFilter] = useState<CategoryFilter>('all');
@@ -112,6 +114,10 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
   }, [filtered, sortBy]);
 
   const shown = sorted.slice(0, visible);
+
+  // Over a handful of rows the Date/Price pills + category chips are more
+  // chrome than table — the toolbar earns its place only on a real archive.
+  const showToolbar = lots.length >= 8;
 
   return (
     <section className="ray-results rail">
@@ -190,7 +196,13 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               {filtered.length.toLocaleString()} sold lots
               {categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}
             </p>
+            {sub && (
+              <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', fontWeight: 400, margin: '8px 0 0', maxWidth: 560, lineHeight: 1.5 }}>
+                {sub}
+              </p>
+            )}
           </div>
+          {showToolbar && (
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               className="ray-sort-pill"
@@ -207,10 +219,11 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               Price
             </button>
           </div>
+          )}
           </div>
         </div>
 
-        {availableCategories.length > 1 && (
+        {showToolbar && availableCategories.length > 1 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
             <button
               className="ray-sort-pill"

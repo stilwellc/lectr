@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { User } from '@supabase/supabase-js';
 import { supabase, authEnabled } from './supabase';
 import type { AuctionLot } from '../types';
+import { craftTitle } from '../utils';
 
 /**
  * The account layer. ONE responsibility beyond auth: saved lots are scoped to a
@@ -23,6 +24,10 @@ export interface SavedMeta {
   bidCount: number | null;
   /** the user marked this past lot as one they OWN — it joins their collection */
   owned?: boolean;
+  /** snapshot of the lot at save time, so an orphaned save (the crawl dropped
+   *  the lot) still says WHAT it was — additive; older saves simply lack it */
+  title?: string | null;
+  artist?: string | null;
 }
 interface SavedEntry extends SavedMeta { id: string; }
 
@@ -36,6 +41,8 @@ function entryFromLot(id: string, lot?: AuctionLot): SavedEntry {
     signalPct: lot?.signal?.pct ?? null,
     bidCount: lot?.bidCount ?? null,
     owned: false,
+    title: lot?.title ? craftTitle(lot.title) : null,
+    artist: lot?.artist ?? null,
   };
 }
 
@@ -59,6 +66,8 @@ function readStored(): SavedEntry[] {
         signalPct: typeof e.signalPct === 'number' ? e.signalPct : null,
         bidCount: typeof e.bidCount === 'number' ? e.bidCount : null,
         owned: e.owned === true,
+        title: typeof e.title === 'string' ? e.title : null,
+        artist: typeof e.artist === 'string' ? e.artist : null,
       });
     }
     return entries;
@@ -75,10 +84,30 @@ function rowToEntry(r: Record<string, unknown>): SavedEntry {
     signalPct: (r.signal_pct as number) ?? null,
     bidCount: (r.bid_count as number) ?? null,
     owned: r.owned === true,
+    // defensive reads — `select('*')` simply won't carry these keys until the
+    // saved_title/saved_artist migration runs; older rows carry null
+    title: typeof r.saved_title === 'string' ? r.saved_title : null,
+    artist: typeof r.saved_artist === 'string' ? r.saved_artist : null,
   };
 }
 function entryToRow(userId: string, e: SavedEntry) {
-  return { user_id: userId, lot_id: e.id, saved_at: e.savedAt, est_mid: e.estMid, signal_pct: e.signalPct, bid_count: e.bidCount, owned: e.owned ?? false };
+  return { user_id: userId, lot_id: e.id, saved_at: e.savedAt, est_mid: e.estMid, signal_pct: e.signalPct, bid_count: e.bidCount, owned: e.owned ?? false, saved_title: e.title ?? null, saved_artist: e.artist ?? null };
+}
+// The saved_title/saved_artist columns are ADDITIVE — until the migration runs,
+// PostgREST rejects a write that names them. Detect that one failure mode and
+// retry the write without the new columns so saving never breaks pre-migration.
+const NEW_COLS = /saved_title|saved_artist/i;
+function stripNewCols(row: ReturnType<typeof entryToRow>) {
+  const { saved_title: _t, saved_artist: _a, ...rest } = row;
+  return rest;
+}
+async function upsertSaved(userId: string, list: SavedEntry[], opts: { onConflict: string; ignoreDuplicates?: boolean }) {
+  const rows = list.map(e => entryToRow(userId, e));
+  let { error } = await supabase!.from('saved_lots').upsert(rows, opts);
+  if (error && NEW_COLS.test(error.message)) {
+    ({ error } = await supabase!.from('saved_lots').upsert(rows.map(stripNewCols), opts));
+  }
+  return { error };
 }
 
 interface AccountValue {
@@ -156,7 +185,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
         migratedRef.current = true;
         const local = readStored();
         if (local.length) {
-          const { error } = await supabase!.from('saved_lots').upsert(local.map(e => entryToRow(user.id, e)), { onConflict: 'user_id,lot_id', ignoreDuplicates: true });
+          const { error } = await upsertSaved(user.id, local, { onConflict: 'user_id,lot_id', ignoreDuplicates: true });
           if (!error) writeStored([]);
           else { console.error('[account] migration upsert failed, keeping local:', error.message); migratedRef.current = false; }
         }
@@ -181,7 +210,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           const pend = JSON.parse(raw) as SavedEntry;
           if (pend?.id && !loaded.some(e => e.id === pend.id)) {
             setEntries(prev => (prev.some(p => p.id === pend.id) ? prev : [...prev, pend]));
-            supabase!.from('saved_lots').upsert(entryToRow(user.id, pend), { onConflict: 'user_id,lot_id' })
+            upsertSaved(user.id, [pend], { onConflict: 'user_id,lot_id' })
               .then(({ error: e2 }) => { if (e2) console.error('[account] pending-save replay failed:', e2.message); });
           }
         }
@@ -228,7 +257,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     } else {
       const e = entryFromLot(lotId, lot);
       setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, e]));
-      supabase.from('saved_lots').upsert(entryToRow(user.id, e), { onConflict: 'user_id,lot_id' })
+      upsertSaved(user.id, [e], { onConflict: 'user_id,lot_id' })
         .then(({ error }) => {
           if (error) { console.error('[account] save failed:', error.message); setEntries(prev => prev.filter(p => p.id !== lotId)); flash("Couldn't save the lot — try again."); }
         });
@@ -239,7 +268,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const savedIds = useMemo(() => entries.map(e => e.id), [entries]);
   const savedMeta = useMemo<Record<string, SavedMeta>>(() => {
     const out: Record<string, SavedMeta> = {};
-    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned };
+    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned, title: e.title, artist: e.artist };
     return out;
   }, [entries]);
   const isSaved = useCallback((id: string) => entries.some(e => e.id === id), [entries]);

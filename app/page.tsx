@@ -9,7 +9,7 @@ import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct } from './utils';
 import ArtistNav from './components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from './components/LotCard';
-import { signalMagnitude } from './lib/comps';
+import { dealScore, signalMagnitude } from './lib/comps';
 import ComparableModal from './components/ComparableModal';
 import type { AuctionLot } from './types';
 import PastResults from './components/PastResults';
@@ -20,7 +20,7 @@ import ApprBarometer from './components/ApprBarometer';
 import SettlementSlip from './components/SettlementSlip';
 import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
-import HammerWeek from './components/HammerWeek';
+import HammerWeek, { weekDaysFor } from './components/HammerWeek';
 import { CallPlate, Colophon, daysWord } from './components/Terminal';
 import Flick from './components/Flick';
 import Greeting from './components/Greeting';
@@ -33,6 +33,28 @@ const EMPTY_SAVED_META: SavedMeta = {};
 // The eager recentSold slice (from upcoming.json) — lightweight Goldin closes
 // so the sports/science Recent-results row paints without the 10MB archive.
 type RecentSoldRow = { id: string; title: string; artist: string; priceUsd?: number; house?: string; saleDate?: string; url?: string; priceBasis?: string; category?: string; objectType?: string; eventKey?: string };
+
+// SAME-SALE RUN COLLAPSE — a consecutive run of >= RUN_MIN signal-less cards
+// from one house + sale day (fossil/meteorite runs) folds behind one ruled
+// header row, default-collapsed. Lots WITH a below/above signal never fold.
+const RUN_MIN = 8;
+type FeedEntry =
+  | { type: 'lot'; lot: AuctionLot }
+  | { type: 'run'; key: string; house: string; day: string; lots: AuctionLot[] };
+
+// The ledger line's cells — typed once so optional lens/week flags don't
+// splinter the array into incompatible object literals.
+type StripItem = {
+  k: string;
+  to: number;
+  format: (n: number) => string;
+  s: string;
+  tone?: 'up';
+  /** the flagged cell — clicking opens the below-market lens at the feed */
+  lens?: boolean;
+  /** the hammers cell — clicking scrolls to the HammerWeek strip */
+  week?: boolean;
+};
 
 // The default view's diversity cap: max 8 lots per maker per page window —
 // a greedy pass preserving date order, capped/overflow lots requeued in
@@ -109,6 +131,11 @@ export default function RayPage() {
   const { allLots, statsByArtist, demand, realized, recentSold, backtest, market: marketData, lastCrawl, loading, fullLoaded, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
+  // ONE TODAY, ONE SERIAL — the crawl day is the data's "today" and the whole
+  // page prints one edition date from it: the ledger footer, the barometer's
+  // serial, the settlement slip, the HammerWeek beige lift, the week window.
+  const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
+  const editionSerial = crawlDay.replace(/-/g, '');
   // Every market on the board is live — the picked market filters directly.
   const activeKey = market;
   // The lander hero IS the Market demand chart: typical sale vs its estimate,
@@ -178,6 +205,18 @@ export default function RayPage() {
     setFeedView(v);
     try { localStorage.setItem('ray-feedview', v); } catch { /* storage blocked */ }
   };
+  // Below 640px the table view is thumb+name with unhinted side-scroll — not
+  // a real choice. Hide the toggle and force the card view (the persisted
+  // preference survives untouched for desktop).
+  const [narrowView, setNarrowView] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const apply = () => setNarrowView(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+  const effectiveView: 'grid' | 'table' = narrowView ? 'grid' : feedView;
 
   // Lenses are scoped to the market they were picked in — a sport chosen in
   // Sports (or a maker in Watches) must not silently empty another market's
@@ -210,11 +249,13 @@ export default function RayPage() {
   const belowSignal = useMemo(() => {
     const ids = new Set<string>();
     const pct = new Map<string, number>();
+    const hasSig = new Set<string>(); // any signal, either direction — run-collapse reads this
     upcoming.forEach(l => {
       const s = lotSignal(l, marketLots);
+      if (s) hasSig.add(l.id);
       if (s && s.label === 'Below Market') { ids.add(l.id); pct.set(l.id, s.pct); }
     });
-    return { ids, pct };
+    return { ids, pct, hasSig };
   }, [upcoming, marketLots]);
   const belowIds = belowSignal.ids;
 
@@ -243,19 +284,62 @@ export default function RayPage() {
     if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
     else if (f.sort === 'est-asc') arr = [...arr].sort((a, b) => est(a) - est(b));
     else if (f.sort === 'gap-desc') {
-      // biggest comps gap first — reuses the belowSignal pass, no second sweep
+      // biggest-gap lens ranks by dealScore (calibrated odds first, gap capped
+      // at 400%) — a +5976% data fault can never lead the lens. Reuses the
+      // belowSignal pass; unflagged lots sink.
       const pct = belowSignal.pct;
-      arr = [...arr].sort((a, b) => (pct.get(b.id) ?? -Infinity) - (pct.get(a.id) ?? -Infinity));
+      const score = (l: AuctionLot) => {
+        const p = pct.get(l.id);
+        return p == null ? -Infinity : dealScore(l, p);
+      };
+      arr = [...arr].sort((a, b) => score(b) - score(a));
     } else if (f.sort === 'newest') {
       // firstSeen is crawl-stamped and may be absent on older data — unseen sinks
       const seen = (l: AuctionLot) => l.firstSeen || '';
       arr = [...arr].sort((a, b) => (seen(a) < seen(b) ? 1 : seen(a) > seen(b) ? -1 : 0));
-    } else if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
-      // the default view ('soonest', no lenses) gets the maker diversity cap
-      arr = diversifyFeed(arr, pageSize);
+    } else {
+      // 'soonest' — already-hammered lots (past sale date, results lagging)
+      // must not outrank genuinely-upcoming lots: stable-partition them to the
+      // bottom, date order preserved within each half.
+      const past = (l: AuctionLot) => !!l.resultsPending && !!l.saleDate && l.saleDate.slice(0, 10) < crawlDay;
+      arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];
+      if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
+        // the default view ('soonest', no lenses) gets the maker diversity cap
+        arr = diversifyFeed(arr, pageSize);
+      }
     }
     return arr; // 'soonest' under a lens keeps the date order upcoming already has
-  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize]);
+  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay]);
+
+  // SAME-SALE RUN COLLAPSE — walk the feed once, folding consecutive runs of
+  // >= RUN_MIN signal-less lots that share a house + sale day into one entry.
+  // The card grid paginates over THESE entries, so a collapsed run counts
+  // once toward the page window.
+  const feedItems = useMemo<FeedEntry[]>(() => {
+    const hasSig = belowSignal.hasSig;
+    const items: FeedEntry[] = [];
+    let i = 0;
+    while (i < feed.length) {
+      const l = feed[i];
+      const day = l.saleDate?.slice(0, 10) || '';
+      let j = i;
+      while (
+        j < feed.length &&
+        feed[j].auctionHouse === l.auctionHouse &&
+        (feed[j].saleDate?.slice(0, 10) || '') === day &&
+        !hasSig.has(feed[j].id)
+      ) j++;
+      if (j - i >= RUN_MIN) {
+        items.push({ type: 'run', key: `${l.auctionHouse}|${day}|${l.id}`, house: l.auctionHouse, day, lots: feed.slice(i, j) });
+        i = j;
+      } else {
+        items.push({ type: 'lot', lot: l });
+        i++;
+      }
+    }
+    return items;
+  }, [feed, belowSignal]);
+  const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
 
   // Lens changes re-run the card entrance. Search typing is deliberately NOT
   // in the key: rekeying per keystroke would remount all visible cards per
@@ -351,7 +435,30 @@ export default function RayPage() {
     return topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
   }, [marketStats]);
 
-  const strip = useMemo(() => {
+  // ONE WEEK — the ledger's "Hammers this week" and the HammerWeek strip both
+  // count against the same Mon–Sun UTC window (the crawl day's week), and the
+  // "across N houses" sub is scoped to that week's lots, not the whole pool.
+  const hammerWeek = useMemo(() => {
+    const days = new Set(weekDaysFor(crawlDay));
+    const weekLots = upcoming.filter(l => days.has(l.saleDate?.slice(0, 10) || ''));
+    return { count: weekLots.length, houses: new Set(weekLots.map(l => l.auctionHouse)).size };
+  }, [upcoming, crawlDay]);
+
+  // "Next hammer" must be a lot that hasn't hammered: soonest saleDate on or
+  // after the crawl day (upcoming is date-sorted; past resultsPending lots
+  // held visible in the pool must never lead this line). Worded against the
+  // crawl day — the edition's clock — in whole UTC days, so it can never
+  // slip into the past tense (daysWord reads the client clock, which drifts
+  // past-tense on UTC evenings).
+  const nextHammer = useMemo(() => {
+    const lot = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= crawlDay) || null;
+    if (!lot) return null;
+    const d = Math.round((Date.parse(`${lot.saleDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${crawlDay}T00:00:00Z`)) / 86_400_000);
+    const word = d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d}d`;
+    return { lot, word };
+  }, [upcoming, crawlDay]);
+
+  const strip = useMemo<StripItem[]>(() => {
     const active = upcoming;
     const withEst = active.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
     const estValue = withEst.reduce((sum, l) => {
@@ -361,34 +468,30 @@ export default function RayPage() {
     }, 0);
     const liveHouses = new Set(active.map(l => l.auctionHouse)).size;
     const asComma = (n: number) => Math.round(n).toLocaleString();
-    const now = new Date();
-    const weekAhead = new Date(now.getTime() + 7 * 86_400_000);
-    const thisWeek = active.filter(l => {
-      const d = new Date(l.saleDate);
-      return !isNaN(d.getTime()) && d >= now && d <= weekAhead;
-    }).length;
+    // ONE WEEK: the same Mon–Sun window the HammerWeek strip rules off
+    const thisWeek = hammerWeek.count;
     const priceOrDash = (n: number) => (n > 0 ? formatPrice(n) : '—');
     // "across 1 houses" reads like a bug; a 0-count week says so in words.
     const hammersSub = thisWeek === 0
       ? 'none scheduled this week'
-      : `across ${liveHouses} ${liveHouses === 1 ? 'house' : 'houses'}`;
+      : `across ${hammerWeek.houses} ${hammerWeek.houses === 1 ? 'house' : 'houses'}`;
     // Estimate-less verticals (sports = Goldin bid sales) have no mid-estimate
     // total and nothing to flag — show real figures instead of a dead "—" / "0".
     if (estValue === 0 && active.length > 0) {
       return [
         { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
         { k: 'On the block', to: active.length, format: asComma, s: 'live lots — bid sales, no estimates' },
-        { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
+        { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub, week: true },
         { k: 'Live houses', to: liveHouses, format: asComma, s: 'sourcing this market' },
       ];
     }
     return [
       { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
       { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
-      { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
+      { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub, week: true },
       { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up', lens: true },
     ];
-  }, [upcoming, belowIds, totalRealized, topArtist]);
+  }, [upcoming, belowIds, totalRealized, topArtist, hammerWeek]);
 
   // The board rail's watchlist strip — what changed since you saved.
   const watchStrip = useMemo(() => {
@@ -530,6 +633,7 @@ export default function RayPage() {
                   <ApprBarometer
                     value={appreciation}
                     marketName={marketName}
+                    serial={editionSerial}
                     /* bid markets (sports/science) carry no eager sold archive —
                        fall back to the precomputed recent-slice median so the
                        dotted-leader row prints a real figure, not a dash */
@@ -588,6 +692,18 @@ export default function RayPage() {
                   <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
                   <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
                 </button>
+              ) : item.week && item.to > 0 ? (
+                <button
+                  key={item.k}
+                  type="button"
+                  onClick={() => document.getElementById('hammer-week')?.scrollIntoView({ behavior: 'smooth' })}
+                  aria-label="See the hammer week, day by day"
+                  style={{ background: 'none', border: 'none', margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                >
+                  <div className="ray-ledger-k">{item.k}</div>
+                  <CountUp to={item.to} format={item.format} className="ray-ledger-v" style={{ display: 'block' }} />
+                  <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
+                </button>
               ) : (
                 <div key={item.k}>
                   <div className="ray-ledger-k">{item.k}</div>
@@ -599,7 +715,7 @@ export default function RayPage() {
             {/* microtype footer, dated like the barometer's certificate */}
             <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
               <span>every estimate, read against every hammer</span>
-              <span>no. {(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}</span>
+              <span>no. {editionSerial}</span>
             </div>
           </section>
           </div>
@@ -619,9 +735,11 @@ export default function RayPage() {
                 } as React.CSSProperties}
               >
                 <h2 className="ray-h2">On the block</h2>
-                {upcoming[0] && (
+                {/* only a lot that hasn't hammered yet may claim "next" —
+                    past-dated resultsPending lots never lead this line */}
+                {nextHammer && (
                   <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
-                    Next hammer: {daysWord(upcoming[0].saleDate)} · {upcoming[0].auctionHouse}
+                    Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}
                   </span>
                 )}
               </div>
@@ -635,9 +753,10 @@ export default function RayPage() {
                 total={upcoming.length}
                 market={activeKey}
                 onMarketReset={() => setMarket('all')}
-                view={feedView}
+                view={effectiveView}
                 onViewChange={handleView}
                 pageSize={pageSize}
+                showToggle={!narrowView}
               />
 
               {/* THE HAMMER WEEK — the "hammers this week" count, given a
@@ -647,9 +766,10 @@ export default function RayPage() {
                 lots={upcoming}
                 activeDay={feedFilters.saleDay}
                 onSelectDay={handleSaleDay}
+                todayIso={crawlDay}
               />
 
-              {feedView === 'table' && feed.length > 0 ? (
+              {effectiveView === 'table' && feed.length > 0 ? (
                 <div key={feedKey} className="ray-feed-rekey" style={{ overflowX: 'auto' }}>
                   <table className="ray-feedtable">
                     <thead>
@@ -751,22 +871,86 @@ export default function RayPage() {
                     </button>
                   </div>
                 ) : (
-                  feed.slice(0, visibleUpcoming).map((lot, i) => (
-                    <div
-                      key={lot.id}
-                      className="ray-feed-rekey"
-                      style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
-                    >
-                      <LotCard
-                        lot={lot}
-                        showArtist
-                        allLots={marketLots}
-                        saved={isSaved(lot.id)}
-                        onToggleSave={toggle}
-                        lastCrawl={lastCrawl || undefined}
-                      />
-                    </div>
-                  ))
+                  feedItems.slice(0, visibleUpcoming).map((item, i) =>
+                    item.type === 'lot' ? (
+                      <div
+                        key={item.lot.id}
+                        className="ray-feed-rekey"
+                        // minWidth 0 zeroes the grid item's automatic minimum —
+                        // the compact row's nowrap lines must ellipsize, not
+                        // stretch the track past the viewport
+                        style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                      >
+                        <LotCard
+                          lot={item.lot}
+                          showArtist
+                          allLots={marketLots}
+                          saved={isSaved(item.lot.id)}
+                          onToggleSave={toggle}
+                          lastCrawl={lastCrawl || undefined}
+                        />
+                      </div>
+                    ) : (
+                      /* a folded same-sale run — one ruled header row for the
+                         whole house+day block; one tap expands it in place */
+                      <div
+                        key={item.key}
+                        className="ray-feed-rekey"
+                        style={{ gridColumn: '1 / -1', animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRuns(r => ({ ...r, [item.key]: !r[item.key] }))}
+                          aria-expanded={!!expandedRuns[item.key]}
+                          aria-label={`${item.house}, ${formatDate(item.day)} — ${item.lots.length} lots without a market signal. ${expandedRuns[item.key] ? 'Collapse' : 'Expand'} the run.`}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            gap: 8,
+                            background: 'none',
+                            border: 'none',
+                            borderTop: '1px solid var(--color-border)',
+                            borderBottom: '1px solid var(--color-border)',
+                            margin: 0,
+                            padding: '12px 2px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            color: 'var(--color-text-muted)',
+                            fontFamily: 'var(--font-sans), sans-serif',
+                          }}
+                        >
+                          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-fg)', whiteSpace: 'nowrap' }}>
+                            {item.house} · {formatDate(item.day)}
+                          </span>
+                          <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            — {item.lots.length}{(() => {
+                              const a = item.lots[0].artist;
+                              return item.lots.every(l => l.artist === a) ? ` ${(ARTIST_LABEL[a] || a).toLowerCase()}` : '';
+                            })()} lots
+                          </span>
+                          <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                            {expandedRuns[item.key] ? 'hide' : 'show'} <Flick size={10} />
+                          </span>
+                        </button>
+                        {expandedRuns[item.key] && (
+                          <div className="ray-upcoming-grid" style={{ marginTop: 24 }}>
+                            {item.lots.map(lot => (
+                              <LotCard
+                                key={lot.id}
+                                lot={lot}
+                                showArtist
+                                allLots={marketLots}
+                                saved={isSaved(lot.id)}
+                                onToggleSave={toggle}
+                                lastCrawl={lastCrawl || undefined}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )
                 )}
               </div>
               )}
@@ -775,7 +959,7 @@ export default function RayPage() {
                 <ComparableModal lot={tableLot} allLots={marketLots} onClose={() => setTableLot(null)} />
               )}
 
-              {visibleUpcoming < feed.length && (
+              {visibleUpcoming < (effectiveView === 'table' ? feed.length : feedItems.length) && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
                   <button
                     onClick={() => setVisibleUpcoming(v => v + pageSize)}
@@ -794,7 +978,7 @@ export default function RayPage() {
                       transition: 'border-color var(--duration-fast) var(--ease-signature)',
                     }}
                   >
-                    Show more ({(feed.length - visibleUpcoming).toLocaleString()} remaining)
+                    Show more ({((effectiveView === 'table' ? feed.length : feedItems.length) - visibleUpcoming).toLocaleString()} remaining)
                   </button>
                 </div>
               )}
@@ -810,7 +994,7 @@ export default function RayPage() {
               <div className="ray-enter" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
                 <SettlementSlip
                   marketName={marketName}
-                  serial={(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}
+                  serial={editionSerial}
                   archiveOpen={showArchive}
                   onToggleArchive={() => setShowArchive(s => !s)}
                   lines={[
@@ -831,7 +1015,7 @@ export default function RayPage() {
             <div className="ray-enter" style={{ '--enter-delay': '180ms' } as React.CSSProperties}>
               <SettlementSlip
                 marketName={marketName}
-                serial={(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}
+                serial={editionSerial}
                 archiveOpen={showArchive}
                 onToggleArchive={() => setShowArchive(s => !s)}
                 lines={[

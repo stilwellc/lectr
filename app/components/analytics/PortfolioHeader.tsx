@@ -3,9 +3,10 @@
 import { useMemo } from 'react';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice, fmtSignedPct } from '../../utils';
-import { MARKETS } from '../../constants';
+import { MARKETS, marketOf } from '../../constants';
 import { useMarket } from '../../lib/market';
 import RecordBand from '../RecordBand';
+import meta from '../../../public/data/ray/meta.json';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -20,14 +21,6 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
   const contextLabel = marketMeta?.live ? marketMeta.label : 'all markets';
 
   const cards = useMemo(() => {
-    const stats = Object.values(statsByArtist);
-    const totalRevenue = stats.reduce((sum, s) => sum + (s.totalAuctionRevenue || 0), 0);
-
-    const weightedAppreciation = totalRevenue > 0
-      ? stats.reduce((sum, s) =>
-          sum + (s.appreciationRate || 0) * (s.totalAuctionRevenue || 0), 0) / totalRevenue
-      : 0;
-
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const recentSold = allLots.filter(l =>
@@ -70,13 +63,41 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
           return { label: 'Median sale, past year', value: formatPrice(median), sub: 'realized · no house estimates in this market', tone: '' };
         })();
 
+    // ONE corpus count: the 'all' book is the full crawl corpus from
+    // meta.json, never the served subset — and every count names its base.
+    const totalLotsCard = market === 'all' || !marketMeta?.live
+      ? { label: 'Total lots', value: meta.totalLots.toLocaleString(), sub: 'on the book, full corpus', tone: '' }
+      : { label: 'Total lots', value: allLots.length.toLocaleString(), sub: `on the book · ${contextLabel}`, tone: '' };
+
+    // Sell-through, all-time: sold ÷ (sold + bought-in) over estimate-market
+    // lots only — Goldin's no-reserve verticals conclude every lot 'sold', so
+    // counting them would print a fake 100%; bid markets show sold count.
+    const estMarketConcluded = allLots.filter(l =>
+      (l.status === 'sold' || l.status === 'bought_in') &&
+      ['art', 'design', 'watches'].includes(marketOf(l.artist))
+    );
+    const estMarketSold = estMarketConcluded.filter(l => l.status === 'sold').length;
+    const sellThroughCard = estMarketConcluded.length >= 5
+      ? {
+          label: 'Sell-through, all-time',
+          value: `${Math.round((estMarketSold / estMarketConcluded.length) * 100)}%`,
+          sub: `${estMarketSold.toLocaleString()} sold of ${estMarketConcluded.length.toLocaleString()} concluded · estimate markets`,
+          tone: '',
+        }
+      : {
+          label: 'Sold lots',
+          value: soldLots.length.toLocaleString(),
+          sub: 'sold · no-reserve market, every lot concludes',
+          tone: '',
+        };
+
     return [
-      { label: 'Total sales value', value: formatPrice(totalRevenue), sub: 'aggregate realized prices, all makers', tone: '' },
-      { label: 'Total lots', value: allLots.length.toLocaleString(), sub: `${makerCount} makers tracked`, tone: '' },
-      { label: 'Appreciation', value: fmtSignedPct(weightedAppreciation, 1), sub: 'sales-weighted avg across makers', tone: '' },
+      totalLotsCard,
+      { label: 'Makers tracked', value: makerCount.toLocaleString(), sub: `across ${contextLabel}`, tone: '' },
+      sellThroughCard,
       estimateCard,
     ];
-  }, [statsByArtist, allLots]);
+  }, [statsByArtist, allLots, market, marketMeta, contextLabel]);
 
   return (
     <section className="ray-portfolio-header rail">

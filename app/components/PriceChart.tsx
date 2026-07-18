@@ -199,7 +199,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
         {/* Chart */}
         {hasChart && (
           <div style={{ padding: '20px 8px 0 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 20px 12px', }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 20px 12px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-fg)', flexShrink: 0 }} />
                 <span style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
@@ -218,6 +218,13 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                   Trend
                 </span>
               </div>
+              {/* the axis clips winsorized spikes — SAY so, or a flat-topped
+                  peak reads as repeated record sales */}
+              {yMax !== undefined && record && (
+                <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--color-text-faint)' }}>
+                  peaks clipped above {formatPrice(yMax)} · record {formatPrice(record.highPrice)}
+                </span>
+              )}
             </div>
             <div className="ray-chart-container ray-chart-draw" ref={drawRef}>
               <ResponsiveContainer width="100%" height="100%">

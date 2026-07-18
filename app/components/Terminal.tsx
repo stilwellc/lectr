@@ -19,7 +19,10 @@ export function daysWord(dateStr: string): string {
   const t = new Date(dateStr).getTime();
   if (isNaN(t)) return 'scheduled';          // never render "in NaNd" on a bad date
   const days = Math.ceil((t - Date.now()) / 86_400_000);
-  if (days <= 0) return 'today';
+  // sign-aware: a lot that hammered 10 days ago must never read "today" —
+  // past dates say so in the past tense
+  if (days < 0) return `hammered ${-days}d ago`;
+  if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days}d`;
 }
@@ -66,6 +69,23 @@ const CALLPLATE_CSS = `
 .lectr-cp-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
 .lectr-cp-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(242,238,227,0.28) 4px,rgba(242,238,227,0.28) 5px)}
 .lectr-cp-monoglyph{font-size:40px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
+/* COMPACT density — no image plate: microcap head, maker/title, the dotted-
+   leader certificate rows (always visible, every width), band slot, CTA. */
+.lectr-cp-compact{display:block;padding:22px 24px 20px}
+.lectr-cp-compact .lectr-cp-head{position:relative;margin-bottom:12px;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-beige-text)}
+.lectr-cp-compact .lectr-cp-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
+.lectr-cp-compact .lectr-cp-band{margin:2px -10px 0}
+.lectr-cp-compact .lectr-cp-leaders{display:block;margin-top:14px;border-top:1px solid var(--hairline);padding-top:4px}
+.lectr-cp-compact .lectr-cp-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
+.lectr-cp-compact .lectr-cp-k{color:var(--color-text-muted)}
+.lectr-cp-compact .lectr-cp-fill{flex:1;border-bottom:1px dotted rgba(242,238,227,0.2);transform:translateY(-3px)}
+.lectr-cp-compact .lectr-cp-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-cp-compact .lectr-cp-v.up{color:var(--color-up)}
+.lectr-cp-compact .lectr-cp-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
+.lectr-cp-compact .lectr-cp-dots{font-size:8.5px;letter-spacing:1px;color:var(--color-beige);margin-right:7px}
+/* FULL density, image failed: never a dominant empty frame — the monogram
+   plate shrinks to a modest square at every presentation. */
+.lectr-cp.lectr-cp-noimg .ray-plate-img{height:140px}
 @media (min-width:900px){
   .ray-board-belowrow .lectr-cp{padding:20px 24px 18px}
   .ray-board-belowrow .lectr-cp .lectr-cp-body{display:grid;grid-template-columns:42% minmax(0,1fr);grid-template-rows:auto 1fr;column-gap:36px}
@@ -89,6 +109,11 @@ const CALLPLATE_CSS = `
   .ray-board-belowrow .lectr-cp .lectr-cp-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
   .ray-board-belowrow .lectr-cp .lectr-cp-dots{font-size:8.5px;letter-spacing:1px;color:var(--color-beige);margin-right:7px}
   .ray-board-belowrow .lectr-cp .ray-deckcall-cta{margin-top:auto;padding-top:14px;border-top:1px solid var(--hairline)}
+  /* wide plate, image failed: reflow text-first — the monogram becomes a
+     ~140px side square and the certificate column takes the width */
+  .ray-board-belowrow .lectr-cp.lectr-cp-noimg .lectr-cp-body{grid-template-columns:176px minmax(0,1fr)}
+  .ray-board-belowrow .lectr-cp.lectr-cp-noimg .ray-plate-img{height:140px}
+  .ray-board-belowrow .lectr-cp.lectr-cp-noimg .lectr-cp-monoglyph{font-size:40px}
 }
 `;
 
@@ -112,12 +137,23 @@ export function CallPlate({
   market = 'all',
   isSaved,
   onToggleSave,
+  density = 'full',
+  band,
+  onSeeComps,
 }: {
   lots: AuctionLot[];
   allLots: AuctionLot[];
   market?: Market;
   isSaved?: (id: string) => boolean;
   onToggleSave?: (id: string, lot?: AuctionLot) => void;
+  /** 'compact' drops the image plate: microcap head, maker/title, the
+      dotted-leader rows, an optional band slot, and the CTA row. */
+  density?: 'full' | 'compact';
+  /** compact only — a PriceBand (or similar) strip slotted under the title */
+  band?: ReactNode;
+  /** compact only — when provided, the primary CTA reads "See the comps"
+      and opens the caller's modal instead of linking to /value */
+  onSeeComps?: (lot: AuctionLot) => void;
 }) {
   const call = useMemo(() => pickCall(lots, allLots, market), [lots, allLots, market]);
   // a hotlink-blocked photograph must never unmount the column — the fallback
@@ -142,26 +178,65 @@ export function CallPlate({
     ? Math.round(estMid * (1 + signal!.pct / 100))
     : null);
 
+  const saveBtn = onToggleSave && (
+    <button
+      className="ray-save-btn"
+      onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
+      aria-label={saved ? 'Remove from saved' : 'Save lot'}
+      style={{ width: 44, height: 44, margin: '-14px -12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
+    >
+      <span style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: saved ? 'var(--color-fg)' : 'var(--color-bg-elevated)', borderRadius: 100 }}>
+        <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+          <path d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z" fill={saved ? 'var(--color-bg)' : 'var(--color-text-faint)'} />
+        </svg>
+      </span>
+    </button>
+  );
+
+  // COMPACT — /value's call hero: same pickCall, same numbers, one component.
+  if (density === 'compact') {
+    return (
+      <div className="glass lit lectr-cp lectr-cp-compact">
+        <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
+        <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span>Today&rsquo;s call · ranked by comps gap</span>
+          {saveBtn}
+        </div>
+        <div className="ray-call-artist">{makerName}</div>
+        <div className="ray-call-title">{craftTitle(lot.title)}</div>
+        {band && <div className="lectr-cp-band">{band}</div>}
+        <div className="lectr-cp-leaders">
+          <LeaderRow k="Ask" v={formatEstimate(lot)} />
+          <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
+          <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
+          <LeaderRow k="Confidence">
+            <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
+          </LeaderRow>
+          <LeaderRow k="Hammers" v={`${formatDate(lot.saleDate)} · ${daysWord(lot.saleDate)}`} sub={lot.auctionHouse} />
+        </div>
+        <div className="ray-call-ctas" style={{ marginTop: 16 }}>
+          {onSeeComps ? (
+            <button className="ray-call-btn ray-call-btn-primary" onClick={() => onSeeComps(lot)}>
+              See the comps
+            </button>
+          ) : (
+            <Link className="ray-call-btn ray-call-btn-primary" href="/value">See how we called it</Link>
+          )}
+          <a className="ray-call-btn ray-call-btn-quiet" href={lot.url} target="_blank" rel="noopener noreferrer">
+            View lot <Flick size={10} style={{ marginLeft: 5 }} />
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Link href="/value" className="ray-board-panel ray-deckcall lectr-cp" aria-label="Today's call — see how we called it">
+    <Link href="/value" className={`ray-board-panel ray-deckcall lectr-cp${imgOk ? '' : ' lectr-cp-noimg'}`} aria-label="Today's call — see how we called it">
       <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
       <div className="lectr-cp-body">
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <span>Today&rsquo;s call · ranked by comps gap</span>
-          {onToggleSave && (
-            <button
-              className="ray-save-btn"
-              onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
-              aria-label={saved ? 'Remove from saved' : 'Save lot'}
-              style={{ width: 44, height: 44, margin: '-14px -12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
-            >
-              <span style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: saved ? 'var(--color-fg)' : 'var(--color-bg-elevated)', borderRadius: 100 }}>
-                <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
-                  <path d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z" fill={saved ? 'var(--color-bg)' : 'var(--color-text-faint)'} />
-                </svg>
-              </span>
-            </button>
-          )}
+          {saveBtn}
         </div>
 
         {/* the plate: photograph on the elevated mat — or, when the house
@@ -236,10 +311,14 @@ export function CallPlate({
  * light when the reader arrives, over the provenance the whole product
  * stands on. One gesture, then quiet.
  */
-export function Colophon({ lotCount, houseCount, record }: {
+export function Colophon({ record }: {
+  // lotCount/houseCount stay in the contract (call sites pass them) but the
+  // slim colophon no longer prints the stat trio — THE SETTLEMENT one scroll
+  // up already states it.
   lotCount: number;
   houseCount: number;
-  /** the backtest's flagged record — the strongest true sentence */
+  /** the backtest's flagged record — rendered only when passed; pages with a
+      proofstrip/settlement pass null and get the slim "See the record" line */
   record?: { n: number; medianPerfPct: number } | null;
 }) {
   const [inView, setInView] = useState(false);
@@ -264,13 +343,6 @@ export function Colophon({ lotCount, houseCount, record }: {
         </div>
         <p className="ray-close-thesis">Every estimate, read against every hammer.</p>
 
-        {/* provenance numerals */}
-        <div className="ray-close-ledger" role="list">
-          <div role="listitem"><b>{lotCount.toLocaleString()}</b><span>lots on the book</span></div>
-          <div role="listitem"><b>{houseCount}</b><span>auction houses</span></div>
-          <div role="listitem"><b>2000</b><span>archive reaches back to</span></div>
-        </div>
-
         {/* the map of the house */}
         <div className="ray-close-map">
           <div className="ray-close-col">
@@ -293,12 +365,12 @@ export function Colophon({ lotCount, houseCount, record }: {
           </div>
           <div className="ray-close-col ray-close-record">
             <span className="ray-close-k">The record</span>
-            {record && record.n > 500 ? (
+            {/* the sentence renders only WHEN PASSED — pages that already show
+                the settlement/proofstrip pass record={null} and get one line */}
+            {record && record.n > 500 && (
               <p>
                 Flagged calls hammered <b className="up">+{record.medianPerfPct}% median</b> over their estimates across {record.n.toLocaleString()} replayed sales.
               </p>
-            ) : (
-              <p>Every call is replayed against what the lot really hammered for.</p>
             )}
             <Link href="/value" className="ray-close-cta">See the record <Flick size={12} /></Link>
           </div>

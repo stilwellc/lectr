@@ -116,6 +116,9 @@ function LotCard({
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
   const [reminded, setReminded] = useState(false);
+  // hotlink-blocked/dead images flip the card into the compact row layout —
+  // a 140-200px well showing a monogram letter is burned space, not a photo
+  const [imgFailed, setImgFailed] = useState(false);
   const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
 
   // firstSeen ships from the crawler diff — read defensively: older data
@@ -152,6 +155,13 @@ function LotCard({
   const catLabel = categoryLabels[lot.category] || null;
   const isUpcoming = lot.status === 'upcoming';
 
+  // A resultsPending lot with a PAST sale date must not speak in the future
+  // tense ("hammers Jul 7" on a Jul 17 page) or offer a reminder for an
+  // auction that already happened. "Today" is the crawl day — the data's
+  // clock — falling back to the client clock when no crawl stamp is passed.
+  const todayIso = (lastCrawl || new Date().toISOString()).slice(0, 10);
+  const isPastPending = isUpcoming && !!lot.resultsPending && !!lot.saleDate && lot.saleDate.slice(0, 10) < todayIso;
+
   // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the maker
   // label and the maker line already renders, the title says nothing twice.
   const makerLabel = lot.artist ? (ARTIST_LABEL[lot.artist] || lot.artist) : '';
@@ -169,6 +179,135 @@ function LotCard({
   // descriptive only, and never lights the red/green call row.
   const soldComp = lot.soldComp ?? null;
 
+  // Stretched primary action — keeps save/remind as sibling controls, not
+  // descendants. Shared by both faces (photo card / compact row).
+  const primaryAction = isUpcoming ? (
+    <button
+      onClick={() => setModalOpen(true)}
+      aria-label={`View comparable sales for ${lot.title}`}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        borderRadius: 18,
+      }}
+    />
+  ) : (
+    <a
+      href={lot.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1,
+        borderRadius: 18,
+      }}
+    />
+  );
+
+  // No photograph (or the house hotlink-blocked it) → the card renders as a
+  // COMPACT ROW: no image well, title/maker/est/signal in ~72px. Photographed
+  // lots keep the full card.
+  const noImage = !lot.imageUrl || imgFailed;
+
+  const rowContent = (
+    <div className="ray-lot-card glass glass-quiet glass-noblur" style={{
+      overflow: 'hidden',
+      cursor: 'pointer',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '12px 16px',
+      minHeight: 72,
+      minWidth: 0, // when the card is itself a grid item (expanded runs)
+    }}>
+      {primaryAction}
+      <div style={{ flex: 1, minWidth: 0, zIndex: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+          {showArtist && lot.artist && (
+            <Link
+              href={`/${lot.artist}`}
+              className="ray-lot-maker"
+              onClick={e => e.stopPropagation()}
+              style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              {makerLabel}
+            </Link>
+          )}
+          {!titleDupesMaker && (
+            <span className="ray-lot-title" style={{
+              fontFamily: 'var(--font-sans), sans-serif',
+              fontSize: showArtist ? 13 : 14,
+              fontWeight: showArtist ? 400 : 600,
+              color: showArtist ? 'var(--color-text-muted)' : 'var(--color-fg)',
+              letterSpacing: '-0.01em',
+              lineHeight: 1.4,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+            }}>
+              {titleText}
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {isNewToday && <span className="ray-newchip" style={{ marginRight: 6 }}>New today</span>}
+          {lot.auctionHouse}
+          {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
+          {isPastPending
+            ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
+            : ` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
+        </div>
+      </div>
+      <div style={{ flexShrink: 0, textAlign: 'right', zIndex: 'auto' }}>
+        {buySignal && (
+          <div className="ray-sigrow" data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'} style={{ margin: 0, justifyContent: 'flex-end' }}>
+            <span className="ray-sigrow-pct">
+              {signalMagnitude(buySignal.label, buySignal.pct)}
+            </span>
+          </div>
+        )}
+        <span className="ray-lot-est" style={{ display: 'block' }}>{formatEstimate(lot)}</span>
+      </div>
+      {onToggleSave && (
+        <button
+          className="ray-save-btn"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
+          style={{
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: saved ? 'var(--color-fg)' : 'var(--color-bg-elevated)',
+            border: 'none',
+            borderRadius: 100,
+            cursor: 'pointer',
+            padding: 0,
+            zIndex: 2,
+          }}
+          aria-label={saved ? 'Remove from saved' : 'Save lot'}
+        >
+          <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+            <path
+              d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+              fill={saved ? 'var(--color-bg)' : 'var(--color-text-faint)'}
+              stroke={saved ? 'var(--color-bg)' : 'var(--color-text-faint)'}
+              strokeWidth="0.8"
+            />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+
   const cardContent = (
     <div className="ray-lot-card ray-card-compact glass glass-quiet glass-noblur" style={{
       overflow: 'hidden',
@@ -177,36 +316,7 @@ function LotCard({
       display: 'flex',
       flexDirection: 'column',
     }}>
-      {/* Stretched primary action — keeps save/remind as sibling controls, not descendants */}
-      {isUpcoming ? (
-        <button
-          onClick={() => setModalOpen(true)}
-          aria-label={`View comparable sales for ${lot.title}`}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 1,
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            borderRadius: 18,
-          }}
-        />
-      ) : (
-        <a
-          href={lot.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 1,
-            borderRadius: 18,
-          }}
-        />
-      )}
+      {primaryAction}
       {/* zIndex auto keeps the stretched link (z1) clickable above this
           content while save/remind buttons (z2) stay above the link —
           overrides the .glass > * z-index:2 rule. */}
@@ -239,21 +349,18 @@ function LotCard({
             loading="lazy"
             decoding="async"
             // cache hits never fire onLoad/onError — check complete at
-            // attach; complete with zero naturalWidth is a cached failure
+            // attach; complete with zero naturalWidth is a cached failure.
+            // A failure flips the whole card into the compact row layout.
             ref={(el) => {
               if (!el || !el.complete) return;
               if (el.naturalWidth > 0) {
                 el.setAttribute('data-loaded', 'true');
               } else {
-                el.removeAttribute('data-loaded');
-                el.setAttribute('data-error', 'true');
+                setImgFailed(true);
               }
             }}
             onLoad={(e) => e.currentTarget.setAttribute('data-loaded', 'true')}
-            onError={(e) => {
-              e.currentTarget.removeAttribute('data-loaded');
-              e.currentTarget.setAttribute('data-error', 'true');
-            }}
+            onError={() => setImgFailed(true)}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           />
         )}
@@ -338,7 +445,9 @@ function LotCard({
         <div style={{ fontSize: 13, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
           {lot.auctionHouse}
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
-          {` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
+          {isPastPending
+            ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
+            : ` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
         </div>
         <div style={{ marginTop: 'auto' }}>
           {/* The intelligence leads — the number IS the card's rank. */}
@@ -396,6 +505,8 @@ function LotCard({
 
         {isUpcoming && (
           <div className="ray-lot-footer">
+            {/* no reminder for a hammer that already fell */}
+            {!isPastPending && (
             <button
               onClick={handleAddToCalendar}
               className="ray-lot-remind"
@@ -415,7 +526,8 @@ function LotCard({
               )}
               {reminded ? 'Added to calendar' : 'Remind me'}
             </button>
-            <span className="ray-lot-comps" aria-hidden="true">
+            )}
+            <span className="ray-lot-comps" aria-hidden="true" style={isPastPending ? { marginLeft: 'auto' } : undefined}>
               Comps <Flick size={10} />
             </span>
           </div>
@@ -426,7 +538,7 @@ function LotCard({
 
   return (
     <>
-      {cardContent}
+      {noImage ? rowContent : cardContent}
       {modalOpen && (
         <ComparableModal
           lot={lot}

@@ -6,20 +6,19 @@ import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
-import { pickCall } from '../components/Terminal';
+import { pickCall, CallPlate } from '../components/Terminal';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
-import { lotSignal, confidenceMeter, formatEstimate } from '../components/LotCard';
+import { lotSignal, formatEstimate } from '../components/LotCard';
 import ComparableModal, { PriceBand } from '../components/ComparableModal';
 import RecordByYear from '../components/RecordByYear';
-import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
-import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle, httpsImg, fmtSignedPct } from '../utils';
-import { FORM_LABEL, signalWithPool } from '../lib/comps';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct } from '../utils';
+import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
 const ROWS_PAGE = 12;
 
@@ -43,19 +42,13 @@ export default function ValuePage() {
 
   const deals = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    // Rank by the CALIBRATED odds first (the engine's measured beat-rate,
-    // which drops on extreme ratios where they measurably under-deliver),
-    // then by the gap capped at 400% — a +5976% data fault can never again
-    // outrank a clean 2× flag with 70% measured odds.
-    const score = (d: { lot: AuctionLot; signal: { pct: number } | null }) => {
-      const br = (d.lot as { value?: { signal?: { beatRatePct?: number } | null } | null }).value?.signal?.beatRatePct ?? 50;
-      return br * 1000 + Math.min(d.signal!.pct, 400);
-    };
+    // THE ONE FLAGGED RANKING — dealScore (lib/comps): calibrated odds first,
+    // then the gap capped at 400%. Same ordering as every other surface.
     return marketLots
       .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
       .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
-      .sort((a, b) => score(b) - score(a));
+      .sort((a, b) => dealScore(b.lot, b.signal!.pct) - dealScore(a.lot, a.signal!.pct));
   }, [marketLots]);
 
   const summary = useMemo(() => {
@@ -212,60 +205,25 @@ export default function ValuePage() {
 
           {call && (
             <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 22 } as React.CSSProperties}>
-              <div className="ray-call lit">
-                <div className="ray-call-copy">
-                  <div className="ray-call-eyebrow">
-                    <span>Today&rsquo;s call</span>
-                    <MethodologyNote />
-                  </div>
-                  <div className="ray-call-artist">{ARTIST_LABEL[call.lot.artist] || call.lot.artist}</div>
-                  <div className="ray-call-title">{craftTitle(call.lot.title)}</div>
-                  <div className="ray-call-meta">
-                    {call.lot.auctionHouse}
-                    {call.lot.category !== 'unknown' && categoryLabels[call.lot.category] ? ` · ${categoryLabels[call.lot.category]}` : ''}
-                    {` · hammers ${formatDate(call.lot.saleDate)} · ${formatEstimate(call.lot)}`}
-                  </div>
-                  {callMedian !== null && (
-                    <div className="ray-call-band">
-                      <PriceBand
-                        prices={callComps}
-                        median={callMedian}
-                        estLow={call.lot.estimateLow}
-                        estHigh={call.lot.estimateHigh}
-                        below={true}
-                      />
-                    </div>
-                  )}
-                  <div className="ray-call-line">
-                    {call.signal!.kind === 'edition'
-                      ? `This exact edition has sold ${call.signal!.pct}% above this estimate (${call.signal!.basis} sales).`
-                      : `${call.signal!.basis} comparable ${(FORM_LABEL as Record<string, string>)[call.signal!.form!] || 'works'} put the median ${call.signal!.pct}% above this estimate.`}
-                    <span style={{ display: 'block', marginTop: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                      {confidenceMeter(call.signal!.confidence).dots}{' '}
-                      {confidenceMeter(call.signal!.confidence).word} confidence
-                      {call.signal!.kind === 'edition' ? ' — the strongest comp there is' : ''}
-                    </span>
-                  </div>
-                  <div className="ray-call-ctas">
-                    <button className="ray-call-btn ray-call-btn-primary" onClick={() => setModalLot(call.lot)}>
-                      See the comps
-                    </button>
-                    <a className="ray-call-btn ray-call-btn-quiet" href={call.lot.url} target="_blank" rel="noopener noreferrer">
-                      View lot <Flick size={10} style={{ marginLeft: 5 }} />
-                    </a>
-                  </div>
-                </div>
-                <div className="ray-call-art">
-                  <div className="ray-lot-plate" aria-hidden={call.lot.imageUrl ? 'true' : undefined}>
-                    <span className="ray-lot-plate-letter">{call.lot.title.charAt(0)}</span>
-                    <span className="ray-lot-plate-rule" />
-                  </div>
-                  {call.lot.imageUrl && (
-                    <img src={httpsImg(call.lot.imageUrl)} alt={call.lot.title} referrerPolicy="no-referrer"
-                      onError={e => e.currentTarget.remove()} />
-                  )}
-                </div>
-              </div>
+              {/* ONE CALLPLATE — the lander's component in compact density:
+                  same pickCall lot, same numbers, the modal one click away. */}
+              <CallPlate
+                lots={marketLots}
+                allLots={marketLots}
+                density="compact"
+                isSaved={isSaved}
+                onToggleSave={toggle}
+                onSeeComps={l => setModalLot(l)}
+                band={callMedian !== null ? (
+                  <PriceBand
+                    prices={callComps}
+                    median={callMedian}
+                    estLow={call.lot.estimateLow}
+                    estHigh={call.lot.estimateHigh}
+                    below={true}
+                  />
+                ) : null}
+              />
             </section>
           )}
 
@@ -331,7 +289,7 @@ export default function ValuePage() {
             ) : (
               <>
                 <h2 className="ray-h2 ray-enter" style={{ marginBottom: 18 }}>
-                  Deepest value first
+                  Deepest value first · calibrated odds
                 </h2>
                 {/* Compact rows — thumb · maker · signal % · est. Each row
                     opens the comps modal; the house link lives inside it. */}
@@ -370,8 +328,15 @@ export default function ValuePage() {
                       </span>
                       <span style={{ textAlign: 'right' }}>
                         <span className="ray-value-row-sig" style={{ display: 'block' }}>
-                          +{Math.round(d.signal!.pct)}%
+                          {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
                         </span>
+                        {/* THE RANKING KEY, visible: the engine's calibrated
+                            beat rate — why a +140% can outrank a +375% */}
+                        {d.lot.value?.signal?.beatRatePct != null && (
+                          <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                            {Math.round(d.lot.value.signal.beatRatePct)}% odds
+                          </span>
+                        )}
                         <span className="ray-value-row-est" style={{ display: 'block' }}>
                           {formatEstimate(d.lot)}
                         </span>

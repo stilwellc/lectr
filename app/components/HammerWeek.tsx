@@ -18,25 +18,36 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_MS = 86_400_000;
 const MAX_TICKS = 6;
 
+/** The ONE Mon–Sun week: seven UTC calendar days (YYYY-MM-DD) for the week
+ *  containing `todayIso`. Locale-stable — everything in UTC, same as the
+ *  lots' ISO saleDate strings. The ledger's "Hammers this week" and this
+ *  strip both count against exactly this window. */
+export function weekDaysFor(todayIso: string): string[] {
+  const anchor = new Date(`${todayIso}T00:00:00Z`);
+  const backToMonday = (anchor.getUTCDay() + 6) % 7;
+  const monday = anchor.getTime() - backToMonday * DAY_MS;
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(monday + i * DAY_MS).toISOString().slice(0, 10)
+  );
+}
+
 export default function HammerWeek({
   lots,
   activeDay,
   onSelectDay,
+  todayIso,
 }: {
   lots: AuctionLot[]; // the unfiltered upcoming pool (same array the feed reads)
   activeDay: string | null | undefined; // feedFilters.saleDay (YYYY-MM-DD)
   onSelectDay: (day: string | null) => void;
+  /** the crawl day (YYYY-MM-DD) — the data's "today". The beige-lift column
+   *  tracks the edition's date, not the client clock. Falls back to client. */
+  todayIso?: string;
 }) {
   const week = useMemo(() => {
-    // Locale-stable: everything in UTC calendar days, same as the lots'
-    // ISO saleDate strings — no timezone drift between header and filter.
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const anchor = new Date(`${todayIso}T00:00:00Z`);
-    const backToMonday = (anchor.getUTCDay() + 6) % 7;
-    const monday = anchor.getTime() - backToMonday * DAY_MS;
-    const days = Array.from({ length: 7 }, (_, i) =>
-      new Date(monday + i * DAY_MS).toISOString().slice(0, 10)
-    );
+    // crawl-day = the data's "today" — one edition date across the page
+    const today = todayIso || new Date().toISOString().slice(0, 10);
+    const days = weekDaysFor(today);
     const daySet = new Set(days);
     const counts = new Map<string, number>();
     const houses = new Map<string, Set<string>>();
@@ -48,14 +59,15 @@ export default function HammerWeek({
     }
     let total = 0;
     counts.forEach(n => { total += n; });
-    return { days, todayIso, counts, houses, total };
-  }, [lots]);
+    return { days, todayIso: today, counts, houses, total };
+  }, [lots, todayIso]);
 
   // The strip only earns its rule when the week actually has hammers.
   if (week.total === 0) return null;
 
   return (
     <div
+      id="hammer-week"
       role="group"
       aria-label="Hammers by day, this week"
       className="ray-hammerweek"

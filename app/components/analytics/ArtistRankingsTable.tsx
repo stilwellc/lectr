@@ -28,9 +28,12 @@ interface ArtistRow {
   sellThrough: number;
 }
 
+const COLLAPSED_ROWS = 10;
+
 export default function ArtistRankingsTable({ statsByArtist, allLots, market }: Props & { market?: Market }) {
   const [sortKey, setSortKey] = useState<SortKey>('totalRevenue');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [expanded, setExpanded] = useState(false);
 
   const rows = useMemo<ArtistRow[]>(() => {
     const roster = market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)) : ARTISTS;
@@ -245,7 +248,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
             </tr>
           </thead>
           <tbody>
-            {sorted.map((row) => (
+            {(expanded ? sorted : sorted.slice(0, COLLAPSED_ROWS)).map((row) => (
               <tr key={row.slug} className="ray-rankings-row">
                 <td className="ray-rankings-td ray-rankings-sticky" style={{ fontWeight: 500 }}>
                   <Link
@@ -304,6 +307,29 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         </table>
         </div>
       </div>
+      {!expanded && sorted.length > COLLAPSED_ROWS && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+          <button
+            onClick={() => setExpanded(true)}
+            style={{
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: 100,
+              padding: '10px 32px',
+              fontSize: 12,
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
+              color: 'var(--color-text-muted)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans), sans-serif',
+              transition: 'border-color var(--duration-fast) var(--ease-signature)',
+            }}
+          >
+            Show all {sorted.length} makers
+          </button>
+        </div>
+      )}
       <p style={{ marginTop: 10, fontSize: 11.5, color: 'var(--color-text-faint)' }}>
         % over est. is hammer basis — the buyer&rsquo;s premium is divided out before comparing to the estimate mid; median across each maker&rsquo;s sold lots with estimates.
       </p>

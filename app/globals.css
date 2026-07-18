@@ -2731,47 +2731,12 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 
 /* ── mobile bottom tab bar ── */
-.ray-tabbar { display: none; }
 @media (max-width: 768px) {
-  .ray-tabbar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 60;
-    display: flex;
-    background: var(--color-nav-bg);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-top: 1px solid var(--color-border);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
   /* clear the bar at page bottom */
   .ray-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }
-.ray-tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  padding: 9px 4px 10px;
-  font-family: var(--font-sans);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--color-text-faint);
-  transition: color var(--duration-fast) var(--ease-signature);
-}
-.ray-tab svg { width: 21px; height: 21px; }
-.ray-tab[data-active=true] { color: var(--color-fg); }
-.ray-tab:active { transform: scale(0.94); }
 /* Value link lights butter when active — green is reserved for direction */
 .ray-nav-link-value[data-active=true] { color: var(--color-butter-text) !important; }
-.ray-tab[data-active=true]:nth-child(2) { color: var(--color-butter-text); }
 
 /* ── command palette ── */
 .ray-ck-hintbtn {
@@ -3173,10 +3138,6 @@ body {
 /* nav gets a hair of glass depth back (still sober) */
 .ray-artist-nav {
   background: linear-gradient(180deg, rgba(23, 21, 15, 0.92), rgba(15, 14, 10, 0.88));
-}
-.ray-tabbar {
-  background: linear-gradient(0deg, rgba(23, 21, 15, 0.92), rgba(15, 14, 10, 0.88));
-  box-shadow: 0 -8px 30px rgba(8, 6, 3, 0.4);
 }
 
 /* ── the verticals: market tabs on the lander ── */

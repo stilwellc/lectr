@@ -36,7 +36,7 @@ function CategoryTooltip({ active, payload }: { active?: boolean; payload?: Arra
   );
 }
 
-export default function CategoryBreakdown({ allLots }: Props) {
+export default function CategoryBreakdown({ allLots, embedded = false }: Props & { embedded?: boolean }) {
   const { theme } = useTheme();
   const categoryData = useMemo(() => {
     const catMap: Record<string, { revenue: number; count: number; soldCount: number }> = {};
@@ -65,27 +65,9 @@ export default function CategoryBreakdown({ allLots }: Props) {
 
   if (categoryData.length === 0) return null;
 
-  return (
-    <section className="ray-category rail">
-      <style>{`
-        .ray-category { padding-block: 40px 48px; }
-        @media (max-width: 768px) {
-          .ray-category { padding-block: 32px 32px; }
-        }
-      `}</style>
-
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
-          fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-        }}>
-          Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>breakdown</span>
-        </h2>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = share of lots</p>
-      </div>
-
+  // the chart card itself — reused verbatim by the embedded (Distributions
+  // tab) rendering, which supplies its own section frame and header
+  const card = (
       <div className="glass glass-quiet" style={{
         overflow: 'hidden',
         padding: '20px 8px 16px 0',
@@ -142,6 +124,32 @@ export default function CategoryBreakdown({ allLots }: Props) {
           ))}
         </div>
       </div>
+  );
+
+  if (embedded) return card;
+
+  return (
+    <section className="ray-category rail">
+      <style>{`
+        .ray-category { padding-block: 40px 48px; }
+        @media (max-width: 768px) {
+          .ray-category { padding-block: 32px 32px; }
+        }
+      `}</style>
+
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+        }}>
+          Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>breakdown</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = share of lots</p>
+      </div>
+
+      {card}
     </section>
   );
 }

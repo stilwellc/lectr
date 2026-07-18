@@ -17,17 +17,17 @@ import TopSales from '../components/analytics/TopSales';
 import MarketIntelligence from '../components/analytics/MarketIntelligence';
 import Masthead, { Underscore } from '../components/Masthead';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
+import DeskNote from '../components/analytics/DeskNote';
+import { Colophon } from '../components/Terminal';
+import meta from '../../public/data/ray/meta.json';
 
-const DemandChart = dynamic(() => import('../components/analytics/DemandChart'), { ssr: false });
-const CategoryBreakdown = dynamic(() => import('../components/analytics/CategoryBreakdown'), { ssr: false });
-const AuctionHouseDistribution = dynamic(() => import('../components/analytics/AuctionHouseDistribution'), { ssr: false });
-const PriceDistribution = dynamic(() => import('../components/analytics/PriceDistribution'), { ssr: false });
+const Distributions = dynamic(() => import('../components/analytics/Distributions'), { ssr: false });
 const CalibrationCurve = dynamic(() => import('../components/analytics/CalibrationCurve'), { ssr: false });
 
 // The market's analytics grid. `marketLots` already carries any merged archive
-// rows; `suppressDemand` drops the estimate-based Demand Index for the
-// Goldin verticals (no estimates to measure against). Shared verbatim by the
-// standard (phase-2) and archive (phase-3) bodies.
+// rows. The demand read itself lives on the lander hero — this page keeps the
+// index context (MarketIntelligence), never a second demand instrument.
+// Shared verbatim by the standard (phase-2) and archive (phase-3) bodies.
 function AnalyticsGrid({
   marketStats,
   marketLots,
@@ -35,7 +35,6 @@ function AnalyticsGrid({
   activeKey,
   marketSeries,
   fromCache,
-  suppressDemand,
   backtest,
 }: {
   backtest?: import('../hooks/useRayData').Backtest | null;
@@ -44,21 +43,15 @@ function AnalyticsGrid({
   statsByArtist: Record<string, MarketStats>;
   activeKey: Market;
   fromCache: boolean;
-  suppressDemand: boolean;
   marketSeries: import('../hooks/useRayData').MarketSeriesJson | null;
 }) {
   const nodes = [
     marketSeries ? <MarketIntelligence key="mi" series={marketSeries} marketLabel={activeKey === 'all' ? 'the market' : activeKey} /> : null,
     <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
-    // sports/science publish no estimates — the % Demand Index is suppressed
-    // (the realized cohort curve lives on the home board, not here).
-    suppressDemand ? null : <DemandChart key="demand" allLots={marketLots} />,
     <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
     backtest ? <CalibrationCurve key="cal" backtest={backtest} /> : null,
-    <CategoryBreakdown key="cat" allLots={marketLots} />,
-    <AuctionHouseDistribution key="house" statsByArtist={marketStats} />,
     <TopSales key="top" allLots={marketLots} />,
-    <PriceDistribution key="dist" allLots={marketLots} />,
+    <Distributions key="dist" allLots={marketLots} statsByArtist={marketStats} />,
   ].filter((n): n is React.ReactElement => n !== null);
 
   return (
@@ -121,6 +114,8 @@ export default function AnalyticsPage() {
               <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{houseCount} auction houses</b>
               {lastCrawl ? <>, read {formatDate(lastCrawl)}</> : null}.</>}
       />
+      {/* the market's current-quarter note from the desk — hidden for 'all' */}
+      <DeskNote market={activeKey} style={{ marginTop: 12 }} />
       </section>
 
       <div className="rail" style={{ paddingTop: 16 }}><MarketSwitch compact /></div>
@@ -143,19 +138,20 @@ export default function AnalyticsPage() {
           statsByArtist={statsByArtist}
           activeKey={activeKey}
           fromCache={fromCache}
-          suppressDemand={false}
           marketSeries={marketData?.markets?.[activeKey] || null}
           backtest={backtest}
         />
       )}
+
+      {/* the closing colophon — corpus counts from meta.json, one base for every number */}
+      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
     </div>
   );
 }
 
 // Archive markets only: mounting this triggers useSoldArchive()'s phase-3
 // fetch. It aggregates every panel over the archive-merged market lots, gated
-// on archiveLoaded (RayLoading / archiveError-retry until then). DemandChart is
-// suppressed — Goldin publishes no estimates for the % index to measure.
+// on archiveLoaded (RayLoading / archiveError-retry until then).
 function ArchiveAnalyticsBody({
   activeKey,
   mktSet,
@@ -200,7 +196,6 @@ function ArchiveAnalyticsBody({
       statsByArtist={statsByArtist}
       activeKey={activeKey}
       fromCache={fromCache}
-      suppressDemand
       marketSeries={marketSeries}
     />
   );

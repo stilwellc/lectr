@@ -36,7 +36,7 @@ function HouseTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   );
 }
 
-export default function AuctionHouseDistribution({ statsByArtist }: Props) {
+export default function AuctionHouseDistribution({ statsByArtist, embedded = false }: Props & { embedded?: boolean }) {
   const { theme } = useTheme();
   const houseData = useMemo(() => {
     const houseMap: Record<string, { count: number; totalValue: number }> = {};
@@ -60,29 +60,16 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
 
   if (houseData.length === 0) return null;
 
-  return (
-    <section className="ray-house-dist rail">
+  // the chart card itself — reused verbatim by the embedded (Distributions
+  // tab) rendering, which supplies its own section frame and header
+  const card = (
+    <>
       <style>{`
-        .ray-house-dist { padding-block: 40px 48px; }
         .ray-house-chart { height: 300px; }
         @media (max-width: 768px) {
-          .ray-house-dist { padding-block: 32px 32px; }
           .ray-house-chart { height: 290px; }
         }
       `}</style>
-
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
-          fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-        }}>
-          Auction house <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
-        </h2>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Ranked by total sales value</p>
-      </div>
-
       <div className="glass glass-quiet" style={{
         overflow: 'hidden',
       }}>
@@ -120,6 +107,33 @@ export default function AuctionHouseDistribution({ statsByArtist }: Props) {
         </div>
 
       </div>
+    </>
+  );
+
+  if (embedded) return card;
+
+  return (
+    <section className="ray-house-dist rail">
+      <style>{`
+        .ray-house-dist { padding-block: 40px 48px; }
+        @media (max-width: 768px) {
+          .ray-house-dist { padding-block: 32px 32px; }
+        }
+      `}</style>
+
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 24,
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+        }}>
+          Auction house <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Ranked by total sales value</p>
+      </div>
+
+      {card}
     </section>
   );
 }

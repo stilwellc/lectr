@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AuctionLot } from '../types';
 import { categoryLabels, sportOf } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
@@ -54,6 +54,7 @@ export default function FeedToolbar({
   view,
   onViewChange,
   pageSize = 24,
+  showToggle = true,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -66,7 +67,14 @@ export default function FeedToolbar({
   view: 'grid' | 'table';
   onViewChange: (v: 'grid' | 'table') => void;
   pageSize?: number;
+  /** false hides the card/table toggle (sub-640px: the table is thumb+name
+   *  with unhinted side-scroll — not a real choice on a phone) */
+  showToggle?: boolean;
 }) {
+  // The below-market lens auto-ranks by gap (its smart default) — but it must
+  // hand back whatever sort the reader had picked when the lens comes off,
+  // not force-reset to 'soonest'.
+  const preLensSort = useRef<FeedSort>(FEED_DEFAULTS.sort);
   // Collapse-on-scroll: scrolling down folds the toolbar to one compact row
   // (styled by .ray-toolbar-collapsed); any scroll up re-expands it.
   const [collapsed, setCollapsed] = useState(false);
@@ -207,7 +215,7 @@ export default function FeedToolbar({
           </div>
         )}
 
-        {showSortChrome && (
+        {showSortChrome && showToggle && (
           <span className="ray-viewtoggle" role="radiogroup" aria-label="Feed layout">
             <button role="radio" aria-checked={view === 'grid'} aria-label="Card view" data-active={view === 'grid'} onClick={() => onViewChange('grid')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
@@ -230,7 +238,15 @@ export default function FeedToolbar({
               data-active={filters.belowOnly}
               onClick={() => {
                 const on = !filters.belowOnly;
-                set({ belowOnly: on, sort: on ? 'gap-desc' : 'soonest' });
+                if (on) {
+                  // remember what the reader had, then rank by the gap
+                  preLensSort.current = filters.sort;
+                  set({ belowOnly: true, sort: 'gap-desc' });
+                } else {
+                  // lens off: restore the pre-lens sort — unless the reader
+                  // explicitly re-sorted while inside the lens (keep that)
+                  set({ belowOnly: false, sort: filters.sort === 'gap-desc' ? preLensSort.current : filters.sort });
+                }
               }}
             >
               ● Below market <i>{belowCount}</i>

@@ -20,13 +20,16 @@ import { formatPrice } from '../utils';
  *     banner so the mobile majority gets the instrument too.
  */
 export default function ApprBarometer({
-  value, marketName, typical, record, typicalLabel = 'Typical sale, past year',
+  value, marketName, typical, record, typicalLabel = 'Typical sale, past year', serial,
 }: {
   value: number;                                 // appreciation %, e.g. 21.7
   marketName: string;
   typical: number | null;                        // 12-month median sale
   record: { priceUsd: number; maker: string } | null;
   typicalLabel?: string;                         // bid markets pass 'Typical sale, recent'
+  /** the edition serial (YYYYMMDD, lastCrawl-derived) — ONE date across the
+   *  page's instruments. Falls back to the client clock when absent. */
+  serial?: string;
 }) {
   // needle: clamp ±40% → ±80° from vertical; start parked at the low stop
   const clamped = Math.max(-40, Math.min(40, value));
@@ -39,9 +42,21 @@ export default function ApprBarometer({
     return () => clearTimeout(t);
   }, [target]);
 
+  // sub-480px third face: one ruled paper line; tap swaps in the full pocket
+  // card, tap again folds it back. 480–899px keeps the pocket card untouched.
+  const [tiny, setTiny] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 479px)');
+    const apply = () => setTiny(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
   const up = value >= 0;
   const heat = up ? 'var(--paper-up)' : 'var(--paper-down)';
-  const serial = `no. ${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+  const serialText = `no. ${serial || new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
   const swing = 'transform 1100ms cubic-bezier(0.22, 0.9, 0.24, 1)';
   const rad = (deg: number) => ((deg - 90) * Math.PI) / 180;
 
@@ -114,9 +129,8 @@ export default function ApprBarometer({
               <path d={arcPath(0, target, R)} fill="none" stroke={heat} strokeWidth={2.4} strokeLinecap="round" />
             )}
             {ticks}
-            {/* end + zero labels, printed small */}
-            <text x={pt(-80, R + 1)[0] - 2} y={pt(-80, R + 1)[1] + 12} fontSize={9} fill="var(--paper-muted)" textAnchor="middle" fontFamily="var(--font-sans), sans-serif">cooling</text>
-            <text x={pt(80, R + 1)[0] + 2} y={pt(80, R + 1)[1] + 12} fontSize={9} fill="var(--paper-muted)" textAnchor="middle" fontFamily="var(--font-sans), sans-serif">heating</text>
+            {/* zero label only — the chart's heating badge owns the word
+                "heating"; the barometer keeps its ticks and its number */}
             <text x={CX} y={CY - R - 6} fontSize={8.5} fill="var(--paper-muted)" textAnchor="middle" fontFamily="var(--font-sans), sans-serif">0</text>
             {/* needle — a drawn pointer with a counterweight tail, swung by CSS */}
             <g style={{ transform: `rotate(${angle}deg)`, transformOrigin: `${CX}px ${CY}px`, transition: swing }}>
@@ -135,7 +149,7 @@ export default function ApprBarometer({
               duration={1100}
               style={{ fontSize: 40, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: heat, fontVariantNumeric: 'tabular-nums' }}
             />
-            <div style={{ fontSize: 11.5, color: 'var(--paper-muted)', marginTop: 6 }}>appreciation · sales-weighted across makers</div>
+            <div style={{ fontSize: 11.5, color: 'var(--paper-muted)', marginTop: 6 }}>appreciation · 12 mo · sales-weighted</div>
           </div>
 
           {/* printed stat rows with dotted leaders */}
@@ -158,13 +172,49 @@ export default function ApprBarometer({
           {/* certificate footer rule + microtype */}
           <div style={{ ...footRow, marginTop: 14, paddingTop: 7 }}>
             <span>read nightly from the tape</span>
-            <span>{serial}</span>
+            <span>{serialText}</span>
           </div>
         </div>
       </div>
 
+      {/* ————————— COMPACT LINE (sub-480px, collapsed) ————————— */}
+      {tiny && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+          aria-label={`Barometer — appreciation ${up ? '+' : ''}${value.toFixed(1)} percent. Expand the instrument.`}
+          style={{
+            display: 'flex', alignItems: 'baseline', gap: 8, width: '100%',
+            background: 'none', border: 'none', borderTop: '2px solid currentColor',
+            borderBottom: '1px solid var(--paper-line)', margin: 0, padding: '9px 0 8px',
+            color: 'inherit', cursor: 'pointer', fontFamily: 'var(--font-sans), sans-serif', textAlign: 'left',
+          }}
+        >
+          <span style={{ ...microcap, whiteSpace: 'nowrap' }}>Barometer</span>
+          <span aria-hidden style={{ flex: 1, borderBottom: '1px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
+          <span style={{ fontSize: 12, color: 'var(--paper-muted)', whiteSpace: 'nowrap' }}>appreciation</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: heat, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+            {up ? '+' : ''}{value.toFixed(1)}%
+          </span>
+          <Flick size={10} style={{ flex: 'none', alignSelf: 'center' }} />
+        </button>
+      )}
+
       {/* ————————— POCKET BAROMETER (mobile, landscape) ————————— */}
-      <div className="ray-baro-pocket" style={{ flexDirection: 'column', width: '100%', textAlign: 'left' }}>
+      <div
+        className="ray-baro-pocket"
+        // sub-480px: the line face stands in until tapped open; tapping the
+        // opened pocket folds it back to the line. 480–899px: untouched.
+        onClick={tiny ? () => setExpanded(false) : undefined}
+        role={tiny ? 'button' : undefined}
+        aria-label={tiny ? 'Collapse the barometer' : undefined}
+        style={{
+          flexDirection: 'column', width: '100%', textAlign: 'left',
+          ...(tiny && !expanded ? { display: 'none' } : null),
+          ...(tiny ? { cursor: 'pointer' } : null),
+        }}
+      >
         {/* certificate double rule */}
         <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
         <div style={{ borderTop: '1px solid var(--paper-line)' }} />
@@ -198,7 +248,7 @@ export default function ApprBarometer({
                 duration={1100}
                 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: heat, fontVariantNumeric: 'tabular-nums' }}
               />
-              <div style={{ fontSize: 10.5, color: 'var(--paper-muted)', marginTop: 4 }}>appreciation · sales-weighted</div>
+              <div style={{ fontSize: 10.5, color: 'var(--paper-muted)', marginTop: 4 }}>appreciation · 12 mo · sales-weighted</div>
             </div>
             {typical != null && (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8, fontSize: 12 }}>
@@ -213,7 +263,7 @@ export default function ApprBarometer({
         {/* footer hairline + microtype */}
         <div style={{ ...footRow, paddingTop: 6 }}>
           <span>read nightly</span>
-          <span>{serial}</span>
+          <span>{serialText}</span>
         </div>
       </div>
     </>
