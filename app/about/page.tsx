@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
 import { Colophon } from '../components/Terminal';
+import Masthead, { Accent } from '../components/Masthead';
 import meta from '../../public/data/ray/meta.json';
 
 export const metadata: Metadata = {
@@ -54,19 +55,27 @@ export default function AboutPage() {
       <ArtistNav activeSlug="about" />
 
       <main id="main" style={{ paddingTop: 28, paddingBottom: 40 }}>
-        <header style={{ ...wrap, marginBottom: 8 }}>
-          <p style={kicker}>How it works</p>
-          <h1 style={{ fontSize: 'clamp(30px, 4vw, 40px)', fontWeight: 700, letterSpacing: '-0.025em', margin: '0 0 12px' }}>
-            The architecture, the pipeline, and the price engine
-          </h1>
-          <p style={{ ...p, fontSize: 16 }}>
+        <div style={{ ...wrap, marginBottom: 8 }}>
+          {/* the certificate masthead — dated from the last crawl on the book */}
+          <Masthead
+            kicker="The machine"
+            serial={meta.lastCrawl}
+            title={<>How lectr <Accent>reads</Accent> the market.</>}
+            sub={<>
+              <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meta.totalLots.toLocaleString()} lots</b>
+              {' '}from{' '}
+              <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meta.sources.length} houses</b>
+              {' '}— the architecture, the pipeline, and the price engine, end to end.
+            </>}
+          />
+          <p style={{ ...p, fontSize: 16, marginTop: 18 }}>
             lectr reads every auction estimate against every hammer. It ingests live and historical
             lots from the major houses, scores each against comparable sales, and calls whether a lot
             is trading below or above where its comps actually clear. This page is the engineering
             walk-through: the data flow, the storage split, the value engine, and how the signal is
             validated. It assumes you read code.
           </p>
-        </header>
+        </div>
 
         <section style={wrap}>
           <p style={kicker}>01 · System</p>

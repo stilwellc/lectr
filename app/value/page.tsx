@@ -16,6 +16,7 @@ import RecordByYear from '../components/RecordByYear';
 import MethodologyNote from '../components/MethodologyNote';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import RecordBand from '../components/RecordBand';
+import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import { getUpcomingCounts, formatPrice, formatDate, categoryLabels, craftTitle, httpsImg, fmtSignedPct } from '../utils';
 import { FORM_LABEL, signalWithPool } from '../lib/comps';
@@ -188,25 +189,25 @@ export default function ValuePage() {
         <RayEntrance animate={!fromCache}>
           <div className="rail ray-enter" style={{ paddingTop: 16 }}><MarketSwitch compact /></div>
 
-          {/* One hero: today's call. The count and totals live in the
-              sentence — full numbers, no second display numeral. */}
+          {/* The certificate masthead — the flagged count and totals fold
+              into the data subline; full numbers, no second display numeral. */}
           <section className="rail ray-enter" style={{ paddingTop: 24 }}>
-            <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
-              Value · below-market {activeLabel} lots on the block
-            </p>
-            <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0 }}>
-              {deals.length > 0
+            <Masthead
+              kicker="The signal · ranked by comps gap"
+              serial={lastCrawl || undefined}
+              title={<>Priced <Accent>under</Accent> where the {activeLabel === 'collectible' ? 'market' : `${activeLabel} market`} clears.</>}
+              sub={deals.length > 0
                 ? <>
-                    <b style={{ color: 'var(--color-fg)', fontWeight: 700 }}>{deals.length}</b> flagged{' '}
-                    {deals.length === 1 ? 'lot' : 'lots'} ·{' '}
-                    <span style={{ color: 'var(--color-up)', fontWeight: 600 }}>
+                    <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{deals.length}</b> flagged{' '}
+                    {deals.length === 1 ? 'lot' : 'lots'} on the block ·{' '}
+                    <span style={{ color: 'var(--color-up)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                       comps run +{Math.round(summary.medianGap)}% over these estimates
                     </span>{' '}
                     · {formatPrice(summary.totalEst)} in estimates · {summary.artists} makers
                     {summary.soonest && <> · first hammer {formatDate(summary.soonest.lot.saleDate)}</>}
                   </>
                 : 'No lots are flagged below market right now — the crawl refreshes daily.'}
-            </p>
+            />
           </section>
 
           {call && (

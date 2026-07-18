@@ -15,7 +15,7 @@ import PortfolioHeader from '../components/analytics/PortfolioHeader';
 import ArtistRankingsTable from '../components/analytics/ArtistRankingsTable';
 import TopSales from '../components/analytics/TopSales';
 import MarketIntelligence from '../components/analytics/MarketIntelligence';
-import RayHero from '../components/RayHero';
+import Masthead, { Underscore } from '../components/Masthead';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 
 const DemandChart = dynamic(() => import('../components/analytics/DemandChart'), { ssr: false });
@@ -108,14 +108,20 @@ export default function AnalyticsPage() {
     }}>
       <ArtistNav activeSlug="analytics" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      <RayHero
-        eyebrow="Market Analytics"
-        title={<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>Analytics</span>}
+      {/* the certificate masthead — same instrument grammar as the ledger */}
+      <section className="rail" style={{ paddingTop: 28 }}>
+      <Masthead
+        kicker="The intelligence desk"
+        serial={lastCrawl || undefined}
+        title={<>Every market, read as <Underscore>one book</Underscore>.</>}
         sub={!fullLoaded
           ? ' ' /* reserve the line — no zero-count flash while the crawl delivers */
-          : <>Market-level intelligence across {Object.keys(marketStats).length} artists and {houseCount} auction houses.</>}
-        timestamp={lastCrawl ? formatDate(lastCrawl) : undefined}
+          : <>Demand, rankings, calibration and the tape —{' '}
+              <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{Object.keys(marketStats).length} makers</b>,{' '}
+              <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{houseCount} auction houses</b>
+              {lastCrawl ? <>, read {formatDate(lastCrawl)}</> : null}.</>}
       />
+      </section>
 
       <div className="rail" style={{ paddingTop: 16 }}><MarketSwitch compact /></div>
 

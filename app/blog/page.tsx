@@ -3,6 +3,7 @@ import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import Flick from '../components/Flick';
+import Masthead, { Underscore } from '../components/Masthead';
 import meta from '../../public/data/ray/meta.json';
 
 export const metadata: Metadata = {
@@ -54,16 +55,18 @@ export default function BlogIndex() {
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="blog" />
       <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
-        <header style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px', marginBottom: 34 }}>
-          <p style={{ fontFamily: 'var(--font-mono), monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>Notes from the desk</p>
-          <h1 style={{ fontSize: 'clamp(30px, 4vw, 40px)', fontWeight: 700, letterSpacing: '-0.025em', margin: 0 }}>
-            What the data taught us
-          </h1>
-          <p style={{ fontSize: 15.5, lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: '12px 0 0', maxWidth: 560 }}>
-            Occasional writing on how lectr reads the auction market — the methods, the measurements,
-            and the wrong turns we kept the receipts for.
-          </p>
-        </header>
+        <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px', marginBottom: 34 }}>
+          {/* the certificate masthead — dated from the crawl the notes read */}
+          <Masthead
+            kicker="Notes from the desk"
+            serial={meta.lastCrawl}
+            title={<>What the data <Underscore>taught us</Underscore>.</>}
+            sub={<>
+              {POSTS.length} notes on file · occasional writing on how lectr reads the auction market —
+              the methods, the measurements, and the wrong turns we kept the receipts for.
+            </>}
+          />
+        </div>
 
         <section style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {POSTS.map(p => (

@@ -12,6 +12,7 @@ import { appraiseLot, soldCompBand, isSportsScienceObject } from '../lib/comps';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
+import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct } from '../utils';
 import { ARTIST_LABEL } from '../constants';
@@ -258,32 +259,47 @@ export default function SavedPage() {
         </RayEntrance>
       ) : (
         <RayEntrance animate={!fromCache}>
-          <section className="ray-hero2 rail ray-enter">
-            <p className="ray-hero2-label">Your watchlist · total at stake</p>
-            <h1 className="ray-hero2-value">
-              {summary.totalEst > 0
-                ? <CountUp to={summary.totalEst} format={formatPrice} duration={1100} />
-                : `${upcoming.length || savedLots.length}`}
-            </h1>
-            <p className="ray-hero2-delta">
-              {summary.next && (
-                <span className="up">
-                  next hammer {hammerWord(daysUntil(summary.next.saleDate))}
-                </span>
-              )}
-              <span className="ctx">
-                watching {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
-                {summary.flagged > 0 && <> · {summary.flagged} below market</>}
-                {sold.length > 0 && <> · {sold.length} concluded</>}
-              </span>
-              {(changes.moved > 0 || changes.newBids > 0) && (
-                <span className="ctx" style={{ display: 'block', marginTop: 4 }}>
-                  since you saved
-                  {changes.moved > 0 && <> · {changes.moved} {changes.moved === 1 ? 'signal' : 'signals'} moved</>}
-                  {changes.newBids > 0 && <> · {changes.newBids} new {changes.newBids === 1 ? 'bid' : 'bids'}</>}
-                </span>
-              )}
-            </p>
+          <section className="rail ray-enter" style={{ paddingTop: 24 }}>
+            {/* the certificate masthead — the stake IS the accent figure */}
+            <Masthead
+              kicker="Your desk · the watchlist"
+              serial={lastCrawl || undefined}
+              title={summary.totalEst > 0
+                ? <>
+                    Watching{' '}
+                    <Accent>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        <CountUp to={summary.totalEst} format={formatPrice} duration={1100} />
+                      </span>
+                    </Accent>{' '}
+                    to the hammer.
+                  </>
+                : <>
+                    Watching <Accent>{upcoming.length || savedLots.length} {(upcoming.length || savedLots.length) === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
+                  </>}
+              sub={
+                <>
+                  {summary.next && <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))} · </>}
+                  watching {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
+                  {summary.flagged > 0 && (
+                    <>
+                      {' '}·{' '}
+                      <b style={{ color: 'var(--color-up)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {summary.flagged} below market
+                      </b>
+                    </>
+                  )}
+                  {sold.length > 0 && <> · {sold.length} concluded</>}
+                  {(changes.moved > 0 || changes.newBids > 0) && (
+                    <>
+                      {' '}· since you saved
+                      {changes.moved > 0 && <> · {changes.moved} {changes.moved === 1 ? 'signal' : 'signals'} moved</>}
+                      {changes.newBids > 0 && <> · {changes.newBids} new {changes.newBids === 1 ? 'bid' : 'bids'}</>}
+                    </>
+                  )}
+                </>
+              }
+            />
 
             <div className="ray-strip" style={{ marginTop: 22 }}>
               <div>

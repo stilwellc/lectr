@@ -12,6 +12,7 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import { formatDate, getUpcomingCounts } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from '../components/CountUp';
+import Masthead, { Accent } from '../components/Masthead';
 
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 
@@ -30,6 +31,9 @@ export default function ArtistsPage() {
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const rosterCount = useMemo(() => ARTISTS.filter(a => mktSet.has(a.slug)).length, [mktSet]);
   const { savedIds } = useSavedLots();
+
+  // the roster noun follows the market — 'all' has no noun, so name it
+  const noun = activeKey === 'all' ? (rosterCount === 1 ? 'tracked name' : 'tracked names') : rosterNoun(activeKey, rosterCount);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
@@ -54,25 +58,31 @@ export default function ArtistsPage() {
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
-          <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
-            <div style={{ marginBottom: 18 }}><MarketSwitch compact /></div>
-            <p className="ray-hero2-label">The {activeLabel} roster</p>
-            <h1 className="ray-hero2-value" style={{ fontSize: 'clamp(34px, 4.5vw, 48px)' }}>
-              <CountUp to={rosterCount} format={n => `${Math.round(n)} ${rosterNoun(activeKey, Math.round(n))}`} duration={900} />
-            </h1>
-            <p className="ray-hero2-delta">
-              <span>
-                {summary.live} live lots on the block
-                {summary.marketNow !== null && (
-                  <>
-                    {' '}· market demand{' '}
-                    <b style={{ color: summary.marketNow >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
-                      {formatDemand(summary.marketNow)}
-                    </b>
-                  </>
-                )}
-              </span>
-            </p>
+          <section className="rail ray-enter" style={{ paddingTop: 24, paddingBottom: 8 }}>
+            <div style={{ marginBottom: 22 }}><MarketSwitch compact /></div>
+            {/* the certificate masthead — roster count rides the serial slot */}
+            <Masthead
+              kicker={`The roster · ${activeLabel} market`}
+              datum={<CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} />}
+              title={<>Every maker, read as a <Accent>demand curve</Accent>.</>}
+              sub={
+                <>
+                  {rosterCount} {noun} ·{' '}
+                  <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                    {summary.live} live lots
+                  </b>{' '}
+                  on the block
+                  {summary.marketNow !== null && (
+                    <>
+                      {' '}· market demand{' '}
+                      <b style={{ color: summary.marketNow >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        {formatDemand(summary.marketNow)}
+                      </b>
+                    </>
+                  )}
+                </>
+              }
+            />
           </section>
 
           <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
