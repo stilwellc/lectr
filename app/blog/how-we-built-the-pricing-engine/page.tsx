@@ -72,14 +72,22 @@ export default function PricingEnginePost() {
             (§7). The target is directional: estimate the level at which the lot&rsquo;s comparable pool
             currently clears, and flag the lot when that level is far from the ask.
           </p>
+          <p style={p}>
+            In plain English: we don&rsquo;t guess the final price. We ask what nearly-identical things
+            have actually been fetching, and we only speak up when that number sits far above or far
+            below what the auction house is asking.
+          </p>
 
           <h2 style={h2}>1 · The similarity kernel</h2>
           <p style={p}>
             Comps are same-maker sold lots scored by a lexical kernel with structured bonuses. Titles are
             tokenized (stopworded, lightly singularized, biographical parentheticals stripped, the
             maker&rsquo;s own name words dropped — each hygiene step holdout-validated; the parenthetical
-            strip alone moved art coverage 19.8→21.1% <em>and</em> edge +2pt). Tokens are weighted by
-            inverse document frequency over the sold corpus:
+            strip alone moved art coverage 19.8→21.1% <em>and</em> edge +2pt). The core idea:{' '}
+            <span style={strong}>rare words count for more</span>. Two titles that share
+            &ldquo;Fernande&rdquo; are probably the same work; two titles that share
+            &ldquo;untitled&rdquo; mean nothing. Formally, tokens are weighted by inverse document
+            frequency and titles compared by cosine:
           </p>
           <Formula caption="wₜ = IDF weight of token t; N = sold lots in the corpus; dfₜ = lots whose title carries t. cos is the cosine over the two titles' sparse IDF vectors.">
 {`w_t = log( N / df_t )
@@ -97,7 +105,10 @@ cos(a,b) = Σ_t w_t(a) · w_t(b)  /  ( ‖w(a)‖ · ‖w(b)‖ )`}
           </Formula>
 
           <h2 style={h2}>2 · The comp gate</h2>
-          <p style={p}>A candidate enters the pool only if both the raw lexical read and the composite clear a bar:</p>
+          <p style={p}>
+            A comp gets in only when it BOTH reads like the lot (the words agree) AND matches on hard
+            facts (reference, model, dimensions). Formally:
+          </p>
           <Formula caption="The fallback tier fires only when the strict pool cannot seat three comps; its output is capped at medium confidence and published as its own backtest row so the headline never silently blends.">
 {`admit(c)    ⟺  cos ≥ 0.50  ∧  score ≥ 65
 fallback(c) ⟺  cos ≥ 0.45  ∧  score ≥ 55    (only when |pool| < 3)`}
@@ -113,9 +124,11 @@ fallback(c) ⟺  cos ≥ 0.45  ∧  score ≥ 55    (only when |pool| < 3)`}
 
           <h2 style={h2}>3 · The estimator</h2>
           <p style={p}>
-            The pool&rsquo;s clearing level is a weighted median over the top-K comps by score
-            (<V>K = 10</V>; K ∈ [5, 20] and the weight exponent were swept and are flat within noise),
-            with weights that square the lexical read and decay with age:
+            In plain English: take the ten best matches and find the middle of their prices — but
+            let better matches and fresher sales vote louder. A comp&rsquo;s vote halves for every two
+            years of age, so last spring&rsquo;s sale outweighs 2019&rsquo;s. Formally, a weighted
+            median over the top-K comps (<V>K = 10</V>; K ∈ [5, 20] was swept and is flat within
+            noise):
           </p>
           <Formula caption="V = the engine's comp value. aᵢ = years between comp i's sale and the target's sale date; h = 2 years in estimate markets, 1 year in bid markets (memorabilia cycles faster — both measured). wmed = weighted median.">
 {`w_i  =  cos_i²  ·  2^( −a_i / h )
@@ -139,8 +152,11 @@ label(ℓ) =  below   if  r ≥ 1.30
             at      otherwise`}
           </Formula>
           <p style={p}>
-            Realized prices are premium-inclusive while estimates are set on hammer. Across every lot in
-            the corpus carrying both figures, the premium is remarkably flat:
+            Here&rsquo;s the trap that ate our first headline. Auction results are published with the
+            buyer&rsquo;s premium — the ~25% fee added on top of the hammer price — while estimates are
+            set on the hammer alone. Compare the two naively and <em>everything</em> looks 25% better
+            than it is. Across every lot in the corpus carrying both figures, that fee is remarkably
+            flat:
           </p>
           <Formula caption="Flat 22–26% across houses and price bands. A pool trading exactly at its estimates therefore reads r ≈ 1.25 — flags in the 1.2–1.3 band were pure premium, not edge, which is why the threshold sits at 1.30.">
 {`median( R / H )  =  1.250          H = hammer price
@@ -158,9 +174,11 @@ label(ℓ) =  below   if  r ≥ 1.30
 
           <h2 style={h2}>5 · Calibration: the displayed probability</h2>
           <p style={p}>
-            The UI prints <V>P(beat)</V> — the chance the lot clears its high estimate — as a step
-            function of <V>r</V>, re-fit from the full replay at every nightly build, per market, with
-            recency weighting and shrinkage toward the global rate:
+            The percentage on every card — the chance the lot beats its high estimate — is just
+            history counted honestly: of all past lots that looked like this one, how many actually
+            cleared the high estimate? Recent years count more, and thin buckets get pulled toward the
+            overall average so a handful of lucky sales can&rsquo;t shout. Formally, re-fit nightly per
+            market:
           </p>
           <Formula caption="b indexes the r-buckets (edges 0.6 / 0.9 / 1.3 / 2 / 10); ωⱼ = 2^(−ageⱼ/3y); yⱼ = 1 if lot j beat its high estimate; p_g = the global bucket rate; k = 60 pseudo-observations of shrinkage; min-n guards fall back to global. Monotonicity is enforced across the normal buckets — and deliberately NOT across the last one.">
 {`p̂(b, mkt)  =  ( Σ_j ω_j · y_j  +  k · p_g(b) )  /  ( Σ_j ω_j  +  k )`}
@@ -178,9 +196,9 @@ label(ℓ) =  below   if  r ≥ 1.30
 
           <h2 style={h2}>6 · Validation protocol</h2>
           <p style={p}>
-            One instrument produces every number above: a strict temporal holdout. For each concluded
-            estimate-bearing lot, the engine replays with the comp roster truncated at the lot&rsquo;s own
-            sale date, through the exact production code path:
+            One instrument produces every number above: we rewind the clock. For each concluded lot,
+            the engine re-makes its call using only the sales that had already happened on that day —
+            the exact production code, no peeking — and then we score what the lot actually did:
           </p>
           <Formula caption="No hindsight: a lot's own result never participates in its own call, and neither does anything dated on or after it. Bought-in lots are scored as outcomes — a below-market flag on a lot that then failed to sell is a miss, not an exclusion.">
 {`pool(ℓ)  =  { c  :  maker(c) = maker(ℓ)  ∧  t_c < t_ℓ }`}
@@ -209,10 +227,10 @@ label(ℓ) =  below   if  r ≥ 1.30
               <tr><th style={th}>Model</th><th style={th}>Result</th></tr>
             </thead>
             <tbody>
-              <tr><td style={td}>Absolute hedonic regression — log R on size, year, medium, house</td><td style={td}>MdAPE 1.8–4.2× vs the houses&rsquo; own 1.25–1.45× — specialists win at absolute pricing</td></tr>
-              <tr><td style={td}>Logistic P(beat) on log r, out-of-time</td><td style={td}>Brier worse by +0.0067 ± 0.0017 vs the recency-weighted step fit</td></tr>
-              <tr><td style={td}>Full-feature logistic (pool size, dispersion, best-cos, comp age, market)</td><td style={td}>Every coefficient null except log r (z = 8.3); no learned score beats raw r for ranking</td></tr>
-              <tr><td style={td}>Per-house estimate-bias adjustment of m</td><td style={td}>Null at house level (p = 0.84); maker-level actively dilutes (rank-corr 0.245 → 0.223) — maker estimate-lightness IS the harvested alpha</td></tr>
+              <tr><td style={td}>Absolute hedonic regression — log R on size, year, medium, house</td><td style={td}>Typical miss of 1.8–4.2×, vs the houses&rsquo; own 1.25–1.45× — specialists win at absolute pricing</td></tr>
+              <tr><td style={td}>Logistic P(beat) on log r, out-of-time</td><td style={td}>Predictions measurably worse than the simple step fit (Brier score +0.0067 ± 0.0017 — a standard accuracy score for probabilities, lower is better)</td></tr>
+              <tr><td style={td}>Full-feature logistic (pool size, dispersion, best-cos, comp age, market)</td><td style={td}>Only the comps gap itself carries signal (z = 8.3); pool size, dispersion, comp age all null — no learned score beats raw r for ranking deals</td></tr>
+              <tr><td style={td}>Per-house estimate-bias adjustment of m</td><td style={td}>No effect at house level (p = 0.84); at maker level it makes the deal ranking WORSE (rank-corr 0.245 → 0.223) — makers whose estimates run light are exactly where the edge comes from, so &ldquo;correcting&rdquo; them erases it</td></tr>
               <tr><td style={td}>Premium correction inside r instead of the claims layer</td><td style={td}>A near-constant /1.25 rescale absorbed by threshold re-tuning; matched flag sets overlap 97%</td></tr>
               <tr><td style={td}>Hard model-identity gate on the value path</td><td style={td}>−504 coverage, zero edge — the ranking already does the work</td></tr>
               <tr><td style={td}>Embedding / minhash retrieval</td><td style={td}>Retrieval failures are 0.5% of the coverage funnel; the binding constraint is candidate scarcity, not recall</td></tr>
@@ -225,8 +243,8 @@ label(ℓ) =  below   if  r ≥ 1.30
             two usable same-maker priors), which is why the largest single improvement of the year was a
             19× archive backfill, not math. Coverage is honest but partial (~38% of estimate-bearing
             lots); edge compresses above $10K, exactly where mistakes are expensive; and bid-only markets
-            carry a different guarantee (a realized-comp band, MdAPE ~39%, with no estimate to be
-            directional against). All of it lives in the nightly replay, and the replay is the contract:{' '}
+            carry a different guarantee (a realized-comp band whose typical miss is ~39%, with no
+            estimate to be directional against). All of it lives in the nightly replay, and the replay is the contract:{' '}
             <span style={strong}>measured on history, stated at the hammer, wrong in public when it&rsquo;s
             wrong.</span>
           </p>
