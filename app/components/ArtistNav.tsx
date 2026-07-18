@@ -587,45 +587,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
 
     </div>
 
-      {/* Mobile bottom tab bar — a SIBLING of the nav: backdrop-filter on the
-          nav would otherwise become the containing block for position:fixed
-          and pin the bar to the top. */}
-      <nav className="ray-tabbar" aria-label="Sections">
-        <button className="ray-tab" data-active={activeSlug === null} onClick={() => navigate(homePath)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M3 16l5-6 4 4 6-8" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 21h18" strokeLinecap="round" />
-          </svg>
-          Overview
-        </button>
-        <button className="ray-tab" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M19 5L5 19" strokeLinecap="round" />
-            <circle cx="7.5" cy="7.5" r="2.6" />
-            <circle cx="16.5" cy="16.5" r="2.6" />
-          </svg>
-          Value
-        </button>
-        <button className="ray-tab" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="8" r="3.4" />
-            <path d="M5 20c1.4-3.4 4-5 7-5s5.6 1.6 7 5" strokeLinecap="round" />
-          </svg>
-          Makers
-        </button>
-        <button className="ray-tab" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M5 20V10M12 20V4M19 20v-7" strokeLinecap="round" />
-          </svg>
-          Analytics
-        </button>
-        <button className="ray-tab" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M6 3h12v18l-6-4.2L6 21V3z" strokeLinejoin="round" />
-          </svg>
-          Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
-        </button>
-      </nav>
+      {/* The mobile bottom tab bar was retired — the hamburger sheet now
+          carries every section, so the bar was redundant chrome. */}
 
       {open && isMobile && typeof document !== 'undefined' && createPortal(
         <div className="ray-maker-scrim" onClick={() => setOpen(false)} role="presentation">

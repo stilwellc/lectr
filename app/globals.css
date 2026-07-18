@@ -1346,8 +1346,8 @@ h1 {
 @media (prefers-reduced-motion: reduce) { .ray-spark-card:hover { transform: none; } }
 /* Disabled toolbar pills should read disabled, not clickable. */
 .ray-toolbar-pill:disabled, .ray-toolbar-pill[aria-disabled="true"] { opacity: 0.38; cursor: default; pointer-events: none; }
-/* keep content off the fixed mobile tab bar */
-@media (max-width: 899px) { .ray-mobnav-pad { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); } }
+/* the mobile tab bar is retired — keep only a small bottom breathing gap + safe-area */
+@media (max-width: 899px) { .ray-mobnav-pad { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); } }
 
 /* ── THE PAPER BAND — solid beige banners between logical layers ──
    Full flat blocks, no gradients: a true paper ground with dark ink sitting
