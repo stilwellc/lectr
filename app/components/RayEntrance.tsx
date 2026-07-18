@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 /**
  * The crawl delivers — Ray's loading + arrival choreography.
@@ -50,14 +50,21 @@ export default function RayEntrance({
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  // Decided once at mount: no animation for cached revisits or
-  // reduced motion (content renders complete immediately).
-  const [armed] = useState(
-    () =>
-      animate &&
-      typeof window !== 'undefined' &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  // Armed AFTER mount, never during the first render: the initializer used
+  // to read matchMedia synchronously, so SSG HTML (no window → attribute
+  // absent) hydrated against a client first render with
+  // data-ray-animate="true" — a prop mismatch on every prerendered page.
+  // useLayoutEffect re-renders before first paint, so the hidden pre-state
+  // still lands before the double-rAF flip and the choreography is unchanged;
+  // cached revisits and reduced motion stay un-armed (instant render).
+  const [armed, setArmed] = useState(false);
+  useLayoutEffect(() => {
+    if (animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setArmed(true);
+    }
+    // decided once at mount, like the initializer it replaces
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!armed) return;

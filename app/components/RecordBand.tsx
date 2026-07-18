@@ -36,7 +36,12 @@ export default function RecordBand({
   const no = serial || null;
   return (
     <div className="ray-recband">
-      <style>{`
+      {/* dangerouslySetInnerHTML, NOT a text child: React escapes text
+          children ('>' became '&gt;') but browsers never decode entities
+          inside <style>, so the SSG HTML and the client render diverged and
+          every maker page failed hydration (React #418/#423/#425). __html
+          serializes raw and React skips child diffing — deterministic. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         /* the ruled row — 1px hairlines drawn by the gap+background trick,
            exactly like the lander ledger; auto-fit gives 2-up on phones */
         .ray-recband-grid {
@@ -45,7 +50,7 @@ export default function RecordBand({
           gap: 1px;
           background: var(--paper-line);
         }
-        .ray-recband-grid > div {
+        .ray-recband-cell {
           background: var(--paper);
           text-align: center;
           padding: 15px 14px 17px;
@@ -68,7 +73,7 @@ export default function RecordBand({
           /* 2x2: reserve two label lines so the numerals share a baseline */
           .ray-recband-k { min-height: 2.6em; }
         }
-      `}</style>
+      ` }} />
 
       {/* certificate double rule + microcap title row */}
       <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
@@ -83,7 +88,7 @@ export default function RecordBand({
         {cells.map(cell => {
           const tone = cell.signed == null ? 'flat' : toneOf(cell.signed);
           return (
-            <div key={cell.k}>
+            <div key={cell.k} className="ray-recband-cell">
               <div className="ray-recband-k">{cell.k}</div>
               <div
                 className="ray-recband-v"

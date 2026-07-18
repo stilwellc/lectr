@@ -80,7 +80,11 @@ export default function HammerWeek({
         WebkitOverflowScrolling: 'touch',
       }}
     >
-      <style>{`
+      {/* __html, not a text child: the [data-*="true"] attribute selectors
+          carry quotes which React would escape in SSR text while the browser
+          leaves <style> raw text undecoded — a hydration mismatch whenever
+          this ships in prerendered HTML. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         .ray-hammerweek { scrollbar-width: none; }
         .ray-hammerweek::-webkit-scrollbar { display: none; }
         .ray-hammerweek-row {
@@ -118,7 +122,7 @@ export default function HammerWeek({
         .ray-hammerweek-day:not(:disabled):not([aria-pressed="true"]):hover {
           background: color-mix(in srgb, var(--color-beige) 7%, transparent);
         }
-      `}</style>
+      ` }} />
       <div className="ray-hammerweek-row">
         {week.days.map((day, i) => {
           const n = week.counts.get(day) || 0;

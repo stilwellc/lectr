@@ -506,7 +506,11 @@ export default function ComparableModal({
         fontVariantNumeric: 'tabular-nums',
       }}
     >
-      <style>{`
+      {/* __html, not a text child: this CSS carries quotes (content: '',
+          attribute selectors) which React would escape in SSR text while the
+          browser leaves <style> raw text undecoded — a hydration mismatch
+          whenever this ships in prerendered HTML. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes compModalFade { from { opacity: 0; } to { opacity: 1; } }
         @keyframes compModalRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: no-preference) {
@@ -588,7 +592,7 @@ export default function ComparableModal({
           .comp-modal-meta-dims { display: none !important; }
           .comp-modal-price { min-width: 60px; }
         }
-      `}</style>
+      ` }} />
       {/* Mounted only for sports/science objects — its mount triggers the
           10MB sold-archive fetch. Renders nothing. */}
       {wantsArchive && <ArchiveLoader onState={setArchive} />}
