@@ -12,6 +12,9 @@ on:
 permissions:
   contents: write
 
+env:
+  SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
+
 jobs:
   crawl:
     runs-on: ubuntu-latest

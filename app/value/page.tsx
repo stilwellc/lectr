@@ -46,7 +46,7 @@ export default function ValuePage() {
     // THE ONE FLAGGED RANKING — dealScore (lib/comps): calibrated odds first,
     // then the gap capped at 400%. Same ordering as every other surface.
     return marketLots
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate.slice(0, 10) >= today)))
       .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
       .sort((a, b) => dealScore(b.lot, b.signal!.pct) - dealScore(a.lot, a.signal!.pct));

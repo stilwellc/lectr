@@ -1205,6 +1205,14 @@ const SOTHEBYS_SCIENCE_SALES = [
 // masquerade as pending.
 const RESULT_PENDING_MS = 14 * 86_400_000;
 
+// Sotheby's gates realized prices behind a login. When a logged-in session
+// cookie is provided (SOTHEBYS_COOKIE env / GitHub secret), every Sotheby's
+// request carries it and sold results resolve like any other house. Without
+// it the crawler still works — results just stay pending until the window
+// lapses. Cookie format: the raw Cookie header value from a logged-in browser.
+const SOTHEBYS_COOKIE = process.env.SOTHEBYS_COOKIE || '';
+const sothebysAuth = (): Record<string, string> => (SOTHEBYS_COOKIE ? { Cookie: SOTHEBYS_COOKIE } : {});
+
 // Tracked art & design makers → slug. Order: specific before ambiguous.
 // Ambiguous surnames (condo=apartment, saul, sachs) require the full name.
 const ART_MAKER_ROUTES: [RegExp, string][] = [
@@ -1281,7 +1289,7 @@ function routeItem(creators: string | null, title: string, extra = ''): string |
 
 async function sothebysAuctionMeta(slug: string): Promise<{ uuid: string; endDate: string | null; state: string; title: string } | null> {
   try {
-    const res = await fetch(`https://www.sothebys.com/en/buy/auction/${slug}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+    const res = await fetch(`https://www.sothebys.com/en/buy/auction/${slug}`, { headers: { 'User-Agent': UA, ...sothebysAuth() }, signal: AbortSignal.timeout(30000) });
     if (!res.ok) { console.warn(`[Sotheby's] meta ${slug}: HTTP ${res.status}`); return null; }
     const html = await res.text();
     const uuid = (html.match(/"auctionId":"([0-9a-f-]{36})"/) || [])[1];
@@ -1302,7 +1310,7 @@ async function sothebysAuctionLots(uuid: string): Promise<{ currency: Currency; 
     try {
       const res = await fetch(SOTHEBYS_GQL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apollographql-client-name': 'sothebys-web', 'User-Agent': UA },
+        headers: { 'Content-Type': 'application/json', 'apollographql-client-name': 'sothebys-web', 'User-Agent': UA, ...sothebysAuth() },
         body: JSON.stringify({ query: SOTHEBYS_LOT_QUERY, variables: { id: uuid, limit: 100, offset } }),
         signal: AbortSignal.timeout(30000),
       });
@@ -1336,7 +1344,7 @@ async function enrichSothebysCloseTimes(lots: AuctionLot[]): Promise<void> {
   for (let i = 0; i < slice.length; i += CONC) {
     await Promise.all(slice.slice(i, i + CONC).map(async lot => {
       try {
-        const r = await fetch(lot.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
+        const r = await fetch(lot.url, { headers: { 'User-Agent': UA, ...sothebysAuth() }, signal: AbortSignal.timeout(20000) });
         if (!r.ok) return;
         const h = await r.text();
         const raw = (h.match(/"scheduledOpeningDate":"([^"]+)"/) || [])[1]

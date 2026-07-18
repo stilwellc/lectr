@@ -282,7 +282,7 @@ export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string
   const today = new Date().toISOString().split('T')[0];
   const counts: Record<string, number> = {};
   for (const lot of lots) {
-    if (lot.status === 'upcoming' && lot.saleDate && (lot.saleDate >= today || lot.resultsPending)) {
+    if (lot.status === 'upcoming' && lot.saleDate && (lot.saleDate >= today || (lot.resultsPending && lot.saleDate.slice(0, 10) >= today))) {
       counts[lot.artist] = (counts[lot.artist] || 0) + 1;
     }
   }

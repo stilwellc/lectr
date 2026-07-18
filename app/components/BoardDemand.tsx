@@ -152,7 +152,7 @@ export default function BoardDemand({
   const liveCount = useMemo(() => {
     if (hasIndex) return 0;
     const today = new Date().toISOString().split('T')[0];
-    return allLots.filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending)).length;
+    return allLots.filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate.slice(0, 10) >= today))).length;
   }, [allLots, hasIndex]);
 
   // the index/blend board shows the full arc but headlines the past-year move

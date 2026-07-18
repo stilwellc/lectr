@@ -234,7 +234,7 @@ export default function RayPage() {
       // resultsPending lots are held visible (live/just-closed) even though the
       // parsed sale date can read as past — a timed auction closes lots per-day
       // and the sale-level date lags, so a live lot must not be filtered out.
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate.slice(0, 10) >= today)))
       // ISO date strings order lexicographically — no Date per comparison
       .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
   }, [marketLots]);
@@ -495,7 +495,7 @@ export default function RayPage() {
       // resultsPending lots are held visible (live/just-closed) even though the
       // parsed sale date can read as past — a timed auction closes lots per-day
       // and the sale-level date lags, so a live lot must not be filtered out.
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate.slice(0, 10) >= today)))
       .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
     let bestMove: { from: number; to: number } | null = null;
     for (const l of live) {
