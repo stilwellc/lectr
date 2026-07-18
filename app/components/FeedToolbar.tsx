@@ -76,29 +76,6 @@ export default function FeedToolbar({
   // hand back whatever sort the reader had picked when the lens comes off,
   // not force-reset to 'soonest'.
   const preLensSort = useRef<FeedSort>(FEED_DEFAULTS.sort);
-  // Collapse-on-scroll: scrolling down folds the toolbar to one compact row
-  // (styled by .ray-toolbar-collapsed); any scroll up re-expands it.
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    let lastY = window.scrollY;
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const y = window.scrollY;
-        const dy = y - lastY;
-        // small jitters (rubber-banding, sticky reflow) don't flip the state
-        if (Math.abs(dy) > 8) {
-          setCollapsed(dy > 0 && y > 160);
-          lastY = y;
-        }
-        ticking = false;
-      });
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   // A vertical chosen via the feed chooser must behave exactly like one
   // chosen via the top pills — the refine memos key off this, not `market`.
@@ -233,7 +210,7 @@ export default function FeedToolbar({
   const estActive = filters.sort === 'est-desc' || filters.sort === 'est-asc';
 
   return (
-    <div className={`ray-toolbar${collapsed ? ' ray-toolbar-collapsed' : ''}`} role="search" aria-label="Find lots">
+    <div className="ray-toolbar" role="search" aria-label="Find lots">
       <div className="ray-toolbar-row">
         <div className="ray-toolbar-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">

@@ -3612,15 +3612,6 @@ body {
     max-height: 640px;
     transition: max-height 220ms var(--ease-ui);
   }
-  .ray-toolbar-collapsed {
-    max-height: 44px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-  .ray-toolbar-collapsed .ray-toolbar-search { padding: 6px 12px; }
 
   /* touch: the save button meets the 44px floor */
   .ray-lot-remind { min-height: 44px; }

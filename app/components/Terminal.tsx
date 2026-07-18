@@ -296,7 +296,7 @@ export function CallPlate({
           <img
             src="/brand/lectr-nav.png"
             alt=""
-            style={{ height: 18, width: 'auto', opacity: 0.55, alignSelf: 'flex-end', marginTop: 10 }}
+            style={{ height: 18, width: 'auto', opacity: 0.55, display: 'block', marginLeft: 'auto', marginTop: 10 }}
           />
         </div>
       </div>
