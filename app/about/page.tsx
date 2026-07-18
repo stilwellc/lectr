@@ -104,9 +104,14 @@ export default function AboutPage() {
 
       <main id="main" style={{ paddingTop: 28, paddingBottom: 40 }}>
         <div style={{ ...wrap, marginBottom: 26 }}>
+          {/* the walk-through reads as part of the editorial layer now — back
+              link up top, like every note */}
+          <p style={{ margin: '0 0 18px' }}>
+            <Link href="/blog" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}><Flick size={11} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 2 }} /> All notes</Link>
+          </p>
           {/* the certificate masthead — dated from the last crawl on the book */}
           <Masthead
-            kicker="The machine"
+            kicker="Notes from the desk · The systems walk-through"
             serial={meta.lastCrawl}
             title={<>How lectr <Accent>reads</Accent> the market.</>}
             sub={<>

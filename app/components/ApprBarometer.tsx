@@ -149,7 +149,7 @@ export default function ApprBarometer({
               duration={1100}
               style={{ fontSize: 40, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: heat, fontVariantNumeric: 'tabular-nums' }}
             />
-            <div style={{ fontSize: 11.5, color: 'var(--paper-muted)', marginTop: 6 }}>appreciation · 12 mo · sales-weighted</div>
+            <div style={{ fontSize: 11.5, color: 'var(--paper-muted)', marginTop: 6 }}>appreciation · annualized, 3-yr window · sales-weighted</div>
           </div>
 
           {/* printed stat rows with dotted leaders */}
@@ -248,7 +248,7 @@ export default function ApprBarometer({
                 duration={1100}
                 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: heat, fontVariantNumeric: 'tabular-nums' }}
               />
-              <div style={{ fontSize: 10.5, color: 'var(--paper-muted)', marginTop: 4 }}>appreciation · 12 mo · sales-weighted</div>
+              <div style={{ fontSize: 10.5, color: 'var(--paper-muted)', marginTop: 4 }}>appreciation · annualized, 3-yr window · sales-weighted</div>
             </div>
             {typical != null && (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8, fontSize: 12 }}>

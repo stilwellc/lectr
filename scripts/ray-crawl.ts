@@ -3181,6 +3181,10 @@ async function main() {
   // the watch filter below, and the W16 signal-scoped image check.
   const { classifyForm, objectClassOf, computeDeepSignal, isSportsScienceObject, extractSportsTags } =
     await import('../app/lib/comps');
+  // sport tag (title-derived) for the SPORT filter on the sports vertical —
+  // sportOf lives in app/utils (pure, no client deps; same fn the UI uses).
+  const { sportOf } = await import('../app/utils');
+  const SPORT_SLUGS = new Set(['game-used', 'trophies-awards', 'tickets-passes']);
   let categoryCounts: Record<string, number> = {};
   for (const lot of allLots) {
     lot.category = classifyLot(lot);
@@ -3207,6 +3211,12 @@ async function main() {
       if (lot.eventKey !== undefined) delete lot.eventKey;
       if (lot.sportYear !== undefined) delete lot.sportYear;
     }
+    // SPORT tag — which sport a sports-vertical lot belongs to, read from the
+    // title. Stamped on the three sports slugs only (null = no sport cue →
+    // "Other" in the UI filter); cleared when a lot lives outside the sports
+    // vertical, mirroring the entity/objectType cleanup above.
+    if (SPORT_SLUGS.has(lot.artist)) lot.sport = sportOf(lot.title);
+    else if (lot.sport !== undefined) delete lot.sport;
 
     // ── v2 IDENTITY STAMP ──────────────────────────────────────────────────
     // Persist what the value/similarity engine joins on, using the SAME pure

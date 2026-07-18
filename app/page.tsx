@@ -20,7 +20,7 @@ import ApprBarometer from './components/ApprBarometer';
 import SettlementSlip from './components/SettlementSlip';
 import MarketSwitch from './components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './components/FeedToolbar';
-import HammerWeek, { weekDaysFor } from './components/HammerWeek';
+import { weekDaysFor } from './components/HammerWeek';
 import { CallPlate, Colophon, daysWord } from './components/Terminal';
 import Flick from './components/Flick';
 import Greeting from './components/Greeting';
@@ -52,8 +52,6 @@ type StripItem = {
   tone?: 'up';
   /** the flagged cell — clicking opens the below-market lens at the feed */
   lens?: boolean;
-  /** the hammers cell — clicking scrolls to the HammerWeek strip */
-  week?: boolean;
 };
 
 // The default view's diversity cap: max 8 lots per maker per page window —
@@ -353,13 +351,6 @@ export default function RayPage() {
     setVisibleUpcoming(pageSize);
   };
 
-  // THE HAMMER WEEK's lens — click a day, see that day's hammers; click the
-  // active day (or the toolbar's Clear) and the calendar view returns.
-  const handleSaleDay = (day: string | null) => {
-    setFeedFilters(f => ({ ...f, saleDay: day }));
-    setVisibleUpcoming(pageSize);
-  };
-
   // The ledger's flagged figure, the proofstrip flag stat and the toolbar
   // pill all fire this one lens: below-market, biggest gap first, at the feed.
   const openBelowLens = () => {
@@ -435,9 +426,9 @@ export default function RayPage() {
     return topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
   }, [marketStats]);
 
-  // ONE WEEK — the ledger's "Hammers this week" and the HammerWeek strip both
-  // count against the same Mon–Sun UTC window (the crawl day's week), and the
-  // "across N houses" sub is scoped to that week's lots, not the whole pool.
+  // ONE WEEK — the ledger's "Hammers this week" counts against the Mon–Sun
+  // UTC window of the crawl day's week, and the "across N houses" sub is
+  // scoped to that week's lots, not the whole pool.
   const hammerWeek = useMemo(() => {
     const days = new Set(weekDaysFor(crawlDay));
     const weekLots = upcoming.filter(l => days.has(l.saleDate?.slice(0, 10) || ''));
@@ -468,7 +459,7 @@ export default function RayPage() {
     }, 0);
     const liveHouses = new Set(active.map(l => l.auctionHouse)).size;
     const asComma = (n: number) => Math.round(n).toLocaleString();
-    // ONE WEEK: the same Mon–Sun window the HammerWeek strip rules off
+    // ONE WEEK: the crawl day's Mon–Sun window
     const thisWeek = hammerWeek.count;
     const priceOrDash = (n: number) => (n > 0 ? formatPrice(n) : '—');
     // "across 1 houses" reads like a bug; a 0-count week says so in words.
@@ -481,14 +472,14 @@ export default function RayPage() {
       return [
         { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
         { k: 'On the block', to: active.length, format: asComma, s: 'live lots — bid sales, no estimates' },
-        { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub, week: true },
+        { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
         { k: 'Live houses', to: liveHouses, format: asComma, s: 'sourcing this market' },
       ];
     }
     return [
       { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
       { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
-      { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub, week: true },
+      { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
       { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up', lens: true },
     ];
   }, [upcoming, belowIds, totalRealized, topArtist, hammerWeek]);
@@ -515,7 +506,10 @@ export default function RayPage() {
       const delta = s.pct - meta.signalPct;
       if (delta > 0 && (!bestMove || delta > bestMove.to - bestMove.from)) bestMove = { from: meta.signalPct, to: s.pct };
     }
-    return { count: mine.length, next: live[0] || null, bestMove };
+    // "next hammer" must be genuinely future — a past-dated resultsPending lot
+    // stays visible in the list but can never be "next" (it already hammered)
+    const future = live.filter(l => l.saleDate >= today);
+    return { count: mine.length, next: future[0] || null, bestMove };
   }, [savedIds, savedMeta, allLots]);
 
   // The call plate + watchlist strip, extracted so they can live either in the
@@ -566,12 +560,11 @@ export default function RayPage() {
 
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {/* R2 · the one market switcher — a pill rail directly under the nav,
-          above the board it controls. The active pill is the lit element. */}
+      {/* R2 · the category nav — the six-pill row folded into one dropdown.
+          No category: a lit "Choose a category" control. Category chosen: a
+          chip + quiet "Change category" — the feed toolbar's filters lead. */}
       <div className="rail" style={{ paddingTop: 14 }}>
-        <div className="ray-markets-fade ray-markets-center">
-          <MarketSwitch compact lit />
-        </div>
+        <MarketSwitch lander />
       </div>
 
       {error ? (
@@ -692,18 +685,6 @@ export default function RayPage() {
                   <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
                   <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
                 </button>
-              ) : item.week && item.to > 0 ? (
-                <button
-                  key={item.k}
-                  type="button"
-                  onClick={() => document.getElementById('hammer-week')?.scrollIntoView({ behavior: 'smooth' })}
-                  aria-label="See the hammer week, day by day"
-                  style={{ background: 'none', border: 'none', margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
-                >
-                  <div className="ray-ledger-k">{item.k}</div>
-                  <CountUp to={item.to} format={item.format} className="ray-ledger-v" style={{ display: 'block' }} />
-                  <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
-                </button>
               ) : (
                 <div key={item.k}>
                   <div className="ray-ledger-k">{item.k}</div>
@@ -757,16 +738,6 @@ export default function RayPage() {
                 onViewChange={handleView}
                 pageSize={pageSize}
                 showToggle={!narrowView}
-              />
-
-              {/* THE HAMMER WEEK — the "hammers this week" count, given a
-                  shape: a ruled seven-day strip. Self-gates: renders nothing
-                  when no lot hammers inside the current Mon–Sun week. */}
-              <HammerWeek
-                lots={upcoming}
-                activeDay={feedFilters.saleDay}
-                onSelectDay={handleSaleDay}
-                todayIso={crawlDay}
               />
 
               {effectiveView === 'table' && feed.length > 0 ? (

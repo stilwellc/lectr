@@ -13,7 +13,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   const [open, setOpen] = useState(false);
   const [lit, setLit] = useState(false);
   const [query, setQuery] = useState('');
-  const { authEnabled, user, signOut, openLogin } = useAuth();
+  // the sheet's "All makers" disclosure — collapsed on every open
+  const [showAll, setShowAll] = useState(false);
+  const { authEnabled, user, openLogin } = useAuth();
   // On phones the maker finder is a full-screen sheet (portaled to <body> to
   // escape the nav's backdrop-filter containing block), not a cramped dropdown.
   const [isMobile, setIsMobile] = useState(false);
@@ -86,6 +88,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   useEffect(() => {
     if (!open) return;
     setQuery('');
+    setShowAll(false);
     if (dropdownRef.current) dropdownRef.current.scrollTop = 0;
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false);
@@ -107,9 +110,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     { label: 'Value', path: '/value', active: activeSlug === 'value' },
     { label: 'Makers', path: '/artists', active: activeSlug === 'artists' },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
-    { label: `Saved${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' },
+    { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' },
     { label: 'Blog', path: '/blog', active: activeSlug === 'blog' },
-    { label: 'How it works', path: '/about', active: activeSlug === 'about' },
   ];
 
   // Shared finder pieces — the filter input and the grouped maker list — reused
@@ -479,11 +481,12 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Blog</button>
           <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')}>
-            Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
+            My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
           </button>
           {authEnabled && (user ? (
-            <button className="ray-nav-link" onClick={() => signOut()} title={user.email || 'Signed in'}>
-              {(user.email || 'account').split('@')[0]} · Sign out
+            /* signed in → the account button opens the profile; sign-out lives THERE now */
+            <button className="ray-nav-link" onClick={() => navigate('/saved')} title={user.email || 'Signed in'}>
+              {(user.email || 'account').split('@')[0]}
             </button>
           ) : (
             <button className="ray-nav-link" onClick={openLogin}>Sign in</button>
@@ -561,12 +564,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     {s.label}
                   </button>
                 ))}
-                {authEnabled && (
+                {authEnabled && !user && (
+                  /* signed-out only — for signed-in users the account (and
+                     sign-out) lives on My profile, not in the menu */
                   <button
                     className="ray-maker-navitem"
-                    onClick={() => { if (user) signOut(); else openLogin(); setOpen(false); }}
+                    onClick={() => { openLogin(); setOpen(false); }}
                   >
-                    {user ? `Sign out · ${(user.email || 'account').split('@')[0]}` : 'Sign in'}
+                    Sign in
                   </button>
                 )}
               </nav>
@@ -590,6 +595,26 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                       <span className="ray-artist-count">{upcomingCounts[a.slug]}</span>
                     </button>
                   ))}
+                  {/* the disclosure — unrolls the full grouped roster IN the
+                      sheet; the down Flick flips while it is open */}
+                  <button
+                    role="menuitem"
+                    className="ray-artist-dropdown-item"
+                    aria-expanded={showAll}
+                    onClick={() => setShowAll(s => !s)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, color: 'var(--color-fg)' }}
+                  >
+                    All makers{' '}
+                    <Flick
+                      size={11}
+                      style={{
+                        marginLeft: 0,
+                        transform: showAll ? 'scaleY(-1) rotate(180deg)' : 'scaleY(-1)',
+                        transition: 'transform var(--duration-fast) var(--ease-signature)',
+                      }}
+                    />
+                  </button>
+                  {showAll && groupList}
                   <button
                     role="menuitem"
                     className="ray-artist-dropdown-item"
@@ -606,7 +631,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         document.body
       )}
 
-      <CommandK upcomingCounts={upcomingCounts} />
+      <CommandK upcomingCounts={upcomingCounts} savedCount={savedCount} />
     </>
   );
 }

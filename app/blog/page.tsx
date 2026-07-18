@@ -11,7 +11,16 @@ export const metadata: Metadata = {
   description: 'Writing from lectr — how the pricing engine works, what the market data actually says, and what we got wrong on the way.',
 };
 
-const POSTS = [
+// `href` is the special case — a card that lives outside /blog/* (the systems
+// walk-through at /about). Cards without it link to /blog/{slug} as before.
+const POSTS: { slug: string; date: string; title: string; dek: string; href?: string }[] = [
+  {
+    slug: 'how-lectr-works',
+    href: '/about',
+    date: '2026-07-17',
+    title: 'How lectr works',
+    dek: 'The systems walk-through — crawlers, the identity ledger, the engine, and the nightly replay, section by section.',
+  },
   {
     slug: 'q2-2026-art',
     date: '2026-07-16',
@@ -72,7 +81,7 @@ export default function BlogIndex() {
           {POSTS.map(p => (
             <Link
               key={p.slug}
-              href={`/blog/${p.slug}`}
+              href={p.href ?? `/blog/${p.slug}`}
               className="ray-blog-card"
               style={{ display: 'block', textDecoration: 'none', color: 'inherit', border: '1px solid var(--hairline)', borderRadius: 12, padding: '22px 24px', background: 'var(--color-bg-elevated)' }}
             >

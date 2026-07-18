@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import type { LotCategory } from '../types';
-import { ARTIST_LABEL } from '../constants';
+import { ARTIST_LABEL, marketOf } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle } from '../utils';
 import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
 import SectionMark from './SectionMark';
@@ -60,6 +60,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
   const [visible, setVisible] = useState(20);
   const [sortBy, setSortBy] = useState<SortMode>('date');
   const [internalFilter, setInternalFilter] = useState<CategoryFilter>('all');
+  const [sportFilter, setSportFilter] = useState<string>('all');
 
   const categoryFilter = externalFilter ?? internalFilter;
   const setCategoryFilter = (cat: CategoryFilter) => {
@@ -83,10 +84,25 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
     return Array.from(cats).sort();
   }, [lots]);
 
+  // SPORT chips — derived from the data, so they appear automatically when it
+  // supports them: every lot is a sports-vertical lot AND >=2 distinct sports
+  // exist (a null sport files under "Other"). [sport, count] pairs, biggest
+  // sport first, Other pinned last. Counts are over the unfiltered pool,
+  // mirroring availableCategories.
+  const sportGroups = useMemo(() => {
+    if (!lots.length || !lots.every(l => marketOf(l.artist) === 'sports')) return null;
+    const counts = new Map<string, number>();
+    for (const l of lots) counts.set(l.sport || 'Other', (counts.get(l.sport || 'Other') || 0) + 1);
+    if (counts.size < 2) return null;
+    return Array.from(counts.entries()).sort((a, b) =>
+      a[0] === 'Other' ? 1 : b[0] === 'Other' ? -1 : b[1] - a[1]);
+  }, [lots]);
+
   const filtered = useMemo(() => {
-    if (categoryFilter === 'all') return lots;
-    return lots.filter(l => l.category === categoryFilter);
-  }, [lots, categoryFilter]);
+    let out = categoryFilter === 'all' ? lots : lots.filter(l => l.category === categoryFilter);
+    if (sportGroups && sportFilter !== 'all') out = out.filter(l => (l.sport || 'Other') === sportFilter);
+    return out;
+  }, [lots, categoryFilter, sportGroups, sportFilter]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -162,6 +178,17 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           background: var(--color-fg);
           border-color: var(--color-fg);
           color: var(--color-bg);
+        }
+        /* sport-chip counts — the toolbar-pill count grammar (mono, faint, upright) */
+        .ray-results .ray-sport-chips .ray-sort-pill i {
+          font-style: normal;
+          font-family: var(--font-mono), monospace;
+          font-size: 9.5px;
+          color: var(--color-text-faint);
+          letter-spacing: 0;
+        }
+        .ray-results .ray-sport-chips .ray-sort-pill[data-active=true] i {
+          color: color-mix(in srgb, var(--color-bg) 72%, transparent);
         }
         @media (max-width: 768px) {
           .ray-results { padding-block: 32px 80px; }
@@ -240,6 +267,32 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 onClick={() => setCategoryFilter(cat as CategoryFilter)}
               >
                 {categoryLabels[cat] || cat}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showToolbar && sportGroups && (
+          <div className="ray-sport-chips" role="radiogroup" aria-label="Filter by sport" style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+            <button
+              className="ray-sort-pill"
+              role="radio"
+              aria-checked={sportFilter === 'all'}
+              data-active={sportFilter === 'all' ? 'true' : 'false'}
+              onClick={() => { setSportFilter('all'); setVisible(20); }}
+            >
+              All
+            </button>
+            {sportGroups.map(([sport, n]) => (
+              <button
+                key={sport}
+                className="ray-sort-pill"
+                role="radio"
+                aria-checked={sportFilter === sport}
+                data-active={sportFilter === sport ? 'true' : 'false'}
+                onClick={() => { setSportFilter(sport); setVisible(20); }}
+              >
+                {sport} <i>{n}</i>
               </button>
             ))}
           </div>

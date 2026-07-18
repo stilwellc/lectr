@@ -27,7 +27,7 @@ export const OPEN_CK_EVENT = 'lectr:open-ck';
  * it is a grouped BROWSE — the full maker roster under microcap market
  * headers. Rendered in a portal above everything.
  */
-export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<string, number> }) {
+export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingCounts: Record<string, number>; savedCount?: number }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
@@ -50,9 +50,9 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
       { label: 'Value', hint: 'below-market lots', path: '/value', kind: 'section' as const },
       { label: 'Makers', hint: 'the roster, as demand curves', path: '/artists', kind: 'section' as const },
       { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics', kind: 'section' as const },
-      { label: 'Saved', hint: 'your watchlist', path: '/saved', kind: 'section' as const },
+      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/saved', kind: 'section' as const },
       { label: 'Blog', hint: 'quarterly market notes + how we built the engine', path: '/blog', kind: 'section' as const },
-      { label: 'How it works', hint: 'the engine, for engineers', path: '/about', kind: 'section' as const },
+      { label: 'How lectr works', hint: 'the engine, for engineers', path: '/about', kind: 'section' as const },
       {
         label: onBlockCount > 0 ? `On the block · ${onBlockCount}` : 'On the block',
         hint: 'the live feed',
@@ -74,7 +74,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
         kind: 'maker' as const,
       })),
     ];
-  }, [upcomingCounts, market, homePath]);
+  }, [upcomingCounts, savedCount, market, homePath]);
 
   // Empty-query BROWSE: sections first, then each live market as a microcap
   // header row followed by its makers — the grouped index the nav dropdown

@@ -67,7 +67,7 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
 export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
-  const { authEnabled, user, authReady, savedReady, signInWithGoogle } = useAuth();
+  const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
 
   const savedLots = useMemo(() =>
     savedIds
@@ -148,7 +148,10 @@ export default function SavedPage() {
       const sig = lotSignal(l, allLots);
       return sig && sig.label === 'Below Market';
     }).length;
-    const next = upcoming[0] || null;
+    // next hammer = genuinely future only (past-dated resultsPending lots are
+    // watched, but they already hammered — they can't be "next")
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const next = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= todayIso) || null;
     return { totalEst, flagged, next };
   }, [upcoming, allLots]);
 
@@ -231,6 +234,22 @@ export default function SavedPage() {
 
       <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
+      {/* the quiet account row — sign-out lives on the profile now, not in the
+          nav. Right-aligned over the masthead; renders for signed-in users in
+          EVERY profile state (watchlist, empty, loading), so sign-out is never
+          unreachable. */}
+      {authEnabled && authReady && user && (
+        <div className="rail" style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 14 }}>
+          <button
+            className="ray-call-btn ray-call-btn-quiet"
+            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 12.5, padding: '4px 0' }}
+            onClick={() => signOut()}
+          >
+            {user.email || 'account'} · Sign out
+          </button>
+        </div>
+      )}
+
       {authEnabled && authReady && !user ? (
         /* The ONLY auth-gated surface — saved lots are scoped to a user. */
         <RayEntrance animate>
@@ -288,7 +307,7 @@ export default function SavedPage() {
           <section className="rail ray-enter" style={{ paddingTop: 24 }}>
             {/* the certificate masthead — the stake IS the accent figure */}
             <Masthead
-              kicker="Your desk · the watchlist"
+              kicker="My profile"
               serial={lastCrawl || undefined}
               title={summary.totalEst > 0
                 ? <>

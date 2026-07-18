@@ -359,7 +359,7 @@ export function Colophon({ record }: {
             <Link href="/value">Value</Link>
             <Link href="/artists">Makers</Link>
             <Link href="/analytics">Analytics</Link>
-            <Link href="/saved">Saved</Link>
+            <Link href="/saved">My profile</Link>
             <Link href="/about">How it works</Link>
             <Link href="/blog">Notes from the desk</Link>
           </div>

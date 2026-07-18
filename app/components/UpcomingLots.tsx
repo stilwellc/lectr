@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { AuctionLot, MarketStats } from '../types';
+import { marketOf } from '../constants';
 import LotCard from './LotCard';
 import SectionMark from './SectionMark';
 
@@ -40,12 +41,31 @@ export default function UpcomingLots({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'price'>('date');
+  const [sportFilter, setSportFilter] = useState<string>('all');
+
+  // SPORT chips — derived from the data, so they appear automatically when it
+  // supports them: every lot is a sports-vertical lot AND >=2 distinct sports
+  // exist (a null sport files under "Other"). [sport, count] pairs, biggest
+  // sport first, Other pinned last.
+  const sportGroups = useMemo(() => {
+    if (!lots.length || !lots.every(l => marketOf(l.artist) === 'sports')) return null;
+    const counts = new Map<string, number>();
+    for (const l of lots) counts.set(l.sport || 'Other', (counts.get(l.sport || 'Other') || 0) + 1);
+    if (counts.size < 2) return null;
+    return Array.from(counts.entries()).sort((a, b) =>
+      a[0] === 'Other' ? 1 : b[0] === 'Other' ? -1 : b[1] - a[1]);
+  }, [lots]);
+
+  const bySport = useMemo(
+    () => (sportGroups && sportFilter !== 'all' ? lots.filter(l => (l.sport || 'Other') === sportFilter) : lots),
+    [lots, sportGroups, sportFilter]
+  );
 
   // 'date' keeps the caller's order (the page already sorts by sale date);
   // 'price' ranks by estimate mid, highest ask first
   const sorted = useMemo(
-    () => (sortBy === 'price' ? [...lots].sort((a, b) => askOf(b) - askOf(a)) : lots),
-    [lots, sortBy]
+    () => (sortBy === 'price' ? [...bySport].sort((a, b) => askOf(b) - askOf(a)) : bySport),
+    [bySport, sortBy]
   );
   const shown = expanded ? sorted : sorted.slice(0, COLLAPSED_CARDS);
 
@@ -82,6 +102,23 @@ export default function UpcomingLots({
           background: var(--color-fg);
           border-color: var(--color-fg);
           color: var(--color-bg);
+        }
+        .ray-upcoming .ray-sport-chips {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+          margin: -2px 0 20px;
+        }
+        /* chip counts — the toolbar-pill count grammar (mono, faint, upright) */
+        .ray-upcoming .ray-sport-chips .ray-sort-pill i {
+          font-style: normal;
+          font-family: var(--font-mono), monospace;
+          font-size: 9.5px;
+          color: var(--color-text-faint);
+          letter-spacing: 0;
+        }
+        .ray-upcoming .ray-sport-chips .ray-sort-pill[data-active=true] i {
+          color: color-mix(in srgb, var(--color-bg) 72%, transparent);
         }
         @media (max-width: 768px) {
           .ray-upcoming { padding-block: 32px 32px; }
@@ -134,6 +171,32 @@ export default function UpcomingLots({
           </div>
         </div>
       </div>
+
+      {sportGroups && (
+        <div className="ray-sport-chips" role="radiogroup" aria-label="Filter by sport">
+          <button
+            className="ray-sort-pill"
+            role="radio"
+            aria-checked={sportFilter === 'all'}
+            data-active={sportFilter === 'all' ? 'true' : 'false'}
+            onClick={() => setSportFilter('all')}
+          >
+            All
+          </button>
+          {sportGroups.map(([sport, n]) => (
+            <button
+              key={sport}
+              className="ray-sort-pill"
+              role="radio"
+              aria-checked={sportFilter === sport}
+              data-active={sportFilter === sport ? 'true' : 'false'}
+              onClick={() => setSportFilter(sport)}
+            >
+              {sport} <i>{n}</i>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="ray-upcoming-grid">
         {shown.map((lot, i) => (

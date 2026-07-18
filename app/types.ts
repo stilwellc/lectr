@@ -156,6 +156,12 @@ export interface AuctionLot {
   objectType?: ObjectType;
   eventKey?: string;
   sportYear?: number;
+  /** Which sport a sports-vertical lot belongs to — sportOf(title) in
+      app/utils.ts ('Soccer' | 'Basketball' | …), stamped at crawl time on the
+      three sports slugs (game-used, trophies-awards, tickets-passes) only.
+      null = title names no sport (the UI files it under "Other");
+      undefined/absent on every non-sports lot. */
+  sport?: string | null;
   /** Precomputed realized-comp band for upcoming Goldin sports/science lots
       (the descriptive analogue of `signal`, built from soldCompBand). null on
       every non-sports/science-object lot; undefined = not precomputed. Carries
