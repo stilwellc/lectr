@@ -104,6 +104,7 @@ export default function FeedToolbar({
     if (market !== 'all') return [];
     return MARKETS.filter(m => m.live && m.key !== 'all').map(m => {
       const set = marketArtists(m.key);
+
       return { key: m.key, label: m.label, n: lots.filter(l => set.has(l.artist)).length };
     }).filter(v => v.n > 0);
   }, [lots, market]);
@@ -150,6 +151,55 @@ export default function FeedToolbar({
   );
 
   const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch });
+
+  const [catOpen, setCatOpen] = useState(false);
+  // close the category menu on Escape / outside click
+  useEffect(() => {
+    if (!catOpen) return;
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setCatOpen(false); };
+    const click = () => setCatOpen(false);
+    document.addEventListener('keydown', key);
+    document.addEventListener('click', click);
+    return () => { document.removeEventListener('keydown', key); document.removeEventListener('click', click); };
+  }, [catOpen]);
+  const catMenu = (
+    <div
+      role="menu"
+      aria-label="Categories"
+      onClick={e => e.stopPropagation()}
+      style={{
+        position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30, minWidth: 210,
+        background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)',
+        borderRadius: 10, padding: 6, boxShadow: '0 14px 34px -18px rgba(8,6,3,0.85)',
+      }}
+    >
+      <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--color-text-muted)', padding: '6px 10px 7px', borderBottom: '1px solid var(--hairline)', marginBottom: 4 }}>
+        The categories
+      </div>
+      {verticals.map(v => (
+        <button
+          key={v.key}
+          role="menuitem"
+          className="ray-toolbar-pill"
+          data-active={filters.vertical === v.key}
+          style={{ display: 'flex', width: '100%', justifyContent: 'space-between', marginBottom: 2 }}
+          onClick={() => { set({ vertical: filters.vertical === v.key ? null : v.key }); setCatOpen(false); }}
+        >
+          {v.label} <i>{v.n}</i>
+        </button>
+      ))}
+      {filters.vertical != null && (
+        <button
+          role="menuitem"
+          className="ray-toolbar-pill"
+          style={{ display: 'flex', width: '100%', justifyContent: 'flex-start', marginTop: 2, color: 'var(--color-text-muted)' }}
+          onClick={() => { set({ vertical: null }); setCatOpen(false); }}
+        >
+          All categories
+        </button>
+      )}
+    </div>
+  );
   const isFiltered =
     filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null;
 
@@ -264,16 +314,43 @@ export default function FeedToolbar({
           </>
         )}
 
-        {verticals.map(v => (
-          <button
-            key={v.key}
-            className="ray-toolbar-pill"
-            data-active={filters.vertical === v.key}
-            onClick={() => set({ vertical: filters.vertical === v.key ? null : v.key })}
-          >
-            {v.label} <i>{v.n}</i>
-          </button>
-        ))}
+        {/* CATEGORY: a chooser, not a wall of chips. No category picked →
+            one "Choose a category" pill opening a menu; picked → the active
+            chip + a quiet "Change category". When the top pills already chose
+            a vertical (market !== 'all') the verticals list is empty and the
+            "Total market" reset above is the change affordance. */}
+        {verticals.length > 0 && filters.vertical == null && (
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <button
+              className="ray-toolbar-pill"
+              aria-haspopup="menu"
+              aria-expanded={catOpen}
+              onClick={() => setCatOpen(o => !o)}
+            >
+              Choose a category <Flick size={10} style={{ transform: 'rotate(90deg)' }} />
+            </button>
+            {catOpen && catMenu}
+          </span>
+        )}
+        {verticals.length > 0 && filters.vertical != null && (() => {
+          const v = verticals.find(x => x.key === filters.vertical);
+          return (
+            <span style={{ position: 'relative', display: 'inline-flex', gap: 8 }}>
+              <button
+                className="ray-toolbar-pill"
+                data-active
+                onClick={() => set({ vertical: null })}
+                title="Clear category"
+              >
+                {v ? v.label : filters.vertical} {v && <i>{v.n}</i>}
+              </button>
+              <button className="ray-toolbar-pill" aria-haspopup="menu" aria-expanded={catOpen} onClick={() => setCatOpen(o => !o)}>
+                Change category
+              </button>
+              {catOpen && catMenu}
+            </span>
+          );
+        })()}
 
         {sports.map(([sport, n]) => (
           <button

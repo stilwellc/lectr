@@ -564,7 +564,7 @@ export default function RayPage() {
           No category: a lit "Choose a category" control. Category chosen: a
           chip + quiet "Change category" — the feed toolbar's filters lead. */}
       <div className="rail" style={{ paddingTop: 14 }}>
-        <MarketSwitch lander />
+        <MarketSwitch />
       </div>
 
       {error ? (
