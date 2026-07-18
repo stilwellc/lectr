@@ -73,10 +73,10 @@ export default function BlogIndex() {
             <Link
               key={p.slug}
               href={`/blog/${p.slug}`}
-              className="ray-blog-card"
-              style={{ display: 'block', textDecoration: 'none', color: 'inherit', border: '1px solid var(--hairline)', borderRadius: 12, padding: '22px 24px', background: 'var(--color-bg-elevated)' }}
+              className="ray-blog-card ray-paper"
+              style={{ display: 'block', textDecoration: 'none', color: 'var(--color-fg)', border: '1px solid var(--paper-edge)', borderRadius: 12, padding: '22px 24px', background: 'var(--paper-butter)' }}
             >
-              <div style={{ fontFamily: 'var(--font-mono), monospace', fontSize: 11.5, color: 'var(--color-text-faint)', marginBottom: 8 }}>
+              <div style={{ fontFamily: 'var(--font-mono), monospace', fontSize: 11.5, color: 'var(--color-text-faint)', marginBottom: 8, letterSpacing: '0.02em' }}>
                 {new Date(p.date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
               </div>
               <h2 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px', lineHeight: 1.3 }}>{p.title}</h2>
