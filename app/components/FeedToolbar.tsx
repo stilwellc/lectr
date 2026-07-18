@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
 import { categoryLabels, sportOf } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
@@ -99,6 +100,10 @@ export default function FeedToolbar({
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // A vertical chosen via the feed chooser must behave exactly like one
+  // chosen via the top pills — the refine memos key off this, not `market`.
+  const effectiveMarket = market !== 'all' ? market : (filters.vertical ?? 'all');
+
   // total market → the verticals, with live counts
   const verticals = useMemo(() => {
     if (market !== 'all') return [];
@@ -113,29 +118,29 @@ export default function FeedToolbar({
   // 17 makers is a wall). Zero-count makers stay visible as disabled pills —
   // coverage honesty: "Rolex 0" tells the truth "vanished Rolex" hides.
   const makers = useMemo(() => {
-    if (market === 'all' || market === 'art') return [] as [string, number][];
+    if (effectiveMarket === 'all' || effectiveMarket === 'art') return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { c[l.artist] = (c[l.artist] || 0) + 1; });
-    return Array.from(marketArtists(market))
+    return Array.from(marketArtists(effectiveMarket))
       .map(slug => [slug, c[slug] || 0] as [string, number])
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }, [lots, market]);
+  }, [lots, effectiveMarket]);
 
   // sports → which sport (the cut collectors actually shop by)
   const sports = useMemo(() => {
-    if (market !== 'sports') return [] as [string, number][];
+    if (effectiveMarket !== 'sports') return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { const s = sportOf(l.title) || 'Other'; c[s] = (c[s] || 0) + 1; });
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [lots, market]);
+  }, [lots, effectiveMarket]);
 
   // art → its mediums (the meaningful cut for that market)
   const categories = useMemo(() => {
-    if (market !== 'art') return [] as [string, number][];
+    if (effectiveMarket !== 'art') return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { if (l.category !== 'unknown' && l.category !== 'object') c[l.category] = (c[l.category] || 0) + 1; });
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
-  }, [lots, market]);
+  }, [lots, effectiveMarket]);
 
   const belowCount = useMemo(
     () => lots.filter(l => belowIds.has(l.id)).length,
@@ -153,22 +158,39 @@ export default function FeedToolbar({
   const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch });
 
   const [catOpen, setCatOpen] = useState(false);
-  // close the category menu on Escape / outside click
+  const catTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [catPos, setCatPos] = useState<{ top: number; left: number } | null>(null);
+  const openCat = () => {
+    const r = catTriggerRef.current?.getBoundingClientRect();
+    if (r) setCatPos({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 240) });
+    setCatOpen(true);
+  };
   useEffect(() => {
     if (!catOpen) return;
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setCatOpen(false); };
-    const click = () => setCatOpen(false);
+    const close = () => setCatOpen(false);
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    // NO scroll-close: it killed the menu the instant anything scrolled an
+    // item into view (keyboard nav, tap-scroll, automation) — the menu is
+    // position:fixed, so a page scroll just leaves it anchored. Escape,
+    // outside-click and resize are the honest dismissals.
     document.addEventListener('keydown', key);
-    document.addEventListener('click', click);
-    return () => { document.removeEventListener('keydown', key); document.removeEventListener('click', click); };
+    document.addEventListener('click', close);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('keydown', key);
+      document.removeEventListener('click', close);
+      window.removeEventListener('resize', close);
+    };
   }, [catOpen]);
-  const catMenu = (
+  // PORTALED to <body>: the toolbar rows scroll and carry a fade mask — an
+  // absolute child in there gets clipped/masked (the original sin of v1).
+  const catMenu = catOpen && catPos && typeof document !== 'undefined' ? createPortal(
     <div
       role="menu"
       aria-label="Categories"
       onClick={e => e.stopPropagation()}
       style={{
-        position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30, minWidth: 210,
+        position: 'fixed', top: catPos.top, left: catPos.left, zIndex: 60, minWidth: 224,
         background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)',
         borderRadius: 10, padding: 6, boxShadow: '0 14px 34px -18px rgba(8,6,3,0.85)',
       }}
@@ -183,7 +205,7 @@ export default function FeedToolbar({
           className="ray-toolbar-pill"
           data-active={filters.vertical === v.key}
           style={{ display: 'flex', width: '100%', justifyContent: 'space-between', marginBottom: 2 }}
-          onClick={() => { set({ vertical: filters.vertical === v.key ? null : v.key }); setCatOpen(false); }}
+          onClick={() => { set({ vertical: filters.vertical === v.key ? null : v.key, maker: null, sport: null, category: null }); setCatOpen(false); }}
         >
           {v.label} <i>{v.n}</i>
         </button>
@@ -193,13 +215,14 @@ export default function FeedToolbar({
           role="menuitem"
           className="ray-toolbar-pill"
           style={{ display: 'flex', width: '100%', justifyContent: 'flex-start', marginTop: 2, color: 'var(--color-text-muted)' }}
-          onClick={() => { set({ vertical: null }); setCatOpen(false); }}
+          onClick={() => { set({ vertical: null, maker: null, sport: null, category: null }); setCatOpen(false); }}
         >
           All categories
         </button>
       )}
-    </div>
-  );
+    </div>,
+    document.body
+  ) : null;
   const isFiltered =
     filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null;
 
@@ -277,10 +300,11 @@ export default function FeedToolbar({
         )}
       </div>
 
-      <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade">
-        {/* The signal leads — the one lens that carries the product's claim.
-            Toggling it on also ranks by the gap (the old FilmStrip's job);
-            toggling it off restores the calendar. */}
+      {/* LEAD ROW — never scrolled, never masked: the signal lens + the
+          category control live here so they are always visible and the
+          portal menu can never be clipped (v1 rendered it inside the masked
+          scroll row — invisible; the trigger also scrolled away on mobile). */}
+      <div className="ray-toolbar-row ray-toolbar-row-lead" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {belowCount > 0 && (
           <>
             <button
@@ -305,53 +329,42 @@ export default function FeedToolbar({
           </>
         )}
 
-        {market !== 'all' && onMarketReset && (
-          <>
-            <button className="ray-toolbar-pill" onClick={onMarketReset}>
-              <Flick size={10} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 5 }} /> Total market
-            </button>
-            <span className="ray-toolbar-divider" aria-hidden="true" />
-          </>
+        {market === 'all' && verticals.length > 0 && filters.vertical == null && (
+          <button
+            ref={catTriggerRef}
+            className="ray-toolbar-pill"
+            aria-haspopup="menu"
+            aria-expanded={catOpen}
+            onClick={e => { e.stopPropagation(); catOpen ? setCatOpen(false) : openCat(); }}
+          >
+            Choose a category <Flick size={10} style={{ transform: 'rotate(90deg)' }} />
+          </button>
         )}
-
-        {/* CATEGORY: a chooser, not a wall of chips. No category picked →
-            one "Choose a category" pill opening a menu; picked → the active
-            chip + a quiet "Change category". When the top pills already chose
-            a vertical (market !== 'all') the verticals list is empty and the
-            "Total market" reset above is the change affordance. */}
-        {verticals.length > 0 && filters.vertical == null && (
-          <span style={{ position: 'relative', display: 'inline-flex' }}>
-            <button
-              className="ray-toolbar-pill"
-              aria-haspopup="menu"
-              aria-expanded={catOpen}
-              onClick={() => setCatOpen(o => !o)}
-            >
-              Choose a category <Flick size={10} style={{ transform: 'rotate(90deg)' }} />
-            </button>
-            {catOpen && catMenu}
-          </span>
-        )}
-        {verticals.length > 0 && filters.vertical != null && (() => {
+        {market === 'all' && filters.vertical != null && (() => {
           const v = verticals.find(x => x.key === filters.vertical);
           return (
-            <span style={{ position: 'relative', display: 'inline-flex', gap: 8 }}>
-              <button
-                className="ray-toolbar-pill"
-                data-active
-                onClick={() => set({ vertical: null })}
-                title="Clear category"
-              >
+            <>
+              <button className="ray-toolbar-pill" data-active onClick={() => set({ vertical: null, maker: null, sport: null, category: null })} title="Clear category">
                 {v ? v.label : filters.vertical} {v && <i>{v.n}</i>}
               </button>
-              <button className="ray-toolbar-pill" aria-haspopup="menu" aria-expanded={catOpen} onClick={() => setCatOpen(o => !o)}>
+              <button ref={catTriggerRef} className="ray-toolbar-pill" aria-haspopup="menu" aria-expanded={catOpen} onClick={e => { e.stopPropagation(); catOpen ? setCatOpen(false) : openCat(); }}>
                 Change category
               </button>
-              {catOpen && catMenu}
-            </span>
+            </>
           );
         })()}
+        {market !== 'all' && onMarketReset && (
+          <button className="ray-toolbar-pill" onClick={onMarketReset}>
+            <Flick size={10} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 5 }} /> Total market
+          </button>
+        )}
+        {catMenu}
+      </div>
 
+      {/* REFINE ROW — only once a category exists (top pills or the chooser):
+          sports / makers / mediums scroll behind the fade as before. */}
+      {(sports.length > 0 || makers.length > 0 || categories.length > 0) && (
+        <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade">
         {sports.map(([sport, n]) => (
           <button
             key={sport}
@@ -387,8 +400,8 @@ export default function FeedToolbar({
             {categoryLabels[cat] || cat} <i>{n}</i>
           </button>
         ))}
-
-      </div>
+        </div>
+      )}
 
       {/* Count + Clear live OUTSIDE the masked scroll row — the fade mask
           must never dissolve the one control that undoes a filter. */}

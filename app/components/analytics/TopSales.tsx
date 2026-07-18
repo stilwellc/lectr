@@ -3,15 +3,16 @@
 import { useMemo, useState } from 'react';
 import { AuctionLot } from '../../types';
 import { formatDate, formatPrice, houseColors, craftTitle, overEstimatePct, toneOf, fmtSignedPct } from '../../utils';
-import { ARTIST_LABEL } from '../../constants';
+import { ARTIST_LABEL, Market } from '../../constants';
 
 interface Props {
   allLots: AuctionLot[];
+  market?: Market;
 }
 
 const COLLAPSED_ROWS = 5;
 
-export default function TopSales({ allLots }: Props) {
+export default function TopSales({ allLots, market }: Props) {
   const [expanded, setExpanded] = useState(false);
   const topSales = useMemo(() => {
     return allLots
@@ -207,6 +208,13 @@ export default function TopSales({ allLots }: Props) {
                       }} />
                       {lot.auctionHouse}
                     </span>
+                    {/* sports market only: which sport the lot belongs to —
+                        one muted word, no chip */}
+                    {market === 'sports' && lot.sport ? (
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 400 }}>
+                        {' '}&middot; {lot.sport}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="ray-top-td ray-top-hide-mobile" style={{
                     textAlign: 'right',

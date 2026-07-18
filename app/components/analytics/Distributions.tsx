@@ -2,29 +2,39 @@
 
 import { useState } from 'react';
 import { AuctionLot, MarketStats } from '../../types';
+import type { Market } from '../../constants';
 import CategoryBreakdown from './CategoryBreakdown';
 import AuctionHouseDistribution from './AuctionHouseDistribution';
 import PriceDistribution from './PriceDistribution';
+import SportBreakdown from './SportBreakdown';
 
-type Tab = 'category' | 'house' | 'price';
+type Tab = 'category' | 'house' | 'price' | 'sport';
 
 const TAB_META: { key: Tab; label: string; sub: string }[] = [
   { key: 'category', label: 'Category', sub: 'Bars = total sales value · dots below = share of lots' },
   { key: 'house', label: 'House', sub: 'Ranked by total sales value' },
   { key: 'price', label: 'Price', sub: 'Sold lots by price bracket' },
+  // sports market only — sold value ranked by sport (realized, no estimates)
+  { key: 'sport', label: 'Sport', sub: 'Sold value ranked by sport' },
 ];
 
 /**
- * Distributions — the three how-the-market-splits charts (category, auction
- * house, price bracket) folded into one section: a small tab row renders one
- * chart at a time instead of stacking three full-height sections.
+ * Distributions — the how-the-market-splits charts (category, auction house,
+ * price bracket — plus sport, on the sports market only) folded into one
+ * section: a small tab row renders one chart at a time instead of stacking
+ * full-height sections.
  */
-export default function Distributions({ allLots, statsByArtist }: {
+export default function Distributions({ allLots, statsByArtist, market }: {
   allLots: AuctionLot[];
   statsByArtist: Record<string, MarketStats>;
+  market?: Market;
 }) {
-  const [tab, setTab] = useState<Tab>('category');
-  const active = TAB_META.find(t => t.key === tab)!;
+  const [rawTab, setTab] = useState<Tab>('category');
+  const tabs = TAB_META.filter(t => t.key !== 'sport' || market === 'sports');
+  // if the market switches away from sports while the Sport tab is up, fall
+  // back to the first tab rather than rendering a blank band
+  const tab: Tab = tabs.some(t => t.key === rawTab) ? rawTab : 'category';
+  const active = tabs.find(t => t.key === tab)!;
 
   return (
     <section className="ray-distributions rail">
@@ -72,7 +82,7 @@ export default function Distributions({ allLots, statsByArtist }: {
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>{active.sub}</p>
         </div>
         <div style={{ display: 'flex', gap: 6 }} role="tablist" aria-label="Distribution view">
-          {TAB_META.map(t => (
+          {tabs.map(t => (
             <button
               key={t.key}
               role="tab"
@@ -90,6 +100,7 @@ export default function Distributions({ allLots, statsByArtist }: {
       {tab === 'category' && <CategoryBreakdown allLots={allLots} embedded />}
       {tab === 'house' && <AuctionHouseDistribution statsByArtist={statsByArtist} embedded />}
       {tab === 'price' && <PriceDistribution allLots={allLots} embedded />}
+      {tab === 'sport' && <SportBreakdown allLots={allLots} />}
     </section>
   );
 }
