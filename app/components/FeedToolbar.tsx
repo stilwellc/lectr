@@ -332,7 +332,7 @@ export default function FeedToolbar({
         {market === 'all' && verticals.length > 0 && filters.vertical == null && (
           <button
             ref={catTriggerRef}
-            className="ray-toolbar-pill"
+            className="ray-toolbar-pill ray-cat-pill-primary"
             aria-haspopup="menu"
             aria-expanded={catOpen}
             onClick={e => { e.stopPropagation(); catOpen ? setCatOpen(false) : openCat(); }}
@@ -347,7 +347,7 @@ export default function FeedToolbar({
               <button className="ray-toolbar-pill" data-active onClick={() => set({ vertical: null, maker: null, sport: null, category: null })} title="Clear category">
                 {v ? v.label : filters.vertical} {v && <i>{v.n}</i>}
               </button>
-              <button ref={catTriggerRef} className="ray-toolbar-pill" aria-haspopup="menu" aria-expanded={catOpen} onClick={e => { e.stopPropagation(); catOpen ? setCatOpen(false) : openCat(); }}>
+              <button ref={catTriggerRef} className="ray-toolbar-pill ray-cat-pill" aria-haspopup="menu" aria-expanded={catOpen} onClick={e => { e.stopPropagation(); catOpen ? setCatOpen(false) : openCat(); }}>
                 Change category
               </button>
             </>

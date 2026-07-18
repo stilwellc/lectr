@@ -3784,3 +3784,18 @@ body {
 /* blog index cards — hairline lift on hover */
 .ray-blog-card { transition: border-color 180ms var(--ease-signature), transform 180ms var(--ease-signature); }
 .ray-blog-card:hover { border-color: var(--color-border-mid); transform: translateY(-1px); }
+
+/* the category control is the accent's job — never one more gray pill */
+.ray-toolbar-pill.ray-cat-pill-primary {
+  background: var(--color-butter);
+  border-color: var(--color-butter);
+  color: var(--color-butter-ink, #1C1712);
+  font-weight: 700;
+}
+.ray-toolbar-pill.ray-cat-pill-primary:hover { filter: brightness(1.04); }
+.ray-toolbar-pill.ray-cat-pill {
+  border-color: color-mix(in srgb, var(--color-butter) 55%, transparent);
+  color: var(--color-butter-text);
+  font-weight: 600;
+}
+.ray-toolbar-pill.ray-cat-pill:hover { border-color: var(--color-butter); }
