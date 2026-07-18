@@ -45,8 +45,8 @@ const POSTS = [
   {
     slug: 'how-we-built-the-pricing-engine',
     date: '2026-07-16',
-    title: 'How we built the pricing engine — and everything it got wrong first',
-    dek: 'Seven thousand replayed auction calls, a buyer’s-premium problem hiding in plain sight, and why our best model is the one that admits what it can’t know.',
+    title: 'The pricing engine, quantitatively',
+    dek: 'The estimator, the gates, the calibration, and the validation protocol — with the formulas, the fitted constants, and the ablations that measured worse.',
   },
 ];
 
