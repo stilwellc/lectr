@@ -6,7 +6,7 @@ import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
-import { pickCall, CallPlate } from '../components/Terminal';
+import { Colophon, pickCall, CallPlate } from '../components/Terminal';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
@@ -17,6 +17,7 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
+import meta from '../../public/data/ray/meta.json';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
@@ -323,7 +324,7 @@ export default function ValuePage() {
                           {ARTIST_LABEL[d.lot.artist] || d.lot.artist}
                         </span>
                         <span className="ray-value-row-title" style={{ display: 'block' }}>
-                          {craftTitle(d.lot.title)} · hammers {formatDate(d.lot.saleDate)}
+                          {craftTitle(d.lot.title)} · {d.lot.saleDate && d.lot.saleDate.slice(0, 10) < new Date().toISOString().slice(0, 10) ? 'hammered' : 'hammers'} {formatDate(d.lot.saleDate)}
                         </span>
                       </span>
                       <span style={{ textAlign: 'right' }}>
@@ -369,6 +370,7 @@ export default function ValuePage() {
           )}
         </RayEntrance>
       )}
+      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
     </div>
   );
 }

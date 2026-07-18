@@ -32,6 +32,7 @@ export default function ArtistHero({
   upcomingCount,
   bidMarket = false,
   market,
+  serial,
 }: {
   label: string;
   stats: MarketStats | null;
@@ -46,6 +47,8 @@ export default function ArtistHero({
   bidMarket?: boolean;
   /** the maker's market — the current-quarter desk-note cross-link */
   market?: Market;
+  /** crawl-day YYYYMMDD for the record card's certificate footer */
+  serial?: string;
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
@@ -296,6 +299,7 @@ export default function ArtistHero({
         style={{ marginTop: 28, border: '1px solid var(--paper-edge)', borderRadius: 12, padding: '18px 20px 12px' }}
       >
         <RecordBand
+          serial={serial}
           title={'The maker’s record'}
           context={label}
           footer="read nightly from the tape"

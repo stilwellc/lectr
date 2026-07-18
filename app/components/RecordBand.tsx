@@ -31,7 +31,9 @@ export default function RecordBand({
   cells: RecordCell[];
   footer?: string;
 }) {
-  const no = serial || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  // no client-clock fallback: an SSG page would mint a build-day serial and
+  // hydrate against a client-day one (React #418/#425). No serial → no line.
+  const no = serial || null;
   return (
     <div className="ray-recband">
       <style>{`

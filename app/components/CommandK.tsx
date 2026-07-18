@@ -68,7 +68,7 @@ export default function CommandK({ upcomingCounts }: { upcomingCounts: Record<st
       ...ARTISTS.map(a => ({
         label: a.label,
         hint: upcomingCounts[a.slug]
-          ? `${a.market} · ${upcomingCounts[a.slug]} live lots`
+          ? `${a.market} · ${upcomingCounts[a.slug]} live ${upcomingCounts[a.slug] === 1 ? 'lot' : 'lots'}`
           : `${a.market} maker`,
         path: `/${a.slug}`,
         kind: 'maker' as const,

@@ -56,7 +56,7 @@ export default function ApprBarometer({
 
   const up = value >= 0;
   const heat = up ? 'var(--paper-up)' : 'var(--paper-down)';
-  const serialText = `no. ${serial || new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+  const serialText = serial ? `no. ${serial}` : '';
   const swing = 'transform 1100ms cubic-bezier(0.22, 0.9, 0.24, 1)';
   const rad = (deg: number) => ((deg - 90) * Math.PI) / 180;
 

@@ -7,6 +7,7 @@ import { useRayData } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
+import { Colophon } from '../components/Terminal';
 import LotCard, { lotSignal } from '../components/LotCard';
 import { appraiseLot, soldCompBand, isSportsScienceObject } from '../lib/comps';
 import PastResults from '../components/PastResults';
@@ -14,6 +15,7 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
+import meta from '../../public/data/ray/meta.json';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct } from '../utils';
 import { ARTIST_LABEL } from '../constants';
 
@@ -493,6 +495,7 @@ export default function SavedPage() {
           )}
         </RayEntrance>
       )}
+      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
     </div>
   );
 }

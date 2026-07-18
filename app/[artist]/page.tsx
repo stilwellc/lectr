@@ -227,7 +227,7 @@ export default function ArtistDetailPage() {
                 <MarketSwitch compact />
               </div>
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-                <ArtistHero label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
+                <ArtistHero serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined} label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
               </div>
             </RayEntrance>
           )}
@@ -235,6 +235,7 @@ export default function ArtistDetailPage() {
           {isArchiveMaker ? (
             <ArchiveMakerBody
               slug={slug}
+              serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined}
               label={label}
               stats={stats}
               phaseLots={lots}
@@ -288,6 +289,7 @@ export default function ArtistDetailPage() {
 // archiveError-retry until then, mirroring the phase-2 fullError pattern).
 function ArchiveMakerBody({
   slug,
+  serial,
   label,
   stats,
   phaseLots,
@@ -301,6 +303,7 @@ function ArchiveMakerBody({
   fromCache,
 }: {
   slug: string;
+  serial?: string;
   label: string;
   stats: MarketStats | null;
   phaseLots: AuctionLot[];
@@ -329,7 +332,7 @@ function ArchiveMakerBody({
           <MarketSwitch compact />
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-          <ArtistHero label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
+          <ArtistHero serial={serial} label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
         </div>
       </RayEntrance>
 
