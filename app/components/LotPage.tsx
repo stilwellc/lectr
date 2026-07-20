@@ -252,7 +252,30 @@ export default function LotPage({ lotId, initialLot }: {
   const [archive, setArchive] = useState<{ soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }>({
     soldArchive: [], archiveLoaded: false, archiveError: false,
   });
-  const preResolved = live || initialLot || null;
+  // Phase-2 permalink fast path — one indexed row from the Supabase lots
+  // table resolves the certificate in ~1KB instead of waiting on the 25MB
+  // shard stream. It is also the long memory: rows are upserted nightly and
+  // never deleted, so a permalink keeps resolving after the lot rolls off
+  // the tape. Live shard data supersedes it the moment it arrives.
+  const [dbLot, setDbLot] = useState<AuctionLot | null>(null);
+  const [dbSettled, setDbSettled] = useState(false);
+  useEffect(() => {
+    const dbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const dbAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!lotId || !dbUrl || !dbAnon || live || initialLot) { setDbSettled(true); return; }
+    let dead = false;
+    fetch(`${dbUrl}/rest/v1/lots?id=eq.${encodeURIComponent(lotId)}&select=data`, {
+      headers: { apikey: dbAnon, Authorization: `Bearer ${dbAnon}` },
+    })
+      .then(r => (r.ok ? r.json() : []))
+      .then(rows => { if (!dead && rows?.[0]?.data) setDbLot(rows[0].data as AuctionLot); })
+      .catch(() => { /* shards remain the resolution path */ })
+      .finally(() => { if (!dead) setDbSettled(true); });
+    return () => { dead = true; };
+    // one shot per id on mount — live/initialLot arriving later is fine, they win below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotId]);
+  const preResolved = live || initialLot || dbLot || null;
   const isGoldinId = lotId.startsWith('goldin');
   const wantsArchive =
     (!!preResolved && isSportsScienceObject(preResolved)) ||
@@ -326,7 +349,7 @@ export default function LotPage({ lotId, initialLot }: {
   if (!lot) {
     const mainSettled = fullLoaded || fullError;
     const archiveSettled = !isGoldinId || archive.archiveLoaded || archive.archiveError;
-    const settled = !lotId || (!loading && mainSettled && archiveSettled);
+    const settled = !lotId || (!loading && mainSettled && archiveSettled && dbSettled);
     return (
       <>
         <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />

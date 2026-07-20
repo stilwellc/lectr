@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "crawl": "tsx scripts/ray-crawl.ts",
-    "build-og": "tsx scripts/build-og.tsx"
+    "build-og": "tsx scripts/build-og.tsx",
+    "data:pull": "bash scripts/data-store.sh pull",
+    "data:push": "bash scripts/data-store.sh push"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.5",

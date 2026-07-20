@@ -33,6 +33,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # R2 is the data store of record (bucket lectr-data). Pull the previous
+      # corpus so enrichment/firstSeen/bid history carry forward — the guard
+      # inside data-store.sh keeps whichever copy (git checkout vs R2) is
+      # newer, so this is safe during the git→R2 transition.
+      - name: Pull previous data from R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull
+
       - name: Run crawler
         run: npx tsx scripts/ray-crawl.ts
 
@@ -44,6 +54,26 @@ jobs:
 
       - name: Rebuild the point-in-time backtest
         run: npx tsx scripts/build-backtest.ts
+
+      # Publish the night's data to R2 (latest + dated corpus snapshot).
+      # WARN-only while the CI token is still Pages-scoped — once it carries
+      # R2 Edit and a green run lands, the git commit below gets removed and
+      # this becomes the sole publish path (fail loud then).
+      - name: Push data to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bash scripts/data-store.sh push || \
+            echo "::warning::R2 push failed — the CI token likely lacks Workers R2 Storage: Edit. Data shipped via git this run."
+
+      # Mirror the corpus into the Supabase lots table (permalink fast path).
+      # Skips silently when the secrets are absent; the site works off shards.
+      - name: Sync lots table
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: npx tsx scripts/sync-lots-db.ts
 
       - name: Commit updated data
         run: |
