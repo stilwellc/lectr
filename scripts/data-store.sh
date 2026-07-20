@@ -48,6 +48,25 @@ TOKEN=$(token)
 obj_get() { # key -> file; returns curl's exit, 404 leaves empty file + rc 22
   curl -sf -H "Authorization: Bearer $TOKEN" "$API/$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$1")" -o "$2"
 }
+listed_etag() { # authoritative etag from the bucket listing (fresh even when GET lags)
+  curl -sf -H "Authorization: Bearer $TOKEN" "$API?prefix=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$1")" \
+    | python3 -c "import json,sys;objs=json.load(sys.stdin).get('result',[]);print(next((o['etag'].strip('\"') for o in objs if o.get('key')==sys.argv[1]),''))" "$1" 2>/dev/null || true
+}
+obj_get_fresh() { # key file — GET, and retry briefly if the read lags the listed etag.
+  # The R2 API GET path was observed serving a pre-overwrite object for many
+  # minutes after a same-key overwrite. Steady state is one overwrite a day so
+  # this rarely fires, but when it does the warning names the regression.
+  local key="$1" file="$2" want have
+  want=$(listed_etag "$key")
+  for attempt in 1 2 3; do
+    obj_get "$key" "$file" || return $?
+    have=$(md5 -q "$file" 2>/dev/null || md5sum "$file" | cut -d' ' -f1)
+    { [ -z "$want" ] || [ "$have" = "$want" ]; } && return 0
+    sleep 15
+  done
+  echo "[data-store] WARNING: read of $key is STALE (etag $have, bucket says $want) — using it anyway; freshness guard decides"
+  return 0
+}
 obj_put() { # key file — upload, then verify the returned etag against local md5
   local key="$1" file="$2" enc
   enc=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$key")
@@ -69,7 +88,7 @@ stamp_of() { # lastCrawl out of a meta.json, empty if unreadable
 }
 
 pull() {
-  if ! obj_get "latest/served.tar.gz" "$TMP/served.tar.gz"; then
+  if ! obj_get_fresh "latest/served.tar.gz" "$TMP/served.tar.gz"; then
     if [ -f public/data/ray/meta.json ]; then
       echo "[data-store] R2 unreachable — keeping local copy"
       return 0
@@ -89,7 +108,7 @@ pull() {
   rm -rf public/data/ray && mkdir -p public/data/ray
   cp -R "$TMP/served/." public/data/ray/
   echo "[data-store] served payloads pulled from R2 (lastCrawl $remote)"
-  if obj_get "latest/corpus.tar" "$TMP/corpus.tar"; then
+  if obj_get_fresh "latest/corpus.tar" "$TMP/corpus.tar"; then
     mkdir -p data/corpus
     tar -xf "$TMP/corpus.tar" -C data/corpus
     echo "[data-store] corpus pulled from R2"
