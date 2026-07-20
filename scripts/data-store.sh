@@ -10,24 +10,66 @@
 #   latest/served.tar.gz   public/data/ray/ (the client payloads, whole dir)
 #   snapshots/YYYYMMDD/corpus.tar   daily corpus snapshot (30-day lifecycle)
 #
-# Freshness guard: pull compares meta.json lastCrawl and refuses to overwrite
-# newer local data with older R2 data (protects the dual-write transition,
-# where a git checkout can be ahead of R2 if a push failed).
+# Talks to the R2 REST API directly with curl — NOT `wrangler r2 object`,
+# which was observed (wrangler 4.112) serving stale reads on overwritten
+# keys. Every PUT is verified by comparing the etag the API returns against
+# the local md5 (etag == md5 for single-part uploads), so a silent store
+# failure cannot pass. NOTE: the GET endpoint can lag a write by a few
+# minutes on overwritten keys — harmless at nightly cadence, and the pull
+# freshness guard keeps a stale read from ever regressing local data.
 #
-# Auth: local = wrangler OAuth; CI = CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
-# (the token needs Account → Workers R2 Storage → Edit).
+# Freshness guard: pull compares meta.json lastCrawl and refuses to
+# overwrite newer local data with older R2 data.
+#
+# Auth: CI = CLOUDFLARE_API_TOKEN (needs Account → Workers R2 Storage → Edit);
+# local = wrangler's OAuth token read from its config (refresh with any
+# wrangler command, e.g. `npx wrangler whoami`, if it has gone stale).
 set -euo pipefail
 BUCKET=lectr-data
+ACCOUNT=${CLOUDFLARE_ACCOUNT_ID:-5bcc5f43136c9ba6b6cb7f949813f473}
+API="https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/r2/buckets/$BUCKET/objects"
 cd "$(dirname "$0")/.."
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+
+token() {
+  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then echo "$CLOUDFLARE_API_TOKEN"; return; fi
+  python3 - <<'EOF'
+import re, glob, os
+home = os.path.expanduser('~')
+for p in glob.glob(home+'/Library/Preferences/.wrangler/config/*.toml') + glob.glob(home+'/.wrangler/config/*.toml') + glob.glob(home+'/.config/.wrangler/config/*.toml'):
+    m = re.search(r'oauth_token\s*=\s*"([^"]+)"', open(p).read())
+    if m: print(m.group(1)); raise SystemExit
+raise SystemExit('no Cloudflare credentials: set CLOUDFLARE_API_TOKEN or log in with `npx wrangler login`')
+EOF
+}
+TOKEN=$(token)
+
+obj_get() { # key -> file; returns curl's exit, 404 leaves empty file + rc 22
+  curl -sf -H "Authorization: Bearer $TOKEN" "$API/$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$1")" -o "$2"
+}
+obj_put() { # key file — upload, then verify the returned etag against local md5
+  local key="$1" file="$2" enc
+  enc=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$key")
+  local resp
+  resp=$(curl -sf -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary "@$file" "$API/$enc") \
+    || { echo "[data-store] PUT $key failed"; return 1; }
+  echo "$resp" | grep -q '"success": *true' || { echo "[data-store] PUT $key rejected: $(echo "$resp" | head -c 200)"; return 1; }
+  local up etag
+  up=$(md5 -q "$file" 2>/dev/null || md5sum "$file" | cut -d' ' -f1)
+  etag=$(echo "$resp" | python3 -c "import json,sys;print(json.load(sys.stdin).get('result',{}).get('etag','').strip('\"'))" 2>/dev/null || true)
+  if [ -n "$etag" ] && [ "$etag" != "$up" ]; then
+    echo "[data-store] ETAG MISMATCH on $key (local $up, stored $etag) — store is inconsistent"; return 1
+  fi
+  echo "[data-store] $key ✓ ($(wc -c < "$file" | tr -d ' ') bytes, etag ${etag:-unverified})"
+}
 
 stamp_of() { # lastCrawl out of a meta.json, empty if unreadable
   python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('lastCrawl',''))" "$1" 2>/dev/null || true
 }
 
 pull() {
-  if ! npx wrangler r2 object get "$BUCKET/latest/served.tar.gz" --file "$TMP/served.tar.gz" --remote 2>/dev/null; then
+  if ! obj_get "latest/served.tar.gz" "$TMP/served.tar.gz"; then
     echo "[data-store] no served payloads in R2 (or no access) — keeping local copy"
     return 0
   fi
@@ -41,7 +83,7 @@ pull() {
   rm -rf public/data/ray && mkdir -p public/data/ray
   cp -R "$TMP/served/." public/data/ray/
   echo "[data-store] served payloads pulled from R2 (lastCrawl $remote)"
-  if npx wrangler r2 object get "$BUCKET/latest/corpus.tar" --file "$TMP/corpus.tar" --remote 2>/dev/null; then
+  if obj_get "latest/corpus.tar" "$TMP/corpus.tar"; then
     mkdir -p data/corpus
     tar -xf "$TMP/corpus.tar" -C data/corpus
     echo "[data-store] corpus pulled from R2"
@@ -56,12 +98,12 @@ push() {
   # corpus members are already gzipped — plain tar, no double compression
   (cd data/corpus && tar -cf "$TMP/corpus.tar" ./*.json.gz)
   (cd public/data/ray && tar -czf "$TMP/served.tar.gz" .)
-  npx wrangler r2 object put "$BUCKET/latest/corpus.tar" --file "$TMP/corpus.tar" --remote
-  npx wrangler r2 object put "$BUCKET/latest/served.tar.gz" --file "$TMP/served.tar.gz" --remote
+  obj_put "latest/corpus.tar" "$TMP/corpus.tar"
+  obj_put "latest/served.tar.gz" "$TMP/served.tar.gz"
   # dated corpus snapshot — the rollback ladder (replaces git history for data)
   day=$(stamp_of public/data/ray/meta.json | cut -c1-10 | tr -d '-')
   [ -n "$day" ] || day=$(date -u +%Y%m%d)
-  npx wrangler r2 object put "$BUCKET/snapshots/$day/corpus.tar" --file "$TMP/corpus.tar" --remote
+  obj_put "snapshots/$day/corpus.tar" "$TMP/corpus.tar"
   echo "[data-store] pushed latest + snapshot $day"
 }
 
