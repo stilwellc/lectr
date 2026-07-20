@@ -175,7 +175,7 @@ export function estimateValue(
     const ageYears = Math.max(0, (refMs - t) / 31_557_600_000);
     return Math.pow(0.5, ageYears / halflife);
   };
-  const compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
+  let compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
   // Displayed band widened to q0.15..q0.85 (lerp) so it honestly covers ~50% of
   // realized outcomes; the round q1..q3 only covered ~37% and mislabeled the
@@ -197,16 +197,6 @@ export function estimateValue(
   // a relaxed-gate pool never claims the top tier
   if (tier === 'fallback' && confidence === 'high') confidence = 'medium';
 
-  // SPLIT-CONFORMAL band (when calibration is loaded): compValue × the
-  // per-tier 15/85 quantiles of realized/compValue from the holdout — an
-  // honest ~70% outcome band (the comp-price quantile band only covered
-  // ~42-51%, and "high" confidence was the LEAST honest at 41.8%).
-  let bandLow = low, bandHigh = high;
-  const bandCal = CAL?.band?.[confidence];
-  if (bandCal && compValueUsd > 0) {
-    bandLow = compValueUsd * bandCal.lo;
-    bandHigh = compValueUsd * bandCal.hi;
-  }
 
   // strongest identity match → "this exact item sold for $Z"
   const exactC = top.find(c => c.match.cls === 'physicalMatch') || top.find(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
@@ -219,6 +209,22 @@ export function estimateValue(
   let compRatio: number | null = null;
   if (estMid && estMid > 0) {
     compRatio = compValueUsd / estMid;
+    // EXACT-MATCH CONSISTENCY GUARD (holdout-validated ADOPT): an extreme
+    // ratio that contradicts the lot's own strongest evidence — an exact comp
+    // realized inside the estimate band — is comp-pool pollution, not alpha.
+    // Recompute from the exact-class comps only; cap confidence at medium.
+    // Fired cohort measured unflagged-like (+16%/−7% hammer, 52% beat); the
+    // base compValue was 7.3× high vs 0.87 after. Edge 20.4→20.6pt, art +0.8.
+    if (compRatio > 5 && exactC
+        && exactC.realizedUsd >= 0.5 * lot.estLowUsd! && exactC.realizedUsd <= 2 * lot.estHighUsd!) {
+      const exactPool = top.filter(c => c.match.cls === 'physicalMatch'
+        || (c.match.cls === 'modelMatch' && c.match.cosine >= 0.92));
+      if (exactPool.length) {
+        compValueUsd = weightedMedian(exactPool.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
+        compRatio = compValueUsd / estMid;
+        if (confidence === 'high') confidence = 'medium';
+      }
+    }
     const br = beatRate(compRatio, CAL?.marketBySlug?.[lot.artist]);
     const label = compRatio >= 1.3 ? 'below comparable market'      // lot priced under where comps trade → likely undervalued
       : compRatio <= 0.75 ? 'above comparable market'
@@ -226,6 +232,17 @@ export function estimateValue(
     const strength = compRatio >= 2 || compRatio <= 0.55 ? 'strong'
       : compRatio >= 1.3 || compRatio <= 0.75 ? 'moderate' : 'slight';
     signal = { label, strength, beatRatePct: br };
+  }
+
+  // SPLIT-CONFORMAL band (when calibration is loaded): compValue × the
+  // per-tier 15/85 quantiles of realized/compValue from the holdout — an
+  // honest ~70% outcome band (the comp-price quantile band only covered
+  // ~42-51%, and "high" confidence was the LEAST honest at 41.8%).
+  let bandLow = low, bandHigh = high;
+  const bandCal = CAL?.band?.[confidence];
+  if (bandCal && compValueUsd > 0) {
+    bandLow = compValueUsd * bandCal.lo;
+    bandHigh = compValueUsd * bandCal.hi;
   }
 
   // ABSOLUTE value (Goldin / no estimate) + under/over vs live bid

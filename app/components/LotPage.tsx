@@ -1,0 +1,570 @@
+'use client';
+
+import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import type { AuctionLot } from '../types';
+import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
+import { useRayData, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
+import { useSavedLots } from '../hooks/useSavedLots';
+import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors } from '../utils';
+import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude } from '../lib/comps';
+import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
+import { daysWord, Colophon } from './Terminal';
+import ArtistNav from './ArtistNav';
+import Flick from './Flick';
+
+/**
+ * LotPage — one lot as a CATALOGUE PAGE in the certificate language: the
+ * matted photograph plate (monogram fallback, CallPlate's pattern) beside a
+ * ruled certificate column — microcap kicker, title, dotted-leader rows, the
+ * comp pool as compact ledger rows, and the CTA row (view at house / save /
+ * copy permalink). Serves BOTH permalink shapes:
+ *   /lot?id=<id>        — universal client resolution from the served data
+ *   /lot/<id> (static)  — the flagged set, prerendered with initialLot so the
+ *                         first paint (and the crawler) sees real content.
+ * Sold lots print the realized price, never ask-forward framing; lots past
+ * their hammer with no result say "results pending".
+ */
+
+/* The copy button styles itself (id-guarded head injection, LotCard's
+   pattern) — it mounts inside ComparableModal too, where LOTPAGE_CSS never
+   renders. Also concatenated into LOTPAGE_CSS so the prerendered flagged
+   pages carry it in their first HTML. */
+const COPY_BTN_STYLE_ID = 'lectr-lot-copy-style';
+const COPY_BTN_CSS = `
+.lectr-lot-copy{display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid var(--color-butter-deep);color:var(--color-butter-text);border-radius:12px;padding:10px 18px;font-family:var(--font-sans);font-size:13.5px;font-weight:600;letter-spacing:-0.01em;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
+.lectr-lot-copy:hover{background:var(--color-butter-subtle)}
+.lectr-lot-copy[data-copied=true]{background:var(--color-butter-subtle);color:var(--color-butter)}
+`;
+
+/* The catalogue-page layout. Injected via dangerouslySetInnerHTML — raw-text
+   <style> children with quotes break hydration on prerendered pages
+   (see RecordBand/ComparableModal); __html serializes raw, deterministic. */
+const LOTPAGE_CSS = COPY_BTN_CSS + `
+.lectr-lot{padding-block:26px 64px}
+.lectr-lot-grid{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr);column-gap:44px;row-gap:26px;align-items:start}
+.lectr-lot-head{position:relative;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:12px}
+.lectr-lot-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
+.lectr-lot-head .no{color:var(--color-text-muted);font-weight:600;font-variant-numeric:tabular-nums}
+.lectr-lot-title{font-size:clamp(24px,3.4vw,34px);font-weight:650;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0 0 4px}
+.lectr-lot-medium{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:2px 0 0}
+.lectr-lot-leaders{margin-top:16px;border-top:1px solid var(--hairline);padding-top:4px}
+.lectr-lot-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
+.lectr-lot-k{color:var(--color-text-muted)}
+.lectr-lot-fill{flex:1;border-bottom:1px dotted rgba(242,238,227,0.2);transform:translateY(-3px)}
+.lectr-lot-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-lot-v.up{color:var(--color-up)}
+.lectr-lot-v.down{color:var(--color-down)}
+.lectr-lot-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
+.lectr-lot-dots{font-size:8.5px;letter-spacing:1px;color:var(--color-butter);margin-right:7px}
+.lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
+.lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(242,238,227,0.28) 4px,rgba(242,238,227,0.28) 5px)}
+.lectr-lot-monoglyph{font-size:64px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
+.lectr-lot .ray-plate-mat{padding:18px;margin-bottom:0}
+.lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
+.lectr-lot .ray-plate-img img{object-fit:contain}
+.lectr-lot .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11px;color:var(--color-text-muted);text-align:left}
+.lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--hairline)}
+.lectr-lot-comps{margin-top:44px}
+.lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
+.lectr-lot-comps-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
+.lectr-lot-comps-head .ctx{color:var(--color-text-muted);font-weight:600}
+.lectr-lot-comp{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--hairline-soft);text-decoration:none;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
+.lectr-lot-comp:hover{background:var(--color-hover-item)}
+.lectr-lot-comp-i{font-size:12px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;width:18px;text-align:right;flex-shrink:0}
+.lectr-lot-comp-thumb{width:40px;height:40px;flex-shrink:0;position:relative;overflow:hidden;background:var(--color-bg-elevated);outline:1px solid rgba(242,238,227,0.1);outline-offset:-1px;display:flex;align-items:center;justify-content:center}
+.lectr-lot-comp-thumb span{font-size:16px;font-weight:600;color:var(--color-text-faint)}
+.lectr-lot-comp-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lectr-lot-comp-t{flex:1;min-width:0}
+.lectr-lot-comp-title{font-size:13.5px;font-weight:600;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lectr-lot-comp-meta{font-size:11.5px;color:var(--color-text-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lectr-lot-comp-p{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);flex-shrink:0}
+.lectr-lot-quiet{padding:34px 0;text-align:center;color:var(--color-text-faint);font-size:13px}
+.lectr-lot-skel{border-top:1px solid var(--hairline);height:0}
+.lectr-lot-skel-block{background:var(--color-bg-elevated);border-radius:4px}
+@media (prefers-reduced-motion: no-preference){
+  .lectr-lot-skel-block{animation:lectrLotPulse 1.4s ease-in-out infinite}
+  @keyframes lectrLotPulse{0%,100%{opacity:1}50%{opacity:0.45}}
+}
+.lectr-lot-noimg .ray-plate-img{height:220px}
+@media (max-width:899px){
+  .lectr-lot{padding-block-start:14px}
+  .lectr-lot-grid{grid-template-columns:1fr}
+  .lectr-lot .ray-plate-img{height:240px}
+  .lectr-lot-noimg .ray-plate-img{height:160px}
+  .lectr-lot-monoglyph{font-size:44px}
+}
+`;
+
+const SITE = 'https://lectr.bid';
+export function lotPermalink(id: string): string {
+  return `${SITE}/lot?id=${encodeURIComponent(id)}`;
+}
+
+/** The share affordance: copies the universal permalink, confirms for 1.5s.
+    Butter outline — the accent family, never green/red. */
+export function CopyLinkButton({ id, style }: { id: string; style?: React.CSSProperties }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | null>(null);
+  useInsertionEffect(() => {
+    if (document.getElementById(COPY_BTN_STYLE_ID)) return;
+    const el = document.createElement('style');
+    el.id = COPY_BTN_STYLE_ID;
+    el.textContent = COPY_BTN_CSS;
+    document.head.appendChild(el);
+  }, []);
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+
+  const onCopy = async () => {
+    const url = lotPermalink(id);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // clipboard API denied (http, permissions) — the textarea fallback
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* nothing left to try */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <button type="button" className="lectr-lot-copy" data-copied={copied} onClick={onCopy} style={style} aria-live="polite">
+      {copied ? (
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      ) : (
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M5.75 8.25a2.5 2.5 0 003.54 0l2.5-2.5a2.5 2.5 0 10-3.54-3.54l-1 1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <path d="M8.25 5.75a2.5 2.5 0 00-3.54 0l-2.5 2.5a2.5 2.5 0 103.54 3.54l1-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      )}
+      {copied ? 'Copied' : 'Copy link'}
+    </button>
+  );
+}
+
+/** One dotted-leader certificate row: label — dotted fill — value. */
+function LeaderRow({ k, v, tone, sub, children }: {
+  k: string; v?: string; tone?: 'up' | 'down'; sub?: string; children?: React.ReactNode;
+}) {
+  return (
+    <div className="lectr-lot-row">
+      <span className="lectr-lot-k">{k}</span>
+      <span className="lectr-lot-fill" aria-hidden />
+      {sub && <span className="lectr-lot-sub">{sub}</span>}
+      <span className={`lectr-lot-v${tone ? ` ${tone}` : ''}`}>{children ?? v}</span>
+    </div>
+  );
+}
+
+/** The phase-3 trigger, isolated so only Goldin-sports/science needs mount it
+    (useSoldArchive fetches on mount by contract — the 10MB tier must never
+    ride along on an art lot's permalink). Renders nothing. */
+function ArchiveProbe({ onState }: {
+  onState: (s: { soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }) => void;
+}) {
+  const { soldArchive, archiveLoaded, archiveError } = useSoldArchive();
+  useEffect(() => {
+    onState({ soldArchive, archiveLoaded, archiveError });
+  }, [soldArchive, archiveLoaded, archiveError, onState]);
+  return null;
+}
+
+/** The loading state — a certificate-shaped skeleton, no spinners. Also the
+    Suspense fallback for the query route. */
+export function LotPageSkeleton() {
+  return (
+    <div className="lectr-lot rail" aria-busy="true" aria-label="Loading lot">
+      <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
+      <div className="lectr-lot-grid" style={{ paddingTop: 12 }}>
+        <div className="ray-plate-mat">
+          <div className="ray-plate-img lectr-lot-skel-block" />
+          <div className="ray-plate-cap"><span className="lectr-lot-skel-block" style={{ display: 'inline-block', width: 180, height: 10 }} /></div>
+        </div>
+        <div>
+          <div className="lectr-lot-head"><span className="lectr-lot-skel-block" style={{ width: 190, height: 10 }} /></div>
+          <div className="lectr-lot-skel-block" style={{ width: '70%', height: 30, marginBottom: 10 }} />
+          <div className="lectr-lot-leaders">
+            {[0, 1, 2, 3, 4].map(i => (
+              <div key={i} className="lectr-lot-row">
+                <span className="lectr-lot-skel-block" style={{ width: 74, height: 12 }} />
+                <span className="lectr-lot-fill" aria-hidden />
+                <span className="lectr-lot-skel-block" style={{ width: 96, height: 12 }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotOnTheBook({ id }: { id: string }) {
+  return (
+    <div className="lectr-lot rail" style={{ paddingTop: 60, paddingBottom: 100, textAlign: 'center' }}>
+      <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-text-faint)', marginBottom: 14, fontVariantNumeric: 'tabular-nums' }}>
+        {id ? `no. ${id}` : 'no lot number'}
+      </div>
+      <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 650, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
+        This lot isn&rsquo;t on the book
+      </h1>
+      <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', maxWidth: 420, margin: '0 auto 26px', lineHeight: 1.55 }}>
+        It may have left the tape — concluded sales roll off as the crawl moves on — or the link may be misprinted.
+      </p>
+      <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none' }}>
+        Back to the tape <Flick size={11} />
+      </Link>
+    </div>
+  );
+}
+
+export default function LotPage({ lotId, initialLot }: {
+  lotId: string;
+  /** the build-time lot for the static flagged set — first paint is instant
+      and the crawler sees real content; live data supersedes it on arrival */
+  initialLot?: AuctionLot | null;
+}) {
+  const { allLots, loading, fullLoaded, fullError, lastCrawl } = useRayData();
+  const { savedIds, isSaved, toggle } = useSavedLots();
+  // Date.now() lives behind mount so SSG HTML (built on another day) never
+  // hydrates against a different "in Nd" string.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const live = useMemo(() => allLots.find(l => l.id === lotId) || null, [allLots, lotId]);
+
+  // Phase-3 sold-archive tier (10MB, Goldin) — mounted ONLY when this page can
+  // actually need it: a resolved sports/science object (band pool) or an
+  // unresolved goldin-* id after the main corpus finished (sports sold lots
+  // live nowhere else). Every archive id is goldin-*, so a fake art id never
+  // pays the download to learn it's fake.
+  const [archive, setArchive] = useState<{ soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }>({
+    soldArchive: [], archiveLoaded: false, archiveError: false,
+  });
+  const preResolved = live || initialLot || null;
+  const isGoldinId = lotId.startsWith('goldin');
+  const wantsArchive =
+    (!!preResolved && isSportsScienceObject(preResolved)) ||
+    (!preResolved && isGoldinId && (fullLoaded || fullError));
+  const archiveLot = useMemo(
+    () => (!preResolved && archive.archiveLoaded ? archive.soldArchive.find(l => l.id === lotId) || null : null),
+    [preResolved, archive.archiveLoaded, archive.soldArchive, lotId],
+  );
+  const lot = preResolved || archiveLot;
+
+  // set the tab title on the query route (the static set gets real metadata)
+  useEffect(() => {
+    if (lot) document.title = `${craftTitle(lot.title)} — lectr`;
+  }, [lot]);
+
+  const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  const houseCount = useMemo(() => new Set(allLots.map(l => l.auctionHouse)).size, [allLots]);
+
+  // ── the certificate's numbers ─────────────────────────────────────────
+  const isUpcoming = lot?.status === 'upcoming';
+  const todayIso = (lastCrawl || (mounted ? new Date().toISOString() : '')).slice(0, 10);
+  const isPastPending = !!lot && isUpcoming && !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso;
+
+  // the number every card shows: crawl-time signal first, client compute after
+  const sig = useMemo(() => (lot && isUpcoming ? lotSignal(lot, allLots) : null), [lot, allLots, isUpcoming]);
+
+  // the comp pool behind the rows — the ENGINE's pool when it made the call
+  // (same doctrine as ComparableModal: one lot, one statistic), else the
+  // client read; sports/science objects get the descriptive realized band.
+  const bandPoolLots = useMemo(
+    () => (archive.archiveLoaded && archive.soldArchive.length ? [...allLots, ...archive.soldArchive] : allLots),
+    [allLots, archive.archiveLoaded, archive.soldArchive],
+  );
+  const band = useMemo(
+    () => (lot && isSportsScienceObject(lot) ? soldCompBand(lot, bandPoolLots) : null),
+    [lot, bandPoolLots],
+  );
+  const called = useMemo(() => {
+    if (!lot || band) return null;
+    const ev = lot.value;
+    if (ev && ev.signal && ev.compRatio != null && !ev.signal.label.startsWith('at')) {
+      const byId = new Map(allLots.map(l => [l.id, l]));
+      const pool = (ev.poolIds || []).map(id => byId.get(id)).filter((x): x is AuctionLot => !!x);
+      if (pool.length) return { pool, n: ev.n || pool.length, med: ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
+    }
+    const read = signalWithPool(lot, allLots);
+    return read ? { pool: read.pool, n: read.pool.length, med: read.signal.med, form: read.signal.form as string, kind: read.signal.kind } : null;
+  }, [lot, allLots, band]);
+
+  const compRows = useMemo(() => {
+    const pool = band ? band.pool : called ? called.pool : [];
+    return [...pool]
+      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+      .slice(0, 12);
+  }, [band, called]);
+
+  // Comps median: the signal's own median first (crawl-time signals carry it),
+  // else the appraisal through the same pools, else the realized band.
+  const compsMed = useMemo(() => {
+    if (!lot) return null;
+    const sigMed = (sig as (NonNullable<typeof sig> & { med?: number }) | null)?.med;
+    if (sigMed != null) return sigMed;
+    if (called?.med != null) return called.med;
+    if (band) return band.median;
+    if (fullLoaded) return appraiseLot(lot, allLots)?.value ?? null;
+    return null;
+  }, [lot, sig, called, band, fullLoaded, allLots]);
+  const compsN = sig?.basis ?? (band ? band.n : called?.n) ?? null;
+
+  // ── resolution states ─────────────────────────────────────────────────
+  if (!lot) {
+    const mainSettled = fullLoaded || fullError;
+    const archiveSettled = !isGoldinId || archive.archiveLoaded || archive.archiveError;
+    const settled = !lotId || (!loading && mainSettled && archiveSettled);
+    return (
+      <>
+        <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+        {wantsArchive && <ArchiveProbe onState={setArchive} />}
+        {settled ? (
+          <>
+            <NotOnTheBook id={lotId} />
+            {(fullError || archive.archiveError) && lotId && (
+              <div className="rail" style={{ textAlign: 'center', paddingBottom: 60, marginTop: -60 }}>
+                <button
+                  className="ray-call-btn ray-call-btn-quiet"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    if (fullError) retryFullLoad();
+                    if (archive.archiveError) { setArchive(a => ({ ...a, archiveError: false })); retryArchiveLoad(); }
+                  }}
+                >
+                  Part of the book didn&rsquo;t load — try again
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <LotPageSkeleton />
+        )}
+      </>
+    );
+  }
+
+  // ── the catalogue page ────────────────────────────────────────────────
+  const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
+  const marketKey = ARTIST_MARKET[lot.artist];
+  const marketLabel = MARKETS.find(m => m.key === marketKey)?.label || null;
+  const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title).charAt(0) || '?').toUpperCase();
+  const imgOk = !!lot.imageUrl && !imgFailed;
+  const saved = isSaved(lot.id);
+  const isSold = lot.status === 'sold' || lot.status === 'bought_in';
+  const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
+  const beatRate = lot.value?.signal?.beatRatePct ?? null;
+  const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
+  const formLabel = (band && ((FORM_LABEL as Record<string, string>)[band.form] || band.form))
+    || (called?.form && (FORM_LABEL as Record<string, string>)[called.form])
+    || 'sales';
+  const compsPending = !band && !called && !fullLoaded && !fullError;
+
+  return (
+    <>
+      <ArtistNav activeSlug={lot.artist in ARTIST_LABEL ? lot.artist : null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+      {wantsArchive && <ArchiveProbe onState={setArchive} />}
+      <div className="lectr-lot rail">
+        <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
+
+        <div className="lectr-lot-grid" style={{ paddingTop: 12 }}>
+          {/* the plate: photograph on the elevated mat — or the monogram when
+              the house blocks the hotlink (CallPlate's exact fallback) */}
+          <figure className={`ray-plate-mat${imgOk ? '' : ' lectr-lot-noimg'}`} style={{ margin: 0 }}>
+            {imgOk ? (
+              <div className="ray-plate-img">
+                <img
+                  src={httpsImg(lot.imageUrl)}
+                  alt={craftTitle(lot.title)}
+                  referrerPolicy="no-referrer"
+                  onError={() => setImgFailed(true)}
+                  // cache hits never fire onError — complete with zero
+                  // naturalWidth at attach is a cached failure
+                  ref={el => { if (el && el.complete && el.naturalWidth === 0) setImgFailed(true); }}
+                />
+              </div>
+            ) : (
+              <div className="ray-plate-img lectr-lot-mono" style={{ position: 'relative' }}>
+                <span className="lectr-lot-monorules" aria-hidden />
+                <span className="lectr-lot-monoglyph">{monogram}</span>
+              </div>
+            )}
+            <figcaption className="ray-plate-cap">{caption}</figcaption>
+          </figure>
+
+          {/* the certificate */}
+          <div>
+            <div className="lectr-lot-head">
+              <span>
+                {lot.artist in ARTIST_LABEL
+                  ? <Link href={`/${lot.artist}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
+                  : makerName}
+                {marketLabel ? ` · ${marketLabel}` : ''}
+              </span>
+              <span className="no">no. {lot.id}</span>
+            </div>
+
+            <h1 className="lectr-lot-title">{craftTitle(lot.title)}</h1>
+            {(lot.year || lot.medium) && (
+              <p className="lectr-lot-medium">
+                {[lot.year, lot.medium ? cleanText(lot.medium) : null, lot.dimensions].filter(Boolean).join(' · ')}
+              </p>
+            )}
+
+            <div className="lectr-lot-leaders">
+              {isSold ? (
+                <>
+                  <LeaderRow
+                    k={lot.status === 'bought_in' ? 'Result' : 'Realized'}
+                    v={lot.status === 'bought_in' ? 'bought in' : lot.priceUsd ? formatPrice(lot.priceUsd) : '—'}
+                  />
+                  {(lot.estimateLow || lot.estimateHigh) && <LeaderRow k="Estimate" v={formatEstimate(lot)} />}
+                </>
+              ) : (
+                <LeaderRow k="Ask" v={formatEstimate(lot)} />
+              )}
+
+              {compsMed != null && (
+                <LeaderRow k="Comps median" v={formatPrice(compsMed)} sub={compsN != null ? `${compsN} sales` : undefined} />
+              )}
+
+              {/* ask-forward framing is for open lots only */}
+              {isUpcoming && sig && (
+                <LeaderRow
+                  k="The gap"
+                  v={signalMagnitude(sig.label, sig.pct)}
+                  tone={sig.label === 'Below Market' ? 'up' : 'down'}
+                  sub={beatRate != null
+                    ? `${beatRate}% of flags like this beat their estimate`
+                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
+                />
+              )}
+              {isUpcoming && sig && (
+                <LeaderRow k="Confidence">
+                  <span className="lectr-lot-dots" aria-hidden>{confidenceMeter(sig.confidence).dots}</span>
+                  {confidenceMeter(sig.confidence).word}
+                </LeaderRow>
+              )}
+              {isUpcoming && !sig && band && (
+                <LeaderRow k="Similar sold" v={`${formatPrice(band.low)}–${formatPrice(band.high)}`} sub={`${band.n} sales`} />
+              )}
+
+              {isSold ? (
+                <LeaderRow k="Hammered" v={formatDate(lot.saleDate)} />
+              ) : isPastPending ? (
+                <LeaderRow k="Hammered" v={`${formatDate(lot.saleDate)} · results pending`} />
+              ) : (
+                <LeaderRow
+                  k="Hammers"
+                  v={mounted && !isNaN(new Date(lot.saleDate).getTime())
+                    ? `${formatDate(lot.saleDate)} · ${daysWord(lot.saleDate)}`
+                    : formatDate(lot.saleDate)}
+                />
+              )}
+
+              <LeaderRow k="House">
+                <span style={{ color: houseColor }}>{lot.auctionHouse}</span>
+              </LeaderRow>
+            </div>
+
+            <div className="lectr-lot-ctas">
+              <a className="ray-call-btn ray-call-btn-primary" href={lot.url} target="_blank" rel="noopener noreferrer">
+                View at {lot.auctionHouse} <Flick size={11} style={{ marginLeft: 2 }} />
+              </a>
+              <button
+                type="button"
+                className="ray-call-btn ray-call-btn-quiet"
+                style={{ cursor: 'pointer', background: saved ? 'var(--color-bg-elevated)' : 'var(--color-bg)' }}
+                onClick={() => toggle(lot.id, lot)}
+                aria-pressed={saved}
+              >
+                <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
+                  <path
+                    d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+                    fill={saved ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    strokeWidth="1.1"
+                  />
+                </svg>
+                {saved ? 'Saved' : 'Save'}
+              </button>
+              <CopyLinkButton id={lot.id} />
+            </div>
+          </div>
+        </div>
+
+        {/* the comp pool — the evidence, as ledger rows */}
+        <section className="lectr-lot-comps" aria-label="Comparable sales">
+          <div className="lectr-lot-comps-head">
+            <span>
+              {band
+                ? `Recent sold · ${band.n} comparable ${formLabel}`
+                : called
+                  ? called.kind === 'edition'
+                    ? `The comps · this exact work, sold ${called.n} times`
+                    : `The comps · ${called.n} comparable ${formLabel}`
+                  : 'The comps'}
+            </span>
+            <span className="ctx">medians, never means</span>
+          </div>
+          {band && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.5 }}>
+              Realized prices — winning bid plus buyer&rsquo;s premium. Goldin publishes no estimates.
+            </p>
+          )}
+
+          {compsPending || (lot && isSportsScienceObject(lot) && wantsArchive && !archive.archiveLoaded && !archive.archiveError) ? (
+            <div className="lectr-lot-quiet">Loading comparable sales&hellip;</div>
+          ) : compRows.length === 0 ? (
+            <div className="lectr-lot-quiet">
+              {fullError
+                ? <>
+                    Comparable sales couldn&rsquo;t be loaded.{' '}
+                    <button onClick={() => retryFullLoad()} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
+                      Try again
+                    </button>
+                  </>
+                : <>No comparable sales clear the gates for this lot — lectr doesn&rsquo;t manufacture a pool.</>}
+            </div>
+          ) : (
+            <div style={{ marginTop: 6 }}>
+              {compRows.map((comp, i) => (
+                <a key={comp.id} href={comp.url} target="_blank" rel="noopener noreferrer" className="lectr-lot-comp">
+                  <span className="lectr-lot-comp-i">{i + 1}</span>
+                  <span className="lectr-lot-comp-thumb" aria-hidden>
+                    <span>{(craftTitle(comp.title) || '?').charAt(0)}</span>
+                    {comp.imageUrl && (
+                      <img src={httpsImg(comp.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => e.currentTarget.remove()} />
+                    )}
+                  </span>
+                  <span className="lectr-lot-comp-t">
+                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(comp.title)}</span>
+                    <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
+                      <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
+                      {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
+                      {comp.medium ? ` · ${cleanText(comp.medium)}` : ''}
+                    </span>
+                  </span>
+                  <span className="lectr-lot-comp-p">{comp.priceUsd ? formatPrice(comp.priceUsd) : '—'}</span>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+      <Colophon lotCount={allLots.length} houseCount={houseCount} record={null} />
+    </>
+  );
+}

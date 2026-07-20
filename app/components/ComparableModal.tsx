@@ -12,6 +12,7 @@ import { useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
 import { formatEstimate } from './LotCard';
+import { CopyLinkButton } from './LotPage';
 import Flick from './Flick';
 
 // ── LotValueBlock — the engine's under/over-valued read + the exact-item moment.
@@ -793,30 +794,32 @@ export default function ComparableModal({
               {lot.saleName ? ` · ${lot.saleName}` : ''}
             </div>
 
-            <a
-              href={lot.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                marginTop: 14,
-                padding: '8px 20px',
-                borderRadius: 100,
-                background: 'var(--color-accent-wine)',
-                color: 'var(--color-bg)',
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: '-0.01em',
-                textTransform: 'none',
-                textDecoration: 'none',
-                transition: 'opacity var(--duration-fast) var(--ease-signature)',
-                alignSelf: 'flex-start',
-              }}
-            >
-              View lot <Flick size={10} style={{ marginLeft: 0 }} />
-            </a>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 14, alignSelf: 'flex-start' }}>
+              <a
+                href={lot.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 20px',
+                  borderRadius: 100,
+                  background: 'var(--color-accent-wine)',
+                  color: 'var(--color-bg)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                  textTransform: 'none',
+                  textDecoration: 'none',
+                  transition: 'opacity var(--duration-fast) var(--ease-signature)',
+                }}
+              >
+                View lot <Flick size={10} style={{ marginLeft: 0 }} />
+              </a>
+              {/* the share point — every card's modal can mint the permalink */}
+              <CopyLinkButton id={lot.id} style={{ borderRadius: 100, padding: '7px 16px', fontSize: 12 }} />
+            </div>
           </div>
         </div>
 
