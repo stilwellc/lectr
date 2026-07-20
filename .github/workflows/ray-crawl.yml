@@ -74,6 +74,13 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: npx tsx scripts/sync-lots-db.ts
 
+      # Match tonight's new lots against every saved search → alert rows
+      - name: Match saved-search alerts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: npx tsx scripts/match-alerts.ts
+
       # Deploy the fresh data ourselves — no git commit happens, so only this
       # workflow can put the night's crawl in front of users.
       - name: Build site with fresh data

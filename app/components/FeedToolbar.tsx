@@ -6,6 +6,7 @@ import { AuctionLot } from '../types';
 import { categoryLabels, sportOf } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 import Flick from './Flick';
+import SaveSearch from './SaveSearch';
 
 export type FeedSort = 'soonest' | 'gap-desc' | 'newest' | 'est-desc' | 'est-asc';
 
@@ -690,6 +691,7 @@ export default function FeedToolbar({
             <button className="ray-toolbar-reset" onClick={() => onChange({ ...FEED_DEFAULTS, sort: filters.sort })}>
               Clear
             </button>
+            <SaveSearch filters={filters} market={effectiveMarket} />
           </>
         ) : (
           <>{total.toLocaleString()} lots</>

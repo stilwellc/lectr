@@ -8,6 +8,7 @@ import { useMarket, MARKET_PATH } from '../lib/market';
 import CommandK, { OPEN_CK_EVENT } from './CommandK';
 import Flick from './Flick';
 import { useAuth } from '../lib/account';
+import { useUnseenAlertCount } from '../lib/alerts';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
@@ -16,6 +17,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   // the sheet's "All makers" disclosure — collapsed on every open
   const [showAll, setShowAll] = useState(false);
   const { authEnabled, user, openLogin } = useAuth();
+  const unseenAlerts = useUnseenAlertCount();
   // On phones the maker finder is a full-screen sheet (portaled to <body> to
   // escape the nav's backdrop-filter containing block), not a cramped dropdown.
   const [isMobile, setIsMobile] = useState(false);
@@ -485,6 +487,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           {(!authEnabled || user) ? (
             <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')} title={user?.email || undefined}>
               My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
+              {unseenAlerts > 0 && (
+                // butter marker: the nightly crawl left unread search matches
+                <span aria-label={`${unseenAlerts} new matches`} style={{
+                  display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
+                  background: 'var(--color-butter)', marginLeft: 6, verticalAlign: '2px',
+                }} />
+              )}
             </button>
           ) : (
             <button className="ray-nav-link" onClick={openLogin}>Sign in</button>

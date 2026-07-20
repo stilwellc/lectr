@@ -15,6 +15,7 @@ import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
+import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import meta from '../../public/data/ray/meta.json';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct } from '../utils';
@@ -373,6 +374,9 @@ export default function SavedPage() {
               }
             />
           </section>
+
+          {/* what the nightly crawl caught for your saved searches */}
+          <AlertsInbox />
 
           {upcoming.length > 0 && (
             <section className="ray-saved-section rail">
