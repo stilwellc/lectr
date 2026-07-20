@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
+import { supabase } from '../lib/supabase';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import LotCard, { lotSignal } from '../components/LotCard';
@@ -143,6 +144,25 @@ export default function SavedPage() {
     const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
     return { rows, totalPaid, totalAppraised };
   }, [savedLots, ownedIds, allLots]);
+
+  // COLLECTION HISTORY: one snapshot per user per day (RLS-owned), written
+  // when the profile renders with an owned collection — the raw material for
+  // the "your collection over time" chart. Idempotent upsert; localStorage
+  // guard keeps it to one write per day per browser.
+  useEffect(() => {
+    if (!supabase || !user || !fullLoaded || collection.rows.length === 0) return;
+    const day = new Date().toISOString().slice(0, 10);
+    const guardKey = `lectr-snap-${user.id.slice(0, 8)}`;
+    try { if (localStorage.getItem(guardKey) === day) return; } catch { /* private mode */ }
+    supabase.from('collection_snapshots').upsert({
+      user_id: user.id, snap_date: day,
+      total_paid: Math.round(collection.totalPaid),
+      total_appraised: Math.round(collection.totalAppraised),
+      pieces: collection.rows.length,
+    }, { onConflict: 'user_id,snap_date' }).then(({ error }) => {
+      if (!error) { try { localStorage.setItem(guardKey, day); } catch { /* ignore */ } }
+    });
+  }, [user, fullLoaded, collection]);
 
   const summary = useMemo(() => {
     const withEst = upcoming.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);

@@ -3531,6 +3531,41 @@ async function main() {
   // Full v2 corpus (gz, source of truth) + slim served files (client). The
   // corpus carries every engine field; the client gets a null-omitted display
   // projection under Cloudflare's 25MB/file cap. See scripts/corpus-io.ts.
+  // ── PUBLISH SANITY GATE ───────────────────────────────────────────────
+  // The last line of defense before the corpus is written and self-deployed:
+  // compare against the PREVIOUS corpus and refuse to publish a collapse. A
+  // crawler regression that silently drops a house/vertical must fail the run
+  // loudly (no commit, no deploy, yesterday's good data keeps serving) — not
+  // ship a hollowed-out book. Growth is never blocked; only shrinkage is.
+  {
+    try {
+      const zlibMod = await import('zlib');
+      const prevPath = path.join(process.cwd(), 'data', 'corpus', 'lots.json.gz');
+      if (fs.existsSync(prevPath)) {
+        const prev = JSON.parse(zlibMod.gunzipSync(fs.readFileSync(prevPath)).toString('utf8')) as { status?: string; auctionHouse?: string }[];
+        const prevTotal = prev.length;
+        const newTotal = allLots.filter(l => !isGoldinSold(l)).length;
+        if (prevTotal > 1000 && newTotal < prevTotal * 0.97) {
+          throw new Error(`corpus shrank ${prevTotal} → ${newTotal} (>3%) — refusing to publish`);
+        }
+        const prevSold = prev.filter(l => l.status === 'sold').length;
+        const newSold = allLots.filter(l => l.status === 'sold' && !isGoldinSold(l)).length;
+        if (prevSold > 1000 && newSold < prevSold * 0.97) {
+          throw new Error(`sold book shrank ${prevSold} → ${newSold} (>3%) — refusing to publish`);
+        }
+        const prevHouses = new Set(prev.map(l => l.auctionHouse)).size;
+        const newHouses = new Set(allLots.map(l => l.auctionHouse)).size;
+        if (newHouses < prevHouses) {
+          throw new Error(`an auction house vanished (${prevHouses} → ${newHouses}) — refusing to publish`);
+        }
+        console.log(`[Ray] publish gate OK: lots ${prevTotal}→${newTotal}, sold ${prevSold}→${newSold}, houses ${prevHouses}→${newHouses}`);
+      }
+    } catch (e) {
+      if (String(e).includes('refusing to publish')) throw e;
+      console.warn('[Ray] publish gate check skipped:', e);
+    }
+  }
+
   const { writeCorpusAndServed } = await import('./corpus-io');
   const io = writeCorpusAndServed(
     allLots as unknown as Record<string, unknown>[],
