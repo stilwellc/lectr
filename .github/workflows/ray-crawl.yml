@@ -84,3 +84,17 @@ jobs:
             sleep $((i * 5))
           done
           echo "push failed after retries"; exit 1
+
+      # Deploy the fresh data ourselves: pushes made with the default
+      # GITHUB_TOKEN never trigger deploy.yml (GitHub's loop prevention), so
+      # without this step a night's crawl commits but prod serves stale data
+      # until the next human push (observed Jul 18: two crawls, zero deploys).
+      - name: Build site with fresh data
+        run: npm run build
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "no CF token — skipping deploy"; exit 0; fi
+          npx wrangler pages deploy out --project-name collectr --branch main --commit-dirty=true

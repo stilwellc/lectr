@@ -1942,6 +1942,44 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     }
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false; // windowed, not enumerated
   }
+  // 1b · AUCTION-AWARE LIVE PASS — newly launched flagship auctions (e.g.
+  // "2026 Summer Game Used Memorabilia Auction") can go Active with their
+  // lots carrying NO item_type facet yet, so the facet passes above miss the
+  // entire event (581 live lots invisible, verified Jul 2026). Enumerate
+  // Active object auctions by NAME from the auctions API and ingest their
+  // lots by auction_id through the SAME per-lot gates — the router still
+  // decides every lot (cards/slabs still drop), so a mixed auction is safe.
+  try {
+    const aRes = await fetch(GOLDIN_AUCTIONS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+      body: JSON.stringify({ status: 'All', order: 'desc' }),
+      signal: AbortSignal.timeout(25000),
+    });
+    if (aRes.ok) {
+      const auctions = ((await aRes.json() as any).auctions || []) as any[];
+      const objectAuctions = auctions.filter(a =>
+        a.status === 'Active'
+        && /\b(game.used|memorabilia|jersey|sneaker)\b/i.test(a.name || a.title || '')
+        && !/\b(tcg|card|pok[eé]mon|comic|box break)\b/i.test(a.name || a.title || ''));
+      for (const a of objectAuctions) {
+        let from = 0, total = Infinity;
+        while (from < Math.min(total, 3000)) {
+          const { lots, total: t } = await goldinQuery({ auction_id: [a.auction_id], size: 100, from });
+          total = t;
+          if (!lots.length) break;
+          lots.forEach((l: any) => ingest(l, 'game-used'));
+          from += 100;
+          await sleep(400);
+        }
+        console.log(`  [Goldin] auction pass '${(a.name || '').slice(0, 48)}': ${Math.min(total, 3000)} lots enumerated`);
+      }
+    }
+  } catch (e) {
+    console.log('  [Goldin] auction-aware live pass failed:', e);
+    goldinFeedComplete = false;
+  }
+
   for (const q of GOLDIN_SCIENCE_QUERIES) {
     try {
       const { lots } = await goldinQuery({ searchTerm: q, size: 100, from: 0 });
