@@ -70,8 +70,14 @@ stamp_of() { # lastCrawl out of a meta.json, empty if unreadable
 
 pull() {
   if ! obj_get "latest/served.tar.gz" "$TMP/served.tar.gz"; then
-    echo "[data-store] no served payloads in R2 (or no access) — keeping local copy"
-    return 0
+    if [ -f public/data/ray/meta.json ]; then
+      echo "[data-store] R2 unreachable — keeping local copy"
+      return 0
+    fi
+    # data is not in git: with no R2 and no local copy there is nothing to
+    # build from — fail here, loudly, instead of exporting an empty site
+    echo "[data-store] FATAL: no data in R2 and no local copy"
+    exit 1
   fi
   mkdir -p "$TMP/served" && tar -xzf "$TMP/served.tar.gz" -C "$TMP/served"
   remote=$(stamp_of "$TMP/served/meta.json")

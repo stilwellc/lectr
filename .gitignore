@@ -32,6 +32,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# full v2 corpus: commit the gz (source of truth), ignore the raw
-data/corpus/*.json
-!data/corpus/*.json.gz
+# auction data lives in R2 (bucket lectr-data), not git — see docs/data-pipeline.md
+/data/corpus/
+/public/data/ray/
