@@ -88,16 +88,23 @@ export default function SavedPage() {
   // we can't yet judge orphans, so the raw count stands in.
   const badgeCount = fullLoaded ? savedLots.length : savedIds.length;
 
+  // A hammered lot awaiting the house's results is CONCLUDED, not watched —
+  // it joins the results list priced "Pending". It carries no price, so every
+  // pricing computation (verdict, appraisals, comps, engine) already excludes
+  // it structurally; nothing pending can leak into a number.
+  const isPastPending = (l: AuctionLot) =>
+    l.status === 'upcoming' && !!l.resultsPending && !!l.saleDate && l.saleDate.slice(0, 10) < new Date().toISOString().slice(0, 10);
+
   const upcoming = useMemo(() =>
     savedLots
-      .filter(l => l.status === 'upcoming')
+      .filter(l => l.status === 'upcoming' && !isPastPending(l))
       .sort((a, b) => new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime()),
     [savedLots]
   );
 
   const sold = useMemo(() =>
     savedLots
-      .filter(l => l.status === 'sold')
+      .filter(l => l.status === 'sold' || isPastPending(l))
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
     [savedLots]
   );

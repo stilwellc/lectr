@@ -396,7 +396,11 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   color: 'var(--color-fg)',
                   lineHeight: 1.3,
                 }}>
-                  {lot.priceUsd ? formatPrice(lot.priceUsd) : '—'}
+                  {lot.priceUsd
+                    ? formatPrice(lot.priceUsd)
+                    : (lot as { resultsPending?: boolean }).resultsPending
+                      ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.92em' }}>Pending</span>
+                      : '—'}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 1 }}>
                   {/* the product's core statistic, on every result it has one for */}
