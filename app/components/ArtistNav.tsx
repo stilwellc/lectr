@@ -329,15 +329,30 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         }
         .ray-artist-dropdown-filter::placeholder { color: var(--color-text-faint); }
         .ray-nav-burger { display: none; }
+        .ray-nav-search { display: none; }
         @media (max-width: 768px) {
           .ray-artist-nav { top: 0; }
           /* the maker-only trigger gives way to a real menu button on phones */
           .ray-artist-select-wrap { display: none; }
+          /* search + menu cluster on the right; the search carries the auto so
+             the two sit side by side with the inner flex gap between them */
+          .ray-nav-search {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+            padding: 8px 8px;
+            min-height: 42px;
+            background: none;
+            border: none;
+            color: var(--color-fg);
+            cursor: pointer;
+          }
+          .ray-nav-search svg { width: 21px; height: 21px; }
           .ray-nav-burger {
             display: inline-flex;
             align-items: center;
             gap: 7px;
-            margin-left: auto;
             padding: 8px 12px;
             min-height: 42px;
             background: none;
@@ -524,6 +539,20 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           </span>
         </button>
         </div>
+
+        {/* Mobile-only search — icon that opens the same CommandK palette as the
+            desktop pill and ⌘K. Sits just left of the menu button; the two
+            cluster on the right (this one carries the margin-left:auto). */}
+        <button
+          className="ray-nav-search"
+          aria-label="Search"
+          onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+        </button>
 
         {/* Mobile-only menu button — opens the full-screen nav sheet (sections
             + maker finder). Desktop uses the links + Find a maker above. */}
