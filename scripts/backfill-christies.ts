@@ -348,7 +348,9 @@ async function discoverSlugs(): Promise<string[]> {
     fs.writeFileSync(CDX_CACHE, body);
   }
   const slugs = new Set<string>();
-  for (const m of body.matchAll(/\/en\/auction\/([a-z0-9][a-z0-9-]*-\d{4,6})(?:[/?]|$)/g)) slugs.add(m[1]);
+  const slugRe = /\/en\/auction\/([a-z0-9][a-z0-9-]*-\d{4,6})(?:[/?]|$)/g;
+  let sm: RegExpExecArray | null;
+  while ((sm = slugRe.exec(body)) !== null) slugs.add(sm[1]);
   const all = Array.from(slugs).sort();
   fs.writeFileSync(SLUG_FILE, all.join('\n') + '\n');
   console.log(`[discover] ${all.length} unique Christie's auction slugs → ${SLUG_FILE}`);
