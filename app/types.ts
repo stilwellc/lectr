@@ -232,6 +232,16 @@ export interface AuctionLot {
   objectFingerprint?: string | null;
   /** links lots believed same physical object; distinct from comp pool; null until confident */
   repeatSaleGroupId?: string | null;
+  /** the athlete behind a sports lot (build-stamped on upcoming; parsed from title) */
+  playerSlug?: string | null;
+  playerName?: string | null;
+  /** live sports-card comps: exact same card+grade sales + the grade ladder,
+      hash-joined at build against the sold-card corpus (never similarity) */
+  cardComps?: {
+    med: number | null; n: number;
+    lastSales: { d: string | null; p: number }[];
+    gradeLadder: { g: string; med: number; n: number }[];
+  } | null;
   /** Part-2 engine output, stamped at build time on upcoming lots. See
       app/lib/value.ts ValueResult. Structural to avoid a types↔value cycle. */
   value?: {

@@ -318,6 +318,121 @@ export function runMarketBuild() {
   fs.writeFileSync(path.join(SERVED, 'refs.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), refs: refsOut }));
   console.log(`[market] refs.json: ${refsOut.length} references (${(fs.statSync(path.join(SERVED, 'refs.json')).size / 1024).toFixed(0)}KB) · ${((Date.now() - tRef) / 1000).toFixed(0)}s`);
 
+  // ── 3e · sports player dossiers (players.json) + live-card comps ──
+  // The cross-market read Collin wants: one player, cards AND game-used AND
+  // tickets/trophies — "how is this athlete doing in the wider market". All
+  // parsed from titles (app/lib/cards.ts), aggregated at build, R2-only.
+  const tPl = Date.now();
+  {
+    const { parseCard, playerOf, cardKey, cardLadderKey } = require('../app/lib/cards');
+    const SPORT_SET = new Set(MARKETS.sports);
+    const sportsSold = all.filter(l => SPORT_SET.has(l.artist) && l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate);
+
+    // one parse pass over every sold sports lot
+    type PLot = AuctionLot & { _pid?: string | null; _pname?: string | null; _card?: ReturnType<typeof parseCard> };
+    const byPlayer = new Map<string, { name: string; lots: PLot[] }>();
+    const byCardKey = new Map<string, AuctionLot[]>();
+    const byLadderKey = new Map<string, AuctionLot[]>();
+    for (const l of sportsSold as PLot[]) {
+      if (l.artist === 'sports-cards') {
+        const c = parseCard(l.title || '');
+        l._card = c; l._pid = c.playerSlug; l._pname = c.player;
+        const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
+        const lk = cardLadderKey(c); if (lk) (byLadderKey.get(lk) || byLadderKey.set(lk, []).get(lk)!).push(l);
+      } else {
+        const p = playerOf(l.title || '', l.artist);
+        l._pid = p.playerSlug; l._pname = p.player;
+      }
+      if (l._pid && l._pname) {
+        const e = byPlayer.get(l._pid) || byPlayer.set(l._pid, { name: l._pname, lots: [] }).get(l._pid)!;
+        e.lots.push(l);
+      }
+    }
+
+    // players.json — players with real depth (≥25 sales)
+    const playersOut: Record<string, unknown>[] = [];
+    for (const [slug, { name, lots: ls }] of Array.from(byPlayer.entries())) {
+      if (ls.length < 25) continue;
+      ls.sort((a, b) => (a.saleDate! < b.saleDate! ? -1 : 1));
+      const cats: Record<string, { n: number; medUsd: number; ttmMedUsd: number | null }> = {};
+      const cut = Date.now() - 365 * 864e5;
+      for (const cat of ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes']) {
+        const cl = ls.filter(l => l.artist === cat);
+        if (!cl.length) continue;
+        const ttm = cl.filter(l => new Date(l.saleDate!).getTime() > cut).map(l => l.realizedUsd!);
+        cats[cat] = {
+          n: cl.length,
+          medUsd: Math.round(median(cl.map(l => l.realizedUsd!))),
+          ttmMedUsd: ttm.length >= 5 ? Math.round(median(ttm)) : null,
+        };
+      }
+      // yearly card trend (cards are the dense series; objects ride `recent`)
+      const cardLots = ls.filter(l => l.artist === 'sports-cards');
+      const byYear = new Map<number, number[]>();
+      for (const l of cardLots) { const y = +l.saleDate!.slice(0, 4); (byYear.get(y) || byYear.set(y, []).get(y)!).push(l.realizedUsd!); }
+      const yearly = Array.from(byYear.entries()).filter(([, v]) => v.length >= 5).sort((a, b) => a[0] - b[0])
+        .map(([y, v]) => ({ y, med: Math.round(median(v)), n: v.length }));
+      // the marquee object results (top game-used/trophy hammers — the wider market)
+      const objects = ls.filter(l => l.artist !== 'sports-cards')
+        .sort((a, b) => (b.realizedUsd! - a.realizedUsd!)).slice(0, 6)
+        .map(l => ({ id: l.id, d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
+      const recent = ls.slice(-8).reverse()
+        .map(l => ({ d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
+      // sport: majority vote over the lots' stamped sport field
+      const sportVotes = new Map<string, number>();
+      for (const l of ls) { const s = (l as AuctionLot & { sport?: string | null }).sport; if (s) sportVotes.set(s, (sportVotes.get(s) || 0) + 1); }
+      const sport = Array.from(sportVotes.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+      playersOut.push({ slug, name, sport, n: ls.length, cats, yearly, objects, recent });
+    }
+    playersOut.sort((a, b) => (b.n as number) - (a.n as number));
+    fs.writeFileSync(path.join(SERVED, 'players.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), players: playersOut }));
+    console.log(`[market] players.json: ${playersOut.length} players (${(fs.statSync(path.join(SERVED, 'players.json')).size / 1048576).toFixed(1)}MB)`);
+
+    // live-card comps: exact cardKey → last sales; ladderKey → grade ladder.
+    // Stamped on the LIVE lot objects (they're in `all`, so the stamp flows to
+    // corpus + served shards + upcoming.json). playerSlug stamps every live
+    // sports lot so the client links to /player without re-parsing.
+    let stamped = 0, laddered = 0;
+    for (const l of all) {
+      if (!SPORT_SET.has(l.artist) || l.status !== 'upcoming') continue;
+      const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null; cardComps?: unknown };
+      if (l.artist === 'sports-cards') {
+        const c = parseCard(l.title || '');
+        lw.playerSlug = c.playerSlug; lw.playerName = c.player;
+        const ck = cardKey(c); const lk = cardLadderKey(c);
+        const exact: AuctionLot[] = (ck ? byCardKey.get(ck) : undefined) || [];
+        const ladder: AuctionLot[] = (lk ? byLadderKey.get(lk) : undefined) || [];
+        const lastSales = exact.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 5)
+          .map(s => ({ d: s.saleDate, p: Math.round(s.realizedUsd!) }));
+        const gradeRungs = new Map<string, number[]>();
+        for (const s of ladder) {
+          const g = (s as PLot)._card;
+          if (!g || g.gradeNum == null) continue;
+          const key = `${g.gradeCo} ${g.gradeNum}`;
+          (gradeRungs.get(key) || gradeRungs.set(key, []).get(key)!).push(s.realizedUsd!);
+        }
+        const gradeLadder = Array.from(gradeRungs.entries())
+          .map(([g, v]) => ({ g, med: Math.round(median(v)), n: v.length }))
+          .filter(r => r.n >= 2)
+          .sort((a, b) => parseFloat(a.g.split(' ')[1]) - parseFloat(b.g.split(' ')[1]));
+        if (lastSales.length || gradeLadder.length) {
+          lw.cardComps = {
+            med: exact.length ? Math.round(median(exact.map(s => s.realizedUsd!))) : null,
+            n: exact.length,
+            lastSales,
+            gradeLadder: gradeLadder.length > 1 ? gradeLadder : [],
+          };
+          stamped++;
+          if (gradeLadder.length > 1) laddered++;
+        }
+      } else {
+        const p = playerOf(l.title || '', l.artist);
+        lw.playerSlug = p.playerSlug; lw.playerName = p.player;
+      }
+    }
+    console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
+  }
+
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,

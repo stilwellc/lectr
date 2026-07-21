@@ -536,6 +536,31 @@ export default function LotPage({ lotId, initialLot }: {
                   </Link>
                 </LeaderRow>
               )}
+
+              {/* sports lots link to the athlete's cross-market dossier */}
+              {marketKey === 'sports' && lot.playerSlug && (
+                <LeaderRow k="Player">
+                  <Link href={`/player?id=${encodeURIComponent(lot.playerSlug)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                    {lot.playerName || lot.playerSlug} <Flick size={10} style={{ marginLeft: 2 }} />
+                  </Link>
+                </LeaderRow>
+              )}
+
+              {/* live card: the exact-card record — same card, same grade */}
+              {isUpcoming && lot.cardComps && lot.cardComps.n > 0 && (
+                <LeaderRow
+                  k="This card"
+                  v={lot.cardComps.med != null ? formatPrice(lot.cardComps.med) : '—'}
+                  sub={`${lot.cardComps.n} ${lot.cardComps.n === 1 ? 'sale' : 'sales'}, same card & grade`}
+                  tone={lot.cardComps.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! < lot.cardComps.med ? 'up' : undefined}
+                />
+              )}
+              {isUpcoming && lot.cardComps && lot.cardComps.lastSales.length > 0 && (
+                <LeaderRow
+                  k="Last sold"
+                  v={`${formatPrice(lot.cardComps.lastSales[0].p)}${lot.cardComps.lastSales[0].d ? ` · ${formatDate(lot.cardComps.lastSales[0].d, { month: 'short', year: 'numeric' })}` : ''}`}
+                />
+              )}
             </div>
 
             <div className="lectr-lot-ctas">
@@ -600,6 +625,29 @@ export default function LotPage({ lotId, initialLot }: {
                   ? <span key={p.id} className="lectr-lot-comp" style={{ cursor: 'default' }}>{inner}</span>
                   : <Link key={p.id} href={`/lot?id=${encodeURIComponent(p.id)}`} className="lectr-lot-comp">{inner}</Link>;
               })}
+            </div>
+          </section>
+        )}
+
+        {/* the grade ladder — same card, every grade: the economics of the
+            card market in one table. Build-stamped from exact identity
+            matches, never similarity. */}
+        {lot.cardComps && lot.cardComps.gradeLadder.length > 1 && (
+          <section className="lectr-lot-comps" aria-label="Grade ladder">
+            <div className="lectr-lot-comps-head">
+              <span>The grade ladder · this card, every grade</span>
+              <span className="ctx">medians, never means</span>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {lot.cardComps.gradeLadder.map(r => (
+                <span key={r.g} className="lectr-lot-comp" style={{ cursor: 'default' }}>
+                  <span className="lectr-lot-comp-t">
+                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{r.g}</span>
+                    <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{r.n} {r.n === 1 ? 'sale' : 'sales'}</span>
+                  </span>
+                  <span className="lectr-lot-comp-p">{formatPrice(r.med)}</span>
+                </span>
+              ))}
             </div>
           </section>
         )}
