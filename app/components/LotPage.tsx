@@ -6,7 +6,7 @@ import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
 import { useRayData, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors } from '../utils';
+import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
@@ -40,7 +40,8 @@ const COPY_BTN_CSS = `
 /* The catalogue-page layout. Injected via dangerouslySetInnerHTML — raw-text
    <style> children with quotes break hydration on prerendered pages
    (see RecordBand/ComparableModal); __html serializes raw, deterministic. */
-const LOTPAGE_CSS = COPY_BTN_CSS + `
+// exported for RefPage, which reuses the comp-row ledger grammar
+export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot{padding-block:26px 64px}
 .lectr-lot-grid{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr);column-gap:44px;row-gap:26px;align-items:start}
 .lectr-lot-head{position:relative;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:12px}
@@ -234,7 +235,7 @@ export default function LotPage({ lotId, initialLot }: {
       and the crawler sees real content; live data supersedes it on arrival */
   initialLot?: AuctionLot | null;
 }) {
-  const { allLots, loading, fullLoaded, fullError, lastCrawl } = useRayData();
+  const { allLots, loading, fullLoaded, fullError, lastCrawl, market } = useRayData();
   const { savedIds, isSaved, toggle } = useSavedLots();
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
@@ -331,6 +332,31 @@ export default function LotPage({ lotId, initialLot }: {
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
       .slice(0, 12);
   }, [band, called]);
+
+  // ── provenance: the same physical object across the book ──
+  // repeatSaleGroupId is the engine's strict physical-match verdict (photo/
+  // edition/serial-justified, price-sanity-guarded) — never fuzzy title echo.
+  const provenance = useMemo(() => {
+    const gid = lot?.repeatSaleGroupId;
+    if (!lot || !gid) return [];
+    const rows = bandPoolLots.filter(l => l.repeatSaleGroupId === gid);
+    if (!rows.some(r => r.id === lot.id)) rows.push(lot);
+    return rows.length >= 2
+      ? rows.slice().sort((a, b) => ((a.saleDate || '') < (b.saleDate || '') ? -1 : 1))
+      : [];
+  }, [lot, bandPoolLots]);
+
+  // ── house calibration: does this house's estimate historically hold? ──
+  // hammer-led per the dual-basis doctrine; market cell first, 'all' fallback.
+  const houseIntel = useMemo(() => {
+    if (!lot?.auctionHouse || !market?.houseCal) return null;
+    const mkt = ARTIST_MARKET[lot.artist] || 'all';
+    const cell = market.houseCal[lot.auctionHouse]?.[mkt] || market.houseCal[lot.auctionHouse]?.all;
+    if (!cell) return null;
+    const sign = cell.hammerMedPct > 0 ? '+' : '';
+    const word = cell.hammerMedPct >= 3 ? 'run conservative' : cell.hammerMedPct <= -3 ? 'run rich' : 'hold';
+    return `estimates here ${word} · hammers ${sign}${cell.hammerMedPct}% vs mid · ${cell.n.toLocaleString()} sales`;
+  }, [lot, market]);
 
   // Comps median: the signal's own median first (crawl-time signals carry it),
   // else the appraisal through the same pools, else the realized band.
@@ -497,9 +523,19 @@ export default function LotPage({ lotId, initialLot }: {
                 />
               )}
 
-              <LeaderRow k="House">
+              <LeaderRow k="House" sub={houseIntel ?? undefined}>
                 <span style={{ color: houseColor }}>{lot.auctionHouse}</span>
               </LeaderRow>
+
+              {/* watch lots link into their reference dossier — the page a
+                  bidder reads before trusting the estimate */}
+              {marketKey === 'watches' && lot.reference && (
+                <LeaderRow k="Reference">
+                  <Link href={`/ref?id=${encodeURIComponent(`${lot.artist}:${lot.reference}`)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                    {refLabel(lot.reference)} <Flick size={10} style={{ marginLeft: 2 }} />
+                  </Link>
+                </LeaderRow>
+              )}
             </div>
 
             <div className="lectr-lot-ctas">
@@ -527,6 +563,46 @@ export default function LotPage({ lotId, initialLot }: {
             </div>
           </div>
         </div>
+
+        {/* provenance — the same physical object's trips across the block.
+            Strict physical-match groups only; absence of the section means the
+            engine confirmed nothing, never that nothing exists. */}
+        {provenance.length >= 2 && (
+          <section className="lectr-lot-comps" aria-label="Provenance">
+            <div className="lectr-lot-comps-head">
+              <span>Provenance · this exact object, {provenance.length} appearances</span>
+              <span className="ctx">physical matches, engine-confirmed</span>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {provenance.map(p => {
+                const here = p.id === lot.id;
+                const money = p.status === 'sold' && p.priceUsd
+                  ? formatPrice(p.priceUsd)
+                  : p.status === 'bought_in' ? 'bought in'
+                  : p.status === 'upcoming' ? (formatEstimate(p) || 'on the block') : '—';
+                const inner = (
+                  <>
+                    <span className="lectr-lot-comp-i" aria-hidden>{here ? '·' : ''}</span>
+                    <span className="lectr-lot-comp-t">
+                      <span className="lectr-lot-comp-title" style={{ display: 'block' }}>
+                        {formatDate(p.saleDate, { month: 'long', year: 'numeric' })}
+                        {here ? ' — this listing' : ''}
+                      </span>
+                      <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
+                        <span style={{ color: houseColors[p.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{p.auctionHouse}</span>
+                        {p.saleName ? ` · ${cleanText(p.saleName)}` : ''}
+                      </span>
+                    </span>
+                    <span className="lectr-lot-comp-p">{money}</span>
+                  </>
+                );
+                return here
+                  ? <span key={p.id} className="lectr-lot-comp" style={{ cursor: 'default' }}>{inner}</span>
+                  : <Link key={p.id} href={`/lot?id=${encodeURIComponent(p.id)}`} className="lectr-lot-comp">{inner}</Link>;
+              })}
+            </div>
+          </section>
+        )}
 
         {/* the comp pool — the evidence, as ledger rows */}
         <section className="lectr-lot-comps" aria-label="Comparable sales">

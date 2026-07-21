@@ -81,6 +81,16 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: npx tsx scripts/match-alerts.ts
 
+      # Email each user their fresh matches — one digest per night. Skips
+      # silently until RESEND_API_KEY is provisioned (in-app inbox unaffected).
+      - name: Send alert digests
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+        run: npx tsx scripts/send-digest.ts
+
       # Deploy the fresh data ourselves — no git commit happens, so only this
       # workflow can put the night's crawl in front of users.
       - name: Build site with fresh data

@@ -76,6 +76,10 @@ export interface MarketData {
   generatedAt: string;
   markets: Record<string, MarketSeriesJson>;
   makers: Record<string, MarketSeriesJson>;
+  /** per house×market estimate honesty (hammer-led medians, n≥40 cells) */
+  houseCal?: Record<string, Record<string, { n: number; hammerMedPct: number; allInMedPct: number }>>;
+  /** per market calendar-month performance; cells with n<30 carry zeros and are UI-gated */
+  seasonality?: Record<string, { n: number; hammerMedPct: number; allInMedPct: number; sellThroughPct: number | null }[]>;
   calibration: { directional: { method: string; buckets: [string, number][] }; valueError: Record<string, number> };
 }
 export interface MarketSeriesJson {

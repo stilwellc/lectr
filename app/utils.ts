@@ -288,3 +288,22 @@ export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string
   }
   return counts;
 }
+
+// ── watch reference labels (the /ref dossier grammar) ────────────────────────
+// Known model lines read as words; bare numerics read as references.
+const REF_LINE_LABELS: Record<string, string> = {
+  oysterperpetual: 'Oyster Perpetual', royaloak: 'Royal Oak', seamaster: 'Seamaster',
+  calatrava: 'Calatrava', santos: 'Santos', constellation: 'Constellation',
+  speedmaster: 'Speedmaster', pasha: 'Pasha', gondolo: 'Gondolo', cellini: 'Cellini',
+  nautilus: 'Nautilus', aquanaut: 'Aquanaut', datejust: 'Datejust', daytona: 'Daytona',
+  submariner: 'Submariner', cosmograph: 'Cosmograph', tank: 'Tank', panthère: 'Panthère',
+  panthere: 'Panthère', ballon: 'Ballon Bleu', deville: 'De Ville', reverso: 'Reverso',
+  explorer: 'Explorer', gmtmaster: 'GMT-Master', milgauss: 'Milgauss', yachtmaster: 'Yacht-Master',
+  seadweller: 'Sea-Dweller', airking: 'Air-King', tortue: 'Tortue', baignoire: 'Baignoire',
+  ronde: 'Ronde', roadster: 'Roadster', cloche: 'Cloche', must: 'Must de Cartier',
+};
+export function refLabel(ref: string): string {
+  if (REF_LINE_LABELS[ref]) return REF_LINE_LABELS[ref];
+  if (/^\d[\dA-Za-z/.-]*$/.test(ref)) return `Ref. ${ref.toUpperCase()}`;
+  return ref.charAt(0).toUpperCase() + ref.slice(1);
+}

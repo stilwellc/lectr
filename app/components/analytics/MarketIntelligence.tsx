@@ -8,7 +8,7 @@
  * Every panel names its method and n — the numbers are validated, not asserted.
  */
 import React, { useMemo } from 'react';
-import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
 import type { MarketSeriesJson } from '../../hooks/useRayData';
 import Flick from '../Flick';
 import { toneOf, fmtSignedPct } from '../../utils';
@@ -72,7 +72,10 @@ function Panel({ title, method, n, children }: { title: string; method: string; 
   );
 }
 
-export default function MarketIntelligence({ series, marketLabel }: { series: MarketSeriesJson; marketLabel: string }) {
+type MonthCell = { n: number; hammerMedPct: number; allInMedPct: number; sellThroughPct: number | null };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export default function MarketIntelligence({ series, marketLabel, seasonality }: { series: MarketSeriesJson; marketLabel: string; seasonality?: MonthCell[] | null }) {
   const idxChange = useMemo(() => pctChange(series.index), [series.index]);
   const stHead = useMemo(() => headlineSellThrough(series.sellThrough), [series.sellThrough]);
   const stSmooth = useMemo(() => smooth3(series.sellThrough), [series.sellThrough]);
@@ -86,6 +89,24 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
 
   const showSellThrough = series.sellThrough.length >= 3 && stHead !== null;
   const showAccuracy = series.houseAccuracy.length >= 3 && accLatest != null;
+
+  // seasonality: months with n≥30 chart; thinner months are suppressed, and
+  // the whole panel is suppressed under 8 usable months (an honest year-shape
+  // needs most of the calendar). Hammer basis leads, per the doctrine.
+  const seasonRows = useMemo(() => {
+    if (!seasonality) return [];
+    const rows = seasonality
+      .map((c, i) => ({ month: MONTHS[i], pct: c.n >= 30 ? c.hammerMedPct : null, n: c.n }))
+      .filter((r): r is { month: string; pct: number; n: number } => r.pct !== null);
+    return rows.length >= 8 ? rows : [];
+  }, [seasonality]);
+  const seasonBest = useMemo(() => (seasonRows.length ? seasonRows.reduce((a, b) => (b.pct > a.pct ? b : a)) : null), [seasonRows]);
+  const seasonWorst = useMemo(() => (seasonRows.length ? seasonRows.reduce((a, b) => (b.pct < a.pct ? b : a)) : null), [seasonRows]);
+  const seasonN = useMemo(() => seasonRows.reduce((s, r) => s + r.n, 0), [seasonRows]);
+
+  // market depth: sales per quarter — the honest liquidity read
+  const showDepth = series.volume.length >= 4;
+  const depthLatest = showDepth ? series.volume[series.volume.length - 1] : null;
   // when one panel is suppressed the survivor spans the whole band instead of
   // leaving a vacant half
   const soloPanel = showSellThrough !== showAccuracy;
@@ -175,6 +196,59 @@ export default function MarketIntelligence({ series, marketLabel }: { series: Ma
           </Panel>
         )}
       </div>
+
+      {(seasonRows.length > 0 || showDepth) && (
+        <div className="ray-mi-row" style={seasonRows.length > 0 !== showDepth ? { gridTemplateColumns: '1fr' } : undefined}>
+          {/* SEASONALITY — the calendar as a lever */}
+          {seasonRows.length > 0 && seasonBest && seasonWorst && (
+            <Panel title="seasonality" method={`median hammer vs estimate mid, by calendar month · hammer basis · ${seasonN.toLocaleString()} sales`}>
+              <div className="ray-mi-hero">
+                <span className="ray-mi-num sm">{seasonBest.month}</span>
+                <span className="ray-mi-sub">
+                  runs hottest ({fmtSignedPct(seasonBest.pct)} vs mid) · {seasonWorst.month} coolest ({fmtSignedPct(seasonWorst.pct)})
+                </span>
+              </div>
+              <div style={{ height: 130 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={seasonRows} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: MUTED }} interval={0} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: MUTED }} width={34} tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`} axisLine={false} tickLine={false} />
+                    <ReferenceLine y={0} stroke="var(--chart-ref)" />
+                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number, _n, p) => [`${v > 0 ? '+' : ''}${v}% vs mid · ${(p.payload.n || 0).toLocaleString()} sales`, 'hammer']} />
+                    <Bar dataKey="pct" radius={[2, 2, 0, 0]}>
+                      {seasonRows.map(r => (
+                        <Cell key={r.month} fill={INK} fillOpacity={r.month === seasonBest.month || r.month === seasonWorst.month ? 0.95 : 0.35} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
+
+          {/* MARKET DEPTH — sales per quarter, the honest liquidity read */}
+          {showDepth && depthLatest && (
+            <Panel title="market depth" method="catalogued sales per quarter — how liquid this market actually is">
+              <div className="ray-mi-hero">
+                <span className="ray-mi-num sm">{depthLatest.value.toLocaleString()}</span>
+                <span className="ray-mi-sub">sales in the latest complete quarter ({tickQ(depthLatest.period)})</span>
+              </div>
+              <div style={{ height: 130 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={series.volume} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                    <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: MUTED }} width={38} axisLine={false} tickLine={false} />
+                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v.toLocaleString()} sales`, 'depth']} />
+                    <Bar dataKey="value" fill={INK} fillOpacity={0.5} radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
+        </div>
+      )}
     </section>
   );
 }

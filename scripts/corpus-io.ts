@@ -16,11 +16,14 @@ export const CORPUS_DIR = path.join(process.cwd(), 'data', 'corpus');
 export const SERVED_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
 
 // Engine-only / redundant fields the client never renders.
+// `reference` and `repeatSaleGroupId` are deliberately NOT stripped: the client
+// links watch lots to /ref pages and renders provenance timelines from them,
+// and nulls are omitted below so they only cost bytes where actually set.
 const STRIP = new Set([
-  'titleTokens','normalizedTitle','objectFingerprint','modelKey','reference',
+  'titleTokens','normalizedTitle','objectFingerprint','modelKey',
   'materialTokens','mediumCanon','authCert','gradeLabel','description','titleRaw',
   'serialNo','editionOf','editionTotal','editionMarker','dimSource','yearSource',
-  'yearIsCirca','sizeClass','repeatSaleGroupId','fxRecovered','fxRate','fxAsOf',
+  'yearIsCirca','sizeClass','fxRecovered','fxRate','fxAsOf',
   'schemaVersion','validatedAt','firstSeenKnown','platform','saleDateTime',
   'buyerPremiumPct','hammerNative','premiumNative','realizedNative','hammerUsd',
   'premiumUsd','estLowNative','estHighNative','nativeCurrency','makerSlug',

@@ -34,6 +34,7 @@ function AnalyticsGrid({
   statsByArtist,
   activeKey,
   marketSeries,
+  seasonality,
   fromCache,
   backtest,
 }: {
@@ -44,9 +45,10 @@ function AnalyticsGrid({
   activeKey: Market;
   fromCache: boolean;
   marketSeries: import('../hooks/useRayData').MarketSeriesJson | null;
+  seasonality?: NonNullable<import('../hooks/useRayData').MarketData['seasonality']>[string] | null;
 }) {
   const nodes = [
-    marketSeries ? <MarketIntelligence key="mi" series={marketSeries} marketLabel={activeKey === 'all' ? 'the market' : activeKey} /> : null,
+    marketSeries ? <MarketIntelligence key="mi" series={marketSeries} marketLabel={activeKey === 'all' ? 'the market' : activeKey} seasonality={seasonality} /> : null,
     <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
     <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
     backtest ? <CalibrationCurve key="cal" backtest={backtest} /> : null,
@@ -128,6 +130,7 @@ export default function AnalyticsPage() {
           statsByArtist={statsByArtist}
           fromCache={fromCache}
           marketSeries={marketData?.markets?.[activeKey] || null}
+          seasonality={marketData?.seasonality?.[activeKey] || null}
         />
       ) : !fullLoaded ? (
         <RayLoading />
@@ -139,6 +142,7 @@ export default function AnalyticsPage() {
           activeKey={activeKey}
           fromCache={fromCache}
           marketSeries={marketData?.markets?.[activeKey] || null}
+          seasonality={marketData?.seasonality?.[activeKey] || null}
           backtest={backtest}
         />
       )}
@@ -159,6 +163,7 @@ function ArchiveAnalyticsBody({
   statsByArtist,
   fromCache,
   marketSeries,
+  seasonality,
 }: {
   activeKey: Market;
   mktSet: Set<string>;
@@ -166,6 +171,7 @@ function ArchiveAnalyticsBody({
   statsByArtist: Record<string, MarketStats>;
   fromCache: boolean;
   marketSeries: import('../hooks/useRayData').MarketSeriesJson | null;
+  seasonality?: NonNullable<import('../hooks/useRayData').MarketData['seasonality']>[string] | null;
 }) {
   const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
   const marketLots = useMemo(
@@ -197,6 +203,7 @@ function ArchiveAnalyticsBody({
       activeKey={activeKey}
       fromCache={fromCache}
       marketSeries={marketSeries}
+      seasonality={seasonality}
     />
   );
 }
