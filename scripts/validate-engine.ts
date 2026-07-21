@@ -28,7 +28,7 @@ const MARKETS: Record<string, string[]> = {
   art: ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf'],
   design: ['george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'],
   watches: ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'],
-  sports: ['game-used', 'trophies-awards', 'tickets-passes'],
+  sports: ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes'],
   science: ['space-exploration', 'meteorites', 'fossils', 'scientific-instruments'],
 };
 const marketOf = (l: AuctionLot) => { for (const m in MARKETS) if (MARKETS[m].includes(l.artist)) return m; return 'other'; };

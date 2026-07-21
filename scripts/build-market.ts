@@ -27,7 +27,7 @@ const MARKETS: Record<string, string[]> = {
   art: ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf'],
   design: ['george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'],
   watches: ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'],
-  sports: ['game-used', 'trophies-awards', 'tickets-passes'],
+  sports: ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes'],
   science: ['space-exploration', 'meteorites', 'fossils', 'scientific-instruments'],
 };
 
@@ -62,9 +62,17 @@ export function runMarketBuild() {
   // pass's groups)
   for (const l of all) { delete (l as AuctionLot & { repeatSaleGroupId?: unknown }).repeatSaleGroupId; delete (l as AuctionLot & { value?: unknown }).value; }
 
-  const sold = all.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
+  // Sport cards are a DATA asset, not an engine-valued vertical: 348k of them
+  // would make the valuation pool (per live lot) and the repeat-sale grouping
+  // explode, and a mass-produced card is not a unique object (title similarity
+  // would falsely group different copies). They stay in the CORPUS (written
+  // below) but never enter the engine — no value, no comps, no repeat-sale.
+  const CARDS = 'sports-cards';
+  const engineAll = all.filter(l => l.artist !== CARDS);
+
+  const sold = engineAll.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
   const tbl = buildIdf(sold);
-  buildVectors(all, tbl);          // attach _v to every lot (upcoming need it too)
+  buildVectors(engineAll, tbl);    // attach _v to every engine lot (upcoming need it too)
   const soldSorted = sold.slice().sort((a, b) => a.saleDate < b.saleDate ? -1 : 1);
   const soldPos = new Map(soldSorted.map((l, i) => [l.id, i]));
   console.log(`[market] ${all.length} lots · ${sold.length} priced sold · vocab ${Object.keys(tbl.df).length}`);
@@ -74,7 +82,7 @@ export function runMarketBuild() {
   // upcoming lot reads its same-maker pool in O(1) instead of rescanning all 36k.
   const soldByArtist = new Map<string, AuctionLot[]>();
   for (const s of soldSorted) (soldByArtist.get(s.artist) || soldByArtist.set(s.artist, []).get(s.artist)!).push(s);
-  const upcoming = all.filter(l => l.status === 'upcoming');
+  const upcoming = engineAll.filter(l => l.status === 'upcoming');
   let valued = 0;
   const tVal = Date.now();
   // sports lots: restrict priors to comps sharing the extracted sport/entity —
@@ -169,7 +177,7 @@ export function runMarketBuild() {
   const groups = new Map<string, string[]>();
   for (const l of soldSorted) { const r = find(l.id); (groups.get(r) || groups.set(r, []).get(r)!).push(l.id); }
   let physGroups = 0;
-  const idToLot = new Map(all.map(l => [l.id, l]));
+  const idToLot = new Map(engineAll.map(l => [l.id, l]));
   for (const [root, ids] of Array.from(groups.entries())) {
     if (ids.length < 2) continue;
     physGroups++;
@@ -181,13 +189,13 @@ export function runMarketBuild() {
   const markets: Record<string, MarketSeries> = {};
   for (const m in MARKETS) {
     const set = new Set(MARKETS[m]);
-    markets[m] = buildMarketSeries(all.filter(l => set.has(l.artist)), m);
+    markets[m] = buildMarketSeries(engineAll.filter(l => set.has(l.artist)), m);
     const idxLen = markets[m].index.length;
     console.log(`[market] ${m.padEnd(8)} index ${idxLen}pts · sellThrough ${markets[m].sellThrough.length}pts · houseAcc ${markets[m].houseAccuracy.length}pts · n${markets[m].n}`);
   }
   // the aggregate 'all' market — every tracked maker/slug
   const allSlugs = new Set(Object.values(MARKETS).flat());
-  markets.all = buildMarketSeries(all.filter(l => allSlugs.has(l.artist)), 'the market');
+  markets.all = buildMarketSeries(engineAll.filter(l => allSlugs.has(l.artist)), 'the market');
   console.log(`[market] all      index ${markets.all.index.length}pts · n${markets.all.n}`);
 
   // per-maker mini-series for the big names (drill-down)
@@ -325,7 +333,11 @@ export function runMarketBuild() {
   for (const l of all) delete (l as AuctionLot & { _v?: unknown })._v;
   const { writeCorpusAndServed } = require('./corpus-io');
   writeCorpusAndServed(all as unknown as Record<string, unknown>[],
-    (l: Record<string, unknown>) => l.auctionHouse === 'Goldin' && l.status === 'sold');
+    (l: Record<string, unknown>) => l.auctionHouse === 'Goldin' && l.status === 'sold',
+    // corpus-only: the 348k SOLD sport cards live in the corpus gz for the DB/
+    // future features, but never ship to the client (payload). Live cards DO
+    // ship (they're on the block); only sold cards are held back.
+    (l: Record<string, unknown>) => l.artist === 'sports-cards' && l.status === 'sold');
   // rebuild the eager payload so upcoming lots carry their fresh `value`
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED);

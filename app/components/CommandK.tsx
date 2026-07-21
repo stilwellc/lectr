@@ -95,45 +95,10 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     return [...sections, ...grouped];
   }, [items]);
 
-  // THE ARCHIVE TIER — every lot that ever crossed the book, straight from
-  // the lots table (trigram-indexed, one ~50ms query). Sold-only: the live
-  // book is already searched client-side below, so the two tiers never
-  // overlap. Debounced; absent DB config degrades to live-only silently.
-  const [archHits, setArchHits] = useState<Item[]>([]);
-  useEffect(() => {
-    const dbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const dbAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const needle = q.trim();
-    if (needle.length < 3 || !dbUrl || !dbAnon) { setArchHits([]); return; }
-    let dead = false;
-    const t = window.setTimeout(async () => {
-      try {
-        const words = needle.split(/\s+/).slice(0, 4)
-          .map(w => w.replace(/[%,()*\\]/g, ''))
-          .filter(Boolean);
-        if (!words.length) return;
-        const and = `and=(${words.map(w => `title.ilike.*${encodeURIComponent(w)}*`).join(',')})`;
-        const res = await fetch(
-          `${dbUrl}/rest/v1/lots?${and}&status=eq.sold&select=id,title,artist,sale_date,price_usd,house&order=sale_date.desc.nullslast&limit=8`,
-          { headers: { apikey: dbAnon, Authorization: `Bearer ${dbAnon}` } },
-        );
-        if (!res.ok) return;
-        const rows: { id: string; title: string; artist: string | null; sale_date: string | null; price_usd: number | null; house: string | null }[] = await res.json();
-        if (dead) return;
-        setArchHits(rows.map(r => ({
-          label: craftTitle(r.title || r.id),
-          hint: [
-            r.sale_date ? `hammered ${r.sale_date.slice(0, 4)}` : 'hammered',
-            r.price_usd ? `$${Math.round(r.price_usd).toLocaleString()}` : null,
-            r.house,
-          ].filter(Boolean).join(' · '),
-          path: `/lot?id=${encodeURIComponent(r.id)}`,
-          kind: 'lot' as const,
-        })));
-      } catch { /* archive tier is a bonus — never break the palette */ }
-    }, 220);
-    return () => { dead = true; window.clearTimeout(t); };
-  }, [q]);
+  // Search covers the LIVE BOOK only (upcoming lots), client-side below — a
+  // collector searches for something they can still bid on, not the sold
+  // archive. The sold history lives in R2, never mirrored to Supabase, so
+  // there is no DB search tier to maintain.
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -149,8 +114,8 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         path: `/${l.artist}#on-the-block`,
         kind: 'lot' as const,
       }));
-    return [...itemMatches, ...lotMatches, ...archHits];
-  }, [items, browseItems, q, upcomingLots, archHits]);
+    return [...itemMatches, ...lotMatches];
+  }, [items, browseItems, q, upcomingLots]);
   // While searching, only the first 12 are rendered — keyboard nav + Enter
   // must index into the SAME list, or the highlight vanishes and Enter fires
   // an unseen item. The empty-query browse renders the whole grouped roster

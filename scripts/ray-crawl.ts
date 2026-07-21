@@ -1715,23 +1715,31 @@ const GOLDIN_TICKET = /\b(tickets?\b|stub|full ticket|season pass|press pass|cre
 // Returns a routing slug, 'blocked' (hard exclusion — the facet fallback must
 // NEVER override it, or the slab gate is dead code on the fallback passes), or
 // null (no signal — the facet fallback may apply).
-function goldinRoute(title: string): string | null {
+//
+// sportScoped: the lot came from a query filtered to Goldin's own `category:
+// ['Sport']`, which already excludes Pokémon/TCG (those are Non-Sport). In that
+// context a card is a SPORTS CARD we want (→ 'sports-cards'), not blocked; and a
+// Sport lot with no object signal is, overwhelmingly, a card. Unscoped passes
+// keep the original doctrine (cards blocked) since they can surface Non-Sport.
+function goldinRoute(title: string, sportScoped = false): string | null {
   const t = title.toLowerCase();
-  if (GOLDIN_CARD_MAKERS.test(t)) return 'blocked';     // never cards
   if (GOLDIN_EXCLUDE_GAMES.test(t)) return 'blocked';   // never video games
   if (GOLDIN_EXCLUDE_MISC.test(t)) return 'blocked';    // magazines, theme parks, props
+  if (!sportScoped && GOLDIN_CARD_MAKERS.test(t)) return 'blocked'; // unscoped: never cards
+  // sports objects win over the card default — a game-used jersey in a Sport
+  // pass is game-used, not a card (checked before the sportScoped card fallback)
+  const objectSignal = GOLDIN_GAME_USED.test(t) ? 'game-used'
+    : GOLDIN_TROPHY.test(t) ? 'trophies-awards'
+    : GOLDIN_TICKET.test(t) ? 'tickets-passes'
+    : null;
+  if (sportScoped) return objectSignal || 'sports-cards';
+  if (objectSignal) return objectSignal;
   // space first — Apollo/NASA artifacts head the science vertical's space slug
   if (/\b(apollo|nasa|lunar|moon landing|astronaut|spacesuit|space suit|mercury (program|capsule)|gemini (program|capsule)|saturn v|cosmonaut|sputnik|space[- ]?flown)\b/.test(t)) return 'space-exploration';
   // then computing/tech: an Apple-1 or a sealed iPhone is science even in a sports house
   if (/\b(apple[- ]?(1|i{1,3}|ii)|iphone|ipod|macintosh|apple lisa|steve jobs|wozniak|apple computer|commodore|ibm\b|altair|enigma|bell labs|transistor|semiconductor|integrated circuit|microprocessor|vacuum tube|punch(ed)? card|eniac|univac|\bcray\b|pdp-\d|\bvax\b|\bnext(cube|step)?\b|xerox (alto|parc)|difference engine|babbage|\bturing\b|kenbak|imsai|trs-80)\b/.test(t)) return 'scientific-instruments';
   if (/\b(meteorite|pallasite|tektite)\b/.test(t)) return 'meteorites';
   if (/\b(fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|amber with|t[- ]rex|raptor)\b/.test(t)) return 'fossils';
-  // sports objects — a grading mark doesn't disqualify a real object
-  const objectSignal = GOLDIN_GAME_USED.test(t) ? 'game-used'
-    : GOLDIN_TROPHY.test(t) ? 'trophies-awards'
-    : GOLDIN_TICKET.test(t) ? 'tickets-passes'
-    : null;
-  if (objectSignal) return objectSignal;
   if (GOLDIN_GRADED.test(t)) return 'blocked';          // graded, no object signal = a slab
   return null;
 }
@@ -1750,10 +1758,16 @@ const GOLDIN_SCIENCE_QUERIES = ['apple computer', 'macintosh', 'steve jobs', 'fo
 // Tickets are the clean, card-free sport buckets (~13k sold combined);
 // 'Awards and Trophies' returns 0 sold and 'Memorabilia' is 34k card-heavy —
 // both left to the live pass + router until they earn a dedicated gate.
-const GOLDIN_SOLD_PASSES: { label: string; scope: Record<string, unknown>; fallback: string | null }[] = [
-  // sport objects
-  { label: 'Game-Used', scope: { item_type: ['Game-Used Memorabilia'], category: ['Sport'] }, fallback: 'game-used' },
-  { label: 'Tickets', scope: { item_type: ['Tickets and Passes'], category: ['Sport'] }, fallback: 'tickets-passes' },
+const GOLDIN_SOLD_PASSES: { label: string; scope: Record<string, unknown>; fallback: string | null; sportScoped?: boolean }[] = [
+  // sport OBJECTS — these buckets are small enough that Ending_Soonest's tail
+  // window (from ≈ total-500) stays under the 10k Algolia cap. sportScoped so a
+  // game-used relic card still routes game-used, not dropped.
+  { label: 'Game-Used', scope: { item_type: ['Game-Used Memorabilia'], category: ['Sport'] }, fallback: 'game-used', sportScoped: true },
+  { label: 'Tickets', scope: { item_type: ['Tickets and Passes'], category: ['Sport'] }, fallback: 'tickets-passes', sportScoped: true },
+  // sold CARDS are NOT pulled here: at 348k the newest closes sit past the 10k
+  // cap (Ending_Soonest tail unreachable). Instead the live Sport pass tracks
+  // upcoming cards and the Completed-flip promotes them to sold — so the card
+  // archive grows nightly — while the one-time backfill seeds the history.
   // science: NASA/space + Apple/computing (Collin's science sold sources)
   { label: 'NASA', scope: { sub_category: ['NASA'], category: ['Non-Sport'] }, fallback: 'space-exploration' },
   { label: 'iPhone', scope: { item_type: ['iPhone'], category: ['Non-Sport'] }, fallback: 'scientific-instruments' },
@@ -1808,12 +1822,14 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // A live bid is NEVER a sale: Goldin's clock crosses end_timestamp BEFORE
   // extended bidding resolves, and its lot-level `status` field lies (always
   // "Live"), so sold is never inferred here from a timestamp or a bid.
-  const ingest = (lot: any, fallback: string | null) => {
+  const ingest = (lot: any, fallback: string | null, sportScoped = false) => {
     if (!lot.title || !lot.lot_id) return;
     const t = lot.title.toLowerCase();
     if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return; }
-    if (GOLDIN_CARD_MAKERS.test(t) || GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t)) { dropped++; return; }
-    const routed = goldinRoute(lot.title);
+    // sport-scoped (category:['Sport']) passes KEEP cards → sports-cards; only
+    // unscoped passes hard-drop cards (they could be Non-Sport/Pokémon).
+    if (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t))) { dropped++; return; }
+    const routed = goldinRoute(lot.title, sportScoped);
     // 'blocked' is a hard exclusion (slab with no object signal, etc.) — the
     // facet fallback must never resurrect it, or graded cards ride the
     // Tickets/Game-Used facets straight into the sports vertical.
@@ -1872,13 +1888,13 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // ingest a SOLD result (show_only:'Sold') — a permanent record at the
   // realized price (winning bid + buyer's premium). Same gates as live; a
   // zero-price row is unusable and skipped. Returns true when it logged one.
-  const ingestSold = (lot: any, fallback: string | null): boolean => {
+  const ingestSold = (lot: any, fallback: string | null, sportScoped = false): boolean => {
     if (!lot.title || !lot.lot_id) return false;
     if (byId.has(lot.lot_id)) return false; // live pass or an earlier sold row won
     const t = lot.title.toLowerCase();
     if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return false; }
-    if (GOLDIN_CARD_MAKERS.test(t) || GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t)) { dropped++; return false; }
-    const routed = goldinRoute(lot.title);
+    if (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t))) { dropped++; return false; }
+    const routed = goldinRoute(lot.title, sportScoped);
     if (routed === 'blocked') { dropped++; return false; }
     const artist = routed || fallback;
     if (!artist) { dropped++; return false; }
@@ -1950,6 +1966,31 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     }
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false; // windowed, not enumerated
   }
+  // 1a · LIVE SPORT CARDS — the whole live Sport book (category:['Sport'],
+  // which is Goldin's own line: Non-Sport/Pokémon is a separate category we
+  // never touch). sportScoped ingest routes cards → sports-cards, objects →
+  // their slugs. ~3.5k live lots; capped generously. This is the on-the-block
+  // + ⌘K-searchable card feed; the 348k SOLD history is the one-time backfill.
+  {
+    let from = 0, total = Infinity;
+    const CAP = 8000;
+    while (from < Math.min(total, CAP)) {
+      try {
+        const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Sport'], size: 100, from });
+        total = t;
+        if (!lots.length) break;
+        lots.forEach((l: any) => ingest(l, 'sports-cards', true));
+        from += 100;
+        await sleep(400);
+      } catch (e) {
+        console.log(`  [Goldin] live Sport pass truncated at ${from}:`, e);
+        goldinFeedComplete = false;
+        break;
+      }
+    }
+    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+    console.log(`  [Goldin] live Sport pass: ${Math.min(total, CAP)} lots enumerated`);
+  }
   // 1b · AUCTION-AWARE LIVE PASS — newly launched flagship auctions (e.g.
   // "2026 Summer Game Used Memorabilia Auction") can go Active with their
   // lots carrying NO item_type facet yet, so the facet passes above miss the
@@ -2016,7 +2057,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       for (let from = start; from < total; from += 100) {
         const { lots } = await goldinQuery({ ...scope, size: 100, from });
         if (!lots.length) break;
-        for (const l of lots) if (ingestSold(l, pass.fallback)) soldLogged++;
+        for (const l of lots) if (ingestSold(l, pass.fallback, pass.sportScoped)) soldLogged++;
         await sleep(400);
       }
     } catch (e) {
@@ -2890,7 +2931,7 @@ async function main() {
   // pass, not per-artist. Scope to whichever verticals this run touches.
   const WATCH_SLUGS = ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'];
   const SCIENCE_SLUGS = ['meteorites', 'fossils', 'space-exploration', 'scientific-instruments'];
-  const SPORTS_SLUGS = ['game-used', 'trophies-awards', 'tickets-passes'];
+  const SPORTS_SLUGS = ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes'];
   const ART_SLUGS = ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf', 'george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'];
   const wantWatch = !only || WATCH_SLUGS.some(s => only.has(s));
   const wantScience = !only || SCIENCE_SLUGS.some(s => only.has(s));
@@ -3238,7 +3279,7 @@ async function main() {
   // sport tag (title-derived) for the SPORT filter on the sports vertical —
   // sportOf lives in app/utils (pure, no client deps; same fn the UI uses).
   const { sportOf } = await import('../app/utils');
-  const SPORT_SLUGS = new Set(['game-used', 'trophies-awards', 'tickets-passes']);
+  const SPORT_SLUGS = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes']);
   let categoryCounts: Record<string, number> = {};
   for (const lot of allLots) {
     lot.category = classifyLot(lot);

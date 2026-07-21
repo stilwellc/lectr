@@ -69,28 +69,38 @@ export function readCorpus(): Record<string, unknown>[] {
 }
 
 /** Write the full corpus (gz) + slim served files from an in-memory allLots.
- *  isArchived(lot) decides which file a lot lands in (Goldin sold → archive). */
+ *  isArchived(lot) decides which file a lot lands in (Goldin sold → archive).
+ *  isCorpusOnly(lot) (optional) keeps a lot in the CORPUS gz (engine reads it)
+ *  but strips it from EVERY served file — for bulk data (348K sold sport cards)
+ *  that must not bloat the client payload. Corpus-only lots still land in the
+ *  main/archive gz split per isArchived, just never in the shards or served
+ *  archive. */
 export function writeCorpusAndServed(
   allLots: Record<string, unknown>[],
   isArchived: (l: Record<string, unknown>) => boolean,
+  isCorpusOnly: (l: Record<string, unknown>) => boolean = () => false,
 ): { corpusMb: string; servedMb: string; archiveMb: string } {
   fs.mkdirSync(CORPUS_DIR, { recursive: true });
   const archive = allLots.filter(isArchived);
   const main = allLots.filter(l => !isArchived(l));
   const mb = (n: number) => (n / 1048576).toFixed(1);
 
-  // full corpus (gz) — source of truth
+  // full corpus (gz) — source of truth (INCLUDES corpus-only lots)
   const lotsGz = zlib.gzipSync(Buffer.from(JSON.stringify(main)));
   const archGz = zlib.gzipSync(Buffer.from(JSON.stringify(archive)));
   fs.writeFileSync(path.join(CORPUS_DIR, 'lots.json.gz'), lotsGz);
   fs.writeFileSync(path.join(CORPUS_DIR, 'sold-archive.json.gz'), archGz);
+
+  // served projections EXCLUDE corpus-only lots (they'd blow the payload)
+  const mainServed = main.filter(l => !isCorpusOnly(l));
+  const archiveServed = archive.filter(l => !isCorpusOnly(l));
 
   // slim served — the main file is SHARDED (lots-0.json, lots-1.json, … +
   // lots-index.json) because a single lots.json outgrew Cloudflare Pages'
   // 25 MiB/file HARD cap (deploys fail outright past it). ~18 MiB per shard
   // leaves headroom; the client fetches all shards in parallel and concats.
   const SHARD_TARGET = 18 * 1048576;
-  const slimStrs = main.map(l => JSON.stringify(slimForClient(l)));
+  const slimStrs = mainServed.map(l => JSON.stringify(slimForClient(l)));
   const shards: string[][] = [[]];
   let curBytes = 2;
   for (const s of slimStrs) {
@@ -113,7 +123,7 @@ export function writeCorpusAndServed(
   });
   fs.writeFileSync(path.join(SERVED_DIR, 'lots-index.json'), JSON.stringify({ shards: shards.length }));
 
-  const archSlim = JSON.stringify(archive.map(slimForClient));
+  const archSlim = JSON.stringify(archiveServed.map(slimForClient));
   fs.writeFileSync(path.join(SERVED_DIR, 'sold-archive.json'), archSlim);
 
   const CAP = 24 * 1048576;

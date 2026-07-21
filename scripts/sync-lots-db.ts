@@ -21,7 +21,12 @@ async function main() {
   if (!url || !key) { console.log('[sync-lots] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — skipping DB sync'); return; }
   const lots = readCorpus() as any[];
   const now = new Date().toISOString();
-  const rows = lots.filter(l => l.id).map(l => {
+  // UPCOMING ONLY. Supabase is the search + permalink-resolve layer, and we
+  // only want the live book searchable — not the sold archive. Keeping it
+  // upcoming-only also keeps the table tiny (~5k rows) forever, however large
+  // the R2 sold corpus grows (affordability). The engine/analytics never read
+  // Supabase — they read the R2 corpus — so this changes nothing computed.
+  const rows = lots.filter(l => l.id && l.status === 'upcoming').map(l => {
     const v = l.value ?? null;
     return {
       id: String(l.id),
@@ -64,7 +69,19 @@ async function main() {
     done += chunk.length;
     if (done % 5000 < CHUNK) console.log(`[sync-lots] ${done}/${rows.length}`);
   }
-  console.log(`[sync-lots] upserted ${done} lots into public.lots`);
+  console.log(`[sync-lots] upserted ${done} upcoming lots into public.lots`);
+
+  // SWEEP: delete every row not refreshed this run — i.e. lots that are no
+  // longer upcoming (they sold / were withdrawn). This keeps `lots` == the
+  // current live book. Done AFTER a clean upsert so a partial failure never
+  // deletes valid rows; anything wrongly removed is re-added next run. On the
+  // first run this also evicts the ~120k historical sold rows in one statement.
+  const del = await fetch(`${url}/rest/v1/lots?updated_at=lt.${encodeURIComponent(now)}`, {
+    method: 'DELETE',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'return=minimal' },
+  });
+  if (!del.ok) console.error(`[sync-lots] sweep failed (non-fatal): ${del.status} ${(await del.text()).slice(0, 200)}`);
+  else console.log('[sync-lots] swept non-upcoming rows (table now mirrors the live book)');
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

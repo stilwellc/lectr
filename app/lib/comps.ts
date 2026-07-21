@@ -595,7 +595,7 @@ export const SPORTS_SCIENCE_SLUGS = new Set<string>([
 
 /** The sports subset of SPORTS_SCIENCE_SLUGS — these carry sportsForm Forms;
     the science slugs classify through the frozen classifyForm science forms. */
-const SPORTS_SLUGS = new Set<string>(['game-used', 'trophies-awards', 'tickets-passes']);
+const SPORTS_SLUGS = new Set<string>(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes']);
 
 /** THE choke point. Every function below returns early / null unless this is
     true, so none of them can ever run on a non-sports/science-object lot. */

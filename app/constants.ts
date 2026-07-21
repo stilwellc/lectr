@@ -13,7 +13,7 @@ export const MARKETS: { key: Market; label: string; live: boolean; tagline: stri
   { key: 'art', label: 'Art', live: true, tagline: 'paintings, editions, photography & sculpture' },
   { key: 'design', label: 'Design', live: true, tagline: 'the furniture & objects market' },
   { key: 'watches', label: 'Watches', live: true, tagline: 'the reference market' },
-  { key: 'sports', label: 'Sports', live: true, tagline: 'game-worn, trophies & tickets — never cards' },
+  { key: 'sports', label: 'Sports', live: true, tagline: 'cards, game-worn, trophies & tickets' },
   { key: 'science', label: 'Science', live: true, tagline: 'tech, fossils, space & instruments' },
 ];
 
@@ -50,7 +50,9 @@ export const ARTISTS = [
   { slug: 'fossils', label: 'Fossils & Dinosaurs', market: 'science' },
   { slug: 'space-exploration', label: 'Space Exploration', market: 'science' },
   { slug: 'scientific-instruments', label: 'Scientific Instruments', market: 'science' },
-  // the sports vertical: Goldin objects — never cards
+  // the sports vertical: Goldin — sport cards (Goldin's own Sport category, so
+  // never Pokémon/TCG which are Non-Sport) plus the object slugs
+  { slug: 'sports-cards', label: 'Sports Cards', market: 'sports' },
   { slug: 'game-used', label: 'Game Worn & Used', market: 'sports' },
   { slug: 'trophies-awards', label: 'Trophies & Awards', market: 'sports' },
   { slug: 'tickets-passes', label: 'Tickets & Passes', market: 'sports' },
