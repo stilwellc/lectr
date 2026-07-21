@@ -375,9 +375,6 @@ export default function SavedPage() {
             />
           </section>
 
-          {/* what the nightly crawl caught for your saved searches */}
-          <AlertsInbox />
-
           {upcoming.length > 0 && (
             <section className="ray-saved-section rail">
               <h2 className="ray-h2 ray-enter" style={{ marginBottom: 18 }}>
@@ -543,6 +540,10 @@ export default function SavedPage() {
               </div>
             </section>
           )}
+
+          {/* Saved-search alerts live at the very bottom — a secondary feed,
+              below your actual watchlist, collection and results. */}
+          <AlertsInbox />
         </RayEntrance>
       )}
       <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
