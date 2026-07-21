@@ -186,16 +186,20 @@ export function runMarketBuild() {
   console.log(`[market] repeat-sale: ${physPairs} physical pairs → ${physGroups} groups · ${((Date.now() - tRs) / 1000).toFixed(0)}s`);
 
   // ── 3 · market series (the dashboards) ──
+  // Series run over `all` (INCLUDING cards): the analytics are O(n) aggregation,
+  // not the O(pool) valuation/repeat-sale cards were held out of. So the sports
+  // vertical's volume/depth/index reflect the ~300k card market, and card lots
+  // count in every dashboard — while cards still carry no per-lot value/comps.
   const markets: Record<string, MarketSeries> = {};
   for (const m in MARKETS) {
     const set = new Set(MARKETS[m]);
-    markets[m] = buildMarketSeries(engineAll.filter(l => set.has(l.artist)), m);
+    markets[m] = buildMarketSeries(all.filter(l => set.has(l.artist)), m);
     const idxLen = markets[m].index.length;
     console.log(`[market] ${m.padEnd(8)} index ${idxLen}pts · sellThrough ${markets[m].sellThrough.length}pts · houseAcc ${markets[m].houseAccuracy.length}pts · n${markets[m].n}`);
   }
   // the aggregate 'all' market — every tracked maker/slug
   const allSlugs = new Set(Object.values(MARKETS).flat());
-  markets.all = buildMarketSeries(engineAll.filter(l => allSlugs.has(l.artist)), 'the market');
+  markets.all = buildMarketSeries(all.filter(l => allSlugs.has(l.artist)), 'the market');
   console.log(`[market] all      index ${markets.all.index.length}pts · n${markets.all.n}`);
 
   // per-maker mini-series for the big names (drill-down)

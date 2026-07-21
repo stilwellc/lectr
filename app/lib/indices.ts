@@ -38,8 +38,12 @@ const median = (a: number[]) => {
   return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 
-/** A tight like-for-like cohort key: same maker + form + coarse size band. */
+/** A tight like-for-like cohort key: same maker + form + coarse size band.
+ *  Sport cards carry no form/size (they're a lean data asset) — cohort them by
+ *  sport instead, so the index tracks per-sport card price movement rather than
+ *  lumping 300k cards into one meaningless blob. */
 function cohortKey(l: AuctionLot): string {
+  if (l.artist === 'sports-cards') return `sports-cards|${(l as { sport?: string | null }).sport || 'na'}`;
   const size = l.sizeClass || 'na';
   return `${l.artist}|${l.formKey || l.category}|${size}`;
 }
@@ -58,6 +62,10 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
   const soldPriced = lots.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate);
 
   // ── volume + sell-through ──
+  // volume counts ALL sold (cards included — the real market size). sell-through
+  // EXCLUDES cards: we only ingest SOLD cards (Goldin publishes no bought-in for
+  // them), so counting them would read a false 100%. Objects have real
+  // sold+bought_in, so their sell-through stays honest.
   const volByQ = new Map<string, number>();
   const soldByQ = new Map<string, number>();
   const biByQ = new Map<string, number>();
@@ -65,7 +73,7 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
     const q = QUARTER(l.saleDate); if (!q) continue;
     if (l.status === 'sold' && (l.realizedUsd || 0) > 0) {
       volByQ.set(q, (volByQ.get(q) || 0) + 1);
-      soldByQ.set(q, (soldByQ.get(q) || 0) + 1);
+      if (l.artist !== 'sports-cards') soldByQ.set(q, (soldByQ.get(q) || 0) + 1);
     } else if (l.status === 'bought_in') {
       biByQ.set(q, (biByQ.get(q) || 0) + 1);
     }
