@@ -40,6 +40,7 @@ import {
 } from '../app/lib/normalize';
 import { runMarketBuild } from './build-market';
 import { isSportsSale, routeSportsLot } from './sports-sale';
+import { isCultureSale, routeCulture } from './culture';
 
 /* ── config ──────────────────────────────────────────────────────────────── */
 
@@ -143,6 +144,7 @@ const OBJECT_ARTISTS = new Set([
   'rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier',
   'meteorites', 'fossils', 'space-exploration', 'scientific-instruments',
   'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia',
+  'movie-tv', 'music-memorabilia', 'entertainment-memorabilia',
 ]);
 const EDITION_DEFAULT_ARTISTS = new Set(['andy-warhol', 'keith-haring', 'ed-ruscha', 'henri-matisse', 'pablo-picasso']);
 const ORIGINAL_DEFAULT_ARTISTS = new Set([
@@ -414,6 +416,7 @@ const writeGz = (f: string, d: unknown) =>
 
     const saleName = sale.split('/').pop()!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     const sportsSale = isSportsSale(sale); // route the WHOLE sale to sports
+    const cultureSale = !sportsSale && isCultureSale(sale); // else pop-culture
     const saleDate = meta.endDate;
     const saleDay = saleDate.split('T')[0];
 
@@ -433,7 +436,9 @@ const writeGz = (f: string, d: unknown) =>
 
       // sports SALES route ALL lots to the sports vertical (memorabilia catch-all);
       // other sales route to tracked makers only.
-      const artist = sportsSale ? routeSportsLot(lot.title, lot.subtitle || '') : routeItem(lot.creatorsDisplayTitle, lot.title, lot.subtitle || '');
+      const artist = sportsSale ? routeSportsLot(lot.title, lot.subtitle || '')
+        : cultureSale ? routeCulture(lot.title, lot.subtitle || '')
+        : routeItem(lot.creatorsDisplayTitle, lot.title, lot.subtitle || '');
       if (!artist) continue; // nothing we track — never guess
 
       const id = `sothebys-${lot.lotId}`;

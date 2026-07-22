@@ -40,6 +40,7 @@ import {
 } from '../app/lib/normalize';
 import { runMarketBuild } from './build-market';
 import { isSportsSale, routeSportsLot } from './sports-sale';
+import { isCultureSale, routeCulture } from './culture';
 
 /* ── config ──────────────────────────────────────────────────────────────── */
 
@@ -54,7 +55,7 @@ const CORPUS = path.join(process.cwd(), 'data', 'corpus');
 // Sports terms target genuine memorabilia sales (baseball/olympic/world-cup/…)
 // while avoiding "sporting guns/rifles" firearms sales — routeItem gates the
 // rest (game-used / trophies / tickets only; cards never).
-const CANDIDATE_RE = /(watch|montre|contemporary|post-?war|modern|impressionist|avant-garde|first-open|thinking-italian|print|multiple|edition|design|scandinav|nordic|works-on-paper|day-sale|evening|morning-session|afternoon-session|art-contemporain|art-moderne|now-|21st|20th-century|natural-history|meteorite|dinosaur|fossil|jurassic|science|deep-impact|space|palaeontolog|mineral|latin-american|dubuffet|warhol|picasso|kaws|haring|basquiat|ruscha|condo|photograph|prouve|jeanneret|nakashima|eames|sports|memorabilia|olympic|world-cup|baseball|cricket|golf|tennis|boxing|wimbledon|maradona|game-used|game-worn|super-bowl|world-series)/;
+const CANDIDATE_RE = /(watch|montre|contemporary|post-?war|modern|impressionist|avant-garde|first-open|thinking-italian|print|multiple|edition|design|scandinav|nordic|works-on-paper|day-sale|evening|morning-session|afternoon-session|art-contemporain|art-moderne|now-|21st|20th-century|natural-history|meteorite|dinosaur|fossil|jurassic|science|deep-impact|space|palaeontolog|mineral|latin-american|dubuffet|warhol|picasso|kaws|haring|basquiat|ruscha|condo|photograph|prouve|jeanneret|nakashima|eames|sports|memorabilia|olympic|world-cup|baseball|cricket|golf|tennis|boxing|wimbledon|maradona|game-used|game-worn|super-bowl|world-series|hollywood|entertainment|popular-culture|pop-culture|rock-and-pop|rock-n-roll|the-beatles|bowie|james-bond|film-and|music|icons)/;
 
 const MAX_TOTAL_REQUESTS = 12000; // hard stop across live + wayback + cdx pages
 const MAX_PAGES = 20;             // per sale (flagship sales run into hundreds)
@@ -131,6 +132,7 @@ const OBJECT_ARTISTS = new Set([
   'rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier',
   'meteorites', 'fossils', 'space-exploration', 'scientific-instruments',
   'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia',
+  'movie-tv', 'music-memorabilia', 'entertainment-memorabilia',
 ]);
 const EDITION_DEFAULT_ARTISTS = new Set(['andy-warhol', 'keith-haring', 'ed-ruscha', 'henri-matisse', 'pablo-picasso']);
 const ORIGINAL_DEFAULT_ARTISTS = new Set([
@@ -394,6 +396,7 @@ const writeGz = (f: string, d: unknown) =>
   const ingestSale = (slug: string, rawLots: any[]): void => {
     const saleName = slug.replace(/-\d{4,6}$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     const sportsSale = isSportsSale(slug); // route the WHOLE sale to sports
+    const cultureSale = !sportsSale && isCultureSale(slug); // else pop-culture
     for (const lot of rawLots) {
       const primary = lot.title_primary_txt || '';
       const secondary = lot.title_secondary_txt || '';
@@ -412,7 +415,9 @@ const writeGz = (f: string, d: unknown) =>
 
       // sports SALES route ALL lots to the sports vertical (memorabilia catch-all
       // for what the object regexes miss); other sales route to tracked makers.
-      const artist = sportsSale ? routeSportsLot(title, lot.description_txt || '') : routeItem(primary, secondary, lot.description_txt || '');
+      const artist = sportsSale ? routeSportsLot(title, lot.description_txt || '')
+        : cultureSale ? routeCulture(title, lot.description_txt || '')
+        : routeItem(primary, secondary, lot.description_txt || '');
       if (!artist) continue; // nothing we track — never guess
 
       const id = `christies-auc-${lot.object_id}`;

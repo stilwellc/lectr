@@ -47,8 +47,12 @@ export function routeCulture(title: string, description = ''): string | null {
 // A Sotheby's/Christie's sale slug that IS a pop-culture sale. Their "popular
 // culture" / music / entertainment sales. EXCLUDES handbags, wine, watches,
 // and the sports sales (those route via sports-sale.ts).
-const CULTURE_SALE = /(^|[-/ ])(popular[- ]culture|pop[- ]culture|entertainment|hollywood|music|rock[- ]?n[-' ]?roll|hip[- ]hop|the[- ]beatles|freddie[- ]mercury|memorabilia|icons?|natural[- ]history[- ]of|an[- ]american[- ]icon|monsters[- ]of|the[- ]one[- ]that|stage[- ]worn|screen[- ]worn|film[- ](and|&)[- ]entertainment)([-/ ]|$)/i;
-const NOT_CULTURE_SALE = /handbags?|wine|whisk|jewel|watch|sport|baseball|basketball|football|hockey|soccer|olympic|golf|tennis|firearms?|arms[- ]|comics?|trading[- ]cards?/i;
+// NOTE two false friends learned the hard way (Christie's backlog): bare
+// "music" caught antique MECHANICAL MUSIC / music boxes / automata, and
+// "icons" caught ORTHODOX/RUSSIAN religious icons & Objects of Vertu — both
+// nuked below. "music" here must carry a pop/rock context.
+const CULTURE_SALE = /(^|[-/ ])(popular[- ]culture|pop[- ]culture|entertainment|hollywood|pop[- ]?music|rock[- ](and|&)[- ]pop|music[- ]memorabilia|rock[- ]?n[-' ]?roll|hip[- ]hop|the[- ]beatles|freddie[- ]mercury|memorabilia|icons?|glamour[- ](and|&)[- ]style|an[- ]american[- ]icon|monsters[- ]of|the[- ]one[- ]that|stage[- ]worn|screen[- ]worn|film[- ](and|&)[- ]entertainment)([-/ ]|$)/i;
+const NOT_CULTURE_SALE = /handbags?|wine|whisk|jewel|watch|sport|baseball|basketball|football|hockey|soccer|olympic|golf|tennis|firearms?|arms[- ]|comics?|trading[- ]cards?|mechanical[- ]music|automat(a|on|ons)|music[- ]box|musical[- ]instrument|barrel[- ]organ|technical[- ]apparatus|\bradios?\b|orthodox|russian|byzantine|portrait[- ]miniature|objects?[- ]of[- ]vertu|\bvertu\b|ecclesiastic|religious|tapestr|country[- ]furniture|works[- ]of[- ]art|\bdolls?\b|doll[- ']?s[- ]hous/i;
 
 export function isCultureSale(slug: string): boolean {
   const s = slug.toLowerCase();
