@@ -20,9 +20,12 @@ env:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    # the crawl grew a lot (6 houses + Goldin + watches/science/sports auction
-    # APIs) — 15 min was cutting it close, so give it real headroom
-    timeout-minutes: 45
+    # the crawl grew ~4x (Goldin sports cards + culture backlog → 455k corpus)
+    # and now does pull→crawl→rebuild→push→sync→build→deploy in one job. It was
+    # silently hitting the old 45min cap (a nightly ran 45m22s then got KILLED,
+    # leaving prod stale), plus the R2 GET-lag pull-wait can add minutes. Give
+    # it real headroom.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
 
