@@ -6,7 +6,7 @@
  * announced before it trades. 'all' is the whole collectibles market — the
  * lander's default until a vertical is chosen.
  */
-export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science';
+export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science' | 'culture';
 
 export const MARKETS: { key: Market; label: string; live: boolean; tagline: string }[] = [
   { key: 'all', label: 'Total market', live: true, tagline: 'every vertical, one tape' },
@@ -15,6 +15,7 @@ export const MARKETS: { key: Market; label: string; live: boolean; tagline: stri
   { key: 'watches', label: 'Watches', live: true, tagline: 'the reference market' },
   { key: 'sports', label: 'Sports', live: true, tagline: 'cards, game-worn, trophies & tickets' },
   { key: 'science', label: 'Science', live: true, tagline: 'tech, fossils, space & instruments' },
+  { key: 'culture', label: 'Pop Culture', live: true, tagline: 'screen-worn, stage-played & the unrepeatable' },
 ];
 
 export const ARTISTS = [
@@ -58,6 +59,12 @@ export const ARTISTS = [
   { slug: 'trophies-awards', label: 'Trophies & Awards', market: 'sports' },
   { slug: 'tickets-passes', label: 'Tickets & Passes', market: 'sports' },
   { slug: 'sports-memorabilia', label: 'Sports Memorabilia', market: 'sports' },
+  // the pop-culture vertical: high-end 1/1 cultural artifacts, never mass
+  // (no comics/cards/video games) — screen-used film & TV, stage-worn music,
+  // handwritten lyrics, and the iconic entertainment/historic catch-all
+  { slug: 'movie-tv', label: 'Film & TV', market: 'culture' },
+  { slug: 'music-memorabilia', label: 'Music', market: 'culture' },
+  { slug: 'entertainment-memorabilia', label: 'Entertainment & Icons', market: 'culture' },
 ] as const;
 
 export type ArtistSlug = (typeof ARTISTS)[number]['slug'];
@@ -84,6 +91,7 @@ export function rosterNoun(market: Market, n = 2): string {
     case 'watches': return plural ? 'makers' : 'maker';
     case 'science': return plural ? 'collections' : 'collection';
     case 'sports': return plural ? 'categories' : 'category';
+    case 'culture': return plural ? 'categories' : 'category';
     default: return 'tracked';
   }
 }

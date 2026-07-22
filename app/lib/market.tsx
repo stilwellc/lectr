@@ -20,6 +20,7 @@ export const MARKET_PATH: Record<Market, string> = {
   watches: '/watches',
   science: '/science',
   sports: '/sports',
+  culture: '/culture',
 };
 
 const PATH_MARKET: Record<string, Market> = {
@@ -30,6 +31,7 @@ const PATH_MARKET: Record<string, Market> = {
   '/watches': 'watches',
   '/science': 'science',
   '/sports': 'sports',
+  '/culture': 'culture',
 };
 
 const MarketContext = createContext<{ market: Market; setMarket: (m: Market) => void }>({
@@ -51,6 +53,7 @@ const MARKET_TITLE: Record<Market, string> = {
   watches: 'Watches — lectr',
   science: 'Science — lectr',
   sports: 'Sports — lectr',
+  culture: 'Pop Culture — lectr',
 };
 
 export function MarketProvider({ children }: { children: React.ReactNode }) {

@@ -29,6 +29,7 @@ const MARKETS: Record<string, string[]> = {
   watches: ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'],
   sports: ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'],
   science: ['space-exploration', 'meteorites', 'fossils', 'scientific-instruments'],
+  culture: ['movie-tv', 'music-memorabilia', 'entertainment-memorabilia'],
 };
 
 function readGz(f: string): AuctionLot[] {

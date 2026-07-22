@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cheerio from 'cheerio';
 import { computeStats } from './compute-stats';
+import { routeCulture } from './culture';
 
 // ── Types ──
 // Imported from app/types.ts — the app's types are the single source of truth.
@@ -1823,14 +1824,17 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // A live bid is NEVER a sale: Goldin's clock crosses end_timestamp BEFORE
   // extended bidding resolves, and its lot-level `status` field lies (always
   // "Live"), so sold is never inferred here from a timestamp or a bid.
-  const ingest = (lot: any, fallback: string | null, sportScoped = false) => {
+  const ingest = (lot: any, fallback: string | null, sportScoped = false, cultureScoped = false) => {
     if (!lot.title || !lot.lot_id) return;
     const t = lot.title.toLowerCase();
     if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return; }
+    // culture-scoped (Goldin's Pop-Culture/Entertainment/Rock-N-Roll/History
+    // sub-categories): route via routeCulture (drops mass/graded, keeps the 1/1
+    // artifacts). Otherwise sport-scoped or plain object routing.
     // sport-scoped (category:['Sport']) passes KEEP cards → sports-cards; only
     // unscoped passes hard-drop cards (they could be Non-Sport/Pokémon).
-    if (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t))) { dropped++; return; }
-    const routed = goldinRoute(lot.title, sportScoped);
+    if (!cultureScoped && (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t)))) { dropped++; return; }
+    const routed = cultureScoped ? routeCulture(lot.title) : goldinRoute(lot.title, sportScoped);
     // 'blocked' is a hard exclusion (slab with no object signal, etc.) — the
     // facet fallback must never resurrect it, or graded cards ride the
     // Tickets/Game-Used facets straight into the sports vertical.
@@ -1991,6 +1995,30 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     }
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
     console.log(`  [Goldin] live Sport pass: ${Math.min(total, CAP)} lots enumerated`);
+  }
+  // 1a-culture · LIVE POP CULTURE — Goldin's curated Non-Sport sub-categories
+  // (Pop Culture/Entertainment, Rock N' Roll, History): the high-end 1/1
+  // artifacts. cultureScoped ingest drops mass/graded (comics/cards/games/VHS/
+  // vinyl/toys/posters) via routeCulture and routes the rest to culture slugs.
+  {
+    let from = 0, total = Infinity;
+    const CAP = 8000;
+    while (from < Math.min(total, CAP)) {
+      try {
+        const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Non-Sport'], sub_category: ['Pop Culture/Entertainment', "Rock N' Roll", 'History'], size: 100, from });
+        total = t;
+        if (!lots.length) break;
+        lots.forEach((l: any) => ingest(l, null, false, true));
+        from += 100;
+        await sleep(400);
+      } catch (e) {
+        console.log(`  [Goldin] live Culture pass truncated at ${from}:`, e);
+        goldinFeedComplete = false;
+        break;
+      }
+    }
+    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+    console.log(`  [Goldin] live Culture pass: ${Math.min(total, CAP)} lots enumerated`);
   }
   // 1b · AUCTION-AWARE LIVE PASS — newly launched flagship auctions (e.g.
   // "2026 Summer Game Used Memorabilia Auction") can go Active with their

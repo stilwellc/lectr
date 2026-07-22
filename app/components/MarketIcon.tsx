@@ -4,7 +4,8 @@ import type { Market } from '../constants';
  * MarketIcon — one monoline glyph per vertical, drawn in the same 1.8px
  * round-cap stroke family as the rest of the pen-weight ramp. Collectibles = the whole grid, Art = framed
  * gesture, Design = chair in profile, Watches = dial with crown, Sports = the
- * trophy, Science = the flask. currentColor so each context tints them.
+ * trophy, Science = the flask, Pop Culture = the star on the walk of fame.
+ * currentColor so each context tints them.
  */
 const GLYPHS: Record<Market, React.ReactNode> = {
   all: (
@@ -51,6 +52,11 @@ const GLYPHS: Record<Market, React.ReactNode> = {
       <path d="M10 4.5v4.2l-4.2 7.9a1.9 1.9 0 0 0 1.7 2.9h9a1.9 1.9 0 0 0 1.7-2.9L14 8.7V4.5" />
       <path d="M8.8 4.5h6.4" />
       <path d="M7.9 13.2h8.2" />
+    </>
+  ),
+  culture: (
+    <>
+      <path d="M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.57L12 16.4l-5.01 2.63.96-5.57L3.9 9.5l5.6-.8z" />
     </>
   ),
 };
