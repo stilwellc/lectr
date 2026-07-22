@@ -16,6 +16,10 @@ permissions:
 
 env:
   SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
+  # the crawl loads the whole ~455k-lot corpus into memory (lotMap + allLots +
+  # the engine pass) and OOM'd on Node's default ~2GB heap (exit 134). Runners
+  # have 16GB — give node 10GB. Applies to every tsx/next step in the job.
+  NODE_OPTIONS: --max-old-space-size=10240
 
 jobs:
   crawl:
