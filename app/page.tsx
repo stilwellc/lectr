@@ -990,7 +990,11 @@ export default function RayPage() {
                 archiveOpen={showArchive}
                 onToggleArchive={() => setShowArchive(s => !s)}
                 lines={[
-                  { k: 'Sold lots on the book', v: sold.length.toLocaleString() },
+                  // the whole-market view: the true corpus-wide sold count
+                  // (meta.totalSold), NOT sold.length — the client only loads a
+                  // ~140k slim slice, so counting loaded sold lots badly
+                  // undercounts the ~433k archive (mirrors the sports/science row).
+                  { k: 'Sold lots on the book', v: (meta.totalSold ?? sold.length).toLocaleString() },
                   ...(soldMedianPct !== null ? [{ k: 'Median hammer vs estimate', v: fmtSignedPct(soldMedianPct), signed: soldMedianPct }] : []),
                   ...(sold[0].saleDate ? [{ k: 'Latest hammer', v: formatDate(sold[0].saleDate) }] : []),
                 ]}
