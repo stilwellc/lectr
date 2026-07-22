@@ -63,7 +63,7 @@ jobs:
     needs: crawl
     if: always()                # build from fresh-or-last-good segments even if some crawls failed
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60         # segment pulls (parallel) can wait out R2 GET-lag + full engine
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

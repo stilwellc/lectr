@@ -34,15 +34,35 @@ export function segmentOf(auctionHouse: string): SegmentName {
   return HOUSE_TO_SEGMENT[auctionHouse] || 'other';
 }
 
+// Segments are stored as gzipped NDJSON (one lot per line), NOT a JSON array.
+// A 322k-lot Goldin segment JSON-stringifies to >512MB — past V8's max string
+// length ("RangeError: Invalid string length"). NDJSON never builds one giant
+// string: write concatenates small per-lot buffers; read parses line-by-line
+// over the gunzipped buffer. Scales to any segment size.
+function parseNdjson(buf: Buffer): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  let start = 0;
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] === 0x0a) { // '\n'
+      if (i > start) out.push(JSON.parse(buf.toString('utf8', start, i)));
+      start = i + 1;
+    }
+  }
+  if (start < buf.length) out.push(JSON.parse(buf.toString('utf8', start, buf.length)));
+  return out;
+}
+
 export function readSegment(name: string): Record<string, unknown>[] {
   const gz = path.join(SEGMENTS_DIR, name + '.json.gz');
-  if (fs.existsSync(gz)) return JSON.parse(zlib.gunzipSync(fs.readFileSync(gz)).toString('utf8'));
-  return [];
+  if (!fs.existsSync(gz)) return [];
+  return parseNdjson(zlib.gunzipSync(fs.readFileSync(gz)));
 }
 
 export function writeSegment(name: string, lots: Record<string, unknown>[]): void {
   fs.mkdirSync(SEGMENTS_DIR, { recursive: true });
-  fs.writeFileSync(path.join(SEGMENTS_DIR, name + '.json.gz'), zlib.gzipSync(Buffer.from(JSON.stringify(lots))));
+  const parts: Buffer[] = [];
+  for (const l of lots) parts.push(Buffer.from(JSON.stringify(l) + '\n', 'utf8'));
+  fs.writeFileSync(path.join(SEGMENTS_DIR, name + '.json.gz'), zlib.gzipSync(Buffer.concat(parts)));
 }
 
 /** Concat every segment file back into the full corpus (for assemble/engine). */
@@ -51,7 +71,7 @@ export function readAllSegments(): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
   for (const f of fs.readdirSync(SEGMENTS_DIR).sort()) {
     if (!f.endsWith('.json.gz')) continue;
-    const rows = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(SEGMENTS_DIR, f))).toString('utf8'));
+    const rows = parseNdjson(zlib.gunzipSync(fs.readFileSync(path.join(SEGMENTS_DIR, f))));
     for (const r of rows) out.push(r); // loop-append: spread overflows past ~100k
   }
   return out;
@@ -86,6 +106,18 @@ const STRIP = new Set([
   // nightly bid snapshots (corpus-only raw material for bid momentum)
   'bidHistory',
 ]);
+
+/** Gzip a JSON ARRAY without building one giant intermediate string (which
+ *  blows V8's max string length past ~300k lots). Concat small per-row buffers. */
+export function gzipJsonArray(rows: Record<string, unknown>[]): Buffer {
+  const parts: Buffer[] = [Buffer.from('[', 'utf8')];
+  for (let i = 0; i < rows.length; i++) {
+    if (i) parts.push(Buffer.from(',', 'utf8'));
+    parts.push(Buffer.from(JSON.stringify(rows[i]), 'utf8'));
+  }
+  parts.push(Buffer.from(']', 'utf8'));
+  return zlib.gzipSync(Buffer.concat(parts));
+}
 
 export function slimForClient<T extends Record<string, unknown>>(lot: T): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -137,9 +169,11 @@ export function writeCorpusAndServed(
   const main = allLots.filter(l => !isArchived(l));
   const mb = (n: number) => (n / 1048576).toFixed(1);
 
-  // full corpus (gz) — source of truth (INCLUDES corpus-only lots)
-  const lotsGz = zlib.gzipSync(Buffer.from(JSON.stringify(main)));
-  const archGz = zlib.gzipSync(Buffer.from(JSON.stringify(archive)));
+  // full corpus (gz) — source of truth (INCLUDES corpus-only lots). Serialize
+  // as a JSON array WITHOUT one giant intermediate string: JSON.stringify of a
+  // 300k+ lot array blows V8's max string length. Concat small per-lot buffers.
+  const lotsGz = gzipJsonArray(main);
+  const archGz = gzipJsonArray(archive);
   fs.writeFileSync(path.join(CORPUS_DIR, 'lots.json.gz'), lotsGz);
   fs.writeFileSync(path.join(CORPUS_DIR, 'sold-archive.json.gz'), archGz);
 

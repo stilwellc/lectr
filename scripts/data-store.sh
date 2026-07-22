@@ -156,7 +156,16 @@ pull_segment() {
   obj_get_fresh "latest/segments/$name.json.gz" "data/corpus/segments/$name.json.gz" \
     || echo "[data-store] segment $name not in R2 yet (fresh) — crawl will seed it"
 }
-pull_all_segments() { mkdir -p data/corpus/segments; for s in $SEGMENTS; do pull_segment "$s"; done; }
+# Pull every segment IN PARALLEL. Serial pulls each wait out R2 GET-lag (up to
+# ~14min via obj_get_fresh); 6 in a row blew the assemble timeout. Parallel →
+# worst case is one lag window, not six.
+pull_all_segments() {
+  mkdir -p data/corpus/segments
+  local pids="" rc=0
+  for s in $SEGMENTS; do pull_segment "$s" & pids="$pids $!"; done
+  for p in $pids; do wait "$p" || rc=1; done
+  return $rc
+}
 
 case "${1:-}" in
   pull) pull ;;
