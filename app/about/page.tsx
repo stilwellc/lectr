@@ -248,7 +248,7 @@ export default function AboutPage() {
             <Down label="in the background" />
             <Node title="Phase 2 — full history" sub="lots.json ~9 MB. Merges in and re-attaches signal / soldComp to each lot by id." />
             <Down label="on demand" />
-            <Node title="Phase 3 — sold archive" sub="sold-archive.json ~10 MB. Fetched ONLY when a sports/science comps modal opens; art/watch/design never pay for it." />
+            <Node title="Phase 3 — sold archive" sub="sold-archive shards, ~22 MB. Fetched ONLY when a sports/science comps modal opens; art/watch/design never pay for it." />
           </Flow>
         </Section>
 

@@ -318,9 +318,7 @@ function loadSoldArchive() {
   // a retry after archiveError returns gated surfaces to their loading state
   if (archiveErrorState) { archiveErrorState = false; notifyArchive(); }
   const lastCrawl = cached?.lastCrawl || '';
-  const archiveUrl = lastCrawl
-    ? `/data/ray/sold-archive.json?v=${encodeURIComponent(lastCrawl)}`
-    : '/data/ray/sold-archive.json';
+  const ver = lastCrawl ? `?v=${encodeURIComponent(lastCrawl)}` : '';
   // the precomputed soldComp lives on the eager upcoming lots, keyed by id
   const soldComps = new Map((cached?.allLots || []).map(l => [l.id, l.soldComp]));
   (async () => {
@@ -329,8 +327,19 @@ function loadSoldArchive() {
       try {
         // first try trusts the cache; retries bypass it in case the cached
         // body itself was the problem (truncated download)
-        const archiveData = await fetchJson(archiveUrl, { cache: attempt === 0 ? 'force-cache' : 'reload' });
-        const archive = archiveData as AuctionLot[];
+        const cacheMode: RequestCache = attempt === 0 ? 'force-cache' : 'reload';
+        // SHARDED like phase 2 (the single file crossed 22MB against the CDN's
+        // 25MB cap): index → shards in parallel. Single-file fallback covers
+        // the transition window where a client has new code but cached old data.
+        let archive: AuctionLot[];
+        try {
+          const idx = await fetchJson(`/data/ray/sold-archive-index.json${ver}`, { cache: cacheMode }) as { shards: number };
+          const parts = await Promise.all(Array.from({ length: idx.shards }, (_, i) =>
+            fetchJson(`/data/ray/sold-archive-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>));
+          archive = parts.flat();
+        } catch {
+          archive = await fetchJson(`/data/ray/sold-archive.json${ver}`, { cache: cacheMode }) as AuctionLot[];
+        }
         const merged = archive.map(l => (soldComps.has(l.id) ? { ...l, soldComp: soldComps.get(l.id) } : l));
         cachedArchive = merged;
         archiveLoadedState = true;

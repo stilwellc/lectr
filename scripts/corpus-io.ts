@@ -95,40 +95,39 @@ export function writeCorpusAndServed(
   const mainServed = main.filter(l => !isCorpusOnly(l));
   const archiveServed = archive.filter(l => !isCorpusOnly(l));
 
-  // slim served — the main file is SHARDED (lots-0.json, lots-1.json, … +
-  // lots-index.json) because a single lots.json outgrew Cloudflare Pages'
-  // 25 MiB/file HARD cap (deploys fail outright past it). ~18 MiB per shard
-  // leaves headroom; the client fetches all shards in parallel and concats.
+  // slim served — BOTH tiers are SHARDED (<file>-0.json, <file>-1.json, … +
+  // <file>-index.json) because a single file outgrew Cloudflare Pages'
+  // 25 MiB/file HARD cap (deploys fail outright past it — lots.json first,
+  // then the archive crossed 22MB after the card sample). ~18 MiB per shard
+  // leaves headroom; the client fetches a tier's shards in parallel + concats.
   const SHARD_TARGET = 18 * 1048576;
-  const slimStrs = mainServed.map(l => JSON.stringify(slimForClient(l)));
-  const shards: string[][] = [[]];
-  let curBytes = 2;
-  for (const s of slimStrs) {
-    const last = shards[shards.length - 1];
-    if (last.length && curBytes + s.length + 1 > SHARD_TARGET) { shards.push([s]); curBytes = 2 + s.length; }
-    else { last.push(s); curBytes += s.length + 1; }
-  }
-  // clear stale shards beyond the new count, and the legacy single file
-  for (let i = shards.length; ; i++) {
-    const p = path.join(SERVED_DIR, `lots-${i}.json`);
-    if (fs.existsSync(p)) fs.unlinkSync(p); else break;
-  }
-  const legacy = path.join(SERVED_DIR, 'lots.json');
-  if (fs.existsSync(legacy)) fs.unlinkSync(legacy);
-  let servedBytes = 0;
-  shards.forEach((arr, i) => {
-    const body = '[' + arr.join(',') + ']';
-    servedBytes += Buffer.byteLength(body);
-    fs.writeFileSync(path.join(SERVED_DIR, `lots-${i}.json`), body);
-  });
-  fs.writeFileSync(path.join(SERVED_DIR, 'lots-index.json'), JSON.stringify({ shards: shards.length }));
-
-  const archSlim = JSON.stringify(archiveServed.map(slimForClient));
-  fs.writeFileSync(path.join(SERVED_DIR, 'sold-archive.json'), archSlim);
-
-  const CAP = 24 * 1048576;
-  if (Buffer.byteLength(archSlim) > CAP) console.warn(`[corpus] served sold-archive.json is ${mb(Buffer.byteLength(archSlim))}MB — approaching Cloudflare's 25MB/file cap (shard it like lots)`);
-
-  console.log(`[corpus] served lots sharded ×${shards.length} (${mb(servedBytes)}MB total)`);
+  const writeSharded = (base: string, rows: Record<string, unknown>[]): number => {
+    const strs = rows.map(l => JSON.stringify(slimForClient(l)));
+    const shards: string[][] = [[]];
+    let curBytes = 2;
+    for (const s of strs) {
+      const last = shards[shards.length - 1];
+      if (last.length && curBytes + s.length + 1 > SHARD_TARGET) { shards.push([s]); curBytes = 2 + s.length; }
+      else { last.push(s); curBytes += s.length + 1; }
+    }
+    // clear stale shards beyond the new count, and the legacy single file
+    for (let i = shards.length; ; i++) {
+      const p = path.join(SERVED_DIR, `${base}-${i}.json`);
+      if (fs.existsSync(p)) fs.unlinkSync(p); else break;
+    }
+    const legacy = path.join(SERVED_DIR, `${base}.json`);
+    if (fs.existsSync(legacy)) fs.unlinkSync(legacy);
+    let bytes = 0;
+    shards.forEach((arr, i) => {
+      const body = '[' + arr.join(',') + ']';
+      bytes += Buffer.byteLength(body);
+      fs.writeFileSync(path.join(SERVED_DIR, `${base}-${i}.json`), body);
+    });
+    fs.writeFileSync(path.join(SERVED_DIR, `${base}-index.json`), JSON.stringify({ shards: shards.length }));
+    console.log(`[corpus] served ${base} sharded ×${shards.length} (${mb(bytes)}MB total)`);
+    return bytes;
+  };
+  const servedBytes = writeSharded('lots', mainServed);
+  writeSharded('sold-archive', archiveServed);
   return { corpusMb: mb(lotsGz.length), archiveMb: mb(archGz.length), servedMb: mb(servedBytes) };
 }
