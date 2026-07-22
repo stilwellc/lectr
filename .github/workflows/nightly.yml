@@ -71,6 +71,8 @@ jobs:
       - run: npm ci
       - name: Pull all segments
         run: bash scripts/data-store.sh pull-segments
+      - name: Pull previous totals (for the sanity gate)
+        run: bash scripts/data-store.sh pull-meta
       - name: Assemble + engine (sanity-gated)
         run: npx tsx scripts/assemble.ts
       - name: Rebuild eager upcoming payload

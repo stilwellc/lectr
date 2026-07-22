@@ -134,6 +134,9 @@ push() {
   (cd public/data/ray && tar -czf "$TMP/served.tar.gz" .)
   obj_put "latest/corpus.tar" "$TMP/corpus.tar"
   obj_put "latest/served.tar.gz" "$TMP/served.tar.gz"
+  # standalone meta.json — a tiny object so assemble can read the PREVIOUS
+  # totals for its sanity gate without unpacking the 18MB served tarball.
+  obj_put "latest/meta.json" "public/data/ray/meta.json"
   # dated corpus snapshot — the rollback ladder (replaces git history for data)
   day=$(stamp_of public/data/ray/meta.json | cut -c1-10 | tr -d '-')
   [ -n "$day" ] || day=$(date -u +%Y%m%d)
@@ -173,5 +176,8 @@ case "${1:-}" in
   push-segment) push_segment "$2" ;;
   pull-segment) pull_segment "$2" ;;
   pull-segments) pull_all_segments ;;
+  # previous totals for assemble's sanity gate — a plain (non-fresh) GET is fine;
+  # a slightly-stale baseline still catches a catastrophic shrink.
+  pull-meta) mkdir -p public/data/ray; obj_get "latest/meta.json" "public/data/ray/meta.json" || echo "[data-store] no prior meta.json yet (first run)" ;;
   *) echo "usage: $0 pull|push|push-segment <name>|pull-segment <name>|pull-segments"; exit 1 ;;
 esac

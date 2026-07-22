@@ -172,6 +172,10 @@ export function writeCorpusAndServed(
   isCorpusOnly: (l: Record<string, unknown>) => boolean = () => false,
 ): { corpusMb: string; servedMb: string; archiveMb: string } {
   fs.mkdirSync(CORPUS_DIR, { recursive: true });
+  // The served dir is R2-only (gitignored), so a fresh assemble checkout that
+  // pulled ONLY segments has no public/data/ray yet — create it before writing
+  // the shards, or writeSharded ENOENTs on lots-0.json.
+  fs.mkdirSync(SERVED_DIR, { recursive: true });
   const archive = allLots.filter(isArchived);
   const main = allLots.filter(l => !isArchived(l));
   const mb = (n: number) => (n / 1048576).toFixed(1);
