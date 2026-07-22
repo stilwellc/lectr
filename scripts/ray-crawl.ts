@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cheerio from 'cheerio';
 import { computeStats } from './compute-stats';
-import { routeCulture } from './culture';
+import { routeCulture, isCultureSale } from './culture';
+import { isSportsSale, routeSportsLot } from './sports-sale';
 
 // ── Types ──
 // Imported from app/types.ts — the app's types are the single source of truth.
@@ -1424,8 +1425,17 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
     let kept = 0;
     for (const lot of rawLots) {
       if (!lot.title) continue;
-      // item-level: the lot's own text decides where it belongs, never the sale
-      const artist = routeItem(lot.creatorsDisplayTitle, lot.title, lot.subtitle || '');
+      // item-level FIRST: the lot's own text decides where it belongs. Only if
+      // no tracked maker matches do we fall back to the SALE as the signal — but
+      // strictly for the memorabilia verticals routeItem can't identify (sports/
+      // pop-culture), gated by the SAME isSportsSale/isCultureSale used in the
+      // backfills so the false-friend exclusions (mechanical-music, orthodox
+      // icons, etc.) parse out here too.
+      let artist = routeItem(lot.creatorsDisplayTitle, lot.title, lot.subtitle || '');
+      if (!artist) {
+        if (isSportsSale(sale)) artist = routeSportsLot(lot.title, lot.subtitle || '');
+        else if (isCultureSale(sale)) artist = routeCulture(lot.title, lot.subtitle || '');
+      }
       if (!artist) continue; // nothing we track — skip, never guess
 
       const soldRes = lot.bidState?.sold;
@@ -1606,8 +1616,15 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
       const title = secondary ? `${primary} ${secondary}`.trim() : primary;
       if (!title) continue;
       if (lot.lot_withdrawn) continue;
-      // item-level: the lot's own text decides where it belongs, never the sale
-      const artist = routeItem(primary, secondary, lot.description_txt || '');
+      // item-level FIRST, then SALE as fallback for the memorabilia verticals
+      // routeItem can't identify (sports/pop-culture), gated by the same
+      // isSportsSale/isCultureSale as the backfills (mechanical-music/orthodox-
+      // icon false friends parse out here too).
+      let artist = routeItem(primary, secondary, lot.description_txt || '');
+      if (!artist) {
+        if (isSportsSale(sale)) artist = routeSportsLot(title, lot.description_txt || '');
+        else if (isCultureSale(sale)) artist = routeCulture(title, lot.description_txt || '');
+      }
       if (!artist) continue; // nothing we track — skip, never guess
 
       const realisedNum = parseFloat(lot.price_realised || '');
