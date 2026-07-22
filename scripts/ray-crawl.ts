@@ -3365,7 +3365,9 @@ async function main() {
     console.log(`[Ray] Dropped ${beforeWatch - keptLots.length} non-watch lots from watch makers (jewelry/objects)`);
   }
   allLots.length = 0;
-  allLots.push(...keptLots);
+  // NOT push(...keptLots): spread overflows the call stack past ~100k args and
+  // the corpus is now ~455k. Loop-append (same fix as the backfill scripts).
+  for (const l of keptLots) allLots.push(l);
 
   // ── W16 · dead-link guard (publish-time backstop) ──
   // Catches URLs that predate the parse-time id resolution above: an empty/
@@ -3386,7 +3388,7 @@ async function main() {
   if (deadDropped || deadRepaired) {
     console.log(`[Ray] Dead-link guard: dropped ${deadDropped} upcoming lots, repaired ${deadRepaired} archive URLs`);
     allLots.length = 0;
-    allLots.push(...linkedLots);
+    for (const l of linkedLots) allLots.push(l); // no spread — corpus > 100k args overflows
   }
 
   // ── W16 · image liveness, scoped to signal-bearing lots ──
@@ -3487,7 +3489,7 @@ async function main() {
       const badIds = new Set(report.fatal.map(f => (f.match(/^\[\d+\] ([^:]+):/) || [])[1]).filter(Boolean));
       const kept = allLots.filter(l => !badIds.has(l.id));
       console.warn(`[Ray] Dropping ${allLots.length - kept.length} invalid row(s) and publishing the remaining ${kept.length}.`);
-      allLots.length = 0; allLots.push(...kept);
+      allLots.length = 0; for (const l of kept) allLots.push(l); // no spread — corpus > 100k args overflows
       const recheck = assertInvariants(allLots);
       if (recheck.fatal.length > 0) throw new Error(`assertInvariants: ${recheck.fatal.length} FATAL remain after drop — refusing to publish`);
     }
