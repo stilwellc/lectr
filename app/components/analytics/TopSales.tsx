@@ -1,25 +1,36 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AuctionLot } from '../../types';
+import { AuctionLot, TopSaleRow } from '../../types';
 import { formatDate, formatPrice, houseColors, craftTitle, overEstimatePct, toneOf, fmtSignedPct } from '../../utils';
 import { ARTIST_LABEL, Market } from '../../constants';
+import type { MarketSeriesJson } from '../../hooks/useRayData';
 
 interface Props {
   allLots: AuctionLot[];
   market?: Market;
+  series?: MarketSeriesJson | null;
 }
 
 const COLLAPSED_ROWS = 5;
 
-export default function TopSales({ allLots, market }: Props) {
+export default function TopSales({ allLots, market, series }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const topSales = useMemo(() => {
+  // Prefer the build-time top-sales (ranked over the FULL corpus): the loaded
+  // `allLots` is a slim/sample slice, so its #1 "record" and ladder can be
+  // wrong for any vertical whose true top lots weren't shipped (esp. cards).
+  const topSales = useMemo<TopSaleRow[]>(() => {
+    if (series?.analytics?.topSales?.length) return series.analytics.topSales;
     return allLots
       .filter(l => l.status === 'sold' && l.priceUsd)
       .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
-      .slice(0, 20);
-  }, [allLots]);
+      .slice(0, 20)
+      .map(l => ({
+        id: String(l.id), artist: l.artist, title: l.title || '', priceUsd: l.priceUsd || 0,
+        url: l.url || '', auctionHouse: l.auctionHouse || '', saleDate: l.saleDate || '',
+        sport: (l as AuctionLot & { sport?: string }).sport ?? null, overEst: overEstimatePct(l),
+      }));
+  }, [series, allLots]);
 
   if (topSales.length === 0) return null;
 
@@ -126,9 +137,9 @@ export default function TopSales({ allLots, market }: Props) {
             {shown.map((lot, i) => {
               const ct = craftTitle(lot.title);
               const title = ct.length > 50 ? ct.slice(0, 47) + '…' : ct;
-              // hammer basis — the premium is divided out before comparing to
-              // the estimate mid (null when the lot carries no estimate)
-              const overEst = overEstimatePct(lot);
+              // precomputed at build (hammer basis, premium divided out;
+              // null when the lot carries no estimate)
+              const overEst = lot.overEst;
               return (
                 <tr key={lot.id} className="ray-top-row">
                   {/* Rank 1 is the single wine record marker for this view */}

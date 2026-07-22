@@ -13,8 +13,18 @@
 // per-lot router, which still drops a non-sport lot. EXCLUDES the traps:
 // "sporting guns/rifles/firearms" (weapons), "decorative sporting … prints"
 // and "topographical" (sporting ART), and firearms/arms-&-armour sales.
-const SPORTS_SALE = /(^|[-/ ])(sports?|memorabilia|baseball|basketball|football|soccer|hockey|olympic|cricket|tennis|golf|boxing|wrestling|wimbledon|maradona|pele|\bnba\b|\bnfl\b|\bmlb\b|\bnhl\b|super[- ]?bowl|world[- ]series|world[- ]cup|stanley[- ]cup|ryder[- ]cup|masters|grand[- ]slam|extra[- ]innings|vintage[- ]sports|american[- ]greats|game[- ](used|worn)|game[- ]worn[- ]icons|sneakers?|the[- ]one)([- /]|$)/i;
-const NOT_SPORTS_SALE = /sporting[- ](guns?|rifles?|firearms?|art|pictures?)|decorative[- ]sporting|topographi|antique[- ](arms|firearms)|arms[- ](and[- ])?armou?r|shotguns?|\bwine\b|whisk|handbags?/i;
+// NOTE: bare "masters" was REMOVED — it was for golf's "The Masters" but
+// matched "OLD MASTERS" / "Masters of Design" art sales and dumped ~$500M of
+// Old Master paintings into sports-memorabilia (a classic false friend, like
+// "music"/"icons" for culture). Golf sales already match "golf"; a Masters
+// golf sale without the word "golf" is a rare miss, far better than the flood.
+const SPORTS_SALE = /(^|[-/ ])(sports?|memorabilia|baseball|basketball|football|soccer|hockey|olympic|cricket|tennis|golf|boxing|wrestling|wimbledon|maradona|pele|\bnba\b|\bnfl\b|\bmlb\b|\bnhl\b|super[- ]?bowl|world[- ]series|world[- ]cup|stanley[- ]cup|ryder[- ]cup|grand[- ]slam|extra[- ]innings|vintage[- ]sports|american[- ]greats|game[- ](used|worn)|game[- ]worn[- ]icons|sneakers?|the[- ]one)([- /]|$)/i;
+// NOT_SPORTS_SALE also nukes art-sale slugs belt-and-suspenders (Old Masters,
+// Impressionist/Modern, paintings & drawings, works on paper, 19th-century art).
+// ...and culture-memorabilia sales that match via the bare "memorabilia"
+// keyword (isSportsSale runs BEFORE isCultureSale, so "Entertainment
+// Memorabilia" / "Rock & Pop" would wrongly land in sports without this).
+const NOT_SPORTS_SALE = /sporting[- ](guns?|rifles?|firearms?|art|pictures?)|decorative[- ]sporting|topographi|antique[- ](arms|firearms)|arms[- ](and[- ])?armou?r|shotguns?|\bwine\b|whisk|handbags?|old[- ]masters?|masters[- ]of[- ]design|impressionist|modern[- ]art|paintings?[- ]drawings?|19th[- ]century|works[- ]on[- ]paper|entertainment[- ]memorabilia|film[- ](and|&)[- ]entertainment|rock[- ](and|&|n)[-' ]?pop|music[- ]memorabilia|pop[- ]culture/i;
 
 export function isSportsSale(slug: string): boolean {
   const s = slug.toLowerCase();

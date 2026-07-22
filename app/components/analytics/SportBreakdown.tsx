@@ -50,25 +50,33 @@ function SportTooltip({ active, payload }: { active?: boolean; payload?: Array<{
  * ranked-horizontal-bars pattern. Other (title names no sport) pinned last.
  * Rendered embedded inside the Distributions band only.
  */
-export default function SportBreakdown({ allLots }: Props) {
+export default function SportBreakdown({ allLots, data }: Props & { data?: { sport: string; count: number; totalValue: number }[] }) {
   const { theme } = useTheme();
   const sportData = useMemo(() => {
-    const map: Record<string, { count: number; totalValue: number }> = {};
-    for (const l of allLots) {
-      if (l.status !== 'sold' || !l.priceUsd) continue;
-      const sport = l.sport ?? 'Other';
-      if (!map[sport]) map[sport] = { count: 0, totalValue: 0 };
-      map[sport].count++;
-      map[sport].totalValue += l.priceUsd;
+    // build-time per-sport totals over the FULL corpus when available — the
+    // sports vertical is the sold-archive SAMPLE on the client, so counting
+    // `allLots` badly undercounts every sport's value.
+    let ranked: { sport: string; count: number; totalValue: number }[];
+    if (data?.length) {
+      ranked = data.slice().sort((a, b) => b.totalValue - a.totalValue);
+    } else {
+      const map: Record<string, { count: number; totalValue: number }> = {};
+      for (const l of allLots) {
+        if (l.status !== 'sold' || !l.priceUsd) continue;
+        const sport = l.sport ?? 'Other';
+        if (!map[sport]) map[sport] = { count: 0, totalValue: 0 };
+        map[sport].count++;
+        map[sport].totalValue += l.priceUsd;
+      }
+      ranked = Object.entries(map)
+        .map(([sport, d]) => ({ sport, count: d.count, totalValue: d.totalValue }))
+        .sort((a, b) => b.totalValue - a.totalValue);
     }
     const ramp = SPORT_RAMP[theme];
-    const ranked = Object.entries(map)
-      .map(([sport, d]) => ({ sport, count: d.count, totalValue: d.totalValue }))
-      .sort((a, b) => b.totalValue - a.totalValue);
     // Other = the unattributed remainder — pinned last, never ranked
     const pinned = [...ranked.filter(r => r.sport !== 'Other'), ...ranked.filter(r => r.sport === 'Other')];
     return pinned.map((r, i) => ({ ...r, fill: ramp[Math.min(i, ramp.length - 1)] }));
-  }, [allLots, theme]);
+  }, [allLots, theme, data]);
 
   if (sportData.length === 0) return null;
 

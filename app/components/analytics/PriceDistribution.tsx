@@ -42,8 +42,11 @@ function DistributionTooltip({ active, payload }: { active?: boolean; payload?: 
   );
 }
 
-export default function PriceDistribution({ allLots, embedded = false }: Props & { embedded?: boolean }) {
+export default function PriceDistribution({ allLots, buckets: preBuckets, embedded = false }: Props & { buckets?: { label: string; count: number; totalValue: number }[]; embedded?: boolean }) {
   const buckets = useMemo(() => {
+    // build-time histogram over the FULL corpus when available — the loaded
+    // `allLots` is a sample and distorts the shape (esp. the $500K+ tail).
+    if (preBuckets?.length) return preBuckets;
     const sold = allLots.filter(l => l.status === 'sold' && l.priceUsd);
     return RANGES.map(r => {
       const matching = sold.filter(l => l.priceUsd! >= r.min && l.priceUsd! < r.max);
@@ -53,7 +56,7 @@ export default function PriceDistribution({ allLots, embedded = false }: Props &
         totalValue: matching.reduce((s, l) => s + (l.priceUsd || 0), 0),
       };
     });
-  }, [allLots]);
+  }, [allLots, preBuckets]);
 
   const hasData = buckets.some(b => b.count > 0);
   if (!hasData) return null;

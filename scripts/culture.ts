@@ -36,9 +36,15 @@ const MUSIC = /\b(stage[- ](worn|played|used)|performance[- ]worn|concert[- ]wor
 
 /** Route a lot KNOWN to be pop-culture (Goldin curated sub-cat, or a pop-
  *  culture sale) → a culture slug, or null to drop it as mass/graded. */
+// natural-history / fine-art-photography lots that ride into a culture sale but
+// belong to science/art — a fossil skeleton or a Helmut Newton print is not
+// pop-culture memorabilia.
+const NOT_CULTURE_LOT = /\b(fossil|skeleton|oviraptor\w*|dinosaur|tyrannosaur\w*|[a-z]+saurus|triceratops|mammoth|mastodon|meteorite|mineral specimen|ammonite|trilobite|gelatin silver print|chromogenic print|c-print|helmut newton|irving penn|richard avedon)\b/i;
+/** Route a lot KNOWN to be pop-culture (Goldin curated sub-cat, or a pop-
+ *  culture sale) → a culture slug, or null to drop it as mass/graded. */
 export function routeCulture(title: string, description = ''): string | null {
   const t = `${title} ${description}`.toLowerCase();
-  if (MASS.test(t) || CARD.test(t) || isNumberedLot(t)) return null;
+  if (MASS.test(t) || CARD.test(t) || isNumberedLot(t) || NOT_CULTURE_LOT.test(t)) return null;
   if (MOVIE_TV.test(t)) return 'movie-tv';
   if (MUSIC.test(t)) return 'music-memorabilia';
   return 'entertainment-memorabilia'; // the iconic/historic catch-all
@@ -52,7 +58,7 @@ export function routeCulture(title: string, description = ''): string | null {
 // "icons" caught ORTHODOX/RUSSIAN religious icons & Objects of Vertu — both
 // nuked below. "music" here must carry a pop/rock context.
 const CULTURE_SALE = /(^|[-/ ])(popular[- ]culture|pop[- ]culture|entertainment|hollywood|pop[- ]?music|rock[- ](and|&)[- ]pop|music[- ]memorabilia|rock[- ]?n[-' ]?roll|hip[- ]hop|the[- ]beatles|freddie[- ]mercury|memorabilia|icons?|glamour[- ](and|&)[- ]style|an[- ]american[- ]icon|monsters[- ]of|the[- ]one[- ]that|stage[- ]worn|screen[- ]worn|film[- ](and|&)[- ]entertainment)([-/ ]|$)/i;
-const NOT_CULTURE_SALE = /handbags?|wine|whisk|jewel|watch|sport|baseball|basketball|football|hockey|soccer|olympic|golf|tennis|firearms?|arms[- ]|comics?|trading[- ]cards?|mechanical[- ]music|automat(a|on|ons)|music[- ]box|musical[- ]instrument|barrel[- ]organ|technical[- ]apparatus|\bradios?\b|orthodox|russian|byzantine|portrait[- ]miniature|objects?[- ]of[- ]vertu|\bvertu\b|ecclesiastic|religious|tapestr|country[- ]furniture|works[- ]of[- ]art|\bdolls?\b|doll[- ']?s[- ]hous/i;
+const NOT_CULTURE_SALE = /handbags?|wine|whisk|jewel|watch|sport|baseball|basketball|football|hockey|soccer|olympic|golf|tennis|firearms?|arms[- ]|comics?|trading[- ]cards?|mechanical[- ]music|automat(a|on|ons)|music[- ]box|musical[- ]instrument|barrel[- ]organ|technical[- ]apparatus|\bradios?\b|orthodox|russian|byzantine|portrait[- ]miniature|objects?[- ]of[- ]vertu|\bvertu\b|ecclesiastic|religious|tapestr|country[- ]furniture|works[- ]of[- ]art|\bdolls?\b|doll[- ']?s[- ]hous|photographs?|old[- ]masters?|impressionist|natural[- ]history|fossils?|dinosaur|meteorite|mineral/i;
 
 export function isCultureSale(slug: string): boolean {
   const s = slug.toLowerCase();

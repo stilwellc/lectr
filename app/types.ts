@@ -279,6 +279,27 @@ export interface HouseCount {
   totalValue: number;
 }
 
+// Build-time analytics for a market, computed over the FULL corpus so the
+// distribution charts don't have to iterate the slim/sample client payload
+// (which badly undercounts the ~433k-sold verticals like cards).
+export interface TopSaleRow {
+  id: string;
+  artist: string;
+  title: string;
+  priceUsd: number;
+  url: string;
+  auctionHouse: string;
+  saleDate: string;
+  sport?: string | null;
+  overEst: number | null;
+}
+export interface MarketAnalytics {
+  topSales: TopSaleRow[];
+  priceBuckets: { label: string; count: number; totalValue: number }[];
+  sportBreakdown: { sport: string; count: number; totalValue: number }[];
+  categoryBreakdown: { categoryKey: string; revenue: number; count: number; soldCount: number }[];
+}
+
 export interface MarketStats {
   lastUpdated: string;
   totalLotsTracked: number;

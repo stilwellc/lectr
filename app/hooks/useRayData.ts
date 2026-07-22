@@ -88,6 +88,7 @@ export interface MarketSeriesJson {
   volume: { period: string; value: number; n: number }[];
   sellThrough: { period: string; value: number; n: number }[];
   houseAccuracy: { period: string; value: number; n: number }[];
+  analytics?: import('../types').MarketAnalytics;
 }
 interface RayPayload {
   market: MarketData | null;

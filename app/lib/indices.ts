@@ -24,6 +24,7 @@ export interface MarketSeries {
   sellThrough: IndexPoint[];    // 0–100
   houseAccuracy: IndexPoint[];  // realized/est-mid median, per period (>1 = houses light)
   n: number;
+  analytics?: import('../types').MarketAnalytics;  // build-time distribution aggregates (full corpus)
 }
 
 const QUARTER = (d: string) => {

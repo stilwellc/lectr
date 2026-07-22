@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { AuctionLot, MarketStats } from '../../types';
 import type { Market } from '../../constants';
+import type { MarketSeriesJson } from '../../hooks/useRayData';
 import CategoryBreakdown from './CategoryBreakdown';
 import AuctionHouseDistribution from './AuctionHouseDistribution';
 import PriceDistribution from './PriceDistribution';
@@ -24,11 +25,13 @@ const TAB_META: { key: Tab; label: string; sub: string }[] = [
  * section: a small tab row renders one chart at a time instead of stacking
  * full-height sections.
  */
-export default function Distributions({ allLots, statsByArtist, market }: {
+export default function Distributions({ allLots, statsByArtist, market, series }: {
   allLots: AuctionLot[];
   statsByArtist: Record<string, MarketStats>;
   market?: Market;
+  series?: MarketSeriesJson | null;
 }) {
+  const an = series?.analytics;
   const [rawTab, setTab] = useState<Tab>('category');
   const tabs = TAB_META.filter(t => t.key !== 'sport' || market === 'sports');
   // if the market switches away from sports while the Sport tab is up, fall
@@ -97,10 +100,10 @@ export default function Distributions({ allLots, statsByArtist, market }: {
         </div>
       </div>
 
-      {tab === 'category' && <CategoryBreakdown allLots={allLots} embedded />}
+      {tab === 'category' && <CategoryBreakdown allLots={allLots} data={an?.categoryBreakdown} embedded />}
       {tab === 'house' && <AuctionHouseDistribution statsByArtist={statsByArtist} embedded />}
-      {tab === 'price' && <PriceDistribution allLots={allLots} embedded />}
-      {tab === 'sport' && <SportBreakdown allLots={allLots} />}
+      {tab === 'price' && <PriceDistribution allLots={allLots} buckets={an?.priceBuckets} embedded />}
+      {tab === 'sport' && <SportBreakdown allLots={allLots} data={an?.sportBreakdown} />}
     </section>
   );
 }

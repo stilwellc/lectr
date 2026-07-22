@@ -36,32 +36,39 @@ function CategoryTooltip({ active, payload }: { active?: boolean; payload?: Arra
   );
 }
 
-export default function CategoryBreakdown({ allLots, embedded = false }: Props & { embedded?: boolean }) {
+export default function CategoryBreakdown({ allLots, data, embedded = false }: Props & { data?: { categoryKey: string; revenue: number; count: number; soldCount: number }[]; embedded?: boolean }) {
   const { theme } = useTheme();
   const categoryData = useMemo(() => {
-    const catMap: Record<string, { revenue: number; count: number; soldCount: number }> = {};
-    for (const lot of allLots) {
-      const cat = lot.category || 'unknown';
-      if (!catMap[cat]) catMap[cat] = { revenue: 0, count: 0, soldCount: 0 };
-      catMap[cat].count++;
-      if (lot.status === 'sold' && lot.priceUsd) {
-        catMap[cat].revenue += lot.priceUsd;
-        catMap[cat].soldCount++;
-      }
-    }
-    return Object.entries(catMap)
-      .filter(([cat]) => cat !== 'unknown')
-      .map(([cat, d]) => ({
-        category: categoryLabels[cat] || cat,
-        categoryKey: cat,
+    // build-time per-category totals over the FULL corpus when available;
+    // else fall back to the loaded (sample) lots.
+    const rows = data?.length
+      ? data.map(d => ({ categoryKey: d.categoryKey, revenue: d.revenue, count: d.count, soldCount: d.soldCount }))
+      : (() => {
+          const catMap: Record<string, { revenue: number; count: number; soldCount: number }> = {};
+          for (const lot of allLots) {
+            const cat = lot.category || 'unknown';
+            if (!catMap[cat]) catMap[cat] = { revenue: 0, count: 0, soldCount: 0 };
+            catMap[cat].count++;
+            if (lot.status === 'sold' && lot.priceUsd) {
+              catMap[cat].revenue += lot.priceUsd;
+              catMap[cat].soldCount++;
+            }
+          }
+          return Object.entries(catMap).map(([categoryKey, d]) => ({ categoryKey, ...d }));
+        })();
+    return rows
+      .filter(r => r.categoryKey !== 'unknown')
+      .map(d => ({
+        category: categoryLabels[d.categoryKey] || d.categoryKey,
+        categoryKey: d.categoryKey,
         revenue: d.revenue,
         count: d.count,
         soldCount: d.soldCount,
         // Recharts fills need concrete hexes, swapped per theme.
-        fill: categoryColorsHex[theme][cat] || (theme === 'light' ? '#6D685E' : '#A69B86'),
+        fill: categoryColorsHex[theme][d.categoryKey] || (theme === 'light' ? '#6D685E' : '#A69B86'),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [allLots, theme]);
+  }, [allLots, theme, data]);
 
   if (categoryData.length === 0) return null;
 

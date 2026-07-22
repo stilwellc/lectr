@@ -18,7 +18,45 @@ import type { AuctionLot } from '../app/types';
 import { buildIdf, buildVectors, similarity, idf } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
-import { sportOf } from '../app/utils';
+import { sportOf, overEstimatePct } from '../app/utils';
+import type { MarketAnalytics } from '../app/types';
+
+// Build-time distribution aggregates over the FULL corpus for a market's lots,
+// so the analytics charts (Top sales, Price distribution, Sport/Category
+// breakdown) read the true 433k-sold picture instead of iterating the ~38k
+// slim/sample client payload (which garbles the sports/cards vertical).
+const PRICE_RANGES: [string, number, number][] = [
+  ['$0–1K', 0, 1_000], ['$1K–5K', 1_000, 5_000], ['$5K–25K', 5_000, 25_000],
+  ['$25K–100K', 25_000, 100_000], ['$100K–500K', 100_000, 500_000], ['$500K+', 500_000, Infinity],
+];
+function marketAnalytics(lots: AuctionLot[]): MarketAnalytics {
+  const sold = lots.filter(l => l.status === 'sold' && (l.priceUsd || 0) > 0);
+  const topSales = sold.slice().sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0)).slice(0, 20).map(l => ({
+    id: String(l.id), artist: l.artist, title: l.title || '', priceUsd: l.priceUsd || 0,
+    url: l.url || '', auctionHouse: l.auctionHouse || '', saleDate: l.saleDate || '',
+    sport: (l as AuctionLot & { sport?: string }).sport ?? null, overEst: overEstimatePct(l),
+  }));
+  const priceBuckets = PRICE_RANGES.map(([label, min, max]) => {
+    const m = sold.filter(l => l.priceUsd! >= min && l.priceUsd! < max);
+    return { label, count: m.length, totalValue: m.reduce((s, l) => s + (l.priceUsd || 0), 0) };
+  });
+  const sMap: Record<string, { count: number; totalValue: number }> = {};
+  for (const l of sold) {
+    const sp = (l as AuctionLot & { sport?: string }).sport ?? 'Other';
+    (sMap[sp] || (sMap[sp] = { count: 0, totalValue: 0 })).count++;
+    sMap[sp].totalValue += l.priceUsd || 0;
+  }
+  const sportBreakdown = Object.entries(sMap).map(([sport, d]) => ({ sport, ...d })).sort((a, b) => b.totalValue - a.totalValue);
+  const cMap: Record<string, { revenue: number; count: number; soldCount: number }> = {};
+  for (const l of lots) {
+    const cat = l.category || 'unknown';
+    (cMap[cat] || (cMap[cat] = { revenue: 0, count: 0, soldCount: 0 })).count++;
+    if (l.status === 'sold' && (l.priceUsd || 0) > 0) { cMap[cat].revenue += l.priceUsd || 0; cMap[cat].soldCount++; }
+  }
+  const categoryBreakdown = Object.entries(cMap).filter(([c]) => c !== 'unknown')
+    .map(([categoryKey, d]) => ({ categoryKey, ...d })).sort((a, b) => b.revenue - a.revenue);
+  return { topSales, priceBuckets, sportBreakdown, categoryBreakdown };
+}
 
 const CORPUS = path.join(process.cwd(), 'data', 'corpus');
 const SERVED = path.join(process.cwd(), 'public', 'data', 'ray');
@@ -194,13 +232,17 @@ export function runMarketBuild() {
   const markets: Record<string, MarketSeries> = {};
   for (const m in MARKETS) {
     const set = new Set(MARKETS[m]);
-    markets[m] = buildMarketSeries(all.filter(l => set.has(l.artist)), m);
+    const mLots = all.filter(l => set.has(l.artist));
+    markets[m] = buildMarketSeries(mLots, m);
+    markets[m].analytics = marketAnalytics(mLots);
     const idxLen = markets[m].index.length;
     console.log(`[market] ${m.padEnd(8)} index ${idxLen}pts · sellThrough ${markets[m].sellThrough.length}pts · houseAcc ${markets[m].houseAccuracy.length}pts · n${markets[m].n}`);
   }
   // the aggregate 'all' market — every tracked maker/slug
   const allSlugs = new Set(Object.values(MARKETS).flat());
-  markets.all = buildMarketSeries(all.filter(l => allSlugs.has(l.artist)), 'the market');
+  const allMarketLots = all.filter(l => allSlugs.has(l.artist));
+  markets.all = buildMarketSeries(allMarketLots, 'the market');
+  markets.all.analytics = marketAnalytics(allMarketLots);
   console.log(`[market] all      index ${markets.all.index.length}pts · n${markets.all.n}`);
 
   // per-maker mini-series for the big names (drill-down)
