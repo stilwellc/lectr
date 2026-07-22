@@ -3724,7 +3724,8 @@ body {
 }
 .ray-markets-compact .ray-market-tab[data-active=true] svg { color: var(--color-butter-ink); }
 
-/* mobile: no scroll — two rows of three, full width */
+/* mobile: no scroll — the total market spans the full top row, the six
+   verticals sit as two rows of three beneath it */
 @media (max-width: 899px) {
   .ray-markets-fade { mask-image: none; -webkit-mask-image: none; overflow: visible; }
   .ray-markets-compact {
@@ -3737,6 +3738,10 @@ body {
     justify-content: center;
     padding: 10px 6px;
     font-size: 12px;
+  }
+  /* the whole market ('all') takes the entire top row as one wide pill */
+  .ray-markets-compact .ray-market-tab[data-market="all"] {
+    grid-column: 1 / -1;
   }
 }
 
