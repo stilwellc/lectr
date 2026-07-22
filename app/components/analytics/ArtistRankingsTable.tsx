@@ -112,18 +112,37 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
   // (lens = by sport) or on the collection slug (lens = by collection)
   const bidRows = useMemo<BidRow[]>(() => {
     if (!isBid) return [];
-    const now = Date.now();
-    const groups = new Map<string, { label: string; href: string | null; pinLast: boolean; sales: { t: number; p: number }[] }>();
+    // BY COLLECTION (slug): read the authoritative full-corpus stats.json row
+    // per slug — the loaded `allLots` is the ~38k sold-archive SAMPLE, so
+    // summing it undercounts the 433k-sold verticals (cards showed a fraction
+    // of their real $612M revenue / $2.93M record).
     if (lens === 'collection') {
       const roster = ARTISTS.filter(a => marketArtists('sports').has(a.slug));
-      for (const a of roster) groups.set(a.slug, { label: a.label, href: `/${a.slug}`, pinLast: false, sales: [] });
+      return roster.map(a => {
+        const st = statsByArtist[a.slug];
+        return {
+          key: a.slug,
+          label: a.label,
+          href: `/${a.slug}`,
+          pinLast: false,
+          totalRevenue: st?.totalAuctionRevenue || 0,
+          medianSale: st?.medianPriceLast12Months || 0,
+          recordPrice: st?.recordPrice || 0,
+          movement: st && st.appreciationRate != null ? st.appreciationRate : -9999,
+          soldLots: st?.totalLotsTracked || 0,
+        };
+      });
     }
+    // BY SPORT: no per-sport stats row exists, so this view still aggregates
+    // the loaded lots (a sample). It's a secondary lens; the collection view
+    // above is the authoritative one.
+    const now = Date.now();
+    const groups = new Map<string, { label: string; href: string | null; pinLast: boolean; sales: { t: number; p: number }[] }>();
     for (const l of allLots) {
       if (l.status !== 'sold' || !l.priceUsd) continue;
-      const key = lens === 'sport' ? (l.sport ?? 'Other') : l.artist;
+      const key = l.sport ?? 'Other'; // this branch is the by-sport lens only
       let g = groups.get(key);
       if (!g) {
-        if (lens === 'collection') continue; // off-roster safety
         g = { label: key, href: null, pinLast: key === 'Other', sales: [] };
         groups.set(key, g);
       }
@@ -153,7 +172,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         soldLots: g.sales.length,
       };
     });
-  }, [isBid, lens, allLots]);
+  }, [isBid, lens, allLots, statsByArtist]);
 
   const sorted = useMemo(() => {
     const key = ARTIST_SORT_KEYS.includes(sortKey) ? sortKey : 'totalRevenue';

@@ -75,8 +75,18 @@ export default function ArtistHero({
 
   // The headline series: Demand Index (vs estimate) for estimate markets;
   // quarterly MEDIAN REALIZED for bid markets (no estimates exist to divide by).
-  const series = useMemo(() => {
+  const series = useMemo<{ date: string; value: number }[]>(() => {
     if (!bidMarket) return demandSeries(lensLots);
+    // Bid markets (cards, sports objects, culture): prefer the authoritative
+    // full-corpus quarterly median from stats.json. The loaded `lensLots` is a
+    // slim sample for these corpus-only/archive verticals, so computing the
+    // series from it is sparse/empty — the artist-page chart went blank. Only
+    // the whole-slug view (no category lens) maps to the stat.
+    if (stats?.priceHistory?.length && (lens === 'all' || !showLens)) {
+      return stats.priceHistory
+        .filter(p => p.medianPrice > 0)
+        .map(p => ({ date: p.date.replace('-', ' '), value: p.medianPrice }));
+    }
     const byQ = new Map<string, { end: number; prices: number[] }>();
     for (const l of lensLots) {
       if (l.status !== 'sold' || !l.priceUsd) continue;
@@ -125,6 +135,11 @@ export default function ArtistHero({
 
   // Price context: median sale of the trailing 12 months (per lens).
   const typicalSale = useMemo(() => {
+    // authoritative trailing-12mo median from stats.json for the whole slug
+    // (loaded sample is sparse for cards/culture); else compute from the lens.
+    if (bidMarket && stats?.medianPriceLast12Months && (lens === 'all' || !showLens)) {
+      return stats.medianPriceLast12Months;
+    }
     const cutoff = Date.now() - 365 * 86_400_000;
     const prices = lensLots
       .filter(l => l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff)
@@ -133,7 +148,7 @@ export default function ArtistHero({
     if (prices.length < 3) return null;
     const m = Math.floor(prices.length / 2);
     return prices.length % 2 === 0 ? (prices[m - 1] + prices[m]) / 2 : prices[m];
-  }, [lensLots]);
+  }, [lensLots, bidMarket, stats, lens, showLens]);
 
   const facts = useMemo(() => {
     const concluded = lots.filter(l => l.status === 'sold' || l.status === 'bought_in');
