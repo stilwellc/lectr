@@ -39,21 +39,28 @@ export function segmentOf(auctionHouse: string): SegmentName {
 // length ("RangeError: Invalid string length"). NDJSON never builds one giant
 // string: write concatenates small per-lot buffers; read parses line-by-line
 // over the gunzipped buffer. Scales to any segment size.
+// NDJSON files use a DISTINCT extension (.ndjson.gz) from the legacy JSON-array
+// segments (.json.gz). Same-key overwrites suffered R2 GET-lag: a crawl could
+// read the OLD array format from a NEW-format key, mis-parse the whole array as
+// one line, and crash (undefined id). A separate key has no old object to lag
+// onto. The parser also defensively flattens any array-line (belt + braces).
 function parseNdjson(buf: Buffer): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
+  const pushLine = (s: number, e: number) => {
+    if (e <= s) return;
+    const v = JSON.parse(buf.toString('utf8', s, e));
+    if (Array.isArray(v)) { for (const x of v) out.push(x); } else out.push(v);
+  };
   let start = 0;
   for (let i = 0; i < buf.length; i++) {
-    if (buf[i] === 0x0a) { // '\n'
-      if (i > start) out.push(JSON.parse(buf.toString('utf8', start, i)));
-      start = i + 1;
-    }
+    if (buf[i] === 0x0a) { pushLine(start, i); start = i + 1; } // '\n'
   }
-  if (start < buf.length) out.push(JSON.parse(buf.toString('utf8', start, buf.length)));
+  pushLine(start, buf.length);
   return out;
 }
 
 export function readSegment(name: string): Record<string, unknown>[] {
-  const gz = path.join(SEGMENTS_DIR, name + '.json.gz');
+  const gz = path.join(SEGMENTS_DIR, name + '.ndjson.gz');
   if (!fs.existsSync(gz)) return [];
   return parseNdjson(zlib.gunzipSync(fs.readFileSync(gz)));
 }
@@ -62,7 +69,7 @@ export function writeSegment(name: string, lots: Record<string, unknown>[]): voi
   fs.mkdirSync(SEGMENTS_DIR, { recursive: true });
   const parts: Buffer[] = [];
   for (const l of lots) parts.push(Buffer.from(JSON.stringify(l) + '\n', 'utf8'));
-  fs.writeFileSync(path.join(SEGMENTS_DIR, name + '.json.gz'), zlib.gzipSync(Buffer.concat(parts)));
+  fs.writeFileSync(path.join(SEGMENTS_DIR, name + '.ndjson.gz'), zlib.gzipSync(Buffer.concat(parts)));
 }
 
 /** Concat every segment file back into the full corpus (for assemble/engine). */
@@ -70,7 +77,7 @@ export function readAllSegments(): Record<string, unknown>[] {
   if (!fs.existsSync(SEGMENTS_DIR)) return [];
   const out: Record<string, unknown>[] = [];
   for (const f of fs.readdirSync(SEGMENTS_DIR).sort()) {
-    if (!f.endsWith('.json.gz')) continue;
+    if (!f.endsWith('.ndjson.gz')) continue;
     const rows = parseNdjson(zlib.gunzipSync(fs.readFileSync(path.join(SEGMENTS_DIR, f))));
     for (const r of rows) out.push(r); // loop-append: spread overflows past ~100k
   }

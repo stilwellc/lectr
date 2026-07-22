@@ -146,14 +146,14 @@ push() {
 # latest/segments/<name>.json.gz. A pull miss (new segment) is non-fatal.
 SEGMENTS="goldin sothebys christies bonhams phillips wright other"
 push_segment() {
-  local name="$1" f="data/corpus/segments/$1.json.gz"
+  local name="$1" f="data/corpus/segments/$1.ndjson.gz"
   test -f "$f" || { echo "[data-store] no segment $name to push — skipping"; return 0; }
-  obj_put "latest/segments/$name.json.gz" "$f"
+  obj_put "latest/segments/$name.ndjson.gz" "$f"
 }
 pull_segment() {
   local name="$1"
   mkdir -p data/corpus/segments
-  obj_get_fresh "latest/segments/$name.json.gz" "data/corpus/segments/$name.json.gz" \
+  obj_get_fresh "latest/segments/$name.ndjson.gz" "data/corpus/segments/$name.ndjson.gz" \
     || echo "[data-store] segment $name not in R2 yet (fresh) — crawl will seed it"
 }
 # Pull every segment IN PARALLEL. Serial pulls each wait out R2 GET-lag (up to
