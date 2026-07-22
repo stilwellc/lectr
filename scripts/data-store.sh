@@ -52,20 +52,29 @@ listed_etag() { # authoritative etag from the bucket listing (fresh even when GE
   curl -sf -H "Authorization: Bearer $TOKEN" "$API?prefix=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$1")" \
     | python3 -c "import json,sys;objs=json.load(sys.stdin).get('result',[]);print(next((o['etag'].strip('\"') for o in objs if o.get('key')==sys.argv[1]),''))" "$1" 2>/dev/null || true
 }
-obj_get_fresh() { # key file — GET, and retry briefly if the read lags the listed etag.
-  # The R2 API GET path was observed serving a pre-overwrite object for many
-  # minutes after a same-key overwrite. Steady state is one overwrite a day so
-  # this rarely fires, but when it does the warning names the regression.
-  local key="$1" file="$2" want have
+obj_get_fresh() { # key file — GET, and WAIT OUT the GET-lag against the listed etag.
+  # The R2 API GET path was observed serving a pre-overwrite object for 10-15+
+  # minutes after a same-key overwrite while the bucket LISTING etag flips
+  # immediately. A CI deploy that pulls during that window bakes STALE data and
+  # silently regresses production (observed: a deploy shipped a pre-culture
+  # payload while the fresh one sat in the bucket). The listing etag is the
+  # source of truth, so poll GET until it matches — up to DATA_FRESH_TRIES×20s
+  # (default ~14min, covering the worst lag seen). Only then bake.
+  local key="$1" file="$2" want have tries=${DATA_FRESH_TRIES:-42}
   want=$(listed_etag "$key")
-  for attempt in 1 2 3; do
+  local attempt=1
+  while :; do
     obj_get "$key" "$file" || return $?
     have=$(md5 -q "$file" 2>/dev/null || md5sum "$file" | cut -d' ' -f1)
-    { [ -z "$want" ] || [ "$have" = "$want" ]; } && return 0
-    sleep 15
+    { [ -z "$want" ] || [ "$have" = "$want" ]; } && { [ "$attempt" -gt 1 ] && echo "[data-store] $key fresh after $attempt reads (GET caught up to listed etag)"; return 0; }
+    if [ "$attempt" -ge "$tries" ]; then
+      echo "[data-store] WARNING: read of $key STILL STALE after $attempt reads (etag $have, bucket says $want) — using it anyway; freshness guard decides"
+      return 0
+    fi
+    [ "$attempt" -eq 1 ] && echo "[data-store] $key GET lags bucket (have $have, want $want) — waiting for propagation…"
+    attempt=$((attempt + 1))
+    sleep 20
   done
-  echo "[data-store] WARNING: read of $key is STALE (etag $have, bucket says $want) — using it anyway; freshness guard decides"
-  return 0
 }
 obj_put() { # key file — upload, then verify the returned etag against local md5
   local key="$1" file="$2" enc

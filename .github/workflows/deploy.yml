@@ -18,7 +18,10 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # generous: the R2 GET-lag guard in data-store.sh can wait ~14min for the
+    # bucket's fresh object to become GET-visible before baking (prevents a
+    # stale-payload deploy from regressing prod).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
