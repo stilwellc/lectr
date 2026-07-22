@@ -11,9 +11,61 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
-
 export const CORPUS_DIR = path.join(process.cwd(), 'data', 'corpus');
 export const SERVED_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
+
+// ── SEGMENTS: the corpus split BY AUCTION HOUSE, so the nightly can crawl each
+// in its OWN isolated, bounded, retryable job (data/corpus/segments/<name>.json.gz)
+// instead of one monolith that loads the whole 455k+ corpus. A lot's house is
+// disjoint (unlike its vertical, which cross-pulls — a Sotheby's sports sale can
+// hold culture lots), so house segments never overlap and assemble.ts is a
+// clean concat. Each house's crawlers own their segment. Wright+Rago share a
+// crawler → one 'wright' segment.
+export const SEGMENTS_DIR = path.join(CORPUS_DIR, 'segments');
+export const SEGMENT_NAMES = ['goldin', 'sothebys', 'christies', 'bonhams', 'phillips', 'wright', 'other'] as const;
+export type SegmentName = (typeof SEGMENT_NAMES)[number];
+
+const HOUSE_TO_SEGMENT: Record<string, SegmentName> = {
+  'Goldin': 'goldin', "Sotheby's": 'sothebys', 'Sothebys': 'sothebys', "Christie's": 'christies',
+  'Christies': 'christies', 'Bonhams': 'bonhams', 'Phillips': 'phillips', 'Wright': 'wright', 'Rago': 'wright',
+};
+/** Which segment a lot belongs to — keyed on its auction house. */
+export function segmentOf(auctionHouse: string): SegmentName {
+  return HOUSE_TO_SEGMENT[auctionHouse] || 'other';
+}
+
+export function readSegment(name: string): Record<string, unknown>[] {
+  const gz = path.join(SEGMENTS_DIR, name + '.json.gz');
+  if (fs.existsSync(gz)) return JSON.parse(zlib.gunzipSync(fs.readFileSync(gz)).toString('utf8'));
+  return [];
+}
+
+export function writeSegment(name: string, lots: Record<string, unknown>[]): void {
+  fs.mkdirSync(SEGMENTS_DIR, { recursive: true });
+  fs.writeFileSync(path.join(SEGMENTS_DIR, name + '.json.gz'), zlib.gzipSync(Buffer.from(JSON.stringify(lots))));
+}
+
+/** Concat every segment file back into the full corpus (for assemble/engine). */
+export function readAllSegments(): Record<string, unknown>[] {
+  if (!fs.existsSync(SEGMENTS_DIR)) return [];
+  const out: Record<string, unknown>[] = [];
+  for (const f of fs.readdirSync(SEGMENTS_DIR).sort()) {
+    if (!f.endsWith('.json.gz')) continue;
+    const rows = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(SEGMENTS_DIR, f))).toString('utf8'));
+    for (const r of rows) out.push(r); // loop-append: spread overflows past ~100k
+  }
+  return out;
+}
+
+/** Partition a full lot list into per-segment buckets (bootstrap + tests). */
+export function splitIntoSegments(allLots: Record<string, unknown>[]): Record<string, Record<string, unknown>[]> {
+  const byName: Record<string, Record<string, unknown>[]> = {};
+  for (const l of allLots) {
+    const name = segmentOf(String((l as { auctionHouse?: string }).auctionHouse || ''));
+    (byName[name] || (byName[name] = [])).push(l);
+  }
+  return byName;
+}
 
 // Engine-only / redundant fields the client never renders.
 // `reference` and `repeatSaleGroupId` are deliberately NOT stripped: the client

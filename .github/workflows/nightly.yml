@@ -1,0 +1,137 @@
+name: Nightly (segmented)
+
+# The bulletproof, scalable nightly. Instead of ONE monolith that loads the
+# whole ~455k-lot corpus and does crawl→build→deploy in a single job (which hit
+# a new ceiling every time the corpus grew — call-stack, 45min timeout, 2GB
+# heap), the work is split into staged, isolated, retryable jobs:
+#
+#   crawl (matrix, one job PER HOUSE, run in parallel, fail-fast: false)
+#     → each pulls ONLY its own R2 segment, crawls ONLY its house, writes its
+#       segment back. A house failing can't touch another's data, and a crawl
+#       that collapses its own segment refuses to overwrite the last-good one.
+#   assemble (needs: crawl, if: always)
+#     → reunions every segment (fresh OR last-good), runs the engine, and a
+#       SANITY GATE refuses to publish a corpus that shrank >10%. The only
+#       full-corpus job → carries the big heap.
+#   deploy (needs: assemble)  →  pull served → build → ship
+#   sync   (needs: assemble, if: always, non-blocking)  →  supabase + alerts
+#
+# Net: no single job scales with the TOTAL corpus, a partial failure can never
+# regress prod, and any stage is retryable in isolation.
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: --max-old-space-size=10240
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  crawl:
+    strategy:
+      fail-fast: false          # one house failing must NOT cancel the others
+      matrix:
+        house: [goldin, sothebys, christies, bonhams, phillips, wright]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
+      RAY_HOUSE: ${{ matrix.house }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull this house's segment (last-good)
+        run: bash scripts/data-store.sh pull-segment ${{ matrix.house }}
+      - name: Crawl ${{ matrix.house }}
+        run: npx tsx scripts/ray-crawl.ts
+      - name: Push this house's segment
+        run: bash scripts/data-store.sh push-segment ${{ matrix.house }}
+
+  assemble:
+    needs: crawl
+    if: always()                # build from fresh-or-last-good segments even if some crawls failed
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull all segments
+        run: bash scripts/data-store.sh pull-segments
+      - name: Assemble + engine (sanity-gated)
+        run: npx tsx scripts/assemble.ts
+      - name: Rebuild eager upcoming payload
+        run: npx tsx scripts/build-upcoming.ts
+      - name: Rebuild point-in-time backtest
+        run: npx tsx scripts/build-backtest.ts
+      - name: Push corpus + served to R2
+        run: bash scripts/data-store.sh push
+
+  deploy:
+    needs: assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull fresh served payload (waits out R2 GET-lag)
+        run: bash scripts/data-store.sh pull
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run build
+      - name: Verify build self-consistency
+        run: |
+          test -f out/index.html || { echo "::error::out/index.html missing"; exit 1; }
+          missing=0
+          for f in out/*.html; do
+            for c in $(grep -oE '/_next/static/chunks/[a-z0-9/_.-]+\.js' "$f" | sort -u); do
+              [ -f "out$c" ] || { echo "::error::$f references missing chunk $c"; missing=$((missing+1)); }
+            done
+          done
+          [ "$missing" -eq 0 ] || { echo "::error::$missing missing chunk ref(s)"; exit 1; }
+      - name: Deploy to Cloudflare Pages
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "no CF token — skipping deploy"; exit 0; fi
+          npx wrangler pages deploy out --project-name collectr --branch main --commit-dirty=true
+
+  sync:
+    needs: assemble
+    if: always()                # non-blocking: alerts/supabase must never gate a deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull served (for the lot data)
+        run: bash scripts/data-store.sh pull
+      - name: Sync lots table
+        run: npx tsx scripts/sync-lots-db.ts || echo "sync-lots failed (non-fatal)"
+      - name: Match saved-search alerts
+        run: npx tsx scripts/match-alerts.ts || echo "match-alerts failed (non-fatal)"
+      - name: Send alert digests
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+        run: npx tsx scripts/send-digest.ts || echo "send-digest failed (non-fatal)"

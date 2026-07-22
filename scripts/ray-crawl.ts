@@ -2792,43 +2792,57 @@ async function enrichLots(lots: AuctionLot[]): Promise<void> {
 
 // ── Crawl a single artist across all houses ──
 
+// SEGMENTED NIGHTLY: RAY_HOUSE=<segment> scopes a run to ONE house's crawlers,
+// so each house crawls in its own isolated, bounded, retryable job and writes
+// its own corpus segment (assemble.ts reunions them). null = crawl every house
+// (the legacy monolith, still used by backfills + manual runs). Wright+Rago
+// share a crawler → the 'wright' segment.
+const CRAWL_HOUSE = process.env.RAY_HOUSE || null;
+const houseWanted = (seg: string) => !CRAWL_HOUSE || CRAWL_HOUSE === seg;
+
 async function crawlArtist(artist: ArtistConfig): Promise<AuctionLot[]> {
   const allLots: AuctionLot[] = [];
 
   console.log(`\n[Ray] === ${artist.displayName} ===`);
 
-  console.log(`[Ray] Crawling Phillips...`);
-  const phillipsLots = await crawlPhillips(artist);
-  console.log(`[Ray] Phillips: ${phillipsLots.length} lots`);
-  allLots.push(...phillipsLots);
+  if (houseWanted('phillips')) {
+    console.log(`[Ray] Crawling Phillips...`);
+    const phillipsLots = await crawlPhillips(artist);
+    console.log(`[Ray] Phillips: ${phillipsLots.length} lots`);
+    allLots.push(...phillipsLots);
+    await sleep(DELAY_MS);
+  }
 
-  await sleep(DELAY_MS);
+  if (houseWanted('sothebys')) {
+    console.log(`[Ray] Crawling Sothebys...`);
+    const sothebysLots = await crawlSothebys(artist);
+    console.log(`[Ray] Sothebys: ${sothebysLots.length} lots`);
+    allLots.push(...sothebysLots);
+    await sleep(DELAY_MS);
+  }
 
-  console.log(`[Ray] Crawling Sothebys...`);
-  const sothebysLots = await crawlSothebys(artist);
-  console.log(`[Ray] Sothebys: ${sothebysLots.length} lots`);
-  allLots.push(...sothebysLots);
+  if (houseWanted('christies')) {
+    console.log(`[Ray] Crawling Christie's...`);
+    const christiesLots = await crawlChristies(artist);
+    console.log(`[Ray] Christie's: ${christiesLots.length} lots`);
+    allLots.push(...christiesLots);
+    await sleep(DELAY_MS);
+  }
 
-  await sleep(DELAY_MS);
+  if (houseWanted('wright')) {
+    console.log(`[Ray] Crawling Wright/Rago...`);
+    const wrightLots = await crawlWright(artist);
+    console.log(`[Ray] Wright/Rago: ${wrightLots.length} lots`);
+    allLots.push(...wrightLots);
+    await sleep(DELAY_MS);
+  }
 
-  console.log(`[Ray] Crawling Christie's...`);
-  const christiesLots = await crawlChristies(artist);
-  console.log(`[Ray] Christie's: ${christiesLots.length} lots`);
-  allLots.push(...christiesLots);
-
-  await sleep(DELAY_MS);
-
-  console.log(`[Ray] Crawling Wright/Rago...`);
-  const wrightLots = await crawlWright(artist);
-  console.log(`[Ray] Wright/Rago: ${wrightLots.length} lots`);
-  allLots.push(...wrightLots);
-
-  await sleep(DELAY_MS);
-
-  console.log(`[Ray] Crawling Bonhams...`);
-  const bonhamsLots = await crawlBonhams(artist);
-  console.log(`[Ray] Bonhams: ${bonhamsLots.length} lots`);
-  allLots.push(...bonhamsLots);
+  if (houseWanted('bonhams')) {
+    console.log(`[Ray] Crawling Bonhams...`);
+    const bonhamsLots = await crawlBonhams(artist);
+    console.log(`[Ray] Bonhams: ${bonhamsLots.length} lots`);
+    allLots.push(...bonhamsLots);
+  }
 
   return allLots;
 }
@@ -2853,13 +2867,15 @@ async function main() {
   const statsPath = path.join(DATA_DIR, 'stats.json');
 
   try {
-    const { readCorpus } = await import('./corpus-io');
-    existingLots = readCorpus() as unknown as AuctionLot[];
+    const { readCorpus, readSegment } = await import('./corpus-io');
+    // SEGMENTED: a house run loads only ITS segment (bounded memory); the
+    // legacy monolith loads the whole corpus.
+    existingLots = (CRAWL_HOUSE ? readSegment(CRAWL_HOUSE) : readCorpus()) as unknown as AuctionLot[];
     for (const lot of existingLots) {
       if (!lot.artist) lot.artist = 'george-condo';
       if (!lot.category) lot.category = 'unknown' as LotCategory;
     }
-    console.log(`[Ray] Loaded ${existingLots.length} existing lots (full corpus incl. sold-archive).`);
+    console.log(`[Ray] Loaded ${existingLots.length} existing lots (${CRAWL_HOUSE ? `segment ${CRAWL_HOUSE}` : 'full corpus incl. sold-archive'}).`);
   } catch (e) { console.log('[Ray] Could not read corpus:', (e as Error).message); }
   if (fs.existsSync(statsPath)) {
     try {
@@ -2899,11 +2915,13 @@ async function main() {
   const scopeCount = [wantWatch, wantScience, wantSports, wantArt].filter(Boolean).length;
   const auctionScope: 'watches' | 'science' | 'sports' | 'art' | 'all' | null =
     scopeCount > 1 ? 'all' : wantWatch ? 'watches' : wantScience ? 'science' : wantSports ? 'sports' : wantArt ? 'art' : null;
-  if (auctionScope) {
+  if (auctionScope && houseWanted('sothebys')) {
     freshLots.push(...await crawlSothebysAuctions(auctionScope));
-    freshLots.push(...await crawlChristiesAuctions(auctionScope));
     // accurate per-lot close times for the live Sotheby's lots (best-effort)
     await enrichSothebysCloseTimes(freshLots);
+  }
+  if (auctionScope && houseWanted('christies')) {
+    freshLots.push(...await crawlChristiesAuctions(auctionScope));
   }
   // Goldin: sports objects (never cards) + computing/fossils (never games).
   // Live inventory only — each crawl replaces the previous Goldin set
@@ -2924,7 +2942,7 @@ async function main() {
     }
   }
   let freshGoldinIds = new Set<string>();
-  if (!only || GOLDIN_SLUGS.some(s => only.has(s))) {
+  if (houseWanted('goldin') && (!only || GOLDIN_SLUGS.some(s => only.has(s)))) {
     const goldinLots = await crawlGoldin();
     goldinRan = true;
     freshGoldinIds = new Set(goldinLots.map(l => l.id));
@@ -3529,6 +3547,22 @@ async function main() {
       console.log(`[coverage]   ${k.padEnd(8)} ${String(b).padStart(4)} → ${String(a).padStart(4)}${collapse ? '   ⚠️  COVERAGE ALERT — sharp drop, investigate' : ''}`);
     }
     if (alerts) console.warn(`[Ray] ⚠️  COVERAGE ALERT: ${alerts} market(s) lost their active lots this crawl — check the crawler/source before trusting this data.`);
+  }
+
+  // ── SEGMENTED NIGHTLY: a house run owns ONE segment. Write just this house's
+  // lots and STOP — the full-corpus write + engine + served build belong to
+  // assemble.ts, which reunions every segment. Last-good guard: a crawl that
+  // collapsed its own segment must never overwrite the good one (isolated
+  // failure ≠ data loss).
+  if (CRAWL_HOUSE) {
+    const { writeSegment, segmentOf } = await import('./corpus-io');
+    const segLots = allLots.filter(l => segmentOf((l as AuctionLot).auctionHouse) === CRAWL_HOUSE);
+    if (existingLots.length > 200 && segLots.length < existingLots.length * 0.5) {
+      throw new Error(`[Ray] segment ${CRAWL_HOUSE} collapsed ${existingLots.length} → ${segLots.length} (>50%) — refusing to overwrite the last-good segment`);
+    }
+    writeSegment(CRAWL_HOUSE, segLots as unknown as Record<string, unknown>[]);
+    console.log(`[Ray] segment ${CRAWL_HOUSE}: wrote ${segLots.length} lots (was ${existingLots.length}) — assemble reunions + builds.`);
+    return;
   }
 
   // W3 · Payload split at write time. Goldin *sold* is ~35% of the corpus and

@@ -1,14 +1,13 @@
-name: Ray - Crawl Auction Data
+name: Ray - Crawl Auction Data (monolith — manual fallback)
 
-# Nightly pipeline: pull previous data from R2 → crawl → sanity gate →
-# rebuild payloads → push to R2 (the store of record, see
-# docs/data-pipeline.md) → sync the Supabase lots table → build + deploy.
-# Data never touches git; the site has no server, data is baked into the
-# static export this workflow ships to Cloudflare Pages itself.
+# SUPERSEDED by nightly.yml (the staged, segmented, bulletproof pipeline). This
+# is the old single-job monolith: pull full corpus → crawl every house → build
+# → deploy in one job. Kept as a MANUAL fallback (workflow_dispatch only — no
+# cron, so it never double-fires with nightly.yml). It writes the full corpus
+# (data/corpus/{lots,sold-archive}.json.gz) directly, which the segmented
+# pipeline can re-bootstrap from. Use only if the staged pipeline is wedged.
 
 on:
-  schedule:
-    - cron: '0 13 * * *'
   workflow_dispatch:
 
 permissions:

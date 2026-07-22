@@ -141,8 +141,28 @@ push() {
   echo "[data-store] pushed latest + snapshot $day"
 }
 
+# ── SEGMENTS: per-house corpus slices for the staged nightly. Each crawl job
+# pull/push-es ONE segment (isolated); assemble pulls them all. R2 key:
+# latest/segments/<name>.json.gz. A pull miss (new segment) is non-fatal.
+SEGMENTS="goldin sothebys christies bonhams phillips wright other"
+push_segment() {
+  local name="$1" f="data/corpus/segments/$1.json.gz"
+  test -f "$f" || { echo "[data-store] no segment $name to push — skipping"; return 0; }
+  obj_put "latest/segments/$name.json.gz" "$f"
+}
+pull_segment() {
+  local name="$1"
+  mkdir -p data/corpus/segments
+  obj_get_fresh "latest/segments/$name.json.gz" "data/corpus/segments/$name.json.gz" \
+    || echo "[data-store] segment $name not in R2 yet (fresh) — crawl will seed it"
+}
+pull_all_segments() { mkdir -p data/corpus/segments; for s in $SEGMENTS; do pull_segment "$s"; done; }
+
 case "${1:-}" in
   pull) pull ;;
   push) push ;;
-  *) echo "usage: $0 pull|push"; exit 1 ;;
+  push-segment) push_segment "$2" ;;
+  pull-segment) pull_segment "$2" ;;
+  pull-segments) pull_all_segments ;;
+  *) echo "usage: $0 pull|push|push-segment <name>|pull-segment <name>|pull-segments"; exit 1 ;;
 esac
