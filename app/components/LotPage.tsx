@@ -235,7 +235,7 @@ export default function LotPage({ lotId, initialLot }: {
       and the crawler sees real content; live data supersedes it on arrival */
   initialLot?: AuctionLot | null;
 }) {
-  const { allLots, loading, fullLoaded, fullError, lastCrawl, market } = useRayData();
+  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots } = useRayData();
   const { savedIds, isSaved, toggle } = useSavedLots();
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
@@ -711,7 +711,7 @@ export default function LotPage({ lotId, initialLot }: {
           )}
         </section>
       </div>
-      <Colophon lotCount={allLots.length} houseCount={houseCount} record={null} />
+      <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />
     </>
   );
 }

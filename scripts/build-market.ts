@@ -210,6 +210,11 @@ export function runMarketBuild() {
     if (n < 120) continue;
     makers[slug] = buildMarketSeries(all.filter(l => l.artist === slug), slug);
   }
+  // sports-cards is engine-excluded so it never enters `sold`/makerCounts —
+  // build its maker series explicitly over the FULL card corpus, or the
+  // /sports-cards analytics reads "insufficient data" against 288k real sales.
+  makers['sports-cards'] = buildMarketSeries(all.filter(l => l.artist === 'sports-cards'), 'sports-cards');
+  console.log(`[market] makers series: ${Object.keys(makers).length} (sports-cards n=${makers['sports-cards'].n})`);
 
   // ── 3b · house calibration: per house×market estimate honesty ──
   // Dual-basis doctrine: estimates are hammer-basis, realized is premium-
@@ -433,6 +438,22 @@ export function runMarketBuild() {
     console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
   }
 
+  // ── 3f · sports-cards stats.json row — the artist-page hero numbers ──
+  // Sold cards are corpus-only, so the client can never compute this vertical's
+  // stats (it would read 0 sales / no record). Compute at build from the full
+  // corpus with the SAME computeStats the nightly uses for every other maker.
+  {
+    const { computeStats } = require('./compute-stats');
+    const statsPath = path.join(SERVED, 'stats.json');
+    try {
+      const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+      const cardLots = all.filter(l => l.artist === 'sports-cards');
+      stats['sports-cards'] = computeStats(cardLots, stats['sports-cards'] || null);
+      fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
+      console.log(`[market] stats.json: sports-cards row updated (${cardLots.length} lots, record $${(stats['sports-cards'].recordPrice || 0).toLocaleString()})`);
+    } catch (e) { console.warn('[market] stats.json sports-cards update failed:', (e as Error).message); }
+  }
+
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,
@@ -451,12 +472,20 @@ export function runMarketBuild() {
   // ── 4 · persist: full corpus (gz) + slim served (value flows to the client) ──
   for (const l of all) delete (l as AuctionLot & { _v?: unknown })._v;
   const { writeCorpusAndServed } = require('./corpus-io');
+  // Served sold-card SAMPLE: the artist page / archive surfaces need real card
+  // rows (record sale, past results, realized cohort) but 288k would blow the
+  // payload — ship the most-recent 1,500 + top 500 by price (the record lives
+  // in the top slice) on the ON-DEMAND archive tier; the rest stay corpus-only.
+  const soldCards = all.filter(l => l.artist === 'sports-cards' && l.status === 'sold' && (l.realizedUsd || 0) > 0);
+  const cardSample = new Set<string>();
+  soldCards.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => cardSample.add(String(l.id)));
+  soldCards.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => cardSample.add(String(l.id)));
+  console.log(`[market] served sold-card sample: ${cardSample.size} of ${soldCards.length}`);
   writeCorpusAndServed(all as unknown as Record<string, unknown>[],
     (l: Record<string, unknown>) => l.auctionHouse === 'Goldin' && l.status === 'sold',
-    // corpus-only: the 348k SOLD sport cards live in the corpus gz for the DB/
-    // future features, but never ship to the client (payload). Live cards DO
-    // ship (they're on the block); only sold cards are held back.
-    (l: Record<string, unknown>) => l.artist === 'sports-cards' && l.status === 'sold');
+    // corpus-only: SOLD sport cards stay off the wire — except the sample above.
+    // Live cards always ship (they're on the block).
+    (l: Record<string, unknown>) => l.artist === 'sports-cards' && l.status === 'sold' && !cardSample.has(String(l.id)));
   // rebuild the eager payload so upcoming lots carry their fresh `value`
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED);

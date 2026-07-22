@@ -72,7 +72,7 @@ function TrendLine({ yearly }: { yearly: PlayerEntry['yearly'] }) {
 }
 
 export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
-  const { allLots, lastCrawl } = useRayData();
+  const { allLots, lastCrawl, totalLots } = useRayData();
   const { savedIds } = useSavedLots();
   const { players, failed: loadFailed } = usePlayers();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -102,7 +102,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
             </>
           )}
         </div>
-        <Colophon lotCount={allLots.length} houseCount={7} record={null} />
+        <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
       </>
     );
   }
@@ -223,7 +223,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           </p>
         </section>
       </div>
-      <Colophon lotCount={allLots.length} houseCount={7} record={null} />
+      <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
     </>
   );
 }

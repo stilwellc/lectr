@@ -68,7 +68,7 @@ function RefLine({ yearly }: { yearly: RefEntry['yearly'] }) {
 }
 
 export default function RefPage({ refKey }: { refKey: string }) {
-  const { allLots, lastCrawl } = useRayData();
+  const { allLots, lastCrawl, totalLots } = useRayData();
   const { savedIds } = useSavedLots();
   const { refs, failed } = useRefs();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -99,7 +99,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
             </>
           )}
         </div>
-        <Colophon lotCount={allLots.length} houseCount={7} record={null} />
+        <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
       </>
     );
   }
@@ -189,7 +189,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
           </p>
         </section>
       </div>
-      <Colophon lotCount={allLots.length} houseCount={7} record={null} />
+      <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
     </>
   );
 }
