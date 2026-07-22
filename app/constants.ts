@@ -50,12 +50,14 @@ export const ARTISTS = [
   { slug: 'fossils', label: 'Fossils & Dinosaurs', market: 'science' },
   { slug: 'space-exploration', label: 'Space Exploration', market: 'science' },
   { slug: 'scientific-instruments', label: 'Scientific Instruments', market: 'science' },
-  // the sports vertical: Goldin — sport cards (Goldin's own Sport category, so
-  // never Pokémon/TCG which are Non-Sport) plus the object slugs
+  // the sports vertical: Goldin cards + objects, plus Sotheby's/Christie's
+  // sports-sale memorabilia (the catch-all: autographs, photos, equipment,
+  // pennants — everything in a sports sale that isn't specifically the above)
   { slug: 'sports-cards', label: 'Sports Cards', market: 'sports' },
   { slug: 'game-used', label: 'Game Worn & Used', market: 'sports' },
   { slug: 'trophies-awards', label: 'Trophies & Awards', market: 'sports' },
   { slug: 'tickets-passes', label: 'Tickets & Passes', market: 'sports' },
+  { slug: 'sports-memorabilia', label: 'Sports Memorabilia', market: 'sports' },
 ] as const;
 
 export type ArtistSlug = (typeof ARTISTS)[number]['slug'];

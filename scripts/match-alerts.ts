@@ -25,9 +25,14 @@ interface Query {
   category?: string | null;
   text?: string | null;
   belowOnly?: boolean;
+  player?: string | null;
 }
 
 function matches(q: Query, lot: any): boolean {
+  // a FOLLOW: sports lots carry a build-stamped playerSlug; art/watch makers
+  // are the artist slug itself — a follow matches either, so "follow Jordan"
+  // and "follow KAWS" both work off the one field.
+  if (q.player && lot.playerSlug !== q.player && lot.artist !== q.player) return false;
   if (q.maker && lot.artist !== q.maker) return false;
   if (q.market && q.market !== 'all' && marketOf(String(lot.artist || '')) !== q.market) return false;
   if (q.sport && (lot.sport || '') !== q.sport) return false;

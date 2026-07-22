@@ -17,6 +17,10 @@ export interface SavedQuery {
   category?: string | null;
   text?: string | null;
   belowOnly?: boolean;
+  /** a followed athlete (players.json slug) OR a followed maker/artist. When
+   *  set the search is a "follow" — new lots for that person alert nightly. */
+  player?: string | null;
+  playerName?: string | null;
 }
 
 export interface SavedSearch {
@@ -36,6 +40,8 @@ export interface AlertRow {
 
 /** One human line for a stored query — mirrors how the toolbar talks. */
 export function describeQuery(q: SavedQuery, labels: { maker?: string; category?: string; market?: string }): string {
+  // a follow reads as the person's name — "Following Michael Jordan"
+  if (q.player) return `Following ${q.playerName || q.player}`;
   const parts: string[] = [];
   if (labels.maker) parts.push(labels.maker);
   else if (q.sport) parts.push(q.sport);

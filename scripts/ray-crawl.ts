@@ -2845,7 +2845,7 @@ async function main() {
   // pass, not per-artist. Scope to whichever verticals this run touches.
   const WATCH_SLUGS = ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'];
   const SCIENCE_SLUGS = ['meteorites', 'fossils', 'space-exploration', 'scientific-instruments'];
-  const SPORTS_SLUGS = ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes'];
+  const SPORTS_SLUGS = ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'];
   const ART_SLUGS = ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf', 'george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'];
   const wantWatch = !only || WATCH_SLUGS.some(s => only.has(s));
   const wantScience = !only || SCIENCE_SLUGS.some(s => only.has(s));
@@ -3193,7 +3193,7 @@ async function main() {
   // sport tag (title-derived) for the SPORT filter on the sports vertical —
   // sportOf lives in app/utils (pure, no client deps; same fn the UI uses).
   const { sportOf } = await import('../app/utils');
-  const SPORT_SLUGS = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes']);
+  const SPORT_SLUGS = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
   let categoryCounts: Record<string, number> = {};
   for (const lot of allLots) {
     lot.category = classifyLot(lot);

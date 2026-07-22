@@ -27,7 +27,7 @@ const MARKETS: Record<string, string[]> = {
   art: ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf'],
   design: ['george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'],
   watches: ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'],
-  sports: ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes'],
+  sports: ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'],
   science: ['space-exploration', 'meteorites', 'fossils', 'scientific-instruments'],
 };
 
@@ -361,7 +361,7 @@ export function runMarketBuild() {
       ls.sort((a, b) => (a.saleDate! < b.saleDate! ? -1 : 1));
       const cats: Record<string, { n: number; medUsd: number; ttmMedUsd: number | null }> = {};
       const cut = Date.now() - 365 * 864e5;
-      for (const cat of ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes']) {
+      for (const cat of ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']) {
         const cl = ls.filter(l => l.artist === cat);
         if (!cl.length) continue;
         const ttm = cl.filter(l => new Date(l.saleDate!).getTime() > cut).map(l => l.realizedUsd!);

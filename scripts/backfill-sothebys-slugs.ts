@@ -39,6 +39,7 @@ import {
   normalizeTitle as normNormalizeTitle,
 } from '../app/lib/normalize';
 import { runMarketBuild } from './build-market';
+import { isSportsSale, routeSportsLot } from './sports-sale';
 
 /* ── config ──────────────────────────────────────────────────────────────── */
 
@@ -51,7 +52,7 @@ const CORPUS = path.join(process.cwd(), 'data', 'corpus');
 // candidate filter — watch + art sale-name keywords (day-sale/evening covers
 // the marquee art sales; sale names are diverse, routeItem keeps only tracked
 // makers anyway, so a false-positive slug costs one meta request).
-const CANDIDATE_RE = /(watch|contemporary|modern|prints|day-sale|day-auction|evening)/;
+const CANDIDATE_RE = /(watch|contemporary|modern|prints|day-sale|day-auction|evening|sport|memorabilia|baseball|basketball|football|soccer|hockey|olympic|cricket|tennis|golf|boxing|maradona|pele|sneaker|the-one|game-worn|game-used|world-cup|super-bowl|street|culture|icons)/;
 
 const MAX_TOTAL_REQUESTS = 5000; // hard stop across meta + GraphQL pages
 const MAX_GQL_PAGES = 40;        // per sale (matches the crawler's guard)
@@ -141,7 +142,7 @@ const DESIGN_ARTISTS = new Set(['george-nakashima', 'charles-eames', 'jean-prouv
 const OBJECT_ARTISTS = new Set([
   'rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier',
   'meteorites', 'fossils', 'space-exploration', 'scientific-instruments',
-  'game-used', 'trophies-awards', 'tickets-passes',
+  'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia',
 ]);
 const EDITION_DEFAULT_ARTISTS = new Set(['andy-warhol', 'keith-haring', 'ed-ruscha', 'henri-matisse', 'pablo-picasso']);
 const ORIGINAL_DEFAULT_ARTISTS = new Set([
@@ -412,6 +413,7 @@ const writeGz = (f: string, d: unknown) =>
     publicSales++;
 
     const saleName = sale.split('/').pop()!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const sportsSale = isSportsSale(sale); // route the WHOLE sale to sports
     const saleDate = meta.endDate;
     const saleDay = saleDate.split('T')[0];
 
@@ -429,7 +431,9 @@ const writeGz = (f: string, d: unknown) =>
       if (!(estLow != null && estLow > 0 && estHigh != null && estHigh > 0)) continue; // estimate-bearing only
       soldWithEst++;
 
-      const artist = routeItem(lot.creatorsDisplayTitle, lot.title, lot.subtitle || '');
+      // sports SALES route ALL lots to the sports vertical (memorabilia catch-all);
+      // other sales route to tracked makers only.
+      const artist = sportsSale ? routeSportsLot(lot.title, lot.subtitle || '') : routeItem(lot.creatorsDisplayTitle, lot.title, lot.subtitle || '');
       if (!artist) continue; // nothing we track — never guess
 
       const id = `sothebys-${lot.lotId}`;
@@ -498,7 +502,7 @@ const writeGz = (f: string, d: unknown) =>
   const { objectClassOf, isSportsScienceObject, extractSportsTags, classifyForm } =
     await import('../app/lib/comps');
   const { sportOf } = await import('../app/utils');
-  const SPORT_SLUGS = new Set(['game-used', 'trophies-awards', 'tickets-passes']);
+  const SPORT_SLUGS = new Set(['game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
 
   for (const lot of newRows as (AuctionLot & Record<string, unknown>)[]) {
     lot.category = classifyLot(lot);
@@ -583,11 +587,13 @@ const writeGz = (f: string, d: unknown) =>
     return;
   }
 
-  /* merge — append only; existing rows byte-untouched */
-  lots.push(...(guarded as unknown as Record<string, unknown>[]));
+  /* merge — append only; existing rows byte-untouched. NOT push(...guarded):
+     spread overflows the call stack past ~100k args. */
+  for (const g of guarded as unknown as Record<string, unknown>[]) lots.push(g);
   writeGz('lots.json', lots);
   console.log(`[merge] corpus lots.json.gz: ${corpusBefore} → ${lots.length} rows (+${guarded.length}) · archive untouched (${archive.length})`);
 
+  if (process.env.SKIP_REBUILD === '1') { console.log('[merge] SKIP_REBUILD=1 — corpus written, served NOT rebuilt.'); return; }
   console.log('[merge] rebuilding served payloads…');
   runMarketBuild();
 })();

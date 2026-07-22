@@ -25,7 +25,10 @@ type Range = '1Y' | '5Y' | 'MAX';
  * record) lives in the sentence; the medium lens splits editions from unique
  * works when both sides have the sales to draw honestly.
  */
+import FollowButton from './FollowButton';
+
 export default function ArtistHero({
+  slug,
   label,
   stats,
   lots,
@@ -34,6 +37,7 @@ export default function ArtistHero({
   market,
   serial,
 }: {
+  slug?: string;
   label: string;
   stats: MarketStats | null;
   lots: AuctionLot[];
@@ -167,6 +171,7 @@ export default function ArtistHero({
                 : `${label} · recent sales`}
         </span>
         <MethodologyNote trigger="what is this?" />
+        {slug && <span style={{ marginLeft: 'auto' }}><FollowButton slug={slug} name={label} /></span>}
       </p>
       {hover ? (
         <h1 className="ray-hero2-value">{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</h1>

@@ -39,6 +39,7 @@ import {
   normalizeTitle as normNormalizeTitle,
 } from '../app/lib/normalize';
 import { runMarketBuild } from './build-market';
+import { isSportsSale, routeSportsLot } from './sports-sale';
 
 /* ── config ──────────────────────────────────────────────────────────────── */
 
@@ -129,7 +130,7 @@ const DESIGN_ARTISTS = new Set(['george-nakashima', 'charles-eames', 'jean-prouv
 const OBJECT_ARTISTS = new Set([
   'rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier',
   'meteorites', 'fossils', 'space-exploration', 'scientific-instruments',
-  'game-used', 'trophies-awards', 'tickets-passes',
+  'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia',
 ]);
 const EDITION_DEFAULT_ARTISTS = new Set(['andy-warhol', 'keith-haring', 'ed-ruscha', 'henri-matisse', 'pablo-picasso']);
 const ORIGINAL_DEFAULT_ARTISTS = new Set([
@@ -392,6 +393,7 @@ const writeGz = (f: string, d: unknown) =>
 
   const ingestSale = (slug: string, rawLots: any[]): void => {
     const saleName = slug.replace(/-\d{4,6}$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const sportsSale = isSportsSale(slug); // route the WHOLE sale to sports
     for (const lot of rawLots) {
       const primary = lot.title_primary_txt || '';
       const secondary = lot.title_secondary_txt || '';
@@ -408,7 +410,9 @@ const writeGz = (f: string, d: unknown) =>
       if (!(estLow && estLow > 0 && estHigh && estHigh > 0)) continue; // estimate-bearing only
       soldWithEst++;
 
-      const artist = routeItem(primary, secondary, lot.description_txt || '');
+      // sports SALES route ALL lots to the sports vertical (memorabilia catch-all
+      // for what the object regexes miss); other sales route to tracked makers.
+      const artist = sportsSale ? routeSportsLot(title, lot.description_txt || '') : routeItem(primary, secondary, lot.description_txt || '');
       if (!artist) continue; // nothing we track — never guess
 
       const id = `christies-auc-${lot.object_id}`;
@@ -492,7 +496,7 @@ const writeGz = (f: string, d: unknown) =>
   const { objectClassOf, isSportsScienceObject, extractSportsTags, classifyForm } =
     await import('../app/lib/comps');
   const { sportOf } = await import('../app/utils');
-  const SPORT_SLUGS = new Set(['game-used', 'trophies-awards', 'tickets-passes']);
+  const SPORT_SLUGS = new Set(['game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
 
   for (const lot of newRows as (AuctionLot & Record<string, unknown>)[]) {
     lot.category = classifyLot(lot);

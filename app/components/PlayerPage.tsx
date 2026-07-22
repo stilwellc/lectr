@@ -15,6 +15,7 @@ import { Colophon } from './Terminal';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { formatPrice, formatDate, getUpcomingCounts } from '../utils';
+import FollowButton from './FollowButton';
 import type { AuctionLot } from '../types';
 
 interface CatCell { n: number; medUsd: number; ttmMedUsd: number | null }
@@ -29,6 +30,7 @@ export interface PlayerEntry {
 const CAT_LABEL: Record<string, string> = {
   'sports-cards': 'Cards', 'game-used': 'Game worn & used',
   'trophies-awards': 'Trophies & awards', 'tickets-passes': 'Tickets & passes',
+  'sports-memorabilia': 'Memorabilia',
 };
 
 let cache: PlayerEntry[] | null = null;
@@ -118,9 +120,12 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
         <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
           {entry.sport ? `${entry.sport} · ` : ''}player dossier
         </p>
-        <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 750, letterSpacing: '-0.02em', margin: 0 }}>
-          {entry.name}
-        </h1>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 750, letterSpacing: '-0.02em', margin: 0 }}>
+            {entry.name}
+          </h1>
+          <FollowButton slug={entry.slug} name={entry.name} />
+        </div>
         {/* medians of WHAT SOLD, deliberately uncolored — a shift in the mix
             (premium cards trading more lately) is not appreciation, and green
             here would claim it is. The yearly line below is the honest trend. */}
@@ -132,7 +137,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
 
         {/* the wider market, one row per category */}
         <div className="lectr-lot-leaders" style={{ marginTop: 20, maxWidth: 560 }}>
-          {(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes'] as const).map(cat => {
+          {(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'] as const).map(cat => {
             const c = entry.cats[cat];
             if (!c) return null;
             return (
