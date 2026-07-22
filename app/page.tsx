@@ -378,7 +378,16 @@ export default function RayPage() {
     if (px.length < 5) return null;
     return px.length % 2 ? px[px.length >> 1] : (px[px.length / 2 - 1] + px[px.length / 2]) / 2;
   }, [sold]);
-  const recordSale = useMemo(() => (sold.length ? sold.reduce((b, l) => ((l.priceUsd || 0) > (b.priceUsd || 0) ? l : b), sold[0]) : null), [sold]);
+  // The market's record sale — read from stats.json's per-slug recordPrice
+  // (a max over the FULL corpus), NOT a max over the loaded `sold` sample,
+  // which omits the archive and can badly under-report (e.g. the $2.93M card).
+  const recordSale = useMemo(() => {
+    let best: { priceUsd: number; artist: string } | null = null;
+    for (const [slug, s] of Object.entries(marketStats)) {
+      if ((s.recordPrice || 0) > (best?.priceUsd || 0)) best = { priceUsd: s.recordPrice, artist: slug };
+    }
+    return best;
+  }, [marketStats]);
 
   // The results row's one honest sentence: median hammer vs mid-estimate.
   const soldMedianPct = useMemo(() => {

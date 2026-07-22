@@ -102,7 +102,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         recordPrice: stats?.recordPrice || 0,
         demand: (() => { const ds = demandSeries(artistLots); return ds.length ? ds[ds.length - 1].value : -9999; })(),
         overEstimate,
-        totalLots: artistLots.length,
+        totalLots: stats?.totalLotsTracked ?? artistLots.length, // full corpus, not the loaded sample
         sellThrough,
       };
     });

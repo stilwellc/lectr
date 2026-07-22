@@ -223,9 +223,12 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
       const withEstimate = artistLots.filter(l =>
         l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0
       );
+      // HAMMER basis: estimates are hammer-basis but priceUsd includes the
+      // buyer's premium (~1.25×) — comparing raw overstated "over estimate" by
+      // ~25pts. Divide out the measured flat premium (matches PortfolioHeader).
       const overEstimate = withEstimate.length >= 3
         ? withEstimate.reduce((s, l) =>
-            s + ((l.priceUsd! - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / withEstimate.length
+            s + ((l.priceUsd! / 1.25 - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / withEstimate.length
         : -999;
 
       return {

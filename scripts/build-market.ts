@@ -439,20 +439,27 @@ export function runMarketBuild() {
     console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
   }
 
-  // ── 3f · sports-cards stats.json row — the artist-page hero numbers ──
-  // Sold cards are corpus-only, so the client can never compute this vertical's
-  // stats (it would read 0 sales / no record). Compute at build from the full
-  // corpus with the SAME computeStats the nightly uses for every other maker.
+  // ── 3f · stats.json rows for corpus-only / non-ARTISTS slugs ──
+  // The nightly stats loop iterates ARTISTS, which OMITS sports-cards (corpus-
+  // only), sports-memorabilia, and the 3 culture slugs — so the client reads
+  // "no data / no record / empty analytics" for those whole verticals. Compute
+  // each here at build from the FULL corpus with the SAME computeStats every
+  // other maker uses. (sports-cards is corpus-only; the others just fell
+  // through the ARTISTS gap — same fix either way.)
   {
     const { computeStats } = require('./compute-stats');
     const statsPath = path.join(SERVED, 'stats.json');
+    const STATS_SLUGS = ['sports-cards', 'sports-memorabilia', 'movie-tv', 'music-memorabilia', 'entertainment-memorabilia'];
     try {
       const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
-      const cardLots = all.filter(l => l.artist === 'sports-cards');
-      stats['sports-cards'] = computeStats(cardLots, stats['sports-cards'] || null);
+      for (const slug of STATS_SLUGS) {
+        const slugLots = all.filter(l => l.artist === slug);
+        if (!slugLots.length) continue;
+        stats[slug] = computeStats(slugLots, stats[slug] || null);
+        console.log(`[market] stats.json: ${slug} row (${slugLots.length} lots, record $${(stats[slug].recordPrice || 0).toLocaleString()})`);
+      }
       fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
-      console.log(`[market] stats.json: sports-cards row updated (${cardLots.length} lots, record $${(stats['sports-cards'].recordPrice || 0).toLocaleString()})`);
-    } catch (e) { console.warn('[market] stats.json sports-cards update failed:', (e as Error).message); }
+    } catch (e) { console.warn('[market] stats.json rows update failed:', (e as Error).message); }
   }
 
   const market = {
