@@ -16,6 +16,12 @@ name: Nightly (segmented)
 #   deploy (needs: assemble)  →  pull served → build → ship
 #   sync   (needs: assemble, if: always, non-blocking)  →  supabase + alerts
 #
+# Segment handoff: crawl→assemble rides SAME-RUN GitHub artifacts (immediately
+# consistent — no R2 GET-lag wait, which cost ~12min/night). R2 keeps every
+# segment too: it's tomorrow's last-good baseline and the recovery source —
+# any house missing an artifact (crawl failed, skip_crawl, or `other`, which
+# no crawl job produces) falls back to its R2 last-good.
+#
 # Net: no single job scales with the TOTAL corpus, a partial failure can never
 # regress prod, and any stage is retryable in isolation.
 
@@ -72,22 +78,55 @@ jobs:
         run: npx tsx scripts/resolve-${{ matrix.house }}.ts --write || echo "resolver failed (non-fatal)"
       - name: Push this house's segment
         run: bash scripts/data-store.sh push-segment ${{ matrix.house }}
+      # Same-run handoff to assemble (immediately consistent, no R2 GET-lag).
+      # The R2 push above stays: tomorrow's last-good baseline + recovery source.
+      - name: Upload segment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: segment-${{ matrix.house }}
+          path: data/corpus/segments/${{ matrix.house }}.ndjson.gz
+          retention-days: 2
+          if-no-files-found: error
 
   assemble:
     needs: crawl
     if: always()                # build from fresh-or-last-good segments even if some crawls failed
     runs-on: ubuntu-latest
-    # pull-segments GET-lag (~12min) + engine (~21) + upcoming leaves thin margin
-    # at 45; a bad-lag night could time out. 60 gives headroom until the
-    # R2→GitHub-artifacts handoff (documented) removes the pull-lag entirely.
+    # Normal night: artifacts skip the pull-segments GET-lag (~12min) entirely.
+    # But skip_crawl / a failed house still pulls from R2 and can eat the lag,
+    # so keep the 60 headroom (engine ~21 + upcoming on top).
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
-      - name: Pull all segments
-        run: bash scripts/data-store.sh pull-segments
+      # Fresh segments from THIS run's crawl jobs — immediately consistent, no
+      # GET-lag. Absent for failed houses and in skip_crawl mode; continue-on-error
+      # lets the R2 fallback below fill every gap.
+      - name: Download fresh segments (same-run artifacts)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: segment-*
+          merge-multiple: true
+          path: data/corpus/segments/
+      # R2 fallback: only segments NOT delivered as artifacts (crawl-failed
+      # house, skip_crawl, and always `other` — no crawl job produces it).
+      # Pulls run in parallel like pull-segments: worst case ONE lag window.
+      - name: Pull missing segments from R2 (last-good fallback)
+        run: |
+          mkdir -p data/corpus/segments
+          pids="" rc=0
+          for h in goldin sothebys christies bonhams phillips wright other; do
+            if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
+              echo "segment $h fresh from artifact — skipping R2"
+            else
+              bash scripts/data-store.sh pull-segment "$h" & pids="$pids $!"
+            fi
+          done
+          for p in $pids; do wait "$p" || rc=1; done
+          exit $rc
       - name: Pull previous totals + backtest (gate baseline + carry the record)
         run: bash scripts/data-store.sh pull-meta && bash scripts/data-store.sh pull-backtest
       - name: Assemble + engine (sanity-gated)
