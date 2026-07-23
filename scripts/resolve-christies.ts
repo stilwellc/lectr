@@ -201,7 +201,7 @@ async function fetchLotResult(url: string): Promise<RawLot | null> {
   let boughtIn = 0, heldPending = 0, unresolved = 0, withdrawn = 0;
   for (const l of stuck) {
     const raw = results.get(l.id);
-    if (raw === undefined) { unresolved++; continue; } // page failed — keep state, never guess
+    if (raw == null) { unresolved++; continue; } // page failed — keep state, never guess
     const L = l as unknown as Record<string, unknown>;
     const realised = parseFloat(String(raw.price_realised ?? ''));
     if (realised > 0) {
