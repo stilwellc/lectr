@@ -96,7 +96,10 @@ jobs:
     needs: assemble
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # re-pulls the served payload → can eat a worst-case R2 GET-lag (~14min via
+    # obj_get_fresh) BEFORE the ~25min replay even starts. 40 was too tight on a
+    # lagged edge (proved: timed out at exactly 40m); 70 absorbs lag + replay + push.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -147,7 +150,9 @@ jobs:
     needs: assemble
     if: always()                # non-blocking: alerts/supabase must never gate a deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # same re-pull GET-lag as backtest: 20 was too tight on a lagged edge (proved:
+    # timed out at exactly 20m still inside the pull). 45 = worst-case lag + sync/alerts.
+    timeout-minutes: 45
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
