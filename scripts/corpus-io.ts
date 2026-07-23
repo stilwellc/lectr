@@ -114,16 +114,23 @@ const STRIP = new Set([
   'bidHistory',
 ]);
 
-/** Gzip a JSON ARRAY without building one giant intermediate string (which
- *  blows V8's max string length past ~300k lots). Concat small per-row buffers. */
-export function gzipJsonArray(rows: Record<string, unknown>[]): Buffer {
-  const parts: Buffer[] = [Buffer.from('[', 'utf8')];
-  for (let i = 0; i < rows.length; i++) {
-    if (i) parts.push(Buffer.from(',', 'utf8'));
-    parts.push(Buffer.from(JSON.stringify(rows[i]), 'utf8'));
-  }
-  parts.push(Buffer.from(']', 'utf8'));
+// The corpus files (lots.json.gz, sold-archive.json.gz) and segments are stored
+// as gzipped NDJSON — NOT a JSON array. A single JSON.stringify / gunzip.toString
+// of the 318k-lot sold-archive (crawl-enriched with bidHistory) blows V8's max
+// string length (0x1fffffe8 ≈ 512MB) on BOTH write and read. NDJSON never builds
+// one giant string: write concatenates small per-row buffers; read parses each
+// line over the gunzipped buffer. gzipNdjson/readGzRows are the shared codecs
+// every corpus reader/writer must use (build-market, build-upcoming, backfills).
+export function gzipNdjson(rows: Record<string, unknown>[]): Buffer {
+  const parts: Buffer[] = [];
+  for (const r of rows) parts.push(Buffer.from(JSON.stringify(r) + '\n', 'utf8'));
   return zlib.gzipSync(Buffer.concat(parts));
+}
+/** Read a gzipped-NDJSON corpus/segment file (buffer-safe). Also flattens a
+ *  legacy single-line JSON array, so pre-conversion files still read. */
+export function readGzRows(file: string): Record<string, unknown>[] {
+  if (!fs.existsSync(file)) return [];
+  return parseNdjson(zlib.gunzipSync(fs.readFileSync(file)));
 }
 
 export function slimForClient<T extends Record<string, unknown>>(lot: T): Record<string, unknown> {
@@ -145,9 +152,9 @@ export function slimForClient<T extends Record<string, unknown>>(lot: T): Record
 export function readCorpus(): Record<string, unknown>[] {
   const read = (base: string): Record<string, unknown>[] | null => {
     const gz = path.join(CORPUS_DIR, base + '.gz');
-    if (fs.existsSync(gz)) return JSON.parse(zlib.gunzipSync(fs.readFileSync(gz)).toString('utf8'));
+    if (fs.existsSync(gz)) return readGzRows(gz); // buffer-safe NDJSON (handles legacy arrays)
     const raw = path.join(CORPUS_DIR, base);
-    if (fs.existsSync(raw)) return JSON.parse(fs.readFileSync(raw, 'utf8'));
+    if (fs.existsSync(raw)) return parseNdjson(fs.readFileSync(raw));
     return null;
   };
   const main = read('lots.json');
@@ -183,8 +190,8 @@ export function writeCorpusAndServed(
   // full corpus (gz) — source of truth (INCLUDES corpus-only lots). Serialize
   // as a JSON array WITHOUT one giant intermediate string: JSON.stringify of a
   // 300k+ lot array blows V8's max string length. Concat small per-lot buffers.
-  const lotsGz = gzipJsonArray(main);
-  const archGz = gzipJsonArray(archive);
+  const lotsGz = gzipNdjson(main);
+  const archGz = gzipNdjson(archive);
   fs.writeFileSync(path.join(CORPUS_DIR, 'lots.json.gz'), lotsGz);
   fs.writeFileSync(path.join(CORPUS_DIR, 'sold-archive.json.gz'), archGz);
 

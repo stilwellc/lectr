@@ -71,10 +71,13 @@ const MARKETS: Record<string, string[]> = {
 };
 
 function readGz(f: string): AuctionLot[] {
-  return JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(CORPUS, f + '.gz'))).toString('utf8'));
+  // buffer-safe NDJSON read — the sold-archive exceeds V8's max string length
+  const { readGzRows } = require('./corpus-io');
+  return readGzRows(path.join(CORPUS, f + '.gz')) as AuctionLot[];
 }
-function writeGz(f: string, data: unknown) {
-  fs.writeFileSync(path.join(CORPUS, f + '.gz'), zlib.gzipSync(Buffer.from(JSON.stringify(data))));
+function writeGz(f: string, data: Record<string, unknown>[]) {
+  const { gzipNdjson } = require('./corpus-io');
+  fs.writeFileSync(path.join(CORPUS, f + '.gz'), gzipNdjson(data));
 }
 
 export function runMarketBuild() {
