@@ -108,6 +108,9 @@ jobs:
 
   deploy:
     needs: assemble
+    # run whenever assemble succeeded — even in skip_crawl mode, where the
+    # skipped crawl would otherwise skip this whole downstream job.
+    if: ${{ !cancelled() && needs.assemble.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
