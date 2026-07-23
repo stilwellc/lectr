@@ -69,7 +69,10 @@ jobs:
     needs: crawl
     if: always()                # build from fresh-or-last-good segments even if some crawls failed
     runs-on: ubuntu-latest
-    timeout-minutes: 45         # pull + engine + upcoming (backtest is now its own parallel job)
+    # pull-segments GET-lag (~12min) + engine (~21) + upcoming leaves thin margin
+    # at 45; a bad-lag night could time out. 60 gives headroom until the
+    # R2→GitHub-artifacts handoff (documented) removes the pull-lag entirely.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
