@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Sports',
-  description: 'Auction intelligence for the sports market — game-worn, trophies & tickets. Never cards.',
-  openGraph: { title: 'Sports — lectr', description: 'Auction intelligence for the sports market — game-worn, trophies & tickets. Never cards.' },
+  description: 'Auction intelligence for the sports market — sport cards, game-worn, trophies & tickets. Non-sport and Pokémon excluded.',
+  openGraph: { title: 'Sports — lectr', description: 'Auction intelligence for the sports market — sport cards, game-worn, trophies & tickets. Non-sport and Pokémon excluded.' },
 };
 
 export { default } from '../page';

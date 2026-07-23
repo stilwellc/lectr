@@ -7,7 +7,7 @@ import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
-import { useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
+import { useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
@@ -295,6 +295,13 @@ export default function ComparableModal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Opening comps is a full-corpus interaction: the sold pool the modal maps
+  // (poolIds → allLots) lives in the phase-2 history. On the lean home lander
+  // that isn't loaded yet, so kick it here — idempotent, and pages that already
+  // mount useFullLots() are unaffected. The frozen call still renders instantly
+  // from lot.value; the comparable-sales rows fill in as the corpus lands.
+  useEffect(() => { triggerFullLoad(); }, []);
 
   // Bottom-sheet drag (under 900px): the handle tracks the finger, and a
   // decisive pull down dismisses — the native sheet gesture.

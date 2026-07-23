@@ -4,7 +4,7 @@ import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
-import { useRayData, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
+import { useFullLots, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude } from '../lib/comps';
@@ -235,7 +235,10 @@ export default function LotPage({ lotId, initialLot }: {
       and the crawler sees real content; live data supersedes it on arrival */
   initialLot?: AuctionLot | null;
 }) {
-  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots } = useRayData();
+  // useFullLots: a permalink to a lot outside the eager slice (rolled-off or
+  // sold) settles only once fullLoaded||fullError, and comps/appraisal read the
+  // full corpus — so this route must trigger phase 2.
+  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots } = useFullLots();
   const { savedIds, isSaved, toggle } = useSavedLots();
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
@@ -482,7 +485,7 @@ export default function LotPage({ lotId, initialLot }: {
                   {(lot.estimateLow || lot.estimateHigh) && <LeaderRow k="Estimate" v={formatEstimate(lot)} />}
                 </>
               ) : (
-                <LeaderRow k="Ask" v={formatEstimate(lot)} />
+                <LeaderRow k={lot.auctionHouse === 'Goldin' ? 'Current bid' : 'Ask'} v={formatEstimate(lot)} />
               )}
 
               {compsMed != null && (

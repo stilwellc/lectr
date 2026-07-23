@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { MARKETS } from '../constants';
 import { useMarket } from '../lib/market';
 import { formatDemand, DemandPoint } from '../lib/demand';
@@ -44,6 +46,7 @@ export default function MarketSwitch({
   compact = false,
   lit = false,
   demand,
+  open = false,
 }: {
   compact?: boolean;
   /** the active pill wears the view's single lit treatment — ONLY pass true
@@ -53,13 +56,41 @@ export default function MarketSwitch({
   /** home's variant: category dropdown / chip + "Change category" — the
       lit control replaces the six-pill row. Inner pages keep `compact`. */
   demand?: Record<string, DemandPoint[]>;
+  /** MARKET OPEN — on the entrance's first non-cached paint the pills ripple-
+      ignite in sequence, then settle dim except the active .lit pill (one sign
+      lit). Session-gated (lectr-marketopen) so it never wears thin on revisits;
+      reduced-motion / cached readers get the settled row at once. */
+  open?: boolean;
 }) {
   const { market, setMarket } = useMarket();
 
+  // The ripple is a pure enhancement layered over the already-correct row.
+  // Armed once, after mount, only when: open, motion allowed, and this session
+  // hasn't seen it. Never blocks the lit pill — that treatment is CSS on
+  // [data-active], present from the first paint regardless.
+  const [ripple, setRipple] = useState(false);
+  useEffect(() => {
+    if (!open || !compact) return;
+    try {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (sessionStorage.getItem('lectr-marketopen')) return;
+      sessionStorage.setItem('lectr-marketopen', '1');
+    } catch { return; }
+    setRipple(true);
+    // drop the class once the whole ripple has finished (T900 + up to 5×60ms
+    // stagger + 420ms ignite ≈ 1620ms) so a later re-render can't restart it.
+    // The keyframe rests at brightness(1) === the un-animated state, so this
+    // removal is invisible.
+    const t = setTimeout(() => setRipple(false), 1750);
+    return () => clearTimeout(t);
+    // decided once at mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (compact) {
     return (
-      <div className="ray-markets ray-markets-compact" role="tablist" aria-label="Markets">
-        {MARKETS.map(m => (
+      <div className={`ray-markets ray-markets-compact${ripple ? ' ray-mkt-open' : ''}`} role="tablist" aria-label="Markets">
+        {MARKETS.map((m, i) => (
           <button
             key={m.key}
             role="tab"
@@ -68,6 +99,7 @@ export default function MarketSwitch({
             data-market={m.key}
             data-active={market === m.key}
             data-live={m.live}
+            style={ripple ? ({ '--ripple-i': i } as CSSProperties) : undefined}
             onClick={() => setMarket(m.key)}
           >
             <span className="ray-pill-obj" aria-hidden="true"><MarketIcon market={m.key} size={15} /></span>

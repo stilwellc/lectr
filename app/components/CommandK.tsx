@@ -180,7 +180,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
           className="ray-ck-input"
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Search a maker, a market, or any lot ever…"
+          placeholder="Search a maker, a market, or a live lot…"
           aria-label="Search"
           onKeyDown={e => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, shown.length - 1)); }

@@ -119,6 +119,14 @@ let inflight: Promise<RayPayload> | null = null;
 // the largest asset must never brick fullLoaded-gated routes for the session.
 let inflightFull = false;
 let retryFull: (() => void) | null = null;
+// Phase 2 (the full history, ~10MB across shards) is now OPT-IN, mirroring
+// phase 3: it fires only when a surface asks for it via useFullLots() /
+// triggerFullLoad(). The home lander renders its feed from the eager
+// upcoming.json alone, so it never pays this — the sold "Record" band lazy-
+// mounts useFullLots() behind its reveal. This flag persists the request so a
+// trigger that arrives before phase 1 resolves still kicks phase 2 the moment
+// the eager payload lands.
+let fullRequested = false;
 // Phase 3 (the Goldin sold-archive, ~10MB) is NEVER auto-fetched. It only
 // streams in when a surface mounts useSoldArchive(). Its own module cache +
 // inflight guard + retry hook keep it independent of phases 1/2.
@@ -166,9 +174,9 @@ function parseStats(statsData: unknown, lots: AuctionLot[]): Record<string, Mark
 
 function loadRayData(): Promise<RayPayload> {
   if (cached) {
-    // a failed (or never-finished) phase 2 re-kicks on the next mount instead
-    // of staying dead for the rest of the session
-    if (!cached.fullLoaded && retryFull && !inflightFull) retryFull();
+    // a requested-but-failed (or never-finished) phase 2 re-kicks on the next
+    // mount instead of staying dead — but only once a surface has asked for it
+    if (fullRequested && !cached.fullLoaded && retryFull && !inflightFull) retryFull();
     return Promise.resolve(cached);
   }
   if (inflight) return inflight;
@@ -264,7 +272,9 @@ function loadRayData(): Promise<RayPayload> {
         })().finally(() => { inflightFull = false; });
       };
       retryFull = loadFull;
-      loadFull();
+      // OPT-IN: only fire phase 2 if a surface has already asked (or asks
+      // later, via triggerFullLoad, which will call retryFull directly).
+      if (fullRequested) loadFull();
 
       inflight = null;
       return core;
@@ -306,9 +316,21 @@ function loadRayData(): Promise<RayPayload> {
   return inflight;
 }
 
+/** Opt-in trigger for the phase-2 full history. Marks the request so it fires
+    the moment phase 1 resolves (or immediately if phase 1 is already done),
+    and survives a phase-1-not-yet-ready mount. Idempotent per session. */
+export function triggerFullLoad() {
+  fullRequested = true;
+  // phase 1 already landed → kick now; otherwise loadRayData's phase-1 tail
+  // reads fullRequested and fires loadFull itself.
+  if (retryFull && !inflightFull && !cached?.fullLoaded) retryFull();
+}
+
 /** Re-attempt the phase-2 archive fetch after a fullError (no-op while a
-    fetch is already inflight or once the archive has loaded). */
+    fetch is already inflight or once the archive has loaded). A retry implies
+    the surface still wants the corpus, so it keeps the request latched. */
 export function retryFullLoad() {
+  fullRequested = true;
   if (retryFull && !inflightFull && !cached?.fullLoaded) retryFull();
 }
 
@@ -396,6 +418,18 @@ export function useRayData(): RayData {
     error: data?.error || null,
     fromCache,
   };
+}
+
+/** Opt-in phase-2 tier: mounting this hook triggers the full-history fetch
+    (once per session, module-cached) and otherwise returns the same view as
+    useRayData(). The bare useRayData() mount NEVER pulls phase 2 — only routes
+    that read the full corpus (artist, analytics, value, saved, lot permalinks)
+    or a surface that lazy-reveals sold history mount this. fullLoaded flips
+    true once the ~10MB shards land, exactly as before. */
+export function useFullLots(): RayData {
+  const base = useRayData();
+  useEffect(() => { triggerFullLoad(); }, []);
+  return base;
 }
 
 export interface SoldArchive {

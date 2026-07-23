@@ -3,7 +3,7 @@
 import React, { useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { useRayData } from '../hooks/useRayData';
+import { useFullLots } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
 import { supabase } from '../lib/supabase';
@@ -67,7 +67,9 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
  * signal flags as cheap — then the lots in urgency order.
  */
 export default function SavedPage() {
-  const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
+  // useFullLots: saved lots may have rolled off upcoming into the corpus, and
+  // the collection valuation gates on fullLoaded — trigger phase 2.
+  const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useFullLots();
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
 

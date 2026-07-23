@@ -7,14 +7,13 @@ import type { Market } from '../constants';
 import type { AuctionLot, MarketStats } from '../types';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
-import { useRayData, useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
+import { useFullLots, useSoldArchive, retryArchiveLoad, retryFullLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { formatDate, getUpcomingCounts } from '../utils';
 import PortfolioHeader from '../components/analytics/PortfolioHeader';
 import ArtistRankingsTable from '../components/analytics/ArtistRankingsTable';
 import TopSales from '../components/analytics/TopSales';
-import MarketIntelligence from '../components/analytics/MarketIntelligence';
 import Masthead, { Underscore } from '../components/Masthead';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import DeskNote from '../components/analytics/DeskNote';
@@ -23,6 +22,13 @@ import meta from '../../public/data/ray/meta.json';
 
 const Distributions = dynamic(() => import('../components/analytics/Distributions'), { ssr: false });
 const CalibrationCurve = dynamic(() => import('../components/analytics/CalibrationCurve'), { ssr: false });
+// MarketIntelligence is the recharts-heaviest instrument (area/line/bar) and
+// sits below the masthead + market switch — dynamic-import it too, with a
+// fixed-height fallback so its arrival doesn't shift the grid below it.
+const MarketIntelligence = dynamic(() => import('../components/analytics/MarketIntelligence'), {
+  ssr: false,
+  loading: () => <div style={{ height: 320, borderRadius: 12, background: 'var(--color-surface)', opacity: 0.5 }} aria-hidden />,
+});
 
 // The market's analytics grid. `marketLots` already carries any merged archive
 // rows. The demand read itself lives on the lander hero — this page keeps the
@@ -72,7 +78,8 @@ function AnalyticsGrid({
 }
 
 export default function AnalyticsPage() {
-  const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fromCache, market: marketData, backtest } = useRayData();
+  // useFullLots: the analytics tables gate on fullLoaded, so trigger phase 2.
+  const { allLots, statsByArtist, sources, lastCrawl, fullLoaded, fullError, fromCache, market: marketData, backtest } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
@@ -132,6 +139,15 @@ export default function AnalyticsPage() {
           marketSeries={marketData?.markets?.[activeKey] || null}
           seasonality={marketData?.seasonality?.[activeKey] || null}
         />
+      ) : fullError ? (
+        <div style={{ padding: '120px 24px', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
+            The sold archive didn&rsquo;t load. Check your connection and try again.
+          </p>
+          <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
+            Retry
+          </button>
+        </div>
       ) : !fullLoaded ? (
         <RayLoading />
       ) : (

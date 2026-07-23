@@ -16,7 +16,10 @@ function PlayerFromQuery() {
 
 export default function PlayerQueryPage() {
   return (
-    <Suspense fallback={null}>
+    // A minimal rail-padded placeholder (not LotPageSkeleton — its image-plate/
+    // leader grid is lot-shaped and would jank against the dossier layout) so
+    // the pre-mount instant paints structure, never a blank flash.
+    <Suspense fallback={<div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} />}>
       <PlayerFromQuery />
     </Suspense>
   );

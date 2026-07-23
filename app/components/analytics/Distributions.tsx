@@ -1,13 +1,24 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { AuctionLot, MarketStats } from '../../types';
 import type { Market } from '../../constants';
 import type { MarketSeriesJson } from '../../hooks/useRayData';
-import CategoryBreakdown from './CategoryBreakdown';
-import AuctionHouseDistribution from './AuctionHouseDistribution';
-import PriceDistribution from './PriceDistribution';
-import SportBreakdown from './SportBreakdown';
+
+// These four distribution charts are recharts-backed and BELOW the fold (this
+// whole section lives well under the analytics hero) — and only ONE renders at
+// a time behind the tab row. Dynamic-import them (ssr:false — this is a static
+// export, the charts are client-only) so recharts leaves the analytics page's
+// initial bundle and only the active tab's chart pulls it. A fixed-height
+// skeleton holds the band's height so switching tabs never shifts layout.
+const ChartSkeleton = ({ h }: { h: number }) => (
+  <div className="ray-chart-skel" style={{ height: h }} aria-hidden />
+);
+const CategoryBreakdown = dynamic(() => import('./CategoryBreakdown'), { ssr: false, loading: () => <ChartSkeleton h={300} /> });
+const AuctionHouseDistribution = dynamic(() => import('./AuctionHouseDistribution'), { ssr: false, loading: () => <ChartSkeleton h={300} /> });
+const PriceDistribution = dynamic(() => import('./PriceDistribution'), { ssr: false, loading: () => <ChartSkeleton h={280} /> });
+const SportBreakdown = dynamic(() => import('./SportBreakdown'), { ssr: false, loading: () => <ChartSkeleton h={300} /> });
 
 type Tab = 'category' | 'house' | 'price' | 'sport';
 
@@ -66,6 +77,12 @@ export default function Distributions({ allLots, statsByArtist, market, series }
           background: var(--color-fg);
           border-color: var(--color-fg);
           color: var(--color-bg);
+        }
+        .ray-chart-skel {
+          width: 100%;
+          border-radius: 10px;
+          background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-hover, var(--color-surface)) 50%, var(--color-surface) 100%);
+          opacity: 0.6;
         }
         @media (max-width: 768px) {
           .ray-distributions { padding-block: 32px 32px; }

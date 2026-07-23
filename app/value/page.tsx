@@ -1,18 +1,26 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import { Colophon, pickCall, CallPlate } from '../components/Terminal';
-import { useRayData } from '../hooks/useRayData';
+import { useFullLots, retryFullLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { lotSignal, formatEstimate } from '../components/LotCard';
 import ComparableModal, { PriceBand } from '../components/ComparableModal';
-import RecordByYear from '../components/RecordByYear';
+// RecordByYear is the value page's ONLY recharts consumer and renders deep in
+// the page (below the fold, gated on a big-enough backtest) — dynamic-import it
+// (ssr:false, static export) so recharts leaves the value page's initial
+// bundle. A fixed-height fallback matches the 240px chart so it can't shift.
+const RecordByYear = dynamic(() => import('../components/RecordByYear'), {
+  ssr: false,
+  loading: () => <div style={{ height: 240, margin: '30px 0', borderRadius: 12, background: 'var(--color-surface)', opacity: 0.5 }} aria-hidden />,
+});
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
@@ -29,7 +37,9 @@ const ROWS_PAGE = 12;
  * is the same statistic everywhere: comps median vs estimate midpoint.
  */
 export default function ValuePage() {
-  const { allLots, statsByArtist, backtest, lastCrawl, loading, fullLoaded, fromCache } = useRayData();
+  // useFullLots: the value engine (callPool/appraisal) reads the full corpus
+  // and gates on fullLoaded, so this route must trigger phase 2.
+  const { allLots, statsByArtist, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -177,7 +187,16 @@ export default function ValuePage() {
 
       <ArtistNav activeSlug="value" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {loading ? (
+      {fullError ? (
+        <div style={{ padding: '120px 24px', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
+            The sold archive didn&rsquo;t load. Check your connection and try again.
+          </p>
+          <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
+            Retry
+          </button>
+        </div>
+      ) : loading || !fullLoaded ? (
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>

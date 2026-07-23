@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ARTISTS, ARTIST_LABEL, marketOf } from '../constants';
 import type { AuctionLot, LotCategory, MarketStats } from '../types';
-import { useRayData, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
+import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useMarket } from '../lib/market';
 import { getUpcomingCounts, formatDate } from '../utils';
@@ -141,7 +141,9 @@ function MakerSections({
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.artist as string;
-  const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache } = useRayData();
+  // useFullLots (not useRayData): the lot-level sections below gate on
+  // fullLoaded, so this route must trigger the phase-2 corpus on mount.
+  const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache } = useFullLots();
   const { toggle, savedIds, ownedIds, toggleOwned } = useSavedLots();
   const { setMarket } = useMarket();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');

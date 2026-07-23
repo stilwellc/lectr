@@ -1883,6 +1883,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1;
+  /* the numeral counts up THROUGH its own magnitudes ($0→$45M→$4.54B); tabular
+     figures keep every frame the same width so the delta pill beside it in
+     .ray-numrow never reflows mid-count */
+  font-variant-numeric: tabular-nums;
   color: var(--color-fg);
   margin: 0;
 }
@@ -3094,6 +3098,52 @@ body {
 .ray-hero2[data-tone='up'] .ray-hero2-value { text-shadow: 0 0 34px rgba(47, 191, 113, 0.25); }
 .ray-hero2[data-tone='down'] .ray-hero2-value { text-shadow: 0 0 34px rgba(229, 84, 75, 0.22); }
 
+/* ════════════════════════════════════════════════════════════════════
+   MARKET OPEN — the board's first-paint beat. The Demand curve and the
+   hero numeral start neutral (--color-fg) and resolve to the trend tone
+   as the draw completes. Numeral = line = the metric: they colour together.
+   These rules also carry the board's resting curve glow (moved off the
+   inline Area filter so tone/neutral can own it). All CSS-driven — a JS
+   hiccup can only leave the FINAL toned state, never a stranded neutral.
+   ════════════════════════════════════════════════════════════════════ */
+.ray-board-demand .recharts-area-curve {
+  transition: stroke 320ms var(--ease-draw), filter 320ms var(--ease-draw);
+}
+.ray-board-demand[data-tone='up'] .recharts-area-curve {
+  filter: drop-shadow(0 0 6px rgba(47, 191, 113, 0.35));
+}
+.ray-board-demand[data-tone='down'] .recharts-area-curve {
+  filter: drop-shadow(0 0 6px rgba(229, 84, 75, 0.30));
+}
+.ray-board-demand .ray-hero2-value {
+  transition: color 320ms var(--ease-draw), text-shadow 320ms var(--ease-draw);
+}
+.ray-board-demand[data-tone='up'] .ray-hero2-value { text-shadow: 0 0 34px rgba(47, 191, 113, 0.22); }
+.ray-board-demand[data-tone='down'] .ray-hero2-value { text-shadow: 0 0 34px rgba(229, 84, 75, 0.20); }
+
+/* the neutral pre-resolve state (armed, mid-draw only) — the line and numeral
+   read as raw --color-fg with no directional glow. Overrides the recharts
+   stroke prop, hence !important. */
+.ray-board-demand[data-neutral='true'] .recharts-area-curve {
+  stroke: var(--color-fg) !important;
+  filter: none;
+}
+/* the fill gradient's stops are the trend tone — grey it out too, or the wash
+   under a neutral line reads green/red before the tone resolves */
+.ray-board-demand[data-neutral='true'] .recharts-area-area {
+  fill: var(--color-fg) !important;
+  opacity: 0.05;
+  transition: opacity 320ms var(--ease-draw), fill 320ms var(--ease-draw);
+}
+.ray-board-demand[data-neutral='true'] .ray-hero2-value {
+  color: var(--color-fg);
+  text-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ray-board-demand .recharts-area-curve,
+  .ray-board-demand .ray-hero2-value { transition: none; }
+}
+
 /* buttons & chips with presence */
 .ray-call-btn-primary {
   background: linear-gradient(180deg, var(--color-fg), #DCD5C4);
@@ -3197,6 +3247,27 @@ body {
   border: 1px solid rgba(232, 218, 182, 0.85);
   padding: 5px 12px; /* absorbs the 1px border; the row never shifts */
   box-shadow: var(--glow-lit), inset 0 1px 0 rgba(242, 238, 227, 0.9);
+}
+
+/* MARKET OPEN — one sign lit. As the hero lands (~T900), the pills ripple-
+   ignite in a 60ms stagger (each brightens with the switch-on dip, then
+   settles), leaving only the active pill on .lit. Pure enhancement layered
+   over the resting row: the active pill's halo above is present from paint,
+   so a skipped/degraded ripple still shows exactly one lit sign, never a
+   stranded dim row. The animation touches brightness only — it never clears
+   the halo. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes lectrPillIgnite {
+    0%   { filter: brightness(1); }
+    35%  { filter: brightness(1.28); }
+    55%  { filter: brightness(0.94); }
+    100% { filter: brightness(1); }
+  }
+  .ray-mkt-open .ray-market-tab {
+    /* T900 hero-land, then index × 60ms down the row */
+    animation: lectrPillIgnite 420ms var(--ease-signature) both;
+    animation-delay: calc(900ms + var(--ripple-i, 0) * 60ms);
+  }
 }
 
 /* the pill row never clips invisibly — the right edge admits there's more */

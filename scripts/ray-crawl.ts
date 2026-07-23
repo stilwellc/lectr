@@ -343,6 +343,15 @@ const DATA_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
 // pagination on the houses that expose it, and enriches far more detail
 // pages. Polite delays are kept; it just keeps walking.
 const DEEP = process.env.RAY_DEEP === '1';
+// INCREMENTAL_CRAWL=1 turns on a Christie's-only fast path: sales already FULLY
+// RESOLVED in the current segment (every lot sold/settled-bought_in, closed
+// longer ago than RESULT_PENDING_MS, not online-only, not resurfaced by today's
+// live department discovery) are NOT re-fetched — their existing lots are simply
+// carried forward by the normal merge (lotMap is seeded from the segment, so a
+// lot we don't re-crawl survives untouched). DEFAULT OFF: when the flag is unset
+// the crawler behaves byte-identically to before (no skip, full re-crawl). This
+// is purely additive and cannot affect the nightly until explicitly enabled.
+const INCREMENTAL_CRAWL = process.env.INCREMENTAL_CRAWL === '1';
 const DELAY_MS = 1500;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
@@ -1606,7 +1615,87 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
   if (scope === 'art' || scope === 'all') artSales.forEach(sale => jobs.push({ sale, kind: 'art' }));
   console.log(`  [Christie's Auctions] ${jobs.length} sales (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports, ${artSales.length} art)`);
 
+  // ── INCREMENTAL-CRAWL FAST PATH (default OFF) ─────────────────────────────
+  // Build the set of sale NAMES that are already fully resolved in the current
+  // segment, so we can skip re-fetching those sales. This block is ONLY entered
+  // when INCREMENTAL_CRAWL=1; when off, `skippableSaleNames` stays empty and the
+  // sale loop below fetches every sale exactly as before (byte-identical).
+  //
+  // KEYING NOTE (why saleName, and why that is safe): a persisted lot does NOT
+  // store the sale slug/code — only a saleName derived from the slug via the
+  // exact transform used below (`slug → Title Case`). saleName is therefore a
+  // SUPERSET key: recurring sales ("Design", "Important Watches") fold multiple
+  // seasons' lots under one name. That only makes the predicate STRICTER — a
+  // collision can add reasons to re-fetch (a live current cohort blocks the
+  // name) but can NEVER hide an unresolved lot behind a skip. That is the safe
+  // direction: at worst we re-fetch a sale we could have skipped; we never skip
+  // a sale that still has a live/pending lot.
+  //
+  // CARRY-FORWARD: skipping a sale means we push NO fresh lots for it. Its
+  // existing lots are preserved automatically by the caller's merge — lotMap is
+  // seeded from the segment (`for (const lot of existingLots) lotMap.set(...)`),
+  // and a lot that is never overwritten by a fresh crawl stays in lotMap and is
+  // written back out. So "skip a fetch" can never drop those lots. And because
+  // every carried-forward lot for a skipped sale is sold/settled-bought_in and
+  // OLDER than RESULT_PENDING_MS, neither the W11 zombie-reconcile (only touches
+  // 'upcoming') nor the results-pending net (only re-holds within the window)
+  // will mutate them.
+  const skippableSaleNames = new Set<string>();
+  const nameOf = (slug: string) => slug.replace(/-\d{4,6}$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  if (INCREMENTAL_CRAWL) {
+    try {
+      const { readSegment } = await import('./corpus-io');
+      const prior = (readSegment('christies') as unknown as AuctionLot[]) || [];
+      const now = Date.now();
+      // A sale is skippable only if EVERY christies-auc lot under its name is a
+      // terminal, old, non-online result. Any single failing lot disqualifies
+      // the whole name (conservative). We never skip online-only sales (their
+      // true close/revival comes from the onlineonly enrichment pass), anything
+      // still upcoming/unknown/results-pending, or anything closed within the
+      // RESULT_PENDING_MS window (late results can still post inside it).
+      const TERMINAL = new Set(['sold', 'bought_in']);
+      const byName = new Map<string, AuctionLot[]>();
+      for (const l of prior) {
+        if (!String(l.id).startsWith('christies-auc-')) continue; // only this crawler's lots
+        const list = byName.get(l.saleName) || [];
+        list.push(l);
+        byName.set(l.saleName, list);
+      }
+      const resolvedOld = (list: AuctionLot[]): boolean => {
+        for (const l of list) {
+          if (!TERMINAL.has(l.status as string)) return false;                 // upcoming/unknown-result/withdrawn → fetch
+          if ((l as AuctionLot & { resultsPending?: boolean }).resultsPending) return false; // pending → fetch
+          if (l.url && /onlineonly/.test(l.url)) return false;                  // online-only → always fetch
+          const dt = (l as AuctionLot & { saleDateTime?: string }).saleDateTime;
+          const t = dt ? Date.parse(dt) : (l.saleDate ? Date.parse(l.saleDate) : NaN);
+          if (isNaN(t)) return false;                                           // undatable → fetch (can't prove it's old)
+          if (now - t <= RESULT_PENDING_MS) return false;                       // inside the late-result window → fetch
+        }
+        return list.length > 0;
+      };
+      for (const [name, list] of Array.from(byName.entries())) if (resolvedOld(list)) skippableSaleNames.add(name);
+      // A sale reappearing in TODAY's live department discovery must ALWAYS be
+      // re-crawled (it is being actively surfaced), even if the segment looks
+      // resolved — remove any such name from the skip set.
+      const discoveredSlugs = [
+        ...Array.from(discovered.watches), ...Array.from(discovered.science),
+        ...Array.from(discovered.sports), ...Array.from(discovered.art),
+      ];
+      for (const slug of discoveredSlugs) skippableSaleNames.delete(nameOf(slug));
+    } catch (e) {
+      // If the segment can't be read, skip NOTHING — fall back to a full crawl
+      // (the safe default). Never let an incremental optimization drop coverage.
+      console.warn(`  [Christie's Auctions] incremental: could not read segment (${(e as Error).message}) — full crawl`);
+      skippableSaleNames.clear();
+    }
+  }
+
+  let skipped = 0, fetched = 0;
   for (const { sale, kind } of jobs) {
+    // Incremental fast path: this sale is fully resolved + old + not resurfaced
+    // in discovery → don't re-fetch. Its lots ride through via carry-forward.
+    if (INCREMENTAL_CRAWL && skippableSaleNames.has(nameOf(sale))) { skipped++; continue; }
+    fetched++;
     const rawLots = await christiesAuctionLots(sale);
     const saleName = sale.replace(/-\d{4,6}$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     let kept = 0;
@@ -1697,6 +1786,7 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
     console.log(`  [Christie's Auctions] ${sale}: ${rawLots.length} lots → ${kept} kept`);
     await sleep(500);
   }
+  if (INCREMENTAL_CRAWL) console.log(`  [Christie's Auctions] incremental: fetched ${fetched} sales, skipped ${skipped} fully-resolved (carried forward from segment)`);
   console.log(`  [Christie's Auctions] Total ${lots.length} lots (${lots.filter(l => l.status === 'sold').length} sold, ${lots.filter(l => l.status === 'upcoming').length} upcoming)`);
   return lots;
 }

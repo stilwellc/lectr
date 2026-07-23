@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
-import { useRayData, useSoldArchive, retryArchiveLoad } from './hooks/useRayData';
+import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from './hooks/useRayData';
 import { useSavedLots } from './hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct } from './utils';
 import ArtistNav from './components/ArtistNav';
@@ -122,6 +122,31 @@ function ArchiveResults({
       <PastResults lots={archiveSold} showArtist savedIds={savedIds} onToggleSave={onToggleSave} />
     </div>
   );
+}
+
+// The home lander renders its feed from the eager upcoming.json ALONE — it does
+// NOT mount useFullLots(), so the ~10MB phase-2 corpus stays off the cold-load
+// path. But the sold "Record" band (art/design/watches/all markets) reads sold
+// history that lives only in that corpus. This below-the-fold sentinel triggers
+// phase 2 once it scrolls near the viewport (or immediately, on browsers with no
+// IntersectionObserver), so the band fills in as the reader descends without the
+// landing ever paying the download up front. Renders nothing.
+function Phase2Sentinel() {
+  const ref = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') { triggerFullLoad(); return; }
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      entries => { if (entries.some(e => e.isIntersecting)) { triggerFullLoad(); io.disconnect(); } },
+      // start the fetch a viewport early so the band is filled by the time the
+      // reader reaches it — the download has a head start on the scroll.
+      { rootMargin: '600px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return <div ref={ref} aria-hidden style={{ height: 1 }} />;
 }
 
 export default function RayPage() {
@@ -573,7 +598,7 @@ export default function RayPage() {
           No category: a lit "Choose a category" control. Category chosen: a
           chip + quiet "Change category" — the feed toolbar's filters lead. */}
       <div className="rail" style={{ paddingTop: 14 }}>
-        <MarketSwitch compact lit />
+        <MarketSwitch compact lit open={!fromCache} />
       </div>
 
       {error ? (
@@ -607,6 +632,7 @@ export default function RayPage() {
                     allLots={marketLots}
                     demand={demand[activeKey]}
                     marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
+                    open={!fromCache}
                   />
                 ) : activeKey === 'sports' ? (
                   /* Goldin publishes no estimates → realized cohort median */
@@ -616,12 +642,14 @@ export default function RayPage() {
                     marketLabel={marketMeta.label.toLowerCase()}
                     mode="realized"
                     cohortLabel="tickets & passes"
+                    open={!fromCache}
                   />
                 ) : (
                   <BoardDemand
                     allLots={marketLots}
                     demand={demand[activeKey] || []}
                     marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
+                    open={!fromCache}
                   />
                 )}
               </div>
@@ -682,7 +710,7 @@ export default function RayPage() {
               <span style={{ color: 'var(--paper-muted)', fontWeight: 600 }}>{marketName}</span>
             </div>
             <div className="ray-ledger" style={{ margin: 0 }}>
-              {strip.map(item => item.lens && item.to > 0 ? (
+              {strip.map((item, i) => item.lens && item.to > 0 ? (
                 <button
                   key={item.k}
                   type="button"
@@ -691,13 +719,15 @@ export default function RayPage() {
                   style={{ background: 'none', border: 'none', margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
                 >
                   <div className="ray-ledger-k">{item.k}</div>
-                  <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
+                  {/* MARKET OPEN: the four figures count up in a 60ms stagger,
+                      landing as the hero resolves. Cached → instant final. */}
+                  <CountUp to={item.to} format={item.format} duration={900} animate={!fromCache} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
                   <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
                 </button>
               ) : (
                 <div key={item.k}>
                   <div className="ray-ledger-k">{item.k}</div>
-                  <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
+                  <CountUp to={item.to} format={item.format} duration={900} animate={!fromCache} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
                   <div className="ray-ledger-s">{item.s}</div>
                 </div>
               ))}
@@ -964,6 +994,12 @@ export default function RayPage() {
               )}
             </section>
           )}
+
+          {/* Phase-2 lazy trigger: the art/design/watches/all Record band below
+              reads sold history from the phase-2 corpus (upcoming.json carries
+              only upcoming lots). Sports/science paint their Record from the
+              eager recentSold slice + lazy phase-3, so they never need phase 2. */}
+          {!isSportsScience && <Phase2Sentinel />}
 
           {/* R7 · THE RECORD — sports/science verticals are Goldin sold-archive
               lots (split out of the eager payload): the row paints from the

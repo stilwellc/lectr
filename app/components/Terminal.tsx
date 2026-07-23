@@ -353,6 +353,7 @@ export function Colophon({ record }: {
             <Link href="/watches">Watches</Link>
             <Link href="/sports">Sports</Link>
             <Link href="/science">Science</Link>
+            <Link href="/culture">Pop Culture</Link>
           </div>
           <div className="ray-close-col">
             <span className="ray-close-k">The desk</span>

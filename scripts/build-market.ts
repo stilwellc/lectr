@@ -104,8 +104,19 @@ export function runMarketBuild() {
   // explode, and a mass-produced card is not a unique object (title similarity
   // would falsely group different copies). They stay in the CORPUS (written
   // below) but never enter the engine — no value, no comps, no repeat-sale.
+  //
+  // The Sotheby's Algolia discovery backfill (source:'sothebys-algolia', ~370k
+  // net-new sold lots) rides the SAME exclusion for the SAME reason: the memory
+  // notes flag repeat-sale + per-lot valuation as ~96% of build time, exploding
+  // with pool size, and these lots carry only THIN metadata (title/fullText —
+  // no dimensions/reference/edition) so they'd add enormous cost with weak
+  // physical-match signal. Like cards, they stay in `all` (so they feed
+  // stats.json / market series / records / the sold archive) but never enter
+  // the engine pool — no value, no comps, no repeat-sale grouping.
   const CARDS = 'sports-cards';
-  const engineAll = all.filter(l => l.artist !== CARDS);
+  const engineAll = all.filter(l =>
+    l.artist !== CARDS &&
+    (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
 
   const sold = engineAll.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
   const tbl = buildIdf(sold);
@@ -529,8 +540,14 @@ export function runMarketBuild() {
   soldCards.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => cardSample.add(String(l.id)));
   soldCards.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => cardSample.add(String(l.id)));
   console.log(`[market] served sold-card sample: ${cardSample.size} of ${soldCards.length}`);
+  // Culture is a MIXED vertical (Goldin no-estimate + Sotheby's/Christie's
+  // estimate-bearing), and only sports/science surfaces mount the phase-3
+  // archive — so Goldin culture sold rows (~9k) went unreachable, hiding half
+  // the vertical. Keep them in the phase-2 shards (the estimate-aware path that
+  // culture surfaces load via useFullLots) instead of archiving them.
+  const CULTURE_KEEP = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia']);
   writeCorpusAndServed(all as unknown as Record<string, unknown>[],
-    (l: Record<string, unknown>) => l.auctionHouse === 'Goldin' && l.status === 'sold',
+    (l: Record<string, unknown>) => l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string),
     // corpus-only: SOLD sport cards stay off the wire — except the sample above.
     // Live cards always ship (they're on the block).
     (l: Record<string, unknown>) => l.artist === 'sports-cards' && l.status === 'sold' && !cardSample.has(String(l.id)));

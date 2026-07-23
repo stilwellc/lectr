@@ -99,6 +99,7 @@ export default function BoardDemand({
   cohortLabel,
   indexKind = 'price',
   secondaryStat,
+  open = false,
 }: {
   allLots: AuctionLot[];
   demand?: { date: string; value: number }[];
@@ -116,6 +117,10 @@ export default function BoardDemand({
   cohortLabel?: string;
   /** index mode sub-kind: 'price' = pure appreciation, 'blend' = price × demand */
   indexKind?: 'price' | 'blend';
+  /** MARKET OPEN — armed on the entrance's first non-cached paint. Runs the
+   *  hero count-up + tone-resolve beat once. Cached revisits pass false, so the
+   *  numeral, line and tone all render final at once (no "0", no neutral flash). */
+  open?: boolean;
 }) {
   const isRealized = mode === 'realized';
   const isIndex = mode === 'index';
@@ -130,6 +135,43 @@ export default function BoardDemand({
   const [range, setRange] = useState<Range>(mode === 'realized' ? '1Y' : 'MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
   const drawRef = useChartDraw();
+
+  // MARKET OPEN — the hero beat. `armed` is decided ONCE, synchronously at the
+  // first render: this whole subtree is only ever client-rendered (it lives
+  // behind the loading gate + fromCache branch, never in the SSG HTML), so
+  // reading matchMedia in the initializer is hydration-safe here and — unlike a
+  // post-mount flip — the numeral starts at 0 on its very first paint (no
+  // final-value flash before the count-up). `resolved` flips the numeral + line
+  // from neutral (--color-fg) to the trend tone at ~70% of the ~900ms draw, so
+  // the number and the line finish colouring together.
+  //   armed=false → tone + final figure paint at once (cached / reduced motion):
+  //                 no neutral flash, no stranded "0".
+  const [armed] = useState(
+    () =>
+      open &&
+      typeof window !== 'undefined' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+  const [resolved, setResolved] = useState(false);
+  // `arming` is the ONE-SHOT count-up switch: true only during the entrance
+  // beat, then off. The numeral is a hover-ternary (scrub value ⇄ CountUp), so
+  // CountUp REMOUNTS every time the reader scrubs off the chart — if it kept
+  // seeing animate=true it would re-sweep 0→now on every hover-out. Flip it off
+  // once the beat finishes so post-entrance remounts land on the value at once.
+  const [arming, setArming] = useState(armed);
+  useEffect(() => {
+    if (!armed) return;
+    // resolve the tone at 70% of the 900ms count-up/draw — number and line land
+    // fully coloured together at ~T900. A late timer can only ADD the tone, so a
+    // JS hiccup leaves the (already-correct) final tone, never a stranded state.
+    const t = setTimeout(() => setResolved(true), 630);
+    // end the count-up window after the last figure settles (hero 900 + ledger
+    // stagger ≤180) so a mid-beat remount can't strand a "0".
+    const tArm = setTimeout(() => setArming(false), 1100);
+    return () => { clearTimeout(t); clearTimeout(tArm); };
+  }, [armed]);
+  // Neutral only while armed-but-unresolved; every other path is trend tone.
+  const heroNeutral = armed && !resolved;
 
   const series = useMemo(
     () => (demand && demand.length ? demand : demandSeries(allLots)),
@@ -180,7 +222,14 @@ export default function BoardDemand({
   }, [hover, series]);
 
   return (
-    <div className="ray-board-demand" data-tone={dir >= 0 ? 'up' : 'down'}>
+    <div
+      className="ray-board-demand"
+      data-tone={dir >= 0 ? 'up' : 'down'}
+      data-open={open ? 'true' : undefined}
+      // neutral drives the numeral/line to --color-fg until the draw resolves;
+      // absent on every non-armed path, so the tone is present from paint
+      data-neutral={heroNeutral ? 'true' : undefined}
+    >
       <div className="ray-demand-head">
         <span className="ray-demand-label">
           {isIndex ? (
@@ -217,7 +266,7 @@ export default function BoardDemand({
 
       {!hasIndex && (
         <div className="ray-numrow">
-          <h1 className="ray-hero2-value"><CountUp to={liveCount} format={n => Math.round(n).toString()} duration={900} /></h1>
+          <h1 className="ray-hero2-value"><CountUp to={liveCount} format={n => Math.round(n).toString()} duration={900} animate={arming} /></h1>
           <span className="ray-numrow-delta">
             <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
               lots on the block · demand index pending — these auctions publish no estimates to measure against
@@ -231,7 +280,7 @@ export default function BoardDemand({
         {hover ? (
           <h1 className="ray-hero2-value">{fmt(hover.value)}</h1>
         ) : (
-          <h1 className="ray-hero2-value"><CountUp to={now} format={fmt} duration={900} /></h1>
+          <h1 className="ray-hero2-value"><CountUp to={now} format={fmt} duration={900} animate={arming} /></h1>
         )}
         <span className="ray-numrow-delta">
           {hover
@@ -276,10 +325,10 @@ export default function BoardDemand({
 
       {ledger && (
         <div className="ray-ledger">
-          {ledger.map(item => (
+          {ledger.map((item, i) => (
             <div key={item.k}>
               <div className="ray-ledger-k">{item.k}</div>
-              <CountUp to={item.to} format={item.format} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
+              <CountUp to={item.to} format={item.format} duration={900} animate={arming} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
               <div className="ray-ledger-s">{item.s}</div>
             </div>
           ))}
@@ -358,7 +407,6 @@ export default function BoardDemand({
                 dot={false}
                 activeDot={{ r: 3.5, fill: lineColor, stroke: 'var(--color-bg-board)', strokeWidth: 2 }}
                 isAnimationActive={false}
-                style={{ filter: `drop-shadow(0 0 6px ${dir >= 0 ? 'rgba(47,191,113,0.35)' : 'rgba(229,84,75,0.3)'})` }}
               />
             </AreaChart>
           </ResponsiveContainer>

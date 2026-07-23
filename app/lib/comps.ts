@@ -441,6 +441,11 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
 
   const sold = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id
+    // Algolia-sourced Sotheby's lots are thin (title-only, no dimensions/medium/
+    // reference/titleTokens) and are engine-EXCLUDED at build time; the client
+    // re-derives comps here, so guard them out too or a title-only lot pollutes
+    // the comp pool for art/watch makers (picasso, patek, rolex, …).
+    && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia'
   );
 
   // 1 · the same edition — the strongest comp there is

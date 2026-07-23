@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { ARTISTS, MARKETS, marketArtists, rosterNoun } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
-import { useRayData } from '../hooks/useRayData';
+import { useFullLots } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -25,7 +25,8 @@ const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSpa
  * not all artists.
  */
 export default function ArtistsPage() {
-  const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache } = useRayData();
+  // useFullLots: the sparklines gate on fullLoaded, so trigger phase 2.
+  const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();

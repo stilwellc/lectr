@@ -34,6 +34,10 @@ on:
         description: 'Skip the crawl stage and rebuild from the last-good segments (recovery / assemble-only)'
         type: boolean
         default: false
+      incremental_crawl:
+        description: "Christie's incremental crawl (skip fully-resolved sales, carry them forward) — cuts ~60% of crawl runtime. OFF by default until validated on a manual run."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -59,6 +63,8 @@ jobs:
     env:
       SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
       RAY_HOUSE: ${{ matrix.house }}
+      # opt-in, off by default — ray-crawl only reads this for the christies house
+      INCREMENTAL_CRAWL: ${{ github.event.inputs.incremental_crawl == 'true' && '1' || '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
