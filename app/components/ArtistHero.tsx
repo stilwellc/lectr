@@ -106,7 +106,7 @@ export default function ArtistHero({
         const m = Math.floor(s.length / 2);
         return { date, value: s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 };
       });
-  }, [lensLots, bidMarket]);
+  }, [lensLots, bidMarket, stats, lens, showLens]);
 
   // STALE GATE: a series whose newest quarter is >13 months old must never
   // headline as "trailing 12 months" — the hero falls back to price facts.

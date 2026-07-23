@@ -24,7 +24,10 @@ const SPORTS_SALE = /(^|[-/ ])(sports?|memorabilia|baseball|basketball|football|
 // ...and culture-memorabilia sales that match via the bare "memorabilia"
 // keyword (isSportsSale runs BEFORE isCultureSale, so "Entertainment
 // Memorabilia" / "Rock & Pop" would wrongly land in sports without this).
-const NOT_SPORTS_SALE = /sporting[- ](guns?|rifles?|firearms?|art|pictures?)|decorative[- ]sporting|topographi|antique[- ](arms|firearms)|arms[- ](and[- ])?armou?r|shotguns?|\bwine\b|whisk|handbags?|old[- ]masters?|masters[- ]of[- ]design|impressionist|modern[- ]art|paintings?[- ]drawings?|19th[- ]century|works[- ]on[- ]paper|entertainment[- ]memorabilia|film[- ](and|&)[- ]entertainment|rock[- ](and|&|n)[-' ]?pop|music[- ]memorabilia|pop[- ]culture/i;
+// ...and mixed luxury sales: "sneakers?" pulled in a "Fine Watches AND Rare
+// Sneakers" sale, routing the WATCHES (tourbillons, repeaters) into sports-
+// memorabilia — so exclude watch/jewel sales here (they own the watch vertical).
+const NOT_SPORTS_SALE = /sporting[- ](guns?|rifles?|firearms?|art|pictures?)|decorative[- ]sporting|topographi|antique[- ](arms|firearms)|arms[- ](and[- ])?armou?r|shotguns?|\bwine\b|whisk|handbags?|old[- ]masters?|masters[- ]of[- ]design|impressionist|modern[- ]art|paintings?[- ]drawings?|19th[- ]century|works[- ]on[- ]paper|entertainment[- ]memorabilia|film[- ](and|&)[- ]entertainment|rock[- ](and|&|n)[-' ]?pop|music[- ]memorabilia|pop[- ]culture|\bwatch(es)?\b|jewel|horolog/i;
 
 export function isSportsSale(slug: string): boolean {
   const s = slug.toLowerCase();

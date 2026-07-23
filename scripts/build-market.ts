@@ -11,7 +11,6 @@
  *
  * Run: npx tsx scripts/build-market.ts   (after a crawl / migrate)
  */
-import * as zlib from 'zlib';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
@@ -74,10 +73,6 @@ function readGz(f: string): AuctionLot[] {
   // buffer-safe NDJSON read — the sold-archive exceeds V8's max string length
   const { readGzRows } = require('./corpus-io');
   return readGzRows(path.join(CORPUS, f + '.gz')) as AuctionLot[];
-}
-function writeGz(f: string, data: Record<string, unknown>[]) {
-  const { gzipNdjson } = require('./corpus-io');
-  fs.writeFileSync(path.join(CORPUS, f + '.gz'), gzipNdjson(data));
 }
 
 export function runMarketBuild() {

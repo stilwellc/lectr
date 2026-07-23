@@ -72,9 +72,13 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
     // Sell-through, all-time: sold ÷ (sold + bought-in) over estimate-market
     // lots only — Goldin's no-reserve verticals conclude every lot 'sold', so
     // counting them would print a fake 100%; bid markets show sold count.
+    // culture (Christie's/Sotheby's culture sales) carries real estimates + gets
+    // bought-in — it's an estimate market, not a no-reserve one, so it belongs
+    // in sell-through, not the "every lot concludes" bucket. (Only Goldin's
+    // sports verticals are truly no-reserve.)
     const estMarketConcluded = allLots.filter(l =>
       (l.status === 'sold' || l.status === 'bought_in') &&
-      ['art', 'design', 'watches'].includes(marketOf(l.artist))
+      ['art', 'design', 'watches', 'culture'].includes(marketOf(l.artist))
     );
     const estMarketSold = estMarketConcluded.filter(l => l.status === 'sold').length;
     const sellThroughCard = estMarketConcluded.length >= 5

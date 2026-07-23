@@ -28,25 +28,38 @@ async function main() {
 
   // ── SANITY GATE ─────────────────────────────────────────────────────────
   // Compare to the last published totals (meta.json). A big shrink = a broken
-  // or empty segment; keep the last-good payload rather than wiping the book.
+  // or empty segment (e.g. a correlated R2 outage returning empty pulls); keep
+  // the last-good payload rather than wiping the book. A corrupt/missing
+  // baseline must NOT silently disable the gate — that's the exact failure that
+  // lets an empty corpus ship. So: parse errors on a PRESENT baseline are fatal,
+  // and even with NO baseline an absolute floor guards a catastrophic reunion.
+  const CORPUS_FLOOR = 100_000; // the corpus is ~455k; anything near-empty is a bug
   const metaPath = path.join(DATA_DIR, 'meta.json');
+  let prev: { totalLots?: number; totalSold?: number } | null = null;
   if (fs.existsSync(metaPath)) {
     try {
-      const prev = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-      const prevTotal = prev.totalLots || 0;
-      if (prevTotal > 1000 && allLots.length < prevTotal * 0.9) {
-        throw new Error(`[assemble] corpus shrank ${prevTotal} → ${allLots.length} (>10%) — refusing to publish (last-good stays live)`);
-      }
-      const prevSold = prev.totalSold || 0;
-      const newSold = allLots.filter(l => l.status === 'sold').length;
-      if (prevSold > 1000 && newSold < prevSold * 0.9) {
-        throw new Error(`[assemble] sold book shrank ${prevSold} → ${newSold} (>10%) — refusing to publish`);
-      }
-      console.log(`[assemble] sanity gate OK: lots ${prevTotal}→${allLots.length}, sold ${prevSold}→${newSold}`);
+      prev = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
     } catch (e) {
-      if (String(e).includes('refusing to publish')) throw e;
-      console.warn('[assemble] sanity gate skipped:', (e as Error).message);
+      throw new Error(`[assemble] baseline meta.json is PRESENT but unparseable — refusing to publish without a sanity baseline: ${(e as Error).message}`);
     }
+  }
+  if (prev && (prev.totalLots || 0) > 1000) {
+    const prevTotal = prev.totalLots || 0;
+    if (allLots.length < prevTotal * 0.9) {
+      throw new Error(`[assemble] corpus shrank ${prevTotal} → ${allLots.length} (>10%) — refusing to publish (last-good stays live)`);
+    }
+    const prevSold = prev.totalSold || 0;
+    const newSold = allLots.filter(l => l.status === 'sold').length;
+    if (prevSold > 1000 && newSold < prevSold * 0.9) {
+      throw new Error(`[assemble] sold book shrank ${prevSold} → ${newSold} (>10%) — refusing to publish`);
+    }
+    console.log(`[assemble] sanity gate OK: lots ${prevTotal}→${allLots.length}, sold ${prevSold}→${newSold}`);
+  } else {
+    // no usable baseline (first run) — fall back to the absolute floor
+    if (allLots.length < CORPUS_FLOOR) {
+      throw new Error(`[assemble] no baseline and only ${allLots.length} lots (< floor ${CORPUS_FLOOR}) — refusing to publish a near-empty corpus`);
+    }
+    console.log(`[assemble] no baseline meta; ${allLots.length} lots clears the ${CORPUS_FLOOR} floor`);
   }
 
   // ── per-artist stats over the FULL corpus (build-market §3f adds the

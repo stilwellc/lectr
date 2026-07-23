@@ -3583,10 +3583,14 @@ async function main() {
   // ship a hollowed-out book. Growth is never blocked; only shrinkage is.
   {
     try {
-      const zlibMod = await import('zlib');
+      const { readGzRows } = await import('./corpus-io');
       const prevPath = path.join(process.cwd(), 'data', 'corpus', 'lots.json.gz');
       if (fs.existsSync(prevPath)) {
-        const prev = JSON.parse(zlibMod.gunzipSync(fs.readFileSync(prevPath)).toString('utf8')) as { status?: string; auctionHouse?: string }[];
+        // buffer-safe NDJSON read — the corpus is NDJSON now, and a raw
+        // gunzip.toString+JSON.parse both throws on it AND blows the 512MB
+        // string limit, which the catch below would silently swallow — disabling
+        // this entire gate. readGzRows handles NDJSON (+ legacy arrays).
+        const prev = readGzRows(prevPath) as { status?: string; auctionHouse?: string }[];
         const prevTotal = prev.length;
         const newTotal = allLots.filter(l => !isGoldinSold(l)).length;
         if (prevTotal > 1000 && newTotal < prevTotal * 0.97) {
