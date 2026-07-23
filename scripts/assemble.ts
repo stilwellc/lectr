@@ -67,10 +67,18 @@ async function main() {
   const existing: Record<string, MarketStats> = {};
   const statsPath = path.join(SERVED_DIR, 'stats.json');
   if (fs.existsSync(statsPath)) { try { Object.assign(existing, JSON.parse(fs.readFileSync(statsPath, 'utf8'))); } catch { /* fresh */ } }
+  // ONE group-by pass instead of a full-corpus filter per ARTISTS slug (~40
+  // scans of 455k). Map push preserves allLots order, so each group is identical
+  // to the old filter → computeStats output is byte-for-byte the same.
+  const bySlug = new Map<string, AuctionLot[]>();
+  for (const l of allLots) {
+    const arr = bySlug.get(l.artist);
+    if (arr) arr.push(l); else bySlug.set(l.artist, [l]);
+  }
   const statsByArtist: Record<string, MarketStats> = {};
   for (const a of ARTISTS) {
-    const lots = allLots.filter(l => l.artist === a.slug);
-    if (lots.length) statsByArtist[a.slug] = computeStats(lots, existing[a.slug] || null);
+    const lots = bySlug.get(a.slug);
+    if (lots && lots.length) statsByArtist[a.slug] = computeStats(lots, existing[a.slug] || null);
     else if (existing[a.slug]) statsByArtist[a.slug] = existing[a.slug]; // carry a slug with no lots this run
   }
 

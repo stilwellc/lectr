@@ -16,8 +16,10 @@ import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { resolveComps, estimateValue, COMP_GATE } from '../app/lib/value';
 
 const CORPUS = path.join(process.cwd(), 'data', 'corpus');
+// buffer-safe NDJSON read via the shared codec (the corpus is NDJSON now; a raw
+// gunzip.toString+JSON.parse both crashes on it and blows the 512MB string cap)
 const readGz = (f: string): AuctionLot[] =>
-  JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(CORPUS, f + '.gz'))).toString('utf8'));
+  (require('./corpus-io').readGzRows(path.join(CORPUS, f + '.gz'))) as AuctionLot[];
 
 type L = AuctionLot & { _v?: Record<string, number>; estLowUsd?: number; estHighUsd?: number; realizedUsd?: number };
 const median = (a: number[]) => {

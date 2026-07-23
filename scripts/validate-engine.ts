@@ -20,7 +20,8 @@ import { resolveComps, estimateValue } from '../app/lib/value';
 
 const CORPUS = path.join(process.cwd(), 'data', 'corpus');
 function readCorpus(): AuctionLot[] {
-  const rd = (f: string) => JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(CORPUS, f + '.gz'))).toString('utf8'));
+  // buffer-safe NDJSON read via the shared codec (corpus is NDJSON now)
+  const rd = (f: string) => require('./corpus-io').readGzRows(path.join(CORPUS, f + '.gz'));
   return rd('lots.json').concat(rd('sold-archive.json'));
 }
 
