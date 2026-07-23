@@ -69,7 +69,7 @@ jobs:
     needs: crawl
     if: always()                # build from fresh-or-last-good segments even if some crawls failed
     runs-on: ubuntu-latest
-    timeout-minutes: 60         # segment pulls (parallel) can wait out R2 GET-lag + full engine
+    timeout-minutes: 45         # pull + engine + upcoming (backtest is now its own parallel job)
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -77,16 +77,34 @@ jobs:
       - run: npm ci
       - name: Pull all segments
         run: bash scripts/data-store.sh pull-segments
-      - name: Pull previous totals (for the sanity gate)
-        run: bash scripts/data-store.sh pull-meta
+      - name: Pull previous totals + backtest (gate baseline + carry the record)
+        run: bash scripts/data-store.sh pull-meta && bash scripts/data-store.sh pull-backtest
       - name: Assemble + engine (sanity-gated)
         run: npx tsx scripts/assemble.ts
       - name: Rebuild eager upcoming payload
         run: npx tsx scripts/build-upcoming.ts
-      - name: Rebuild point-in-time backtest
-        run: npx tsx scripts/build-backtest.ts
       - name: Push corpus + served to R2
         run: bash scripts/data-store.sh push
+
+  # The point-in-time backtest is a heavy replay (~25min) but the record barely
+  # moves night to night, so it runs OFF the critical path in parallel with the
+  # deploy and just refreshes the standalone backtest.json for the next cycle.
+  backtest:
+    needs: assemble
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull corpus + served
+        run: bash scripts/data-store.sh pull
+      - name: Rebuild point-in-time backtest
+        run: npx tsx scripts/build-backtest.ts
+      - name: Push refreshed backtest.json
+        run: bash scripts/data-store.sh push-backtest
 
   deploy:
     needs: assemble
