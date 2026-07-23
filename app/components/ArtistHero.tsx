@@ -161,13 +161,18 @@ export default function ArtistHero({
     const houses = stats?.houseDistribution?.length ?? new Set(lots.map(l => l.auctionHouse)).size;
     const total = stats?.totalLotsTracked ?? lots.length;
     // bid markets: every no-reserve lot concludes 'sold', so sell-through is
-    // a constant 100% — count the past year's sales instead
+    // a constant 100% — count the past year's sales instead. On corpus-only
+    // slugs (cards/sports) the loaded `lots` is a slim sample, so read the
+    // authoritative count from stats.json: Σ totalSales over the trailing 4
+    // quarters of priceHistory (mirrors the series/typicalSale stats path).
     const cutoff = Date.now() - 365 * 86_400_000;
-    const sold12mo = lots.filter(l =>
-      l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff
-    ).length;
+    const sold12mo = bidMarket && stats?.priceHistory?.length
+      ? stats.priceHistory.slice(-4).reduce((s, p) => s + (p.totalSales || 0), 0)
+      : lots.filter(l =>
+          l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff
+        ).length;
     return { sellThrough, houses, total, sold12mo };
-  }, [lots, stats]);
+  }, [lots, stats, bidMarket]);
 
   // The live-lot count comes from the page (date-filtered, the same list the
   // Upcoming section renders) — never a stale status count. The internal

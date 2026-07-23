@@ -54,7 +54,16 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
     const estimateCard = estimateCoverage >= 0.05
       ? { label: 'Avg. hammer vs estimate', value: fmtSignedPct(avgOverEstimate, 1), sub: `${lotsWithEstimate.length.toLocaleString()} lots · hammer basis`, tone: '' }
       : (() => {
-          const prices = recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
+          // STATS-FIRST: the loaded array is a slim sample on these verticals,
+          // so median across the market's slug priceHistory (trailing 4 quarters'
+          // medianPrice) when stats exist; only fall back to the loaded sample.
+          const statMedians = Object.values(statsByArtist)
+            .flatMap(x => (x.priceHistory || []).slice(-4).map(p => p.medianPrice))
+            .filter(m => m > 0)
+            .sort((a, b) => a - b);
+          const prices = statMedians.length
+            ? statMedians
+            : recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
           const median = prices.length
             ? (prices.length % 2
                 ? prices[(prices.length - 1) / 2]
@@ -65,9 +74,13 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
 
     // ONE corpus count: the 'all' book is the full crawl corpus from
     // meta.json, never the served subset — and every count names its base.
+    // On a live vertical the served array is a slim sample, so sum the
+    // full-corpus totalLotsTracked over this market's slugs (same source as
+    // the "sold lots" card below); allLots.length is only a last resort.
+    const marketTracked = Object.values(statsByArtist).reduce((s, x) => s + (x.totalLotsTracked || 0), 0);
     const totalLotsCard = market === 'all' || !marketMeta?.live
       ? { label: 'Total lots', value: meta.totalLots.toLocaleString(), sub: 'on the book, full corpus', tone: '' }
-      : { label: 'Total lots', value: allLots.length.toLocaleString(), sub: `on the book · ${contextLabel}`, tone: '' };
+      : { label: 'Total lots', value: (marketTracked || allLots.length).toLocaleString(), sub: `on the book · ${contextLabel}`, tone: '' };
 
     // Sell-through, all-time: sold ÷ (sold + bought-in) over estimate-market
     // lots only — Goldin's no-reserve verticals conclude every lot 'sold', so

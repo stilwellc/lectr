@@ -220,7 +220,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               Recent <span style={{ fontStyle: 'normal' }}>results</span>
             </h2>
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
-              {filtered.length.toLocaleString()} sold lots
+              {filtered.length.toLocaleString()} results
               {categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}
             </p>
             {sub && (
@@ -396,7 +396,9 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   color: 'var(--color-fg)',
                   lineHeight: 1.3,
                 }}>
-                  {lot.priceUsd
+                  {/* only a sold lot shows a realized price — a bought_in or
+                      unresolved lot must not render a stray priceUsd as a sale */}
+                  {lot.status === 'sold' && lot.priceUsd
                     ? formatPrice(lot.priceUsd)
                     : (lot as { resultsPending?: boolean }).resultsPending
                       ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.92em' }}>Pending</span>

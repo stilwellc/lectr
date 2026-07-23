@@ -33,6 +33,13 @@ export default function CountUp({
   const shownRef = useRef(0);
 
   useEffect(() => {
+    // NaN/undefined `to` would tween into format(NaN) → "$NaN"/"NaN%". Land on
+    // a safe 0 instead of animating garbage.
+    if (!Number.isFinite(to)) {
+      shownRef.current = 0;
+      setVal(0);
+      return;
+    }
     const from = shownRef.current;
     if (to === from) return;
 

@@ -636,8 +636,10 @@ export function extractCollectibleTags(title: string): {
     SPORTS_SCIENCE_SLUGS in comps.ts + the science buckets). */
 const CATEGORY_SLUGS = new Set<string>([
   'game-used', 'trophies-awards', 'tickets-passes',
+  'sports-cards', 'sports-memorabilia',
   'space-exploration', 'meteorites', 'fossils', 'scientific-instruments',
   'minerals', 'natural-history',
+  'movie-tv', 'music-memorabilia', 'entertainment-memorabilia',
 ]);
 
 export function classifyEntity(slug: string): {

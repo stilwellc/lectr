@@ -270,10 +270,14 @@ function loadRayData(): Promise<RayPayload> {
       return core;
     }
 
-    // ── fallback: no upcoming.json yet (older deploy) — the classic single load
+    // ── fallback: no upcoming.json yet (older deploy) — the classic single load.
+    // Version the shard URLs by lastCrawl like the primary path: the shard paths
+    // are immutable-cached (public/_headers), so an un-versioned fetch here could
+    // pin a stale shard for a year.
+    const fbVer = metaData.lastCrawl ? `?v=${encodeURIComponent(metaData.lastCrawl)}` : '';
     const lotsR = await Promise.allSettled([(async () => {
-      const idx = await fetchJson('/data/ray/lots-index.json') as { shards: number };
-      const arrs = await Promise.all(Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) => fetchJson(`/data/ray/lots-${i}.json`) as Promise<AuctionLot[]>));
+      const idx = await fetchJson(`/data/ray/lots-index.json${fbVer}`) as { shards: number };
+      const arrs = await Promise.all(Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) => fetchJson(`/data/ray/lots-${i}.json${fbVer}`) as Promise<AuctionLot[]>));
       return ([] as AuctionLot[]).concat(...arrs);
     })()]);
     const lotsData = (lotsR[0].status === 'fulfilled' ? lotsR[0].value : []) as AuctionLot[];

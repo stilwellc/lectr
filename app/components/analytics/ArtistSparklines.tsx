@@ -45,7 +45,7 @@ function computeSparkData(lots: AuctionLot[]): SparkPoint[] {
     }));
 }
 
-function SparkTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: SparkPoint }> }) {
+function SparkTooltip({ active, payload, priceBasis }: { active?: boolean; payload?: Array<{ payload: SparkPoint }>; priceBasis?: boolean }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -59,9 +59,17 @@ function SparkTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
         {d.date}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-        {`${fmtSignedPct(Math.round(d.avgPrice))} vs estimate`}
-      </div>
+      {/* bid-market fallback: avgPrice is a median $ LEVEL (no estimates to
+          divide by), so caption the price — never "% vs estimate". */}
+      {priceBasis ? (
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-fg)' }}>
+          {`${formatPrice(d.avgPrice)} median realized`}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+          {`${fmtSignedPct(Math.round(d.avgPrice))} vs estimate`}
+        </div>
+      )}
     </div>
   );
 }
@@ -70,6 +78,9 @@ interface ArtistCardData {
   slug: string;
   label: string;
   sparkData: SparkPoint[];
+  /** true when sparkData is the bid-market $ median fallback (no estimates) —
+      the tooltip then reads a price level, not a % over estimate */
+  priceBasis: boolean;
   totalRevenue: number;
   avgPrice: number;
   appreciation: number;
@@ -135,7 +146,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
                 </linearGradient>
               </defs>
               <YAxis hide domain={[(min: number) => min - Math.abs(min) * 0.18 - 1, (max: number) => max + Math.abs(max) * 0.18 + 1]} />
-              <Tooltip content={<SparkTooltip />} />
+              <Tooltip content={<SparkTooltip priceBasis={artist.priceBasis} />} />
               <Area
                 type="monotone"
                 dataKey="avgPrice"
@@ -218,7 +229,22 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
     return roster.map(a => {
       const stats = statsByArtist[a.slug];
       const artistLots = bySlug.get(a.slug) || [];
-      const sparkData = demandSeries(artistLots).map(p => ({ date: p.date, avgPrice: p.value }));
+      let sparkData = demandSeries(artistLots).map(p => ({ date: p.date, avgPrice: p.value }));
+
+      // BID-MARKET FALLBACK: sports/science (Goldin) lots carry NO estimates —
+      // and the sold-cards corpus isn't even loaded client-side — so
+      // demandSeries yields nothing and the card blanks to "Insufficient data".
+      // Mirror ArtistHero's stats path: draw the sparkline from the
+      // full-corpus quarterly medianPrice in stats.json, and headline the
+      // movement chip off stats.appreciationRate. `priceBasis` retargets the
+      // tooltip/tone so a $ level is never captioned as "% vs estimate".
+      let priceBasis = false;
+      if (sparkData.length < 2 && stats?.priceHistory?.length) {
+        const pts = stats.priceHistory
+          .filter(p => p.medianPrice > 0)
+          .map(p => ({ date: p.date, avgPrice: p.medianPrice }));
+        if (pts.length >= 2) { sparkData = pts; priceBasis = true; }
+      }
 
       const withEstimate = artistLots.filter(l =>
         l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0
@@ -235,11 +261,16 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
         slug: a.slug,
         label: a.label,
         sparkData,
+        priceBasis,
         totalRevenue: stats?.totalAuctionRevenue || 0,
         avgPrice: stats?.avgPriceLast12Months || 0,
-        // the last spark point IS the appreciation — sparkData preserved
-        // demandSeries' value as avgPrice, so no second bucketing pass
-        appreciation: sparkData.length ? sparkData[sparkData.length - 1].avgPrice : 0,
+        // the last spark point IS the appreciation for estimate markets
+        // (demandSeries' value carried through as avgPrice); on the bid-market
+        // price fallback that quantity is a $ level, so read the authoritative
+        // appreciationRate from stats.json instead.
+        appreciation: priceBasis
+          ? (stats?.appreciationRate || 0)
+          : sparkData.length ? sparkData[sparkData.length - 1].avgPrice : 0,
         overEstimate,
         totalLots: artistLots.length,
       };

@@ -8,3 +8,24 @@
 /*/opengraph-image
   Content-Type: image/png
   Cache-Control: public, max-age=3600
+
+# ── Versioned data shards: immutable long-lived cache ────────────────────────
+# The client fetches these WITH a ?v=<lastCrawl> query param (force-cache), so
+# every URL is already cache-busted per crawl — a new crawl is a new URL. Yet
+# Cloudflare Pages serves them with `public, max-age=0, must-revalidate`, so
+# each load pays a revalidation round-trip for nothing. Freeze them.
+#
+# _headers matches on PATH, not query string, so these globs match the whole
+# family (lots-0.json … lots-5.json AND lots-index.json; sold-archive-0/1.json
+# AND sold-archive-index.json) — all of which are ?v=-busted in useRayData.ts
+# (lots-index L242, lots-<i> L245, sold-archive-index L337, sold-archive-<i>
+# L339, sold-archive.json fallback L342).
+#
+# Deliberately NOT `/data/ray/*.json` (too broad): the phase-1 files
+# meta/upcoming/stats/market/backtest.json are fetched WITHOUT ?v= (L179-183)
+# and MUST keep revalidating to pick up a new crawl. players.json / refs.json
+# likewise stay untouched. These name-prefixed globs match none of them.
+/data/ray/lots-*
+  Cache-Control: public, max-age=31536000, immutable
+/data/ray/sold-archive-*
+  Cache-Control: public, max-age=31536000, immutable

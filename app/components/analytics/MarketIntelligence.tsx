@@ -87,7 +87,12 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
   const idxTone = idxChange != null ? toneOf(idxChange) : 'flat';
   const idxColor = idxTone === 'up' ? UP : idxTone === 'down' ? DOWN : FLAT;
 
-  const showSellThrough = series.sellThrough.length >= 3 && stHead !== null;
+  // A no-reserve market (all-Goldin sports) records zero bought-in lots, so
+  // every quarter reads a constant 100% — a meaningless figure, not a signal.
+  // Detect it from the data (every point pinned at 100) rather than hardcoding
+  // a market key: keeps science/culture if they carry real bought-in lots.
+  const sellThroughIsFake = series.sellThrough.length > 0 && series.sellThrough.every(p => p.value === 100);
+  const showSellThrough = series.sellThrough.length >= 3 && stHead !== null && !sellThroughIsFake;
   const showAccuracy = series.houseAccuracy.length >= 3 && accLatest != null;
 
   // seasonality: months with n≥30 chart; thinner months are suppressed, and
@@ -104,9 +109,17 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
   const seasonWorst = useMemo(() => (seasonRows.length ? seasonRows.reduce((a, b) => (b.pct < a.pct ? b : a)) : null), [seasonRows]);
   const seasonN = useMemo(() => seasonRows.reduce((s, r) => s + r.n, 0), [seasonRows]);
 
-  // market depth: sales per quarter — the honest liquidity read
+  // market depth: sales per quarter — the honest liquidity read. The volume
+  // series INCLUDES the in-progress quarter (a partial, ~a few weeks of lots),
+  // so headline the last COMPLETE quarter — mirror headlineSellThrough's guard.
   const showDepth = series.volume.length >= 4;
-  const depthLatest = showDepth ? series.volume[series.volume.length - 1] : null;
+  const depthLatest = useMemo(() => {
+    const nowQ = currentQuarter();
+    for (let i = series.volume.length - 1; i >= 0; i--) {
+      if (series.volume[i].period !== nowQ) return series.volume[i];
+    }
+    return null;
+  }, [series.volume]);
   // when one panel is suppressed the survivor spans the whole band instead of
   // leaving a vacant half
   const soloPanel = showSellThrough !== showAccuracy;

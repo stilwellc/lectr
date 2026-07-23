@@ -74,7 +74,11 @@ function TrendLine({ yearly }: { yearly: PlayerEntry['yearly'] }) {
 }
 
 export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
-  const { allLots, lastCrawl, totalLots } = useRayData();
+  const { allLots, lastCrawl, totalLots, sources } = useRayData();
+  // house count is the meta.json source list — not a hardcoded 7 that silently
+  // rots when a house is added. Fall back to the lots' own houses if meta is
+  // still landing.
+  const houseCount = sources.length || new Set(allLots.map(l => l.auctionHouse)).size;
   const { savedIds } = useSavedLots();
   const { players, failed: loadFailed } = usePlayers();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -104,7 +108,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
             </>
           )}
         </div>
-        <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
+        <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />
       </>
     );
   }
@@ -228,7 +232,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           </p>
         </section>
       </div>
-      <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
+      <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />
     </>
   );
 }

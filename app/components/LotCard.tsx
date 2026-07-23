@@ -154,6 +154,11 @@ function LotCard({
   }
   const catLabel = categoryLabels[lot.category] || null;
   const isUpcoming = lot.status === 'upcoming';
+  // A concluded lot that never sold — bought_in (failed to meet reserve) or an
+  // unresolved result. It must NOT speak formatEstimate() in the price slot
+  // (a stale range reads as a live ask) nor a bare date in the meta. Mirrors
+  // LotPage's "bought in" wording.
+  const isNoSale = lot.status === 'bought_in' || lot.status === 'unknown-result';
 
   // A resultsPending lot with a PAST sale date must not speak in the future
   // tense ("hammers Jul 7" on a Jul 17 page) or offer a reminder for an
@@ -264,6 +269,8 @@ function LotCard({
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
+            : isNoSale
+            ? ` · bought in`
             : ` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
         </div>
       </div>
@@ -275,7 +282,7 @@ function LotCard({
             </span>
           </div>
         )}
-        <span className="ray-lot-est" style={{ display: 'block' }}>{formatEstimate(lot)}</span>
+        <span className="ray-lot-est" style={{ display: 'block' }}>{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
       </div>
       {onToggleSave && (
         <button
@@ -447,6 +454,8 @@ function LotCard({
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
+            : isNoSale
+            ? ` · bought in`
             : ` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
         </div>
         <div style={{ marginTop: 'auto' }}>
@@ -500,7 +509,7 @@ function LotCard({
               </span>
             </div>
           )}
-          <span className="ray-lot-est">{formatEstimate(lot)}</span>
+          <span className="ray-lot-est">{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
         </div>
 
         {isUpcoming && (

@@ -75,7 +75,7 @@ export default function ValuePage() {
 
   // Today's call: the strongest deal Ray can STAND BEHIND — highest
   // confidence tier first, never low (one thin comp is not a headline).
-  const call = useMemo(() => pickCall(marketLots, marketLots), [marketLots]);
+  const call = useMemo(() => pickCall(marketLots, marketLots, activeKey), [marketLots, activeKey]);
   const gridDeals = useMemo(
     () => (call ? deals.filter(d => d.lot.id !== call.lot.id) : deals),
     [deals, call]
@@ -211,6 +211,7 @@ export default function ValuePage() {
               <CallPlate
                 lots={marketLots}
                 allLots={marketLots}
+                market={activeKey}
                 density="compact"
                 isSaved={isSaved}
                 onToggleSave={toggle}
