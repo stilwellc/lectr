@@ -23,6 +23,11 @@ on:
   schedule:
     - cron: '0 13 * * *'
   workflow_dispatch:
+    inputs:
+      skip_crawl:
+        description: 'Skip the crawl stage and rebuild from the last-good segments (recovery / assemble-only)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,6 +43,7 @@ env:
 
 jobs:
   crawl:
+    if: ${{ github.event.inputs.skip_crawl != 'true' }}   # assemble-only recovery reuses last-good segments
     strategy:
       fail-fast: false          # one house failing must NOT cancel the others
       matrix:
