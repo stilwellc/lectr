@@ -62,6 +62,14 @@ jobs:
         run: bash scripts/data-store.sh pull-segment ${{ matrix.house }}
       - name: Crawl ${{ matrix.house }}
         run: npx tsx scripts/ray-crawl.ts
+      # Christie's online-only + Sotheby's ResultHidden sales gate results away
+      # from the crawl paths; the resolvers pull them from the public sources
+      # (onlineonly pages / the Algolia search index) so closed lots can't rot
+      # pending or mis-settle to bought_in. Non-fatal: a resolver hiccup must
+      # not lose the night's crawl.
+      - name: Resolve gated results
+        if: matrix.house == 'christies' || matrix.house == 'sothebys'
+        run: npx tsx scripts/resolve-${{ matrix.house }}.ts --write || echo "resolver failed (non-fatal)"
       - name: Push this house's segment
         run: bash scripts/data-store.sh push-segment ${{ matrix.house }}
 
