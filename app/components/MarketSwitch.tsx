@@ -104,6 +104,11 @@ export default function MarketSwitch({
           >
             <span className="ray-pill-obj" aria-hidden="true"><MarketIcon market={m.key} size={15} /></span>
             {m.label}
+            {/* a tiny live trend spark — only when a caller passes `demand`
+                (the lander), so every other compact switch is unchanged */}
+            {m.live && (demand?.[m.key]?.length ?? 0) >= 2 && (
+              <span className="ray-pill-spark" aria-hidden="true"><Spark series={demand![m.key]} /></span>
+            )}
             {!m.live && <span className="ray-market-soon">soon</span>}
           </button>
         ))}
