@@ -17,6 +17,7 @@ import TopSales from '../components/analytics/TopSales';
 import Masthead, { Underscore } from '../components/Masthead';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import DeskNote from '../components/analytics/DeskNote';
+import VerifiedMovers from '../components/analytics/VerifiedMovers';
 import { Colophon } from '../components/Terminal';
 import meta from '../../public/data/ray/meta.json';
 
@@ -40,6 +41,7 @@ function AnalyticsGrid({
   statsByArtist,
   activeKey,
   marketSeries,
+  marketData,
   seasonality,
   fromCache,
   backtest,
@@ -51,10 +53,14 @@ function AnalyticsGrid({
   activeKey: Market;
   fromCache: boolean;
   marketSeries: import('../hooks/useRayData').MarketSeriesJson | null;
+  marketData: import('../hooks/useRayData').MarketData | null;
   seasonality?: NonNullable<import('../hooks/useRayData').MarketData['seasonality']>[string] | null;
 }) {
   const nodes = [
     marketSeries ? <MarketIntelligence key="mi" series={marketSeries} marketLabel={activeKey === 'all' ? 'the market' : activeKey} seasonality={seasonality} /> : null,
+    // the defensible price movement the descriptive index can't claim — scoped
+    // to the active market (honest empty state where none clears the CI)
+    <div key="verified" className="rail"><VerifiedMovers marketData={marketData} scope={activeKey} variant="card" /></div>,
     <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
     <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
     backtest ? <CalibrationCurve key="cal" backtest={backtest} /> : null,
@@ -137,6 +143,7 @@ export default function AnalyticsPage() {
           statsByArtist={statsByArtist}
           fromCache={fromCache}
           marketSeries={marketData?.markets?.[activeKey] || null}
+          marketData={marketData}
           seasonality={marketData?.seasonality?.[activeKey] || null}
         />
       ) : fullError ? (
@@ -158,6 +165,7 @@ export default function AnalyticsPage() {
           activeKey={activeKey}
           fromCache={fromCache}
           marketSeries={marketData?.markets?.[activeKey] || null}
+          marketData={marketData}
           seasonality={marketData?.seasonality?.[activeKey] || null}
           backtest={backtest}
         />
@@ -179,6 +187,7 @@ function ArchiveAnalyticsBody({
   statsByArtist,
   fromCache,
   marketSeries,
+  marketData,
   seasonality,
 }: {
   activeKey: Market;
@@ -187,6 +196,7 @@ function ArchiveAnalyticsBody({
   statsByArtist: Record<string, MarketStats>;
   fromCache: boolean;
   marketSeries: import('../hooks/useRayData').MarketSeriesJson | null;
+  marketData: import('../hooks/useRayData').MarketData | null;
   seasonality?: NonNullable<import('../hooks/useRayData').MarketData['seasonality']>[string] | null;
 }) {
   const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
@@ -219,6 +229,7 @@ function ArchiveAnalyticsBody({
       activeKey={activeKey}
       fromCache={fromCache}
       marketSeries={marketSeries}
+      marketData={marketData}
       seasonality={seasonality}
     />
   );

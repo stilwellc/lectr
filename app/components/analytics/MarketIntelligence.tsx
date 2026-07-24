@@ -139,6 +139,11 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
               </span>
             )}
           </div>
+          {idxChange != null && (
+            <p className="ray-mi-caveat">
+              A descriptive index reading — mix-sensitive, not a confidence-bounded investment return. For price movement the engine will stand behind, see the <b>Verified movers</b> (95% CI).
+            </p>
+          )}
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={series.index} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -282,6 +287,8 @@ function MarketStyles() {
       .ray-mi-delta { font-size: 13px; font-weight: 600; }
       .ray-mi-sub { font-size: 12px; color: var(--color-text-secondary); }
       .ray-mi-suppress { font-size: 13px; color: var(--color-text-secondary); line-height: 1.5; margin: 4px 0 0; }
+      .ray-mi-caveat { font-size: 11.5px; color: var(--color-text-muted); line-height: 1.5; margin: -2px 0 12px; max-width: 620px; }
+      .ray-mi-caveat b { font-weight: 650; color: var(--color-text-secondary); }
     `}} />
   );
 }

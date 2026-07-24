@@ -125,12 +125,34 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
         </div>
         {toneOf(artist.appreciation) !== 'flat' && (
           <div style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down-text)',
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 5,
             whiteSpace: 'nowrap',
-          }}>
-            <Flick size={10} style={{ marginLeft: 0, transform: artist.appreciation > 0 ? undefined : 'scaleY(-1)' }} /> {formatDemand(artist.appreciation)}
+          }}
+            // priceBasis makers have no estimates: this is stats.appreciationRate,
+            // a coarse median-price appreciation estimate — NOT the confidence-
+            // bounded demand read, and never labelled as one.
+            title={artist.priceBasis
+              ? 'Coarse appreciation estimate from median realized price — not a confidence-bounded return. See Verified movers for the reads the engine will stand behind.'
+              : 'Demand: median price realized vs the houses’ estimate.'}
+          >
+            <span style={{
+              fontSize: 9.5,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-faint)',
+            }}>
+              {artist.priceBasis ? 'appr. est.' : 'demand'}
+            </span>
+            <span style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down-text)',
+            }}>
+              <Flick size={10} style={{ marginLeft: 0, transform: artist.appreciation > 0 ? undefined : 'scaleY(-1)' }} /> {formatDemand(artist.appreciation)}
+            </span>
           </div>
         )}
       </div>

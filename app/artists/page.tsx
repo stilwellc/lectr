@@ -14,6 +14,7 @@ import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
+import VerifiedMovers from '../components/analytics/VerifiedMovers';
 import meta from '../../public/data/ray/meta.json';
 
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
@@ -26,7 +27,7 @@ const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSpa
  */
 export default function ArtistsPage() {
   // useFullLots: the sparklines gate on fullLoaded, so trigger phase 2.
-  const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache } = useFullLots();
+  const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache, market: marketData } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -86,6 +87,12 @@ export default function ArtistsPage() {
                 </>
               }
             />
+          </section>
+
+          {/* the defensible reads alongside the demand curves — the only price
+              movement that clears a 95% CI; honest empty state per market */}
+          <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 4, paddingBottom: 4 } as React.CSSProperties}>
+            <VerifiedMovers marketData={marketData} scope={activeKey} variant="card" />
           </section>
 
           <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
