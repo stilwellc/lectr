@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { type Market } from '../../constants';
@@ -126,6 +126,17 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
   const [ref, seen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
 
+  // cap the visible rows; the rest reveal behind a "show more"
+  const CAP = 5;
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? rows : rows.slice(0, CAP);
+  const hasMore = rows.length > CAP;
+  const moreBtn = hasMore ? (
+    <button type="button" className={styles.subShowMore} onClick={() => setExpanded((v) => !v)}>
+      {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
+    </button>
+  ) : null;
+
   const kicker = activeKey === 'all' ? 'Sub-markets · what’s moving everywhere' : 'Sub-markets · this vertical';
   const title = activeKey === 'all'
     ? 'The market, by sub-market.'
@@ -166,7 +177,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
       <div ref={ref}>
         {head}
         <div className={styles.mobSubList}>
-          {rows.map((r) => {
+          {shown.map((r) => {
             const dir = dirFor(r);
             const line = readLine(r);
             return (
@@ -196,6 +207,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
             );
           })}
         </div>
+        {moreBtn}
         {foot}
       </div>
     );
@@ -220,7 +232,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
             <span role="columnheader" className={styles.right}>Lots</span>
           </div>
           <m.div variants={container} initial="hidden" animate={seen ? 'show' : 'hidden'}>
-            {rows.map((r) => {
+            {shown.map((r) => {
               const dir = dirFor(r);
               const line = readLine(r);
               return (
@@ -249,6 +261,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
             })}
           </m.div>
         </div>
+        {moreBtn}
         {foot}
       </div>
     </LazyMotion>

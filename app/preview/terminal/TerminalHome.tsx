@@ -662,19 +662,6 @@ export default function TerminalHomePage() {
               </div>
             </div>
 
-            {/* ══ THE SUB-MARKET BOARD — vertical → sub-markets, each by its
-                strongest honest read; a row is a market switch ══ */}
-            {marketData?.subMarkets && (
-              <section className={styles.moversSection}>
-                <SubMarketBoard
-                  market={marketData}
-                  activeKey={activeKey}
-                  onSelect={onMoverSelect}
-                  variant={mounted && isMobile ? 'mobile' : 'desktop'}
-                />
-              </section>
-            )}
-
             {/* ══ THE FEED — On the block (full parity) ══ */}
             {upcoming.length > 0 && (
               <section id="on-the-block" className={styles.feedSection}>
@@ -913,6 +900,19 @@ export default function TerminalHomePage() {
                     </button>
                   </div>
                 )}
+              </section>
+            )}
+
+            {/* ══ THE SUB-MARKET BOARD — below the block; vertical → sub-markets,
+                each by its strongest honest read; a row is a market switch ══ */}
+            {marketData?.subMarkets && (
+              <section className={styles.moversSection}>
+                <SubMarketBoard
+                  market={marketData}
+                  activeKey={activeKey}
+                  onSelect={onMoverSelect}
+                  variant={mounted && isMobile ? 'mobile' : 'desktop'}
+                />
               </section>
             )}
 
