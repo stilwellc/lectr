@@ -1680,7 +1680,7 @@ a.recordObj:focus-visible {
   transform: translateY(-50%);
   z-index: -1;
   color: var(--tt-butter);
-  opacity: 0.11;
+  opacity: 0.06;
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -1689,7 +1689,7 @@ a.recordObj:focus-visible {
 .root :global(.ray-pill-ghost) svg { height: 100%; width: auto; display: block; }
 /* the active/lit pill is butter — dial the ghost down so it doesn't muddy the ink label */
 .root :global(.ray-market-tab.lit .ray-pill-ghost),
-.root :global(.ray-market-tab[data-active='true'] .ray-pill-ghost) { color: #2a2317; opacity: 0.09; }
+.root :global(.ray-market-tab[data-active='true'] .ray-pill-ghost) { color: #2a2317; opacity: 0.05; }
 
 /* ── sub-market board "show more" ── */
 .subShowMore {
