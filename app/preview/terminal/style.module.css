@@ -1195,3 +1195,139 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .liveDot { animation: none; }
   .tapeTrack { animation: none; transform: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   REUSED-BAND DARK SKIN — scoped to .terminal-shell only.
+   These are GLOBAL components (app/components/*) shared by the real
+   homepage; we NEVER edit them or globals.css. Instead we re-flip the
+   paper token ramp back to the Terminal's dark grammar INSIDE the
+   terminal root, so the ledger band, the ApprBarometer, and the
+   SettlementSlip — all of which read from --paper-* + currentColor —
+   inherit vellum-black surfaces, hairline rules, butter numerals, and
+   mono/tabular data with zero global collision.
+
+   The paper components set their own color tokens via .ray-band /
+   .ray-paper / .ray-appr.ray-paper; we out-specify them by prefixing
+   with the terminal root and re-pointing every paper token at a dark
+   value. currentColor (used for the certificate double-rules and the
+   barometer needle) follows `color`, so re-setting color to the fg
+   ink recolors every drawn stroke too.
+   ══════════════════════════════════════════════════════════════ */
+.root :global(.ray-band),
+.root :global(.ray-paper),
+.root :global(.ray-appr.ray-paper) {
+  /* re-point the whole paper ramp at the Terminal palette */
+  --paper: transparent;
+  --paper-ink: #ede6da;            /* fg ink → light on dark */
+  --paper-secondary: #c9beac;
+  --paper-muted: #9a8f7d;
+  --paper-faint: #756c5d;
+  --paper-line: rgba(232, 218, 182, 0.12);
+  --paper-edge: rgba(232, 218, 182, 0.14);
+  --paper-up: #57be87;
+  --paper-down: #cc6a5c;
+  --paper-up-text: #57be87;
+  --paper-down-text: #cc6a5c;
+  /* the derived --color-* tokens the flip also sets */
+  --color-fg: #ede6da;
+  --color-text-secondary: #c9beac;
+  --color-text-muted: #9a8f7d;
+  --color-text-faint: #756c5d;
+  --color-up: #57be87;
+  --color-down: #cc6a5c;
+  --color-down-text: #cc6a5c;
+  --color-border: rgba(232, 218, 182, 0.12);
+  --hairline: rgba(232, 218, 182, 0.09);
+  --hairline-soft: rgba(232, 218, 182, 0.09);
+  /* butter is legible on dark — restore it as the accent */
+  --color-butter: #e8dab6;
+  --color-butter-text: #e8dab6;
+  --color-butter-deep: #e8dab6;
+  --color-butter-subtle: rgba(232, 218, 182, 0.09);
+  color: #ede6da;
+}
+
+/* the band shells become dark vellum panels with a hairline frame and
+   the Terminal's radius — not paper slabs with a hard border-block */
+.root :global(.ray-band) {
+  background: linear-gradient(180deg, #14110d, rgba(20, 17, 13, 0.55));
+  border: 1px solid rgba(232, 218, 182, 0.14);
+  border-block: 1px solid rgba(232, 218, 182, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
+}
+
+/* the ledger's 4-cell rule: dark hairline gaps, transparent cells so
+   the numerals sit directly on the panel (mono/tabular, butter accent) */
+.root :global(.ray-band) :global(.ray-ledger) {
+  background: rgba(232, 218, 182, 0.1);
+  border-block: none;
+}
+.root :global(.ray-band) :global(.ray-ledger) > * {
+  background: #14110d !important;
+}
+.root :global(.ray-band) :global(.ray-ledger-k) {
+  font-family: var(--font-mono-data), monospace;
+  color: #9a8f7d;
+}
+.root :global(.ray-band) :global(.ray-ledger-v) {
+  font-family: var(--font-mono-data), monospace;
+  color: #ede6da;
+  letter-spacing: -0.01em;
+}
+.root :global(.ray-band) :global(.ray-ledger-v.up) {
+  color: #e8dab6;   /* the flagged figure — the page's own butter accent */
+}
+.root :global(.ray-band) :global(.ray-ledger-s) {
+  font-family: var(--font-mono-data), monospace;
+  color: #756c5d;
+}
+
+/* the SettlementSlip's ink-outline archive control → butter hairline pill */
+.root :global(.ray-band) button {
+  border-color: rgba(232, 218, 182, 0.28) !important;
+  color: #e8dab6 !important;
+}
+
+/* the appreciation aside sheds its paper block: it becomes the same
+   dark instrument card as the chart / edge panels around it */
+.root :global(.ray-appr.ray-paper) {
+  background: linear-gradient(180deg, #14110d, rgba(20, 17, 13, 0.4));
+  border: 1px solid rgba(232, 218, 182, 0.14);
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.55);
+}
+
+/* the reused sold Record band (.ray-recordband) already reads --panel,
+   but pin the Terminal radius so it rhymes with the panels above it */
+.root :global(.ray-recordband) {
+  border-radius: 14px;
+}
+
+/* ── THE FEED — density pass ──────────────────────────────────────
+   LotCard renders photo-less (or hotlink-blocked) lots as its compact
+   ROW face (.ray-lot-card WITHOUT .ray-card-compact). In the auto-fill
+   card grid those rows were trapped in a single 288px column and read
+   as sparse, repetitive tiles. Promote any grid item whose card is the
+   compact row to span the full width, so the photo-less lots stack as a
+   dense, intentional ledger of rows beneath the photographed cards. */
+.root :global(.ray-upcoming-grid) > :global(.ray-feed-rekey):has(:global(.ray-lot-card):not(:global(.ray-card-compact))) {
+  grid-column: 1 / -1;
+}
+/* tighten the compact rows into one continuous instrument: seam them
+   with hairlines instead of leaving card gaps + shadows between them */
+.root :global(.ray-upcoming-grid) > :global(.ray-feed-rekey):has(:global(.ray-lot-card):not(:global(.ray-card-compact))) :global(.ray-lot-card) {
+  border-radius: 0;
+  box-shadow: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-bottom: 1px solid rgba(232, 218, 182, 0.09);
+  background: transparent !important;
+}
+/* neutralize the card grid's row-gap for the stacked rows so they read
+   as a single ruled column, not floating strips */
+.root :global(.ray-upcoming-grid):has(> :global(.ray-feed-rekey):has(:global(.ray-lot-card):not(:global(.ray-card-compact)))) {
+  align-items: start;
+}
