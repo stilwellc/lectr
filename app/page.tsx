@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, marketArtists } from './constants';
 import { useMarket } from './lib/market';
@@ -14,11 +14,8 @@ import ComparableModal from './components/ComparableModal';
 import type { AuctionLot } from './types';
 import PastResults from './components/PastResults';
 import RayEntrance, { RayLoading } from './components/RayEntrance';
+import CountUp from './components/CountUp';
 import BoardDemand from './components/BoardDemand';
-import SplitFlap from './components/SplitFlap';
-import BoardFrame from './components/BoardFrame';
-import Grain from './components/Grain';
-import ExchangeTicker from './components/ExchangeTicker';
 import ApprBarometer from './components/ApprBarometer';
 import SettlementSlip from './components/SettlementSlip';
 import MarketSwitch from './components/MarketSwitch';
@@ -154,36 +151,8 @@ function Phase2Sentinel() {
 
 export default function RayPage() {
   const ray = useRayData();
-  const { allLots, statsByArtist, demand, realized, recentSold, tape, backtest, market: marketData, lastCrawl, loading, fullLoaded, error, fromCache } = ray;
+  const { allLots, statsByArtist, demand, realized, recentSold, backtest, market: marketData, lastCrawl, loading, fullLoaded, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
-
-  // THE OPENING — one shared entrance signal. The Greeting owns the first ~1.15s
-  // (the sign writes on), then LIFTS and hands off: onDone flips `opened` true,
-  // which arms the whole board beat (hero flap → curve draw → tone resolve →
-  // ledger cascade → ticker ignite → pills ripple). Cached revisit / reduced-
-  // motion / non-first-session → the Greeting does NOT play, onDone fires at
-  // once, and every primitive is passed opened=true so it renders final with no
-  // mask, no re-watch, no stranded 0. `willGreet` is decided ONCE (synchronous,
-  // client-only) so `opened` starts false ONLY when the pen is genuinely coming.
-  const [willGreet] = useState(() => {
-    if (typeof window === 'undefined') return false;         // SSG → final state
-    if (fromCache) return false;                             // cached data → no beat
-    try {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-      if (sessionStorage.getItem('lectr-greeted')) return false; // seen this session
-      sessionStorage.setItem('lectr-greeted', '1');
-      return true;
-    } catch { return false; }
-  });
-  const [opened, setOpened] = useState(!willGreet);
-  const handoff = useCallback(() => setOpened(true), []);
-  // `playOpening` is the single "run the beat NOW" signal every primitive reads:
-  // true ONLY on a genuine first visit, AND only once the Greeting has handed
-  // off. Any degraded path (cached data, reduced-motion, already-greeted this
-  // session) has willGreet=false → playOpening is permanently false → every
-  // primitive renders its FINAL state at once (no flap, no neutral flash, no
-  // stranded 0, no re-watch).
-  const playOpening = opened && willGreet;
   const marketMeta = MARKETS.find(m => m.key === market)!;
   // ONE TODAY, ONE SERIAL — the crawl day is the data's "today" and the whole
   // page prints one edition date from it: the ledger footer, the barometer's
@@ -491,26 +460,6 @@ export default function RayPage() {
     return topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
   }, [marketStats]);
 
-  // THE EXCHANGE TAPE — a quietly-running strip of recently realized hammers,
-  // fed from the SAME `tape` (TapeByMarket) the crawl already emits: maker ·
-  // realized price. If a market's tape slice is thin, derive from the loaded
-  // `sold` records so the rail is never empty. Static-export / SSR safe: the
-  // markup renders server-side, motion is pure CSS in ExchangeTicker.
-  const tickerItems = useMemo(() => {
-    const fromTape = (tape[activeKey] || tape['all'] || []).slice(0, 28);
-    if (fromTape.length >= 6) {
-      return fromTape.map(t => ({
-        label: (ARTIST_LABEL[t.artist] || t.artist).toUpperCase(),
-        price: t.price,
-      }));
-    }
-    // fallback: the market's most recent realized hammers already on the page
-    return sold.slice(0, 24).map(l => ({
-      label: (ARTIST_LABEL[l.artist] || l.artist).toUpperCase(),
-      price: formatPrice(l.priceUsd!),
-    }));
-  }, [tape, activeKey, sold]);
-
   // ONE WEEK — the ledger's "Hammers this week" counts against the Mon–Sun
   // UTC window of the crawl day's week, and the "across N houses" sub is
   // scoped to that week's lots, not the whole pool.
@@ -623,10 +572,7 @@ export default function RayPage() {
 
   return (
     <>
-    <Greeting play={willGreet} onDone={handoff} />
-    {/* the faintest warm patina over the whole floor — mounted once, high in
-        the tree; fixed-position, non-interactive, static-export safe */}
-    <Grain opacity={0.03} />
+    <Greeting />
     <div style={{
       minHeight: '100vh',
       background: 'var(--color-bg)',
@@ -652,18 +598,8 @@ export default function RayPage() {
           No category: a lit "Choose a category" control. Category chosen: a
           chip + quiet "Change category" — the feed toolbar's filters lead. */}
       <div className="rail" style={{ paddingTop: 14 }}>
-        <MarketSwitch compact lit open={playOpening} />
+        <MarketSwitch compact lit open={!fromCache} />
       </div>
-
-      {/* THE EXCHANGE TAPE — a persistent, quietly-running strip of realized
-          hammers under the pills. `play` (one-time ignition) fires with the
-          board opening; on cached/reduced-motion it renders as a static row.
-          Fed from the crawl's own `tape` (maker · realized price). */}
-      {tickerItems.length > 0 && (
-        <div className="rail ray-tape-rail">
-          <ExchangeTicker items={tickerItems} play={playOpening} speed={58} />
-        </div>
-      )}
 
       {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12 }}>
@@ -686,12 +622,9 @@ export default function RayPage() {
         <RayEntrance animate={!fromCache}>
           {/* THE BOARD OWNS VIEWPORT 1 — demand numeral + curve on the left,
               today's call and the watchlist strip in the right rail. */}
-          <div className={`rail ray-board-wrap${playOpening ? ' ray-choreo' : ''}`}>
+          <div className={`rail ray-board-wrap${fromCache ? '' : ' ray-choreo'}`}>
             <div className="ray-board-rail">
-              {/* THE HERO BOARD — dressed in board chrome (hairline brass frame
-                  + corner registration ticks). BoardFrame is pure CSS, no layout
-                  shift, static-export safe. */}
-              <BoardFrame className="ray-pane ray-board-hero" corners>
+              <div className="ray-pane">
                 {(demand[activeKey] && demand[activeKey].length >= 4) ? (
                   /* THE MARKET DEMAND CHART — typical sale vs its estimate,
                      trailing 12 months, full history. The lander hero. */
@@ -699,7 +632,7 @@ export default function RayPage() {
                     allLots={marketLots}
                     demand={demand[activeKey]}
                     marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
-                    open={playOpening}
+                    open={!fromCache}
                   />
                 ) : activeKey === 'sports' ? (
                   /* Goldin publishes no estimates → realized cohort median */
@@ -709,17 +642,17 @@ export default function RayPage() {
                     marketLabel={marketMeta.label.toLowerCase()}
                     mode="realized"
                     cohortLabel="tickets & passes"
-                    open={playOpening}
+                    open={!fromCache}
                   />
                 ) : (
                   <BoardDemand
                     allLots={marketLots}
                     demand={demand[activeKey] || []}
                     marketLabel={activeKey === 'all' ? 'total' : marketMeta.label.toLowerCase()}
-                    open={playOpening}
+                    open={!fromCache}
                   />
                 )}
-              </BoardFrame>
+              </div>
               {hasAppr ? (
                 /* Desktop: the Appreciation instrument sits to the right of the
                    graph. Mobile: the same component shows its landscape POCKET
@@ -786,21 +719,15 @@ export default function RayPage() {
                   style={{ background: 'none', border: 'none', margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
                 >
                   <div className="ray-ledger-k">{item.k}</div>
-                  {/* MARKET OPEN: the four figures split-flap into place in a
-                      left→right cascade, landing just after the hero resolves.
-                      play=false (cached/reduced-motion) → final glyphs at once,
-                      no stranded 0. */}
-                  <span className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }}>
-                    <SplitFlap value={item.format(item.to)} size="ledger" play={playOpening} stagger={40} landMs={560} startDelay={Math.min(i, 3) * 120} />
-                  </span>
+                  {/* MARKET OPEN: the four figures count up in a 60ms stagger,
+                      landing as the hero resolves. Cached → instant final. */}
+                  <CountUp to={item.to} format={item.format} duration={900} animate={!fromCache} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
                   <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
                 </button>
               ) : (
                 <div key={item.k}>
                   <div className="ray-ledger-k">{item.k}</div>
-                  <span className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }}>
-                    <SplitFlap value={item.format(item.to)} size="ledger" play={playOpening} stagger={40} landMs={560} startDelay={Math.min(i, 3) * 120} />
-                  </span>
+                  <CountUp to={item.to} format={item.format} duration={900} animate={!fromCache} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
                   <div className="ray-ledger-s">{item.s}</div>
                 </div>
               ))}

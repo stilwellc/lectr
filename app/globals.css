@@ -3144,117 +3144,6 @@ body {
   .ray-board-demand .ray-hero2-value { transition: none; }
 }
 
-/* ── THE OPENING · split-flap hero + board chrome ─────────────────────────
-   The hero numeral is now a <SplitFlap> (brass-butter glyphs on raised vellum
-   cells), so the directional GLOW rides the flap cells instead of the old
-   text-shadow on a text node. Butter stays the numeral colour (on-brand);
-   green/red is DIRECTION only, carried here as a faint drop-shadow that
-   resolves with the curve. Neutral (armed, mid-flap) desaturates the glyphs to
-   --color-fg so number + line colour together at land. Every rule is the FINAL
-   toned state by default — a skipped/hiccuped beat can only leave it correct. */
-.ray-hero-flap { display: inline-block; vertical-align: baseline; }
-.ray-hero-flap .sflap-glyph {
-  transition: color 320ms var(--ease-draw), filter 320ms var(--ease-draw);
-}
-/* the board hero sits in .ray-pane — hold the flap to the board's numeral
-   scale (matches the pre-flap 48px hero, 36px under 900px) so the plate reads
-   as an instrument, not a billboard */
-.ray-pane .ray-hero-flap .sflap-hero { --sflap-fs: 46px; }
-@media (max-width: 900px) { .ray-pane .ray-hero-flap .sflap-hero { --sflap-fs: 34px; } }
-.ray-board-demand[data-tone='up'] .ray-hero-flap {
-  filter: drop-shadow(0 0 24px rgba(47, 191, 113, 0.18));
-  transition: filter 320ms var(--ease-draw);
-}
-.ray-board-demand[data-tone='down'] .ray-hero-flap {
-  filter: drop-shadow(0 0 24px rgba(229, 84, 75, 0.16));
-  transition: filter 320ms var(--ease-draw);
-}
-/* neutral pre-resolve: grey the glyphs, drop the directional glow */
-.ray-board-demand[data-neutral='true'] .ray-hero-flap { filter: none; }
-.ray-board-demand[data-neutral='true'] .ray-hero-flap .sflap-glyph {
-  color: var(--color-fg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ray-hero-flap .sflap-glyph, .ray-hero-flap { transition: none; }
-}
-
-/* THE HERO BOARD FRAME — BoardFrame supplies the brass hairline + corner ticks
-   as the outer bezel, so the board's own 1px border would double it. Drop the
-   inner border and let the frame own the edge; a hair of inset padding keeps
-   the plot off the bezel. */
-.ray-board-hero.bframe { --radius: 12px; padding: 1px; }
-.ray-board-hero .ray-board-demand { border: none; border-radius: 11px; }
-
-/* OPENING-BELL SWEEP — a single brass hairline wipes left→right across the
-   board as it opens, once, in sync with the hero flap. Pure transform/opacity,
-   composited; never fires on cached/reduced-motion (only .ray-choreo, which is
-   gated on the handoff, carries it). */
-.ray-choreo .ray-board-hero { position: relative; overflow: hidden; }
-.ray-choreo .ray-board-hero::after {
-  content: "";
-  position: absolute;
-  top: 0; bottom: 0; left: 0;
-  width: 42%;
-  pointer-events: none;
-  z-index: 4;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--color-butter) 22%, transparent) 48%,
-    color-mix(in srgb, var(--color-butter) 30%, transparent) 52%,
-    transparent 100%);
-  transform: translateX(-120%);
-  animation: rayBellSweep 900ms var(--ease-ui) 120ms both;
-}
-@keyframes rayBellSweep {
-  from { transform: translateX(-120%); opacity: 0; }
-  20%  { opacity: 1; }
-  to   { transform: translateX(320%); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ray-choreo .ray-board-hero::after { animation: none; display: none; }
-}
-
-/* THE EXCHANGE TAPE — the persistent rail under the pills. A quiet band, hair
-   of breathing room above/below so it reads as chrome, not content. */
-.ray-tape-rail { margin-top: 12px; }
-
-/* THE LEDGER, SPLIT-FLAP — the ledger figures live on the light PAPER band, so
-   the flap cells re-skin for paper: ink glyphs (butter is remapped to paper-ink
-   in the .ray-band scope already) on a faint vellum plate with an ink seam,
-   instead of the dark-ground vellum. Tabular widths keep the row from
-   reflowing mid-flip. */
-.ray-band .ray-ledger .sflap { --sflap-gap: 0.05em; }
-.ray-band .ray-ledger .sflap-cell {
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--paper) 88%, var(--paper-ink) 3%) 0%,
-      color-mix(in srgb, var(--paper) 92%, var(--paper-ink) 2%) 49.6%,
-      color-mix(in srgb, var(--paper) 86%, var(--paper-ink) 6%) 50.4%,
-      color-mix(in srgb, var(--paper) 82%, var(--paper-ink) 9%) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(28, 23, 18, 0.10),
-    0 1px 1px rgba(28, 23, 18, 0.08);
-}
-.ray-band .ray-ledger .sflap-glyph {
-  color: var(--paper-ink);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.ray-band .ray-ledger .sflap-bottom { box-shadow: inset 0 1px 3px rgba(28, 23, 18, 0.10); }
-.ray-band .ray-ledger .sflap-seam {
-  background: linear-gradient(90deg,
-    rgba(28,23,18,0) 0%, rgba(28,23,18,0.22) 12%, rgba(28,23,18,0.24) 88%, rgba(28,23,18,0) 100%);
-  box-shadow: 0 0.5px 0 rgba(255,255,255,0.35);
-}
-.ray-band .ray-ledger .sflap-leaf-face {
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--paper) 88%, var(--paper-ink) 3%) 0%,
-    color-mix(in srgb, var(--paper) 92%, var(--paper-ink) 2%) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-/* the flagged ledger figure keeps its up-tone: colour the ink glyphs green */
-.ray-band .ray-ledger-v.up .sflap-glyph { color: var(--paper-up, var(--color-up)); }
-
 /* buttons & chips with presence */
 .ray-call-btn-primary {
   background: linear-gradient(180deg, var(--color-fg), #DCD5C4);
@@ -3949,9 +3838,7 @@ body {
   height: 132px;
   width: auto;
   clip-path: inset(0 100% 0 0);
-  /* writes on in ~0.95s (lands ~T1050), so the sign is whole for a breath
-     before the ~T1150 lift hands off to the board — one continuous open */
-  animation: lectrCloseWrite 0.95s var(--ease-draw) 100ms forwards;
+  animation: lectrCloseWrite 1.4s var(--ease-draw) 150ms forwards;
   filter: drop-shadow(0 0 26px rgba(242, 238, 227, 0.14));
 }
 @media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }
