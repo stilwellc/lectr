@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
 import { AuctionLot } from '../types';
 import { demandSeries, formatDemand } from '../lib/demand';
 import { formatMoneyAxis } from '../utils';
-import CountUp from './CountUp';
+import SplitFlap from './SplitFlap';
 import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
@@ -136,42 +136,45 @@ export default function BoardDemand({
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
   const drawRef = useChartDraw();
 
-  // MARKET OPEN — the hero beat. `armed` is decided ONCE, synchronously at the
-  // first render: this whole subtree is only ever client-rendered (it lives
-  // behind the loading gate + fromCache branch, never in the SSG HTML), so
-  // reading matchMedia in the initializer is hydration-safe here and — unlike a
-  // post-mount flip — the numeral starts at 0 on its very first paint (no
-  // final-value flash before the count-up). `resolved` flips the numeral + line
-  // from neutral (--color-fg) to the trend tone at ~70% of the ~900ms draw, so
-  // the number and the line finish colouring together.
-  //   armed=false → tone + final figure paint at once (cached / reduced motion):
-  //                 no neutral flash, no stranded "0".
-  const [armed] = useState(
-    () =>
-      open &&
-      typeof window !== 'undefined' &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  // MARKET OPEN — the hero beat, now GATED ON THE GREETING HANDOFF. `open` is a
+  // shared entrance signal lifted into page.tsx: it flips false→true the instant
+  // the Greeting mark lifts (or is true from first paint on a cached / reduced-
+  // motion / non-first visit, where the board must be final at once). So unlike
+  // a latched-at-init flag, this must react to `open` turning true AFTER mount.
+  //
+  // SplitFlap is SSR/degradation-safe: with play=false it renders the final
+  // glyphs statically (no roll, no stranded 0), and it reads reduced-motion
+  // itself. We still gate `arming` on motion so the tone-resolve/ledger timers
+  // don't fire a neutral flash for a reduced-motion reader.
+  const motionOK =
+    typeof window === 'undefined' ||
+    typeof window.matchMedia !== 'function' ||
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // `arming` is the ONE-SHOT flip switch: true only during the entrance beat,
+  // then off. The numeral is a hover-ternary (scrub value ⇄ flap), so it
+  // REMOUNTS whenever the reader scrubs off the chart — if it kept seeing
+  // play=true it would re-roll on every hover-out. `armedRef` ensures the beat
+  // arms exactly once, the first time `open` is true under allowed motion.
+  const [arming, setArming] = useState(false);
   const [resolved, setResolved] = useState(false);
-  // `arming` is the ONE-SHOT count-up switch: true only during the entrance
-  // beat, then off. The numeral is a hover-ternary (scrub value ⇄ CountUp), so
-  // CountUp REMOUNTS every time the reader scrubs off the chart — if it kept
-  // seeing animate=true it would re-sweep 0→now on every hover-out. Flip it off
-  // once the beat finishes so post-entrance remounts land on the value at once.
-  const [arming, setArming] = useState(armed);
+  const armedRef = useRef(false);
   useEffect(() => {
-    if (!armed) return;
-    // resolve the tone at 70% of the 900ms count-up/draw — number and line land
-    // fully coloured together at ~T900. A late timer can only ADD the tone, so a
-    // JS hiccup leaves the (already-correct) final tone, never a stranded state.
+    if (armedRef.current) return;          // beat already fired once
+    if (!open) return;                     // waiting on the Greeting handoff
+    if (!motionOK) { setResolved(true); return; } // reduced motion → tone at once
+    armedRef.current = true;
+    setArming(true);
+    // resolve the tone at ~70% of the ~900ms flap/draw — number and line land
+    // fully coloured together. A late timer can only ADD the tone, so a JS
+    // hiccup leaves the (already-correct) final tone, never a stranded neutral.
     const t = setTimeout(() => setResolved(true), 630);
-    // end the count-up window after the last figure settles (hero 900 + ledger
-    // stagger ≤180) so a mid-beat remount can't strand a "0".
-    const tArm = setTimeout(() => setArming(false), 1100);
+    // end the beat window after the last cell settles (hero flap + ledger
+    // stagger) so a mid-beat remount can't strand a mid-roll.
+    const tArm = setTimeout(() => setArming(false), 1300);
     return () => { clearTimeout(t); clearTimeout(tArm); };
-  }, [armed]);
-  // Neutral only while armed-but-unresolved; every other path is trend tone.
-  const heroNeutral = armed && !resolved;
+  }, [open, motionOK]);
+  // Neutral only while arming-but-unresolved; every other path is trend tone.
+  const heroNeutral = arming && !resolved;
 
   const series = useMemo(
     () => (demand && demand.length ? demand : demandSeries(allLots)),
@@ -266,7 +269,7 @@ export default function BoardDemand({
 
       {!hasIndex && (
         <div className="ray-numrow">
-          <h1 className="ray-hero2-value"><CountUp to={liveCount} format={n => Math.round(n).toString()} duration={900} animate={arming} /></h1>
+          <h1 className="ray-hero2-value ray-hero-flap"><SplitFlap value={Math.round(liveCount).toString()} size="hero" play={arming} landMs={780} stagger={58} /></h1>
           <span className="ray-numrow-delta">
             <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>
               lots on the block · demand index pending — these auctions publish no estimates to measure against
@@ -280,7 +283,7 @@ export default function BoardDemand({
         {hover ? (
           <h1 className="ray-hero2-value">{fmt(hover.value)}</h1>
         ) : (
-          <h1 className="ray-hero2-value"><CountUp to={now} format={fmt} duration={900} animate={arming} /></h1>
+          <h1 className="ray-hero2-value ray-hero-flap"><SplitFlap value={fmt(now)} size="hero" play={arming} landMs={780} stagger={58} /></h1>
         )}
         <span className="ray-numrow-delta">
           {hover
@@ -328,7 +331,9 @@ export default function BoardDemand({
           {ledger.map((item, i) => (
             <div key={item.k}>
               <div className="ray-ledger-k">{item.k}</div>
-              <CountUp to={item.to} format={item.format} duration={900} animate={arming} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
+              <span className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }}>
+                <SplitFlap value={item.format(item.to)} size="ledger" play={arming} stagger={44} landMs={620} startDelay={360 + Math.min(i, 3) * 130} />
+              </span>
               <div className="ray-ledger-s">{item.s}</div>
             </div>
           ))}
