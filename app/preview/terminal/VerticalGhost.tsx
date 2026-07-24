@@ -88,35 +88,33 @@ function WatchesGhost() {
 }
 
 function SportsGhost() {
-  // a baseball — clean ball + one smooth seam + evenly-spaced stitch ticks
-  // (kept simple + orderly, same restraint as the clock, not a stitch scatter)
+  // a baseball — a fully-visible ball (kept small so it doesn't bleed off) with
+  // a central seam and stitch rows on BOTH sides of it
   return (
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <circle cx="98" cy="100" r="80" stroke="currentColor" strokeWidth="8" />
-      {/* seam kept left-of-center so BOTH stitch rows stay inside the pill crop */}
-      <path d="M50 32 C80 66 80 134 50 168" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-      {/* stitches straddling the seam — left row AND right row, both visible */}
-      <g stroke="currentColor" strokeWidth="3.4" strokeLinecap="round">
-        <path d="M40 52 l15 5" /><path d="M76 46 l-15 5" />
-        <path d="M42 84 l15 3" /><path d="M78 80 l-15 3" />
-        <path d="M42 116 l15 -3" /><path d="M78 120 l-15 -3" />
-        <path d="M40 148 l15 -5" /><path d="M76 154 l-15 -5" />
+      <circle cx="88" cy="100" r="64" stroke="currentColor" strokeWidth="7.5" />
+      {/* central seam */}
+      <path d="M88 40 C70 70 70 130 88 160" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" />
+      {/* stitches — left row AND right row of the seam, both inside the crop */}
+      <g stroke="currentColor" strokeWidth="4.2" strokeLinecap="round">
+        <path d="M66 58 l13 6" /><path d="M62 86 l13 4" /><path d="M62 114 l13 -4" /><path d="M66 142 l13 -6" />
+        <path d="M110 58 l-13 6" /><path d="M114 86 l-13 4" /><path d="M114 114 l-13 -4" /><path d="M110 142 l-13 -6" />
       </g>
     </svg>
   );
 }
 
 function ScienceGhost() {
-  // a bone — a FILLED knobbed end + shaft bleeding off the right edge. Showing
-  // ONE bulb-end + shaft reads unmistakably as a bone at pill scale (a full-
-  // width bone only shows its two ends and reads as "two blobs").
+  // an atom — nucleus + three crossing electron orbits (the universal science
+  // mark; the dino-bone never read as a bone at pill scale)
   return (
-    <svg viewBox="0 0 200 200" fill="currentColor" aria-hidden>
-      {/* shaft (extends off the right edge) */}
-      <rect x="118" y="88" width="92" height="24" rx="12" />
-      {/* the knobbed end — two lobes */}
-      <circle cx="124" cy="76" r="19" />
-      <circle cx="124" cy="124" r="19" />
+    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
+      <g stroke="currentColor" strokeWidth="6">
+        <ellipse cx="100" cy="100" rx="78" ry="30" />
+        <ellipse cx="100" cy="100" rx="78" ry="30" transform="rotate(60 100 100)" />
+        <ellipse cx="100" cy="100" rx="78" ry="30" transform="rotate(120 100 100)" />
+      </g>
+      <circle cx="100" cy="100" r="11" fill="currentColor" />
     </svg>
   );
 }
