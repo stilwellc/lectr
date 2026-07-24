@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import {
   ResponsiveContainer,
   ComposedChart,
+  Area,
   Line,
   Scatter,
   YAxis,
@@ -72,6 +73,10 @@ export default function MarketChart({ data, play, height = 260, compact = false 
     return 'flat';
   }, [vals]);
 
+  // the area under the line fills with the direction color (green up / red down
+  // / grey flat), fading to transparent toward the axis — the pop.
+  const fillColor = dir === 'up' ? '#57be87' : dir === 'down' ? '#cc6a5c' : '#9a8f7d';
+
   const animate = play && !reduce;
 
   return (
@@ -86,8 +91,24 @@ export default function MarketChart({ data, play, height = 260, compact = false 
               <stop offset="0%" stopColor="var(--tt-butter)" stopOpacity="0.55" />
               <stop offset="100%" stopColor="var(--tt-butter)" stopOpacity="1" />
             </linearGradient>
+            {/* directional area fill — colored near the line, fading to nothing */}
+            <linearGradient id="tt-area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={fillColor} stopOpacity="0.34" />
+              <stop offset="72%" stopColor={fillColor} stopOpacity="0.06" />
+              <stop offset="100%" stopColor={fillColor} stopOpacity="0" />
+            </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--tt-hair)" strokeDasharray="0" vertical={false} />
+          {/* the transparent directional fill beneath the line */}
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="none"
+            fill="url(#tt-area)"
+            isAnimationActive={animate}
+            animationDuration={animate ? 1100 : 0}
+            animationEasing="ease-out"
+          />
           <XAxis
             dataKey="period"
             tick={{ fontSize: 9.5, fill: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data)' }}
