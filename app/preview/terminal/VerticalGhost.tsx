@@ -92,43 +92,40 @@ function SportsGhost() {
   // (kept simple + orderly, same restraint as the clock, not a stitch scatter)
   return (
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <circle cx="102" cy="100" r="82" stroke="currentColor" strokeWidth="8" />
-      {/* one clean seam arc */}
-      <path d="M54 30 C96 72 96 128 54 170" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-      {/* neat stitches straddling BOTH sides of the seam */}
+      <circle cx="98" cy="100" r="80" stroke="currentColor" strokeWidth="8" />
+      {/* seam kept left-of-center so BOTH stitch rows stay inside the pill crop */}
+      <path d="M50 32 C80 66 80 134 50 168" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+      {/* stitches straddling the seam — left row AND right row, both visible */}
       <g stroke="currentColor" strokeWidth="3.4" strokeLinecap="round">
-        <path d="M60 52 l14 6" /><path d="M92 52 l-14 6" />
-        <path d="M64 84 l14 4" /><path d="M96 84 l-14 4" />
-        <path d="M64 116 l14 -4" /><path d="M96 116 l-14 -4" />
-        <path d="M60 148 l14 -6" /><path d="M92 148 l-14 -6" />
+        <path d="M40 52 l15 5" /><path d="M76 46 l-15 5" />
+        <path d="M42 84 l15 3" /><path d="M78 80 l-15 3" />
+        <path d="M42 116 l15 -3" /><path d="M78 120 l-15 -3" />
+        <path d="M40 148 l15 -5" /><path d="M76 154 l-15 -5" />
       </g>
     </svg>
   );
 }
 
 function ScienceGhost() {
-  // a bone — a diagonal shaft with two knobbed ends (classic dog-bone), cropped
+  // a bone — a FILLED knobbed end + shaft bleeding off the right edge. Showing
+  // ONE bulb-end + shaft reads unmistakably as a bone at pill scale (a full-
+  // width bone only shows its two ends and reads as "two blobs").
   return (
-    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <g stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
-        {/* shaft, lower-left to upper-right */}
-        <path d="M66 138 L138 66" />
-        {/* lower-left knobs */}
-        <circle cx="54" cy="138" r="15" />
-        <circle cx="68" cy="152" r="15" />
-        {/* upper-right knobs */}
-        <circle cx="138" cy="52" r="15" />
-        <circle cx="152" cy="66" r="15" />
-      </g>
+    <svg viewBox="0 0 200 200" fill="currentColor" aria-hidden>
+      {/* shaft (extends off the right edge) */}
+      <rect x="118" y="88" width="92" height="24" rx="12" />
+      {/* the knobbed end — two lobes */}
+      <circle cx="124" cy="76" r="19" />
+      <circle cx="124" cy="124" r="19" />
     </svg>
   );
 }
 
 function CultureGhost() {
-  // a cropped camera — body + lens (scaled down a touch)
+  // a cropped camera — body + lens (full size, vertically centered in the box)
   return (
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <g transform="translate(104 116) scale(0.8) translate(-104 -116)">
+      <g transform="translate(0 -6)">
         {/* body */}
         <rect x="20" y="66" width="168" height="102" rx="16" stroke="currentColor" strokeWidth="8" />
         {/* pentaprism / viewfinder hump */}
