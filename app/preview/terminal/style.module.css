@@ -1213,90 +1213,14 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    barometer needle) follows `color`, so re-setting color to the fg
    ink recolors every drawn stroke too.
    ══════════════════════════════════════════════════════════════ */
+/* TWO-TONE BY DESIGN: the paper "certificate" cards (the ledger, the
+   appreciation barometer, the sold-record band) KEEP their warm beige —
+   a deliberate second colour that breaks up the dark terminal scroll and
+   reads as the brand's certificate/paper motif. We do NOT dark-flip them.
+   Only give them the Terminal's radius so they rhyme with the dark panels. */
 .root :global(.ray-band),
-.root :global(.ray-paper),
 .root :global(.ray-appr.ray-paper) {
-  /* re-point the whole paper ramp at the Terminal palette */
-  --paper: transparent;
-  --paper-ink: #ede6da;            /* fg ink → light on dark */
-  --paper-secondary: #c9beac;
-  --paper-muted: #9a8f7d;
-  --paper-faint: #756c5d;
-  --paper-line: rgba(232, 218, 182, 0.12);
-  --paper-edge: rgba(232, 218, 182, 0.14);
-  --paper-up: #57be87;
-  --paper-down: #cc6a5c;
-  --paper-up-text: #57be87;
-  --paper-down-text: #cc6a5c;
-  /* the derived --color-* tokens the flip also sets */
-  --color-fg: #ede6da;
-  --color-text-secondary: #c9beac;
-  --color-text-muted: #9a8f7d;
-  --color-text-faint: #756c5d;
-  --color-up: #57be87;
-  --color-down: #cc6a5c;
-  --color-down-text: #cc6a5c;
-  --color-border: rgba(232, 218, 182, 0.12);
-  --hairline: rgba(232, 218, 182, 0.09);
-  --hairline-soft: rgba(232, 218, 182, 0.09);
-  /* butter is legible on dark — restore it as the accent */
-  --color-butter: #e8dab6;
-  --color-butter-text: #e8dab6;
-  --color-butter-deep: #e8dab6;
-  --color-butter-subtle: rgba(232, 218, 182, 0.09);
-  color: #ede6da;
-}
-
-/* the band shells become dark vellum panels with a hairline frame and
-   the Terminal's radius — not paper slabs with a hard border-block */
-.root :global(.ray-band) {
-  background: linear-gradient(180deg, #14110d, rgba(20, 17, 13, 0.55));
-  border: 1px solid rgba(232, 218, 182, 0.14);
-  border-block: 1px solid rgba(232, 218, 182, 0.14);
   border-radius: 14px;
-  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
-}
-
-/* the ledger's 4-cell rule: dark hairline gaps, transparent cells so
-   the numerals sit directly on the panel (mono/tabular, butter accent) */
-.root :global(.ray-band) :global(.ray-ledger) {
-  background: rgba(232, 218, 182, 0.1);
-  border-block: none;
-}
-.root :global(.ray-band) :global(.ray-ledger) > * {
-  background: #14110d !important;
-}
-.root :global(.ray-band) :global(.ray-ledger-k) {
-  font-family: var(--font-mono-data), monospace;
-  color: #9a8f7d;
-}
-.root :global(.ray-band) :global(.ray-ledger-v) {
-  font-family: var(--font-mono-data), monospace;
-  color: #ede6da;
-  letter-spacing: -0.01em;
-}
-.root :global(.ray-band) :global(.ray-ledger-v.up) {
-  color: #e8dab6;   /* the flagged figure — the page's own butter accent */
-}
-.root :global(.ray-band) :global(.ray-ledger-s) {
-  font-family: var(--font-mono-data), monospace;
-  color: #756c5d;
-}
-
-/* the SettlementSlip's ink-outline archive control → butter hairline pill */
-.root :global(.ray-band) button {
-  border-color: rgba(232, 218, 182, 0.28) !important;
-  color: #e8dab6 !important;
-}
-
-/* the appreciation aside sheds its paper block: it becomes the same
-   dark instrument card as the chart / edge panels around it */
-.root :global(.ray-appr.ray-paper) {
-  background: linear-gradient(180deg, #14110d, rgba(20, 17, 13, 0.4));
-  border: 1px solid rgba(232, 218, 182, 0.14);
-  border-radius: 14px;
-  padding: 22px 24px;
-  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.55);
 }
 
 /* the reused sold Record band (.ray-recordband) already reads --panel,

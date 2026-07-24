@@ -43,7 +43,9 @@ export function useMounted(): boolean {
 /** IntersectionObserver-backed reveal. Returns a ref + whether it has
     entered the viewport (latched — reveals once, never re-hides). */
 export function useInView<T extends HTMLElement>(
-  opts: IntersectionObserverInit = { threshold: 0.15, rootMargin: '0px 0px -8% 0px' },
+  // threshold 0 = fire when ANY pixel enters (a tall element taller than
+  // ~6× the viewport can never reach a 0.15 ratio, which silently hid content)
+  opts: IntersectionObserverInit = { threshold: 0, rootMargin: '0px 0px -6% 0px' },
 ): [React.RefObject<T>, boolean] {
   const ref = useRef<T>(null);
   const [seen, setSeen] = useState(false);
@@ -53,7 +55,7 @@ export function useInView<T extends HTMLElement>(
       return;
     }
     const el = ref.current;
-    if (!el) return;
+    if (!el) { setSeen(true); return; }
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         if (e.isIntersecting) {
@@ -64,7 +66,11 @@ export function useInView<T extends HTMLElement>(
       }
     }, opts);
     io.observe(el);
-    return () => io.disconnect();
+    // SAFETY: content must NEVER stay hidden if the observer misfires — reveal
+    // after a beat regardless. Below-fold content just shows before it's scrolled
+    // to (harmless); above-fold still animates in immediately.
+    const t = setTimeout(() => setSeen(true), 2200);
+    return () => { io.disconnect(); clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return [ref, seen];
