@@ -22,6 +22,9 @@ export interface RecordEntry {
   house: string;
   /** short source flag surfaced on the row */
   source: string;
+  /** optional direct link to the sale; when absent the row resolves the sale
+      via a title+house web search so every record is still clickable. */
+  url?: string;
 }
 
 /** Ranked at render time; ordering here is illustrative. */

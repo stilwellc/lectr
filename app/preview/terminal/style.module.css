@@ -1298,6 +1298,25 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    dark row, while staying secondary to the label */
 .root :global(.ray-pill-emblem) { opacity: 0.78; }
 
+/* record rows link out to the sale — the title is the affordance */
+a.recordObj {
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 140ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+a.recordObj:hover,
+a.recordObj:focus-visible {
+  color: var(--tt-butter);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.recordEmpty {
+  padding: 22px 4px;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 12px;
+  color: var(--tt-muted);
+}
+
 /* ── honest pricing: demand headline + verified movers ────────────────── */
 
 /* the headline is a LEVEL (demand / typical price), not a gain — read it in

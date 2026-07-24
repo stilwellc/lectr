@@ -970,7 +970,7 @@ export default function TerminalHomePage() {
 
             {/* ══ THE RECORD BOARD — the Terminal flourish (curated cross-cat highs) ══ */}
             <section className={styles.recordSection}>
-              <RecordBoard variant={mounted && isMobile ? 'mobile' : 'desktop'} />
+              <RecordBoard variant={mounted && isMobile ? 'mobile' : 'desktop'} market={activeKey} />
             </section>
           </div>
 
