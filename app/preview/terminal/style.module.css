@@ -132,9 +132,23 @@
 .hero {
   display: grid;
   grid-template-columns: 1.02fr 1fr;
-  gap: clamp(32px, 5vw, 72px);
+  grid-template-areas:
+    "head chart"
+    "meta chart";
+  column-gap: clamp(32px, 5vw, 72px);
+  row-gap: 28px;
   align-items: center;
   padding: clamp(48px, 7vw, 88px) 0 40px;
+}
+.heroHead { grid-area: head; min-width: 0; align-self: end; }
+.heroChart { grid-area: chart; min-width: 0; align-self: center; }
+.heroMeta {
+  grid-area: meta;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  align-items: flex-start;
 }
 .heroLeft {
   min-width: 0;
@@ -195,7 +209,7 @@
 .heroStats {
   display: flex;
   gap: 34px;
-  margin-bottom: 34px;
+  /* spacing owned by .heroMeta's gap now */
 }
 .stat,
 .statBtn {
@@ -1000,12 +1014,16 @@
   }
   .hero {
     grid-template-columns: 1fr;
-    gap: 26px;
-    padding: 28px 0 20px;
+    /* number leads → chart (the value prop) → the read-outs. No prose wall. */
+    grid-template-areas: "head" "chart" "meta";
+    row-gap: 20px;
+    padding: 20px 0 16px;
     align-items: stretch;
   }
+  .heroHead { align-self: stretch; }
+  .heroMeta { gap: 22px; }
   .heroNumber { font-size: clamp(64px, 20vw, 104px); }
-  .heroNumberRow { gap: 16px; }
+  .heroNumberRow { gap: 16px; margin-bottom: 0; }
   .instrumentRow {
     grid-template-columns: 1fr;
     gap: 16px;

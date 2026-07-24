@@ -106,8 +106,6 @@ export default function IndexHero({
   demand,
   realized,
   totalLots,
-  totalSold,
-  houses,
   belowMkt,
   onOpenBelow,
   onCommand,
@@ -141,7 +139,9 @@ export default function IndexHero({
   return (
     <LazyMotion features={domAnimation} strict>
       <section className={styles.hero}>
-        <m.div className={styles.heroLeft} {...rise(0.05)}>
+        {/* HEAD — kicker + the number. On mobile this leads, then the chart, then
+            the meta row: number → chart → data, never a wall of prose. */}
+        <m.div className={styles.heroHead} {...rise(0.05)}>
           <span className={styles.sectionKicker}>{hero.kicker}</span>
           <div className={styles.heroNumberRow}>
             <RollingNumber
@@ -162,16 +162,28 @@ export default function IndexHero({
               </span>
             </div>
           </div>
-          <p className={styles.heroThesis}>
-            {activeKey === 'all' ? (
-              <>Bloomberg for collectibles. One dollar-normalized index across art, watches,
-              design, sports, science &amp; culture — <strong>{fmtInt(totalLots)}</strong> lots,{' '}
-              <strong>{fmtInt(totalSold)}</strong> sold.</>
+        </m.div>
+
+        {/* CHART — the value prop, right under the number */}
+        <m.div className={styles.heroChart} {...rise(0.12)}>
+          <div className={styles.chartCard}>
+            <div className={styles.chartCardHead}>
+              <span>{activeKey === 'all' ? 'Index · quarterly cohort' : `${marketLabel} · quarterly cohort`}</span>
+              <span className={styles.chartCardTag}>{hero.chartTag}</span>
+            </div>
+            {hasChart ? (
+              <MarketChart data={hero.idx} play={play} height={300} />
             ) : (
-              <>The {marketLabel.toLowerCase()} market, read against every hammer —{' '}
-              <strong>{fmtInt(totalLots)}</strong> lots on the book across {houses} houses.</>
+              <div className={styles.heroSparkFallback}>
+                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dY >= 0 ? 'up' : 'down'} width={420} height={120} strokeWidth={1.8} />
+                <span className={styles.chartCardTag}>series building — sampling this market</span>
+              </div>
             )}
-          </p>
+          </div>
+        </m.div>
+
+        {/* META — the three read-outs + ⌘K. No prose. */}
+        <m.div className={styles.heroMeta} {...rise(0.18)}>
           <div className={styles.heroStats}>
             <Stat
               label="Sell-through"
@@ -194,23 +206,6 @@ export default function IndexHero({
             <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
             <span className={styles.cmdArrow} aria-hidden>↵</span>
           </button>
-        </m.div>
-
-        <m.div className={styles.heroRight} {...rise(0.16)}>
-          <div className={styles.chartCard}>
-            <div className={styles.chartCardHead}>
-              <span>{activeKey === 'all' ? 'Index · quarterly cohort' : `${marketLabel} · quarterly cohort`}</span>
-              <span className={styles.chartCardTag}>{hero.chartTag}</span>
-            </div>
-            {hasChart ? (
-              <MarketChart data={hero.idx} play={play} height={300} />
-            ) : (
-              <div className={styles.heroSparkFallback}>
-                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dY >= 0 ? 'up' : 'down'} width={420} height={120} strokeWidth={1.8} />
-                <span className={styles.chartCardTag}>series building — sampling this market</span>
-              </div>
-            )}
-          </div>
         </m.div>
       </section>
     </LazyMotion>
