@@ -65,22 +65,24 @@ function DesignGhost() {
 }
 
 function WatchesGhost() {
-  // a cropped watch dial with hands + a couple hour ticks
+  // a cropped watch dial with hands + a couple hour ticks (scaled down a touch)
   return (
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <circle cx="96" cy="100" r="82" stroke="currentColor" strokeWidth="8" />
-      <circle cx="96" cy="100" r="66" stroke="currentColor" strokeWidth="2.5" opacity="0.5" />
-      {/* hour hand */}
-      <path d="M96 100 L96 52" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-      {/* minute hand */}
-      <path d="M96 100 L146 118" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      {/* center pin */}
-      <circle cx="96" cy="100" r="6" fill="currentColor" />
-      {/* ticks */}
-      <path d="M96 24 L96 36" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      <path d="M172 100 L160 100" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      <path d="M96 176 L96 164" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      <path d="M20 100 L32 100" stroke="currentColor" strokeWidth="6" strokeLinecap="round" opacity="0.7" />
+      <g transform="translate(96 100) scale(0.8) translate(-96 -100)">
+        <circle cx="96" cy="100" r="82" stroke="currentColor" strokeWidth="8" />
+        <circle cx="96" cy="100" r="66" stroke="currentColor" strokeWidth="2.5" opacity="0.5" />
+        {/* hour hand */}
+        <path d="M96 100 L96 52" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+        {/* minute hand */}
+        <path d="M96 100 L146 118" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+        {/* center pin */}
+        <circle cx="96" cy="100" r="6" fill="currentColor" />
+        {/* ticks */}
+        <path d="M96 24 L96 36" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+        <path d="M172 100 L160 100" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+        <path d="M96 176 L96 164" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+        <path d="M20 100 L32 100" stroke="currentColor" strokeWidth="6" strokeLinecap="round" opacity="0.7" />
+      </g>
     </svg>
   );
 }
@@ -92,54 +94,51 @@ function SportsGhost() {
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
       <circle cx="102" cy="100" r="82" stroke="currentColor" strokeWidth="8" />
       {/* one clean seam arc */}
-      <path d="M52 32 C94 72 94 128 52 168" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-      {/* neat, evenly-spaced stitches straddling the seam */}
-      <g stroke="currentColor" strokeWidth="3.6" strokeLinecap="round">
-        <path d="M60 54 l17 -3" />
-        <path d="M66 84 l17 -2" />
-        <path d="M66 116 l17 2" />
-        <path d="M60 146 l17 3" />
+      <path d="M54 30 C96 72 96 128 54 170" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+      {/* neat stitches straddling BOTH sides of the seam */}
+      <g stroke="currentColor" strokeWidth="3.4" strokeLinecap="round">
+        <path d="M60 52 l14 6" /><path d="M92 52 l-14 6" />
+        <path d="M64 84 l14 4" /><path d="M96 84 l-14 4" />
+        <path d="M64 116 l14 -4" /><path d="M96 116 l-14 -4" />
+        <path d="M60 148 l14 -6" /><path d="M92 148 l-14 -6" />
       </g>
     </svg>
   );
 }
 
 function ScienceGhost() {
-  // a fossil / dino bone (femur), cropped
+  // a bone — a diagonal shaft with two knobbed ends (classic dog-bone), cropped
   return (
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <path
-        d="M40 150
-           C22 158 20 178 36 184
-           C50 190 66 178 66 166
-           C86 158 118 118 138 96
-           C158 118 186 114 192 96
-           C200 76 182 60 168 66
-           C170 48 156 32 138 40
-           C122 47 122 66 130 76
-           C110 96 82 128 66 146
-           C56 138 44 140 40 150 Z"
-        stroke="currentColor"
-        strokeWidth="7"
-        strokeLinejoin="round"
-      />
+      <g stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
+        {/* shaft, lower-left to upper-right */}
+        <path d="M66 138 L138 66" />
+        {/* lower-left knobs */}
+        <circle cx="54" cy="138" r="15" />
+        <circle cx="68" cy="152" r="15" />
+        {/* upper-right knobs */}
+        <circle cx="138" cy="52" r="15" />
+        <circle cx="152" cy="66" r="15" />
+      </g>
     </svg>
   );
 }
 
 function CultureGhost() {
-  // a cropped camera — body + lens
+  // a cropped camera — body + lens (scaled down a touch)
   return (
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      {/* body */}
-      <rect x="20" y="66" width="168" height="102" rx="16" stroke="currentColor" strokeWidth="8" />
-      {/* pentaprism / viewfinder hump */}
-      <path d="M70 66 L82 44 L124 44 L136 66" stroke="currentColor" strokeWidth="8" strokeLinejoin="round" />
-      {/* lens */}
-      <circle cx="100" cy="120" r="34" stroke="currentColor" strokeWidth="8" />
-      <circle cx="100" cy="120" r="18" stroke="currentColor" strokeWidth="4" opacity="0.6" />
-      {/* shutter */}
-      <circle cx="46" cy="52" r="5" fill="currentColor" />
+      <g transform="translate(104 116) scale(0.8) translate(-104 -116)">
+        {/* body */}
+        <rect x="20" y="66" width="168" height="102" rx="16" stroke="currentColor" strokeWidth="8" />
+        {/* pentaprism / viewfinder hump */}
+        <path d="M70 66 L82 44 L124 44 L136 66" stroke="currentColor" strokeWidth="8" strokeLinejoin="round" />
+        {/* lens */}
+        <circle cx="100" cy="120" r="34" stroke="currentColor" strokeWidth="8" />
+        <circle cx="100" cy="120" r="18" stroke="currentColor" strokeWidth="4" opacity="0.6" />
+        {/* shutter */}
+        <circle cx="46" cy="52" r="5" fill="currentColor" />
+      </g>
     </svg>
   );
 }
