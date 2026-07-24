@@ -13,8 +13,10 @@
     "data:push": "bash scripts/data-store.sh push"
   },
   "dependencies": {
+    "@paper-design/shaders-react": "^0.0.77",
     "@supabase/supabase-js": "^2.110.5",
     "autoprefixer": "^10.4.17",
+    "framer-motion": "^12.42.2",
     "next": "14.1.0",
     "postcss": "^8.4.35",
     "react": "^18.2.0",

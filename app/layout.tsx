@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Fraunces, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
@@ -14,6 +14,23 @@ const inter = Inter({
   // load the VARIABLE font (no fixed weight list) so every weight renders,
   // including the 650/750 used on prominent numerals (static cuts snapped them).
   variable: '--font-inter',
+  display: 'swap',
+});
+
+// The lander type system (research: serif-for-authority + mono-for-data). Fraunces
+// = an editorial "museum voice" display serif (optical sizing, high contrast) for
+// headline authority; IBM Plex Mono = terminal-grade tabular figures for all data.
+// Exposed as --font-serif-display / --font-mono-data; Inter stays the neutral UI sans.
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-serif-display',
+  display: 'swap',
+  axes: ['opsz', 'SOFT', 'WONK'],
+});
+const plexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-mono-data',
   display: 'swap',
 });
 
@@ -46,7 +63,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={inter.variable}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable} ${plexMono.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{
