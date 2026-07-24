@@ -26,20 +26,6 @@ export default function RecordBoard({ variant = 'desktop' }: Props) {
   const ranked = [...RECORD_BOARD].sort((a, b) => b.usd - a.usd);
   const top = ranked[0].usd;
 
-  const container = {
-    hidden: {},
-    show: { transition: { staggerChildren: reduce ? 0 : 0.05 } },
-  };
-  const row = {
-    hidden: reduce ? { opacity: 1 } : { opacity: 0, y: 10, scale: 0.98 },
-    show: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: { duration: 0.5, ease: EASE },
-    },
-  };
-
   return (
     <div className={styles.recordBoard} ref={ref}>
       <div className={styles.recordHead}>
@@ -52,16 +38,13 @@ export default function RecordBoard({ variant = 'desktop' }: Props) {
         </span>
       </div>
 
-      <m.ol
-        className={variant === 'mobile' ? styles.recordListMobile : styles.recordList}
-        variants={container}
-        initial="hidden"
-        animate={seen ? 'show' : 'hidden'}
-      >
+      {/* rows are ALWAYS visible (content must never hide behind a scroll
+          observer). Only the bar fill animates in on scroll — decorative. */}
+      <ol className={variant === 'mobile' ? styles.recordListMobile : styles.recordList}>
         {ranked.map((r, i) => {
           const w = Math.max(6, (r.usd / top) * 100);
           return (
-            <m.li key={r.title} className={styles.recordRow} variants={row}>
+            <li key={r.title} className={styles.recordRow}>
               <span className={styles.recordRank}>{String(i + 1).padStart(2, '0')}</span>
               <span className={styles.recordCat} data-cat={r.category}>
                 {r.category}
@@ -75,17 +58,17 @@ export default function RecordBoard({ variant = 'desktop' }: Props) {
                   <m.span
                     className={styles.recordBar}
                     initial={reduce ? false : { scaleX: 0 }}
-                    animate={seen ? { scaleX: w / 100 } : { scaleX: 0 }}
-                    transition={{ duration: 0.9, ease: EASE, delay: reduce ? 0 : 0.12 + i * 0.04 }}
+                    animate={{ scaleX: (seen ? w : w) / 100 }}
+                    transition={{ duration: reduce ? 0 : 0.9, ease: EASE, delay: reduce || !seen ? 0 : 0.12 + i * 0.04 }}
                   />
                 </span>
               </span>
               <span className={styles.recordPrice}>{fmtMoneyCompact(r.usd)}</span>
               <span className={styles.recordSource}>{r.source}</span>
-            </m.li>
+            </li>
           );
         })}
-      </m.ol>
+      </ol>
     </div>
   );
 }
