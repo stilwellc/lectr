@@ -32,7 +32,6 @@ import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import CountUp from '../../components/CountUp';
-import ApprBarometer from '../../components/ApprBarometer';
 import SettlementSlip from '../../components/SettlementSlip';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedToolbar';
@@ -510,7 +509,6 @@ export default function TerminalHomePage() {
     </Link>
   ) : null;
   const marketName = activeKey === 'all' ? 'The total market' : marketMeta.label;
-  const hasAppr = appreciation != null;
 
   // below-market count for the hero stat (scoped to the live book)
   const belowMktCount = belowIds.size;
@@ -523,6 +521,11 @@ export default function TerminalHomePage() {
 
   return (
     <>
+    {/* the page's primary heading — visually hidden (the hero leads with the
+        market number, not a title) but present for crawlers/AT. */}
+    <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+      lectr — auction intelligence for the collectibles market
+    </h1>
     <Greeting />
     <div className={`${styles.root} terminal-shell`} data-mounted={mounted}>
       {/* the feed grid — global ray-* classes the reused LotCard renders into,
@@ -598,20 +601,12 @@ export default function TerminalHomePage() {
               </section>
             )}
 
-            {/* ══ Today's call + appreciation + watchlist (the working rail) ══ */}
+            {/* ══ Today's call + watchlist (the working rail) ══
+                NOTE: the appreciation barometer was removed here — it printed a
+                sales-weighted "+X% appreciation" with no confidence interval,
+                which the honest hero + verified-movers deliberately avoid. The
+                homepage must not assert a return the engine won't defend. */}
             <div className={styles.instrumentRow}>
-              {hasAppr && (
-                <aside className="ray-appr ray-paper" aria-label={`${marketName} appreciation`} style={{ minWidth: 0 }}>
-                  <ApprBarometer
-                    value={appreciation}
-                    marketName={marketName}
-                    serial={editionSerial}
-                    typical={soldMedian12 ?? recentMedian}
-                    typicalLabel={soldMedian12 == null && recentMedian != null ? 'Typical sale, recent' : undefined}
-                    record={recordSale ? { priceUsd: recordSale.priceUsd || 0, maker: ARTIST_LABEL[recordSale.artist] || recordSale.artist } : null}
-                  />
-                </aside>
-              )}
               <div className={styles.callCol}>
                 {callPlateEl}
                 {watchStripEl}

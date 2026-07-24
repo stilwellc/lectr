@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   description: `Auction intelligence for the collectibles market — ${ARTISTS.length} makers tracked across major houses, crawled nightly.`,
   openGraph: {
     title: 'lectr — auction intelligence',
-    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses, crawled automatically.`,
+    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} makers tracked across major houses, crawled nightly.`,
     siteName: 'lectr',
     type: 'website',
     locale: 'en_US',
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'lectr — auction intelligence',
-    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} artists tracked across major houses.`,
+    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} makers tracked across major houses, crawled nightly.`,
   },
 };
 
