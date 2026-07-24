@@ -163,6 +163,13 @@ const GLYPH: Partial<Record<Market, () => React.ReactElement>> = {
   // 'all' → intentionally none; keep the total-market view clean.
 };
 
+/** The bare glyph, for embedding as a faint ghost inside each market pill
+    (cropped + bleeding off the pill's right edge). 'all' → null. */
+export function GhostGlyph({ market }: { market: Market }) {
+  const Glyph = GLYPH[market];
+  return Glyph ? <Glyph /> : null;
+}
+
 export default function VerticalGhost({ market }: { market: Market }) {
   const Glyph = GLYPH[market];
   if (!Glyph) return null;

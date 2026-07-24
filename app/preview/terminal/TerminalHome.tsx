@@ -49,7 +49,6 @@ import RecordBoard from './RecordBoard';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
 import { CardEmblem } from './emblems';
-import VerticalGhost from './VerticalGhost';
 
 // W13 contract: useSavedLots grows a savedMeta record (hook agent's edit).
 type SavedMeta = Record<string, { savedAt: string; estMid: number | null; signalPct: number | null; bidCount: number | null }>;
@@ -529,8 +528,6 @@ export default function TerminalHomePage() {
     </h1>
     <Greeting />
     <div className={`${styles.root} terminal-shell`} data-mounted={mounted}>
-      {/* GHOST LOGO — faint per-vertical illustration bleeding off the right edge (decorative) */}
-      <VerticalGhost market={activeKey} />
       {/* the feed grid — global ray-* classes the reused LotCard renders into,
           re-authored here (page.tsx carried these in an inline style block). */}
       <style>{`

@@ -1666,3 +1666,27 @@ a.recordObj:focus-visible {
   line-height: 1.25;
   max-width: 18ch;
 }
+
+/* ── per-pill ghost — a cropped category illustration bleeding off each pill's
+   right edge (Terminal only; gated by the `emblems` prop). Sits behind the
+   icon + label, clipped to the pill, faint. Total market carries none. ── */
+.root :global(.ray-market-tab) { position: relative; overflow: hidden; isolation: isolate; }
+.root :global(.ray-pill-ghost) {
+  position: absolute;
+  top: 50%;
+  right: -4%;
+  width: 52%;
+  height: 200%;
+  transform: translateY(-50%);
+  z-index: -1;
+  color: var(--tt-butter);
+  opacity: 0.11;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.root :global(.ray-pill-ghost) svg { height: 100%; width: auto; display: block; }
+/* the active/lit pill is butter — dial the ghost down so it doesn't muddy the ink label */
+.root :global(.ray-market-tab.lit .ray-pill-ghost),
+.root :global(.ray-market-tab[data-active='true'] .ray-pill-ghost) { color: #2a2317; opacity: 0.09; }

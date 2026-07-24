@@ -7,6 +7,7 @@ import { useMarket } from '../lib/market';
 import { formatDemand, DemandPoint } from '../lib/demand';
 import MarketIcon from './MarketIcon';
 import TerminalEmblem from '../preview/terminal/emblems';
+import { GhostGlyph } from '../preview/terminal/VerticalGhost';
 import Flick from './Flick';
 
 /**
@@ -109,6 +110,9 @@ export default function MarketSwitch({
             style={ripple ? ({ '--ripple-i': i } as CSSProperties) : undefined}
             onClick={() => setMarket(m.key)}
           >
+            {emblems && m.key !== 'all' && (
+              <span className="ray-pill-ghost" aria-hidden="true"><GhostGlyph market={m.key} /></span>
+            )}
             <span className={`ray-pill-obj${emblems ? ' ray-pill-emblem' : ''}`} aria-hidden="true">
               {emblems ? <TerminalEmblem market={m.key} size={15} /> : <MarketIcon market={m.key} size={15} />}
             </span>
