@@ -197,10 +197,39 @@
   gap: 34px;
   margin-bottom: 34px;
 }
-.stat {
+.stat,
+.statBtn {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+.statBtn {
+  align-items: flex-start;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.statBtn:hover { border-bottom-color: rgba(232, 218, 182, 0.4); }
+.statBtn:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 3px; }
+.statBtn[data-accent='true'] .statVal { color: var(--tt-butter); }
+
+/* hero sparkline fallback — when a market has no rebased index/demand yet */
+.heroSparkFallback {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 0 12px;
+}
+.heroSparkFallback .chartCardTag {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
 }
 .statVal {
   font-family: var(--font-mono-data), monospace;
@@ -494,13 +523,27 @@
 .moversTrendHead { text-align: center; }
 .moversRow {
   height: 52px;
+  width: 100%;
+  border: none;
   border-bottom: 1px solid var(--tt-hair);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
   font-family: var(--font-mono-data), monospace;
   transition: background 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .moversRow:hover {
   background: rgba(232, 218, 182, 0.03);
 }
+.moversRow:focus-visible {
+  outline: 2px solid rgba(232, 218, 182, 0.6);
+  outline-offset: -2px;
+}
+.moversRow[data-active='true'] {
+  background: rgba(232, 218, 182, 0.06);
+}
+.moversRow[data-active='true'] .moversName { color: var(--tt-butter); }
 .moversName {
   display: flex;
   align-items: center;
@@ -713,6 +756,42 @@
   white-space: nowrap;
 }
 
+/* ── the working instrument row: appreciation + call + watchlist ── */
+.instrumentRow {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) 1fr;
+  gap: clamp(16px, 2.5vw, 28px);
+  align-items: start;
+  margin-top: clamp(28px, 4vw, 44px);
+}
+.instrumentRow:has(.callCol:only-child) {
+  grid-template-columns: 1fr;
+}
+.callCol {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* the movers board section */
+.moversSection { margin-top: clamp(44px, 6vw, 72px); }
+
+/* the feed section */
+.feedSection { margin-top: clamp(44px, 6vw, 72px); }
+.feedTitle {
+  font-family: var(--font-serif-display), serif;
+  font-weight: 400;
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--tt-fg);
+  margin: 0;
+}
+
+/* the functional sold record band — inset with breathing room */
+.recordBandWrap { margin-top: clamp(40px, 5vw, 64px); }
+
 /* footer */
 .footer,
 .mobFooter {
@@ -795,6 +874,18 @@
   border-radius: 14px;
   background: linear-gradient(180deg, var(--tt-panel), rgba(20, 17, 13, 0.3));
   padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.mobMoverCard:focus-visible {
+  outline: 2px solid rgba(232, 218, 182, 0.6);
+  outline-offset: 2px;
+}
+.mobMoverCard[data-active='true'] {
+  border-color: var(--tt-butter);
+  background: linear-gradient(180deg, rgba(232, 218, 182, 0.08), rgba(20, 17, 13, 0.3));
 }
 .mobMoverTop {
   display: flex;
@@ -895,6 +986,70 @@
 .mobFooter {
   justify-content: center;
   margin-top: 40px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE — the single composition re-authored down the
+   breakpoints (the working page is one tree; the Terminal
+   grammar folds cleanly rather than swapping to a squished
+   mobile). <900 / <768 / <640 all tuned.
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .deskShell {
+    padding: 0 clamp(16px, 4vw, 28px) 64px;
+  }
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 26px;
+    padding: 28px 0 20px;
+    align-items: stretch;
+  }
+  .heroNumber { font-size: clamp(64px, 20vw, 104px); }
+  .heroNumberRow { gap: 16px; }
+  .instrumentRow {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .midGrid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .edgeCard { align-self: stretch; }
+}
+
+@media (max-width: 768px) {
+  .heroStats { gap: 22px; flex-wrap: wrap; }
+  .statVal { font-size: 21px; }
+  .moversHead { flex-wrap: wrap; gap: 12px; }
+  /* the movers table collapses to the 2-up card list (variant=mobile) */
+  .mobMoverList { grid-template-columns: 1fr 1fr; }
+  .tapeSection { gap: 12px; }
+  .recordRow {
+    grid-template-columns: 2.2ch 1fr auto;
+    grid-template-areas:
+      'rank main price'
+      'rank bar bar'
+      'rank meta meta';
+    gap: 6px 14px;
+    padding: 16px 2px;
+  }
+  .recordRow .recordRank { grid-area: rank; align-self: start; padding-top: 3px; }
+  .recordRow .recordCat { grid-area: meta; justify-self: start; margin-top: 2px; }
+  .recordRow .recordMain { grid-area: main; }
+  .recordRow .recordBarCell { grid-area: bar; }
+  .recordRow .recordPrice { grid-area: price; align-self: start; }
+  .recordRow .recordSource { display: none; }
+  .recordRow .recordObj { white-space: normal; }
+  .recordHead { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .recordCaption { text-align: left; }
+}
+
+@media (max-width: 560px) {
+  .heroNumber { font-size: clamp(56px, 22vw, 88px); }
+  .heroNumberRow { flex-wrap: wrap; align-items: baseline; }
+  .heroDeltas { flex-direction: row; gap: 14px; padding-bottom: 0; }
+  .mobMoverList { grid-template-columns: 1fr; }
+  .heroStats { gap: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
