@@ -1255,3 +1255,53 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .root :global(.ray-upcoming-grid):has(> :global(.ray-feed-rekey):has(:global(.ray-lot-card):not(:global(.ray-card-compact)))) {
   align-items: start;
 }
+
+/* ═══ GHOST MOTIFS + GUILLOCHÉ ══════════════════════════════════
+   Faint category motifs ghosted behind the market pills, and an
+   engraved guilloché woven behind the beige certificate cards —
+   collectible/certificate richness, drawn behind all content. */
+
+/* the beige cards get an engine-turned guilloché weave (dark ink over
+   the warm paper, tiled behind the content — reads as a certificate) */
+.root :global(.ray-band),
+.root :global(.ray-appr.ray-paper) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='23' viewBox='0 0 46 23'%3E%3Cg fill='none' stroke='%231c1712' stroke-width='0.6' opacity='0.4'%3E%3Cpath d='M0 11.5 Q11.5 0 23 11.5 T46 11.5'/%3E%3Cpath d='M0 11.5 Q11.5 23 23 11.5 T46 11.5'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 46px 23px;
+}
+
+/* a bigger faint guilloché seal in a corner of the ledger card */
+.root :global(.ray-band) { position: relative; overflow: hidden; }
+.root :global(.ray-band)::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  bottom: -34px;
+  width: 160px;
+  height: 160px;
+  pointer-events: none;
+  z-index: 0;
+  background: no-repeat center / contain
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%231c1712' stroke-width='0.7'%3E%3Cg opacity='0.16'%3E%3Ccircle cx='50' cy='50' r='46'/%3E%3Ccircle cx='50' cy='50' r='38'/%3E%3Ccircle cx='50' cy='50' r='30'/%3E%3Ccircle cx='50' cy='50' r='22'/%3E%3Cpath d='M50 4v92M4 50h92M18 18l64 64M82 18l-64 64'/%3E%3C/g%3E%3C/svg%3E");
+}
+.root :global(.ray-band) > * { position: relative; z-index: 1; }
+
+/* category ghost motif behind each market pill — the same monoline glyph
+   as its icon, oversized + faint, bleeding off the right edge */
+.root :global(.ray-market-tab) {
+  position: relative;
+  overflow: hidden;
+  background-repeat: no-repeat;
+  background-position: right -12px center;
+  background-size: 46px 46px;
+}
+.root :global(.ray-market-tab.lit) { background-position: right -14px center; background-size: 54px 54px; }
+.root :global(.ray-market-tab[data-market='all']) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8dab6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg opacity='0.11'%3E%3Crect x='4' y='4' width='7' height='7' rx='1.6'/%3E%3Crect x='13' y='4' width='7' height='7' rx='1.6'/%3E%3Crect x='4' y='13' width='7' height='7' rx='1.6'/%3E%3Crect x='13' y='13' width='7' height='7' rx='1.6'/%3E%3C/g%3E%3C/svg%3E"); }
+.root :global(.ray-market-tab[data-market='art']) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8dab6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg opacity='0.11'%3E%3Crect x='4' y='4.5' width='16' height='15' rx='1.8'/%3E%3Cpath d='M7.5 15.5c1.6-3.4 3.4-5 5-5s2.9 1.2 4 2.6'/%3E%3Ccircle cx='9.2' cy='9' r='1.1'/%3E%3C/g%3E%3C/svg%3E"); }
+.root :global(.ray-market-tab[data-market='design']) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8dab6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg opacity='0.11'%3E%3Cpath d='M7.5 4.5V20'/%3E%3Cpath d='M7.5 13.5H17'/%3E%3Cpath d='M17 13.5V20'/%3E%3Cpath d='M7.5 9h7'/%3E%3C/g%3E%3C/svg%3E"); }
+.root :global(.ray-market-tab[data-market='watches']) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8dab6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg opacity='0.11'%3E%3Ccircle cx='11.4' cy='12' r='7.3'/%3E%3Cpath d='M11.4 8.3V12l2.7 1.7'/%3E%3Cpath d='M19.9 10.4h1.4v3.2h-1.4'/%3E%3C/g%3E%3C/svg%3E"); }
+.root :global(.ray-market-tab[data-market='sports']) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8dab6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg opacity='0.11'%3E%3Cpath d='M7.5 4.5h9v4.8a4.5 4.5 0 0 1-9 0z'/%3E%3Cpath d='M7.5 6H5a3 3 0 0 0 3 3.4'/%3E%3Cpath d='M16.5 6H19a3 3 0 0 1-3 3.4'/%3E%3Cpath d='M12 13.8v3.4'/%3E%3Cpath d='M8.5 19.5h7'/%3E%3C/g%3E%3C/svg%3E"); }
+.root :global(.ray-market-tab[data-market='science']) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8dab6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg opacity='0.11'%3E%3Cpath d='M10 4.5v4.2l-4.2 7.9a1.9 1.9 0 0 0 1.7 2.9h9a1.9 1.9 0 0 0 1.7-2.9L14 8.7V4.5'/%3E%3Cpath d='M8.8 4.5h6.4'/%3E%3Cpath d='M7.9 13.2h8.2'/%3E%3C/g%3E%3C/svg%3E"); }
+.root :global(.ray-market-tab[data-market='culture']) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8dab6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg opacity='0.11'%3E%3Cpath d='M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.57L12 16.4l-5.01 2.63.96-5.57L3.9 9.5l5.6-.8z'/%3E%3C/g%3E%3C/svg%3E"); }
+/* keep the pill's real content above its ghost */
+.root :global(.ray-market-tab) > * { position: relative; z-index: 1; }
