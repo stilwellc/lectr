@@ -84,6 +84,28 @@ export interface MarketData {
   /** per-maker hedonic index — the statistically-defensible price-movement read.
       A horizon publishes ONLY when its CI resolves the sign (else abstains). */
   makerIndex?: Record<string, MakerIndexResult>;
+  /** sub-market tracking: per vertical, each tracked slug with the STRONGEST
+      honest read its data supports — a verified CI'd index where it's a real
+      maker, else measured demand, else descriptive (typical/record/volume).
+      Keyed by vertical market key ('science' → its sub-markets). */
+  subMarkets?: Record<string, SubMarketRead[]>;
+}
+export interface SubMarketRead {
+  slug: string;
+  label: string;
+  vertical: string;                 // the parent vertical market key
+  readType: 'index' | 'demand' | 'descriptive';
+  /** readType 'index': the verified hedonic move (longest resolving horizon) */
+  index: { horizon: string; changePct: number; ciLoPct: number; ciHiPct: number } | null;
+  /** readType 'demand': measured %-over-estimate */
+  demandNow: number | null;
+  demandSeries: { period: string; value: number; n: number }[];
+  /** always-available descriptive layer */
+  typicalUsd: number | null;        // median price, last 12 months
+  record: { usd: number; title: string; date: string | null; house: string | null } | null;
+  lots: number;                     // volume tracked
+  sellThroughPct: number | null;
+  estCoverage: number;              // 0..1 — fraction of lots carrying estimates
 }
 export interface HedonicHorizon {
   changePct: number | null;
