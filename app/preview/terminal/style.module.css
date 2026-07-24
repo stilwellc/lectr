@@ -190,6 +190,15 @@
 .heroDelta[data-dir='up'] { color: var(--color-up); }
 .heroDelta[data-dir='down'] { color: var(--color-down); }
 
+.heroExplain {
+  display: block;
+  margin-top: 14px;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
+}
 .heroThesis {
   font-family: var(--font-serif-display), serif;
   font-size: clamp(19px, 1.9vw, 26px);

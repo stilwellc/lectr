@@ -78,14 +78,10 @@ export default function MarketChart({ data, play, height = 260, compact = false 
             interval={compact ? Math.max(1, Math.floor(rows.length / 3)) : Math.max(1, Math.floor(rows.length / 6))}
             minTickGap={16}
           />
-          <YAxis
-            domain={[Math.floor(min - pad), Math.ceil(max + pad)]}
-            width={compact ? 26 : 34}
-            tick={{ fontSize: 9.5, fill: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data)' }}
-            tickLine={false}
-            axisLine={false}
-            tickCount={compact ? 3 : 5}
-          />
+          {/* y-axis drives the scale but renders NO numbers — an abstract index
+              level on the axis ("127") just confuses; the shape + the % deltas
+              tell the story. */}
+          <YAxis domain={[Math.floor(min - pad), Math.ceil(max + pad)]} hide />
           <Tooltip
             content={<TerminalTooltip />}
             cursor={{ stroke: 'var(--tt-butter)', strokeOpacity: 0.3, strokeWidth: 1 }}

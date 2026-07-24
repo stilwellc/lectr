@@ -68,8 +68,8 @@ function useHeroSeries(
         : null;
       return {
         idx,
-        kicker: `lectr market index · ${activeKey === 'all' ? 'total collectibles' : series.label.toLowerCase()}`,
-        chartTag: 'rebased 100 · smoothed',
+        kicker: activeKey === 'all' ? 'The collectibles market' : `The ${series.label.toLowerCase()} market`,
+        explain: '100 = its long-run average price',
         unit: 'index' as const,
         sellThrough: sell,
       };
@@ -79,8 +79,8 @@ function useHeroSeries(
       const idx: IndexPoint[] = demand.map((p) => ({ period: p.date.slice(0, 7), value: p.value, n: p.n }));
       return {
         idx,
-        kicker: `demand index · ${activeKey === 'all' ? 'total collectibles' : activeKey}`,
-        chartTag: 'sale vs estimate · trailing',
+        kicker: activeKey === 'all' ? 'The collectibles market' : `The ${activeKey} market`,
+        explain: 'how much lots beat their estimates',
         unit: 'demand' as const,
         sellThrough: null,
       };
@@ -91,13 +91,13 @@ function useHeroSeries(
       const idx: IndexPoint[] = rz.map((p) => ({ period: p.date.slice(0, 7), value: p.value, n: p.n }));
       return {
         idx,
-        kicker: `realized median · ${activeKey}`,
-        chartTag: 'like-for-like cohort · $ median',
+        kicker: `The ${activeKey} market`,
+        explain: 'typical price paid, last 12 months',
         unit: 'realized' as const,
         sellThrough: null,
       };
     }
-    return { idx: [] as IndexPoint[], kicker: `lectr market index · ${activeKey}`, chartTag: '', unit: 'index' as const, sellThrough: null };
+    return { idx: [] as IndexPoint[], kicker: `The ${activeKey} market`, explain: '', unit: 'index' as const, sellThrough: null };
   }, [activeKey, market, demand, realized]);
 }
 
@@ -149,7 +149,6 @@ export default function IndexHero({
           <m.div className={styles.mHeroCard} {...rise(0.04)}>
             <div className={styles.mHeroHead}>
               <span className={styles.mHeroLabel}>{hero.kicker}</span>
-              <span className={styles.mHeroLive}><i />live</span>
             </div>
             <div className={styles.mHeroNumRow}>
               <RollingNumber
@@ -172,12 +171,12 @@ export default function IndexHero({
             </div>
             <div className={styles.mHeroChart}>
               {hasChart ? (
-                <MarketChart data={hero.idx} play={play} height={172} />
+                <MarketChart data={hero.idx} play={play} height={172} compact />
               ) : (
                 <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dY >= 0 ? 'up' : 'down'} width={360} height={90} strokeWidth={1.8} />
               )}
             </div>
-            <div className={styles.mHeroTag}>{hero.chartTag}</div>
+            <div className={styles.mHeroTag}>lectr index · {hero.explain}</div>
           </m.div>
 
           <m.div className={styles.mHeroStats} {...rise(0.12)}>
@@ -238,14 +237,15 @@ export default function IndexHero({
               </span>
             </div>
           </div>
+          <span className={styles.heroExplain}>lectr index · {hero.explain}</span>
         </m.div>
 
         {/* CHART — the value prop, right under the number */}
         <m.div className={styles.heroChart} {...rise(0.12)}>
           <div className={styles.chartCard}>
             <div className={styles.chartCardHead}>
-              <span>{activeKey === 'all' ? 'Index · quarterly cohort' : `${marketLabel} · quarterly cohort`}</span>
-              <span className={styles.chartCardTag}>{hero.chartTag}</span>
+              <span>{marketLabel} · quarterly</span>
+              <span className={styles.chartCardTag}>{hero.explain}</span>
             </div>
             {hasChart ? (
               <MarketChart data={hero.idx} play={play} height={300} />
