@@ -52,11 +52,13 @@ export default function MarketChart({ data, play, height = 260, compact = false 
   const reduce = useReducedMotion();
   const rows = useMemo(() => data.map((d) => ({ ...d })), [data]);
 
-  // y-domain padded so the trend breathes; index is rebased to 100.
+  // y-domain auto-scales to the series so the line uses the chart's height.
+  // (This reads DEMAND / typical price now — not a rebased-100 index — so we no
+  // longer force 100 into range, which pinned the line to the bottom.)
   const vals = rows.map((r) => r.value);
-  const min = Math.min(...vals, 100);
-  const max = Math.max(...vals, 100);
-  const pad = Math.max(8, (max - min) * 0.14);
+  const min = vals.length ? Math.min(...vals) : 0;
+  const max = vals.length ? Math.max(...vals) : 100;
+  const pad = Math.max(2, (max - min) * 0.25);
 
   // DIRECTION — derived from this component's OWN data: last vs first, with a
   // small flat deadband so a negligible drift reads gray, not colored. Drives
