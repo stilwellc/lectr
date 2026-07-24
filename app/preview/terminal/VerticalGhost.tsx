@@ -86,28 +86,19 @@ function WatchesGhost() {
 }
 
 function SportsGhost() {
-  // half a baseball — the curved seam with stitch ticks
+  // a baseball — clean ball + one smooth seam + evenly-spaced stitch ticks
+  // (kept simple + orderly, same restraint as the clock, not a stitch scatter)
   return (
     <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <circle cx="118" cy="100" r="84" stroke="currentColor" strokeWidth="7" />
-      {/* seam arc */}
-      <path
-        id="seam"
-        d="M52 32 C86 70 86 130 52 168"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinecap="round"
-      />
-      {/* stitches straddling the seam */}
-      <g stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
-        <path d="M56 52 L74 44" />
-        <path d="M62 46 L44 54" />
-        <path d="M68 82 L86 76" />
-        <path d="M72 76 L54 84" />
-        <path d="M70 118 L88 124" />
-        <path d="M74 124 L56 116" />
-        <path d="M56 148 L74 156" />
-        <path d="M62 154 L44 146" />
+      <circle cx="102" cy="100" r="82" stroke="currentColor" strokeWidth="8" />
+      {/* one clean seam arc */}
+      <path d="M52 32 C94 72 94 128 52 168" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+      {/* neat, evenly-spaced stitches straddling the seam */}
+      <g stroke="currentColor" strokeWidth="3.6" strokeLinecap="round">
+        <path d="M60 54 l17 -3" />
+        <path d="M66 84 l17 -2" />
+        <path d="M66 116 l17 2" />
+        <path d="M60 146 l17 3" />
       </g>
     </svg>
   );

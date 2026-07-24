@@ -1674,9 +1674,9 @@ a.recordObj:focus-visible {
 .root :global(.ray-pill-ghost) {
   position: absolute;
   top: 50%;
-  right: -4%;
+  right: -2%;
   width: 52%;
-  height: 200%;
+  height: 158%;
   transform: translateY(-50%);
   z-index: -1;
   color: var(--tt-butter);
