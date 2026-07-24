@@ -57,10 +57,28 @@ export default function MarketChart({ data, play, height = 260, compact = false 
   const max = Math.max(...vals, 100);
   const pad = Math.max(8, (max - min) * 0.14);
 
+  // DIRECTION — derived from this component's OWN data: last vs first, with a
+  // small flat deadband so a negligible drift reads gray, not colored. Drives
+  // the colored drop-shadow glow beneath the plot (green up / red down / gray flat).
+  const dir = useMemo<'up' | 'down' | 'flat'>(() => {
+    if (vals.length < 2) return 'flat';
+    const first = vals[0];
+    const last = vals[vals.length - 1];
+    if (!first) return 'flat';
+    const pct = ((last - first) / Math.abs(first)) * 100;
+    const DEADBAND = 1.5; // ±1.5% reads flat
+    if (pct > DEADBAND) return 'up';
+    if (pct < -DEADBAND) return 'down';
+    return 'flat';
+  }, [vals]);
+
   const animate = play && !reduce;
 
   return (
-    <div className={styles.chartWrap} style={{ height }}>
+    <div className={styles.chartWrap} style={{ height }} data-dir={dir}>
+      {/* colored directional drop-shadow — a soft blurred glow the chart casts,
+          tinted by the series direction. Purely decorative, sits beneath the plot. */}
+      <div className={styles.chartGlow} data-dir={dir} aria-hidden />
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 8, right: 6, bottom: 4, left: 0 }}>
           <defs>

@@ -62,8 +62,24 @@ export default function Sparkline({
           <stop offset="0%" stopColor={color} stopOpacity="0.22" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
+        {/* soft directional glow — the line casts a faint colored shadow,
+            tinted by `dir` (up/down/flat). Decorative; matches the hero chart. */}
+        <filter id={`sgl-${gid}`} x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="2.4" />
+        </filter>
       </defs>
       <path d={area} fill={`url(#sg-${gid})`} stroke="none" />
+      {/* the glow: a blurred, low-opacity copy of the line beneath it */}
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth + 1.4}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity={0.28}
+        filter={`url(#sgl-${gid})`}
+      />
       <path
         d={line}
         fill="none"

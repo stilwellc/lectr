@@ -18,6 +18,7 @@ import { buildIdf, buildVectors, similarity, idf } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
 import { buildHedonicIndex, buildMakerIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
+import { buildSubMarkets } from './sub-markets';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -558,11 +559,30 @@ export function runMarketBuild() {
     } catch (e) { console.warn('[market] stats.json rows update failed:', (e as Error).message); }
   }
 
+  // ── 3g · sub-market reads: per vertical, each tracked slug with the STRONGEST
+  // honest read its data supports — a verified CI'd maker index, else measured
+  // demand (%-over-estimate), else descriptive (typical/record/volume). No
+  // fabricated appreciation: a descriptive slug carries no movement number.
+  // Reads the fresh stats.json (rewritten in 3f) for the descriptive layer, the
+  // full corpus for demand/coverage/sell-through, and makerIndex for 'index'.
+  let subMarkets: ReturnType<typeof buildSubMarkets> = {};
+  try {
+    const statsBySlug = JSON.parse(fs.readFileSync(path.join(SERVED, 'stats.json'), 'utf8'));
+    subMarkets = buildSubMarkets(all, statsBySlug, makerIndex);
+    const breakdown = Object.entries(subMarkets).map(([v, rows]) => {
+      const c = { index: 0, demand: 0, descriptive: 0 };
+      for (const r of rows) c[r.readType]++;
+      return `${v}[i${c.index} d${c.demand} x${c.descriptive}]`;
+    }).join(' ');
+    console.log(`[market] subMarkets: ${breakdown}`);
+  } catch (e) { console.warn('[market] subMarkets build failed:', (e as Error).message); }
+
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,
     hedonic,      // statistically-defensible hedonic price-change index (per market) + composite — see scripts/hedonic-index.ts
     makerIndex,   // per-maker hedonic index (bottom-up components of the market composites)
+    subMarkets,   // per-vertical sub-market reads (strongest honest read per slug) — see scripts/sub-markets.ts
     makers,
     houseCal,     // per house×market estimate honesty (hammer-led, n≥40 cells)
     seasonality,  // per market calendar-month performance (UI gates on n)

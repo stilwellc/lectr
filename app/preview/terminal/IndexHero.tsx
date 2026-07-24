@@ -8,8 +8,9 @@ import type { Market } from '../../constants';
 import RollingNumber from './RollingNumber';
 import MarketChart, { type IndexPoint } from './MarketChart';
 import Sparkline from './Sparkline';
-import { fmtDelta, fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
+import { fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
 import { verifiedMovers, fmtPct, type VerifiedMover } from './verified';
+import type { SubMarketRead } from '../../hooks/useRayData';
 import styles from './style.module.css';
 
 /* ============================================================
@@ -46,8 +47,11 @@ interface Props {
   onOpenBelow: () => void;
   /** wire the dead ⌘K to the real palette */
   onCommand: () => void;
-  /** the appreciation read, if the market has one */
+  /** the appreciation read, if the market has one — the yearly value trend
+      that the left tile cross-checks against demand */
   appreciation: number | null;
+  /** lots on the block right now in the scoped market */
+  onBlock: number;
   /** sell-through, when the scoped market series carries it */
   play: boolean;
   /** mobile gets its OWN hero composition — not the desktop scaled down */
@@ -103,6 +107,8 @@ export default function IndexHero({
   realized,
   totalLots,
   belowMkt,
+  appreciation,
+  onBlock,
   onOpenBelow,
   onCommand,
   play,
@@ -140,6 +146,16 @@ export default function IndexHero({
 
   const fmtHeadline = (n: number) => (isMoney ? fmtMoneyCompact(n) : fmtPct(n));
   const metricLabel = isMoney ? 'typical price' : 'demand';
+
+  // ── ROI × DEMAND cross-check (the left read-out). Demand is a RELATIVE beat
+  // (sold over estimate) — it can run hot while houses quietly cut estimates,
+  // so it's paired with the absolute value trend (annualized appreciation). When
+  // lots are beating ask (demand up) but typical values are falling YoY, the
+  // tile raises a flag: the heat is beating a softening bar, not real strength.
+  const roi = appreciation;
+  const roiDir: 'up' | 'down' | undefined = roi == null ? undefined : roi >= 0 ? 'up' : 'down';
+  const demandHot = hero.unit === 'demand' && headline > 0;
+  const roiFlag = demandHot && roi != null && roi < -1.5 ? 'beating soft estimates' : undefined;
 
   // the verified movers scoped to this market — the only defensible price moves
   const movers = useMemo(() => verifiedMovers(market, activeKey), [market, activeKey]);
@@ -193,13 +209,14 @@ export default function IndexHero({
           </m.div>
 
           <m.div className={styles.mHeroStats} {...rise(0.12)}>
-            <span className={styles.mStat}>
-              <span className={styles.mStatVal} data-dir={trendDir}>{fmtDelta(qMove)}</span>
-              <span className={styles.mStatLabel}>Last quarter</span>
+            <span className={styles.mStat} data-flag={roiFlag ? 'true' : undefined}>
+              <span className={styles.mStatVal} data-dir={roiDir}>{roi != null ? fmtPct(roi) : '—'}</span>
+              <span className={styles.mStatLabel}>Yearly ROI</span>
+              {roiFlag && <span className={styles.statFlag}>⚠ {roiFlag}</span>}
             </span>
             <span className={styles.mStat}>
-              <span className={styles.mStatVal}>{fmtInt(vals.length ? hero.idx[hero.idx.length - 1].n : 0)}</span>
-              <span className={styles.mStatLabel}>Lots read</span>
+              <span className={styles.mStatVal}>{fmtInt(onBlock)}</span>
+              <span className={styles.mStatLabel}>On the block</span>
             </span>
             {belowMkt ? (
               <button type="button" className={styles.mStat} data-accent="true" onClick={onOpenBelow} aria-label={`${belowMkt} below-market lots — see them`}>
@@ -214,7 +231,7 @@ export default function IndexHero({
             )}
           </m.div>
 
-          <VerifiedStrip movers={movers} activeKey={activeKey} compact />
+          <VerifiedStrip movers={movers} activeKey={activeKey} market={market} compact />
 
           <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
             <kbd className={styles.kbd}>⌘K</kbd>
@@ -278,11 +295,8 @@ export default function IndexHero({
         {/* META — read-outs + verified movers + ⌘K */}
         <m.div className={styles.heroMeta} {...rise(0.18)}>
           <div className={styles.heroStats}>
-            <Stat label="Last quarter" value={fmtDelta(qMove)} dir={trendDir} />
-            <Stat
-              label="Lots read"
-              value={fmtInt(vals.length ? hero.idx[hero.idx.length - 1].n : 0)}
-            />
+            <Stat label="Yearly ROI" value={roi != null ? fmtPct(roi) : '—'} dir={roiDir} flag={roiFlag} />
+            <Stat label="On the block" value={fmtInt(onBlock)} />
             <Stat
               label="Below-market now"
               value={belowMkt ? fmtInt(belowMkt) : '—'}
@@ -290,7 +304,7 @@ export default function IndexHero({
               onClick={belowMkt ? onOpenBelow : undefined}
             />
           </div>
-          <VerifiedStrip movers={movers} activeKey={activeKey} />
+          <VerifiedStrip movers={movers} activeKey={activeKey} market={market} />
           <button type="button" className={styles.cmdPill} onClick={onCommand}>
             <kbd className={styles.kbd}>⌘</kbd>
             <kbd className={styles.kbd}>K</kbd>
@@ -304,43 +318,92 @@ export default function IndexHero({
 }
 
 /* The verified movers — the only price-movement reads that clear the 95%
-   confidence bar. Where a market has none yet, we say so plainly rather than
-   dress up a number the engine won't back. */
-function VerifiedStrip({ movers, activeKey, compact }: { movers: VerifiedMover[]; activeKey: Market; compact?: boolean }) {
-  if (!movers.length) {
+   confidence bar. Where a market has NO verified index maker, we fall back to
+   that vertical's tracked sub-markets (demand / descriptive) so every hero
+   carries real depth — never a bare empty line, and never a fabricated %. */
+function VerifiedStrip({ movers, activeKey, market, compact }: { movers: VerifiedMover[]; activeKey: Market; market: MarketData | null; compact?: boolean }) {
+  if (movers.length) {
     return (
-      <div className={styles.verifiedEmpty}>
-        <span className={styles.verifiedEmptyDot} aria-hidden />
-        No maker in {activeKey === 'all' ? 'the market' : `${activeKey}`} clears the 95%-confidence bar yet — we only print a move the data resolves.
+      <div className={styles.verifiedStrip}>
+        <div className={styles.verifiedHead}>
+          <span>Verified movers</span>
+          <span>price movement · 95% confidence</span>
+        </div>
+        <div className={styles.verifiedRows}>
+          {movers.slice(0, compact ? 3 : 5).map((mv) => (
+            <div key={mv.slug} className={styles.verifiedRow} data-dir={mv.dir}>
+              <span className={styles.verifiedName}>{mv.label}</span>
+              <span className={styles.verifiedChg} data-dir={mv.dir}>
+                {fmtPct(mv.changePct)} <em>{mv.horizon}</em>
+              </span>
+              <span className={styles.verifiedCi}>[{mv.ciLoPct.toFixed(0)}, {mv.ciHiPct.toFixed(0)}]</span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
+
+  // no CI'd maker — surface this vertical's sub-market reads instead of the bare line
+  const subs = activeKey === 'all' ? [] : (market?.subMarkets?.[activeKey] || []);
+  if (subs.length) return <SubMarketStrip subs={subs} compact={compact} />;
+
+  return (
+    <div className={styles.verifiedEmpty}>
+      <span className={styles.verifiedEmptyDot} aria-hidden />
+      No maker in {activeKey === 'all' ? 'the market' : `${activeKey}`} clears the 95%-confidence bar yet — we only print a move the data resolves.
+    </div>
+  );
+}
+
+/* The sub-market depth line for a hero with no verified maker — the strongest
+   honest read per sub-market (demand %-over-est or the descriptive typical/
+   record), ranked demand-first. Compact by design. */
+function SubMarketStrip({ subs, compact }: { subs: SubMarketRead[]; compact?: boolean }) {
+  const rank = { index: 0, demand: 1, descriptive: 2 } as const;
+  const ordered = [...subs].sort((a, b) => {
+    if (rank[a.readType] !== rank[b.readType]) return rank[a.readType] - rank[b.readType];
+    if (a.readType === 'demand') return (b.demandNow ?? -Infinity) - (a.demandNow ?? -Infinity);
+    return b.lots - a.lots;
+  });
+  const rows = ordered.slice(0, compact ? 3 : 3);
+  const line = (r: SubMarketRead): { main: string; dir?: 'up' | 'down'; sub: string } => {
+    if (r.readType === 'index' && r.index) {
+      return { main: fmtPct(r.index.changePct), dir: r.index.changePct >= 0 ? 'up' : 'down', sub: `[${r.index.ciLoPct.toFixed(0)}, ${r.index.ciHiPct.toFixed(0)}]` };
+    }
+    if (r.readType === 'demand' && r.demandNow != null) {
+      return { main: `demand ${fmtPct(r.demandNow)}`, dir: r.demandNow >= 0 ? 'up' : 'down', sub: r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : (r.record ? fmtMoneyCompact(r.record.usd) : `${r.lots} lots`) };
+    }
+    return { main: r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : '—', sub: r.record ? `rec ${fmtMoneyCompact(r.record.usd)}` : `${r.lots} lots` };
+  };
   return (
     <div className={styles.verifiedStrip}>
       <div className={styles.verifiedHead}>
-        <span>Verified movers</span>
-        <span>price movement · 95% confidence</span>
+        <span>Sub-markets</span>
+        <span>strongest honest read</span>
       </div>
       <div className={styles.verifiedRows}>
-        {movers.slice(0, compact ? 3 : 5).map((mv) => (
-          <div key={mv.slug} className={styles.verifiedRow} data-dir={mv.dir}>
-            <span className={styles.verifiedName}>{mv.label}</span>
-            <span className={styles.verifiedChg} data-dir={mv.dir}>
-              {fmtPct(mv.changePct)} <em>{mv.horizon}</em>
-            </span>
-            <span className={styles.verifiedCi}>[{mv.ciLoPct.toFixed(0)}, {mv.ciHiPct.toFixed(0)}]</span>
-          </div>
-        ))}
+        {rows.map((r) => {
+          const l = line(r);
+          return (
+            <div key={r.slug} className={styles.verifiedRow} data-dir={l.dir}>
+              <span className={styles.verifiedName}>{r.label}</span>
+              <span className={styles.verifiedChg} data-dir={l.dir}>{l.main}</span>
+              <span className={styles.verifiedCi}>{l.sub}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, accent, dir, onClick }: { label: string; value: string; accent?: boolean; dir?: 'up' | 'down'; onClick?: () => void }) {
+function Stat({ label, value, accent, dir, flag, onClick }: { label: string; value: string; accent?: boolean; dir?: 'up' | 'down'; flag?: string; onClick?: () => void }) {
   const content = (
     <>
       <span className={styles.statVal} data-dir={dir}>{value}</span>
       <span className={styles.statLabel}>{label}</span>
+      {flag && <span className={styles.statFlag}>⚠ {flag}</span>}
     </>
   );
   if (onClick) {

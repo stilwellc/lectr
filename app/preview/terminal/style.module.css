@@ -1196,6 +1196,148 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .tapeTrack { animation: none; transform: none; }
 }
 
+/* ── sub-market board: vertical → sub-markets, three honest read grammars ──
+   Mirrors the verified-movers table but carries a readType tag + a support
+   column (CI for an index, typical/record for demand/descriptive). */
+.subTable {
+  border-top: 1px solid var(--tt-hair-2);
+}
+.subColHead,
+.subRow {
+  display: grid;
+  grid-template-columns: 1.5fr 0.7fr 1.15fr 1.15fr 0.55fr;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px;
+}
+.subColHead {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--tt-hair);
+  font-family: var(--font-mono-data), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
+}
+.subRow {
+  height: 52px;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--tt-hair);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-mono-data), monospace;
+  transition: background 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.subRow:hover { background: rgba(232, 218, 182, 0.03); }
+.subRow:focus-visible {
+  outline: 2px solid rgba(232, 218, 182, 0.6);
+  outline-offset: -2px;
+}
+.subRow[data-active='true'] { background: rgba(232, 218, 182, 0.06); }
+.subRow[data-active='true'] .moversName { color: var(--tt-butter); }
+
+/* the readType pill — visually distinct per grammar so nothing reads as a return */
+.subTag {
+  justify-self: start;
+  display: inline-block;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--tt-hair-2);
+  color: var(--tt-faint);
+  white-space: nowrap;
+}
+.subTag[data-type='index'] {
+  color: var(--tt-butter);
+  border-color: rgba(232, 218, 182, 0.4);
+  background: rgba(232, 218, 182, 0.06);
+}
+.subTag[data-type='demand'] {
+  color: var(--color-up);
+  border-color: color-mix(in srgb, var(--color-up) 40%, transparent);
+  background: color-mix(in srgb, var(--color-up) 8%, transparent);
+}
+.subTag[data-type='descriptive'] {
+  color: var(--tt-muted);
+}
+.subSupport {
+  text-align: right;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 12px;
+  color: var(--tt-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subMeta {
+  margin-top: 8px;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10.5px;
+  color: var(--tt-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* mobile card list — one column, the movers card grammar */
+.mobSubList {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.mobSubCard {
+  border: 1px solid var(--tt-hair-2);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--tt-panel), rgba(20, 17, 13, 0.3));
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.mobSubCard:focus-visible {
+  outline: 2px solid rgba(232, 218, 182, 0.6);
+  outline-offset: 2px;
+}
+.mobSubCard[data-active='true'] {
+  border-color: var(--tt-butter);
+  background: linear-gradient(180deg, rgba(232, 218, 182, 0.08), rgba(20, 17, 13, 0.3));
+}
+.mobSubTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.mobSubName {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tt-fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobSubBot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* ══════════════════════════════════════════════════════════════
    REUSED-BAND DARK SKIN — scoped to .terminal-shell only.
    These are GLOBAL components (app/components/*) shared by the real
@@ -1426,4 +1568,101 @@ a.recordObj:focus-visible {
   font-size: 12px;
   line-height: 1.6;
   color: var(--tt-muted);
+}
+
+/* ── ghost logos + chart glow ── */
+
+/* --- TASK 1: colored directional drop-shadow under the charts --- */
+/* The chart content must sit above the glow. chartWrap already sizes the plot;
+   we make it a positioning + stacking context so the absolute glow tucks behind. */
+.chartWrap {
+  position: relative;
+  isolation: isolate;
+}
+.chartWrap > :not(.chartGlow) {
+  position: relative;
+  z-index: 1;
+}
+.chartGlow {
+  position: absolute;
+  z-index: 0;
+  /* sit under the plot body, biased toward the bottom so it reads as a cast shadow */
+  left: 8%;
+  right: 8%;
+  bottom: 4%;
+  top: 34%;
+  border-radius: 50%;
+  filter: blur(34px);
+  opacity: 0;
+  transition: opacity 600ms ease, background 600ms ease;
+  pointer-events: none;
+}
+/* explicit greens/reds (not var(--color-up), which can resolve empty under some
+   theme scopes) so the cast shadow always reads its direction. */
+.chartGlow[data-dir='up'] {
+  background: radial-gradient(58% 100% at 50% 100%, #57be87 0%, rgba(87, 190, 135, 0) 70%);
+  opacity: 0.24;
+}
+.chartGlow[data-dir='down'] {
+  background: radial-gradient(58% 100% at 50% 100%, #cc6a5c 0%, rgba(204, 106, 92, 0) 70%);
+  opacity: 0.24;
+}
+.chartGlow[data-dir='flat'] {
+  background: radial-gradient(58% 100% at 50% 100%, #9a8f7d 0%, rgba(154, 143, 125, 0) 70%);
+  opacity: 0.15;
+}
+
+/* --- TASK 2: faint per-vertical ghost logo, right edge only --- */
+.ghost {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1; /* above bgField/grain (z:0), below deskShell content (z:2) */
+  width: 46%;
+  max-width: 560px;
+  height: clamp(360px, 62vh, 620px);
+  pointer-events: none;
+  overflow: hidden; /* clip the bleed cleanly at the viewport's right edge */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.ghost svg {
+  /* oversize + shove right so the illustration bleeds off the edge gracefully */
+  width: 118%;
+  height: auto;
+  max-height: 100%;
+  transform: translateX(14%);
+  color: var(--tt-butter);
+  opacity: 0.06;
+}
+/* a touch dimmer for the busier glyphs so nothing reads as a stamp */
+.ghost[data-market='sports'] svg,
+.ghost[data-market='culture'] svg {
+  opacity: 0.055;
+}
+
+/* Mobile — dial the ghost WAY back and lift it clear of the hero number so it
+   never crowds content; hide entirely on the narrowest screens. */
+@media (max-width: 900px) {
+  .ghost {
+    width: 52%;
+    height: clamp(240px, 40vh, 380px);
+  }
+  .ghost svg { opacity: 0.045; }
+}
+@media (max-width: 600px) {
+  .ghost { display: none; }
+}
+
+/* ── ROI × demand divergence flag on the hero stat tile ── */
+.statFlag {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d8a24a;
+  margin-top: 4px;
+  line-height: 1.25;
+  max-width: 18ch;
 }
