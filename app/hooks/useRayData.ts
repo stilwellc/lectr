@@ -81,6 +81,25 @@ export interface MarketData {
   /** per market calendar-month performance; cells with n<30 carry zeros and are UI-gated */
   seasonality?: Record<string, { n: number; hammerMedPct: number; allInMedPct: number; sellThroughPct: number | null }[]>;
   calibration: { directional: { method: string; buckets: [string, number][] }; valueError: Record<string, number> };
+  /** per-maker hedonic index — the statistically-defensible price-movement read.
+      A horizon publishes ONLY when its CI resolves the sign (else abstains). */
+  makerIndex?: Record<string, MakerIndexResult>;
+}
+export interface HedonicHorizon {
+  changePct: number | null;
+  ciLoPct: number | null;
+  ciHiPct: number | null;
+  nStart: number;
+  nEnd: number;
+  publishable: boolean;
+  reason: string;
+}
+export interface MakerIndexResult {
+  series: { period: string; value: number; ciLo: number; ciHi: number; n: number }[];
+  horizons: Record<string, HedonicHorizon>;
+  lastCompleteQuarter: string;
+  coverageMakerLots: number;
+  note?: string;
 }
 export interface MarketSeriesJson {
   method: string; label: string; n: number;

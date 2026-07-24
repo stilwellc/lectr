@@ -527,7 +527,7 @@
 .moversColHead,
 .moversRow {
   display: grid;
-  grid-template-columns: 1.4fr 0.7fr 0.8fr 1fr 0.9fr;
+  grid-template-columns: 1.3fr 0.95fr 0.85fr 1fr 0.7fr;
   align-items: center;
   gap: 12px;
   padding: 0 4px;
@@ -1297,3 +1297,114 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    glyph default (0.62) so the little illustrations read cleanly on the
    dark row, while staying secondary to the label */
 .root :global(.ray-pill-emblem) { opacity: 0.78; }
+
+/* ── honest pricing: demand headline + verified movers ────────────────── */
+
+/* the headline is a LEVEL (demand / typical price), not a gain — read it in
+   high-contrast cream, never green/red, so it never implies a return */
+.roiNeutral { color: var(--tt-fg); }
+
+.heroExplainLine {
+  margin-top: 6px;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--tt-muted);
+}
+
+/* the Last-quarter momentum stat still tints by direction */
+.statVal[data-dir='up'] { color: var(--color-up); }
+.statVal[data-dir='down'] { color: var(--color-down); }
+
+/* verified-movers strip (in the hero meta column) */
+.verifiedStrip {
+  margin: 4px 0 2px;
+  border-top: 1px solid var(--tt-hair);
+  padding-top: 12px;
+}
+.verifiedHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
+  margin-bottom: 8px;
+}
+.verifiedHead span:first-child { color: var(--tt-butter); font-weight: 700; }
+.verifiedRows { display: flex; flex-direction: column; gap: 2px; }
+.verifiedRow {
+  display: grid;
+  grid-template-columns: 1.3fr 0.95fr 0.85fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--tt-hair);
+  font-family: var(--font-mono-data), monospace;
+}
+.verifiedRow:last-child { border-bottom: none; }
+.verifiedName {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tt-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.verifiedChg {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tt-muted);
+}
+.verifiedChg[data-dir='up'] { color: var(--color-up); }
+.verifiedChg[data-dir='down'] { color: var(--color-down); }
+.verifiedChg em { font-style: normal; font-size: 10px; color: var(--tt-faint); margin-left: 3px; }
+.verifiedCi {
+  text-align: right;
+  font-size: 11px;
+  color: var(--tt-faint);
+}
+.verifiedEmpty {
+  margin: 6px 0 2px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-top: 1px solid var(--tt-hair);
+  padding-top: 12px;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--tt-muted);
+}
+.verifiedEmptyDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 5px;
+  background: var(--tt-faint);
+}
+
+/* movers board: verified-maker additions */
+.moversCi {
+  text-align: right;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 12px;
+  color: var(--tt-faint);
+}
+.moversDelta em { font-style: normal; font-size: 10px; color: var(--tt-faint); margin-left: 4px; }
+.moversEmpty {
+  margin: 8px 0 4px;
+  padding: 20px;
+  border: 1px solid var(--tt-hair-2);
+  border-radius: 14px;
+  background: rgba(232, 218, 182, 0.02);
+  font-family: var(--font-mono-data), monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tt-muted);
+}

@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.110.5",
     "autoprefixer": "^10.4.17",
     "framer-motion": "^12.42.2",
+    "ml-matrix": "^6.14.0",
     "next": "14.1.0",
     "postcss": "^8.4.35",
     "react": "^18.2.0",

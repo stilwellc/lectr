@@ -17,6 +17,7 @@ import type { AuctionLot } from '../app/types';
 import { buildIdf, buildVectors, similarity, idf } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
+import { buildHedonicIndex, buildMakerIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -239,20 +240,64 @@ export function runMarketBuild() {
   // vertical's volume/depth/index reflect the ~300k card market, and card lots
   // count in every dashboard — while cards still carry no per-lot value/comps.
   const markets: Record<string, MarketSeries> = {};
+  // hedonic = the statistically-defensible replacement index (added ALONGSIDE
+  // the legacy cohort index, which other code still reads). Log-price hedonic
+  // regression with robust IRLS + honest gating. See scripts/hedonic-index.ts.
+  const hedonic: Record<string, HedonicResult> = {};
+
+  // ── 3-hedonic-a · per-MAKER hedonic index (bottom-up components) ──
+  // One hedonic per roster maker over THAT maker's lots (maker dummy dropped;
+  // within-maker drivers refModel/form/size/year/house carry the mix). Engine-
+  // excluded verticals (sports-cards, sothebys-algolia backfill) never enter a
+  // component index — they can't be held like-for-like. These are the building
+  // blocks the market composites are assembled from.
+  const HEDONIC_EXCLUDE = (l: AuctionLot) => l.artist === 'sports-cards'
+    || (l as AuctionLot & { source?: string }).source === 'sothebys-algolia';
+  const rosterSlugs = Array.from(new Set(Object.values(MARKETS).flat()));
+  const makerIndex: Record<string, MakerIndexResult> = {};
+  const makerRealized: Record<string, number> = {};
+  const makerLotsBySlug = new Map<string, AuctionLot[]>();
+  for (const slug of rosterSlugs) {
+    const ls = all.filter(l => l.artist === slug && !HEDONIC_EXCLUDE(l));
+    makerLotsBySlug.set(slug, ls);
+    makerIndex[slug] = buildMakerIndex(ls);
+    makerRealized[slug] = ls.reduce((s, l) => s + (l.status === 'sold' ? (l.realizedUsd || 0) : 0), 0);
+    const h1 = makerIndex[slug].horizons['1Y'];
+    const anyPub = Object.values(makerIndex[slug].horizons).some(h => h.publishable);
+    if (anyPub) console.log(`[market] maker ${slug.padEnd(18)} lastComplete=${makerIndex[slug].lastCompleteQuarter} 1Y=${h1.publishable ? `${h1.changePct!.toFixed(1)}% [${h1.ciLoPct!.toFixed(1)},${h1.ciHiPct!.toFixed(1)}]` : `(3Y/5Y only)`} cov=${makerIndex[slug].coverageMakerLots}`);
+  }
+  console.log(`[market] maker indices: ${Object.keys(makerIndex).length} built, ${Object.values(makerIndex).filter(mi => Object.values(mi.horizons).some(h => h.publishable)).length} with ≥1 publishable horizon`);
+
+  // helper: build a market's composite from its component maker indices
+  const compositeFor = (slugs: string[]): CompositeInput[] =>
+    slugs.map(slug => ({ slug, index: makerIndex[slug], realized: makerRealized[slug] || 0 }));
+
   for (const m in MARKETS) {
     const set = new Set(MARKETS[m]);
     const mLots = all.filter(l => set.has(l.artist));
     markets[m] = buildMarketSeries(mLots, m);
     markets[m].analytics = marketAnalytics(mLots);
+    hedonic[m] = buildHedonicIndex(mLots);
+    hedonic[m].composite = buildComposite(compositeFor(MARKETS[m]), MARKETS[m].length);
     const idxLen = markets[m].index.length;
+    const h1 = hedonic[m].horizons['1Y'];
+    const cmp = hedonic[m].composite!;
     console.log(`[market] ${m.padEnd(8)} index ${idxLen}pts · sellThrough ${markets[m].sellThrough.length}pts · houseAcc ${markets[m].houseAccuracy.length}pts · n${markets[m].n}`);
+    console.log(`[market] ${m.padEnd(8)} hedonic: lastComplete=${hedonic[m].lastCompleteQuarter} 1Y=${h1.publishable ? `${h1.changePct!.toFixed(1)}% [${h1.ciLoPct!.toFixed(1)},${h1.ciHiPct!.toFixed(1)}] n${h1.nStart}/${h1.nEnd}` : `NOT-PUB (${h1.reason})`}`);
+    console.log(`[market] ${m.padEnd(8)} composite: pub=${cmp.publishable} components=${cmp.components.filter(c => c.publishable).length} 1Y=${cmp.horizons['1Y'].publishable ? `${cmp.horizons['1Y'].changePct!.toFixed(1)}% [${cmp.horizons['1Y'].ciLoPct!.toFixed(1)},${cmp.horizons['1Y'].ciHiPct!.toFixed(1)}]` : `NOT-PUB (${cmp.reason || cmp.horizons['1Y'].reason})`}`);
   }
   // the aggregate 'all' market — every tracked maker/slug
-  const allSlugs = new Set(Object.values(MARKETS).flat());
+  const allSlugs = new Set(rosterSlugs);
   const allMarketLots = all.filter(l => allSlugs.has(l.artist));
   markets.all = buildMarketSeries(allMarketLots, 'the market');
   markets.all.analytics = marketAnalytics(allMarketLots);
+  hedonic.all = buildHedonicIndex(allMarketLots);
+  hedonic.all.composite = buildComposite(compositeFor(rosterSlugs), rosterSlugs.length);
+  const hAll1 = hedonic.all.horizons['1Y'];
+  const cmpAll = hedonic.all.composite!;
   console.log(`[market] all      index ${markets.all.index.length}pts · n${markets.all.n}`);
+  console.log(`[market] all      hedonic: lastComplete=${hedonic.all.lastCompleteQuarter} 1Y=${hAll1.publishable ? `${hAll1.changePct!.toFixed(1)}%` : `NOT-PUB (${hAll1.reason})`}`);
+  console.log(`[market] all      composite: pub=${cmpAll.publishable} components=${cmpAll.components.filter(c => c.publishable).length} 1Y=${cmpAll.horizons['1Y'].publishable ? `${cmpAll.horizons['1Y'].changePct!.toFixed(1)}% [${cmpAll.horizons['1Y'].ciLoPct!.toFixed(1)},${cmpAll.horizons['1Y'].ciHiPct!.toFixed(1)}]` : `NOT-PUB (${cmpAll.reason || cmpAll.horizons['1Y'].reason})`}`);
 
   // per-maker mini-series for the big names (drill-down)
   const makers: Record<string, MarketSeries> = {};
@@ -516,6 +561,8 @@ export function runMarketBuild() {
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,
+    hedonic,      // statistically-defensible hedonic price-change index (per market) + composite — see scripts/hedonic-index.ts
+    makerIndex,   // per-maker hedonic index (bottom-up components of the market composites)
     makers,
     houseCal,     // per house×market estimate honesty (hammer-led, n≥40 cells)
     seasonality,  // per market calendar-month performance (UI gates on n)
