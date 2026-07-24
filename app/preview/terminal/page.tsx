@@ -49,6 +49,7 @@ import Tape from './Tape';
 import RecordBoard from './RecordBoard';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
+import { CardEmblem } from './emblems';
 
 // W13 contract: useSavedLots grows a savedMeta record (hook agent's edit).
 type SavedMeta = Record<string, { savedAt: string; estMid: number | null; signalPct: number | null; bidCount: number | null }>;
@@ -547,7 +548,7 @@ export default function TerminalHomePage() {
 
       {/* the 7-market switch — re-scopes the WHOLE page in place */}
       <div className="rail" style={{ paddingTop: 14, position: 'relative', zIndex: 3 }}>
-        <MarketSwitch compact lit open={!fromCache} />
+        <MarketSwitch compact lit open={!fromCache} emblems />
       </div>
 
       {error ? (
@@ -626,12 +627,15 @@ export default function TerminalHomePage() {
             )}
 
             {/* ══ THE LEDGER — the market in four figures; flagged IS the lens ══ */}
-            <div className="ray-band" style={{ marginTop: 40, paddingBlock: '22px 18px', borderRadius: 14 }}>
+            <div className={`ray-band ${styles.ledgerBand}`} style={{ marginTop: 40, paddingBlock: '22px 18px', borderRadius: 14 }}>
               <div style={{ padding: '0 clamp(18px, 3vw, 30px)' }}>
                 <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
                 <div style={{ borderTop: '1px solid var(--paper-line)', marginBottom: 10 }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 10 }}>
-                  <span>The ledger</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 10 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <CardEmblem kind="ledger" />
+                    The ledger
+                  </span>
                   <span style={{ color: 'var(--paper-muted)', fontWeight: 600 }}>{marketName}</span>
                 </div>
                 <div className="ray-ledger" style={{ margin: 0 }}>
@@ -941,7 +945,7 @@ export default function TerminalHomePage() {
                 </div>
               )
             ) : sold.length > 0 && (activeKey === 'all' ? (
-              <div className={styles.recordBandWrap}>
+              <div className={`${styles.recordBandWrap} ${styles.recordEmblem}`}>
                 <SettlementSlip
                   marketName={marketName}
                   serial={editionSerial}
@@ -962,7 +966,7 @@ export default function TerminalHomePage() {
                 )}
               </div>
             ) : (
-              <div className={`ray-recordband ${styles.recordBandWrap}`}>
+              <div className={`ray-recordband ${styles.recordBandWrap} ${styles.recordEmblem}`}>
                 <div className="rail">
                   <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
                 </div>

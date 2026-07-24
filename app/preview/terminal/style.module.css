@@ -1255,3 +1255,45 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .root :global(.ray-upcoming-grid):has(> :global(.ray-feed-rekey):has(:global(.ray-lot-card):not(:global(.ray-card-compact)))) {
   align-items: start;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   CATEGORY / CARD EMBLEMS — Terminal-only.
+   The barometer certificate already carries a small drawn gauge in its
+   block; give the OTHER two beige certificates the same treatment — one
+   crisp jeweler's line-emblem tucked in a top corner, related to the
+   card's content. Ink at reduced opacity so it reads as an accent that
+   never competes with the numerals. Authored as inline SVG data-URIs
+   (static-export safe, no deps). Scoped under .root — the shared global
+   band components are untouched everywhere else.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* THE LEDGER emblem is injected inline in the eyebrow (see page.tsx /
+   CardEmblem) so it sits robustly beside the label at every breakpoint.
+
+   THE SETTLEMENT (record band) is the shared global SettlementSlip — we
+   can't inject into its eyebrow, so its medal emblem is placed by the
+   Terminal-scoped wrapper: the medallion tucks into the eyebrow row's
+   empty middle-left gutter, just after "THE SETTLEMENT", clear of the
+   top rules and the right-hand market label. */
+.recordEmblem :global(.ray-band) > :global(.rail),
+.recordEmblem :global(.ray-recordband) {
+  position: relative;
+}
+.recordEmblem :global(.ray-band) > :global(.rail)::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: calc(clamp(18px, 4vw, 40px) + 132px);
+  width: 20px;
+  height: 20px;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1;
+  background: center/contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='%231C1712' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M26 34l-5 20 11-6 11 6-5-20'/%3E%3Ccircle cx='32' cy='24' r='16'/%3E%3Ccircle cx='32' cy='24' r='10.5'/%3E%3Cpath d='M32 18l1.7 3.6 3.9.5-2.9 2.7.8 3.9L32 26.9l-3.5 1.7.8-3.9-2.9-2.7 3.9-.5z'/%3E%3C/svg%3E");
+}
+
+/* the richer Terminal pill emblems sit a touch brighter than the plain
+   glyph default (0.62) so the little illustrations read cleanly on the
+   dark row, while staying secondary to the label */
+.root :global(.ray-pill-emblem) { opacity: 0.78; }

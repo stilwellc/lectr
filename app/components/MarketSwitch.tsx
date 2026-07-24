@@ -6,6 +6,7 @@ import { MARKETS } from '../constants';
 import { useMarket } from '../lib/market';
 import { formatDemand, DemandPoint } from '../lib/demand';
 import MarketIcon from './MarketIcon';
+import TerminalEmblem from '../preview/terminal/emblems';
 import Flick from './Flick';
 
 /**
@@ -47,6 +48,7 @@ export default function MarketSwitch({
   lit = false,
   demand,
   open = false,
+  emblems = false,
 }: {
   compact?: boolean;
   /** the active pill wears the view's single lit treatment — ONLY pass true
@@ -61,6 +63,11 @@ export default function MarketSwitch({
       lit). Session-gated (lectr-marketopen) so it never wears thin on revisits;
       reduced-motion / cached readers get the settled row at once. */
   open?: boolean;
+  /** TERMINAL-ONLY: swap the plain MarketIcon glyph for the richer
+      TerminalEmblem line-illustrations (a framed painting, a chair, a
+      wristwatch…). Opt-in so /home and the other inner pages keep the
+      original glyph — only the Terminal passes this. */
+  emblems?: boolean;
 }) {
   const { market, setMarket } = useMarket();
 
@@ -102,7 +109,9 @@ export default function MarketSwitch({
             style={ripple ? ({ '--ripple-i': i } as CSSProperties) : undefined}
             onClick={() => setMarket(m.key)}
           >
-            <span className="ray-pill-obj" aria-hidden="true"><MarketIcon market={m.key} size={15} /></span>
+            <span className={`ray-pill-obj${emblems ? ' ray-pill-emblem' : ''}`} aria-hidden="true">
+              {emblems ? <TerminalEmblem market={m.key} size={15} /> : <MarketIcon market={m.key} size={15} />}
+            </span>
             {m.label}
             {!m.live && <span className="ray-market-soon">soon</span>}
           </button>
