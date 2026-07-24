@@ -547,7 +547,7 @@ export default function TerminalHomePage() {
 
       {/* the 7-market switch — re-scopes the WHOLE page in place */}
       <div className="rail" style={{ paddingTop: 14, position: 'relative', zIndex: 3 }}>
-        <MarketSwitch compact lit open={!fromCache} demand={demand} />
+        <MarketSwitch compact lit open={!fromCache} />
       </div>
 
       {error ? (
