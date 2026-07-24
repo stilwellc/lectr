@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint } from '../../types';
@@ -25,6 +25,8 @@ import styles from './style.module.css';
    ============================================================ */
 
 const EASE = [0.23, 1, 0.32, 1] as const;
+
+type TfKey = '1Y' | '3Y' | '5Y' | 'MAX';
 
 interface Props {
   activeKey: Market;
@@ -111,7 +113,6 @@ export default function IndexHero({
   belowMkt,
   onOpenBelow,
   onCommand,
-  appreciation,
   play,
   isMobile,
 }: Props) {
@@ -119,17 +120,32 @@ export default function IndexHero({
   const hero = useHeroSeries(activeKey, market, demand, realized);
   const vals = hero.idx.map((p) => p.value);
   const level = vals.length ? vals[vals.length - 1] : 100;
-  const prev = vals.length > 1 ? vals[vals.length - 2] : level;
-  const yrAgo = vals.length > 4 ? vals[vals.length - 5] : vals[0] ?? level;
-  const dQ = prev ? ((level - prev) / prev) * 100 : 0;
-  const dY = yrAgo ? ((level - yrAgo) / yrAgo) * 100 : 0;
-  const spark = vals.slice(-12);
 
-  // format the glyph by unit: index/demand read as a level; realized as $ compact
-  const fmtLevel = (n: number) =>
-    hero.unit === 'realized'
-      ? n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${Math.round(n)}`
-      : n.toFixed(1);
+  // ── RATE OF RETURN over a selectable horizon — the intuitive read. Collectors
+  // think in returns + momentum, not index points. "Return" = the market's price
+  // movement from the start of the window to now.
+  const HORIZONS: { key: TfKey; label: string; q: number }[] = [
+    { key: '1Y', label: 'past year', q: 4 },
+    { key: '3Y', label: 'past 3 years', q: 12 },
+    { key: '5Y', label: 'past 5 years', q: 20 },
+    { key: 'MAX', label: 'all time', q: Infinity },
+  ];
+  const avail = HORIZONS.filter((t) => (t.q === Infinity ? vals.length >= 6 : vals.length > t.q));
+  const [tf, setTf] = useState<TfKey>('1Y');
+  const horizon = avail.find((t) => t.key === tf) || avail[avail.length - 1] || HORIZONS[0];
+  const startI = horizon.q === Infinity ? 0 : Math.max(0, vals.length - 1 - horizon.q);
+  const startVal = vals[startI] ?? vals[0] ?? level;
+  const roi = startVal ? (level / startVal - 1) * 100 : 0;
+  const dir = roi >= 0 ? 'up' : 'down';
+  const windowIdx = horizon.q === Infinity ? hero.idx : hero.idx.slice(startI);
+  const spark = (horizon.q === Infinity ? vals : vals.slice(startI)).slice(-16);
+
+  // momentum — the most recent quarter-over-quarter move (price movement / demand)
+  const qMove = vals.length > 1 && vals[vals.length - 2]
+    ? ((level - vals[vals.length - 2]) / vals[vals.length - 2]) * 100
+    : 0;
+
+  const fmtRoi = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
 
   const rise = (delay: number) => ({
     initial: reduce ? false : { opacity: 0, y: 16, scale: 0.98 },
@@ -149,44 +165,45 @@ export default function IndexHero({
           <m.div className={styles.mHeroCard} {...rise(0.04)}>
             <div className={styles.mHeroHead}>
               <span className={styles.mHeroLabel}>{hero.kicker}</span>
+              <span className={styles.mHeroReturnTag}>total return</span>
             </div>
             <div className={styles.mHeroNumRow}>
               <RollingNumber
-                className={styles.mHeroNum}
-                value={level}
-                from={reduce || hero.unit === 'realized' ? level : Math.max(0, level - 14)}
-                format={fmtLevel}
+                className={`${styles.mHeroNum} ${dir === 'up' ? styles.roiUp : styles.roiDown}`}
+                value={roi}
+                from={reduce ? roi : 0}
+                format={fmtRoi}
                 duration={1300}
                 delay={200}
                 play={play}
               />
-              <div className={styles.mHeroDeltas}>
-                <span className={styles.mHeroDelta} data-dir={dY >= 0 ? 'up' : 'down'}>
-                  {fmtDelta(dY)} <em>1Y</em>
-                </span>
-                <span className={styles.mHeroDeltaSub} data-dir={dQ >= 0 ? 'up' : 'down'}>
-                  {fmtDelta(dQ)} <em>1Q</em>
-                </span>
-              </div>
+              <span className={styles.mHeroReturnPer}>{horizon.label}</span>
+            </div>
+            <div className={styles.tfToggle} role="tablist" aria-label="Return horizon">
+              {avail.map((t) => (
+                <button key={t.key} type="button" role="tab" aria-selected={t.key === horizon.key}
+                  className={styles.tfChip} data-on={t.key === horizon.key ? 'true' : undefined}
+                  onClick={() => setTf(t.key)}>{t.key === 'MAX' ? 'ALL' : t.key}</button>
+              ))}
             </div>
             <div className={styles.mHeroChart}>
               {hasChart ? (
-                <MarketChart data={hero.idx} play={play} height={172} compact />
+                <MarketChart data={windowIdx} play={play} height={168} compact />
               ) : (
-                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dY >= 0 ? 'up' : 'down'} width={360} height={90} strokeWidth={1.8} />
+                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dir} width={360} height={90} strokeWidth={1.8} />
               )}
             </div>
-            <div className={styles.mHeroTag}>lectr index · {hero.explain}</div>
+            <div className={styles.mHeroTag}>price movement · {horizon.label}</div>
           </m.div>
 
           <m.div className={styles.mHeroStats} {...rise(0.12)}>
             <span className={styles.mStat}>
-              <span className={styles.mStatVal}>{hero.sellThrough != null ? `${hero.sellThrough}%` : '—'}</span>
-              <span className={styles.mStatLabel}>Sell-through</span>
+              <span className={styles.mStatVal} data-dir={qMove >= 0 ? 'up' : 'down'}>{fmtDelta(qMove)}</span>
+              <span className={styles.mStatLabel}>Last quarter</span>
             </span>
             <span className={styles.mStat}>
-              <span className={styles.mStatVal}>{appreciation != null ? `${appreciation >= 0 ? '+' : ''}${appreciation.toFixed(1)}%` : '—'}</span>
-              <span className={styles.mStatLabel}>Appreciation</span>
+              <span className={styles.mStatVal}>{hero.sellThrough != null ? `${hero.sellThrough}%` : '—'}</span>
+              <span className={styles.mStatLabel}>Sell-through</span>
             </span>
             {belowMkt ? (
               <button type="button" className={styles.mStat} data-accent="true" onClick={onOpenBelow} aria-label={`${belowMkt} below-market lots — see them`}>
@@ -217,41 +234,43 @@ export default function IndexHero({
         {/* HEAD — kicker + the number. On mobile this leads, then the chart, then
             the meta row: number → chart → data, never a wall of prose. */}
         <m.div className={styles.heroHead} {...rise(0.05)}>
-          <span className={styles.sectionKicker}>{hero.kicker}</span>
+          <div className={styles.heroTopRow}>
+            <span className={styles.sectionKicker}>{hero.kicker}</span>
+            <span className={styles.heroReturnTag}>total return</span>
+          </div>
           <div className={styles.heroNumberRow}>
             <RollingNumber
-              className={styles.heroNumber}
-              value={level}
-              from={reduce || hero.unit === 'realized' ? level : Math.max(0, level - 22)}
-              format={fmtLevel}
+              className={`${styles.heroNumber} ${dir === 'up' ? styles.roiUp : styles.roiDown}`}
+              value={roi}
+              from={reduce ? roi : 0}
+              format={fmtRoi}
               duration={1500}
               delay={220}
               play={play}
             />
-            <div className={styles.heroDeltas}>
-              <span className={styles.heroDelta} data-dir={dQ >= 0 ? 'up' : 'down'}>
-                {fmtDelta(dQ)} <em>quarter</em>
-              </span>
-              <span className={styles.heroDelta} data-dir={dY >= 0 ? 'up' : 'down'}>
-                {fmtDelta(dY)} <em>year</em>
-              </span>
-            </div>
+            <span className={styles.heroReturnPer}>{horizon.label}</span>
           </div>
-          <span className={styles.heroExplain}>lectr index · {hero.explain}</span>
+          <div className={styles.tfToggle} role="tablist" aria-label="Return horizon">
+            {avail.map((t) => (
+              <button key={t.key} type="button" role="tab" aria-selected={t.key === horizon.key}
+                className={styles.tfChip} data-on={t.key === horizon.key ? 'true' : undefined}
+                onClick={() => setTf(t.key)}>{t.key === 'MAX' ? 'ALL' : t.key}</button>
+            ))}
+          </div>
         </m.div>
 
         {/* CHART — the value prop, right under the number */}
         <m.div className={styles.heroChart} {...rise(0.12)}>
           <div className={styles.chartCard}>
             <div className={styles.chartCardHead}>
-              <span>{marketLabel} · quarterly</span>
-              <span className={styles.chartCardTag}>{hero.explain}</span>
+              <span>price movement · {horizon.label}</span>
+              <span className={styles.chartCardTag}>{marketLabel.toLowerCase()}</span>
             </div>
             {hasChart ? (
-              <MarketChart data={hero.idx} play={play} height={300} />
+              <MarketChart data={windowIdx} play={play} height={300} />
             ) : (
               <div className={styles.heroSparkFallback}>
-                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dY >= 0 ? 'up' : 'down'} width={420} height={120} strokeWidth={1.8} />
+                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dir} width={420} height={120} strokeWidth={1.8} />
                 <span className={styles.chartCardTag}>series building — sampling this market</span>
               </div>
             )}
@@ -261,13 +280,10 @@ export default function IndexHero({
         {/* META — the three read-outs + ⌘K. No prose. */}
         <m.div className={styles.heroMeta} {...rise(0.18)}>
           <div className={styles.heroStats}>
+            <Stat label="Last quarter" value={fmtDelta(qMove)} />
             <Stat
               label="Sell-through"
               value={hero.sellThrough != null ? `${hero.sellThrough}%` : '—'}
-            />
-            <Stat
-              label="Appreciation"
-              value={appreciation != null ? `${appreciation >= 0 ? '+' : ''}${appreciation.toFixed(1)}%` : '—'}
             />
             <Stat
               label="Below-market now"

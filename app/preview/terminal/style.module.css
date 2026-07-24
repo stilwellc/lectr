@@ -1086,6 +1086,49 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 }
 .mHero .cmdPillFull { width: 100%; justify-content: center; padding: 14px; }
 
+/* ── RETURN HERO — ROI number coloring + the horizon toggle ── */
+.roiUp { color: var(--color-up); }
+.roiDown { color: var(--color-down); }
+
+.tfToggle {
+  display: inline-flex; gap: 3px; padding: 3px;
+  border: 1px solid var(--tt-hair-2); border-radius: 10px; background: rgba(0, 0, 0, 0.22);
+}
+.tfChip {
+  font-family: var(--font-mono-data), monospace; font-size: 11px; letter-spacing: 0.04em;
+  padding: 5px 11px; border-radius: 7px; border: none; background: none; color: var(--tt-muted);
+  cursor: pointer; transition: background 180ms var(--ease-signature, cubic-bezier(0.23,1,0.32,1)), color 180ms;
+}
+.tfChip:hover { color: var(--tt-fg); }
+.tfChip[data-on='true'] { background: rgba(232, 218, 182, 0.12); color: var(--tt-butter); }
+.tfChip:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.6); outline-offset: 1px; }
+
+/* mobile return card */
+.mHeroReturnTag {
+  font-family: var(--font-mono-data), monospace; font-size: 9px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--tt-faint); flex: none;
+}
+.mHeroReturnPer {
+  font-family: var(--font-mono-data), monospace; font-size: 11px; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--tt-faint); padding-bottom: 8px;
+}
+.mHero .tfToggle { margin: 2px 0 12px; }
+.mHeroStats .mStatVal[data-dir='up'] { color: var(--color-up); }
+.mHeroStats .mStatVal[data-dir='down'] { color: var(--color-down); }
+
+/* desktop return head */
+.heroTopRow { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.heroReturnTag {
+  font-family: var(--font-mono-data), monospace; font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--tt-faint);
+  padding: 3px 8px; border: 1px solid var(--tt-hair-2); border-radius: 6px;
+}
+.heroReturnPer {
+  font-family: var(--font-mono-data), monospace; font-size: 13px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--tt-faint); padding-bottom: 16px;
+}
+.hero .tfToggle { margin-top: 20px; }
+
 @media (max-width: 900px) {
   .deskShell {
     padding: 0 clamp(16px, 4vw, 28px) 64px;
