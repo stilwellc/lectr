@@ -46,6 +46,8 @@ interface Props {
   appreciation: number | null;
   /** sell-through, when the scoped market series carries it */
   play: boolean;
+  /** mobile gets its OWN hero composition — not the desktop scaled down */
+  isMobile?: boolean;
 }
 
 // Resolve the hero series for the active market. Returns index points
@@ -111,6 +113,7 @@ export default function IndexHero({
   onCommand,
   appreciation,
   play,
+  isMobile,
 }: Props) {
   const reduce = useReducedMotion();
   const hero = useHeroSeries(activeKey, market, demand, realized);
@@ -135,6 +138,79 @@ export default function IndexHero({
   });
 
   const hasChart = hero.idx.length >= 4;
+
+  // ── MOBILE: its own scene — a compact "index card" (a premium trading-app
+  // asset tile), NOT the desktop slab scaled down. Refined number with the
+  // deltas inline, and the CHART is the hero visual, full-width in the card.
+  if (isMobile) {
+    return (
+      <LazyMotion features={domAnimation} strict>
+        <section className={styles.mHero}>
+          <m.div className={styles.mHeroCard} {...rise(0.04)}>
+            <div className={styles.mHeroHead}>
+              <span className={styles.mHeroLabel}>{hero.kicker}</span>
+              <span className={styles.mHeroLive}><i />live</span>
+            </div>
+            <div className={styles.mHeroNumRow}>
+              <RollingNumber
+                className={styles.mHeroNum}
+                value={level}
+                from={reduce || hero.unit === 'realized' ? level : Math.max(0, level - 14)}
+                format={fmtLevel}
+                duration={1300}
+                delay={200}
+                play={play}
+              />
+              <div className={styles.mHeroDeltas}>
+                <span className={styles.mHeroDelta} data-dir={dY >= 0 ? 'up' : 'down'}>
+                  {fmtDelta(dY)} <em>1Y</em>
+                </span>
+                <span className={styles.mHeroDeltaSub} data-dir={dQ >= 0 ? 'up' : 'down'}>
+                  {fmtDelta(dQ)} <em>1Q</em>
+                </span>
+              </div>
+            </div>
+            <div className={styles.mHeroChart}>
+              {hasChart ? (
+                <MarketChart data={hero.idx} play={play} height={172} />
+              ) : (
+                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={dY >= 0 ? 'up' : 'down'} width={360} height={90} strokeWidth={1.8} />
+              )}
+            </div>
+            <div className={styles.mHeroTag}>{hero.chartTag}</div>
+          </m.div>
+
+          <m.div className={styles.mHeroStats} {...rise(0.12)}>
+            <span className={styles.mStat}>
+              <span className={styles.mStatVal}>{hero.sellThrough != null ? `${hero.sellThrough}%` : '—'}</span>
+              <span className={styles.mStatLabel}>Sell-through</span>
+            </span>
+            <span className={styles.mStat}>
+              <span className={styles.mStatVal}>{appreciation != null ? `${appreciation >= 0 ? '+' : ''}${appreciation.toFixed(1)}%` : '—'}</span>
+              <span className={styles.mStatLabel}>Appreciation</span>
+            </span>
+            {belowMkt ? (
+              <button type="button" className={styles.mStat} data-accent="true" onClick={onOpenBelow} aria-label={`${belowMkt} below-market lots — see them`}>
+                <span className={styles.mStatVal}>{fmtInt(belowMkt)}</span>
+                <span className={styles.mStatLabel}>Below market ↗</span>
+              </button>
+            ) : (
+              <span className={styles.mStat}>
+                <span className={styles.mStatVal}>—</span>
+                <span className={styles.mStatLabel}>Below market</span>
+              </span>
+            )}
+          </m.div>
+
+          <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
+            <kbd className={styles.kbd}>⌘K</kbd>
+            <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
+            <span className={styles.cmdArrow} aria-hidden>↵</span>
+          </button>
+        </section>
+      </LazyMotion>
+    );
+  }
 
   return (
     <LazyMotion features={domAnimation} strict>

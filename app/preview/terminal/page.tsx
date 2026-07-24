@@ -586,6 +586,7 @@ export default function TerminalHomePage() {
               onCommand={openCommandK}
               appreciation={appreciation}
               play={!fromCache}
+              isMobile={mounted && isMobile}
             />
 
             {/* ══ the live tape — realized hammers, scoped to the market ══ */}
