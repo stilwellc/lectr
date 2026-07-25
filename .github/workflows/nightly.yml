@@ -22,6 +22,14 @@ name: Nightly (segmented)
 # any house missing an artifact (crawl failed, skip_crawl, or `other`, which
 # no crawl job produces) falls back to its R2 last-good.
 #
+# Payload handoff: the SAME pattern now runs assemble→{deploy,sync,backtest}.
+# assemble uploads served-payload + corpus-payload as same-run artifacts; the
+# three downstream jobs try the artifact first and only fall back to
+# `data-store.sh pull` (R2) when it's absent — a job rerun after artifact
+# expiry, or a manual re-dispatch. That fallback is cheap now too: data-store
+# publishes to write-once versions/ keys behind a tiny pointer, so only the
+# pointer read can lag, never the 18MB payload GETs.
+#
 # Net: no single job scales with the TOTAL corpus, a partial failure can never
 # regress prod, and any stage is retryable in isolation.
 
@@ -141,6 +149,23 @@ jobs:
         run: npx tsx scripts/build-upcoming.ts
       - name: Push corpus + served to R2
         run: bash scripts/data-store.sh push
+      # Same-run handoff to deploy/sync/backtest — immediately consistent, no
+      # R2 round-trip at all. The R2 push above stays authoritative: it's what
+      # reruns, manual dispatches and push-triggered deploy.yml read.
+      - name: Upload served payload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: served-payload
+          path: public/data/ray/
+          retention-days: 1
+          if-no-files-found: error
+      - name: Upload corpus artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-payload
+          path: data/corpus/*.json.gz
+          retention-days: 1
+          if-no-files-found: error
 
   # The point-in-time backtest is a heavy replay (~25min) but the record barely
   # moves night to night, so it runs OFF the critical path in parallel with the
@@ -170,8 +195,28 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
-      - name: Pull corpus + served
-        run: bash scripts/data-store.sh pull
+      # Same-run artifacts from assemble — immediately consistent, no R2 read.
+      # continue-on-error: absent on a rerun after expiry / manual dispatch,
+      # where the R2 fallback below takes over.
+      - name: Fetch served payload (same-run artifact)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: served-payload
+          path: public/data/ray
+      - name: Fetch corpus (same-run artifact)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: corpus-payload
+          path: data/corpus
+      - name: Pull corpus + served from R2 (fallback if artifacts absent)
+        run: |
+          if [ -f public/data/ray/meta.json ] && [ -f data/corpus/lots.json.gz ]; then
+            echo "payloads delivered by same-run artifacts — skipping R2 pull"
+          else
+            bash scripts/data-store.sh pull
+          fi
       - name: Rebuild point-in-time backtest
         run: npx tsx scripts/build-backtest.ts
       - name: Push refreshed backtest.json
@@ -183,14 +228,29 @@ jobs:
     # skipped crawl would otherwise skip this whole downstream job.
     if: ${{ !cancelled() && needs.assemble.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 20 is plenty now: the served payload arrives as a same-run artifact, and
+    # even the R2 fallback no longer waits out GET-lag on the big payloads
+    # (write-once versions/ keys — only the tiny pointer can lag).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
-      - name: Pull fresh served payload (waits out R2 GET-lag)
-        run: bash scripts/data-store.sh pull
+      # Same-run artifact from assemble — immediately consistent, no R2 read.
+      - name: Fetch served payload (same-run artifact)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: served-payload
+          path: public/data/ray
+      - name: Pull served payload from R2 (fallback if artifact absent)
+        run: |
+          if [ -f public/data/ray/meta.json ]; then
+            echo "served payload delivered by same-run artifact — skipping R2 pull"
+          else
+            bash scripts/data-store.sh pull
+          fi
       - name: Build static export
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
@@ -215,9 +275,10 @@ jobs:
     needs: assemble
     if: always()                # non-blocking: alerts/supabase must never gate a deploy
     runs-on: ubuntu-latest
-    # same re-pull GET-lag as backtest: 20 was too tight on a lagged edge (proved:
-    # timed out at exactly 20m still inside the pull). 45 = worst-case lag + sync/alerts.
-    timeout-minutes: 45
+    # Was 45 to survive the re-pull GET-lag (a 20 cap once timed out INSIDE the
+    # pull). The artifact handoff + write-once R2 keys removed that wait; 30
+    # still leaves generous room for sync + alerts on a slow night.
+    timeout-minutes: 30
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -226,8 +287,20 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
-      - name: Pull served (for the lot data)
-        run: bash scripts/data-store.sh pull
+      # Same-run artifact from assemble — immediately consistent, no R2 read.
+      - name: Fetch served payload (same-run artifact)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: served-payload
+          path: public/data/ray
+      - name: Pull served from R2 (fallback if artifact absent)
+        run: |
+          if [ -f public/data/ray/meta.json ]; then
+            echo "served payload delivered by same-run artifact — skipping R2 pull"
+          else
+            bash scripts/data-store.sh pull
+          fi
       - name: Sync lots table
         run: npx tsx scripts/sync-lots-db.ts || echo "sync-lots failed (non-fatal)"
       - name: Match saved-search alerts
