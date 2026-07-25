@@ -5,9 +5,9 @@ import meta from '../../../public/data/ray/meta.json';
 import { Colophon } from '../../components/Terminal';
 
 export const metadata: Metadata = {
-  title: 'The pricing engine, quantitatively — estimator, gates, calibration, and the ablations that failed',
+  title: 'How we built the price-movement engine — a hedonic index that abstains',
   description:
-    'The full math of lectr\'s comparable-sales engine: an IDF-cosine similarity kernel, a recency-decayed weighted median, hammer-basis correction, shrunk empirical calibration, split-conformal bands — and the models that measured worse.',
+    'The math behind lectr\'s appreciation numbers: a per-maker Huber-robust hedonic log-price regression that controls for the within-maker mix, and a confidence gate that publishes a return only when its 95% CI resolves the sign. The result is that almost everything abstains — and the few makers that clear the bar (Rolex, Patek, Cartier) are the whole point.',
 };
 
 const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
@@ -50,207 +50,220 @@ export default function PricingEnginePost() {
       <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 10 }}>
           <p style={{ fontFamily: 'var(--font-mono), monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
-            <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · July 16, 2026 · technical
+            <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · July 24, 2026 · technical
           </p>
           <h1 style={{ fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.15, margin: '0 0 14px' }}>
-            The pricing engine, quantitatively
+            How we built the price-movement engine
           </h1>
           <p style={{ ...p, fontSize: 16.5 }}>
-            The estimator, the gates, the calibration, the validation protocol — and the ablations that
-            measured worse. Everything below is fit and re-fit nightly on a corpus of ~36,000 priced sales
-            and validated on a strict temporal holdout of every call the engine would have made since 2000.
+            An index that says how much a market has actually moved is easy to fake and hard to earn.
+            Ours is a per-maker hedonic regression with a confidence gate bolted to the front of it —
+            and the gate&rsquo;s job is to make the engine <span style={strong}>shut up</span>. Across
+            everything we track, only three makers currently clear the bar. That is the feature, not the
+            bug, and this is how it works.
           </p>
         </header>
 
         <article style={wrap}>
-          <h2 style={h2}>0 · Notation and the target</h2>
+          <h2 style={h2}>0 · The number we refuse to fake</h2>
           <p style={p}>
-            A lot <V>ℓ</V> arrives with a house estimate band <V>[E_lo, E_hi]</V> (hammer basis) and sells
-            at a realized price <V>R</V> (premium-inclusive). Write <V>m = (E_lo + E_hi)/2</V> for the
-            estimate midpoint. The engine&rsquo;s job is <span style={strong}>not</span> to predict <V>R</V> —
-            we measured ourselves against the houses&rsquo; own specialists at absolute pricing and lost
-            (§7). The target is directional: estimate the level at which the lot&rsquo;s comparable pool
-            currently clears, and flag the lot when that level is far from the ask.
-          </p>
-          <p style={p}>
-            In plain English: we don&rsquo;t guess the final price. We ask what nearly-identical things
-            have actually been fetching, and we only speak up when that number sits far above or far
-            below what the auction house is asking.
+            &ldquo;This market is up 40%&rdquo; is the single most abused sentence in collectibles. A
+            median sale price jumps because a marquee quarter over-sampled expensive lots; a cohort
+            index rounds and drifts; a partial quarter reports half its sales and prints a spike. None of
+            those is price movement. Price movement is what a <em>like-for-like</em> object did over
+            time — the same reference, the same form, the same size — with the changing <em>mix</em> of
+            what happened to sell held constant. Everything below is one apparatus for estimating that
+            one quantity, and refusing to state it when we can&rsquo;t.
           </p>
 
-          <h2 style={h2}>1 · The similarity kernel</h2>
+          <h2 style={h2}>1 · The hedonic price-movement index</h2>
           <p style={p}>
-            Comps are same-maker sold lots scored by a lexical kernel with structured bonuses. Titles are
-            tokenized (stopworded, lightly singularized, biographical parentheticals stripped, the
-            maker&rsquo;s own name words dropped — each hygiene step holdout-validated; the parenthetical
-            strip alone moved art coverage 19.8→21.1% <em>and</em> edge +2pt). The core idea:{' '}
-            <span style={strong}>rare words count for more</span>. Two titles that share
-            &ldquo;Fernande&rdquo; are probably the same work; two titles that share
-            &ldquo;untitled&rdquo; mean nothing. Formally, tokens are weighted by inverse document
-            frequency and titles compared by cosine:
+            The engine is a <span style={strong}>hedonic log-price regression</span>, fit per maker in{' '}
+            <V>scripts/hedonic-index.ts</V>. We regress the log of the realized price on a set of quality
+            controls plus a dummy for every calendar quarter. The quarter coefficients are the pure time
+            effect — the price movement of a like-for-like lot — because the quality dummies absorb the
+            mix:
           </p>
-          <Formula caption="wₜ = IDF weight of token t; N = sold lots in the corpus; dfₜ = lots whose title carries t. cos is the cosine over the two titles' sparse IDF vectors.">
-{`w_t = log( N / df_t )
+          <Formula caption="τ_q = the coefficient on quarter q's dummy; the other terms are the like-for-like controls. A quarter's τ is the log-price of a fixed lot in that quarter — mix already differenced out — so it is movement, not composition.">
+{`ln R_i  =  α  +  Σ_q τ_q · 1[quarter_i = q]
 
-cos(a,b) = Σ_t w_t(a) · w_t(b)  /  ( ‖w(a)‖ · ‖w(b)‖ )`}
+            +  β·refModel_i + β·form_i + β·size_i
+            +  β·decade_i  + β·house_i  +  ε_i`}
           </Formula>
           <p style={p}>
-            Structured agreement adds bonuses on top of the lexical read — same watch reference{' '}
-            <V>+0.08</V>, same model line <V>+0.06</V>, same entity (player, mission) <V>+0.05</V>, same
-            year <V>+0.04</V>, matching dimensions <V>+0.04</V>, same event <V>+0.04</V> — and the
-            composite is scored on a 0–100 scale:
+            For a per-maker index the maker is constant, so its dummy drops and the{' '}
+            <span style={strong}>within-maker</span> drivers carry the mix: a watch reference (a Daytona
+            vs a Datejust), a furniture model (a Conoid bench vs a slab table), the form, the size, the
+            object&rsquo;s decade, and the auction house. That is exactly what a naive median can&rsquo;t
+            give you — if a quarter happens to sell more Daytonas, the median jumps even when nothing
+            appreciated; the hedonic <V>τ</V> doesn&rsquo;t, because the reference dummy already ate it.
           </p>
-          <Formula>
-{`score(a,b) = round( 100 · ( cos(a,b) + Σ bonuses ) )`}
+          <p style={p}>
+            Auction tails are heavy — a handful of whale lots would drag ordinary least squares — so the
+            fit is <span style={strong}>Huber IRLS</span>: five reweighting passes that trust residuals
+            inside a robust band and down-weight everything outside it, with a tiny ridge on the
+            non-intercept coefficients for numerical stability. The design matrix is sparse (each lot
+            lights up ~6 dummies out of a few hundred columns), so we never materialize the dense{' '}
+            <V>n×p</V> matrix; we accumulate <V>X&rsquo;WX</V> and <V>X&rsquo;Wy</V> over each row&rsquo;s
+            nonzeros and solve the small system by Cholesky (via <V>ml-matrix</V>, eigen-pseudo-inverse
+            fallback):
+          </p>
+          <Formula caption="β̂ from the Huber-weighted normal equations; the index level rebases quarter τ to 100 at the base quarter. The 95% CI on any horizon comes straight from the covariance Cov(β̂) = σ̂²·(X'WX+ridge)⁻¹.">
+{`β̂        =  ( X'WX + λI )⁻¹ X'Wy
+
+index_q  =  100 · exp( τ_q − τ_base )
+
+change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
           </Formula>
 
-          <h2 style={h2}>2 · The comp gate</h2>
+          <h2 style={h2}>2 · Confidence gating — the part that abstains</h2>
           <p style={p}>
-            A comp gets in only when it BOTH reads like the lot (the words agree) AND matches on hard
-            facts (reference, model, dimensions). Formally:
+            Here is the whole thesis. A horizon — 1Y, 3Y, 5Y — publishes a return{' '}
+            <span style={strong}>only when its 95% confidence interval resolves the sign</span>. If the
+            interval straddles zero, we don&rsquo;t say &ldquo;roughly flat&rdquo; and we don&rsquo;t
+            round toward a story. We <span style={strong}>abstain</span>: the horizon is marked
+            not-publishable with a human-readable reason, and the site says so out loud.
           </p>
-          <Formula caption="The fallback tier fires only when the strict pool cannot seat three comps; its output is capped at medium confidence and published as its own backtest row so the headline never silently blends.">
-{`admit(c)    ⟺  cos ≥ 0.50  ∧  score ≥ 65
-fallback(c) ⟺  cos ≥ 0.45  ∧  score ≥ 55    (only when |pool| < 3)`}
+          <Formula caption="Δln with standard error se from the covariance of the two quarter coefficients. A horizon publishes only if the CI clears zero AND its half-width isn't larger than the point estimate (a wide interval that happens to miss zero is still noise).">
+{`publish(h)  ⟺   CI₉₅( Δln )  excludes 0
+              ∧   half-width  <  2 · | change% |`}
           </Formula>
           <p style={p}>
-            Both pairs of constants came from A/B on the temporal holdout, not taste: the structured gate
-            admitted <span style={strong}>+5% more coverage at identical edge</span> versus the old
-            raw-cosine floor, and the fallback tier&rsquo;s marginal cohort measured{' '}
-            <span style={strong}>+38.9% median / 63.1% beat</span> — statistically indistinguishable from
-            the main engine. Per-market gate overrides were tested and rejected: no market prefers
-            different constants; the score bar binds, the cosine floor is nearly inert across 0.45–0.55.
+            The sign gate is the headline, but it&rsquo;s the last of a stack. A horizon also has to end
+            on a <span style={strong}>complete, dense</span> quarter (we never end on the current stub
+            quarter, and the endpoint&rsquo;s volume must be ≥60% of its trailing-4-quarter median, which
+            catches a half-reported latest quarter); it needs enough distinct references or forms that
+            the within-maker mix is actually controlled; and it fails on a{' '}
+            <span style={strong}>composition break</span> — any single source or house that is &gt;40% of
+            one endpoint but &lt;12% of the other, which is how an archive backfill or a house
+            entering/leaving would otherwise leak into the &ldquo;time&rdquo; effect. Clear all of them,
+            and only then does the CI get a vote.
+          </p>
+          <p style={p}>
+            The consequence is deliberate and severe. The market-level index abstains almost everywhere.
+            Most per-maker indices abstain. Every composite we assemble bottom-up from makers abstains
+            when it can&rsquo;t seat enough measurable components. We publish{' '}
+            <span style={strong}>less, on purpose</span> — because a confident-looking wrong number is
+            worse than an honest blank.
           </p>
 
-          <h2 style={h2}>3 · The estimator</h2>
+          <h2 style={h2}>3 · The verified movers</h2>
           <p style={p}>
-            In plain English: take the ten best matches and find the middle of their prices — but
-            let better matches and fresher sales vote louder. A comp&rsquo;s vote halves for every two
-            years of age, so last spring&rsquo;s sale outweighs 2019&rsquo;s. Formally, a weighted
-            median over the top-K comps (<V>K = 10</V>; K ∈ [5, 20] was swept and is flat within
-            noise):
+            The makers that clear the bar are the entire product. As of this writing there are{' '}
+            <span style={strong}>three</span>, all watches, each surfaced at the longest horizon whose CI
+            resolves (5Y &gt; 3Y &gt; 1Y) — the numbers below are read straight out of{' '}
+            <V>makerIndex</V> in <V>market.json</V>:
           </p>
-          <Formula caption="V = the engine's comp value. aᵢ = years between comp i's sale and the target's sale date; h = 2 years in estimate markets, 1 year in bid markets (memorabilia cycles faster — both measured). wmed = weighted median.">
-{`w_i  =  cos_i²  ·  2^( −a_i / h )
-
-V    =  wmed( { R_i } , { w_i } )`}
-          </Formula>
-          <p style={p}>
-            The recency term is the survivor of a decay family tested on holdout: <V>h = 2y</V> added{' '}
-            <span style={strong}>+1.1pt of edge at identical coverage</span>, and the flags it removed had
-            been realizing exactly like unflagged lots — stale-comp false positives. A median, not a mean,
-            because auction tails are heavy; weighted, because a 0.93-cosine comp is better evidence than
-            a 0.55 one.
-          </p>
-
-          <h2 style={h2}>4 · The signal, and the buyer&rsquo;s-premium identity</h2>
-          <Formula caption="r = the comp ratio. The below threshold is NOT 1.0 — and the reason is an accounting identity, not a tuning choice.">
-{`r = V / m
-
-label(ℓ) =  below   if  r ≥ 1.30
-            above   if  r ≤ 0.75
-            at      otherwise`}
-          </Formula>
-          <p style={p}>
-            Here&rsquo;s the trap that ate our first headline. Auction results are published with the
-            buyer&rsquo;s premium — the ~25% fee added on top of the hammer price — while estimates are
-            set on the hammer alone. Compare the two naively and <em>everything</em> looks 25% better
-            than it is. Across every lot in the corpus carrying both figures, that fee is remarkably
-            flat:
-          </p>
-          <Formula caption="Flat 22–26% across houses and price bands. A pool trading exactly at its estimates therefore reads r ≈ 1.25 — flags in the 1.2–1.3 band were pure premium, not edge, which is why the threshold sits at 1.30.">
-{`median( R / H )  =  1.250          H = hammer price
-
-⇒   E[ r | pool trades at estimate ]  ≈  1.25`}
-          </Formula>
-          <p style={p}>
-            Roughly <span style={strong}>70% of our original &ldquo;+40% vs estimate&rdquo; headline was
-            this identity</span>, not alpha. Every public figure now leads with the hammer basis:
-            performance is <V>H/m − 1</V> with <V>H = R/1.25</V> imputed where the house didn&rsquo;t
-            publish a hammer (93% do). On that basis the record reads +15% flagged vs −5% unflagged — and
-            the above-market call, which looked wrong premium-inclusive (+7%), is revealed as right
-            (−11% at the hammer).
-          </p>
-
-          <h2 style={h2}>5 · Calibration: the displayed probability</h2>
-          <p style={p}>
-            The percentage on every card — the chance the lot beats its high estimate — is just
-            history counted honestly: of all past lots that looked like this one, how many actually
-            cleared the high estimate? Recent years count more, and thin buckets get pulled toward the
-            overall average so a handful of lucky sales can&rsquo;t shout. Formally, re-fit nightly per
-            market:
-          </p>
-          <Formula caption="b indexes the r-buckets (edges 0.6 / 0.9 / 1.3 / 2 / 10); ωⱼ = 2^(−ageⱼ/3y); yⱼ = 1 if lot j beat its high estimate; p_g = the global bucket rate; k = 60 pseudo-observations of shrinkage; min-n guards fall back to global. Monotonicity is enforced across the normal buckets — and deliberately NOT across the last one.">
-{`p̂(b, mkt)  =  ( Σ_j ω_j · y_j  +  k · p_g(b) )  /  ( Σ_j ω_j  +  k )`}
-          </Formula>
-          <p style={p}>
-            The honest detail: the final bucket (<V>r ≥ 10</V>) is <em>allowed to drop</em>, because it
-            measurably does — extreme ratios are where data faults live, and the fitted rate falls to
-            ~57–59% against a naive monotone extrapolation of 69%+. The engine tells users its confidence{' '}
-            <em>decreases</em> out there. The displayed value band is split-conformal rather than a
-            comp-price quantile:
-          </p>
-          <Formula caption="q̂ = empirical quantiles of realized/V on the holdout, per confidence tier. Held-out coverage 71–77%, versus 42–51% for the old comp-quantile band — 'high' confidence was, embarrassingly, the least honest band before this.">
-{`band(ℓ)  =  [ V · q̂₀.₁₅(tier) ,   V · q̂₀.₈₅(tier) ]`}
-          </Formula>
-
-          <h2 style={h2}>6 · Validation protocol</h2>
-          <p style={p}>
-            One instrument produces every number above: we rewind the clock. For each concluded lot,
-            the engine re-makes its call using only the sales that had already happened on that day —
-            the exact production code, no peeking — and then we score what the lot actually did:
-          </p>
-          <Formula caption="No hindsight: a lot's own result never participates in its own call, and neither does anything dated on or after it. Bought-in lots are scored as outcomes — a below-market flag on a lot that then failed to sell is a miss, not an exclusion.">
-{`pool(ℓ)  =  { c  :  maker(c) = maker(ℓ)  ∧  t_c < t_ℓ }`}
-          </Formula>
           <table style={table}>
             <thead>
-              <tr><th style={th}>Cohort</th><th style={{ ...th, textAlign: 'right' }}>n</th><th style={{ ...th, textAlign: 'right' }}>median H/m − 1</th><th style={{ ...th, textAlign: 'right' }}>P(beat high)</th><th style={{ ...th, textAlign: 'right' }}>fail to sell</th></tr>
+              <tr><th style={th}>Maker</th><th style={{ ...th, textAlign: 'right' }}>horizon</th><th style={{ ...th, textAlign: 'right' }}>change</th><th style={{ ...th, textAlign: 'right' }}>95% CI</th><th style={{ ...th, textAlign: 'right' }}>lots</th></tr>
             </thead>
             <tbody>
-              <tr><td style={td}>Flagged below</td><td style={tdNum}>7,768</td><td style={tdNum}>+15%</td><td style={tdNum}>45%</td><td style={tdNum}>9.0%</td></tr>
-              <tr><td style={td}>Unflagged</td><td style={tdNum}>—</td><td style={tdNum}>−5%</td><td style={tdNum}>26%</td><td style={tdNum}>15.1%</td></tr>
-              <tr><td style={td}>Flagged above</td><td style={tdNum}>—</td><td style={tdNum}>−11%</td><td style={tdNum}>—</td><td style={tdNum}>22.7%</td></tr>
+              <tr><td style={td}>Cartier</td><td style={tdNum}>5Y</td><td style={tdNum}>+52.9%</td><td style={tdNum}>[19, 96]</td><td style={tdNum}>9,187</td></tr>
+              <tr><td style={td}>Rolex</td><td style={tdNum}>5Y</td><td style={tdNum}>+25.1%</td><td style={tdNum}>[12, 39]</td><td style={tdNum}>21,098</td></tr>
+              <tr><td style={td}>Patek Philippe</td><td style={tdNum}>3Y</td><td style={tdNum}>−18.2%</td><td style={tdNum}>[−26, −9]</td><td style={tdNum}>24,325</td></tr>
             </tbody>
           </table>
           <p style={p}>
-            The separation is monotone in every year of the series since 2000 (
-            <Link href="/value" style={{ color: 'var(--color-fg)' }}>the chart is public</Link>), and the
-            fail-to-sell gradient — 9.0% / 15.1% / 22.7% — is an out-of-sample check the estimator was
-            never fit on.
+            Rolex also publishes a 3Y (<V>+14.6%</V>, CI <V>[2, 28]</V>) and Patek a 1Y
+            (<V>−9.6%</V>, CI <V>[−18, −1]</V>) — same maker, shorter windows, still resolved. Everything
+            else — every artist, every design name, every sports and science bucket —{' '}
+            <span style={strong}>abstains</span>, and the &ldquo;verified movers&rdquo; panel simply says
+            so where a market has none. Three intervals that resolve the sign, standing behind real
+            money, is the honest yield of a very large corpus.
           </p>
 
-          <h2 style={h2}>7 · Ablations and negative results</h2>
-          <p style={p}>What failed, with the numbers that killed it:</p>
+          <h2 style={h2}>4 · Demand vs ROI: two reads, and the divergence flag</h2>
+          <p style={p}>
+            The hedonic index is one of two market reads, and they check each other.{' '}
+            <span style={strong}>Demand</span> (<V>app/lib/demand.ts</V>) is the median percent a lot
+            sold <em>over its own estimate midpoint</em>, trailing twelve months. It&rsquo;s mix-proof by
+            construction — a $900 print and a $3M canvas each beating ask by 60% count identically — which
+            makes it a fast, wide signal. But it is a <span style={strong}>relative</span> beat, and the
+            houses set the bar. A market can run &ldquo;hot&rdquo; on demand while the specialists quietly
+            trim estimates: the lots keep beating ask, but ask keeps falling.
+          </p>
+          <p style={p}>
+            That is exactly what the hedonic ROI is the <span style={strong}>absolute</span> check for.
+            When demand is positive but the appreciation trend is meaningfully negative, the lander flags
+            it — <V>roiFlag = &lsquo;beating soft estimates&rsquo;</V> (<V>IndexHero.tsx</V>) — so a buyer
+            reads the heat correctly: it&rsquo;s clearing a softening bar, not real strength. Demand
+            answers &ldquo;are lots beating the ask?&rdquo;; the hedonic index answers &ldquo;is the ask
+            worth beating?&rdquo; The divergence is the interesting part.
+          </p>
+
+          <h2 style={h2}>5 · Sub-markets: the strongest honest read</h2>
+          <p style={p}>
+            Not everything is a maker, and not every maker earns an index. So every tracked slug is a
+            &ldquo;sub-market&rdquo; (<V>scripts/sub-markets.ts</V>) that carries the{' '}
+            <span style={strong}>strongest honest read its data supports</span>, and no stronger:
+          </p>
           <table style={table}>
             <thead>
-              <tr><th style={th}>Model</th><th style={th}>Result</th></tr>
+              <tr><th style={th}>read</th><th style={th}>when</th><th style={th}>what it shows</th></tr>
             </thead>
             <tbody>
-              <tr><td style={td}>Absolute hedonic regression — log R on size, year, medium, house</td><td style={td}>Typical miss of 1.8–4.2×, vs the houses&rsquo; own 1.25–1.45× — specialists win at absolute pricing</td></tr>
-              <tr><td style={td}>Logistic P(beat) on log r, out-of-time</td><td style={td}>Predictions measurably worse than the simple step fit (Brier score +0.0067 ± 0.0017 — a standard accuracy score for probabilities, lower is better)</td></tr>
-              <tr><td style={td}>Full-feature logistic (pool size, dispersion, best-cos, comp age, market)</td><td style={td}>Only the comps gap itself carries signal (z = 8.3); pool size, dispersion, comp age all null — no learned score beats raw r for ranking deals</td></tr>
-              <tr><td style={td}>Per-house estimate-bias adjustment of m</td><td style={td}>No effect at house level (p = 0.84); at maker level it makes the deal ranking WORSE (rank-corr 0.245 → 0.223) — makers whose estimates run light are exactly where the edge comes from, so &ldquo;correcting&rdquo; them erases it</td></tr>
-              <tr><td style={td}>Premium correction inside r instead of the claims layer</td><td style={td}>A near-constant /1.25 rescale absorbed by threshold re-tuning; matched flag sets overlap 97%</td></tr>
-              <tr><td style={td}>Hard model-identity gate on the value path</td><td style={td}>−504 coverage, zero edge — the ranking already does the work</td></tr>
-              <tr><td style={td}>Embedding / minhash retrieval</td><td style={td}>Retrieval failures are 0.5% of the coverage funnel; the binding constraint is candidate scarcity, not recall</td></tr>
+              <tr><td style={td}><V>index</V></td><td style={td}>a real maker with a publishable CI&rsquo;d horizon</td><td style={td}>the verified price move + interval (Rolex, Patek, Cartier)</td></tr>
+              <tr><td style={td}><V>demand</V></td><td style={td}>the slug carries estimates across enough quarters</td><td style={td}>quarterly median %-over-estimate (hammer basis)</td></tr>
+              <tr><td style={td}><V>descriptive</V></td><td style={td}>no estimates, or not a maker</td><td style={td}>typical price · all-time record · volume — no appreciation</td></tr>
             </tbody>
           </table>
-
-          <h2 style={h2}>8 · Known limitations</h2>
           <p style={p}>
-            The estimator is fuel-limited: ~55% of valuation failures are candidate scarcity (fewer than
-            two usable same-maker priors), which is why the largest single improvement of the year was a
-            19× archive backfill, not math. Coverage is honest but partial (~38% of estimate-bearing
-            lots); edge compresses above $10K, exactly where mistakes are expensive; and bid-only markets
-            carry a different guarantee (a realized-comp band whose typical miss is ~39%, with no
-            estimate to be directional against). All of it lives in the nightly replay, and the replay is the contract:{' '}
-            <span style={strong}>measured on history, stated at the hammer, wrong in public when it&rsquo;s
-            wrong.</span>
+            The last row is the discipline. A collectible <em>bucket</em> — meteorites, game-used,
+            tickets-passes, trophies — is tagged <V>entityClass:&lsquo;category&rsquo;</V> in the type
+            system: its lots are mutually incomparable objects under one thematic slug, so a
+            like-for-like index is impossible (it posts <V>+900%</V> artifacts). The maker index refuses
+            those at the door and they fall to a descriptive read: a typical price and a record, and{' '}
+            <span style={strong}>no appreciation number at all</span>. There is no honest way to say a
+            &ldquo;meteorites index is up 30%,&rdquo; so we don&rsquo;t.
+          </p>
+
+          <h2 style={h2}>6 · Why not a naive market index</h2>
+          <p style={p}>
+            This engine replaced a legacy cohort/appreciation index, and the replacement is a reaction to
+            specific artifacts that index produced — the reasons a marketplace-wide &ldquo;the whole
+            market is up X%&rdquo; number is a lie waiting to happen:
+          </p>
+          <table style={table}>
+            <thead>
+              <tr><th style={th}>Artifact</th><th style={th}>What it did</th></tr>
+            </thead>
+            <tbody>
+              <tr><td style={td}>Seasonal cohort swing</td><td style={td}>A marquee-sale quarter over-samples expensive makers; the index jumps with the mix, not the market</td></tr>
+              <tr><td style={td}>Partial-quarter endpoints</td><td style={td}>A half-reported latest quarter prints a spike or crater that reverses when the rest of the sales land</td></tr>
+              <tr><td style={td}>Integer rounding / mean-pinning</td><td style={td}>Rounding and mean sensitivity manufacture motion out of a thin, heavy-tailed quarter</td></tr>
+              <tr><td style={td}>Backfill composition breaks</td><td style={td}>An archive backfill floods one endpoint with one source; the &ldquo;change&rdquo; is the flood, not price</td></tr>
+              <tr><td style={td}>Card-dominated &lsquo;all&rsquo;</td><td style={td}>Sports-cards are 71–92% of the whole-corpus quarters under one slug — a shift in <em>which</em> cards sold masquerades as market movement</td></tr>
+            </tbody>
+          </table>
+          <p style={p}>
+            The honest engine answers each of these by <em>abstaining</em> rather than emitting a
+            confident number. That card-dominance case is live: the market-wide <V>&lsquo;all&rsquo;</V>{' '}
+            index refuses every horizon because one maker-slug (<V>sports-cards</V>) is 71–92% of the
+            endpoint quarters, so the hedonic control can&rsquo;t hold quality constant within it. The
+            art market shows the subtler version: its market-level index reads down (3Y <V>−14.1%</V>, 5Y{' '}
+            <V>−30.6%</V>), but its bottom-up composite still abstains, because{' '}
+            <span style={strong}>zero</span> art makers publish a defensible per-maker horizon. Picasso is
+            the reason in miniature — his recent quarters are 88–92% prints with no reference-level
+            control, so a shift in <em>which</em> prints sold would leak straight into the time effect.
+            The gate catches it and the maker abstains.
+          </p>
+
+          <h2 style={h2}>7 · What this costs, and what it buys</h2>
+          <p style={p}>
+            The cost is coverage: three verified movers across a corpus of{' '}
+            <span style={strong}>{meta.totalLots.toLocaleString()} lots</span> from {meta.sources.length}{' '}
+            sources. Watches assemble a composite that resolves at 5Y (<V>+25.5%</V>, Rolex / Patek /
+            Cartier at a capped 35/35/30); most verticals never seat enough measurable components to
+            compose at all. That is a small published surface for a very large amount of data — and it is
+            the point. Every appreciation figure the site shows has a 95% interval behind it that
+            resolves the sign, ends on a complete quarter, survives a composition-break check, and holds
+            the within-maker mix constant. Where it can&rsquo;t, it says so.{' '}
+            <span style={strong}>We publish less, on purpose — and everything we publish, we can defend.</span>
           </p>
           <p style={{ ...p, marginTop: 28 }}>
-            <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
-              See the record
+            <Link href="/analytics" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              See the verified movers
             </Link>
             <Link href="/about" style={{ marginLeft: 18, fontSize: 14, color: 'var(--color-text-muted)' }}>
               Or read the systems walk-through

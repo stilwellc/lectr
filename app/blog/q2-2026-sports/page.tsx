@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 
 export const metadata: Metadata = {
-  title: 'Q2 2026 sports market in review — game-used memorabilia doubled',
-  description: 'A $1.34M four-player jersey lot on top, Messi debut shirts, and a game-used median up 154%. The Q2 2026 sports memorabilia numbers.',
+  title: 'Q2 2026 sports market in review — a $126M quarter led by the cards',
+  description: 'A $2.93M LeBron rookie patch auto on top, a $2.81M Gretzky jersey behind it, and 19,000-plus lots through Goldin. The Q2 2026 sports market, reported as the descriptive tape it is.',
 };
 
 export default function Q2Sports() {
@@ -11,59 +11,54 @@ export default function Q2Sports() {
     <QuarterInsight
       market="sports"
       date="July 16, 2026"
-      title="Sports in Q2: game-used doubled"
-      dek="The bid-driven memorabilia market ran hot from the floor up: the typical game-used sale more than doubled year over year, provenance did the heavy lifting, and one four-player NBA jersey lot cleared seven figures."
+      title="Sports in Q2: the cards led a $126M quarter"
+      dek="The highest-volume market we track by a wide margin: 19,000-plus lots for $126M, nearly all of it through Goldin. Modern rookie cards set the ceiling, game-used memorabilia held the marquee, and — because these are bid sales — we report it descriptively, not as a return."
       stats={[
-        { label: 'Total realized', value: '$4.7M', sub: '629 lots sold' },
-        { label: 'Median sale', value: '$793', sub: '+73% vs Q2 2025', tone: 'up' },
-        { label: 'Game-used median', value: '+154%', sub: 'vs Q2 2025 · 275 sales', tone: 'up' },
+        { label: 'Total realized', value: '$125.6M', sub: '19,296 lots sold' },
+        { label: 'Median sale', value: '$551', sub: 'a true retail-depth tape' },
+        { label: 'Top lot', value: '$2.93M', sub: 'LeBron rookie patch auto' },
         { label: 'Basis', value: 'Bid sales', sub: 'no estimates published' },
       ]}
       headline={{
-        image: 'https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202605-1915-2628-8b9d16a0-a668-42d2-b387-b0f4f5068910/700e6d0d-1f0c-4ffc-a621-e28b4b6a4c8b@1x',
-        caption: 'Kobe Bryant / LeBron James / Stephen Curry / Luka Dončić — game-used group',
-        priceUsd: 1_342_000,
+        image: 'https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202603-2415-1559-28920969-4255-4ef8-a4c8-1338eba9fb2a/74314742-97a8-459a-bdbd-3945dd7cd26e@1x',
+        caption: 'LeBron James — 2003-04 Upper Deck Exquisite Collection Rookie Patch Autograph #78',
+        priceUsd: 2_928_000,
         house: 'Goldin',
         saleLine: 'June 29, 2026',
-        para: <>Four eras of the NBA in one lot: game-used material spanning Kobe, LeBron, Curry and Dončić, sold as a single group for $1,342,000 — more than a quarter of the entire sports market&rsquo;s Q2 value in one bid. It&rsquo;s also a snapshot of how this market now prices: not by player nostalgia but by documented, photo-matched game use, bundled into generational narratives that trade like portfolios.</>,
+        para: <>The card that defined a generation of the hobby: LeBron&rsquo;s 2003-04 Upper Deck Exquisite Rookie Patch Autograph, the piece every modern RPA is measured against. It brought $2,928,000 at Goldin&rsquo;s June sale — the top sports result of the quarter, edged out over a $2.81M Wayne Gretzky final-Oilers jersey and a $2.56M Shohei Ohtani 1/1 SuperFractor. Three of the quarter&rsquo;s four biggest lots were cards; the modern rookie market, not vintage memorabilia, set the ceiling.</>,
       }}
       topSales={[
+        { title: 'LeBron James — 2003-04 Upper Deck Exquisite Rookie Patch Autograph #78', priceUsd: 2_928_000, house: 'Goldin', date: '2026-06-29', maker: 'sports-cards' },
+        { title: "Wayne Gretzky — final Edmonton Oilers jersey, 1988 Stanley Cup Final Game 4, photo-matched", priceUsd: 2_806_000, house: 'Goldin', date: '2026-04-26', maker: 'game-used' },
+        { title: 'Shohei Ohtani — 2018 Topps Chrome 1/1 SuperFractor rookie card', priceUsd: 2_562_229, house: 'Goldin', date: '2026-06-29', maker: 'sports-cards' },
+        { title: '1952 Topps #311 Mickey Mantle — PSA NM-MT 8', priceUsd: 1_830_000, house: 'Goldin', date: '2026-06-21', maker: 'sports-cards' },
         { title: 'Kobe Bryant / LeBron James / Stephen Curry / Luka Dončić — game-used group', priceUsd: 1_342_000, house: 'Goldin', date: '2026-06-29', maker: 'game-used' },
-        { title: 'LeBron James — 17 game-used, photo-matched Cavaliers items', priceUsd: 207_400, house: 'Goldin', date: '2026-06-29', maker: 'game-used' },
-        { title: 'Lionel Messi — FC Barcelona first-team professional debut shirt', priceUsd: 201_300, house: 'Goldin', date: '2026-06-14', maker: 'game-used' },
-        { title: 'Lionel Messi — Champions League debut, first full match shirt', priceUsd: 134_200, house: 'Goldin', date: '2026-06-14', maker: 'game-used' },
-        { title: 'Aaron Judge — 51st HR of the AL-record 62-HR season, game-used', priceUsd: 111_020, house: 'Goldin', date: '2026-06-29', maker: 'game-used' },
       ]}
-      movers={[
-        { label: 'Game-used memorabilia', slug: 'game-used', chgPct: 154, n: 275 },
-        { label: 'Trophies & awards', slug: 'trophies-awards', chgPct: 54, n: 18 },
-        { label: 'Tickets & passes', slug: 'tickets-passes', chgPct: 47, n: 336 },
-      ]}
-      footnote="Sports runs on bid auctions with no published estimates, so there is no vs-estimate read here; prices are final bid plus premium."
+      footnote="Sports runs on bid auctions with no published estimates, so there is no vs-estimate read here and our engine treats the card, game-used, ticket and trophy buckets as descriptive — we report volume, records and top sales, not an appreciation figure. Prices are final bid plus premium."
     >
-      <H>Provenance is the product</H>
+      <H>The modern cards set the ceiling</H>
       <P>
-        Every one of the quarter&rsquo;s top results is a provenance story: photo-matched jerseys,
-        career-debut shirts, a record-season home run. The headline — a <B>$1.34M</B> group of
-        game-used jerseys spanning Kobe Bryant, LeBron James, Stephen Curry and Luka Dončić —
-        and the pair of <B>Messi debut shirts</B> ($201K and $134K) all trade on documentation,
-        not memorabilia-shop nostalgia. The market pays for the chain of custody.
+        The top of the quarter was a card market, not a memorabilia one: a <B>$2.93M LeBron rookie
+        patch auto</B>, a <B>$2.56M Ohtani 1/1 SuperFractor</B>, and a <B>$1.83M PSA-8 &rsquo;52
+        Mantle</B> — three of the four biggest lots. The lone jersey in that group, Gretzky&rsquo;s
+        photo-matched final Oilers shirt at $2.81M, is the exception that frames the rule: modern
+        graded rookies now trade at the very top alongside the most storied vintage memorabilia.
       </P>
-      <H>The floor rose everywhere</H>
+      <H>A retail-depth tape, almost all through one house</H>
       <P>
-        This wasn&rsquo;t just a trophy-lot quarter. The <em>typical</em> sale rose 73% year over
-        year, and every category we track moved the same direction: game-used +154% (275 sales),
-        trophies &amp; awards +54%, tickets &amp; passes +47% on 336 sales. When the $500 lot and
-        the $500,000 lot inflate together, that&rsquo;s broad participation — new bidders at the
-        entry level, not just two whales at the top.
+        Sports is the highest-volume market we cover — <B>19,296 lots</B> against a $551 median — and
+        <B> Goldin ran 96% of the value</B>. That mix, a handful of seven-figure trophies over a very
+        long tail of sub-$1,000 lots, is what the vertical is: broad retail participation punctuated
+        by a few whales. It&rsquo;s also why the median stays low even in a $126M quarter.
       </P>
       <H>Reading it without estimates</H>
       <P>
         These are bid auctions — no house estimates exist, so our usual hammer-vs-estimate read
-        doesn&rsquo;t apply. Instead lectr prices each live lot off its own realized comps
-        (sport- and player-matched), which is also why this vertical&rsquo;s &ldquo;lectr
-        value&rdquo; bands matter more here than anywhere else: they&rsquo;re the only estimate
-        in the room.
+        doesn&rsquo;t apply, and we don&rsquo;t manufacture an appreciation number the data
+        can&rsquo;t support. Instead lectr prices each live lot off its own realized comps (sport- and
+        player-matched), which is why this vertical&rsquo;s &ldquo;lectr value&rdquo; bands matter
+        more here than anywhere else: with no estimate in the catalogue, they&rsquo;re the only
+        estimate in the room.
       </P>
     </QuarterInsight>
   );

@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 
 export const metadata: Metadata = {
-  title: 'Q2 2026 watch market in review — everything sells, the middle repriced',
-  description: '728 watches, 96% sell-through, $64.8M — and a median down 19% while Patek Philippe ran +67%. The flight to quality, in numbers.',
+  title: 'Q2 2026 watch market in review — the deepest, most liquid tape we track',
+  description: '1,811 watches, $240M, near-total sell-through — and the only market where our engine will publish a return: Cartier +53% and Rolex +25% over five years, Patek −18% over three. The Q2 2026 numbers.',
 };
 
 export default function Q2Watches() {
@@ -11,60 +11,58 @@ export default function Q2Watches() {
     <QuarterInsight
       market="watch"
       date="July 16, 2026"
-      title="Watches in Q2: everything sells, the middle repriced"
-      dek="The most liquid market we track — 96% of 700+ offered watches found buyers — but the median fell 19% year over year while Patek Philippe ran +67%. That’s not a downturn; it’s a sorting."
+      title="Watches in Q2: the deepest tape we track"
+      dek="1,811 watches sold for $240M — by far the most liquid, most measurable market we cover. It's also the only vertical where our engine clears the bar to publish a return: Cartier and Rolex are up over five years, Patek is down over three, and each read carries its confidence interval."
       stats={[
-        { label: 'Total realized', value: '$64.8M', sub: '728 lots sold' },
-        { label: 'Median sale', value: '$25,805', sub: '−19% vs Q2 2025', tone: 'down' },
-        { label: 'Sell-through', value: '96%', sub: 'deepest liquidity we track', tone: 'up' },
-        { label: 'Hammer vs estimate', value: '1.08×', sub: 'median · 32% beat the high' },
+        { label: 'Total realized', value: '$239.9M', sub: '1,811 lots sold' },
+        { label: 'Median sale', value: '$48,260', sub: 'across the makers we track' },
+        { label: 'Sell-through', value: '97–98%', sub: 'deepest liquidity we track', tone: 'up' },
+        { label: 'Hammer vs estimate', value: '1.35×', sub: 'median · 55% beat the high' },
       ]}
       headline={{
-        image: 'https://dist.phillips.com/auction-assets/NY080126/233450_001.jpg?bg-color=ffffff&pad=0&fit=bounds&height=550&optimize=medium&width=605',
-        caption: 'Patek Philippe — the quarter’s top watch',
-        priceUsd: 3_992_000,
+        image: 'https://dist.phillips.com/auction-assets/HK080226/234083_001.jpg?bg-color=ffffff&pad=0&fit=bounds&height=550&optimize=medium&width=605',
+        caption: 'Patek Philippe — pink gold perpetual calendar chronograph',
+        priceUsd: 10_287_360,
         house: 'Phillips',
-        saleLine: 'June 13, 2026 · New York',
-        para: <>In a quarter where the average Rolex, Cartier and AP repriced down ~30%, the top of the Patek market did the opposite. This exceptionally preserved example brought $3,992,000 at Phillips&rsquo; June sale — the largest watch price of the quarter and the clearest statement of the sorting underway: condition-and-rarity trophies are detaching from the reference market beneath them. Phillips sold four of the quarter&rsquo;s five biggest watches; this one led them all.</>,
+        saleLine: 'May 30, 2026 · Hong Kong',
+        para: <>The quarter&rsquo;s top watch, and one of the largest of the year: an historically important pink gold perpetual calendar chronograph with French calendar and moon phases, its case made by Vichet — the only known pink gold first-series example carrying British hallmarks. It brought $10,287,360 at Phillips&rsquo; May sale against a $3.1–6.1M estimate. Phillips owned the top of the quarter: it took <B>43% of all watch value</B> and every one of the five biggest results, all of them Patek. That&rsquo;s the pattern beneath a market our engine reads as broadly flat-to-soft — the trophy tier keeps setting records even as the reference market it sits above cools.</>,
       }}
       topSales={[
-        { title: 'Patek Philippe — an exceptionally well-preserved, highly important wristwatch', priceUsd: 3_992_000, house: 'Phillips', date: '2026-06-13', maker: 'patek-philippe' },
-        { title: 'Patek Philippe — an extremely important and rare 18K wristwatch', priceUsd: 2_759_000, house: "Christie's", date: '2026-06-12', maker: 'patek-philippe' },
-        { title: 'Rolex — an immensely well-preserved 14K yellow gold example', priceUsd: 1_803_400, house: 'Phillips', date: '2026-06-13', maker: 'rolex' },
-        { title: 'Cartier — a unique, museum-quality piece', priceUsd: 1_402_080, house: 'Phillips', date: '2026-05-09', maker: 'cartier' },
-        { title: 'Audemars Piguet — an extraordinary, historical stainless example', priceUsd: 1_256_030, house: 'Phillips', date: '2026-05-09', maker: 'audemars-piguet' },
+        { title: 'Patek Philippe — pink gold perpetual calendar chronograph, French calendar & moon phases (Vichet case)', priceUsd: 10_287_360, house: 'Phillips', date: '2026-05-30', maker: 'patek-philippe' },
+        { title: 'Patek Philippe — yellow gold two-crown world-time with cloisonné enamel dial', priceUsd: 9_155_150, house: 'Phillips', date: '2026-05-09', maker: 'patek-philippe' },
+        { title: 'Patek Philippe — a most probably unique white gold perpetual calendar split-seconds chronograph', priceUsd: 5_202_000, house: 'Phillips', date: '2026-06-13', maker: 'patek-philippe' },
+        { title: 'Patek Philippe — an incredible, extremely well-preserved pink gold perpetual calendar', priceUsd: 3_992_000, house: 'Phillips', date: '2026-06-13', maker: 'patek-philippe' },
+        { title: 'Patek Philippe — a rare, freshly unsealed white gold double-dial wristwatch', priceUsd: 3_728_300, house: 'Phillips', date: '2026-05-09', maker: 'patek-philippe' },
       ]}
-      movers={[
-        { label: 'Patek Philippe', slug: 'patek-philippe', chgPct: 67, n: 193 },
-      ]}
-      coolers={[
-        { label: 'Omega', slug: 'omega', chgPct: -34, n: 46 },
-        { label: 'Rolex', slug: 'rolex', chgPct: -31, n: 244 },
-        { label: 'Cartier', slug: 'cartier', chgPct: -30, n: 132 },
-        { label: 'Audemars Piguet', slug: 'audemars-piguet', chgPct: -27, n: 113 },
-      ]}
+      footnote="The moves below are our hedonic index reads, each shown with its 95% confidence interval and the horizon over which it resolves. Where a maker's shorter-horizon interval spans zero — Rolex at one year, Audemars Piguet and Cartier at one and three — we don't publish a direction; watches is the one vertical where enough clears the bar to publish any return at all."
     >
-      <H>Liquidity is not the question</H>
+      <H>The only tape we&rsquo;ll put a number on</H>
       <P>
-        Watches were the easiest market to sell into all quarter: <B>96% sell-through</B> across 728
-        lots, with the median hammering 8% over its estimate midpoint. Nothing else we track comes
-        close on clearance. The question isn&rsquo;t whether watches sell — it&rsquo;s at what level.
+        Watches were the easiest market to sell into all quarter — <B>97–98% sell-through</B> across
+        1,811 lots, with the median hammering 35% over its estimate midpoint and 55% clearing the
+        high outright. Nothing else we track comes close on clearance or on sample depth. That depth
+        is why watches is the <em>only</em> vertical where our engine will publish a like-for-like
+        return: the cohorts are big enough that a move survives its own confidence interval. Elsewhere
+        we speak in demand; here we can speak in price.
       </P>
-      <H>The sorting: Patek up 67%, everyone else down ~30%</H>
+      <H>What the index actually says</H>
       <P>
-        The market&rsquo;s median fell 19% year over year, but that single number hides the real
-        move: <B>Patek Philippe&rsquo;s median rose 67%</B> across 193 sales while Rolex (−31%,
-        n=244), Cartier (−30%), Audemars Piguet (−27%) and Omega (−34%) all repriced down through
-        genuinely deep volume. Four of the five top prices ran through Phillips, which took
-        <B> 65% of the quarter&rsquo;s value</B> — its Geneva and New York June sales were where the
-        seven-figure material went.
+        Three makers clear the bar, and they don&rsquo;t point the same way. <B>Cartier is up 52.9%
+        over five years</B> (95% CI +19% to +96%) and <B>Rolex up 25.1%</B> (+12% to +39%) — durable,
+        interval-backed appreciation on the deepest cohorts we hold. <B>Patek Philippe is down 18.2%
+        over three years</B> (−26% to −9%): a real, resolved decline, not noise. The rest stay
+        descriptive — Audemars Piguet&rsquo;s demand reads roughly flat (+2% over estimate), Omega
+        soft (−12%), and at shorter horizons even Rolex&rsquo;s interval spans zero. We report the
+        moves that resolve and hold the ones that don&rsquo;t.
       </P>
-      <H>What it means for a buyer</H>
+      <H>Trophies detached from the reference market</H>
       <P>
-        A 96%-sell-through market that&rsquo;s repricing down at the middle is close to a textbook
-        buyer&rsquo;s setup outside the trophy tier: bids clear, but at a fairer level than a year
-        ago. The below-market flags our engine carries into Q3 are concentrated in exactly that
-        middle — references where the comps have already reset but estimates haven&rsquo;t.
+        The $10M Patek at the top of the quarter — and the four seven-figure Pateks behind it, all
+        through Phillips — is the tell. Condition-and-rarity trophies keep setting records while the
+        reference market beneath them reads flat-to-soft on the index. For a buyer, that&rsquo;s the
+        opportunity: liquidity is total, but outside the unrepeatable pieces the comps have done the
+        repricing and many estimates haven&rsquo;t caught up. The below-market flags our engine
+        carries into Q3 sit in exactly that middle.
       </P>
     </QuarterInsight>
   );

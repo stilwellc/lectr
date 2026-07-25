@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 
 export const metadata: Metadata = {
-  title: 'Q2 2026 design market in review — the strongest demand of any vertical',
-  description: 'Small in dollars, hottest in demand: 43% of design lots beat their high estimate at the hammer, the best read of any market lectr tracks. The Q2 2026 numbers.',
+  title: 'Q2 2026 design market in review — small money, real heat',
+  description: 'The smallest market we track put up the strongest demand of the quarter: the median design lot hammered nearly 50% over its midpoint and 69% beat the high estimate. The Q2 2026 numbers.',
 };
 
 export default function Q2Design() {
@@ -12,12 +12,12 @@ export default function Q2Design() {
       market="design"
       date="July 16, 2026"
       title="Design in Q2: small money, real heat"
-      dek="The smallest market we track put up the strongest demand quality of the quarter: 43% of lots beat their high estimate at the hammer, 82% of everything offered sold, and the median more than doubled year over year."
+      dek="The smallest market we track put up the strongest demand quality of the quarter: the median lot hammered nearly 50% over its estimate midpoint, more than two-thirds of lots beat their high estimate, and 88% of everything offered sold."
       stats={[
-        { label: 'Total realized', value: '$2.7M', sub: '102 lots sold' },
-        { label: 'Median sale', value: '$14,080', sub: '+126% vs Q2 2025', tone: 'up' },
-        { label: 'Sell-through', value: '82%', sub: 'buyers showed up' },
-        { label: 'Beat the high estimate', value: '43%', sub: 'best of any market · 1.13× median', tone: 'up' },
+        { label: 'Total realized', value: '$5.9M', sub: '170 lots sold' },
+        { label: 'Median sale', value: '$20,480', sub: 'across the designers we track' },
+        { label: 'Sell-through', value: '88%', sub: 'buyers showed up' },
+        { label: 'Beat the high estimate', value: '69%', sub: 'best of any market · 1.48× median', tone: 'up' },
       ]}
       headline={{
         image: '/blog/q2-2026-jeanneret-library-table.jpg',
@@ -25,46 +25,50 @@ export default function Q2Design() {
         priceUsd: 355_600,
         house: "Christie's",
         saleLine: 'June 10, 2026 · New York',
-        para: <>Chandigarh furniture usually trades in the tens of thousands — chairs and desks made by the hundreds for Le Corbusier and Jeanneret&rsquo;s planned city. The illuminated library table is the other end of that market: a rare, architectural fixture built for the city&rsquo;s institutions, with far fewer survivors. At $355,600 it set the quarter&rsquo;s design ceiling and outran the typical Jeanneret lot by more than twentyfold — proof that within &ldquo;production&rdquo; furniture, scarcity of the specific model is everything.</>,
+        para: <>Chandigarh furniture usually trades in the tens of thousands — chairs and desks made by the hundreds for Le Corbusier and Jeanneret&rsquo;s planned city. The illuminated library table is the other end of that market: a rare, architectural fixture built for the city&rsquo;s institutions, with far fewer survivors. At $355,600 it set the quarter&rsquo;s design ceiling and outran the typical Jeanneret lot by more than thirtyfold — proof that within &ldquo;production&rdquo; furniture, scarcity of the specific model is everything.</>,
       }}
       topSales={[
         { title: 'Pierre Jeanneret — Illuminated Library Table, PJ-TAT-10-B', priceUsd: 355_600, house: "Christie's", date: '2026-06-10', maker: 'pierre-jeanneret' },
         { title: "George Nakashima — 'Frenchman's Cove II' Dining Table, 1968", priceUsd: 330_200, house: "Christie's", date: '2026-06-10', maker: 'george-nakashima' },
-        { title: 'George Nakashima — Special-order Conoid dining table', priceUsd: 153_600, house: 'Wright', date: '2026-05-13', maker: 'george-nakashima' },
-        { title: 'Jean Prouvé — Cabinet, model no. 150', priceUsd: 142_545, house: 'Phillips', date: '2026-04-30', maker: 'jean-prouve' },
-        { title: 'George Nakashima — Special-order Triple Sliding Door cabinet', priceUsd: 102_400, house: 'Wright', date: '2026-05-13', maker: 'george-nakashima' },
+        { title: 'Jean Prouvé — sideboard', priceUsd: 294_400, house: "Sotheby's", date: '2026-06-09', maker: 'jean-prouve' },
+        { title: 'Jean Prouvé — "Visiteur" armchair', priceUsd: 230_400, house: "Sotheby's", date: '2026-06-10', maker: 'jean-prouve' },
+        { title: 'Jean Prouvé — "Visiteur" armchair', priceUsd: 166_400, house: "Sotheby's", date: '2026-06-10', maker: 'jean-prouve' },
       ]}
       movers={[
-        { label: 'Charles & Ray Eames', slug: 'charles-eames', chgPct: 284, n: 17 },
-        { label: 'George Nakashima', slug: 'george-nakashima', chgPct: 40, n: 42 },
-        { label: 'Pierre Jeanneret', slug: 'pierre-jeanneret', chgPct: 3, n: 36 },
+        { label: 'George Nakashima', slug: 'george-nakashima', chgPct: 20, n: 65 },
+        { label: 'Jean Prouvé', slug: 'jean-prouve', chgPct: 14, n: 36 },
       ]}
       coolers={[
-        { label: 'Jean Prouvé (small sample)', slug: 'jean-prouve', chgPct: -47, n: 7 },
+        { label: 'Charles & Ray Eames', slug: 'charles-eames', chgPct: -11, n: 18 },
+        { label: 'Pierre Jeanneret', slug: 'pierre-jeanneret', chgPct: -11, n: 51 },
       ]}
-      footnote="Prouvé traded only 7 times in the quarter — the drop is a mix shift, not a verdict."
+      footnote="Design is thin enough that our engine abstains on designer-level appreciation — none of these cohorts clear the confidence bar. The moves shown are demand reads: how each maker's median lot is hammering against its own estimate right now, not a measured return."
     >
       <H>The strongest demand read we measured</H>
       <P>
-        Design is a $2.7M market next to art&rsquo;s $240M — and it out-demanded everything.
-        The median lot hammered <B>13% over its estimate midpoint</B>, 43% cleared their
-        <em> high</em> estimate outright, and 82% of offered lots sold. Every other market
-        we track was pickier. When small markets run this hot, it&rsquo;s usually supply-starved
-        demand: the good material is scarce and the bidders know it.
+        Design is a $5.9M market next to art&rsquo;s half-billion — and it out-demanded everything.
+        The median lot hammered <B>48% over its estimate midpoint</B>, <B>69% cleared their
+        high estimate outright</B>, and 88% of offered lots sold. Every other market we track was
+        pickier. When small markets run this hot, it&rsquo;s usually supply-starved demand: the good
+        material is scarce and the bidders know it. It&rsquo;s a demand signal, not a measured return —
+        the cohorts here are too thin for our index to publish a price move, so we read it off the
+        estimates instead.
       </P>
-      <H>Christie&rsquo;s June 10 set the ceiling; Wright carried the volume</H>
+      <H>Christie&rsquo;s set the ceiling; Sotheby&rsquo;s and Wright carried the middle</H>
       <P>
         The two headline results — the Jeanneret illuminated library table at <B>$355,600</B> and
         Nakashima&rsquo;s <em>Frenchman&rsquo;s Cove II</em> at <B>$330,200</B> — both came out of
-        Christie&rsquo;s June 10 design sale. But Wright moved the most value across the quarter
-        ($1.5M of the $2.7M), the steady middle of the Nakashima and Chandigarh markets.
+        Christie&rsquo;s June 10 design sale. But the value was spread: Sotheby&rsquo;s took the
+        largest single share (45%, led by a run of Prouvé), with Wright the workhorse of the
+        Nakashima and Chandigarh middle. No single room owned the quarter.
       </P>
-      <H>Eames woke up</H>
+      <H>Nakashima keeps grinding</H>
       <P>
-        The mover of the quarter: <B>Charles &amp; Ray Eames, median up 284%</B> across 17 sales —
-        driven by special-order and early-production pieces rather than the commodity lounge chairs.
-        Nakashima&rsquo;s +40% on 42 sales is the more durable signal: that market keeps grinding higher
-        on genuinely deep trading volume.
+        The durable signal is <B>Nakashima&rsquo;s +20% demand read across 65 sales</B> — the deepest
+        volume in the vertical, still hammering well over estimate. Prouvé&rsquo;s +14% on 36 sales
+        echoes it. Where the reads soften — Eames and Jeanneret both around −11% — it&rsquo;s a mix
+        story: commodity production pieces dragging the median while the rare, architectural examples
+        keep setting the ceiling.
       </P>
     </QuarterInsight>
   );
