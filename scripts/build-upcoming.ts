@@ -70,12 +70,16 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // parsing 'YYYY-MM-DD' as UTC midnight). The build always precedes the client
   // load, so `>= today` here never drops a lot the client would still show.
   const today = new Date().toISOString().slice(0, 10);
+  // results-pending grace: keep a just-closed lot visible only through the day
+  // after its sale while results post; anything older that never resolved (e.g.
+  // Christie's results gated behind login and never scraped) drops, not lingers.
+  const graceCut = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
   const upcoming = lots
     .filter(l => {
       if (l.status !== 'upcoming') return false;
       // A just-closed lot awaiting results is held 'upcoming' with a past sale
-      // date — keep it visible even though its sale date is in the past.
-      if ((l as { resultsPending?: boolean }).resultsPending) return true;
+      // date — keep it visible only within the grace window.
+      if ((l as { resultsPending?: boolean }).resultsPending) return !!l.saleDate && l.saleDate.slice(0, 10) >= graceCut;
       return !!l.saleDate && l.saleDate.slice(0, 10) >= today;
     })
     .map(l => {

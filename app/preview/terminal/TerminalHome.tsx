@@ -256,8 +256,12 @@ export default function TerminalHomePage() {
 
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
+    // results-pending grace: a just-sold lot is held 'upcoming' while results
+    // post, but cap it so a sale weeks past (e.g. Christie's results gated behind
+    // login and never scraped) doesn't linger in the feed as "on the block".
+    const graceCut = new Date(Date.now() - 864e5).toISOString().split('T')[0];
     return marketLots
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate >= graceCut)))
       .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
   }, [marketLots]);
 
@@ -476,8 +480,9 @@ export default function TerminalHomePage() {
     const mine = allLots.filter(l => idSet.has(l.id));
     if (mine.length === 0) return null;
     const today = new Date().toISOString().split('T')[0];
+    const graceCut = new Date(Date.now() - 864e5).toISOString().split('T')[0];
     const live = mine
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || l.resultsPending))
+      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate >= graceCut)))
       .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
     let bestMove: { from: number; to: number } | null = null;
     for (const l of live) {
