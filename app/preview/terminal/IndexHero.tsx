@@ -243,6 +243,10 @@ export default function IndexHero({
     );
   }
 
+  // ── DESKTOP: "the observatory". The chart is the STAGE, not a widget — a
+  // full-width, unboxed landscape under the typography. Type top-left, the
+  // side metrics as a hairline ledger RAIL top-right, and the verified movers
+  // as a ticker BAND beneath the landscape. One composition, no cards.
   return (
     <LazyMotion features={domAnimation} strict>
       <section className={styles.hero}>
@@ -274,46 +278,138 @@ export default function IndexHero({
           </div>
         </m.div>
 
-        {/* CHART — the value prop, right under the number */}
-        <m.div className={styles.heroChart} {...rise(0.12)}>
-          <div className={styles.chartCard}>
-            <div className={styles.chartCardHead}>
-              <span>{metricLabel} · {horizon.label}</span>
-              <span className={styles.chartCardTag}>{marketLabel.toLowerCase()}</span>
+        {/* RAIL — the side metrics as a right-hand ledger: label · hairline · value */}
+        <m.div className={styles.heroRail} {...rise(0.12)}>
+          <div className={styles.railRow}>
+            <span className={styles.railLabel}>Yearly ROI</span>
+            <span className={styles.railVal} data-dir={roiDir}>{roi != null ? fmtPct(roi) : '—'}</span>
+          </div>
+          {roiFlag && <div className={styles.railFlagLine}>⚠ {roiFlag}</div>}
+          <div className={styles.railRow}>
+            <span className={styles.railLabel}>On the block</span>
+            <span className={styles.railVal}>{fmtInt(onBlock)}</span>
+          </div>
+          {belowMkt ? (
+            <button type="button" className={styles.railBtn} onClick={onOpenBelow}
+              aria-label={`${belowMkt} below-market lots — see them`}>
+              <span className={styles.railLabel}>Below market now</span>
+              <span className={styles.railVal} data-accent="true">{fmtInt(belowMkt)}<em className={styles.railGo} aria-hidden>↗</em></span>
+            </button>
+          ) : (
+            <div className={styles.railRow}>
+              <span className={styles.railLabel}>Below market now</span>
+              <span className={styles.railVal}>—</span>
             </div>
-            {hasChart ? (
-              <MarketChart data={windowIdx} play={play} height={300} />
-            ) : (
-              <div className={styles.heroSparkFallback}>
-                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={420} height={120} strokeWidth={1.8} />
-                <span className={styles.chartCardTag}>series building — sampling this market</span>
-              </div>
-            )}
-          </div>
-        </m.div>
-
-        {/* META — read-outs + verified movers + ⌘K */}
-        <m.div className={styles.heroMeta} {...rise(0.18)}>
-          <div className={styles.heroStats}>
-            <Stat label="Yearly ROI" value={roi != null ? fmtPct(roi) : '—'} dir={roiDir} flag={roiFlag} />
-            <Stat label="On the block" value={fmtInt(onBlock)} />
-            <Stat
-              label="Below-market now"
-              value={belowMkt ? fmtInt(belowMkt) : '—'}
-              accent
-              onClick={belowMkt ? onOpenBelow : undefined}
-            />
-          </div>
-          <VerifiedStrip movers={movers} activeKey={activeKey} market={market} />
-          <button type="button" className={styles.cmdPill} onClick={onCommand}>
+          )}
+          <button type="button" className={styles.railCmd} onClick={onCommand}>
             <kbd className={styles.kbd}>⌘</kbd>
             <kbd className={styles.kbd}>K</kbd>
             <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
             <span className={styles.cmdArrow} aria-hidden>↵</span>
           </button>
         </m.div>
+
+        {/* STAGE — the full-width landscape. No box, no card: the line, its
+            directional fill and glow ARE the composition. */}
+        <m.div className={styles.heroStage} {...rise(0.16)}>
+          <div className={styles.stageMeta}>
+            <span>{metricLabel} · {horizon.label}</span>
+            <span>{marketLabel.toLowerCase()}</span>
+          </div>
+          {hasChart ? (
+            <MarketChart data={windowIdx} play={play} height={310} />
+          ) : (
+            <div className={styles.heroSparkFallback}>
+              <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={720} height={140} strokeWidth={1.8} />
+              <span className={styles.chartCardTag}>series building — sampling this market</span>
+            </div>
+          )}
+        </m.div>
+
+        {/* MOVERS BAND — the verified ledger running under the landscape */}
+        <m.div className={styles.heroMoversArea} {...rise(0.2)}>
+          <MoversBand movers={movers} activeKey={activeKey} market={market} />
+        </m.div>
       </section>
     </LazyMotion>
+  );
+}
+
+/* The horizontal movers ledger under the desktop stage — same honesty rules as
+   VerifiedStrip (CI'd movers first, sub-market reads as the fallback, never a
+   fabricated %), recomposed as a single hairline band. */
+function MoversBand({ movers, activeKey, market }: { movers: VerifiedMover[]; activeKey: Market; market: MarketData | null }) {
+  if (movers.length) {
+    return (
+      <div className={styles.moversBand}>
+        <span className={styles.moversBandLabel}>Verified movers<em>95% confidence</em></span>
+        <div className={styles.moversBandRows}>
+          {movers.slice(0, 5).map((mv) => (
+            <span key={mv.slug} className={styles.moverCell}>
+              <span className={styles.moverCellName}>{mv.label}</span>
+              <span className={styles.moverCellChg} data-dir={mv.dir}>
+                {fmtPct(mv.changePct)} <em>{mv.horizon}</em>
+              </span>
+              <span className={styles.moverCellCi}>[{mv.ciLoPct.toFixed(0)}, {mv.ciHiPct.toFixed(0)}]</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // no CI'd maker — this vertical's strongest sub-market reads, same band shape
+  const subs = activeKey === 'all' ? [] : (market?.subMarkets?.[activeKey] || []);
+  if (subs.length) {
+    const rank = { index: 0, demand: 1, descriptive: 2 } as const;
+    const ordered = [...subs].sort((a, b) => {
+      if (rank[a.readType] !== rank[b.readType]) return rank[a.readType] - rank[b.readType];
+      if (a.readType === 'demand') return (b.demandNow ?? -Infinity) - (a.demandNow ?? -Infinity);
+      return b.lots - a.lots;
+    }).slice(0, 4);
+    return (
+      <div className={styles.moversBand}>
+        <span className={styles.moversBandLabel}>Sub-markets<em>strongest honest read</em></span>
+        <div className={styles.moversBandRows}>
+          {ordered.map((r) => {
+            if (r.readType === 'index' && r.index) {
+              const dir = r.index.changePct >= 0 ? 'up' : 'down';
+              return (
+                <span key={r.slug} className={styles.moverCell}>
+                  <span className={styles.moverCellName}>{r.label}</span>
+                  <span className={styles.moverCellChg} data-dir={dir}>{fmtPct(r.index.changePct)} <em>{r.index.horizon}</em></span>
+                  <span className={styles.moverCellCi}>[{r.index.ciLoPct.toFixed(0)}, {r.index.ciHiPct.toFixed(0)}]</span>
+                </span>
+              );
+            }
+            if (r.readType === 'demand' && r.demandNow != null) {
+              const dir = r.demandNow >= 0 ? 'up' : 'down';
+              return (
+                <span key={r.slug} className={styles.moverCell}>
+                  <span className={styles.moverCellName}>{r.label}</span>
+                  <span className={styles.moverCellChg} data-dir={dir}>{fmtPct(r.demandNow)} <em>demand</em></span>
+                  <span className={styles.moverCellCi}>{r.typicalUsd != null ? `typ ${fmtMoneyCompact(r.typicalUsd)}` : `${fmtInt(r.lots)} lots`}</span>
+                </span>
+              );
+            }
+            return (
+              <span key={r.slug} className={styles.moverCell}>
+                <span className={styles.moverCellName}>{r.label}</span>
+                <span className={styles.moverCellChg}>{r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : '—'} <em>typical</em></span>
+                <span className={styles.moverCellCi}>{r.record ? `rec ${fmtMoneyCompact(r.record.usd)}` : `${fmtInt(r.lots)} lots`}</span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.verifiedEmpty}>
+      <span className={styles.verifiedEmptyDot} aria-hidden />
+      No maker in {activeKey === 'all' ? 'the market' : `${activeKey}`} clears the 95%-confidence bar yet — we only print a move the data resolves.
+    </div>
   );
 }
 
@@ -398,24 +494,3 @@ function SubMarketStrip({ subs, compact }: { subs: SubMarketRead[]; compact?: bo
   );
 }
 
-function Stat({ label, value, accent, dir, flag, onClick }: { label: string; value: string; accent?: boolean; dir?: 'up' | 'down'; flag?: string; onClick?: () => void }) {
-  const content = (
-    <>
-      <span className={styles.statVal} data-dir={dir}>{value}</span>
-      <span className={styles.statLabel}>{label}</span>
-      {flag && <span className={styles.statFlag}>⚠ {flag}</span>}
-    </>
-  );
-  if (onClick) {
-    return (
-      <button type="button" className={styles.statBtn} data-accent={accent ? 'true' : undefined} onClick={onClick} aria-label={`${label}: ${value} — see flagged lots`}>
-        {content}
-      </button>
-    );
-  }
-  return (
-    <span className={styles.stat} data-accent={accent ? 'true' : undefined}>
-      {content}
-    </span>
-  );
-}

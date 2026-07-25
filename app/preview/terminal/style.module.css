@@ -129,21 +129,196 @@
   padding: 0 clamp(24px, 5vw, 56px) 80px;
 }
 
+/* THE OBSERVATORY — desktop hero. The chart is the STAGE (a full-width,
+   unboxed landscape), the type sits above it top-left, the side metrics run
+   as a hairline ledger RAIL top-right, and the verified movers close the
+   composition as a ticker band under the landscape. */
 .hero {
   display: grid;
-  grid-template-columns: 1.02fr 1fr;
+  grid-template-columns: minmax(0, 1fr) clamp(272px, 23vw, 336px);
   grid-template-areas:
-    "head chart"
-    "meta chart";
-  column-gap: clamp(32px, 5vw, 72px);
-  row-gap: 28px;
-  align-items: center;
-  padding: clamp(48px, 7vw, 88px) 0 40px;
+    "head  rail"
+    "stage stage"
+    "movers movers";
+  column-gap: clamp(56px, 7vw, 120px);
+  row-gap: 0;
+  align-items: end;
+  padding: clamp(40px, 6vw, 72px) 0 32px;
 }
 .heroHead { grid-area: head; min-width: 0; align-self: end; }
-.heroChart { grid-area: chart; min-width: 0; align-self: center; }
+
+/* ── the metrics rail: right-hand ledger, label left · value right, hairlines ── */
+.heroRail {
+  grid-area: rail;
+  min-width: 0;
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+}
+.railRow,
+.railBtn {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 2px 12px;
+  border-top: 1px solid var(--tt-hair);
+}
+.railRow:first-child { border-top: none; }
+.railBtn {
+  width: 100%;
+  border-left: none; border-right: none; border-bottom: none;
+  background: none;
+  cursor: pointer;
+  transition: background 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.railBtn:hover { background: rgba(232, 218, 182, 0.04); }
+.railBtn:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
+.railLabel {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
+  white-space: nowrap;
+}
+.railVal {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--tt-fg);
+  font-variant-numeric: tabular-nums;
+}
+.railVal[data-dir='up'] { color: var(--color-up); }
+.railVal[data-dir='down'] { color: var(--color-down); }
+.railVal[data-accent='true'] { color: var(--tt-butter); }
+.railGo {
+  font-style: normal;
+  font-size: 12px;
+  margin-left: 7px;
+  color: var(--tt-butter);
+  opacity: 0.85;
+}
+.railFlagLine {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: #d8a24a;
+  text-align: right;
+  padding: 0 2px 10px;
+  margin-top: -6px;
+}
+/* the ⌘K row closes the rail — same ledger grammar, butter on hover */
+.railCmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 2px 2px;
+  border-top: 1px solid var(--tt-hair);
+  border-left: none; border-right: none; border-bottom: none;
+  background: none;
+  cursor: pointer;
+  transition: opacity 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+  opacity: 0.86;
+}
+.railCmd:hover { opacity: 1; }
+.railCmd:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
+.railCmd .cmdLabel { flex: 1; text-align: left; }
+.railCmd .cmdArrow { margin-left: auto; }
+
+/* ── the stage: the chart owns the full hero width, no box around it ── */
+.heroStage {
+  grid-area: stage;
+  min-width: 0;
+  margin-top: clamp(30px, 4vw, 48px);
+}
+.stageMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
+  padding-bottom: 12px;
+}
+
+/* ── the movers band: a single hairline ticker under the landscape ── */
+.heroMoversArea { grid-area: movers; min-width: 0; margin-top: 20px; }
+.moversBand {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(20px, 3vw, 40px);
+  border-top: 1px solid var(--tt-hair);
+  padding-top: 16px;
+  flex-wrap: wrap;
+}
+.moversBandLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tt-secondary);
+  white-space: nowrap;
+}
+.moversBandLabel em {
+  font-style: normal;
+  color: var(--tt-faint);
+  letter-spacing: 0.1em;
+  font-size: 9px;
+}
+.moversBandRows {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.moverCell {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px clamp(16px, 2.2vw, 30px);
+  border-left: 1px solid var(--tt-hair);
+  white-space: nowrap;
+}
+.moverCell:first-child { border-left: none; padding-left: 0; }
+.moverCellName {
+  font-family: var(--font-serif-display), serif;
+  font-size: 15.5px;
+  letter-spacing: -0.005em;
+  color: var(--tt-fg);
+}
+.moverCellChg {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.moverCellChg[data-dir='up'] { color: var(--color-up); }
+.moverCellChg[data-dir='down'] { color: var(--color-down); }
+.moverCellChg em {
+  font-style: normal;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
+  margin-left: 2px;
+}
+.moverCellCi {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10.5px;
+  color: var(--tt-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* legacy two-col meta (mobile hero still composes its own scene) */
 .heroMeta {
-  grid-area: meta;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1135,13 +1310,16 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   }
   .hero {
     grid-template-columns: 1fr;
-    /* number leads → chart (the value prop) → the read-outs. No prose wall. */
-    grid-template-areas: "head" "chart" "meta";
+    /* number leads → stage (the value prop) → the rail → movers. No prose wall. */
+    grid-template-areas: "head" "stage" "rail" "movers";
     row-gap: 20px;
     padding: 20px 0 16px;
     align-items: stretch;
   }
   .heroHead { align-self: stretch; }
+  .heroStage { margin-top: 4px; }
+  .heroRail { align-self: stretch; }
+  .heroMoversArea { margin-top: 4px; }
   .heroMeta { gap: 22px; }
   .heroNumber { font-size: clamp(64px, 20vw, 104px); }
   .heroNumberRow { gap: 16px; margin-bottom: 0; }
