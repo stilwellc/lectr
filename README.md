@@ -12,7 +12,9 @@ Every estimate, read against every hammer.
 
 ---
 
-lectr tracks the collectibles auction market — art, design, watches, sports, and science — across seven auction houses, and calls whether a lot is trading below or above its true comparables. It reads every upcoming lot against a price history it builds itself, precomputes a "below market / above market" signal, and replays those calls point-in-time to prove the record.
+lectr tracks the collectibles auction market — art, design, watches, sports, science, and pop culture — across seven auction houses. It calls whether a lot is trading below or above its true comparables, reads every upcoming lot against a price history it builds itself, precomputes a "below market / above market" signal, and replays those calls point-in-time to prove the record.
+
+It also measures **price movement**: a confidence-gated hedonic index that surfaces only the makers whose returns clear a 95% confidence bar (the *verified movers*), and abstains everywhere the data can't defend a number. Where a market-level return isn't defensible, it drills to **sub-markets** — each shown at the strongest honest read its data supports.
 
 It is a read-only intelligence terminal: **auctions only, never fixed-price listings** — an asking price is not market data.
 
@@ -41,8 +43,9 @@ It is a read-only intelligence terminal: **auctions only, never fixed-price list
 - **Signals** each upcoming lot as *Below Market* or *Above Market* vs. its comparables, precomputed at crawl time.
 - **Backtests** those calls point-in-time: what would you have known that day, and how did the lot actually hammer?
 - **Tracks demand** per market as a typical-sale-vs-estimate index (and, for the estimate-less Goldin verticals, a like-for-like realized-price cohort).
+- **Measures price movement** with a per-maker hedonic index (robust log-price regression, mix-controlled), confidence-gated so it publishes a return *only* when the 95% CI resolves the sign — the *verified movers*. Where a market-level index can't be defended, it drills to **sub-markets**, each showing a verified CI'd move, else measured demand, else a descriptive read (typical price · record · volume) — never a fabricated appreciation.
 
-The home page is a trading-floor terminal: a market switch, the demand board with today's highest-conviction call in the fold, the live feed of lots "on the block," and the record.
+The home page is a trading-floor terminal: the market switch, a **demand-led hero** with a demand × ROI cross-check (a flag when lots are beating softening estimates), the **verified movers** (CI-bounded maker returns), the live feed of lots "on the block," the **sub-market board**, and the all-time record board. Switching markets re-scopes every section.
 
 ## Architecture
 
@@ -59,7 +62,7 @@ lectr is a **pure static export** — there is no server.
                                     lectr.bid  (Cloudflare Pages)
 ```
 
-- **Framework:** Next.js (App Router), `output: 'export'` → 50 prerendered static pages.
+- **Framework:** Next.js (App Router), `output: 'export'` → ~113 prerendered static pages.
 - **Hosting:** Cloudflare Pages (free tier, unlimited bandwidth — the right fit for a multi-MB dataset). No compute is metered because there is none.
 - **Data:** flat JSON files served from `/data/ray/`, fetched by the client in tiers.
 - **Automation:** two GitHub Actions — one crawls daily and commits fresh data, one deploys on every push.
@@ -68,21 +71,22 @@ lectr is a **pure static export** — there is no server.
 
 The client never downloads everything up front:
 
-1. **Eager** (`upcoming.json`, ~750 KB) — upcoming lots with precomputed signals + the tape. Paints instantly.
+1. **Eager** (`upcoming.json` ~800 KB + `market.json` ~750 KB) — upcoming lots with precomputed signals + the tape, plus the market payload: per-market demand, the hedonic **price-movement index**, the per-maker verified indices, and the sub-markets. Paints instantly.
 2. **Full history** (`lots.json`, ~21 MB) — streams behind the paint for comps and results.
 3. **Sold archive** (`sold-archive.json`, ~10 MB) — the Goldin realized-price history, **lazy-loaded** only when a sports/science deep view needs it (comps modal, maker page, analytics). A cold home load fetches zero archive bytes.
 
 ## The markets
 
-`Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science'` — all live.
+`Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science' | 'culture'` — all live.
 
 | Market | Sources | Notes |
 |---|---|---|
 | **Art** | Phillips, Sotheby's, Christie's | paintings, editions, photography, sculpture |
 | **Design** | Wright, Rago, Phillips | furniture & objects; model-keyed comps (an LC2 never comps a Chandigarh) |
 | **Watches** | Bonhams, Phillips, Sotheby's, Christie's | reference-keyed (a Daytona never comps a Datejust) |
-| **Sports** | Goldin, Sotheby's, Christie's | game-worn, trophies, tickets — **never cards** |
+| **Sports** | Goldin, Sotheby's, Christie's | cards, game-worn, trophies, tickets |
 | **Science** | Sotheby's, Christie's, Goldin | tech, fossils, space, instruments — **never video games** |
+| **Pop Culture** | Goldin, Christie's, Sotheby's | screen-worn, stage-played, and the unrepeatable 1/1s |
 
 Markets split **by maker/entity**, not by source. Switching markets re-scopes every section of the site.
 
@@ -130,6 +134,10 @@ scripts/corpus-io.ts        write the split:
 - **`migrate-v2.ts`** — the one-time backfill that brought the existing corpus to v2 (`--dry-run` prints a diff report; `--commit` rewrites). Idempotent.
 - **`build-upcoming.ts`** — the eager payload: upcoming lots + precomputed signals + the tape + per-market demand.
 - **`build-backtest.ts`** — the point-in-time replay of flagged vs. unflagged calls.
+- **`assemble.ts`** — reunions the per-segment crawl output into the full corpus, runs the sanity gate (refuses to publish a shrunken or empty book), then drives the market build.
+- **`build-market.ts`** — per-market series (demand, sell-through, house calibration, seasonality) plus the **hedonic price-movement index**, the per-maker verified indices, market composites, and the sub-markets → `market.json`.
+- **`hedonic-index.ts`** — the confidence-gated hedonic engine: robust IRLS log-price regression, per-maker indices, and bottom-up composites, publishing only what the 95% CI resolves.
+- **`sub-markets.ts`** — the per-vertical sub-market reads (verified index / demand / descriptive).
 - **`build-og.tsx`** — pre-renders the share cards (the root card + one per maker) as static PNGs.
 
 ## The value engine
@@ -145,19 +153,30 @@ The comps result feeds the card signal, the comparables modal, and the crawl-tim
 
 Demand ([`app/lib/demand.ts`](app/lib/demand.ts)) is a mix-proof *typical-sale-vs-estimate* index for markets with published estimates, and a *like-for-like realized-price cohort* for the estimate-less Goldin verticals — never a raw price average, which would be pure mix-noise.
 
+### Price movement — the hedonic index
+
+Demand answers "are lots beating their estimates?" — a *relative* read that houses can game by cutting estimates. So price movement is measured separately. [`scripts/hedonic-index.ts`](scripts/hedonic-index.ts) fits a **per-maker log-price hedonic regression** (robust Huber IRLS) that holds the mix constant — reference/model, form, size, object-decade, house — so a quarter's coefficient is *price movement*, not composition. Each horizon (1Y / 3Y / 5Y) publishes a return **only when its 95% CI resolves the sign**; otherwise it abstains. Market composites are built bottom-up from the publishable component makers, with honest gates (component coverage, degeneracy, and an outright refusal of collectible *buckets* that aren't makers). The output is the **verified movers** — the makers that clear the bar, each with its interval (e.g. Rolex `+25% 5Y [12, 39]`).
+
+The lander pairs the two: the hero shows **demand**, the left tile shows **yearly ROI**, and it flags the divergence — lots beating a softening bar.
+
+**Sub-markets** ([`scripts/sub-markets.ts`](scripts/sub-markets.ts)) view every vertical as a hierarchy. A bucket like *meteorites* or *game-used* is a sub-market, not a maker — so it carries no hedonic index — but each sub-market still shows the strongest honest read its data supports: a verified CI'd move where it's a real maker, else measured demand where it carries estimates, else a descriptive read (typical price · all-time record · volume). Nothing prints an appreciation the engine won't defend.
+
 ## Repository layout
 
 ```
 app/
-  page.tsx                 the terminal (home)
+  page.tsx                 renders the Terminal home
+  preview/terminal/        the Terminal implementation — IndexHero, SubMarketBoard,
+                           MoversBoard, VerifiedMovers, RecordBoard, MarketChart, VerticalGhost
   [artist]/                per-maker market pages
   {art,design,watches,     market landers (static, re-scope the terminal)
-   sports,science,
+   sports,science,culture,
    collectibles}/
   value/                   the calls + the backtest record
   artists/  analytics/     the roster · the rankings
   saved/                   watchlist
-  components/              Terminal, LotCard, ComparableModal, BoardDemand, …
+  components/              LotCard, ComparableModal, MarketSwitch, …
+  hooks/useRayData.ts      the tiered client data loader
   lib/
     comps.ts               the comparability engine
     demand.ts              the demand / realized-cohort series
@@ -168,7 +187,11 @@ scripts/
   ray-crawl.ts             the crawler
   corpus-io.ts             corpus/served split
   migrate-v2.ts            one-time v2 backfill
-  build-upcoming.ts        eager payload
+  assemble.ts              reunion + sanity gate + market build
+  build-market.ts          per-market series + hedonic index + sub-markets
+  hedonic-index.ts         confidence-gated price-movement engine
+  sub-markets.ts           per-vertical sub-market reads
+  build-upcoming.ts        eager payload (signals, tape, demand)
   build-backtest.ts        point-in-time replay
   build-og.tsx             static share cards
 data/corpus/               full v2 corpus (gzipped) — the engine's source of truth
@@ -217,11 +240,14 @@ Non-negotiable rules enforced across the crawler and UI:
 
 - **Auctions only.** Buy-it-now / fixed-price / retail listings are never crawled. An asking price is not market data.
 - **Item-level routing.** Nothing is classified at the auction level; every routing decision is per lot.
-- **Sports = objects, never cards.** Game-worn, trophies, tickets — Topps/Panini/PSA slabs/TCG never pass the gates.
+- **Sports spans cards + objects.** Cards, game-worn, trophies, tickets. Estimate-less Goldin cards get a *descriptive* read (typical price · record · volume) — never a fabricated appreciation.
 - **Science excludes video games.** Apple/computing + fossils/space/instruments only.
 - **Data honesty.** The numeral is the line is the sentence. Red means down/loss only; green means up. Realized and hammer prices are facts. A mix-noise average is never presented as demand.
+- **Never a return the data can't defend.** The hedonic index publishes a price-movement number *only* when its 95% CI resolves the sign; otherwise it abstains and says so. No maker- or market-level appreciation is asserted without a confidence interval behind it.
 - **Native is the fact, USD is derived, dated.** No price-vs-estimate comparison ever crosses currency units.
 
 ## Roadmap
 
-**Part 2 — the deep similarity & value engine.** The v2 foundation exists to support it: a scored `similarity(a, b)` over `titleTokens` + maker + model + year + dimensions + edition + sports tags, yielding "≳90% = the same item / 60–90% = very similar" from one number — plus a repeat-sale index (same physical object linked across dates and houses) and market-wide value tracking. The features are clean, comparable, and persisted, so building the engine is weighting and threshold-tuning rather than re-deriving identity from raw strings.
+**Shipped — price-movement tracking.** The confidence-gated hedonic index (per-maker + composites), the verified movers, and the vertical → sub-market decomposition are live. Coverage is deliberately narrow — only makers that clear the 95% CI publish — so the next lever is *depth*, not a looser bar: semi-annual cohort pooling to lift thin makers over the n≥80/quarter gate, and form-banding to unlock the print-dominated art names (Warhol, Picasso).
+
+**Part 2 — the deep similarity & value engine.** The v2 foundation exists to support it: a scored `similarity(a, b)` over `titleTokens` + maker + model + year + dimensions + edition + sports tags, yielding "≳90% = the same item / 60–90% = very similar" from one number — plus a repeat-sale index (same physical object linked across dates and houses). The features are clean, comparable, and persisted, so building the engine is weighting and threshold-tuning rather than re-deriving identity from raw strings.
