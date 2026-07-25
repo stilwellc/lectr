@@ -317,7 +317,7 @@ export default function IndexHero({
             <span>{marketLabel.toLowerCase()}</span>
           </div>
           {hasChart ? (
-            <MarketChart data={windowIdx} play={play} height={310} />
+            <MarketChart data={windowIdx} play={play} height={264} />
           ) : (
             <div className={styles.heroSparkFallback}>
               <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={720} height={140} strokeWidth={1.8} />

@@ -143,7 +143,7 @@
   column-gap: clamp(56px, 7vw, 120px);
   row-gap: 0;
   align-items: end;
-  padding: clamp(40px, 6vw, 72px) 0 32px;
+  padding: clamp(24px, 3.2vw, 40px) 0 28px;
 }
 .heroHead { grid-area: head; min-width: 0; align-self: end; }
 
@@ -161,7 +161,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 18px;
-  padding: 13px 2px 12px;
+  padding: 10px 2px 9px;
   border-top: 1px solid var(--tt-hair);
 }
 .railRow:first-child { border-top: none; }
@@ -184,7 +184,7 @@
 }
 .railVal {
   font-family: var(--font-mono-data), monospace;
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--tt-fg);
@@ -214,7 +214,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 2px 2px;
+  padding: 11px 2px 2px;
   border-top: 1px solid var(--tt-hair);
   border-left: none; border-right: none; border-bottom: none;
   background: none;
@@ -231,7 +231,7 @@
 .heroStage {
   grid-area: stage;
   min-width: 0;
-  margin-top: clamp(30px, 4vw, 48px);
+  margin-top: clamp(18px, 2.2vw, 28px);
 }
 .stageMeta {
   display: flex;
@@ -243,11 +243,11 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--tt-faint);
-  padding-bottom: 12px;
+  padding-bottom: 10px;
 }
 
 /* ── the movers band: a single hairline ticker under the landscape ── */
-.heroMoversArea { grid-area: movers; min-width: 0; margin-top: 20px; }
+.heroMoversArea { grid-area: movers; min-width: 0; margin-top: 16px; }
 .moversBand {
   display: flex;
   align-items: baseline;
@@ -331,14 +331,15 @@
 .heroNumberRow {
   display: flex;
   align-items: flex-end;
-  gap: 20px;
-  margin-bottom: 22px;
+  gap: 16px;
+  margin-bottom: 14px;
 }
 .heroNumber {
   font-family: var(--font-mono-data), monospace;
   font-weight: 500;
-  font-size: clamp(72px, 11vw, 148px);
-  line-height: 0.86;
+  /* sized so the FULL stage (chart + movers band) lands pre-scroll */
+  font-size: clamp(56px, 6.6vw, 92px);
+  line-height: 0.88;
   letter-spacing: -0.03em;
   color: var(--tt-fg);
 }
@@ -1302,7 +1303,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   font-family: var(--font-mono-data), monospace; font-size: 13px; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--tt-faint); padding-bottom: 16px;
 }
-.hero .tfToggle { margin-top: 20px; }
+.hero .tfToggle { margin-top: 14px; }
 
 @media (max-width: 900px) {
   .deskShell {
