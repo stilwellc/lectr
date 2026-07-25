@@ -1189,6 +1189,28 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .heroDeltas { flex-direction: row; gap: 14px; padding-bottom: 0; }
   .mobMoverList { grid-template-columns: 1fr; }
   .heroStats { gap: 18px; }
+
+  /* STANDARD MOBILE GUTTER — the deskShell already insets everything 16px; the
+     contained cards then added their own padding on top (content landed at
+     ~31–34px, narrower than the 16px feed). Full-bleed the cards to the screen
+     edge so their inner content sits at the same 16px as everything else. */
+  .mHeroCard,
+  .ledgerBand {
+    margin-inline: calc(-1 * clamp(16px, 4vw, 28px)) !important;
+    border-radius: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+  .mHeroCard { padding-inline: clamp(16px, 4vw, 28px); }
+  /* the ledger's inner wrapper carries an inline clamp(18px…30px) pad — pull it
+     back to the standard gutter so its content lines up with the feed. */
+  .ledgerBand > div { padding-inline: clamp(16px, 4vw, 28px) !important; }
+  .root :global(.ray-recordband) {
+    margin-inline: calc(-1 * clamp(16px, 4vw, 28px));
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

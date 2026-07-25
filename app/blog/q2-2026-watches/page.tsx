@@ -3,7 +3,7 @@ import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 
 export const metadata: Metadata = {
   title: 'Q2 2026 watch market in review — the deepest, most liquid tape we track',
-  description: '1,811 watches, $240M, near-total sell-through — and the only market where our engine will publish a return: Cartier +53% and Rolex +25% over five years, Patek −18% over three. The Q2 2026 numbers.',
+  description: '1,811 watches, $240M, near-total sell-through — the only market where our engine will publish a return: Cartier +53% and Rolex +25% over five years, Patek −18% over three, each with its confidence interval. What a CI means and why watches is the one vertical that clears the bar. The Q2 2026 numbers.',
 };
 
 export default function Q2Watches() {
@@ -33,36 +33,83 @@ export default function Q2Watches() {
         { title: 'Patek Philippe — a most probably unique white gold perpetual calendar split-seconds chronograph', priceUsd: 5_202_000, house: 'Phillips', date: '2026-06-13', maker: 'patek-philippe' },
         { title: 'Patek Philippe — an incredible, extremely well-preserved pink gold perpetual calendar', priceUsd: 3_992_000, house: 'Phillips', date: '2026-06-13', maker: 'patek-philippe' },
         { title: 'Patek Philippe — a rare, freshly unsealed white gold double-dial wristwatch', priceUsd: 3_728_300, house: 'Phillips', date: '2026-05-09', maker: 'patek-philippe' },
+        { title: 'Patek Philippe — 18K white gold automatic perpetual calendar (ref. 3450)', priceUsd: 2_759_000, house: "Christie's", date: '2026-06-12', maker: 'patek-philippe' },
+        { title: 'Audemars Piguet — unique platinum custom-order minute-repeating perpetual calendar', priceUsd: 2_454_100, house: "Christie's", date: '2026-05-11', maker: 'audemars-piguet' },
+        { title: 'Cartier — Crash, yellow gold distorted oval wristwatch', priceUsd: 1_998_848, house: "Sotheby's", date: '2026-04-24', maker: 'cartier' },
+        { title: 'Patek Philippe — unique yellow gold single-button chronograph', priceUsd: 1_966_080, house: "Sotheby's", date: '2026-04-24', maker: 'patek-philippe' },
+        { title: 'Cartier — 18K gold asymmetric wristwatch', priceUsd: 1_822_750, house: "Christie's", date: '2026-05-11', maker: 'cartier' },
       ]}
       footnote="The moves below are our hedonic index reads, each shown with its 95% confidence interval and the horizon over which it resolves. Where a maker's shorter-horizon interval spans zero — Rolex at one year, Audemars Piguet and Cartier at one and three — we don't publish a direction; watches is the one vertical where enough clears the bar to publish any return at all."
     >
       <H>The only tape we&rsquo;ll put a number on</H>
       <P>
         Watches were the easiest market to sell into all quarter — <B>97–98% sell-through</B> across
-        1,811 lots, with the median hammering 35% over its estimate midpoint and 55% clearing the
-        high outright. Nothing else we track comes close on clearance or on sample depth. That depth
-        is why watches is the <em>only</em> vertical where our engine will publish a like-for-like
-        return: the cohorts are big enough that a move survives its own confidence interval. Elsewhere
-        we speak in demand; here we can speak in price.
+        1,811 lots, with the median hammering 35% over its estimate midpoint and 55% clearing the high
+        outright. Nothing else we track comes close on clearance or on sample depth: art buys in a
+        third of what it offers, design ran 170 sold lots all quarter, and watches cleared better than
+        ten times that with almost nothing left in the room. That depth is the whole reason watches is
+        the <em>only</em> vertical where our engine will publish a like-for-like return. Elsewhere we
+        speak in demand — how the median lot hammered against its own estimate — because the cohorts
+        are too thin or too mixed to isolate a price move. Here the cohorts are big enough that a move
+        survives its own confidence interval, so we can speak in price.
+      </P>
+      <H>What a confidence interval means here</H>
+      <P>
+        The engine runs a hedonic index per maker: a regression that holds reference, metal, size and
+        condition-language constant and reads the residual as the market&rsquo;s move over time — then
+        it reports the 95% confidence interval around that move. <B>The rule is simple: if the interval
+        spans zero, we publish nothing.</B> A read of &ldquo;+8%, but anywhere from −5% to +21%&rdquo;
+        isn&rsquo;t a direction, it&rsquo;s noise wearing a number, and we&rsquo;d rather say so than
+        launder it into a headline. That is why a maker can appear at one horizon and vanish at another:
+        the same cohort resolves cleanly over five years and dissolves into uncertainty over one. It is
+        also why watches is the one place we quote a return at all — everywhere else the intervals never
+        tighten enough to clear the bar.
       </P>
       <H>What the index actually says</H>
       <P>
         Three makers clear the bar, and they don&rsquo;t point the same way. <B>Cartier is up 52.9%
-        over five years</B> (95% CI +19% to +96%) and <B>Rolex up 25.1%</B> (+12% to +39%) — durable,
-        interval-backed appreciation on the deepest cohorts we hold. <B>Patek Philippe is down 18.2%
-        over three years</B> (−26% to −9%): a real, resolved decline, not noise. The rest stay
-        descriptive — Audemars Piguet&rsquo;s demand reads roughly flat (+2% over estimate), Omega
-        soft (−12%), and at shorter horizons even Rolex&rsquo;s interval spans zero. We report the
-        moves that resolve and hold the ones that don&rsquo;t.
+        over five years</B> (95% CI +19% to +96%) — the strongest resolved appreciation on the board,
+        drawn from a 5,772-lot cohort, and a striking read for a house often filed under jewelry rather
+        than horology. <B>Rolex is up 25.1% over five years</B> (+12% to +39%) and, notably, also clears
+        the bar at three years, up 14.6% (+2% to +28%) — durable, interval-backed appreciation on the
+        deepest cohort we hold. Against them, <B>Patek Philippe is down 18.2% over three years</B> (−26%
+        to −9%), and its one-year read has now resolved negative too, off 9.6% (−18% to −0.5%): a real,
+        continuing decline, not noise. The rest stay descriptive. Audemars Piguet&rsquo;s demand reads
+        roughly flat (+2% over estimate) and its index spans zero at every horizon; Omega reads soft
+        (−12% demand); and even Rolex&rsquo;s one-year interval spans zero. We report the moves that
+        resolve and hold the ones that don&rsquo;t.
+      </P>
+      <P>
+        Read together, that is a bifurcated market. The two makers most exposed to the last cycle&rsquo;s
+        speculative froth — Patek and, at the reference level, the hyped steel sport models — are the
+        ones giving ground, while the design-led houses that never ran as hot, Cartier especially, are
+        the ones compounding. It is the opposite of the story the trophy headlines tell, and it is
+        exactly the kind of divergence the index exists to surface: the record-setter and the appreciating
+        asset are not the same maker.
       </P>
       <H>Trophies detached from the reference market</H>
       <P>
-        The $10M Patek at the top of the quarter — and the four seven-figure Pateks behind it, all
-        through Phillips — is the tell. Condition-and-rarity trophies keep setting records while the
-        reference market beneath them reads flat-to-soft on the index. For a buyer, that&rsquo;s the
-        opportunity: liquidity is total, but outside the unrepeatable pieces the comps have done the
-        repricing and many estimates haven&rsquo;t caught up. The below-market flags our engine
-        carries into Q3 sit in exactly that middle.
+        The top of the quarter is nearly all Patek and nearly all Phillips. The $10.3M perpetual
+        calendar chronograph led, followed by a $9.2M cloisonné world-time and three more seven-figure
+        Pateks — and <B>Phillips took 43% of all tracked watch value</B> and the five biggest results
+        outright. Sotheby&rsquo;s (28%) and Christie&rsquo;s (26%) split most of the rest. Patek alone
+        was 60% of tracked value, Rolex 16%, Cartier 15%. None of these approached a record — Patek&rsquo;s
+        all-time high is the $31.2M Grandmaster Chime from 2019 — but they didn&rsquo;t need to: they are
+        the tell that condition-and-rarity trophies keep clearing at full price while the reference market
+        beneath them reads flat-to-soft on the index. Two of the quarter&rsquo;s most interesting results
+        were Cartiers — a <em>Crash</em> at $2.0M and an asymmetric gold wristwatch at $1.8M — which is
+        the trophy tape agreeing with the index for once: the maker the engine says is appreciating is
+        also the one throwing surprises at the top.
+      </P>
+      <H>Where the opportunity sits</H>
+      <P>
+        For a buyer, the shape of this market is the opportunity. Liquidity is total — you can sell almost
+        anything — but outside the unrepeatable pieces the comps have already done the repricing and many
+        estimates haven&rsquo;t caught up, particularly in Patek references that are still marked to the
+        last cycle. The below-market flags our engine carries into Q3 sit in exactly that middle: not the
+        trophies, which clear at or above every estimate, but the deep, liquid reference tape where a
+        resolved, interval-backed decline has outrun the catalogues. That is the one vertical where we
+        can point at a number and defend it — so it&rsquo;s the one where we do.
       </P>
     </QuarterInsight>
   );
