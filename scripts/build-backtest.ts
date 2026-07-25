@@ -37,7 +37,15 @@ function median(sorted: number[]): number {
 }
 
 export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
+  // Progress logging — the replay is an O(targets×priors) pass that grows with
+  // the corpus and can run for HOURS. Without heartbeats the CI step prints
+  // NOTHING until it either finishes or hits the job timeout (which is exactly
+  // how the 70min-cap "cancelled" nights went undiagnosed). Log the phase timings
+  // and a per-target heartbeat so a slow replay is observable in the run log.
+  const t0 = Date.now();
+  const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
   const lots: L[] = (allLots ?? (readCorpusShared() as unknown as AuctionLot[])) as L[];
+  console.log(`[backtest] loaded ${lots.length} lots (${elapsed()})`);
 
   const sold = lots.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
   const tbl = buildIdf(sold);
@@ -52,6 +60,7 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
   // held-out targets: every concluded lot with a usable estimate — sold AND bought-in
   const soldTargets = sold.filter(hasEst);
   const biTargets = lots.filter(l => l.status === 'bought_in' && l.saleDate && l.titleTokens && l.titleTokens.length && hasEst(l));
+  console.log(`[backtest] vectors built (${elapsed()}) — replaying ${soldTargets.length} sold + ${biTargets.length} bought-in targets`);
 
   type Bucket = { perfs: number[]; hammerPerfs: number[]; beat: number; hammerBeat: number; n: number; boughtIn: number };
   const mk = (): Bucket => ({ perfs: [], hammerPerfs: [], beat: 0, hammerBeat: 0, n: 0, boughtIn: 0 });
@@ -83,7 +92,9 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
     return estimateValue(lot, comps, tbl);
   };
 
+  let done = 0;
   for (const lot of soldTargets) {
+    if (++done % 20000 === 0) console.log(`[backtest] sold replay ${done}/${soldTargets.length} (${elapsed()})`);
     const v = valueOne(lot);
     if (!v || !v.signal) continue;
     const estMid = (lot.estLowUsd! + lot.estHighUsd!) / 2;
@@ -122,6 +133,7 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[]): void {
     }
   }
 
+  console.log(`[backtest] sold replay complete (${elapsed()}) — replaying bought-ins`);
   // bought-ins: same replay, outcome = failed to sell (a flag that bought in is a miss)
   for (const lot of biTargets) {
     const v = valueOne(lot);

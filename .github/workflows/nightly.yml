@@ -149,10 +149,22 @@ jobs:
     needs: assemble
     if: always()
     runs-on: ubuntu-latest
-    # re-pulls the served payload → can eat a worst-case R2 GET-lag (~14min via
-    # obj_get_fresh) BEFORE the ~25min replay even starts. 40 was too tight on a
-    # lagged edge (proved: timed out at exactly 40m); 70 absorbs lag + replay + push.
-    timeout-minutes: 70
+    # NON-BLOCKING by design: the backtest is a standalone replay that refreshes
+    # backtest.json for the NEXT cycle — it is NOT on the deploy critical path
+    # (deploy needs assemble, not this), and the record barely moves night to
+    # night. continue-on-error means a slow-or-failed backtest can NEVER cancel
+    # the run or mask the fact that the crawl+assemble+deploy already shipped.
+    # (Root cause of the 2026-07-24/25 "cancelled" nights: this replay outgrew
+    # its 70min cap as the corpus passed ~500k lots — the job self-cancelled on
+    # timeout and dragged the whole run's conclusion to "cancelled" even though
+    # the site had already deployed fresh data successfully.)
+    continue-on-error: true
+    # Real headroom for the grown replay: the O(targets×priors) replay now runs
+    # well past 70min at current corpus size. 300 (5h, under GH's 6h job cap)
+    # gives it room to finish; continue-on-error is the belt-and-braces so even
+    # an overrun can't gate the run. Revisit build-backtest.ts perf if it ever
+    # approaches this ceiling — see the progress logging added to that script.
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
