@@ -235,6 +235,20 @@ export interface AuctionLot {
   /** the athlete behind a sports lot (build-stamped on upcoming; parsed from title) */
   playerSlug?: string | null;
   playerName?: string | null;
+  /** parsed trading-card identity — the composite fingerprint keying the card
+      repeat-sales index (same player+year+set+cardNo+grade = the same product). */
+  _card?: {
+    player?: string | null;
+    playerSlug?: string | null;
+    year?: string | null;
+    setName?: string | null;
+    cardNo?: string | null;
+    gradeCo?: string | null;
+    gradeNum?: number | null;
+    serialOf?: number | null;
+    rookie?: boolean;
+    auto?: boolean;
+  } | null;
   /** live sports-card comps: exact same card+grade sales + the grade ladder,
       hash-joined at build against the sold-card corpus (never similarity) */
   cardComps?: {

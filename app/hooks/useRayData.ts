@@ -95,8 +95,11 @@ export interface SubMarketRead {
   label: string;
   vertical: string;                 // the parent vertical market key
   readType: 'index' | 'demand' | 'descriptive';
-  /** readType 'index': the verified hedonic move (longest resolving horizon) */
+  /** readType 'index': the verified move (longest resolving horizon) */
   index: { horizon: string; changePct: number; ciLoPct: number; ciHiPct: number } | null;
+  /** how an index read was produced: 'hedonic' (makers w/ estimates) or
+   *  'repeat-sale' (Bailey-Muth-Nourse, mix-immune, for card markets) */
+  indexMethod?: 'hedonic' | 'repeat-sale' | null;
   /** readType 'demand': measured %-over-estimate */
   demandNow: number | null;
   demandSeries: { period: string; value: number; n: number }[];

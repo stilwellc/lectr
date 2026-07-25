@@ -20,6 +20,7 @@
 import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';
 import type { MakerIndexResult } from './hedonic-index';
+import { buildRepeatSaleIndex } from './repeat-sales';
 
 // ── the emitted row (mirrors SubMarketRead in app/hooks/useRayData.ts) ──
 export interface SubMarketRead {
@@ -28,6 +29,10 @@ export interface SubMarketRead {
   vertical: string;
   readType: 'index' | 'demand' | 'descriptive';
   index: { horizon: string; changePct: number; ciLoPct: number; ciHiPct: number } | null;
+  // how an 'index' read was produced: 'hedonic' (per-maker log-price regression,
+  // for makers with estimates) or 'repeat-sale' (Bailey-Muth-Nourse, mix-immune,
+  // for estimate-less markets like cards). null on demand/descriptive reads.
+  indexMethod: 'hedonic' | 'repeat-sale' | null;
   demandNow: number | null;
   demandSeries: { period: string; value: number; n: number }[];
   typicalUsd: number | null;
@@ -128,6 +133,22 @@ function slugDemandSeries(soldLots: AuctionLot[]): { period: string; value: numb
  * @param statsBySlug per-slug descriptive stats (stats.json / computeStats)
  * @param makerIndex  the verified per-maker hedonic index (readType 'index')
  */
+/**
+ * Composite card fingerprint = the repeat-sales object key. Same player + year +
+ * set + card number + grade (+ serial parallel) is "the same product"; two sales
+ * of that key are a repeat sale. Grade is part of the key on purpose — a PSA 10
+ * and a PSA 9 of the same card are different markets. Returns null when the lot
+ * isn't a structured card (→ excluded from the index).
+ */
+function cardKey(l: AuctionLot): string | null {
+  const c = l._card;
+  if (!c || !c.playerSlug || !c.year || !c.cardNo) return null;
+  const grade = c.gradeCo && c.gradeNum != null ? `${c.gradeCo}${c.gradeNum}` : 'raw';
+  const set = (c.setName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const serial = c.serialOf != null ? `/${c.serialOf}` : '';
+  return `${c.playerSlug}|${c.year}|${set}|${c.cardNo}|${grade}${serial}`;
+}
+
 export function buildSubMarkets(
   all: AuctionLot[],
   statsBySlug: Record<string, StatsRow>,
@@ -177,12 +198,33 @@ export function buildSubMarkets(
     // ── verified maker index: the longest horizon whose CI resolves the sign ──
     const mi = makerIndex[slug];
     let index: SubMarketRead['index'] = null;
+    let indexMethod: SubMarketRead['indexMethod'] = null;
     if (mi) {
       for (const h of HORIZON_PREF) {
         const hz = mi.horizons?.[h];
         if (hz?.publishable && hz.changePct != null && hz.ciLoPct != null && hz.ciHiPct != null) {
           index = { horizon: h, changePct: hz.changePct, ciLoPct: hz.ciLoPct, ciHiPct: hz.ciHiPct };
+          indexMethod = 'hedonic';
           break;
+        }
+      }
+    }
+
+    // ── repeat-sales index fallback: for estimate-less card markets the hedonic
+    // can't run, but same-card-same-grade objects sold 2+ times give a mix-immune
+    // Bailey-Muth-Nourse index. Only consulted when no hedonic index exists, and
+    // only publishes on a horizon whose 95% CI resolves the sign. ──
+    if (!index) {
+      const cardLots = sold.filter(l => cardKey(l) != null);
+      if (cardLots.length >= 400) {
+        const rs = buildRepeatSaleIndex(cardLots, cardKey);
+        for (const h of HORIZON_PREF) {
+          const hz = rs.horizons?.[h];
+          if (hz?.publishable && hz.changePct != null && hz.ciLoPct != null && hz.ciHiPct != null) {
+            index = { horizon: h, changePct: hz.changePct, ciLoPct: hz.ciLoPct, ciHiPct: hz.ciHiPct };
+            indexMethod = 'repeat-sale';
+            break;
+          }
         }
       }
     }
@@ -200,6 +242,7 @@ export function buildSubMarkets(
       vertical: market,
       readType,
       index,
+      indexMethod: readType === 'index' ? indexMethod : null,
       // carry demandNow/series only on a demand read — a descriptive slug must
       // never surface a %-over-estimate figure as its read, and an index slug's
       // headline is the CI'd move.

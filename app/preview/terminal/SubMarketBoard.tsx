@@ -88,6 +88,15 @@ function tagFor(r: SubMarketRead): string {
   return 'typical';
 }
 
+// hover-title naming the method behind an index read — both are 95% CI'd, but a
+// hedonic maker move and a mix-immune repeat-sales index are different animals.
+function methodTitle(r: SubMarketRead): string | undefined {
+  if (r.readType !== 'index') return undefined;
+  return r.indexMethod === 'repeat-sale'
+    ? 'Repeat-sales index — same card, same grade, resold 2+ times (mix-immune Bailey-Muth-Nourse, 95% CI)'
+    : 'Hedonic index — quality-controlled per-maker price regression (95% CI)';
+}
+
 // the direction for tinting — index by CI'd move, demand by sign, descriptive neutral
 function dirFor(r: SubMarketRead): 'up' | 'down' | undefined {
   if (r.readType === 'index' && r.index) return r.index.changePct >= 0 ? 'up' : 'down';
@@ -153,9 +162,10 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
 
   const foot = (
     <p className={styles.moversFoot}>
-      Each sub-market shows the strongest read its data supports — a 95%-CI hedonic move where it&apos;s a real
-      maker, else measured demand over estimate, else the descriptive record (typical · record · volume). No
-      sub-market prints an appreciation the engine won&apos;t defend.
+      Each sub-market shows the strongest read its data supports — a 95%-CI index (a hedonic maker move where
+      estimates exist, a mix-immune repeat-sales index where they don&apos;t, as with cards), else measured demand
+      over estimate, else the descriptive record (typical · record · volume). No sub-market prints an
+      appreciation the engine won&apos;t defend.
     </p>
   );
 
@@ -194,7 +204,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
                     <span className={styles.moversTick} data-dir={dir} aria-hidden />
                     {r.label}
                   </span>
-                  <span className={styles.subTag} data-type={r.readType}>{tagFor(r)}</span>
+                  <span className={styles.subTag} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
                 </div>
                 <div className={styles.mobSubBot}>
                   <span className={styles.moversDelta} data-dir={dir}>
@@ -250,7 +260,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
                     <span className={styles.moversTick} data-dir={dir} aria-hidden />
                     {r.label}
                   </span>
-                  <span className={styles.subTag} data-type={r.readType}>{tagFor(r)}</span>
+                  <span className={styles.subTag} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
                   <span className={styles.moversDelta} data-dir={dir}>
                     {line.primary} {line.per && <em>{line.per}</em>}
                   </span>
