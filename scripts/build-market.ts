@@ -84,6 +84,15 @@ export function runMarketBuild() {
   const archive = readGz('sold-archive.json');
   const all = lots.concat(archive);
 
+  // ── corpus-hygiene normalization (idempotent) ──
+  // Fix defects already baked into the corpus BEFORE any market/hedonic/stats is
+  // built: null mis-parsed future years, reroute blue-chip-art / watch lots that
+  // were swept into the science slugs, and back-fill missing watch references.
+  // Runs here so a standalone build-market applies them too; the nightly runs the
+  // same pass in assemble.ts (which persists the fixes into the corpus gz).
+  const { normalizeCorpus } = require('./lib/corpus-normalize');
+  normalizeCorpus(all);
+
   // load the auto-calibration the previous backtest emitted (per-market
   // beatRate relevel + conformal band multipliers) — displayed figures only,
   // never the signal label, so there is no feedback loop into the record.

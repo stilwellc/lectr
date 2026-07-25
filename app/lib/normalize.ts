@@ -397,12 +397,17 @@ function sc(n: number | null, k: number): number | null {
 
 const YEAR_RE = /\b(1[89]\d{2}|20[0-3]\d)\b/;
 
-/** first plausible 4-digit year in a string, or null. */
+/** first plausible 4-digit year in a string, or null. A future year is never a
+    real production year — the corpus audit found lots mis-parsed into 2028–2035
+    (a ref/edition number read as a year), so the upper bound is the current
+    calendar year +1 (buffer for a pre-release / early-cataloged card), computed
+    at call time rather than a frozen literal. */
 function firstYear(s: string): number | null {
   const m = s.match(YEAR_RE);
   if (!m) return null;
   const y = parseInt(m[1], 10);
-  return y >= 1800 && y <= 2035 ? y : null;
+  const maxYear = new Date().getFullYear() + 1;
+  return y >= 1800 && y <= maxYear ? y : null;
 }
 
 export function extractYear(

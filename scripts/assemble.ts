@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readAllSegments, writeCorpusAndServed, CORPUS_DIR, SERVED_DIR } from './corpus-io';
+import { normalizeCorpus } from './lib/corpus-normalize';
 import { computeStats } from './compute-stats';
 import { ARTISTS } from '../app/constants';
 import type { AuctionLot, MarketStats } from '../app/types';
@@ -61,6 +62,14 @@ async function main() {
     }
     console.log(`[assemble] no baseline meta; ${allLots.length} lots clears the ${CORPUS_FLOOR} floor`);
   }
+
+  // ── corpus-hygiene normalization (idempotent) ──
+  // Runs AFTER the sanity gate (so we never normalize a corpus we're about to
+  // reject) and BEFORE the per-slug stats + corpus/served write, so the reroute,
+  // year clamp, and reference back-fill are baked into the persisted corpus gz
+  // and flow through stats/market/hedonic. build-market re-runs the same pass
+  // idempotently on the corpus it reads.
+  normalizeCorpus(allLots);
 
   // ── per-artist stats over the FULL corpus (build-market §3f adds the
   //    corpus-only slugs: sports-cards + culture + sports-memorabilia) ──
