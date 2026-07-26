@@ -59,12 +59,67 @@ const POSTS: { slug: string; date: string; title: string; dek: string; href?: st
   },
 ];
 
+function fmtLong(date: string): string {
+  return new Date(date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+function fmtShort(date: string): string {
+  return new Date(date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric', timeZone: 'UTC' });
+}
+
+/* The research-notes shelf. One markup, two compositions:
+   ≥900px — the newest note runs as a full-width lead (Fraunces title, dek,
+   dated kicker) over a dated ledger of the remaining notes (mono date ·
+   Fraunces title · one dek line · hairline separators — the terminal's
+   shelf of research memos). ≤899px keeps the single card stack.
+   Injected via __html — raw-text <style> children with quotes break
+   hydration on prerendered pages (LotPage's convention). */
+const BLOG_CSS = `
+.ray-blog-shelf{display:flex;flex-direction:column;gap:14px}
+.ray-blog-lead,.ray-blog-entry{display:block;text-decoration:none;color:inherit;border:1px solid var(--hairline);border-radius:12px;padding:22px 24px;background:var(--color-bg-elevated)}
+.ray-blog-date{font-family:var(--font-mono),monospace;font-size:11.5px;color:var(--color-text-faint);margin-bottom:8px;font-variant-numeric:tabular-nums}
+.ray-blog-title{font-size:21px;font-weight:700;letter-spacing:-0.02em;margin:0 0 8px;line-height:1.3;color:var(--color-fg)}
+.ray-blog-dek{font-size:14.5px;line-height:1.55;color:var(--color-text-secondary);margin:0}
+.ray-blog-read{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:13px;font-weight:600;color:var(--color-text-muted)}
+.ray-blog-lead-kicker{display:none}
+.ray-blog-entry-flick{display:none}
+.ray-blog-ledger{display:contents}
+.ray-blog-ledger-head{display:none}
+@media (min-width:900px){
+  .ray-blog-shelf{gap:0}
+  /* the lead — the newest note, full width, editorial voice */
+  .ray-blog-lead{border:none;border-radius:0;background:none;padding:6px 0 30px;transform:none}
+  .ray-blog-lead:hover{border:none;transform:none}
+  .ray-blog-lead .ray-blog-date{display:none}
+  .ray-blog-lead-kicker{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
+  .ray-blog-lead-kicker .no{letter-spacing:0.08em;color:var(--color-text-faint)}
+  .ray-blog-lead .ray-blog-title{font-family:var(--font-serif),serif;font-size:clamp(30px,3.6vw,40px);font-weight:420;letter-spacing:-0.015em;line-height:1.12;margin:0 0 12px;max-width:24ch}
+  .ray-blog-lead:hover .ray-blog-title{color:var(--color-accent-gold,var(--color-fg))}
+  .ray-blog-lead .ray-blog-dek{font-size:15.5px;line-height:1.6;max-width:62ch}
+  /* the ledger — the rest of the file as dated rows */
+  .ray-blog-ledger{display:block;border-top:2px solid var(--color-fg);position:relative}
+  .ray-blog-ledger::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
+  .ray-blog-ledger-head{display:grid;grid-template-columns:118px 1fr;gap:0 22px;padding:9px 0 10px}
+  .ray-blog-entry{display:grid;grid-template-columns:118px 1fr auto;gap:2px 22px;align-items:baseline;border:none;border-radius:0;background:none;padding:16px 2px;border-top:1px solid var(--hairline);transition:background var(--duration-fast) var(--ease-signature)}
+  .ray-blog-entry:hover{border-color:var(--hairline);transform:none;background:var(--color-hover-item)}
+  .ray-blog-entry .ray-blog-date{grid-row:1 / span 2;margin:0;align-self:baseline}
+  .ray-blog-entry .ray-blog-title{font-family:var(--font-serif),serif;font-size:19px;font-weight:460;letter-spacing:-0.01em;line-height:1.25;margin:0}
+  .ray-blog-entry:hover .ray-blog-title{color:var(--color-accent-gold,var(--color-fg))}
+  .ray-blog-entry .ray-blog-dek{grid-column:2;font-size:13px;line-height:1.5;color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ray-blog-entry .ray-blog-read{display:none}
+  .ray-blog-entry-flick{display:block;grid-column:3;grid-row:1;color:var(--color-text-faint)}
+}
+`;
+
 export default function BlogIndex() {
+  // newest first — the lead is the freshest note on the desk
+  const posts = [...POSTS].sort((a, b) => b.date.localeCompare(a.date));
+  const [lead, ...rest] = posts;
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      <style dangerouslySetInnerHTML={{ __html: BLOG_CSS }} />
       <ArtistNav activeSlug="blog" />
       <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
-        <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px', marginBottom: 34 }}>
+        <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 var(--gutter)', marginBottom: 34 }}>
           {/* the certificate masthead — dated from the crawl the notes read */}
           <Masthead
             kicker="Notes from the desk"
@@ -77,22 +132,36 @@ export default function BlogIndex() {
           />
         </div>
 
-        <section style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {POSTS.map(p => (
-            <Link
-              key={p.slug}
-              href={p.href ?? `/blog/${p.slug}`}
-              className="ray-blog-card"
-              style={{ display: 'block', textDecoration: 'none', color: 'inherit', border: '1px solid var(--hairline)', borderRadius: 12, padding: '22px 24px', background: 'var(--color-bg-elevated)' }}
-            >
-              <div style={{ fontFamily: 'var(--font-mono), monospace', fontSize: 11.5, color: 'var(--color-text-faint)', marginBottom: 8 }}>
-                {new Date(p.date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
-              </div>
-              <h2 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px', lineHeight: 1.3 }}>{p.title}</h2>
-              <p style={{ fontSize: 14.5, lineHeight: 1.55, color: 'var(--color-text-secondary)', margin: 0 }}>{p.dek}</p>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 14, fontSize: 13, fontWeight: 600, color: 'var(--color-text-muted)' }}>Read the note <Flick size={12} /></span>
-            </Link>
-          ))}
+        <section className="ray-blog-shelf" style={{ maxWidth: 860, margin: '0 auto', padding: '0 var(--gutter)' }}>
+          {/* the lead — desktop features it full width; mobile renders it as
+              the first card of the stack */}
+          <Link href={lead.href ?? `/blog/${lead.slug}`} className="ray-blog-card ray-blog-lead">
+            <div className="ray-blog-lead-kicker">
+              <span className="kicker">Latest from the desk</span>
+              <span className="kicker no">{fmtLong(lead.date)}</span>
+            </div>
+            <div className="ray-blog-date">{fmtLong(lead.date)}</div>
+            <h2 className="ray-blog-title">{lead.title}</h2>
+            <p className="ray-blog-dek">{lead.dek}</p>
+            <span className="ray-blog-read">Read the note <Flick size={12} /></span>
+          </Link>
+
+          {/* the rest of the file — cards on mobile, a dated ledger ≥900px */}
+          <div className="ray-blog-ledger">
+            <div className="ray-blog-ledger-head" aria-hidden>
+              <span className="kicker">Dated</span>
+              <span className="kicker">Note</span>
+            </div>
+            {rest.map(p => (
+              <Link key={p.slug} href={p.href ?? `/blog/${p.slug}`} className="ray-blog-card ray-blog-entry">
+                <div className="ray-blog-date">{fmtShort(p.date)}</div>
+                <h2 className="ray-blog-title">{p.title}</h2>
+                <p className="ray-blog-dek">{p.dek}</p>
+                <span className="ray-blog-read">Read the note <Flick size={12} /></span>
+                <span className="ray-blog-entry-flick" aria-hidden><Flick size={13} /></span>
+              </Link>
+            ))}
+          </div>
         </section>
       </main>
       <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />

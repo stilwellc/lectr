@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { AuctionLot, MarketStats } from '../../types';
 import type { Market } from '../../constants';
@@ -44,14 +44,20 @@ export default function Distributions({ allLots, statsByArtist, market, series }
 }) {
   const an = series?.analytics;
   const [rawTab, setTab] = useState<Tab>('category');
+  // ≤768px the section folds behind a disclosure header — CSS-gated only,
+  // the desktop DOM stays eager and identical. Collapsed is the default.
+  const [open, setOpen] = useState(false);
   const tabs = TAB_META.filter(t => t.key !== 'sport' || market === 'sports');
   // if the market switches away from sports while the Sport tab is up, fall
   // back to the first tab rather than rendering a blank band
   const tab: Tab = tabs.some(t => t.key === rawTab) ? rawTab : 'category';
   const active = tabs.find(t => t.key === tab)!;
 
+  // the disclosure's headline stat — how many sold lots the charts count
+  const soldN = useMemo(() => allLots.filter(l => l.status === 'sold' && l.priceUsd).length, [allLots]);
+
   return (
-    <section className="ray-distributions rail">
+    <section className="ray-distributions rail" data-open={open}>
       <style>{`
         .ray-distributions { padding-block: 40px 48px; }
         .ray-dist-tab {
@@ -84,11 +90,58 @@ export default function Distributions({ allLots, statsByArtist, market, series }
           background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-hover, var(--color-surface)) 50%, var(--color-surface) 100%);
           opacity: 0.6;
         }
+        /* the mobile disclosure — TopSales' exact grammar (its .ray-disc
+           ruleset is page-global once TopSales mounts, but declare the core
+           here too so Distributions stands alone) */
+        .ray-dist-disc {
+          display: none;
+          width: 100%;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 2px;
+          border-top: 1px solid var(--hairline);
+          border-bottom: 1px solid var(--hairline);
+          background: none; border-left: none; border-right: none;
+          font-family: var(--font-sans), sans-serif;
+          color: var(--color-fg);
+          cursor: pointer;
+          text-align: left;
+        }
+        .ray-dist-disc-t { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+        .ray-dist-disc-stat {
+          font-family: var(--font-mono), monospace;
+          font-size: 11.5px; color: var(--color-text-muted);
+          font-variant-numeric: tabular-nums; white-space: nowrap;
+        }
+        .ray-dist-chev { flex-shrink: 0; align-self: center; color: var(--color-text-faint); transition: transform var(--duration-fast) var(--ease-signature); }
+        .ray-dist-disc[aria-expanded=true] .ray-dist-chev { transform: rotate(180deg); }
         @media (max-width: 768px) {
-          .ray-distributions { padding-block: 32px 32px; }
+          .ray-distributions { padding-block: 18px 18px; }
+          .ray-distributions[data-open=true] { padding-block: 18px 32px; }
+          .ray-dist-disc { display: flex; }
+          .ray-dist-body[data-open=false] { display: none; }
+          /* the disclosure header owns the title on mobile */
+          .ray-dist-body h2 { display: none; }
+          .ray-dist-body { margin-top: 16px; }
         }
       `}</style>
 
+      <button
+        type="button"
+        className="ray-dist-disc"
+        aria-expanded={open}
+        aria-controls="ray-dist-body"
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="ray-dist-disc-t">Distributions</span>
+        <span className="ray-dist-disc-stat">{soldN.toLocaleString()} lots counted</span>
+        <svg className="ray-dist-chev" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      <div className="ray-dist-body" id="ray-dist-body" data-open={open}>
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{
@@ -121,6 +174,7 @@ export default function Distributions({ allLots, statsByArtist, market, series }
       {tab === 'house' && <AuctionHouseDistribution statsByArtist={statsByArtist} embedded />}
       {tab === 'price' && <PriceDistribution allLots={allLots} buckets={an?.priceBuckets} embedded />}
       {tab === 'sport' && <SportBreakdown allLots={allLots} data={an?.sportBreakdown} />}
+      </div>
     </section>
   );
 }

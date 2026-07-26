@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useFullLots } from '../hooks/useRayData';
@@ -9,7 +9,7 @@ import { useAuth } from '../lib/account';
 import { supabase } from '../lib/supabase';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
-import LotCard, { lotSignal } from '../components/LotCard';
+import LotCard, { lotSignal, formatEstimate } from '../components/LotCard';
 import { appraiseLot, soldCompBand, isSportsScienceObject } from '../lib/comps';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -61,6 +61,11 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
   );
 }
 
+/** The desktop watchlist view — ledger (terminal density) or the card grid.
+    Stored per browser; ≤899px always renders cards regardless. */
+type SavedView = 'ledger' | 'cards';
+const SAVEDVIEW_KEY = 'ray-savedview';
+
 /**
  * Saved — the watchlist. Answers "what am I watching and when must I act":
  * total estimate at stake, the next hammer, which of the watched lots the
@@ -72,6 +77,21 @@ export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useFullLots();
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
+
+  // Desktop watchlist view — ledger by default; the stored preference lands
+  // after mount (window-guarded: the static export prerenders this page).
+  const [savedView, setSavedView] = useState<SavedView>('ledger');
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const v = localStorage.getItem(SAVEDVIEW_KEY);
+      if (v === 'cards' || v === 'ledger') setSavedView(v);
+    } catch { /* private mode */ }
+  }, []);
+  const pickView = (v: SavedView) => {
+    setSavedView(v);
+    try { localStorage.setItem(SAVEDVIEW_KEY, v); } catch { /* private mode */ }
+  };
 
   const savedLots = useMemo(() =>
     savedIds
@@ -259,6 +279,60 @@ export default function SavedPage() {
           color: var(--color-text-muted);
         }
         .ray-saved-orphan:last-child { border-bottom: none; }
+        /* ── the watchlist LEDGER (desktop ≥900px) ─────────────────────────
+           maker · work · est · signal now · Δ since saved · hammers-in.
+           Mobile always renders the card grid; the toggle only exists where
+           the ledger can. */
+        .ray-savedview-toggle { display: none; }
+        .ray-saved-ledger { display: none; }
+        @media (min-width: 900px) {
+          .ray-savedview-toggle { display: inline-flex; gap: 5px; }
+          .ray-saved-section[data-view=ledger] .ray-saved-ledger { display: block; }
+          .ray-saved-section[data-view=ledger] .ray-saved-grid { display: none; }
+        }
+        .ray-savedview-btn {
+          font-family: var(--font-sans), sans-serif;
+          font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em;
+          padding: 5px 14px; border-radius: 100px;
+          border: 1px solid var(--color-border);
+          background: transparent; color: var(--color-text-muted); cursor: pointer;
+          transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
+        }
+        .ray-savedview-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
+        .ray-savedview-btn[data-active=true] {
+          background: var(--color-fg); border-color: var(--color-fg); color: var(--color-bg);
+        }
+        .ray-saved-cols {
+          display: grid;
+          grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) 110px 96px 104px 104px;
+          gap: 0 16px; align-items: baseline;
+        }
+        .ray-saved-ledger-head { padding: 0 2px 8px; }
+        .ray-savedrow {
+          padding: 11px 2px;
+          border-top: 1px solid var(--hairline);
+          text-decoration: none; color: inherit;
+          transition: background var(--duration-fast) var(--ease-signature);
+        }
+        .ray-savedrow:hover { background: var(--color-hover-item); }
+        .ray-savedrow .maker {
+          font-size: 13px; font-weight: 600; color: var(--color-fg);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+        }
+        .ray-savedrow .work {
+          font-size: 13px; color: var(--color-text-secondary);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+        }
+        .ray-savedrow .num {
+          font-family: var(--font-mono), monospace;
+          font-size: 12px; font-variant-numeric: tabular-nums;
+          text-align: right; white-space: nowrap; color: var(--color-fg);
+        }
+        .ray-savedrow .num .sub {
+          display: block; font-size: 10px; color: var(--color-text-faint);
+          letter-spacing: 0.02em;
+        }
+        .ray-saved-ledger .kicker.r { text-align: right; }
         @media (max-width: 768px) {
           .ray-saved-grid { grid-template-columns: 1fr; gap: 26px; }
           .ray-saved-section { padding-block: 32px 32px; }
@@ -381,10 +455,59 @@ export default function SavedPage() {
           </section>
 
           {upcoming.length > 0 && (
-            <section className="ray-saved-section rail">
-              <h2 className="ray-h2 ray-enter" style={{ marginBottom: 18 }}>
-                On the block, soonest first
-              </h2>
+            <section className="ray-saved-section rail" data-view={savedView}>
+              <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 18 }}>
+                <h2 className="ray-h2" style={{ margin: 0 }}>
+                  On the block, soonest first
+                </h2>
+                <div className="ray-savedview-toggle" role="group" aria-label="Watchlist view">
+                  <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
+                  <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
+                </div>
+              </div>
+
+              {/* the LEDGER — desktop terminal density; every row is the lot's
+                  permalink. Δ since saved reads the same baseline SavedDelta
+                  does (absence of a baseline renders —, never a fake zero). */}
+              <div className="ray-saved-ledger ray-enter">
+                <div className="ray-saved-cols ray-saved-ledger-head" aria-hidden>
+                  <span className="kicker">Maker</span>
+                  <span className="kicker">Work</span>
+                  <span className="kicker r">Est</span>
+                  <span className="kicker r">Signal now</span>
+                  <span className="kicker r">Δ saved</span>
+                  <span className="kicker r">Hammers</span>
+                </div>
+                {upcoming.map(lot => {
+                  const sig = lotSignal(lot, allLots);
+                  const m = savedMeta[lot.id];
+                  const dPP = m?.signalPct != null && sig !== null
+                    ? Math.round(sig.pct) - Math.round(m.signalPct)
+                    : null;
+                  const newBids = m?.bidCount != null && (lot.bidCount || 0) > m.bidCount
+                    ? (lot.bidCount || 0) - m.bidCount
+                    : 0;
+                  const days = daysUntil(lot.saleDate);
+                  return (
+                    <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ray-saved-cols ray-savedrow">
+                      <span className="maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+                      <span className="work">{craftTitle(lot.title)}</span>
+                      <span className="num">{formatEstimate(lot) || '—'}</span>
+                      <span className="num" style={sig ? { color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
+                        {sig ? fmtSignedPct(sig.pct) : '—'}
+                      </span>
+                      <span className="num" style={{ color: dPP == null || dPP === 0 ? 'var(--color-text-faint)' : dPP > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                        {dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
+                        {newBids > 0 && <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>}
+                      </span>
+                      <span className="num" style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                        {hammerWord(days)}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+
               <div className="ray-saved-grid">
                 {upcoming.map((lot, i) => (
                   <div
