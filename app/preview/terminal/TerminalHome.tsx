@@ -188,6 +188,23 @@ function daysToHammer(l: AuctionLot, crawlDay: string): number | null {
 // The mobile feed's compact row — signal-less lots fold to one ruled line
 // (thumb · maker · title · est/bid · date) instead of a full-bleed card.
 // Tapping opens the same comps context the card offers.
+// The row glow's verdict, from EVERY signal tier the engine publishes:
+// 1. the comp signal (Below/Above Market), 2. the engine's value read vs
+// estimate (below/above comparable market), 3. the live-bid read (bid below/
+// above recent comps — the Goldin book, where most of the coverage lives).
+// 'at market' / 'in line' stay quiet on purpose.
+function feedTone(lot: AuctionLot, belowIds: Set<string>, hasSig: Set<string>): 'up' | 'down' | undefined {
+  if (belowIds.has(lot.id)) return 'up';
+  if (hasSig.has(lot.id)) return 'down';
+  const vs = lot.value?.signal?.label;
+  if (vs === 'below comparable market') return 'up';
+  if (vs === 'above comparable market') return 'down';
+  const vb = lot.value?.vsBid?.label;
+  if (vb === 'below recent comps') return 'up';
+  if (vb === 'above recent comps') return 'down';
+  return undefined;
+}
+
 function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down' }) {
   const est =
     lot.estimateLow || lot.estimateHigh
@@ -905,7 +922,7 @@ export default function TerminalHomePage() {
                           <FeedRow
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
-                            tone={belowIds.has(lot.id) ? 'up' : belowSignal.hasSig.has(lot.id) ? 'down' : undefined}
+                            tone={feedTone(lot, belowIds, belowSignal.hasSig)}
                           />
                         </div>
                       ) : (
