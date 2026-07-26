@@ -194,7 +194,7 @@ function daysToHammer(l: AuctionLot, crawlDay: string): number | null {
 // The mobile feed's compact row — signal-less lots fold to one ruled line
 // (thumb · maker · title · est/bid · date) instead of a full-bleed card.
 // Tapping opens the same comps context the card offers.
-function FeedRow({ lot, onOpen }: { lot: AuctionLot; onOpen: () => void }) {
+function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down' }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -205,7 +205,7 @@ function FeedRow({ lot, onOpen }: { lot: AuctionLot; onOpen: () => void }) {
         : '—';
   return (
     <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title)}`}>
-      <span className="ray-feedrow-thumb" aria-hidden>
+      <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
           <img
@@ -925,15 +925,20 @@ export default function TerminalHomePage() {
                   ) : (
                     feedItems.slice(0, visibleUpcoming).map((item, i) =>
                       item.type === 'lot' ? (
-                        // ≤640px: a signal-less lot folds to a compact ruled row
-                        // (the flagged/below-market cards keep their full frame).
-                        narrowView && !belowSignal.hasSig.has(item.lot.id) ? (
+                        // ≤640px: EVERY lot folds to a compact ruled row — the
+                        // engine's verdict shows as a quiet glow behind the
+                        // thumb (green = below market, red = reads rich).
+                        narrowView ? (
                           <div
                             key={item.lot.id}
                             className="ray-feed-rekey ray-feeditem-row"
                             style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
                           >
-                            <FeedRow lot={item.lot} onOpen={() => setTableLot(item.lot)} />
+                            <FeedRow
+                              lot={item.lot}
+                              onOpen={() => setTableLot(item.lot)}
+                              tone={belowIds.has(item.lot.id) ? 'up' : belowSignal.hasSig.has(item.lot.id) ? 'down' : undefined}
+                            />
                           </div>
                         ) : (
                         <div

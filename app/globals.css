@@ -3750,6 +3750,15 @@ body {
   height: 100%;
   object-fit: cover;
 }
+/* signal glow — a quiet verdict behind the image: green = the engine reads it
+   below market, red = it reads rich. The row stays compact; the glow IS the
+   flag (thumb clips inner light, so it's a soft outer halo + 1px tint ring). */
+.ray-feedrow-thumb[data-tone='up'] {
+  box-shadow: 0 0 0 1px rgba(87, 190, 135, 0.35), 0 0 18px 3px rgba(87, 190, 135, 0.22);
+}
+.ray-feedrow-thumb[data-tone='down'] {
+  box-shadow: 0 0 0 1px rgba(204, 106, 92, 0.35), 0 0 18px 3px rgba(204, 106, 92, 0.20);
+}
 .ray-feedrow-main {
   flex: 1;
   min-width: 0;
