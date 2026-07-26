@@ -183,6 +183,49 @@ export default function ValuePage() {
           .ray-value-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; }
           .ray-value-row-thumb { width: 44px; height: 36px; }
         }
+        /* ── DESKTOP LEDGER (≥900px) ──────────────────────────────────
+           The mobile 3-col row is the phone composition; at rail width the
+           middle went empty while three numbers stacked on the right. Here
+           the same row spreads into true terminal ledger columns:
+           thumb · maker/work · house · hammers · estimate · comps median ·
+           odds · gap. Mono data cells, right-aligned numerics, header in
+           the kicker register. The stacked mobile cell and the inline
+           "hammers <date>" fragment hide — the date owns a column. */
+        .ray-value-head { display: none; }
+        .ray-value-cell { display: none; }
+        @media (min-width: 900px) {
+          .ray-value-row,
+          .ray-value-head {
+            grid-template-columns: 56px minmax(0, 1fr) 92px 88px 118px 84px 52px 64px;
+            gap: 16px;
+          }
+          .ray-value-head {
+            display: grid;
+            align-items: baseline;
+            width: 100%;
+            padding: 12px 16px 9px;
+            border-bottom: 1px solid var(--color-border);
+          }
+          .ray-value-head .kicker { font-size: 9.5px; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .ray-value-mob { display: none; }
+          .ray-value-mobdate { display: none; }
+          .ray-value-cell {
+            display: block;
+            font-family: var(--font-mono), monospace;
+            font-size: 12px;
+            letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
+            color: var(--color-text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+          }
+          .ray-value-cell-num { text-align: right; }
+          .ray-value-cell-gap { color: var(--color-up); font-weight: 700; }
+          .ray-value-cell-odds { color: var(--color-text-secondary); font-weight: 600; }
+          .ray-value-cell-est { color: var(--color-fg); }
+        }
       `}</style>
 
       <ArtistNav activeSlug="value" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
@@ -312,9 +355,20 @@ export default function ValuePage() {
                 <h2 className="ray-h2 ray-enter" style={{ marginBottom: 18 }}>
                   Deepest value first · calibrated odds
                 </h2>
-                {/* Compact rows — thumb · maker · signal % · est. Each row
+                {/* Compact rows — thumb · maker · signal % · est on mobile;
+                    ≥900px the same rows spread into the full ledger. Each row
                     opens the comps modal; the house link lives inside it. */}
                 <div className="glass glass-quiet ray-enter" style={{ overflow: 'hidden' }}>
+                  <div className="ray-value-head" aria-hidden="true">
+                    <span />
+                    <span className="kicker">Lot</span>
+                    <span className="kicker">House</span>
+                    <span className="kicker">Hammers</span>
+                    <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
+                    <span className="kicker" style={{ textAlign: 'right' }}>Comps med</span>
+                    <span className="kicker" style={{ textAlign: 'right' }}>Odds</span>
+                    <span className="kicker" style={{ textAlign: 'right' }}>Gap</span>
+                  </div>
                   {gridDeals.slice(0, shown).map((d, i) => (
                     <button
                       key={d.lot.id}
@@ -344,10 +398,40 @@ export default function ValuePage() {
                           {ARTIST_LABEL[d.lot.artist] || d.lot.artist}
                         </span>
                         <span className="ray-value-row-title" style={{ display: 'block' }}>
-                          {craftTitle(d.lot.title)} · {d.lot.saleDate && d.lot.saleDate.slice(0, 10) < new Date().toISOString().slice(0, 10) ? 'hammered' : 'hammers'} {formatDate(d.lot.saleDate)}
+                          {craftTitle(d.lot.title)}
+                          <span className="ray-value-mobdate">
+                            {' '}· {d.lot.saleDate && d.lot.saleDate.slice(0, 10) < new Date().toISOString().slice(0, 10) ? 'hammered' : 'hammers'} {formatDate(d.lot.saleDate)}
+                          </span>
                         </span>
                       </span>
-                      <span style={{ textAlign: 'right' }}>
+                      {/* ≥900px ledger cells — the date, estimate, comps
+                          median, calibrated odds and gap each own a mono
+                          column. The comps median is the signal's own med
+                          when the deep engine carried it; else re-derived
+                          from the estimate mid × the signal ratio (the same
+                          statistic, inverted). */}
+                      <span className="ray-value-cell">{d.lot.auctionHouse}</span>
+                      <span className="ray-value-cell">{formatDate(d.lot.saleDate)}</span>
+                      <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{formatEstimate(d.lot).replace(/ est\.$/, '')}</span>
+                      <span className="ray-value-cell ray-value-cell-num">
+                        {(() => {
+                          const med = (d.signal as { med?: number } | null)?.med ?? (() => {
+                            const lo = d.lot.estimateLow || d.lot.estimateHigh || 0;
+                            const hi = d.lot.estimateHigh || d.lot.estimateLow || 0;
+                            const mid = (lo + hi) / 2;
+                            return mid > 0 ? mid * (1 + d.signal!.pct / 100) : null;
+                          })();
+                          return med ? formatPrice(med) : '—';
+                        })()}
+                      </span>
+                      <span className="ray-value-cell ray-value-cell-num ray-value-cell-odds">
+                        {d.lot.value?.signal?.beatRatePct != null ? `${Math.round(d.lot.value.signal.beatRatePct)}%` : '—'}
+                      </span>
+                      <span className="ray-value-cell ray-value-cell-num ray-value-cell-gap">
+                        {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
+                      </span>
+                      {/* MOBILE stack — the audited-good phone composition */}
+                      <span className="ray-value-mob" style={{ textAlign: 'right' }}>
                         <span className="ray-value-row-sig" style={{ display: 'block' }}>
                           {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
                         </span>
