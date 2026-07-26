@@ -178,6 +178,20 @@ function LotCard({
     return lotSignal(lot, allLots);
   }, [lot, allLots, isUpcoming]);
 
+  // The desktop verdict ring around the photo — same tiers as the mobile
+  // feed rows: comp signal, then the engine's value read, then the bid read.
+  const cardTone = useMemo<'up' | 'down' | undefined>(() => {
+    if (!isUpcoming) return undefined;
+    if (buySignal) return buySignal.label === 'Below Market' ? 'up' : 'down';
+    const vs = lot.value?.signal?.label;
+    if (vs === 'below comparable market') return 'up';
+    if (vs === 'above comparable market') return 'down';
+    const vb = lot.value?.vsBid?.label;
+    if (vb === 'below recent comps') return 'up';
+    if (vb === 'above recent comps') return 'down';
+    return undefined;
+  }, [buySignal, lot, isUpcoming]);
+
   // The realized band precomputed at build time (soldCompBand over the full
   // corpus). It rides on the lot like `signal` does, so the card grid never
   // has to touch the 10MB sold-archive. It carries NO label and NO pct — it is
@@ -327,7 +341,7 @@ function LotCard({
       {/* zIndex auto keeps the stretched link (z1) clickable above this
           content while save/remind buttons (z2) stay above the link —
           overrides the .glass > * z-index:2 rule. */}
-      <div className="ray-lot-img" style={{
+      <div className="ray-lot-img" data-tone={cardTone} style={{
         position: 'relative',
         zIndex: 'auto',
         width: '100%',

@@ -826,7 +826,7 @@ export default function TerminalHomePage() {
                               style={{ cursor: 'pointer' }}
                             >
                               <td style={{ width: 56 }}>
-                                <span className="thumb-plate" style={{ position: 'relative' }}>
+                                <span className="thumb-plate" data-tone={feedTone(lot, belowIds, belowSignal.hasSig)} style={{ position: 'relative' }}>
                                   {(lot.title || '?').charAt(0)}
                                   {lot.imageUrl && (
                                     <img

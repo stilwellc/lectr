@@ -3310,7 +3310,13 @@ body {
    (self-clipped, above the glow); the light spills past its edges. */
 .ray-feedrow-thumb[data-tone] { overflow: visible; }
 /* the crisp verdict: a fine tinted ring hugging the photo's rounded edge —
-   the pool behind stays as ambience, the ring does the identifying. */
+   the pool behind stays as ambience, the ring does the identifying. Desktop
+   gets the RING ONLY (table thumbs + grid card images), no pool. */
+.ray-feedtable .thumb-plate[data-tone='up'] { box-shadow: 0 0 0 1.5px rgba(87, 190, 135, 0.8); border-color: rgba(87, 190, 135, 0.5); }
+.ray-feedtable .thumb-plate[data-tone='down'] { box-shadow: 0 0 0 1.5px rgba(204, 106, 92, 0.75); border-color: rgba(204, 106, 92, 0.5); }
+.ray-lot-img[data-tone]::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.ray-lot-img[data-tone='up']::after { box-shadow: inset 0 0 0 1.5px rgba(87, 190, 135, 0.7); }
+.ray-lot-img[data-tone='down']::after { box-shadow: inset 0 0 0 1.5px rgba(204, 106, 92, 0.65); }
 .ray-feedrow-thumb[data-tone='up'] { box-shadow: 0 0 0 1.5px rgba(87, 190, 135, 0.8); }
 .ray-feedrow-thumb[data-tone='down'] { box-shadow: 0 0 0 1.5px rgba(204, 106, 92, 0.75); }
 .ray-feedrow-thumb[data-tone]::before {
