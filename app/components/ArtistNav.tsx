@@ -516,27 +516,20 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         </nav>
 
 
-        <button
-          className="ray-ck-hintbtn"
-          aria-label="Open jump palette (Command K)"
-          onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
-        >
-          Search &#8984;K
-        </button>
-
-        {/* ONE search — the pill opens the same CommandK palette as ⌘K,
-            which browses the full roster grouped by market when the query
-            is empty. The old bespoke dropdown was a strict subset of it. */}
+        {/* ONE search on desktop — the pill IS the search (opens the CommandK
+            palette, which browses the full roster by market when empty and
+            searches the archive when typed). The old separate "Search ⌘K"
+            hint button did the exact same thing; folded into this pill's ⌘K
+            badge so there's a single, unambiguous affordance. */}
         <div className="ray-artist-select-wrap">
         <button
           className="ray-artist-select-btn glass glass-pill glass-quiet"
           onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
           aria-haspopup="dialog"
+          aria-label="Search — find a maker or a past lot"
         >
           <span>Find a maker</span>
-          <span style={{ opacity: 0.4 }}>
-            <Flick size={10} style={{ transform: 'scaleY(-1)', marginLeft: 0 }} />
-          </span>
+          <kbd className="ray-nav-kbd" aria-hidden="true">&#8984;K</kbd>
         </button>
         </div>
 
