@@ -42,9 +42,12 @@ interface Props {
   onSelect: (key: Market) => void;
   /** mobile = card list; desktop = table */
   variant?: 'desktop' | 'mobile';
-  /** the condensed desktop board — top 5 rows, no show-more/foot, an
-      "all sub-markets ↓" link anchoring to the full section (#sub-markets) */
+  /** the condensed desktop board — rides beside Today's Call, no show-more/foot.
+      It's the only board on desktop; CI'd reads lead, demand fills the rest. */
   condensed?: boolean;
+  /** how many rows the condensed board renders — sized by the caller to fill
+      the call plate's height (rows flex to eat the remaining slack). */
+  maxRows?: number;
 }
 
 // how strong a demand read is — used to rank the cross-market roll-up
@@ -159,7 +162,7 @@ function RowCells({ r }: { r: SubMarketRead }) {
   );
 }
 
-export default function SubMarketBoard({ market, activeKey, onSelect, variant = 'desktop', condensed = false }: Props) {
+export default function SubMarketBoard({ market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows }: Props) {
   const reduce = useReducedMotion();
   const [ref, seen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
@@ -175,15 +178,17 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
     </button>
   ) : null;
 
-  // The condensed board — rides beside Today's Call on desktop. Top CAP rows,
-  // static (no stagger — it's above the fold), a link down to the full board.
+  // The condensed board — rides beside Today's Call and IS the desktop board.
+  // CI'd reads lead (resolveRows), demand fills the rest; the caller sizes
+  // maxRows to the call plate's height and the rows flex to fill it exactly.
   if (condensed) {
     if (!rows.length) return null;
+    const shownCond = rows.slice(0, Math.max(1, maxRows ?? CAP));
     return (
       <div className={`${styles.movers} ${styles.condensed}`}>
         <div className={styles.condHead}>
           <span className={styles.sectionKicker}>Sub-markets · live board</span>
-          <a className={styles.condLink} href="#sub-markets">all sub-markets ↓</a>
+          <span className={styles.condCount}>{rows.length} tracked</span>
         </div>
         <div className={styles.subTable} role="table">
           <div className={styles.subColHead} role="row">
@@ -193,7 +198,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
             <span role="columnheader" className={styles.right}>Support</span>
             <span role="columnheader" className={styles.right}>Lots</span>
           </div>
-          {rows.slice(0, CAP).map((r) => {
+          {shownCond.map((r) => {
             const line = readLine(r);
             return (
               <button

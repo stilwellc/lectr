@@ -257,6 +257,31 @@ export default function TerminalHomePage() {
   const editionSerial = crawlDay.replace(/-/g, '');
   const activeKey = market;
 
+  // The condensed sub-market board rides the instrumentRow's second column
+  // beside Today's Call — and it's the ONLY board on desktop (the full section
+  // below is desktop-duplicative, so it renders only when this one doesn't:
+  // mobile, or narrow desktop, or a scope with no rows).
+  const boardBeside = mounted && deskWide && hasSubMarketRows(marketData, activeKey);
+  // Fill that column to the call plate's height — measure the left column and
+  // render as many rows as fit, so no white space sits beside the plate. Rows
+  // then flex to eat the remaining slack for an exact height match.
+  const callColRef = React.useRef<HTMLDivElement>(null);
+  const [boardRows, setBoardRows] = useState(6);
+  useEffect(() => {
+    if (!boardBeside || typeof ResizeObserver === 'undefined') return;
+    const el = callColRef.current;
+    if (!el) return;
+    const measure = () => {
+      // overhead ≈ condHead + column header (~72px); divide by a conservative
+      // 50px (rows are 47px min) so the board never overshoots the plate.
+      setBoardRows(Math.max(4, Math.floor((el.offsetHeight - 72) / 50)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [boardBeside, activeKey]);
+
   // Sales-weighted appreciation across the active market's artists.
   const appreciation = useMemo(() => {
     const set = marketArtists(activeKey);
@@ -687,28 +712,24 @@ export default function TerminalHomePage() {
                 composition there (dropping ray-board-belowrow, whose ≥900px
                 two-column certificate needs the full width). With no board the
                 row collapses to one column and the wide certificate returns. */}
-            {(() => {
-              const boardBeside = mounted && deskWide && hasSubMarketRows(marketData, activeKey);
-              return (
-                <div className={styles.instrumentRow}>
-                  <div className={`${styles.callCol}${boardBeside ? '' : ' ray-board-belowrow'}`} style={{ marginTop: 0 }}>
-                    {callPlateEl}
-                    {watchStripEl}
-                  </div>
-                  {boardBeside && (
-                    <div className={styles.boardCol}>
-                      <SubMarketBoard
-                        market={marketData}
-                        activeKey={activeKey}
-                        onSelect={onMoverSelect}
-                        variant="desktop"
-                        condensed
-                      />
-                    </div>
-                  )}
+            <div className={styles.instrumentRow}>
+              <div ref={callColRef} className={`${styles.callCol}${boardBeside ? '' : ' ray-board-belowrow'}`} style={{ marginTop: 0 }}>
+                {callPlateEl}
+                {watchStripEl}
+              </div>
+              {boardBeside && (
+                <div className={styles.boardCol}>
+                  <SubMarketBoard
+                    market={marketData}
+                    activeKey={activeKey}
+                    onSelect={onMoverSelect}
+                    variant="desktop"
+                    condensed
+                    maxRows={boardRows}
+                  />
                 </div>
-              );
-            })()}
+              )}
+            </div>
 
             {backtest && backtest.flagged.n > 500 && (
               <a href="/value" className="ray-proofstrip" style={{ marginTop: 20 }}>
@@ -975,9 +996,11 @@ export default function TerminalHomePage() {
               </section>
             )}
 
-            {/* ══ THE SUB-MARKET BOARD — below the block; vertical → sub-markets,
-                each by its strongest honest read; a row is a market switch ══ */}
-            {marketData?.subMarkets && (
+            {/* ══ THE SUB-MARKET BOARD — the FULL board, only where the condensed
+                board beside Today's Call isn't already showing it (mobile, or
+                narrow desktop). On wide desktop the board rides beside the call
+                and this section is dropped as duplicative. ══ */}
+            {marketData?.subMarkets && !boardBeside && (
               <section id="sub-markets" className={styles.moversSection}>
                 <SubMarketBoard
                   market={marketData}

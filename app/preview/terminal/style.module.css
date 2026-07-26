@@ -960,7 +960,7 @@
   display: grid;
   grid-template-columns: minmax(0, 360px) 1fr;
   gap: clamp(16px, 2.5vw, 28px);
-  align-items: start;
+  align-items: stretch;   /* both columns take the row's full height */
   margin-top: clamp(28px, 4vw, 44px);
 }
 .instrumentRow:has(.callCol:only-child) {
@@ -973,8 +973,12 @@
   min-width: 0;
 }
 
-/* the condensed sub-market board riding the instrumentRow's second column */
-.boardCol { min-width: 0; align-self: start; }
+/* the condensed sub-market board riding the instrumentRow's second column —
+   stretches to the call plate's height; its rows flex to fill (no white space) */
+.boardCol { min-width: 0; align-self: stretch; display: flex; flex-direction: column; }
+.boardCol > .condensed { flex: 1; display: flex; flex-direction: column; }
+.condensed .subTable { flex: 1; display: flex; flex-direction: column; }
+.condensed .subColHead { flex: none; }
 .condHead {
   display: flex;
   align-items: baseline;
@@ -983,19 +987,18 @@
   margin-bottom: var(--space-2);
 }
 .condHead .sectionKicker { margin-bottom: 0; }
-.condLink {
+.condCount {
   font-family: var(--font-mono-data), monospace;
   font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--tt-muted);
-  text-decoration: none;
+  color: var(--tt-faint);
   white-space: nowrap;
-  transition: color 160ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
-.condLink:hover,
-.condLink:focus-visible { color: var(--tt-butter); }
-.condensed .subRow { height: 47px; }
+/* rows flex to fill the column's height (matched to the call plate), never
+   shorter than their natural 47px — so the board and the plate end together */
+.condensed .subRow { flex: 1 1 auto; height: auto; min-height: 47px; }
+.condensed .subRow:last-child { border-bottom: none; }
 @media (max-width: 900px) {
   .boardCol { display: none; }
 }
