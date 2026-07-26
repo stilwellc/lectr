@@ -190,14 +190,30 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         .ray-results .ray-sport-chips .ray-sort-pill[data-active=true] i {
           color: color-mix(in srgb, var(--color-bg) 72%, transparent);
         }
+        /* category + house fold into the meta line as plain text on phones
+           only — desktop keeps its chip badges. display lives HERE, not
+           inline on the div, so the ≤768 display:none can actually win. */
+        .ray-result-badges { display: flex; }
+        .ray-result-meta-mob { display: none; }
         @media (max-width: 768px) {
           .ray-results { padding-block: 32px 80px; }
+          /* one row: title block · price · save — the Own-it button and the
+             chip badges are desktop chrome; the freed width goes to the
+             title. The stretched link still opens the lot at the house. */
           .ray-result-row {
-            grid-template-columns: 1fr auto;
-            gap: 8px;
-            padding: 14px 16px;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 10px;
+            padding: 12px 16px;
           }
           .ray-result-badges { display: none; }
+          .ray-result-own { display: none; }
+          .ray-result-meta-mob { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+          /* one meta line, always: year and medium yield entirely on phones
+             (in ~140px they crushed to 2–3 chars of debris beside the
+             price/date cell) — the meta line is category · house, plain
+             text, never clipped */
+          .ray-result-meta { white-space: nowrap; overflow: hidden; min-width: 0; }
+          .ray-result-medium, .ray-result-year { display: none; }
         }
         @media (max-width: 900px) {
           /* 44px touch target on the save control */
@@ -371,7 +387,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     {titleText}
                   </div>
                 )}
-                <div style={{
+                <div className="ray-result-meta" style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
@@ -379,13 +395,21 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   fontSize: 12,
                   color: 'var(--color-text-faint)',
                 }}>
-                  {lot.year && <span>{lot.year}</span>}
-                  {lot.year && lot.medium && <span style={{ opacity: 0.4 }}>·</span>}
+                  {lot.year && <span className="ray-result-year">{lot.year}</span>}
+                  {lot.year && lot.medium && <span className="ray-result-medium" style={{ opacity: 0.4 }}>·</span>}
                   {lot.medium && (
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                    <span className="ray-result-medium" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
                       {craftTitle(lot.medium)}
                     </span>
                   )}
+                  {/* phones fold the badge content in here as plain text —
+                      the chips (and year/medium) are display:none below
+                      768px, so this IS the whole meta line there */}
+                  <span className="ray-result-meta-mob">
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {catColor ? `${catBadge} · ${lot.auctionHouse}` : lot.auctionHouse}
+                    </span>
+                  </span>
                 </div>
               </div>
 
@@ -428,7 +452,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 </div>
               </div>
 
-              <div className="ray-result-badges" style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <div className="ray-result-badges" style={{ gap: 6, flexShrink: 0 }}>
                 {catColor && (
                   <span style={{
                     padding: '3px 10px',
@@ -463,6 +487,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
 
               {onToggleOwned && (
                 <button
+                  className="ray-result-own"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleOwned(lot.id); }}
                   aria-pressed={ownedIds.includes(lot.id)}
                   aria-label={ownedIds.includes(lot.id) ? 'Remove from your collection' : 'Mark as owned'}

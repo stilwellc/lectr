@@ -318,6 +318,68 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           .ray-rankings-hide-mobile { display: none; }
           .ray-rankings-td { padding: 10px 12px; font-size: 12px; }
         }
+        /* ── PHONE COMPOSITION (≤768px) ───────────────────────────────
+           The table is a desktop instrument — on phones its minWidth-600
+           scroll trap clipped headers mid-word. Below 768px the table
+           yields to ranked card rows: rank · maker · sales value +
+           movement pill. Both live in the DOM; the media query picks. */
+        .ray-rankings-cards { display: none; }
+        .ray-rankings-card {
+          display: grid;
+          grid-template-columns: 28px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 12px;
+          width: 100%;
+          padding: 12px 14px;
+          background: transparent;
+          border: none;
+          border-bottom: 1px solid var(--color-border);
+          text-decoration: none;
+          color: var(--color-fg);
+          font-family: var(--font-sans), sans-serif;
+          text-align: left;
+          transition: background var(--duration-fast) var(--ease-signature);
+        }
+        .ray-rankings-card:last-child { border-bottom: none; }
+        .ray-rankings-card:active { background: var(--color-hover-item); }
+        .ray-rankings-card-rank {
+          font-family: var(--font-mono), monospace;
+          font-size: 11px;
+          font-variant-numeric: tabular-nums;
+          color: var(--color-text-faint);
+        }
+        .ray-rankings-card-name {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .ray-rankings-card-metric {
+          font-family: var(--font-mono), monospace;
+          font-size: 13px;
+          font-weight: 500;
+          font-variant-numeric: tabular-nums;
+          color: var(--color-fg);
+          text-align: right;
+          white-space: nowrap;
+        }
+        .ray-rankings-card-trend {
+          display: block;
+          margin-top: 2px;
+          font-size: 11px;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+        }
+        @media (max-width: 768px) {
+          .ray-rankings-scroll { display: none; }
+          .ray-rankings-cards { display: block; }
+        }
       `}</style>
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
@@ -368,9 +430,10 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
       </div>
 
       {/* Glass frame; the table keeps its natural min width and scrolls
-          inside the inner wrapper instead of widening the page. */}
+          inside the inner wrapper instead of widening the page. On ≤768px
+          the CSS swaps the whole scroll wrapper for the card list below. */}
       <div className="glass glass-quiet" style={{ overflow: 'hidden' }}>
-        <div style={{
+        <div className="ray-rankings-scroll" style={{
           overflowX: 'auto',
           WebkitOverflowScrolling: 'touch',
         }}>
@@ -510,6 +573,58 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           </tbody>
         </table>
         )}
+        </div>
+
+        {/* Ranked card rows — the phone reading of the same sort. One
+            headline metric (sales value) + the movement read; tap goes to
+            the maker page. Sport rows have no page, so they stay inert. */}
+        <div className="ray-rankings-cards">
+          {isBid
+            ? (expanded ? sortedBid : sortedBid.slice(0, COLLAPSED_ROWS)).map((row, i) => {
+                const inner = (
+                  <>
+                    <span className="ray-rankings-card-rank">{row.pinLast ? '—' : String(i + 1).padStart(2, '0')}</span>
+                    <span className="ray-rankings-card-name" style={row.pinLast ? { color: 'var(--color-text-muted)' } : undefined}>
+                      {row.href && <ArtistAvatar label={row.label} size={24} />}
+                      {row.label}
+                    </span>
+                    <span className="ray-rankings-card-metric">
+                      {row.totalRevenue > 0 ? formatPrice(row.totalRevenue) : '—'}
+                      <span className="ray-rankings-card-trend" style={{
+                        color: row.movement <= -9999 || toneOf(row.movement) === 'flat'
+                          ? 'var(--color-text-muted)'
+                          : toneOf(row.movement) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
+                      }}>
+                        {row.movement <= -9999 ? '— 12 mo' : `${fmtSignedPct(row.movement)} 12 mo`}
+                      </span>
+                    </span>
+                  </>
+                );
+                return row.href ? (
+                  <Link key={row.key} href={row.href} className="ray-rankings-card">{inner}</Link>
+                ) : (
+                  <div key={row.key} className="ray-rankings-card">{inner}</div>
+                );
+              })
+            : (expanded ? sorted : sorted.slice(0, COLLAPSED_ROWS)).map((row, i) => (
+                <Link key={row.slug} href={`/${row.slug}`} className="ray-rankings-card">
+                  <span className="ray-rankings-card-rank">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="ray-rankings-card-name">
+                    <ArtistAvatar label={row.label} size={24} />
+                    {row.label}
+                  </span>
+                  <span className="ray-rankings-card-metric">
+                    {formatPrice(row.totalRevenue)}
+                    <span className="ray-rankings-card-trend" style={{
+                      color: row.demand <= -9999 || toneOf(row.demand) === 'flat'
+                        ? 'var(--color-text-muted)'
+                        : toneOf(row.demand) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
+                    }}>
+                      {row.demand <= -9999 ? '— demand' : `${formatDemand(row.demand)} demand`}
+                    </span>
+                  </span>
+                </Link>
+              ))}
         </div>
       </div>
       {!expanded && shownRows.length > COLLAPSED_ROWS && (
