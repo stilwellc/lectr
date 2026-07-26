@@ -72,7 +72,7 @@ export default function UpcomingLots({
   return (
     <section className="ray-upcoming rail">
       <style>{`
-        .ray-upcoming { padding-block: 40px 48px; }
+        .ray-upcoming { padding-block: var(--sect-t) var(--sect-b); }
         .ray-upcoming-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -84,7 +84,7 @@ export default function UpcomingLots({
         .ray-upcoming-grid > * { min-width: 0; }
         .ray-upcoming .ray-sort-pill {
           font-family: var(--font-sans), sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 600;
           letter-spacing: 0.1em;
           text-transform: uppercase;
@@ -117,7 +117,7 @@ export default function UpcomingLots({
         .ray-upcoming .ray-sport-chips .ray-sort-pill i {
           font-style: normal;
           font-family: var(--font-mono), monospace;
-          font-size: 9.5px;
+          font-size: 10px;
           color: var(--color-text-faint);
           letter-spacing: 0;
         }
@@ -125,7 +125,7 @@ export default function UpcomingLots({
           color: color-mix(in srgb, var(--color-bg) 72%, transparent);
         }
         @media (max-width: 768px) {
-          .ray-upcoming { padding-block: 32px 32px; }
+          .ray-upcoming { padding-block: var(--sect-t) var(--sect-b); }
           .ray-upcoming-grid {
             grid-template-columns: 1fr;
             gap: 14px;
@@ -150,10 +150,10 @@ export default function UpcomingLots({
           } as React.CSSProperties}
         >
           <h2 style={{
-            fontFamily: 'var(--font-sans), sans-serif',
+            fontFamily: 'var(--font-serif), serif',
             fontSize: 24,
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
+            fontWeight: 400,
+            letterSpacing: '-0.015em',
           }}>
             Upcoming <span style={{ fontStyle: 'normal' }}>lots</span>
           </h2>
@@ -230,7 +230,7 @@ export default function UpcomingLots({
               border: '1px solid var(--color-border)',
               borderRadius: 100,
               padding: '10px 32px',
-              fontSize: 12,
+              fontSize: 12.5,
               letterSpacing: '-0.01em',
               textTransform: 'none',
               color: 'var(--color-text-muted)',

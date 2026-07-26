@@ -35,14 +35,14 @@ function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[
   return (
     <div className="ray-lv" style={{ margin: '10px 0 2px', padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel)' }}>
       {v.exact && exactLot && (
-        <div style={{ fontSize: 13, color: 'var(--color-fg)', fontWeight: 600, marginBottom: dir || v.estimateUsd ? 8 : 0 }}>
+        <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 600, marginBottom: dir || v.estimateUsd ? 8 : 0 }}>
           {v.exact.cls === 'physicalMatch' ? 'This exact item' : 'This model'} last sold for{' '}
           <b>{usd(v.exact.realizedUsd)}</b>{' '}
           <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>· {formatDate(v.exact.saleDate, { month: 'short', year: 'numeric' })}</span>
         </div>
       )}
       {dir && (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13.5 }}>
           <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-down-text)' : 'var(--color-text-secondary)', fontWeight: 650 }}>
             {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
           </span>
@@ -50,7 +50,7 @@ function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[
         </div>
       )}
       {!dir && v.estimateUsd != null && (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13.5 }}>
           <span style={{ color: 'var(--color-fg)', fontWeight: 650 }}>lectr value {usd(v.low)}–{usd(v.high)}</span>
           <span style={{ color: 'var(--color-text-muted)' }}> · {v.confidence} confidence · from {v.n} comparable sales{v.vsBid ? ` · bid ${v.vsBid.pct >= 0 ? '+' : ''}${v.vsBid.pct}% vs comps` : ''}</span>
         </div>
@@ -728,7 +728,7 @@ export default function ComparableModal({
           <div className="comp-modal-header-info" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <span style={{
-                fontSize: 12,
+                fontSize: 12.5,
                 letterSpacing: '-0.01em',
                 textTransform: 'none',
                 color: houseColor,
@@ -738,9 +738,9 @@ export default function ComparableModal({
               </span>
               {catLabel && lot.category !== 'unknown' && (
                 <>
-                  <span style={{ color: 'var(--color-text-faint)', fontSize: 12 }}>&middot;</span>
+                  <span style={{ color: 'var(--color-text-faint)', fontSize: 12.5 }}>&middot;</span>
                   <span style={{
-                    fontSize: 12,
+                    fontSize: 12.5,
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: catColor,
@@ -759,7 +759,7 @@ export default function ComparableModal({
               className="comp-modal-maker"
               onClick={e => e.stopPropagation()}
               style={{
-                fontSize: 12,
+                fontSize: 12.5,
                 letterSpacing: '-0.01em',
                 textTransform: 'none',
                 color: 'var(--color-text-muted)',
@@ -787,7 +787,7 @@ export default function ComparableModal({
             )}
 
             {lot.year && (
-              <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 10 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', marginBottom: 10 }}>
                 {lot.year}{lot.medium ? ` · ${cleanText(lot.medium)}` : ''}
               </div>
             )}
@@ -796,7 +796,7 @@ export default function ComparableModal({
               {formatEstimate(lot)}
             </div>
             <LotValueBlock lot={lot} allLots={allLots} />
-            <div style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
+            <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)' }}>
               {formatDate(lot.saleDate, { month: 'long', day: 'numeric', year: 'numeric' })}
               {lot.saleName ? ` · ${lot.saleName}` : ''}
             </div>
@@ -814,7 +814,7 @@ export default function ComparableModal({
                   borderRadius: 100,
                   background: 'var(--color-accent-wine)',
                   color: 'var(--color-bg)',
-                  fontSize: 12,
+                  fontSize: 12.5,
                   fontWeight: 600,
                   letterSpacing: '-0.01em',
                   textTransform: 'none',
@@ -825,7 +825,7 @@ export default function ComparableModal({
                 View lot <Flick size={10} style={{ marginLeft: 0 }} />
               </a>
               {/* the share point — every card's modal can mint the permalink */}
-              <CopyLinkButton id={lot.id} style={{ borderRadius: 100, padding: '7px 16px', fontSize: 12 }} />
+              <CopyLinkButton id={lot.id} style={{ borderRadius: 100, padding: '7px 16px', fontSize: 12.5 }} />
             </div>
           </div>
         </div>
@@ -856,7 +856,7 @@ export default function ComparableModal({
               <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontFamily: "var(--font-serif), serif" }}>
                 {formatPrice(compStats.median)}
               </div>
-              <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
+              <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
                 {medianLabel}
               </div>
             </div>
@@ -865,7 +865,7 @@ export default function ComparableModal({
               <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontFamily: "var(--font-serif), serif" }}>
                 {formatPrice(compStats.low)} — {formatPrice(compStats.high)}
               </div>
-              <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
+              <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
                 Range
               </div>
             </div>
@@ -884,7 +884,7 @@ export default function ComparableModal({
                       ? signalMagnitude('Below Market', Math.round((compStats.hammerVsEst - 1) * 100))
                       : signalMagnitude('Above Market', Math.round((1 - compStats.hammerVsEst) * 100))}
                   </div>
-                  <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
+                  <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
                     vs. Est.
                   </div>
                 </div>
@@ -896,7 +896,7 @@ export default function ComparableModal({
         {/* Comparables */}
         <div className="comp-modal-comps">
           <div style={{
-            fontSize: 12,
+            fontSize: 12.5,
             letterSpacing: '-0.01em',
             textTransform: 'none',
             color: 'var(--color-text-muted)',
@@ -917,7 +917,7 @@ export default function ComparableModal({
               nothing to be above or below. Say so plainly. */}
           {band && (
             <div style={{
-              fontSize: 12,
+              fontSize: 12.5,
               letterSpacing: '-0.01em',
               color: 'var(--color-text-faint)',
               marginBottom: 16,
@@ -928,11 +928,11 @@ export default function ComparableModal({
           )}
 
           {archiveFailed ? (
-            <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--color-text-faint)', fontSize: 13 }}>
+            <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--color-text-faint)', fontSize: 13.5 }}>
               Comparable sales couldn&rsquo;t be loaded.
               <button
                 onClick={() => { setArchive(a => ({ ...a, archiveError: false })); retryArchiveLoad(); }}
-                style={{ display: 'block', margin: '12px auto 0', background: 'none', border: '1px solid var(--hairline)', color: 'var(--color-text-secondary)', padding: '7px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ display: 'block', margin: '12px auto 0', background: 'none', border: '1px solid var(--hairline)', color: 'var(--color-text-secondary)', padding: '7px 16px', borderRadius: 8, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 Try again
               </button>
@@ -942,7 +942,7 @@ export default function ComparableModal({
               padding: '40px 0',
               textAlign: 'center',
               color: 'var(--color-text-faint)',
-              fontSize: 13,
+              fontSize: 13.5,
             }}>
               Loading comparable sales&hellip;
             </div>
@@ -951,7 +951,7 @@ export default function ComparableModal({
               padding: '40px 0',
               textAlign: 'center',
               color: 'var(--color-text-faint)',
-              fontSize: 13,
+              fontSize: 13.5,
             }}>
               No comparable sold lots found for this artist.
             </div>
@@ -985,7 +985,7 @@ export default function ComparableModal({
                     <div className="comp-modal-row-inner">
                       {/* Rank */}
                       <span style={{
-                        fontSize: 12,
+                        fontSize: 12.5,
                         color: 'var(--color-text-faint)',
                         fontWeight: 500,
                         width: 16,
@@ -1030,7 +1030,7 @@ export default function ComparableModal({
                           {comp.title}
                         </div>
                         <div className="comp-modal-meta" style={{
-                          fontSize: 12,
+                          fontSize: 12.5,
                           color: 'var(--color-text-faint)',
                         }}>
                           <span style={{ color: compHouseColor, fontWeight: 600 }}>{comp.auctionHouse}</span>
@@ -1067,7 +1067,7 @@ export default function ComparableModal({
                         </div>
                         {ratio !== null && (
                           <div style={{
-                            fontSize: 12,
+                            fontSize: 12.5,
                             color: 'var(--color-text-secondary)',
                             fontWeight: 500,
                           }}>

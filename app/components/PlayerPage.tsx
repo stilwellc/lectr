@@ -65,7 +65,7 @@ function TrendLine({ yearly }: { yearly: PlayerEntry['yearly'] }) {
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="Yearly median card sale">
         <polyline points={pts} fill="none" stroke="var(--color-fg)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-faint)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
         <span>{yearly[0].y} · {formatPrice(yearly[0].med)} card median</span>
         <span>{yearly[yearly.length - 1].y} · {formatPrice(yearly[yearly.length - 1].med)}</span>
       </div>
@@ -119,7 +119,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
   return (
     <>
       {nav}
-      <div className="rail" style={{ paddingTop: 28, paddingBottom: 40 }}>
+      <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
         <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
           {entry.sport ? `${entry.sport} · ` : ''}player dossier

@@ -32,11 +32,11 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
       padding: '10px 14px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
         {label}
       </div>
       {payload.filter(e => e.value != null).map((entry) => (
-        <div key={entry.dataKey} style={{ fontSize: 13, color: tooltipColors[entry.dataKey] || 'var(--color-fg)', marginBottom: 1, fontWeight: 500 }}>
+        <div key={entry.dataKey} style={{ fontSize: 13.5, color: tooltipColors[entry.dataKey] || 'var(--color-fg)', marginBottom: 1, fontWeight: 500 }}>
           {tooltipLabels[entry.dataKey] || entry.dataKey}: {formatAxis(entry.value)}
         </div>
       ))}
@@ -148,7 +148,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
   return (
     <section className="ray-market rail">
       <style>{`
-        .ray-market { padding-block: 40px 48px; }
+        .ray-market { padding-block: var(--sect-t) var(--sect-b); }
         .ray-market-card {
           overflow: hidden;
         }
@@ -160,7 +160,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
         .ray-cat-tr:hover { background: var(--color-hover-item); }
         .ray-cat-td {
           padding: 11px 20px;
-          font-size: 13px;
+          font-size: 13.5px;
         }
         .ray-cat-td-right { text-align: right; }
         .ray-cat-divider {
@@ -169,10 +169,10 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
           margin: 0 20px;
         }
         @media (max-width: 768px) {
-          .ray-market { padding-block: 32px 32px; }
+          .ray-market { padding-block: var(--sect-t) var(--sect-b); }
           .ray-chart-container { height: 200px; }
           .ray-cat-record-col { display: none; }
-          .ray-cat-td { padding: 10px 16px; font-size: 12px; }
+          .ray-cat-td { padding: 10px 16px; font-size: 12.5px; }
           .ray-cat-divider { margin: 0 16px; }
         }
       `}</style>
@@ -182,10 +182,10 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
         {mark && <SectionMark n={mark} style={{ fontSize: 'clamp(96px, 12vw, 150px)' }} />}
         <h2 style={{
           position: 'relative',
-          fontFamily: 'var(--font-sans), sans-serif',
+          fontFamily: 'var(--font-serif), serif',
           fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
+          fontWeight: 400,
+          letterSpacing: '-0.015em',
           padding: '16px 0 12px',
         }}>
           Price <span style={{ fontStyle: 'normal' }}>history</span>
@@ -202,19 +202,19 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 20px 12px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-fg)', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
+                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                   Avg
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent-gold)', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
+                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                   High
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 12, height: 2, background: 'var(--color-accent-wine)', borderRadius: 1, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
+                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                   Trend
                 </span>
               </div>
@@ -242,7 +242,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
+                    tick={{ fontSize: 10.5, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
                     axisLine={{ stroke: 'var(--color-border)' }}
                     tickLine={false}
                     interval="preserveStartEnd"
@@ -250,7 +250,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                   />
                   <YAxis
                     tickFormatter={formatAxis}
-                    tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
+                    tick={{ fontSize: 10.5, fill: 'var(--color-text-faint)', fontFamily: "var(--font-mono), monospace" }}
                     axisLine={false}
                     tickLine={false}
                     width={50}
@@ -336,7 +336,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
               <thead>
                 <tr>
                   <th style={{
-                    fontSize: 12,
+                    fontSize: 12.5,
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',
@@ -347,7 +347,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     Medium
                   </th>
                   <th style={{
-                    fontSize: 12,
+                    fontSize: 12.5,
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',
@@ -358,7 +358,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     Lots
                   </th>
                   <th style={{
-                    fontSize: 12,
+                    fontSize: 12.5,
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',
@@ -369,7 +369,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     Avg
                   </th>
                   <th className="ray-cat-record-col" style={{
-                    fontSize: 12,
+                    fontSize: 12.5,
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',

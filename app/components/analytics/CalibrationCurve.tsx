@@ -37,7 +37,7 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
         <h2 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
           What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
           Measured chance a lot beats its high estimate, by how far its comps trade over the ask —
           refit from {cal.n?.toLocaleString?.() || 'every'} replayed sales at every nightly build. The 10×+ bucket drops on purpose: extreme gaps under-deliver, and the engine says so.
         </p>
@@ -47,15 +47,15 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 6, right: 18, left: 0, bottom: 2 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-              <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} interval={0} />
-              <YAxis domain={[30, 85]} tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} width={40} />
+              <XAxis dataKey="bucket" tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} interval={0} />
+              <YAxis domain={[30, 85]} tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} width={40} />
               <Tooltip
                 cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1 }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   return (
                     <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px', fontFamily: 'var(--font-sans), sans-serif' }}>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 5 }}>comps at {label} the estimate</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 5 }}>comps at {label} the estimate</div>
                       {payload.map(p => (
                         <div key={String(p.dataKey)} style={{ fontSize: 12.5, color: MARKET_COLORS[String(p.dataKey)] || 'var(--color-fg)' }}>
                           {String(p.dataKey)}: {p.value}% beat the high estimate
@@ -72,7 +72,7 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '8px 0 10px 18px', fontSize: 12, color: 'var(--color-text-faint)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '8px 0 10px 18px', fontSize: 12.5, color: 'var(--color-text-faint)' }}>
           {Object.entries(MARKET_COLORS).map(([m, c]) => (
             <span key={m}><span style={{ display: 'inline-block', width: 14, height: 2, background: c, verticalAlign: 'middle', marginRight: 6 }} />{m}</span>
           ))}

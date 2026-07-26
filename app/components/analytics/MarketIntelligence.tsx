@@ -154,10 +154,10 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={70} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: MUTED }} width={38} axisLine={false} tickLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
+                <XAxis dataKey="period" tick={{ fontSize: 10.5, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={70} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10.5, fill: MUTED }} width={38} axisLine={false} tickLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
                 <ReferenceLine y={100} stroke="var(--chart-ref)" strokeDasharray="3 3" />
-                <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} labelStyle={{ color: MUTED }} formatter={(v: number, _n, p) => [`${v} · ${(p.payload.n || 0)} sales`, 'index']} />
+                <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12.5 }} labelStyle={{ color: MUTED }} formatter={(v: number, _n, p) => [`${v} · ${(p.payload.n || 0)} sales`, 'index']} />
                 <Area type="monotone" dataKey="value" stroke={idxColor} strokeWidth={2} fill="url(#miIdx)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -180,7 +180,7 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
                   <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                   <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: MUTED }} width={30} domain={['dataMin - 8', 'dataMax + 4']} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v}%`, 'sell-through']} />
+                  <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12.5 }} formatter={(v: number) => [`${v}%`, 'sell-through']} />
                   <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={1.8} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -206,7 +206,7 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
                   <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: MUTED }} width={34} domain={[0, (max: number) => Math.ceil(max * 2) / 2]} ticks={[0, 0.5, 1, 1.5, 2]} allowDataOverflow={false} tickFormatter={(v: number) => `${v.toFixed(1)}×`} axisLine={false} tickLine={false} />
                   <ReferenceLine y={1} stroke="var(--chart-ref)" strokeDasharray="3 3" />
-                  <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v.toFixed(2)}× estimate`, 'hammer']} />
+                  <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12.5 }} formatter={(v: number) => [`${v.toFixed(2)}× estimate`, 'hammer']} />
                   <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={1.8} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -233,7 +233,7 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: MUTED }} interval={0} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: MUTED }} width={34} tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`} axisLine={false} tickLine={false} />
                     <ReferenceLine y={0} stroke="var(--chart-ref)" />
-                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number, _n, p) => [`${v > 0 ? '+' : ''}${v}% vs mid · ${(p.payload.n || 0).toLocaleString()} sales`, 'hammer']} />
+                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12.5 }} formatter={(v: number, _n, p) => [`${v > 0 ? '+' : ''}${v}% vs mid · ${(p.payload.n || 0).toLocaleString()} sales`, 'hammer']} />
                     <Bar dataKey="pct" radius={[2, 2, 0, 0]}>
                       {seasonRows.map(r => (
                         <Cell key={r.month} fill={INK} fillOpacity={r.month === seasonBest.month || r.month === seasonWorst.month ? 0.95 : 0.35} />
@@ -258,7 +258,7 @@ export default function MarketIntelligence({ series, marketLabel, seasonality }:
                     <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                     <XAxis dataKey="period" tick={{ fontSize: 10, fill: MUTED }} tickFormatter={tickQ} interval="preserveStartEnd" minTickGap={60} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: MUTED }} width={38} axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12 }} formatter={(v: number) => [`${v.toLocaleString()} sales`, 'depth']} />
+                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ background: 'var(--panel)', border: '1px solid var(--hairline)', fontSize: 12.5 }} formatter={(v: number) => [`${v.toLocaleString()} sales`, 'depth']} />
                     <Bar dataKey="value" fill={INK} fillOpacity={0.5} radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -277,16 +277,16 @@ function MarketStyles() {
       .ray-mi { display: flex; flex-direction: column; gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); }
       .ray-mi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hairline); }
       @media (max-width: 760px) { .ray-mi-row { grid-template-columns: 1fr; } }
-      .ray-mi-panel { background: var(--panel); padding: 18px 20px; }
+      .ray-mi-panel { background: var(--panel); padding: var(--card-pad); }
       .ray-mi-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-      .ray-mi-title { font-size: 13px; font-weight: 650; color: var(--color-fg); }
+      .ray-mi-title { font-size: 13.5px; font-weight: 650; color: var(--color-fg); }
       .ray-mi-method { font-size: 10.5px; color: var(--color-text-muted); text-align: right; }
       .ray-mi-hero { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
       .ray-mi-num { font-family: var(--font-mono), monospace; font-size: 40px; font-weight: 500; letter-spacing: -2px; color: var(--color-fg); font-variant-numeric: tabular-nums; }
       .ray-mi-num.sm { font-size: 28px; letter-spacing: -1px; }
-      .ray-mi-delta { font-size: 13px; font-weight: 600; }
-      .ray-mi-sub { font-size: 12px; color: var(--color-text-secondary); }
-      .ray-mi-suppress { font-size: 13px; color: var(--color-text-secondary); line-height: 1.5; margin: 4px 0 0; }
+      .ray-mi-delta { font-size: 13.5px; font-weight: 600; }
+      .ray-mi-sub { font-size: 12.5px; color: var(--color-text-secondary); }
+      .ray-mi-suppress { font-size: 13.5px; color: var(--color-text-secondary); line-height: 1.5; margin: 4px 0 0; }
       .ray-mi-caveat { font-size: 11.5px; color: var(--color-text-muted); line-height: 1.5; margin: -2px 0 12px; max-width: 620px; }
       .ray-mi-caveat b { font-weight: 650; color: var(--color-text-secondary); }
     `}} />

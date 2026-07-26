@@ -242,7 +242,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           padding: 8px 16px;
           color: var(--color-fg);
           font-family: var(--font-sans), sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 500;
           letter-spacing: 0.04em;
           cursor: pointer;
@@ -252,7 +252,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           width: 100%;
           padding: 10px 16px;
           font-family: var(--font-sans), sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 500;
           letter-spacing: 0.04em;
           color: var(--color-text-muted);
@@ -280,7 +280,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           font-weight: 600;
         }
         .ray-artist-count {
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 600;
           color: var(--color-bg);
           background: var(--color-fg);
@@ -293,7 +293,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           width: 100%;
           padding: 8px 16px 4px;
           font-family: var(--font-sans), sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 600;
           letter-spacing: 0.15em;
           text-transform: uppercase;
@@ -318,7 +318,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           width: 100%;
           padding: 10px 16px;
           font-family: var(--font-sans), sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 500;
           letter-spacing: 0.04em;
           color: var(--color-fg);
@@ -359,7 +359,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             border: none;
             color: var(--color-fg);
             font-family: var(--font-sans), sans-serif;
-            font-size: 13px;
+            font-size: 13.5px;
             font-weight: 600;
             letter-spacing: 0.02em;
             cursor: pointer;
@@ -448,7 +448,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           background: var(--color-bg);
         }
         .ray-maker-sheet .ray-artist-count {
-          font-size: 13px;
+          font-size: 13.5px;
           padding: 2px 9px;
         }
         .ray-maker-sheet-nav {

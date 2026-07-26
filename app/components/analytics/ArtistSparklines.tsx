@@ -56,17 +56,17 @@ function SparkTooltip({ active, payload, priceBasis }: { active?: boolean; paylo
       padding: '6px 10px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
         {d.date}
       </div>
       {/* bid-market fallback: avgPrice is a median $ LEVEL (no estimates to
           divide by), so caption the price — never "% vs estimate". */}
       {priceBasis ? (
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-fg)' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg)' }}>
           {`${formatPrice(d.avgPrice)} median realized`}
         </div>
       ) : (
-        <div style={{ fontSize: 12, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
           {`${fmtSignedPct(Math.round(d.avgPrice))} vs estimate`}
         </div>
       )}
@@ -111,7 +111,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
         marginBottom: 8,
       }}>
         <div style={{
-          fontSize: 13,
+          fontSize: 13.5,
           fontWeight: 600,
           color: 'var(--color-fg)',
           letterSpacing: '-0.01em',
@@ -138,7 +138,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
               : 'Demand: median price realized vs the houses’ estimate.'}
           >
             <span style={{
-              fontSize: 9.5,
+              fontSize: 10,
               fontWeight: 700,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
@@ -147,7 +147,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
               {artist.priceBasis ? 'appr. est.' : 'demand'}
             </span>
             <span style={{
-              fontSize: 12,
+              fontSize: 12.5,
               fontWeight: 600,
               color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down-text)',
             }}>
@@ -188,7 +188,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--color-text-faint)',
-          fontSize: 12,
+          fontSize: 12.5,
         }}>
           Insufficient data
         </div>
@@ -202,7 +202,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
         borderTop: '1px solid var(--color-border)',
       }}>
         <div>
-          <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
             Sales Value
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-fg)' }}>
@@ -210,7 +210,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           </div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
             Avg (12mo)
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-muted)' }}>
@@ -218,7 +218,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
             % Over Est.
           </div>
           <div style={{
@@ -304,7 +304,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
   return (
     <section className="ray-sparklines rail">
       <style>{`
-        .ray-sparklines { padding-block: 40px 48px; }
+        .ray-sparklines { padding-block: var(--sect-t) var(--sect-b); }
         .ray-spark-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -317,7 +317,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
           .ray-spark-grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 768px) {
-          .ray-sparklines { padding-block: 32px 32px; }
+          .ray-sparklines { padding-block: var(--sect-t) var(--sect-b); }
           .ray-spark-grid { grid-template-columns: 1fr; }
           .ray-spark-card { padding: 16px; }
         }
@@ -325,10 +325,10 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
 
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
+          fontFamily: 'var(--font-serif), serif',
           fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
+          fontWeight: 400,
+          letterSpacing: '-0.015em',
         }}>
           {market && market !== 'all' ? rosterNoun(market).charAt(0).toUpperCase() + rosterNoun(market).slice(1) : 'Roster'} <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>performance</span>
         </h2>
@@ -336,7 +336,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
           href="/analytics#artist-rankings"
           style={{
             fontFamily: 'var(--font-mono), monospace',
-            fontSize: 12,
+            fontSize: 12.5,
             letterSpacing: '-0.01em',
             textTransform: 'none',
             color: 'var(--color-text-muted)',

@@ -90,7 +90,7 @@ function MakerSections({
           <p style={{ fontSize: 16, color: 'var(--color-text-secondary)', margin: 0 }}>
             No lots tracked for {label} right now.
           </p>
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
+          <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
             The desk refreshes daily as auction houses post new sales and results.
           </p>
         </div>
@@ -225,7 +225,7 @@ export default function ArtistDetailPage() {
               sold rows once phase 3 arrives (ArchiveMakerBody re-renders it). */}
           {!isArchiveMaker && (
             <RayEntrance animate={!fromCache}>
-              <div className="rail ray-enter" style={{ paddingTop: 16 }}>
+              <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}>
                 <MarketSwitch compact />
               </div>
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
@@ -330,7 +330,7 @@ function ArchiveMakerBody({
   return (
     <>
       <RayEntrance animate={!fromCache}>
-        <div className="rail ray-enter" style={{ paddingTop: 16 }}>
+        <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}>
           <MarketSwitch compact />
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>

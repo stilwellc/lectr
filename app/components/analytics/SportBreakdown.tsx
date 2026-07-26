@@ -31,13 +31,13 @@ function SportTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       padding: '10px 14px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
         {d.sport}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
         Value: {formatPrice(d.totalValue)}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>
         {d.count.toLocaleString()} lots
       </div>
     </div>
@@ -92,14 +92,14 @@ export default function SportBreakdown({ allLots, data }: Props & { data?: { spo
               <XAxis
                 type="number"
                 tickFormatter={formatAxis}
-                tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                tick={{ fontSize: 10.5, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
                 type="category"
                 dataKey="sport"
-                tick={{ fontSize: 12, fill: 'var(--color-text-secondary)', fontFamily: "var(--font-sans), sans-serif" }}
+                tick={{ fontSize: 12.5, fill: 'var(--color-text-secondary)', fontFamily: "var(--font-sans), sans-serif" }}
                 axisLine={false}
                 tickLine={false}
                 width={92}
@@ -110,7 +110,7 @@ export default function SportBreakdown({ allLots, data }: Props & { data?: { spo
                 {sportData.map((entry, i) => (
                   <Cell key={i} fill={entry.fill} fillOpacity={0.75} />
                 ))}
-                <LabelList dataKey="totalValue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-muted)', fontSize: 11, fontFamily: 'var(--font-sans), sans-serif' }} />
+                <LabelList dataKey="totalValue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-muted)', fontSize: 11.5, fontFamily: 'var(--font-sans), sans-serif' }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

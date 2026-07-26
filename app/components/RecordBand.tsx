@@ -53,7 +53,7 @@ export default function RecordBand({
         .ray-recband-cell {
           background: var(--paper);
           text-align: center;
-          padding: 15px 14px 17px;
+          padding: var(--card-pad);
           min-width: 0;
         }
         .ray-recband-k {
@@ -104,7 +104,7 @@ export default function RecordBand({
       </div>
 
       {/* microtype footer, dated like every certificate on the site */}
-      <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
+      <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
         <span>{footer}</span>
         <span style={{ whiteSpace: 'nowrap' }}>no. {no}</span>
       </div>

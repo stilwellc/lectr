@@ -122,7 +122,7 @@ function ArchiveResults({
   if (archiveError) {
     return (
       <div className="ray-recordband" style={{ marginTop: 24, textAlign: 'center', padding: '48px 20px' }}>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', marginBottom: 16 }}>
           The sold archive didn&rsquo;t load. Check your connection and try again.
         </p>
         <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryArchiveLoad()}>
@@ -637,20 +637,20 @@ export default function TerminalHomePage() {
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {/* the 7-market switch — re-scopes the WHOLE page in place */}
-      <div className="rail" style={{ paddingTop: 14, position: 'relative', zIndex: 3 }}>
+      <div className="rail" style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
         <MarketSwitch compact lit open={!fromCache} emblems />
       </div>
 
       {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12, position: 'relative', zIndex: 2 }}>
-          <p style={{ fontSize: 13, color: 'var(--tt-muted)', textAlign: 'center' }}>{error}</p>
+          <p style={{ fontSize: 13.5, color: 'var(--tt-muted)', textAlign: 'center' }}>{error}</p>
           <button
             onClick={() => window.location.reload()}
             style={{
-              fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600,
+              fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600,
               padding: '8px 20px', borderRadius: 100, border: '1px solid var(--tt-hair-2)',
               background: 'none', color: 'var(--tt-muted)', cursor: 'pointer',
-              fontFamily: 'var(--font-inter), system-ui, sans-serif',
+              fontFamily: 'var(--font-sans), system-ui, sans-serif',
             }}
           >
             Retry
@@ -768,7 +768,7 @@ export default function TerminalHomePage() {
                     </div>
                   ))}
                 </div>
-                <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
+                <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
                   <span>every estimate, read against every hammer</span>
                   <span>no. {editionSerial}</span>
                 </div>
@@ -888,7 +888,7 @@ export default function TerminalHomePage() {
                                 {sig
                                   ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
                                       {signalMagnitude(sig.label, sig.pct)}<span style={{ color: 'var(--color-text-faint)', marginLeft: 5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
-                                      <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 8.5, letterSpacing: 1, opacity: 0.8 }}>
+                                      <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
                                         {confidenceMeter(sig.confidence).dots}
                                       </span>
                                     </span>
@@ -979,7 +979,7 @@ export default function TerminalHomePage() {
                               fontFamily: 'var(--font-sans), sans-serif',
                             }}
                           >
-                            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-fg)', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-fg)', whiteSpace: 'nowrap' }}>
                               {item.house} · {formatDate(item.day)}
                             </span>
                             <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1037,13 +1037,13 @@ export default function TerminalHomePage() {
                         border: '1px solid var(--tt-hair-2)',
                         borderRadius: 100,
                         padding: '10px 32px',
-                        fontSize: 12,
+                        fontSize: 12.5,
                         letterSpacing: '0.12em',
                         textTransform: 'uppercase',
                         color: 'var(--tt-muted)',
                         fontWeight: 600,
                         cursor: 'pointer',
-                        fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                        fontFamily: 'var(--font-sans), system-ui, sans-serif',
                       }}
                     >
                       Show more ({((effectiveView === 'table' ? feed.length : feedItems.length) - visibleUpcoming).toLocaleString()} remaining)

@@ -23,13 +23,13 @@ function HouseTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       padding: '10px 14px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
         {d.house}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
         Value: {formatPrice(d.totalValue)}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>
         {d.count.toLocaleString()} lots
       </div>
     </div>
@@ -81,14 +81,14 @@ export default function AuctionHouseDistribution({ statsByArtist, embedded = fal
                 <XAxis
                   type="number"
                   tickFormatter={formatAxis}
-                  tick={{ fontSize: 11, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                  tick={{ fontSize: 10.5, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   type="category"
                   dataKey="house"
-                  tick={{ fontSize: 12, fill: 'var(--color-text-secondary)', fontFamily: "var(--font-sans), sans-serif" }}
+                  tick={{ fontSize: 12.5, fill: 'var(--color-text-secondary)', fontFamily: "var(--font-sans), sans-serif" }}
                   axisLine={false}
                   tickLine={false}
                   width={82}
@@ -99,7 +99,7 @@ export default function AuctionHouseDistribution({ statsByArtist, embedded = fal
                   {houseData.map((entry, i) => (
                     <Cell key={i} fill={entry.fill} fillOpacity={0.75} />
                   ))}
-                  <LabelList dataKey="totalValue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-muted)', fontSize: 11, fontFamily: 'var(--font-sans), sans-serif' }} />
+                  <LabelList dataKey="totalValue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-muted)', fontSize: 11.5, fontFamily: 'var(--font-sans), sans-serif' }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -115,22 +115,22 @@ export default function AuctionHouseDistribution({ statsByArtist, embedded = fal
   return (
     <section className="ray-house-dist rail">
       <style>{`
-        .ray-house-dist { padding-block: 40px 48px; }
+        .ray-house-dist { padding-block: var(--sect-t) var(--sect-b); }
         @media (max-width: 768px) {
-          .ray-house-dist { padding-block: 32px 32px; }
+          .ray-house-dist { padding-block: var(--sect-t) var(--sect-b); }
         }
       `}</style>
 
       <div style={{ marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
+          fontFamily: 'var(--font-serif), serif',
           fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
+          fontWeight: 400,
+          letterSpacing: '-0.015em',
         }}>
           Auction house <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Ranked by total sales value</p>
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Ranked by total sales value</p>
       </div>
 
       {card}

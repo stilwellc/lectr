@@ -67,7 +67,7 @@ export default function SettlementSlip({
           </button>
         </div>
 
-        <div className="kicker" style={{ borderTop: '1px solid var(--paper-line)', marginTop: 8, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: 'var(--paper-muted)' }}>
+        <div className="kicker" style={{ borderTop: '1px solid var(--paper-line)', marginTop: 8, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--paper-muted)' }}>
           <span>settled nightly, every hammer on the book</span>
           <span>no. {serial}</span>
         </div>

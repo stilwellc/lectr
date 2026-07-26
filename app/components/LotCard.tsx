@@ -263,7 +263,7 @@ function LotCard({
             </span>
           )}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isNewToday && <span className="ray-newchip" style={{ marginRight: 6 }}>New today</span>}
           {lot.auctionHouse}
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
@@ -449,7 +449,7 @@ function LotCard({
             {titleText}
           </h3>
         )}
-        <div style={{ fontSize: 13, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
+        <div style={{ fontSize: 13.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
           {lot.auctionHouse}
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
           {isPastPending
@@ -491,7 +491,7 @@ function LotCard({
                 alignItems: 'baseline',
                 flexWrap: 'wrap',
                 gap: 6,
-                fontSize: 12,
+                fontSize: 12.5,
                 letterSpacing: '-0.01em',
                 color: 'var(--color-text-muted)',
                 marginBottom: 6,

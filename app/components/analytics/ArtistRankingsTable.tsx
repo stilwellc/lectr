@@ -210,7 +210,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
 
   // active sort wears BEIGE (neutral accent) — gold stays brand-only
   const thStyle = (key: SortKey, align: 'left' | 'right' = 'right'): React.CSSProperties => ({
-    fontSize: 12,
+    fontSize: 12.5,
     letterSpacing: '-0.01em',
     textTransform: 'none',
     color: sortKey === key ? 'var(--color-beige-text)' : 'var(--color-text-faint)',
@@ -266,7 +266,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
   return (
     <section id="artist-rankings" className="ray-rankings rail">
       <style>{`
-        .ray-rankings { padding-block: 40px 48px; }
+        .ray-rankings { padding-block: var(--sect-t) var(--sect-b); }
         .ray-rankings-row {
           transition: background var(--duration-fast) var(--ease-signature);
         }
@@ -275,7 +275,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         }
         .ray-rankings-td {
           padding: 12px 16px;
-          font-size: 13px;
+          font-size: 13.5px;
           border-bottom: 1px solid var(--color-border);
           white-space: nowrap;
         }
@@ -293,7 +293,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
            text get HTML-escaped and break hydration. */
         .ray-rankings-lens {
           font-family: var(--font-sans), sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 600;
           letter-spacing: -0.01em;
           padding: 6px 16px;
@@ -314,9 +314,9 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           color: var(--color-bg);
         }
         @media (max-width: 768px) {
-          .ray-rankings { padding-block: 32px 32px; }
+          .ray-rankings { padding-block: var(--sect-t) var(--sect-b); }
           .ray-rankings-hide-mobile { display: none; }
-          .ray-rankings-td { padding: 10px 12px; font-size: 12px; }
+          .ray-rankings-td { padding: 10px 12px; font-size: 12.5px; }
         }
         /* ── PHONE COMPOSITION (≤768px) ───────────────────────────────
            The table is a desktop instrument — on phones its minWidth-600
@@ -344,7 +344,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         .ray-rankings-card:active { background: var(--color-hover-item); }
         .ray-rankings-card-rank {
           font-family: var(--font-mono), monospace;
-          font-size: 11px;
+          font-size: 11.5px;
           font-variant-numeric: tabular-nums;
           color: var(--color-text-faint);
         }
@@ -362,7 +362,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         }
         .ray-rankings-card-metric {
           font-family: var(--font-mono), monospace;
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 500;
           font-variant-numeric: tabular-nums;
           color: var(--color-fg);
@@ -372,7 +372,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         .ray-rankings-card-trend {
           display: block;
           margin-top: 2px;
-          font-size: 11px;
+          font-size: 11.5px;
           font-weight: 600;
           font-variant-numeric: tabular-nums;
         }
@@ -384,10 +384,10 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
         <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
+          fontFamily: 'var(--font-serif), serif',
           fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
+          fontWeight: 400,
+          letterSpacing: '-0.015em',
         }}>
           Maker <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>rankings</span>
         </h2>
@@ -415,7 +415,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               display: 'inline-flex',
               alignItems: 'center',
               gap: 7,
-              fontSize: 13,
+              fontSize: 13.5,
               fontWeight: 600,
               color: 'var(--color-text-muted)',
               textDecoration: 'none',
@@ -636,7 +636,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               border: '1px solid var(--color-border)',
               borderRadius: 100,
               padding: '10px 32px',
-              fontSize: 12,
+              fontSize: 12.5,
               letterSpacing: '-0.01em',
               textTransform: 'none',
               color: 'var(--color-text-muted)',
