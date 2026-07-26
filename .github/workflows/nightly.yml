@@ -43,9 +43,10 @@ on:
         type: boolean
         default: false
       incremental_crawl:
-        description: "Christie's incremental crawl (skip fully-resolved sales, carry them forward) — cuts ~60% of crawl runtime. OFF by default until validated on a manual run."
-        type: boolean
-        default: false
+        description: "Christie's + Sotheby's incremental crawl (skip fully-resolved sales, carry them forward). auto = crawler default: incremental Mon–Sat, FULL sweep on Sunday UTC (weekly correctness backstop, mirroring the backtest cadence). incremental / full force either mode."
+        type: choice
+        options: [auto, incremental, full]
+        default: auto
 
 permissions:
   contents: read
@@ -71,8 +72,11 @@ jobs:
     env:
       SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
       RAY_HOUSE: ${{ matrix.house }}
-      # opt-in, off by default — ray-crawl only reads this for the christies house
-      INCREMENTAL_CRAWL: ${{ github.event.inputs.incremental_crawl == 'true' && '1' || '' }}
+      # Read by the christies + sothebys houses. '' (scheduled runs / auto) lets
+      # the crawler apply its default: incremental Mon–Sat, full sweep Sunday
+      # (UTC). '1' forces incremental, '0' forces the full sweep — the dispatch
+      # input maps onto exactly those three states.
+      INCREMENTAL_CRAWL: ${{ github.event.inputs.incremental_crawl == 'incremental' && '1' || (github.event.inputs.incremental_crawl == 'full' && '0' || '') }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

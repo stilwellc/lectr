@@ -16,6 +16,13 @@ import type {
   MarketStats, PricePoint, HouseCount, PriceBasis,
 } from '../app/types';
 
+// Shared crawler plumbing: transient-failure retry (5xx/network/timeout only,
+// never 4xx), the incremental skip-set predicate, and robust estimate-range
+// parsing. All pure/no-side-effect modules — safe as static imports.
+import { fetchWithRetry } from './lib/fetch-retry';
+import { buildSkippableSaleNames } from './lib/skip-set';
+import { parseEstimateRange } from './lib/estimate-range';
+
 // v2 foundation — the single, deterministic normalization layer. Every FUTURE
 // row is born v2 by stamping these (native money fact + dated USD, persisted
 // identity keys) at parse/classify time. imageHash is the only I/O function and
@@ -343,15 +350,46 @@ const DATA_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
 // pagination on the houses that expose it, and enriches far more detail
 // pages. Polite delays are kept; it just keeps walking.
 const DEEP = process.env.RAY_DEEP === '1';
-// INCREMENTAL_CRAWL=1 turns on a Christie's-only fast path: sales already FULLY
-// RESOLVED in the current segment (every lot sold/settled-bought_in, closed
-// longer ago than RESULT_PENDING_MS, not online-only, not resurfaced by today's
-// live department discovery) are NOT re-fetched — their existing lots are simply
-// carried forward by the normal merge (lotMap is seeded from the segment, so a
-// lot we don't re-crawl survives untouched). DEFAULT OFF: when the flag is unset
-// the crawler behaves byte-identically to before (no skip, full re-crawl). This
-// is purely additive and cannot affect the nightly until explicitly enabled.
-const INCREMENTAL_CRAWL = process.env.INCREMENTAL_CRAWL === '1';
+// INCREMENTAL CRAWL (Christie's + Sotheby's auction crawlers): sales already
+// FULLY RESOLVED in the current segment (every lot sold/settled-bought_in,
+// closed longer ago than RESULT_PENDING_MS, not online-only, not resurfaced by
+// today's live department discovery) are NOT re-fetched — their existing lots
+// are simply carried forward by the normal merge (lotMap is seeded from the
+// segment, so a lot we don't re-crawl survives untouched).
+//
+// DEFAULT: ON — except Sunday (UTC), which runs the FULL sweep as the weekly
+// correctness backstop, mirroring the backtest's Sunday-full cadence in
+// nightly.yml. Explicit overrides win either way:
+//   INCREMENTAL_CRAWL=1 → force incremental (even on Sunday)
+//   INCREMENTAL_CRAWL=0 → force the full sweep
+// The nightly.yml dispatch input maps onto exactly these three states.
+const UTC_SUNDAY = new Date().getUTCDay() === 0; // matches `date -u +%u` = 7 in nightly.yml
+const INCREMENTAL_CRAWL =
+  process.env.INCREMENTAL_CRAWL === '1' ? true :
+  process.env.INCREMENTAL_CRAWL === '0' ? false :
+  !UTC_SUNDAY;
+const INCREMENTAL_MODE_REASON =
+  process.env.INCREMENTAL_CRAWL === '1' ? 'forced ON (INCREMENTAL_CRAWL=1)' :
+  process.env.INCREMENTAL_CRAWL === '0' ? 'forced OFF (INCREMENTAL_CRAWL=0 — full sweep)' :
+  UTC_SUNDAY ? 'OFF (Sunday UTC — weekly full-sweep backstop)' : 'ON (weekday default)';
+
+// ── CRAWL HEALTH (per-house) ────────────────────────────────────────────────
+// expected: the source's OWN advertised totals where a feed exposes one
+// (Christie's auction total_hits_filtered, Goldin facet/pass totals) — summed
+// per house, 'na' otherwise. parseErrors: lots DROPPED at parse time for a
+// missing REQUIRED field (id/title/url — see parseDrop call sites). Both feed
+// the machine-greppable `[health]` line emitted per house at the end of main().
+const HEALTH: { expected: Record<string, number>; parseErrors: Record<string, number> } = { expected: {}, parseErrors: {} };
+const noteExpected = (house: string, n: number) => {
+  if (Number.isFinite(n) && n > 0) HEALTH.expected[house] = (HEALTH.expected[house] || 0) + n;
+};
+// A lot missing a REQUIRED field (id, title, url) is counted + dropped with ONE
+// warn line — never silently shipped. Optional fields (estimate, condition,
+// medium…) must NEVER route through here.
+const parseDrop = (house: string, why: string, ref: string) => {
+  HEALTH.parseErrors[house] = (HEALTH.parseErrors[house] || 0) + 1;
+  console.warn(`  [parse-drop] house=${house} ${why}: ${String(ref).slice(0, 120)}`);
+};
 const DELAY_MS = 1500;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
@@ -376,8 +414,8 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
   let lotData: any[] = [];
   try {
     const per = 100;
-    const first = await fetch(`https://api.phillips.com/api/maker/${artist.phillips.id}/lots?page=1&resultsPerPage=${per}`, {
-      headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(45000),
+    const first = await fetchWithRetry(`https://api.phillips.com/api/maker/${artist.phillips.id}/lots?page=1&resultsPerPage=${per}`, {
+      headers: { 'User-Agent': UA }, timeoutMs: 45000,
     });
     if (first.ok) {
       const j = await first.json();
@@ -389,8 +427,8 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
       for (let p = 2; p <= lastPage; p++) {
         await sleep(400);
         try {
-          const r = await fetch(`https://api.phillips.com/api/maker/${artist.phillips.id}/lots?page=${p}&resultsPerPage=${per}`, {
-            headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(45000),
+          const r = await fetchWithRetry(`https://api.phillips.com/api/maker/${artist.phillips.id}/lots?page=${p}&resultsPerPage=${per}`, {
+            headers: { 'User-Agent': UA }, timeoutMs: 45000,
           });
           if (!r.ok) { console.warn(`  [Phillips] page ${p}: HTTP ${r.status}`); break; }
           const jp = await r.json();
@@ -406,8 +444,8 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
   // ── fallback: the artist page's hydration blob (legacy path)
   if (lotData.length === 0) {
     try {
-      const res = await fetch(`https://www.phillips.com/artist/${artist.phillips.id}/${artist.phillips.slug}`, {
-        headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+      const res = await fetchWithRetry(`https://www.phillips.com/artist/${artist.phillips.id}/${artist.phillips.slug}`, {
+        headers: { 'User-Agent': UA }, timeoutMs: 30000,
       });
       if (!res.ok) { console.log(`  [Phillips] HTTP ${res.status}`); return lots; }
       const html = await res.text();
@@ -440,9 +478,14 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
   try {
     for (const lot of lotData) {
       if (lot.isNoLot) continue;
-      const title = lot.description || lot.title || lot.lotTitle || 'Untitled';
+      const rawTitle = lot.description || lot.title || lot.lotTitle || '';
+      const title = rawTitle || 'Untitled';
       const saleNum = lot.saleNumber || '';
       const lotNum = lot.lotNumber || '';
+      // REQUIRED-field gate: no id parts → an unkeyable `phillips--` row; no
+      // title at all → junk. Count + drop loudly (optional fields never drop).
+      if (!saleNum && !lotNum) { parseDrop('phillips', 'missing id (saleNumber+lotNumber)', JSON.stringify(lot).slice(0, 100)); continue; }
+      if (!rawTitle) { parseDrop('phillips', 'missing title', `sale=${saleNum} lot=${lotNum}`); continue; }
       const detailLink = lot.detailLink || lot.url || `/detail/${saleNum}/${lotNum}`;
       const currency = detectCurrency(lot.currencySign || '');
       const hammerBP = lot.hammerPlusBP ?? lot.hammerPlusCommission ?? null;
@@ -522,9 +565,9 @@ async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]> {
   console.log(`  [Sothebys] Fetching ${artist.displayName}...`);
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(30000)
+      timeoutMs: 30000,
     });
     if (!res.ok) {
       console.log(`  [Sothebys] HTTP ${res.status}`);
@@ -586,7 +629,7 @@ async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]> {
         // Fallback to slug-based title
         let titleSlug = slug.replace(stripPrefix, '');
         titleSlug = titleSlug.replace(/^qiao-zhi?-?kang-duo-?/i, '');
-        if (!titleSlug || titleSlug.length < 2) continue;
+        if (!titleSlug || titleSlug.length < 2) { parseDrop('sothebys', 'missing title (card + slug both empty)', slug); continue; }
         title = titleSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       }
 
@@ -765,8 +808,8 @@ async function crawlChristies(artist: ArtistConfig): Promise<AuctionLot[]> {
     for (let p = 2; p <= 8; p++) {
       await sleep(800);
       try {
-        const r = await fetch(`https://www.christies.com/en/artists/${artist.christies}?lotavailability=All&sortby=relevance&page=${p}`, {
-          headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+        const r = await fetchWithRetry(`https://www.christies.com/en/artists/${artist.christies}?lotavailability=All&sortby=relevance&page=${p}`, {
+          headers: { 'User-Agent': UA }, timeoutMs: 30000,
         });
         if (!r.ok) break;
         const pageLots = parseChristiesHtml(await r.text(), artist.slug);
@@ -783,9 +826,9 @@ async function crawlChristies(artist: ArtistConfig): Promise<AuctionLot[]> {
   console.log(`  [Christie's] Fetching artist page for ${artist.displayName}...`);
 
   try {
-    const res = await fetch(artistUrl, {
+    const res = await fetchWithRetry(artistUrl, {
       headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(30000)
+      timeoutMs: 30000,
     });
     if (res.ok) {
       parseChristiesHtml(await res.text(), artist.slug).forEach(lot => {
@@ -804,9 +847,9 @@ async function crawlChristies(artist: ArtistConfig): Promise<AuctionLot[]> {
   console.log(`  [Christie's] Fetching search for upcoming lots...`);
 
   try {
-    const res = await fetch(searchUrl, {
+    const res = await fetchWithRetry(searchUrl, {
       headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(30000)
+      timeoutMs: 30000,
     });
     if (res.ok) {
       parseChristiesHtml(await res.text(), artist.slug).forEach(lot => {
@@ -835,18 +878,25 @@ function parseChristiesJson(jsonStr: string, artistSlug: string): AuctionLot[] {
       const titleSecondary = lot.title_secondary_txt || '';
       const title = titleSecondary || lot.title_primary_txt || 'Untitled';
       const lotId = lot.object_id || lot.lot_id_txt || '';
+      // REQUIRED-field gate: no id → an unkeyable/undedupable `christies-` row
+      // AND a dead built URL; no title source at all → junk. Count + drop.
+      if (!lotId) { parseDrop('christies', 'missing object_id/lot_id_txt', String(lot.title_primary_txt || '').slice(0, 80)); continue; }
+      if (!titleSecondary && !lot.title_primary_txt) { parseDrop('christies', 'missing title', `lot ${lotId}`); continue; }
       const lotUrl = lot.url || `https://www.christies.com/en/lot/lot-${lotId}`;
 
       const estimateStr = lot.estimate_txt || '';
       const currency = detectCurrency(estimateStr);
-      let estimateLow: number | null = null;
-      let estimateHigh: number | null = null;
-      const estMatch = estimateStr.match(/([\d,]+)\s*[-–]\s*([\d,]+)/);
-      if (estMatch) {
-        estimateLow = parseInt(estMatch[1].replace(/,/g, ''));
-        estimateHigh = parseInt(estMatch[2].replace(/,/g, ''));
-      }
+      // RANGE-AWARE estimate parse (lib/estimate-range). The old
+      // `([\d,]+)\s*[-–]\s*([\d,]+)` regex could not cross a repeated currency
+      // token ("GBP 200,000 - GBP 300,000") or an em dash, silently dropping
+      // the WHOLE band; and a single-value estimate never populated at all.
+      // Now: both bounds land in estimateLow/estimateHigh (a single value
+      // becomes a flat low==high band); "estimate on request" stays null.
+      const { low: estimateLow, high: estimateHigh } = parseEstimateRange(estimateStr);
 
+      // price_realised_txt is a REALIZED price — a single number by nature
+      // (never a range), so a first-number parse is the correct semantics
+      // here. Do NOT range-parse/sum/average a realized string.
       const priceStr = lot.price_realised_txt || '';
       let priceRealized: number | null = null;
       const priceMatch = priceStr.match(/([\d,]+)/);
@@ -924,9 +974,9 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
   console.log(`  [Wright] Fetching ${artist.displayName}...`);
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(30000)
+      timeoutMs: 30000,
     });
     if (!res.ok) {
       console.log(`  [Wright] HTTP ${res.status}`);
@@ -954,7 +1004,8 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
           const items = session.items || [];
           for (const item of items) {
             totalItems++;
-            lots.push(parseWrightBasicItem(item, session, sessionKey, artist.slug));
+            const parsed = parseWrightBasicItem(item, session, sessionKey, artist.slug);
+            if (parsed) lots.push(parsed); // null = dropped for a missing required field (counted)
           }
         }
       }
@@ -970,7 +1021,8 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
       const lastPage = paginator.last_page || 1;
       console.log(`  [Wright] Found ${items.length} lots on page 1 of ${lastPage} (${paginator.total || items.length} total, advanced page)`);
       for (const item of items) {
-        lots.push(parseWrightAdvancedItem(item, artist.slug));
+        const parsed = parseWrightAdvancedItem(item, artist.slug);
+        if (parsed) lots.push(parsed); // null = dropped for a missing required field (counted)
       }
       // deep mode: walk the whole paginator (history lives back here)
       if (DEEP && lastPage > 1) {
@@ -978,7 +1030,7 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
         for (let p = 2; p <= cap; p++) {
           await sleep(600);
           try {
-            const r2 = await fetch(`${url}?page=${p}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+            const r2 = await fetchWithRetry(`${url}?page=${p}`, { headers: { 'User-Agent': UA }, timeoutMs: 30000 });
             if (!r2.ok) break;
             const $2 = cheerio.load(await r2.text());
             const dp2 = $2('#app').attr('data-page');
@@ -988,7 +1040,10 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
               || pd2?.props?.results?.primary_results?.sorted_items?.results;
             const items2 = pag2?.data;
             if (!items2 || !Array.isArray(items2) || items2.length === 0) break;
-            for (const item of items2) lots.push(parseWrightAdvancedItem(item, artist.slug));
+            for (const item of items2) {
+              const parsed = parseWrightAdvancedItem(item, artist.slug);
+              if (parsed) lots.push(parsed);
+            }
           } catch { break; }
         }
         console.log(`  [Wright] Deep walk complete: ${lots.length} lots total`);
@@ -1004,21 +1059,23 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
   return lots;
 }
 
-function parseWrightBasicItem(item: any, session: any, sessionKey: string, artistSlug: string): AuctionLot {
+function parseWrightBasicItem(item: any, session: any, sessionKey: string, artistSlug: string): AuctionLot | null {
   const title = item.name || 'Untitled';
   const lotNum = item.lot_number || null;
   const house = (item.house || 'Wright') as string;
   const result = item.result || null;
   const resultSansPremium = item.result_sans_premium || null;
 
+  // REQUIRED-field gate: id needs fd_key or lot_number; a lot without a name
+  // or without any alias URL is unusable. Count + drop (optional fields never drop).
+  if (!item.fd_key && !lotNum) { parseDrop('wright', 'missing id (fd_key+lot_number)', String(item.name || '').slice(0, 80)); return null; }
+  if (!item.name) { parseDrop('wright', 'missing title', `fd_key=${item.fd_key || `${lotNum}-${sessionKey}`}`); return null; }
+  if (!item.alias) { parseDrop('wright', 'missing url (alias)', String(item.name).slice(0, 80)); return null; }
+
+  // range-aware (lib/estimate-range): tolerates em dashes, repeated currency
+  // symbols between the bounds, and single-value estimates (flat band).
   const estStr = item.estimate_formatted || '';
-  let estimateLow: number | null = null;
-  let estimateHigh: number | null = null;
-  const estMatch = estStr.match(/([\d,]+)\s*[–\-]\s*([\d,]+)/);
-  if (estMatch) {
-    estimateLow = parseInt(estMatch[1].replace(/,/g, ''));
-    estimateHigh = parseInt(estMatch[2].replace(/,/g, ''));
-  }
+  const { low: estimateLow, high: estimateHigh } = parseEstimateRange(estStr);
 
   const sessionDate = session.date || item.session?.date || '';
   let saleDate = '';
@@ -1082,9 +1139,14 @@ function parseWrightBasicItem(item: any, session: any, sessionKey: string, artis
   };
 }
 
-function parseWrightAdvancedItem(item: any, artistSlug: string): AuctionLot {
+function parseWrightAdvancedItem(item: any, artistSlug: string): AuctionLot | null {
   const title = item.name || 'Untitled';
   const lotNum = item.lot_number || null;
+
+  // REQUIRED-field gate (same doctrine as the basic parser).
+  if (!item.fd_key && !item.id && !lotNum) { parseDrop('wright', 'missing id (fd_key+id+lot_number)', String(item.name || '').slice(0, 80)); return null; }
+  if (!item.name) { parseDrop('wright', 'missing title', `fd_key=${item.fd_key || item.id || lotNum}`); return null; }
+  if (!item.alias) { parseDrop('wright', 'missing url (alias)', String(item.name).slice(0, 80)); return null; }
   const result = item.result_premium_amount || null;
   const hammer = item.result_amount || null;
   const isSold = item.item_status === 'Sold' || (result != null && result > 0);
@@ -1309,7 +1371,7 @@ function routeItem(creators: string | null, title: string, extra = ''): string |
 
 async function sothebysAuctionMeta(slug: string): Promise<{ uuid: string; endDate: string | null; state: string; title: string } | null> {
   try {
-    const res = await fetch(`https://www.sothebys.com/en/buy/auction/${slug}`, { headers: { 'User-Agent': UA, ...sothebysAuth() }, signal: AbortSignal.timeout(30000) });
+    const res = await fetchWithRetry(`https://www.sothebys.com/en/buy/auction/${slug}`, { headers: { 'User-Agent': UA, ...sothebysAuth() }, timeoutMs: 30000 });
     if (!res.ok) { console.warn(`[Sotheby's] meta ${slug}: HTTP ${res.status}`); return null; }
     const html = await res.text();
     const uuid = (html.match(/"auctionId":"([0-9a-f-]{36})"/) || [])[1];
@@ -1328,11 +1390,11 @@ async function sothebysAuctionLots(uuid: string): Promise<{ currency: Currency; 
   let currency: Currency = 'USD';
   for (let guard = 0; guard < 40; guard++) {
     try {
-      const res = await fetch(SOTHEBYS_GQL, {
+      const res = await fetchWithRetry(SOTHEBYS_GQL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apollographql-client-name': 'sothebys-web', 'User-Agent': UA, ...sothebysAuth() },
         body: JSON.stringify({ query: SOTHEBYS_LOT_QUERY, variables: { id: uuid, limit: 100, offset } }),
-        signal: AbortSignal.timeout(30000),
+        timeoutMs: 30000,
       });
       const j = await res.json() as any;
       const auc = j?.data?.auction;
@@ -1392,7 +1454,7 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
   const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>(), art: new Set<string>() };
   const grab = async (url: string, into: Set<string>) => {
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+      const r = await fetchWithRetry(url, { headers: { 'User-Agent': UA }, timeoutMs: 30000 });
       const h = await r.text();
       (h.match(/\/en\/buy\/auction\/20[0-9]{2}\/[a-z0-9-]+/g) || []).forEach(s => into.add(s.replace('/en/buy/auction/', '')));
     } catch { /* ignore */ }
@@ -1426,14 +1488,63 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
 
   console.log(`  [Sotheby's] ${jobs.length} sales to crawl (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports, ${artSales.length} art)`);
 
+  // ── INCREMENTAL-CRAWL FAST PATH (same pattern as Christie's; see the long
+  // comment there for the saleName-superset-key + carry-forward reasoning).
+  // Sotheby's difference: there is NO explicit end_date signal on the segment
+  // rows to lean on — closure is derived STRICTLY from the segment's own lot
+  // statuses + saleDate/saleDateTime (every lot terminal, none results-pending,
+  // ALL datable and closed > RESULT_PENDING_MS ago). Any doubt (an undatable
+  // lot, a pending flag, an upcoming) disqualifies the sale: a wrongly-skipped
+  // live sale is worse than a redundant fetch. Included prior lots are ALL
+  // Sotheby's-house rows (auction-crawler ids aren't prefix-distinguishable
+  // from artist-page ids) — a colliding artist-page cohort can only make the
+  // predicate stricter, never hide an unresolved lot. Skips are keyed by the
+  // sale slug's derived saleName using the EXACT transform the loop stamps.
+  const sothebysNameOf = (slug: string) => slug.split('/').pop()!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const skippableSales = new Map<string, number>(); // saleName → prior-lot count
+  if (INCREMENTAL_CRAWL) {
+    try {
+      const { readSegment } = await import('./corpus-io');
+      const prior = (readSegment('sothebys') as unknown as AuctionLot[]) || [];
+      const names = buildSkippableSaleNames(
+        prior as unknown as import('./lib/skip-set').SkipLot[],
+        l => true, // segment is already Sotheby's-only; superset keying is the safe direction
+      );
+      for (const [name, count] of Array.from(names.entries())) skippableSales.set(name, count);
+      // A sale surfaced by TODAY's live department/series discovery is being
+      // actively shown by the house — always re-crawl it (mirrors Christie's).
+      const discoveredSlugs = [
+        ...Array.from(discovered.watches), ...Array.from(discovered.science),
+        ...Array.from(discovered.sports), ...Array.from(discovered.art),
+      ];
+      for (const slug of discoveredSlugs) skippableSales.delete(sothebysNameOf(slug));
+    } catch (e) {
+      // Segment unreadable → skip NOTHING (full crawl is the safe default).
+      console.warn(`  [Sotheby's] incremental: could not read segment (${(e as Error).message}) — full crawl`);
+      skippableSales.clear();
+    }
+  }
+
+  let sothebysSkipped = 0, sothebysFetched = 0, sothebysCarried = 0;
   for (const { sale, kind } of jobs) {
+    // Incremental fast path: fully resolved + old + not resurfaced in discovery
+    // → don't re-fetch. Its lots ride through via the merge's carry-forward.
+    if (INCREMENTAL_CRAWL && skippableSales.has(sothebysNameOf(sale))) {
+      sothebysSkipped++;
+      sothebysCarried += skippableSales.get(sothebysNameOf(sale)) || 0;
+      continue;
+    }
+    sothebysFetched++;
     const meta = await sothebysAuctionMeta(sale);
     if (!meta) { console.log(`  [Sotheby's] ${sale}: no metadata, skip`); continue; }
     const { currency: auctionCur, lots: rawLots } = await sothebysAuctionLots(meta.uuid);
     const saleName = sale.split('/').pop()!.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     let kept = 0;
     for (const lot of rawLots) {
-      if (!lot.title) continue;
+      // REQUIRED-field gate: lotId keys the record + the URL tail; title is
+      // the identity text. Missing either → count + drop with one warn line.
+      if (!lot.lotId) { parseDrop('sothebys', 'missing lotId', `${sale}: ${String(lot.title || '').slice(0, 60)}`); continue; }
+      if (!lot.title) { parseDrop('sothebys', 'missing title', `${sale}: lot ${lot.lotId}`); continue; }
       // item-level FIRST: the lot's own text decides where it belongs. Only if
       // no tracked maker matches do we fall back to the SALE as the signal — but
       // strictly for the memorabilia verticals routeItem can't identify (sports/
@@ -1525,6 +1636,8 @@ async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'sports' | '
     console.log(`  [Sotheby's] ${sale} (${meta.state}): ${rawLots.length} lots → ${kept} kept`);
     await sleep(500);
   }
+  console.log(`  [Sotheby's] incremental mode: ${INCREMENTAL_MODE_REASON}`);
+  if (INCREMENTAL_CRAWL) console.log(`  [Sotheby's] incremental: fetched ${sothebysFetched} sales, skipped ${sothebysSkipped} fully-resolved (${sothebysCarried} lots carried forward from segment)`);
   console.log(`  [Sotheby's] Total ${lots.length} lots (${lots.filter(l => l.status === 'sold').length} sold, ${lots.filter(l => l.status === 'upcoming').length} upcoming)`);
   return lots;
 }
@@ -1563,8 +1676,8 @@ async function christiesAuctionLots(slug: string): Promise<any[]> {
   const MAX_PAGES = 60;
   for (let page = 1; page <= MAX_PAGES && byId.size < total; page++) {
     try {
-      const res = await fetch(`https://www.christies.com/en/auction/${slug}?sortby=lotnumber&page=${page}`, {
-        headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
+      const res = await fetchWithRetry(`https://www.christies.com/en/auction/${slug}?sortby=lotnumber&page=${page}`, {
+        headers: { 'User-Agent': UA }, timeoutMs: 30000,
       });
       if (!res.ok) break;
       const html = await res.text();
@@ -1581,6 +1694,8 @@ async function christiesAuctionLots(slug: string): Promise<any[]> {
     } catch { break; }
   }
   if (byId.size < total && total !== Infinity) console.warn(`[Christie's] ${slug}: paginated ${byId.size}/${total} lots — sale may be truncated (raise MAX_PAGES?)`);
+  // health: the source's own advertised sale size (total_hits_filtered)
+  if (total !== Infinity) noteExpected('christies', total);
   return Array.from(byId.values());
 }
 
@@ -1589,7 +1704,7 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
   const discovered = { watches: new Set<string>(), science: new Set<string>(), sports: new Set<string>(), art: new Set<string>() };
   const grab = async (url: string, into: Set<string>) => {
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30000) });
+      const r = await fetchWithRetry(url, { headers: { 'User-Agent': UA }, timeoutMs: 30000 });
       const h = await r.text();
       (h.match(/\/en\/auction\/[a-z0-9-]+-[0-9]{4,6}/g) || []).forEach(s => into.add(s.replace('/en/auction/', '')));
     } catch { /* ignore */ }
@@ -1615,11 +1730,14 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
   if (scope === 'art' || scope === 'all') artSales.forEach(sale => jobs.push({ sale, kind: 'art' }));
   console.log(`  [Christie's Auctions] ${jobs.length} sales (${watchSales.length} watch, ${scienceSales.length} science, ${sportsSales.length} sports, ${artSales.length} art)`);
 
-  // ── INCREMENTAL-CRAWL FAST PATH (default OFF) ─────────────────────────────
+  // ── INCREMENTAL-CRAWL FAST PATH (default ON; Sunday UTC = full sweep) ─────
   // Build the set of sale NAMES that are already fully resolved in the current
   // segment, so we can skip re-fetching those sales. This block is ONLY entered
-  // when INCREMENTAL_CRAWL=1; when off, `skippableSaleNames` stays empty and the
-  // sale loop below fetches every sale exactly as before (byte-identical).
+  // when INCREMENTAL_CRAWL is on (weekday default, or forced via env=1); when
+  // off (Sunday full-sweep backstop, or forced via env=0), `skippableSaleNames`
+  // stays empty and the sale loop below fetches every sale (byte-identical to
+  // the original full crawl). The resolved-sale predicate lives in
+  // scripts/lib/skip-set.ts (shared with the Sotheby's auction crawler).
   //
   // KEYING NOTE (why saleName, and why that is safe): a persisted lot does NOT
   // store the sale slug/code — only a saleName derived from the slug via the
@@ -1640,40 +1758,22 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
   // OLDER than RESULT_PENDING_MS, neither the W11 zombie-reconcile (only touches
   // 'upcoming') nor the results-pending net (only re-holds within the window)
   // will mutate them.
-  const skippableSaleNames = new Set<string>();
+  const skippableSaleNames = new Map<string, number>(); // saleName → prior-lot count
   const nameOf = (slug: string) => slug.replace(/-\d{4,6}$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   if (INCREMENTAL_CRAWL) {
     try {
       const { readSegment } = await import('./corpus-io');
       const prior = (readSegment('christies') as unknown as AuctionLot[]) || [];
-      const now = Date.now();
       // A sale is skippable only if EVERY christies-auc lot under its name is a
-      // terminal, old, non-online result. Any single failing lot disqualifies
-      // the whole name (conservative). We never skip online-only sales (their
-      // true close/revival comes from the onlineonly enrichment pass), anything
-      // still upcoming/unknown/results-pending, or anything closed within the
-      // RESULT_PENDING_MS window (late results can still post inside it).
-      const TERMINAL = new Set(['sold', 'bought_in']);
-      const byName = new Map<string, AuctionLot[]>();
-      for (const l of prior) {
-        if (!String(l.id).startsWith('christies-auc-')) continue; // only this crawler's lots
-        const list = byName.get(l.saleName) || [];
-        list.push(l);
-        byName.set(l.saleName, list);
-      }
-      const resolvedOld = (list: AuctionLot[]): boolean => {
-        for (const l of list) {
-          if (!TERMINAL.has(l.status as string)) return false;                 // upcoming/unknown-result/withdrawn → fetch
-          if ((l as AuctionLot & { resultsPending?: boolean }).resultsPending) return false; // pending → fetch
-          if (l.url && /onlineonly/.test(l.url)) return false;                  // online-only → always fetch
-          const dt = (l as AuctionLot & { saleDateTime?: string }).saleDateTime;
-          const t = dt ? Date.parse(dt) : (l.saleDate ? Date.parse(l.saleDate) : NaN);
-          if (isNaN(t)) return false;                                           // undatable → fetch (can't prove it's old)
-          if (now - t <= RESULT_PENDING_MS) return false;                       // inside the late-result window → fetch
-        }
-        return list.length > 0;
-      };
-      for (const [name, list] of Array.from(byName.entries())) if (resolvedOld(list)) skippableSaleNames.add(name);
+      // terminal, old, non-online result — see lib/skip-set.ts for the full
+      // predicate (any single failing lot disqualifies the whole name; online-
+      // only sales, pending results, and anything inside RESULT_PENDING_MS are
+      // never skipped).
+      const names = buildSkippableSaleNames(
+        prior as unknown as import('./lib/skip-set').SkipLot[],
+        l => String(l.id).startsWith('christies-auc-'), // only this crawler's lots
+      );
+      for (const [name, count] of Array.from(names.entries())) skippableSaleNames.set(name, count);
       // A sale reappearing in TODAY's live department discovery must ALWAYS be
       // re-crawled (it is being actively surfaced), even if the segment looks
       // resolved — remove any such name from the skip set.
@@ -1690,11 +1790,15 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
     }
   }
 
-  let skipped = 0, fetched = 0;
+  let skipped = 0, fetched = 0, carried = 0;
   for (const { sale, kind } of jobs) {
     // Incremental fast path: this sale is fully resolved + old + not resurfaced
     // in discovery → don't re-fetch. Its lots ride through via carry-forward.
-    if (INCREMENTAL_CRAWL && skippableSaleNames.has(nameOf(sale))) { skipped++; continue; }
+    if (INCREMENTAL_CRAWL && skippableSaleNames.has(nameOf(sale))) {
+      skipped++;
+      carried += skippableSaleNames.get(nameOf(sale)) || 0;
+      continue;
+    }
     fetched++;
     const rawLots = await christiesAuctionLots(sale);
     const saleName = sale.replace(/-\d{4,6}$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -1703,7 +1807,9 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
       const primary = lot.title_primary_txt || '';
       const secondary = lot.title_secondary_txt || '';
       const title = secondary ? `${primary} ${secondary}`.trim() : primary;
-      if (!title) continue;
+      // REQUIRED-field gate: object_id keys the record; a titleless lot is junk.
+      if (!lot.object_id) { parseDrop('christies', 'missing object_id', `${sale}: ${title.slice(0, 60)}`); continue; }
+      if (!title) { parseDrop('christies', 'missing title', `${sale}: lot ${lot.object_id}`); continue; }
       if (lot.lot_withdrawn) continue;
       // item-level FIRST, then SALE as fallback for the memorabilia verticals
       // routeItem can't identify (sports/pop-culture), gated by the same
@@ -1786,7 +1892,8 @@ async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'sports' | 
     console.log(`  [Christie's Auctions] ${sale}: ${rawLots.length} lots → ${kept} kept`);
     await sleep(500);
   }
-  if (INCREMENTAL_CRAWL) console.log(`  [Christie's Auctions] incremental: fetched ${fetched} sales, skipped ${skipped} fully-resolved (carried forward from segment)`);
+  console.log(`  [Christie's Auctions] incremental mode: ${INCREMENTAL_MODE_REASON}`);
+  if (INCREMENTAL_CRAWL) console.log(`  [Christie's Auctions] incremental: fetched ${fetched} sales, skipped ${skipped} fully-resolved (${carried} lots carried forward from segment)`);
   console.log(`  [Christie's Auctions] Total ${lots.length} lots (${lots.filter(l => l.status === 'sold').length} sold, ${lots.filter(l => l.status === 'upcoming').length} upcoming)`);
   return lots;
 }
@@ -1884,11 +1991,11 @@ const GOLDIN_SOLD_PASSES: { label: string; scope: Record<string, unknown>; fallb
 ];
 
 async function goldinQuery(body: object): Promise<{ lots: any[]; total: number }> {
-  const res = await fetch(GOLDIN_API_V2, {
+  const res = await fetchWithRetry(GOLDIN_API_V2, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
     body: JSON.stringify({ search: { queryType: 'Featured', hasAnalyticsConsent: false, ...body } }),
-    signal: AbortSignal.timeout(25000),
+    timeoutMs: 25000,
   });
   // a 5xx/403 HTML body must throw here, not half-parse — the callers treat a
   // failed page as an INCOMPLETE feed (goldinFeedComplete=false), never as
@@ -1932,7 +2039,9 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // extended bidding resolves, and its lot-level `status` field lies (always
   // "Live"), so sold is never inferred here from a timestamp or a bid.
   const ingest = (lot: any, fallback: string | null, sportScoped = false, cultureScoped = false) => {
-    if (!lot.title || !lot.lot_id) return;
+    // REQUIRED-field gate: lot_id keys the record; title is the identity text.
+    if (!lot.lot_id) { parseDrop('goldin', 'missing lot_id', String(lot.title || '').slice(0, 80)); return; }
+    if (!lot.title) { parseDrop('goldin', 'missing title', `lot ${lot.lot_id}`); return; }
     const t = lot.title.toLowerCase();
     if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return; }
     // culture-scoped (Goldin's Pop-Culture/Entertainment/Rock-N-Roll/History
@@ -2001,7 +2110,9 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // realized price (winning bid + buyer's premium). Same gates as live; a
   // zero-price row is unusable and skipped. Returns true when it logged one.
   const ingestSold = (lot: any, fallback: string | null, sportScoped = false): boolean => {
-    if (!lot.title || !lot.lot_id) return false;
+    // REQUIRED-field gate (same as ingest).
+    if (!lot.lot_id) { parseDrop('goldin', 'missing lot_id (sold)', String(lot.title || '').slice(0, 80)); return false; }
+    if (!lot.title) { parseDrop('goldin', 'missing title (sold)', `lot ${lot.lot_id}`); return false; }
     if (byId.has(lot.lot_id)) return false; // live pass or an earlier sold row won
     const t = lot.title.toLowerCase();
     if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return false; }
@@ -2077,6 +2188,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       }
     }
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false; // windowed, not enumerated
+    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
   }
   // 1a · LIVE SPORT CARDS — the whole live Sport book (category:['Sport'],
   // which is Goldin's own line: Non-Sport/Pokémon is a separate category we
@@ -2101,6 +2213,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       }
     }
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
     console.log(`  [Goldin] live Sport pass: ${Math.min(total, CAP)} lots enumerated`);
   }
   // 1a-culture · LIVE POP CULTURE — Goldin's curated Non-Sport sub-categories
@@ -2125,6 +2238,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       }
     }
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
     console.log(`  [Goldin] live Culture pass: ${Math.min(total, CAP)} lots enumerated`);
   }
   // 1b · AUCTION-AWARE LIVE PASS — newly launched flagship auctions (e.g.
@@ -2135,11 +2249,11 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // lots by auction_id through the SAME per-lot gates — the router still
   // decides every lot (cards/slabs still drop), so a mixed auction is safe.
   try {
-    const aRes = await fetch(GOLDIN_AUCTIONS_API, {
+    const aRes = await fetchWithRetry(GOLDIN_AUCTIONS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
       body: JSON.stringify({ status: 'All', order: 'desc' }),
-      signal: AbortSignal.timeout(25000),
+      timeoutMs: 25000,
     });
     if (aRes.ok) {
       const auctions = ((await aRes.json() as any).auctions || []) as any[];
@@ -2209,11 +2323,11 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
   // (true realized price); this only catches the tail between a lot's auction
   // closing and its appearance under show_only:'Sold'. Never a bid on an open lot.
   try {
-    const aRes = await fetch(GOLDIN_AUCTIONS_API, {
+    const aRes = await fetchWithRetry(GOLDIN_AUCTIONS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
       body: JSON.stringify({ status: 'All', order: 'desc' }),
-      signal: AbortSignal.timeout(25000),
+      timeoutMs: 25000,
     });
     if (!aRes.ok) throw new Error(`Goldin auctions HTTP ${aRes.status}`);
     const auctions = (await aRes.json() as any).auctions || [];
@@ -2250,7 +2364,8 @@ async function crawlBonhams(artist: ArtistConfig): Promise<AuctionLot[]> {
 
     do {
       const url = `${BONHAMS_SEARCH_URL}?q=${query}&query_by=catalogDesc,title&per_page=250&page=${page}`;
-      const res = await fetch(url, {
+      // no timeoutMs: Bonhams historically ran without a fetch timeout — preserved
+      const res = await fetchWithRetry(url, {
         headers: {
           'X-TYPESENSE-API-KEY': BONHAMS_TYPESENSE_KEY,
           'User-Agent': UA,
@@ -2301,9 +2416,12 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
   // lie the publish-time guard below would have to catch anyway.
   const auctionId = doc.auctionId ?? doc.auction_id ?? doc.auction?.id ?? null;
   const lotId = doc.lotId ?? doc.lot_id ?? doc.id ?? null;
-  if (!auctionId || !lotId) return null;
+  // REQUIRED-field gate: both ids form the composite id AND the URL — an
+  // unresolved record is unkeyable + unlinkable. Count + drop (was silent).
+  if (!auctionId || !lotId) { parseDrop('bonhams', 'missing auctionId/lotId', String(doc.title || '').slice(0, 80)); return null; }
 
   const rawTitle = doc.title || '';
+  if (!rawTitle && !doc.styledDescription) { parseDrop('bonhams', 'missing title', `auction ${auctionId} lot ${lotId}`); return null; }
   // Extract a clean title from styledDescription if available
   let title = rawTitle;
   if (doc.styledDescription) {
@@ -2941,6 +3059,7 @@ async function crawlArtist(artist: ArtistConfig): Promise<AuctionLot[]> {
 
 async function main() {
   console.log('[Ray] Starting auction crawl...');
+  console.log(`[Ray] Incremental crawl (Christie's/Sotheby's auctions): ${INCREMENTAL_MODE_REASON}`);
   console.log(`[Ray] Data directory: ${DATA_DIR}`);
   console.log(`[Ray] Artists: ${ARTISTS.map(a => a.displayName).join(', ')}`);
 
@@ -2955,15 +3074,27 @@ async function main() {
   let existingLots: AuctionLot[] = [];
   const existingStatsByArtist: Record<string, MarketStats> = {};
   const statsPath = path.join(DATA_DIR, 'stats.json');
+  // house → segment name for the per-house health line/tripwire (assigned from
+  // corpus-io's canonical map once the dynamic import lands below).
+  let segOfHouse: (house: string) => string = () => 'other';
+  // Pre-crawl per-house upcoming counts — captured NOW because reconcile/
+  // sanitize mutate existingLots' statuses in place later (same reason the
+  // market-level coverageBefore snapshot exists).
+  const upcomingPrevByHouse: Record<string, number> = {};
 
   try {
-    const { readCorpus, readSegment } = await import('./corpus-io');
+    const { readCorpus, readSegment, segmentOf } = await import('./corpus-io');
+    segOfHouse = segmentOf;
     // SEGMENTED: a house run loads only ITS segment (bounded memory); the
     // legacy monolith loads the whole corpus.
     existingLots = (CRAWL_HOUSE ? readSegment(CRAWL_HOUSE) : readCorpus()) as unknown as AuctionLot[];
     for (const lot of existingLots) {
       if (!lot.artist) lot.artist = 'george-condo';
       if (!lot.category) lot.category = 'unknown' as LotCategory;
+      if (lot.status === 'upcoming') {
+        const s = segmentOf(lot.auctionHouse);
+        upcomingPrevByHouse[s] = (upcomingPrevByHouse[s] || 0) + 1;
+      }
     }
     console.log(`[Ray] Loaded ${existingLots.length} existing lots (${CRAWL_HOUSE ? `segment ${CRAWL_HOUSE}` : 'full corpus incl. sold-archive'}).`);
   } catch (e) { console.log('[Ray] Could not read corpus:', (e as Error).message); }
@@ -3639,6 +3770,50 @@ async function main() {
     if (alerts) console.warn(`[Ray] ⚠️  COVERAGE ALERT: ${alerts} market(s) lost their active lots this crawl — check the crawler/source before trusting this data.`);
   }
 
+  // ── PER-HOUSE CRAWL HEALTH + TRIPWIRE ─────────────────────────────────────
+  // One machine-greppable line per house: lots_expected is the SOURCE's own
+  // advertised total where a feed exposes one (Christie's sale totals, Goldin
+  // facet counts — approximate, feeds can overlap), 'na' otherwise;
+  // parse_errors counts lots DROPPED for a missing required field (id/title/
+  // url); upcoming_prev/upcoming_now compare the pre-crawl segment book to the
+  // post-merge one. Sits NEXT TO the market-level coverage tripwire above —
+  // that one watches verticals, this one watches houses.
+  {
+    const fetchedByHouse: Record<string, number> = {};
+    for (const l of freshLots) {
+      const s = segOfHouse(l.auctionHouse);
+      fetchedByHouse[s] = (fetchedByHouse[s] || 0) + 1;
+    }
+    const upcomingNowByHouse: Record<string, number> = {};
+    for (const l of allLots) {
+      if (l.status !== 'upcoming') continue;
+      const s = segOfHouse(l.auctionHouse);
+      upcomingNowByHouse[s] = (upcomingNowByHouse[s] || 0) + 1;
+    }
+    const housesSeen = Array.from(new Set<string>([
+      ...Object.keys(fetchedByHouse), ...Object.keys(upcomingPrevByHouse),
+      ...Object.keys(HEALTH.expected), ...Object.keys(HEALTH.parseErrors),
+    ])).sort();
+    for (const h of housesSeen) {
+      const expected = HEALTH.expected[h] != null ? String(HEALTH.expected[h]) : 'na';
+      console.log(`[health] house=${h} lots_expected=${expected} lots_fetched=${fetchedByHouse[h] || 0} parse_errors=${HEALTH.parseErrors[h] || 0} upcoming_prev=${upcomingPrevByHouse[h] || 0} upcoming_now=${upcomingNowByHouse[h] || 0}`);
+    }
+    // Tripwire: a house's upcoming book dropping >20% night-over-night (>30%
+    // for Goldin — its live inventory naturally churns as auctions complete)
+    // is the signature of a broken crawler/source, not a market move. WARN
+    // loudly (greppable) but never fatal here — the segment-collapse guard
+    // below owns the hard abort. ≥20-lot floor: percentage noise on a
+    // handful of lots is not a signal.
+    for (const h of housesSeen) {
+      const prevUp = upcomingPrevByHouse[h] || 0;
+      const nowUp = upcomingNowByHouse[h] || 0;
+      const tolerance = h === 'goldin' ? 0.3 : 0.2;
+      if (prevUp >= 20 && nowUp < prevUp * (1 - tolerance)) {
+        console.warn(`[Ray] ⚠️  HOUSE TRIPWIRE: ${h} upcoming dropped ${prevUp} → ${nowUp} (>${Math.round(tolerance * 100)}% night-over-night) — check the crawler/source before trusting this segment.`);
+      }
+    }
+  }
+
   // ── SEGMENTED NIGHTLY: a house run owns ONE segment. Write just this house's
   // lots and STOP — the full-corpus write + engine + served build belong to
   // assemble.ts, which reunions every segment. Last-good guard: a crawl that
@@ -3647,8 +3822,11 @@ async function main() {
   if (CRAWL_HOUSE) {
     const { writeSegment, segmentOf } = await import('./corpus-io');
     const segLots = allLots.filter(l => segmentOf((l as AuctionLot).auctionHouse) === CRAWL_HOUSE);
-    if (existingLots.length > 200 && segLots.length < existingLots.length * 0.5) {
-      throw new Error(`[Ray] segment ${CRAWL_HOUSE} collapsed ${existingLots.length} → ${segLots.length} (>50%) — refusing to overwrite the last-good segment`);
+    // Tightened 0.5 → 0.7: a house shrinking >30% overnight is a crawler/source
+    // failure, not a market — abort the write, keep the last-good segment.
+    // (>200-lot floor unchanged: tiny segments swing legitimately.)
+    if (existingLots.length > 200 && segLots.length < existingLots.length * 0.7) {
+      throw new Error(`[Ray] segment ${CRAWL_HOUSE} collapsed ${existingLots.length} → ${segLots.length} (>30%) — refusing to overwrite the last-good segment`);
     }
     writeSegment(CRAWL_HOUSE, segLots as unknown as Record<string, unknown>[]);
     console.log(`[Ray] segment ${CRAWL_HOUSE}: wrote ${segLots.length} lots (was ${existingLots.length}) — assemble reunions + builds.`);
