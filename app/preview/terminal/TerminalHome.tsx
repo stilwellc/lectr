@@ -57,12 +57,6 @@ const EMPTY_SAVED_META: SavedMeta = {};
 // The eager recentSold slice (from upcoming.json) — lightweight Goldin closes.
 type RecentSoldRow = { id: string; title: string; artist: string; priceUsd?: number; house?: string; saleDate?: string; url?: string; priceBasis?: string; category?: string; objectType?: string; eventKey?: string };
 
-// SAME-SALE RUN COLLAPSE — a consecutive run of >= RUN_MIN signal-less cards
-// from one house + sale day folds behind one ruled header row, default-collapsed.
-const RUN_MIN = 8;
-type FeedEntry =
-  | { type: 'lot'; lot: AuctionLot }
-  | { type: 'run'; key: string; house: string; day: string; lots: AuctionLot[] };
 
 // The ledger line's cells.
 type StripItem = {
@@ -398,32 +392,6 @@ export default function TerminalHomePage() {
     return arr;
   }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay]);
 
-  // SAME-SALE RUN COLLAPSE.
-  const feedItems = useMemo<FeedEntry[]>(() => {
-    const hasSig = belowSignal.hasSig;
-    const items: FeedEntry[] = [];
-    let i = 0;
-    while (i < feed.length) {
-      const l = feed[i];
-      const day = l.saleDate?.slice(0, 10) || '';
-      let j = i;
-      while (
-        j < feed.length &&
-        feed[j].auctionHouse === l.auctionHouse &&
-        (feed[j].saleDate?.slice(0, 10) || '') === day &&
-        !hasSig.has(feed[j].id)
-      ) j++;
-      if (j - i >= RUN_MIN) {
-        items.push({ type: 'run', key: `${l.auctionHouse}|${day}|${l.id}`, house: l.auctionHouse, day, lots: feed.slice(i, j) });
-        i = j;
-      } else {
-        items.push({ type: 'lot', lot: l });
-        i++;
-      }
-    }
-    return items;
-  }, [feed, belowSignal]);
-  const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
 
   const feedKey = useMemo(() => {
     const f = feedFilters;
@@ -622,9 +590,7 @@ export default function TerminalHomePage() {
           .terminal-shell .ray-upcoming-grid { gap: 0; }
           .terminal-shell .ray-feeditem-card { margin-bottom: 24px; /* the old grid gap */ }
           .terminal-shell .ray-feeditem-row + .ray-feeditem-card,
-          .terminal-shell .ray-feeditem-run + .ray-feeditem-card { margin-top: var(--space-3); }
           .terminal-shell .ray-feeditem-card + .ray-feeditem-row { margin-top: var(--space-2); }
-          .terminal-shell .ray-feeditem-run { margin-block: var(--space-3); }
         }
         /* the reused paper/record bands are self-contained; let them breathe
            full-width inside the dark shell rather than fight the deskShell rail */
@@ -923,105 +889,39 @@ export default function TerminalHomePage() {
                       </button>
                     </div>
                   ) : (
-                    feedItems.slice(0, visibleUpcoming).map((item, i) =>
-                      item.type === 'lot' ? (
-                        // ≤640px: EVERY lot folds to a compact ruled row — the
-                        // engine's verdict shows as a quiet glow behind the
-                        // thumb (green = below market, red = reads rich).
-                        narrowView ? (
-                          <div
-                            key={item.lot.id}
-                            className="ray-feed-rekey ray-feeditem-row"
-                            style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
-                          >
-                            <FeedRow
-                              lot={item.lot}
-                              onOpen={() => setTableLot(item.lot)}
-                              tone={belowIds.has(item.lot.id) ? 'up' : belowSignal.hasSig.has(item.lot.id) ? 'down' : undefined}
-                            />
-                          </div>
-                        ) : (
+                    feed.slice(0, visibleUpcoming).map((lot, i) =>
+                      // ≤640px: EVERY lot folds to a compact ruled row — the
+                      // engine's verdict shows as a quiet glow behind the
+                      // thumb (green = below market, red = reads rich). No
+                      // same-sale run folding: it applied only to Goldin runs
+                      // (inconsistent + fragile under re-sorts); pagination +
+                      // the maker-diversity cap own volume now.
+                      narrowView ? (
                         <div
-                          key={item.lot.id}
+                          key={lot.id}
+                          className="ray-feed-rekey ray-feeditem-row"
+                          style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                        >
+                          <FeedRow
+                            lot={lot}
+                            onOpen={() => setTableLot(lot)}
+                            tone={belowIds.has(lot.id) ? 'up' : belowSignal.hasSig.has(lot.id) ? 'down' : undefined}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          key={lot.id}
                           className="ray-feed-rekey ray-feeditem-card"
                           style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
                         >
                           <LotCard
-                            lot={item.lot}
+                            lot={lot}
                             showArtist
                             allLots={marketLots}
-                            saved={isSaved(item.lot.id)}
+                            saved={isSaved(lot.id)}
                             onToggleSave={toggle}
                             lastCrawl={lastCrawl || undefined}
                           />
-                        </div>
-                        )
-                      ) : (
-                        <div
-                          key={item.key}
-                          className="ray-feed-rekey ray-feeditem-run"
-                          style={{ gridColumn: '1 / -1', animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setExpandedRuns(r => ({ ...r, [item.key]: !r[item.key] }))}
-                            aria-expanded={!!expandedRuns[item.key]}
-                            aria-label={`${item.house}, ${formatDate(item.day)} — ${item.lots.length} lots without a market signal. ${expandedRuns[item.key] ? 'Collapse' : 'Expand'} the run.`}
-                            style={{
-                              width: '100%',
-                              display: 'flex',
-                              alignItems: 'baseline',
-                              gap: 8,
-                              background: 'none',
-                              border: 'none',
-                              borderTop: '1px solid var(--color-border)',
-                              borderBottom: '1px solid var(--color-border)',
-                              margin: 0,
-                              padding: '12px 2px',
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              color: 'var(--color-text-muted)',
-                              fontFamily: 'var(--font-sans), sans-serif',
-                            }}
-                          >
-                            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-fg)', whiteSpace: 'nowrap' }}>
-                              {item.house} · {formatDate(item.day)}
-                            </span>
-                            <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              — {item.lots.length}{(() => {
-                                const a = item.lots[0].artist;
-                                return item.lots.every(l => l.artist === a) ? ` ${(ARTIST_LABEL[a] || a).toLowerCase()}` : '';
-                              })()} lots
-                            </span>
-                            <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                              {expandedRuns[item.key] ? 'hide' : 'show'} <Flick size={10} />
-                            </span>
-                          </button>
-                          {expandedRuns[item.key] && (
-                            narrowView ? (
-                              // an expanded run's lots are signal-less by
-                              // construction — the compact row list carries them
-                              <div style={{ marginTop: 4 }}>
-                                {item.lots.map(lot => (
-                                  <FeedRow key={lot.id} lot={lot} onOpen={() => setTableLot(lot)} />
-                                ))}
-                              </div>
-                            ) : (
-                            <div className="ray-upcoming-grid" style={{ marginTop: 24 }}>
-                              {item.lots.map(lot => (
-                                <LotCard
-                                  key={lot.id}
-                                  lot={lot}
-                                  showArtist
-                                  allLots={marketLots}
-                                  saved={isSaved(lot.id)}
-                                  onToggleSave={toggle}
-                                  lastCrawl={lastCrawl || undefined}
-                                />
-                              ))}
-                            </div>
-                            )
-                          )}
                         </div>
                       )
                     )
@@ -1033,7 +933,7 @@ export default function TerminalHomePage() {
                   <ComparableModal lot={tableLot} allLots={marketLots} onClose={() => setTableLot(null)} />
                 )}
 
-                {visibleUpcoming < (effectiveView === 'table' ? feed.length : feedItems.length) && (
+                {visibleUpcoming < feed.length && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
                     <button
                       onClick={() => setVisibleUpcoming(v => v + pageSize)}
@@ -1051,7 +951,7 @@ export default function TerminalHomePage() {
                         fontFamily: 'var(--font-inter), system-ui, sans-serif',
                       }}
                     >
-                      Show more ({((effectiveView === 'table' ? feed.length : feedItems.length) - visibleUpcoming).toLocaleString()} remaining)
+                      Show more ({(feed.length - visibleUpcoming).toLocaleString()} remaining)
                     </button>
                   </div>
                 )}
