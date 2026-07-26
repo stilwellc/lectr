@@ -137,13 +137,22 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       return withSignal;
     });
 
+  // pre-parse saleDate → numeric ms ONCE for the recency sorts below (tape +
+  // recentSold each parse both operands per comparison otherwise, over the full
+  // corpus). Stamped AFTER the `upcoming` map so the `{...l}` spread there never
+  // copies it into the payload; the comparators read `_saleMs` off the SAME lot
+  // objects. Invalid/absent dates → NaN, matching the inline `new Date(...)` they
+  // replace (NaN in a subtract sort yields NaN, treated as 0 by V8 — identical).
+  for (const l of lots) (l as { _saleMs?: number })._saleMs = new Date(l.saleDate).getTime();
+  const saleMs = (l: Lot) => (l as { _saleMs?: number })._saleMs ?? NaN;
+
   // The tape ("recent hammers") is PER MARKET so each vertical shows its own
   // notable sales. Take the most recent sold lots, then the top by price —
   // which naturally surfaces the premium houses (Sotheby's / Christie's /
   // Phillips six-figure watches) instead of drowning in Bonhams volume.
   const buildTape = (pool: Lot[]) => pool
     .filter(l => l.status === 'sold' && l.priceUsd && l.title)
-    .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+    .sort((a, b) => saleMs(b) - saleMs(a))
     .slice(0, 160)
     .sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0))
     .slice(0, 18)
@@ -205,7 +214,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     const set = marketArtists(m.key);
     recentSold[m.key] = lots
       .filter(l => set.has(l.artist) && l.status === 'sold' && l.priceUsd && l.title)
-      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+      .sort((a, b) => saleMs(b) - saleMs(a))
       .slice(0, RECENT_N)
       .map(l => {
         const lot = l as unknown as AuctionLot;
