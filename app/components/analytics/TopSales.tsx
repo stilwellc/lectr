@@ -16,6 +16,10 @@ const COLLAPSED_ROWS = 5;
 
 export default function TopSales({ allLots, market, series }: Props) {
   const [expanded, setExpanded] = useState(false);
+  // ≤768px the whole instrument folds behind a disclosure header (title +
+  // headline stat + chevron) — state-gated visibility only, so the desktop
+  // DOM stays fully eager and identical. Collapsed is the mobile default.
+  const [open, setOpen] = useState(false);
   // Prefer the build-time top-sales (ranked over the FULL corpus): the loaded
   // `allLots` is a slim/sample slice, so its #1 "record" and ladder can be
   // wrong for any vertical whose true top lots weren't shipped (esp. cards).
@@ -37,7 +41,7 @@ export default function TopSales({ allLots, market, series }: Props) {
   const shown = expanded ? topSales : topSales.slice(0, COLLAPSED_ROWS);
 
   return (
-    <section className="ray-top-sales rail">
+    <section className="ray-top-sales rail" data-open={open}>
       <style>{`
         .ray-top-sales { padding-block: 40px 48px; }
         .ray-top-row {
@@ -52,13 +56,59 @@ export default function TopSales({ allLots, market, series }: Props) {
           border-bottom: 1px solid var(--color-border);
           vertical-align: middle;
         }
+        /* the mobile disclosure — desktop never sees it, and the body is
+           only ever CSS-hidden (the DOM underneath stays eager) */
+        .ray-disc {
+          display: none;
+          width: 100%;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 2px;
+          border-top: 1px solid var(--hairline);
+          border-bottom: 1px solid var(--hairline);
+          background: none; border-left: none; border-right: none;
+          font-family: var(--font-sans), sans-serif;
+          color: var(--color-fg);
+          cursor: pointer;
+          text-align: left;
+        }
+        .ray-disc-t { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+        .ray-disc-stat {
+          font-family: var(--font-mono), monospace;
+          font-size: 11.5px; color: var(--color-text-muted);
+          font-variant-numeric: tabular-nums; white-space: nowrap;
+        }
+        .ray-disc-chev { flex-shrink: 0; align-self: center; color: var(--color-text-faint); transition: transform var(--duration-fast) var(--ease-signature); }
+        .ray-disc[aria-expanded=true] .ray-disc-chev { transform: rotate(180deg); }
         @media (max-width: 768px) {
-          .ray-top-sales { padding-block: 32px 32px; }
+          .ray-top-sales { padding-block: 18px 18px; }
+          .ray-top-sales[data-open=true] { padding-block: 18px 32px; }
           .ray-top-hide-mobile { display: none; }
           .ray-top-td { padding: 12px 12px; font-size: 12px; }
+          .ray-disc { display: flex; }
+          .ray-top-body[data-open=false] { display: none; }
+          /* the disclosure header owns the title on mobile */
+          .ray-top-body h2 { display: none; }
+          .ray-top-body { margin-top: 16px; }
         }
       `}</style>
 
+      <button
+        type="button"
+        className="ray-disc"
+        aria-expanded={open}
+        aria-controls="ray-topsales-body"
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="ray-disc-t">Top sales</span>
+        <span className="ray-disc-stat">top {formatPrice(topSales[0].priceUsd || 0)}</span>
+        <svg className="ray-disc-chev" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      <div className="ray-top-body" id="ray-topsales-body" data-open={open}>
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{
           fontFamily: 'var(--font-sans), sans-serif',
@@ -265,6 +315,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           </button>
         </div>
       )}
+      </div>
     </section>
   );
 }

@@ -44,6 +44,13 @@ const COPY_BTN_CSS = `
 export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot{padding-block:26px 64px}
 .lectr-lot-grid{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr);column-gap:44px;row-gap:26px;align-items:start}
+/* ≥900px the two columns are independent flows: the certificate column
+   carries the comps ledger under the leader rows, and provenance / the grade
+   ladder ride the plate column — no dead space under the plate, no
+   full-width band below the certificate. ≤899px the wrappers dissolve
+   (display:contents) and CSS order restores the single-column reading order:
+   plate → certificate → provenance → ladder → comps. */
+.lectr-lot-cola,.lectr-lot-colb{min-width:0}
 .lectr-lot-head{position:relative;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:12px}
 .lectr-lot-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
 .lectr-lot-head .no{color:var(--color-text-muted);font-weight:600;font-variant-numeric:tabular-nums}
@@ -90,7 +97,19 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-noimg .ray-plate-img{height:220px}
 @media (max-width:899px){
   .lectr-lot{padding-block-start:14px}
-  .lectr-lot-grid{grid-template-columns:1fr}
+  .lectr-lot-grid{grid-template-columns:minmax(0,1fr)}
+  .lectr-lot-cola,.lectr-lot-colb{display:contents}
+  /* dissolved wrappers make the sections grid items — kill the auto
+     min-content floor or a nowrap comp title widens the page */
+  .lectr-lot-grid>*{min-width:0}
+  .lectr-lot-cola>.ray-plate-mat{order:1}
+  .lectr-lot-cert{order:2}
+  .lectr-lot-prov{order:3}
+  .lectr-lot-ladder{order:4}
+  .lectr-lot-pool{order:5}
+  /* inside the grid the 26px row-gap already separates the sections — trim
+     the section margin so the total stays the original 44px */
+  .lectr-lot-grid .lectr-lot-comps{margin-top:18px}
   .lectr-lot .ray-plate-img{height:240px}
   .lectr-lot-noimg .ray-plate-img{height:160px}
   .lectr-lot-monoglyph{font-size:44px}
@@ -437,6 +456,9 @@ export default function LotPage({ lotId, initialLot }: {
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
 
         <div className="lectr-lot-grid" style={{ paddingTop: 12 }}>
+          {/* the plate column — the photograph, then the object's paper trail
+              (provenance, the grade ladder) riding beneath it on desktop */}
+          <div className="lectr-lot-cola">
           {/* the plate: photograph on the elevated mat — or the monogram when
               the house blocks the hotlink (CallPlate's exact fallback) */}
           <figure className={`ray-plate-mat${imgOk ? '' : ' lectr-lot-noimg'}`} style={{ margin: 0 }}>
@@ -461,8 +483,74 @@ export default function LotPage({ lotId, initialLot }: {
             <figcaption className="ray-plate-cap">{caption}</figcaption>
           </figure>
 
+          {/* provenance — the same physical object's trips across the block.
+              Strict physical-match groups only; absence of the section means
+              the engine confirmed nothing, never that nothing exists. */}
+          {provenance.length >= 2 && (
+            <section className="lectr-lot-comps lectr-lot-prov" aria-label="Provenance">
+              <div className="lectr-lot-comps-head">
+                <span>Provenance · this exact object, {provenance.length} appearances</span>
+                <span className="ctx">physical matches, engine-confirmed</span>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {provenance.map(p => {
+                  const here = p.id === lot.id;
+                  const money = p.status === 'sold' && p.priceUsd
+                    ? formatPrice(p.priceUsd)
+                    : p.status === 'bought_in' ? 'bought in'
+                    : p.status === 'upcoming' ? (formatEstimate(p) || 'on the block') : '—';
+                  const inner = (
+                    <>
+                      <span className="lectr-lot-comp-i" aria-hidden>{here ? '·' : ''}</span>
+                      <span className="lectr-lot-comp-t">
+                        <span className="lectr-lot-comp-title" style={{ display: 'block' }}>
+                          {formatDate(p.saleDate, { month: 'long', year: 'numeric' })}
+                          {here ? ' — this listing' : ''}
+                        </span>
+                        <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
+                          <span style={{ color: houseColors[p.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{p.auctionHouse}</span>
+                          {p.saleName ? ` · ${cleanText(p.saleName)}` : ''}
+                        </span>
+                      </span>
+                      <span className="lectr-lot-comp-p">{money}</span>
+                    </>
+                  );
+                  return here
+                    ? <span key={p.id} className="lectr-lot-comp" style={{ cursor: 'default' }}>{inner}</span>
+                    : <Link key={p.id} href={`/lot?id=${encodeURIComponent(p.id)}`} className="lectr-lot-comp">{inner}</Link>;
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* the grade ladder — same card, every grade: the economics of the
+              card market in one table. Build-stamped from exact identity
+              matches, never similarity. */}
+          {lot.cardComps && lot.cardComps.gradeLadder.length > 1 && (
+            <section className="lectr-lot-comps lectr-lot-ladder" aria-label="Grade ladder">
+              <div className="lectr-lot-comps-head">
+                <span>The grade ladder · this card, every grade</span>
+                <span className="ctx">medians, never means</span>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {lot.cardComps.gradeLadder.map(r => (
+                  <span key={r.g} className="lectr-lot-comp" style={{ cursor: 'default' }}>
+                    <span className="lectr-lot-comp-t">
+                      <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{r.g}</span>
+                      <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{r.n} {r.n === 1 ? 'sale' : 'sales'}</span>
+                    </span>
+                    <span className="lectr-lot-comp-p">{formatPrice(r.med)}</span>
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+          </div>
+
+          {/* the certificate column — leader rows, then the comp ledger */}
+          <div className="lectr-lot-colb">
           {/* the certificate */}
-          <div>
+          <div className="lectr-lot-cert">
             <div className="lectr-lot-head">
               <span>
                 {lot.artist in ARTIST_LABEL
@@ -595,73 +683,10 @@ export default function LotPage({ lotId, initialLot }: {
               <CopyLinkButton id={lot.id} />
             </div>
           </div>
-        </div>
 
-        {/* provenance — the same physical object's trips across the block.
-            Strict physical-match groups only; absence of the section means the
-            engine confirmed nothing, never that nothing exists. */}
-        {provenance.length >= 2 && (
-          <section className="lectr-lot-comps" aria-label="Provenance">
-            <div className="lectr-lot-comps-head">
-              <span>Provenance · this exact object, {provenance.length} appearances</span>
-              <span className="ctx">physical matches, engine-confirmed</span>
-            </div>
-            <div style={{ marginTop: 6 }}>
-              {provenance.map(p => {
-                const here = p.id === lot.id;
-                const money = p.status === 'sold' && p.priceUsd
-                  ? formatPrice(p.priceUsd)
-                  : p.status === 'bought_in' ? 'bought in'
-                  : p.status === 'upcoming' ? (formatEstimate(p) || 'on the block') : '—';
-                const inner = (
-                  <>
-                    <span className="lectr-lot-comp-i" aria-hidden>{here ? '·' : ''}</span>
-                    <span className="lectr-lot-comp-t">
-                      <span className="lectr-lot-comp-title" style={{ display: 'block' }}>
-                        {formatDate(p.saleDate, { month: 'long', year: 'numeric' })}
-                        {here ? ' — this listing' : ''}
-                      </span>
-                      <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                        <span style={{ color: houseColors[p.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{p.auctionHouse}</span>
-                        {p.saleName ? ` · ${cleanText(p.saleName)}` : ''}
-                      </span>
-                    </span>
-                    <span className="lectr-lot-comp-p">{money}</span>
-                  </>
-                );
-                return here
-                  ? <span key={p.id} className="lectr-lot-comp" style={{ cursor: 'default' }}>{inner}</span>
-                  : <Link key={p.id} href={`/lot?id=${encodeURIComponent(p.id)}`} className="lectr-lot-comp">{inner}</Link>;
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* the grade ladder — same card, every grade: the economics of the
-            card market in one table. Build-stamped from exact identity
-            matches, never similarity. */}
-        {lot.cardComps && lot.cardComps.gradeLadder.length > 1 && (
-          <section className="lectr-lot-comps" aria-label="Grade ladder">
-            <div className="lectr-lot-comps-head">
-              <span>The grade ladder · this card, every grade</span>
-              <span className="ctx">medians, never means</span>
-            </div>
-            <div style={{ marginTop: 6 }}>
-              {lot.cardComps.gradeLadder.map(r => (
-                <span key={r.g} className="lectr-lot-comp" style={{ cursor: 'default' }}>
-                  <span className="lectr-lot-comp-t">
-                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{r.g}</span>
-                    <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{r.n} {r.n === 1 ? 'sale' : 'sales'}</span>
-                  </span>
-                  <span className="lectr-lot-comp-p">{formatPrice(r.med)}</span>
-                </span>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* the comp pool — the evidence, as ledger rows */}
-        <section className="lectr-lot-comps" aria-label="Comparable sales">
+          {/* the comp pool — the evidence, as ledger rows under the
+              certificate (desktop); last in the single-column read (mobile) */}
+          <section className="lectr-lot-comps lectr-lot-pool" aria-label="Comparable sales">
           <div className="lectr-lot-comps-head">
             <span>
               {band
@@ -718,6 +743,8 @@ export default function LotPage({ lotId, initialLot }: {
             </div>
           )}
         </section>
+          </div>
+        </div>
       </div>
       <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />
     </>
