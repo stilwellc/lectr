@@ -3309,6 +3309,10 @@ body {
    reads it below market, red = it reads rich. The image itself stays crisp
    (self-clipped, above the glow); the light spills past its edges. */
 .ray-feedrow-thumb[data-tone] { overflow: visible; }
+/* the crisp verdict: a fine tinted ring hugging the photo's rounded edge —
+   the pool behind stays as ambience, the ring does the identifying. */
+.ray-feedrow-thumb[data-tone='up'] { box-shadow: 0 0 0 1.5px rgba(87, 190, 135, 0.8); }
+.ray-feedrow-thumb[data-tone='down'] { box-shadow: 0 0 0 1.5px rgba(204, 106, 92, 0.75); }
 .ray-feedrow-thumb[data-tone]::before {
   content: '';
   position: absolute;
