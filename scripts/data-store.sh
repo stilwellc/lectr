@@ -298,8 +298,20 @@ case "${1:-}" in
   # previous totals for assemble's sanity gate — a plain (non-fresh) GET is fine;
   # a slightly-stale baseline still catches a catastrophic shrink.
   pull-meta) mkdir -p public/data/ray; obj_get "latest/meta.json" "public/data/ray/meta.json" || echo "[data-store] no prior meta.json yet (first run)" ;;
-  pull-backtest) mkdir -p public/data/ray; obj_get "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no prior backtest.json yet (first run)" ;;
-  push-backtest) test -f public/data/ray/backtest.json && obj_put "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no backtest.json to push" ;;
+  # backtest.json (the published record) + its sidecar accumulator state
+  # (data/corpus/backtest-state.json.gz — the raw per-observation arrays the
+  # NIGHTLY incremental rehydrates to append new lots). Both carry forward so the
+  # incremental has a prior to append to; a missing state is non-fatal (the
+  # incremental self-falls-back to a full build, which reseeds the state).
+  pull-backtest)
+    mkdir -p public/data/ray data/corpus
+    obj_get "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no prior backtest.json yet (first run)"
+    obj_get "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" || echo "[data-store] no prior backtest state yet (incremental will full-build)"
+    ;;
+  push-backtest)
+    test -f public/data/ray/backtest.json && obj_put "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no backtest.json to push"
+    test -f data/corpus/backtest-state.json.gz && obj_put "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" || echo "[data-store] no backtest state to push"
+    ;;
   prune) prune "${2:-14}" ;;
   *) echo "usage: $0 pull|push|push-segment <name>|pull-segment <name>|pull-segments|prune [keep=14]"; exit 1 ;;
 esac
