@@ -9,7 +9,7 @@ export interface TopSale { title: string; priceUsd: number; house: string; date:
 export interface Mover { label: string; chgPct: number; n: number; slug?: string }
 
 const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontSize: 21, fontWeight: 700, letterSpacing: '-0.02em', margin: '42px 0 10px' };
+const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 21, fontWeight: 400, letterSpacing: '-0.015em', margin: '42px 0 10px' };
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '4px 0 8px', fontSize: 14 };
 const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
@@ -56,7 +56,7 @@ export default function QuarterInsight({
           <p className="kicker" style={{ margin: '0 0 14px' }}>
             <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · Q2 2026 in review · {date}
           </p>
-          <h1 style={{ fontSize: 'clamp(28px, 4vw, 36px)', fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.16, margin: '0 0 12px' }}>{title}</h1>
+          <h1 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 'clamp(28px, 4vw, 36px)', fontWeight: 400, letterSpacing: '-0.015em', lineHeight: 1.16, margin: '0 0 12px' }}>{title}</h1>
           <p style={{ ...p, fontSize: 16 }}>{dek}</p>
         </header>
 
@@ -98,7 +98,7 @@ export default function QuarterInsight({
               </div>
               <figcaption style={{
                 display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px',
-                padding: '12px 2px 0', fontSize: 13, color: 'var(--color-text-muted)',
+                padding: '12px 2px 0', fontSize: 13.5, color: 'var(--color-text-muted)',
               }}>
                 <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{headline.caption}</span>
                 <span>{headline.house} · {headline.saleLine}</span>

@@ -113,7 +113,7 @@ export default function MarketChart({ data, play, height = 260, compact = false 
           />
           <XAxis
             dataKey="period"
-            tick={{ fontSize: 9.5, fill: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data)' }}
+            tick={{ fontSize: 10, fill: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data)' }}
             tickLine={false}
             axisLine={{ stroke: 'var(--tt-hair)' }}
             interval={compact ? Math.max(1, Math.floor(rows.length / 3)) : Math.max(1, Math.floor(rows.length / 6))}

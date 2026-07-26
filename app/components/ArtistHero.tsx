@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip, ReferenceLine } from 'recharts';
 import { AuctionLot, MarketStats } from '../types';
 import { formatPrice } from '../utils';
@@ -15,6 +15,14 @@ import DeskNote from './analytics/DeskNote';
 import type { Market } from '../constants';
 
 type Range = '1Y' | '5Y' | 'MAX';
+
+/* the terminal numeral register for the maker hero (Wave 3 editorial pass) */
+const heroNumStyle: CSSProperties = {
+  fontFamily: 'var(--font-mono), monospace',
+  fontWeight: 500,
+  letterSpacing: '-0.02em',
+  fontVariantNumeric: 'tabular-nums',
+};
 
 /**
  * ArtistHero — the artist as a demand curve. The numeral is how their typical
@@ -198,10 +206,13 @@ export default function ArtistHero({
         <MethodologyNote trigger="what is this?" />
         {slug && <span style={{ marginLeft: 'auto' }}><FollowButton slug={slug} name={label} /></span>}
       </p>
+      {/* the maker's hero numeral speaks the terminal numeral register —
+          mono 500 tabular (scoped here: .ray-hero2-value is shared with
+          /saved and the board, which keep their own faces) */}
       {hover ? (
-        <h1 className="ray-hero2-value">{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</h1>
+        <h1 className="ray-hero2-value" style={heroNumStyle}>{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</h1>
       ) : (
-        <h1 className="ray-hero2-value">
+        <h1 className="ray-hero2-value" style={heroNumStyle}>
           {series.length && fresh
             ? <CountUp to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
             : typicalSale !== null

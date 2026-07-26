@@ -17,7 +17,7 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
     <section className="rail ray-enter" style={{ paddingTop: 30 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 }}>
         <h2 className="ray-h2" style={{ margin: 0 }}>The record, year by year</h2>
-        <span style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>
+        <span style={{ fontSize: 13.5, color: 'var(--color-text-faint)' }}>
           median result vs estimate — flagged lots should beat unflagged every year, and do
         </span>
       </div>
@@ -28,12 +28,12 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis
                 dataKey="year"
-                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 axisLine={false} tickLine={false} minTickGap={36}
               />
               <YAxis
                 tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`}
-                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 axisLine={false} tickLine={false} width={46}
               />
               <ReferenceLine y={0} stroke="var(--chart-ref)" strokeDasharray="4 4" />
@@ -44,9 +44,9 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                   const d = payload[0].payload as { flaggedMedianPct: number; unflaggedMedianPct: number; nFlagged: number };
                   return (
                     <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px', fontFamily: 'var(--font-sans), sans-serif' }}>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 5 }}>{label} · {d.nFlagged} flagged lots</div>
-                      <div style={{ fontSize: 13, color: 'var(--color-up)', fontWeight: 600 }}>flagged +{d.flaggedMedianPct}%</div>
-                      <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>unflagged {d.unflaggedMedianPct >= 0 ? '+' : ''}{d.unflaggedMedianPct}%</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 5 }}>{label} · {d.nFlagged} flagged lots</div>
+                      <div style={{ fontSize: 13.5, color: 'var(--color-up)', fontWeight: 600 }}>flagged +{d.flaggedMedianPct}%</div>
+                      <div style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>unflagged {d.unflaggedMedianPct >= 0 ? '+' : ''}{d.unflaggedMedianPct}%</div>
                     </div>
                   );
                 }}
@@ -56,7 +56,7 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ display: 'flex', gap: 18, padding: '8px 0 10px 18px', fontSize: 12, color: 'var(--color-text-faint)' }}>
+        <div style={{ display: 'flex', gap: 18, padding: '8px 0 10px 18px', fontSize: 12.5, color: 'var(--color-text-faint)' }}>
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--color-up)', verticalAlign: 'middle', marginRight: 6 }} />flagged below market</span>
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--chart-line-2)', verticalAlign: 'middle', marginRight: 6 }} />unflagged</span>
           <span>· premium-inclusive, as bought</span>

@@ -29,13 +29,13 @@ function DistributionTooltip({ active, payload }: { active?: boolean; payload?: 
       padding: '10px 14px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
         {d.label}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
         {d.count.toLocaleString()} lots
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>
         Total: {formatPrice(d.totalValue)}
       </div>
     </div>
@@ -81,13 +81,13 @@ export default function PriceDistribution({ allLots, buckets: preBuckets, embedd
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                tick={{ fontSize: 12.5, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
                 axisLine={{ stroke: 'var(--color-border)' }}
                 tickLine={false}
                 interval={0}
               />
               <YAxis
-                tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+                tick={{ fontSize: 12.5, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
                 axisLine={false}
                 tickLine={false}
                 width={40}

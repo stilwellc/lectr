@@ -363,7 +363,7 @@ export default function BoardDemand({
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 tickFormatter={(d: string) => {
                   // Always date the tick ("2026 Q2"); recharts thins to fit via
                   // minTickGap. A bare "Q3 Q3 Q3" axis with no year is unreadable.
@@ -379,7 +379,7 @@ export default function BoardDemand({
               <YAxis
                 orientation="right"
                 width={isRealized ? 48 : 40}
-                tick={{ fontSize: 11, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
+                tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }}
                 tickFormatter={isIndex ? (v: number) => `${Math.round(v)}` : isRealized ? (v: number) => formatRealized(v) : (v: number) => `${v > 0 ? '+' : ''}${v}%`}
                 axisLine={false}
                 tickLine={false}

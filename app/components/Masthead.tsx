@@ -86,8 +86,9 @@ export default function Masthead({
         className="ray-masthead-h1"
         style={{
           margin: '10px 0 0',
-          fontWeight: 700,
-          letterSpacing: '-0.03em',
+          fontFamily: 'var(--font-serif), serif',
+          fontWeight: 400,
+          letterSpacing: '-0.015em',
           lineHeight: 1.16,
           color: 'var(--color-fg)',
           maxWidth: 760,
@@ -100,7 +101,7 @@ export default function Masthead({
         <p
           style={{
             margin: '8px 0 0',
-            fontSize: 14.5,
+            fontSize: 15.5,
             lineHeight: 1.6,
             color: 'var(--color-text-secondary)',
             maxWidth: 640,

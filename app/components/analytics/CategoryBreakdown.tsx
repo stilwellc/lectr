@@ -23,13 +23,13 @@ function CategoryTooltip({ active, payload }: { active?: boolean; payload?: Arra
       padding: '10px 14px',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 6 }}>
         {d.category}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 1 }}>
         Sales Value: {formatPrice(d.revenue)}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 1 }}>
+      <div style={{ fontSize: 13.5, color: 'var(--color-text-muted)', marginBottom: 1 }}>
         {d.soldCount.toLocaleString()} sold of {d.count.toLocaleString()} total
       </div>
     </div>
@@ -85,7 +85,7 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
             <XAxis
               type="number"
               tickFormatter={formatAxis}
-              tick={{ fontSize: 12, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
+              tick={{ fontSize: 12.5, fill: 'var(--color-text-faint)', fontFamily: "var(--font-sans), sans-serif" }}
               axisLine={{ stroke: 'var(--color-border)' }}
               tickLine={false}
             />
@@ -93,7 +93,7 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
               type="category"
               dataKey="category"
               width={100}
-              tick={{ fontSize: 12, fill: 'var(--color-text-muted)', fontFamily: "var(--font-sans), sans-serif" }}
+              tick={{ fontSize: 12.5, fill: 'var(--color-text-muted)', fontFamily: "var(--font-sans), sans-serif" }}
               axisLine={false}
               tickLine={false}
             />
@@ -102,7 +102,7 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
               {categoryData.map((entry, i) => (
                 <Cell key={i} fill={entry.fill} fillOpacity={0.7} />
               ))}
-              <LabelList dataKey="revenue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-faint)', fontSize: 11, fontFamily: 'var(--font-sans), sans-serif' }} />
+              <LabelList dataKey="revenue" position="right" formatter={(v: number) => formatAxis(v)} style={{ fill: 'var(--color-text-faint)', fontSize: 11.5, fontFamily: 'var(--font-sans), sans-serif' }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -124,7 +124,7 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
                 opacity: 0.7,
                 flexShrink: 0,
               }} />
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
                 {cat.category}: {cat.count.toLocaleString()} lots
               </span>
             </div>
@@ -138,22 +138,22 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
   return (
     <section className="ray-category rail">
       <style>{`
-        .ray-category { padding-block: 40px 48px; }
+        .ray-category { padding-block: var(--sect-t) var(--sect-b); }
         @media (max-width: 768px) {
-          .ray-category { padding-block: 32px 32px; }
+          .ray-category { padding-block: var(--sect-t) var(--sect-b); }
         }
       `}</style>
 
       <div style={{ marginBottom: 20 }}>
         <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
+          fontFamily: 'var(--font-serif), serif',
           fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
+          fontWeight: 400,
+          letterSpacing: '-0.015em',
         }}>
           Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>breakdown</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = share of lots</p>
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = share of lots</p>
       </div>
 
       {card}

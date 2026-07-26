@@ -217,7 +217,7 @@ export default function FeedToolbar({
         borderRadius: 10, padding: 6, boxShadow: '0 14px 34px -18px rgba(8,6,3,0.85)',
       }}
     >
-      <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--color-text-muted)', padding: '6px 10px 7px', borderBottom: '1px solid var(--hairline)', marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--color-text-muted)', padding: '6px 10px 7px', borderBottom: '1px solid var(--hairline)', marginBottom: 4 }}>
         The categories
       </div>
       {verticals.map(v => (

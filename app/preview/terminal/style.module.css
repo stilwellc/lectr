@@ -56,7 +56,7 @@
 .sectionKicker {
   display: block;
   font-family: var(--font-mono-data), monospace;
-  font-size: 10.5px;
+  font-size: var(--text-label);
   font-weight: 500;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -74,7 +74,7 @@
   padding: 16px 0;
   border-bottom: 1px solid var(--tt-hair);
   font-family: var(--font-mono-data), monospace;
-  font-size: 11px;
+  font-size: 11.5px;
   letter-spacing: 0.1em;
   color: var(--tt-muted);
 }
@@ -195,7 +195,7 @@
 .railVal[data-accent='true'] { color: var(--tt-butter); }
 .railGo {
   font-style: normal;
-  font-size: 12px;
+  font-size: 12.5px;
   margin-left: 7px;
   color: var(--tt-butter);
   opacity: 0.85;
@@ -271,7 +271,7 @@
   font-style: normal;
   color: var(--tt-faint);
   letter-spacing: 0.1em;
-  font-size: 9px;
+  font-size: 10px;
 }
 .moversBandRows {
   display: flex;
@@ -296,7 +296,7 @@
 }
 .moverCellChg {
   font-family: var(--font-mono-data), monospace;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -304,7 +304,7 @@
 .moverCellChg[data-dir='down'] { color: var(--color-down); }
 .moverCellChg em {
   font-style: normal;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--tt-faint);
@@ -351,7 +351,7 @@
 }
 .heroDelta {
   font-family: var(--font-mono-data), monospace;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   letter-spacing: 0.02em;
 }
@@ -370,7 +370,7 @@
   display: block;
   margin-top: 14px;
   font-family: var(--font-mono-data), monospace;
-  font-size: 11px;
+  font-size: 11.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--tt-faint);
@@ -442,7 +442,7 @@
 }
 .statLabel {
   font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--tt-faint);
@@ -489,7 +489,7 @@
   border-bottom-color: rgba(0, 0, 0, 0.4);
   background: rgba(232, 218, 182, 0.06);
   font-family: var(--font-mono-data), monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--tt-fg);
 }
 .cmdLabel {
@@ -541,7 +541,7 @@
   font-family: var(--font-mono-data), monospace;
 }
 .chartTipPeriod {
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   color: var(--tt-faint);
 }
@@ -606,7 +606,7 @@
   gap: 8px;
   padding: 0 22px;
   font-family: var(--font-mono-data), monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   border-right: 1px solid var(--tt-hair);
 }
 .tapeDot {
@@ -713,7 +713,7 @@
   padding-bottom: 10px;
   border-bottom: 1px solid var(--tt-hair);
   font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--tt-faint);
@@ -768,7 +768,7 @@
 }
 .moversDelta {
   text-align: right;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--tt-muted);
 }
@@ -780,7 +780,7 @@
 }
 .moversN {
   text-align: right;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--tt-faint);
 }
 .moversFoot {
@@ -817,7 +817,7 @@
 }
 .edgeStatCap {
   font-family: var(--font-inter), sans-serif;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.4;
   color: var(--tt-muted);
   max-width: 26ch;
@@ -855,7 +855,7 @@
 }
 
 /* ── record board ─────────────────────────────────────────── */
-.recordSection { margin-top: clamp(56px, 7vw, 96px); }
+.recordSection { margin-top: clamp(56px, 7vw, calc(var(--sect-t) + var(--sect-b) + var(--space-2))); }
 .recordBoard { min-width: 0; }
 .recordHead {
   display: flex;
@@ -887,12 +887,12 @@
 }
 .recordRank {
   font-family: var(--font-mono-data), monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--tt-faint);
 }
 .recordCat {
   font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 3px 8px;
@@ -946,7 +946,7 @@
 }
 .recordSource {
   font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.02em;
   color: var(--tt-faint);
   text-align: right;
@@ -1001,10 +1001,10 @@
 }
 
 /* the movers board section — scroll-margin admits the condensed board's anchor */
-.moversSection { margin-top: clamp(44px, 6vw, 72px); scroll-margin-top: 84px; }
+.moversSection { margin-top: clamp(44px, 6vw, calc(var(--sect-t) + var(--sect-b) - var(--space-4))); scroll-margin-top: 84px; }
 
 /* the feed section */
-.feedSection { margin-top: clamp(44px, 6vw, 72px); }
+.feedSection { margin-top: clamp(44px, 6vw, calc(var(--sect-t) + var(--sect-b) - var(--space-4))); }
 .feedTitle {
   font-family: var(--font-serif-display), serif;
   font-weight: 400;
@@ -1124,7 +1124,7 @@
   align-items: center;
   gap: 7px;
   font-family: var(--font-inter), sans-serif;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--tt-fg);
 }
@@ -1231,7 +1231,7 @@
   border-radius: 18px;
   background: linear-gradient(180deg, var(--tt-panel), rgba(20, 17, 13, 0.35));
   box-shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(232, 218, 182, 0.03);
-  padding: 15px 15px 12px;
+  padding: var(--card-pad);
 }
 .mHeroHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .mHeroLabel {
@@ -1242,7 +1242,7 @@
 .mHeroLive {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
   font-family: var(--font-mono-data), monospace;
-  font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-faint);
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-faint);
 }
 .mHeroLive i {
   width: 6px; height: 6px; border-radius: 50%; background: var(--color-up);
@@ -1259,8 +1259,8 @@
   font-size: clamp(40px, 13.5vw, 58px); line-height: 0.9; letter-spacing: -0.02em; color: var(--tt-fg);
 }
 .mHeroDeltas { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-bottom: 4px; }
-.mHeroDelta { font-family: var(--font-mono-data), monospace; font-size: 15px; font-weight: 500; }
-.mHeroDeltaSub { font-family: var(--font-mono-data), monospace; font-size: 12px; font-weight: 500; opacity: 0.82; }
+.mHeroDelta { font-family: var(--font-mono-data), monospace; font-size: 15.5px; font-weight: 500; }
+.mHeroDeltaSub { font-family: var(--font-mono-data), monospace; font-size: 12.5px; font-weight: 500; opacity: 0.82; }
 .mHeroDelta em, .mHeroDeltaSub em {
   font-style: normal; color: var(--tt-faint); font-size: 0.6em;
   letter-spacing: 0.1em; text-transform: uppercase; margin-left: 4px;
@@ -1269,7 +1269,7 @@
 .mHeroDelta[data-dir='down'], .mHeroDeltaSub[data-dir='down'] { color: var(--color-down); }
 .mHeroChart { margin: 0 -4px; }
 .mHeroTag {
-  font-family: var(--font-mono-data), monospace; font-size: 9px;
+  font-family: var(--font-mono-data), monospace; font-size: 10px;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-faint); margin-top: 6px;
 }
 .mHeroStats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -1284,7 +1284,9 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mStatVal { font-family: var(--font-mono-data), monospace; font-size: 18px; font-weight: 500; letter-spacing: -0.01em; color: var(--tt-fg); }
 .mStat[data-accent='true'] .mStatVal { color: var(--tt-butter); }
 .mStatLabel {
-  font-family: var(--font-mono-data), monospace; font-size: 8.5px; letter-spacing: 0.08em;
+  /* merged 8.5→10 (type audit); tracking eased 0.08em→0.03em so the longest
+     label ("Below market ↗") still fits the 3-up tiles on a 390px screen */
+  font-family: var(--font-mono-data), monospace; font-size: 10px; letter-spacing: 0.03em;
   text-transform: uppercase; color: var(--tt-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .mHero .cmdPillFull { width: 100%; justify-content: center; padding: 14px; }
@@ -1298,7 +1300,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   border: 1px solid var(--tt-hair-2); border-radius: 10px; background: rgba(0, 0, 0, 0.22);
 }
 .tfChip {
-  font-family: var(--font-mono-data), monospace; font-size: 11px; letter-spacing: 0.04em;
+  font-family: var(--font-mono-data), monospace; font-size: 11.5px; letter-spacing: 0.04em;
   padding: 5px 11px; border-radius: 7px; border: none; background: none; color: var(--tt-muted);
   cursor: pointer; transition: background 180ms var(--ease-signature, cubic-bezier(0.23,1,0.32,1)), color 180ms;
 }
@@ -1308,11 +1310,11 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 
 /* mobile return card */
 .mHeroReturnTag {
-  font-family: var(--font-mono-data), monospace; font-size: 9px; letter-spacing: 0.14em;
+  font-family: var(--font-mono-data), monospace; font-size: 10px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--tt-faint); flex: none;
 }
 .mHeroReturnPer {
-  font-family: var(--font-mono-data), monospace; font-size: 11px; letter-spacing: 0.05em;
+  font-family: var(--font-mono-data), monospace; font-size: 11.5px; letter-spacing: 0.05em;
   text-transform: uppercase; color: var(--tt-faint); padding-bottom: 8px;
 }
 .mHero .tfToggle { margin: 2px 0 12px; }
@@ -1327,7 +1329,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   padding: 3px 8px; border: 1px solid var(--tt-hair-2); border-radius: 6px;
 }
 .heroReturnPer {
-  font-family: var(--font-mono-data), monospace; font-size: 13px; letter-spacing: 0.04em;
+  font-family: var(--font-mono-data), monospace; font-size: 13.5px; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--tt-faint); padding-bottom: 16px;
 }
 .hero .tfToggle { margin-top: 14px; }
@@ -1443,7 +1445,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   padding-bottom: 10px;
   border-bottom: 1px solid var(--tt-hair);
   font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--tt-faint);
@@ -1473,7 +1475,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   justify-self: start;
   display: inline-block;
   font-family: var(--font-mono-data), monospace;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-weight: 700;
@@ -1499,7 +1501,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .subSupport {
   text-align: right;
   font-family: var(--font-mono-data), monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--tt-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -1525,7 +1527,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   border: 1px solid var(--tt-hair-2);
   border-radius: 14px;
   background: linear-gradient(180deg, var(--tt-panel), rgba(20, 17, 13, 0.3));
-  padding: 14px;
+  padding: var(--card-pad);
   text-align: left;
   cursor: pointer;
   color: inherit;
@@ -1551,7 +1553,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   align-items: center;
   gap: 7px;
   font-family: var(--font-inter), sans-serif;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--tt-fg);
   min-width: 0;
@@ -1683,7 +1685,7 @@ a.recordObj:focus-visible {
 .recordEmpty {
   padding: 22px 4px;
   font-family: var(--font-mono-data), monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--tt-muted);
 }
 
@@ -1696,7 +1698,7 @@ a.recordObj:focus-visible {
 .heroExplainLine {
   margin-top: 6px;
   font-family: var(--font-mono-data), monospace;
-  font-size: 11px;
+  font-size: 11.5px;
   letter-spacing: 0.02em;
   color: var(--tt-muted);
 }
@@ -1716,7 +1718,7 @@ a.recordObj:focus-visible {
   justify-content: space-between;
   align-items: baseline;
   font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--tt-faint);
@@ -1736,7 +1738,7 @@ a.recordObj:focus-visible {
 .verifiedRow:last-child { border-bottom: none; }
 .verifiedName {
   font-family: var(--font-inter), sans-serif;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--tt-fg);
   white-space: nowrap;
@@ -1745,7 +1747,7 @@ a.recordObj:focus-visible {
 }
 .verifiedChg {
   text-align: right;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--tt-muted);
 }
@@ -1754,7 +1756,7 @@ a.recordObj:focus-visible {
 .verifiedChg em { font-style: normal; font-size: 10px; color: var(--tt-faint); margin-left: 3px; }
 .verifiedCi {
   text-align: right;
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--tt-faint);
 }
 .verifiedEmpty {
@@ -1765,7 +1767,7 @@ a.recordObj:focus-visible {
   border-top: 1px solid var(--tt-hair);
   padding-top: 12px;
   font-family: var(--font-mono-data), monospace;
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.5;
   color: var(--tt-muted);
 }
@@ -1782,7 +1784,7 @@ a.recordObj:focus-visible {
 .moversCi {
   text-align: right;
   font-family: var(--font-mono-data), monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--tt-faint);
 }
 .moversDelta em { font-style: normal; font-size: 10px; color: var(--tt-faint); margin-left: 4px; }
@@ -1793,7 +1795,7 @@ a.recordObj:focus-visible {
   border-radius: 14px;
   background: rgba(232, 218, 182, 0.02);
   font-family: var(--font-mono-data), monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--tt-muted);
 }
@@ -1886,7 +1888,7 @@ a.recordObj:focus-visible {
 /* ── ROI × demand divergence flag on the hero stat tile ── */
 .statFlag {
   font-family: var(--font-mono-data), monospace;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #d8a24a;
@@ -1929,7 +1931,7 @@ a.recordObj:focus-visible {
   background: none;
   color: var(--tt-secondary);
   font-family: var(--font-mono-data), monospace;
-  font-size: 11px;
+  font-size: 11.5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;

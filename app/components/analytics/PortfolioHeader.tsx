@@ -122,10 +122,9 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
   return (
     <section className="ray-portfolio-header rail">
       <style>{`
-        .ray-portfolio-header { padding-block: 40px; }
-        @media (max-width: 768px) {
-          .ray-portfolio-header { padding-block: 32px; }
-        }
+        /* section rhythm token — 40px desktop / 32px mobile, same computed
+           values as before (full t/b rhythm would move the bottom +8px) */
+        .ray-portfolio-header { padding-block: var(--sect-t); }
       `}</style>
 
       {/* the book, printed — the same certificate CARD as the maker pages:

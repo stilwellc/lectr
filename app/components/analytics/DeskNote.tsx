@@ -24,7 +24,7 @@ export default function DeskNote({ market, style }: { market: Market; style?: Re
   if (!slug) return null;
   const label = MARKETS.find(m => m.key === market)?.label || market;
   return (
-    <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0, ...style }}>
+    <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0, ...style }}>
       Notes from the desk:{' '}
       <Link
         href={`/blog/${slug}`}

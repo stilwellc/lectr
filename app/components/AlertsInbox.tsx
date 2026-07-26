@@ -50,7 +50,7 @@ const CSS = `
 }
 .lectr-inbox-del {
   background: none; border: none; cursor: pointer; padding: 0 2px;
-  font-size: 12px; color: var(--color-text-faint); line-height: 1;
+  font-size: 12.5px; color: var(--color-text-faint); line-height: 1;
 }
 .lectr-inbox-del:hover { color: var(--color-down-text); }
 `;
@@ -96,7 +96,7 @@ export default function AlertsInbox() {
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 4 }}>
         <h2 className="ray-h2" style={{ margin: 0 }}>Saved searches</h2>
-        <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+        <span style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>
           {searches.length === 1 ? 'one standing search' : `${searches.length} standing searches`} · matched nightly against every new lot
         </span>
         {unseen > 0 && (
@@ -119,7 +119,7 @@ export default function AlertsInbox() {
               <button className="lectr-inbox-del" title="Delete this saved search" onClick={() => remove(s.id)}>×</button>
             </div>
             {rows.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--color-text-faint)', padding: '7px 0' }}>
+              <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', padding: '7px 0' }}>
                 no new matches yet — the next crawl checks tonight
               </div>
             ) : (

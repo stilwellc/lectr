@@ -96,7 +96,7 @@ export default function ApprBarometer({
   const microcap: CSSProperties = { fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' };
   const footRow: CSSProperties = {
     borderTop: '1px solid var(--paper-line)', display: 'flex', justifyContent: 'space-between',
-    fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)',
+    fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)',
   };
 
   return (
@@ -154,18 +154,18 @@ export default function ApprBarometer({
 
           {/* printed stat rows with dotted leaders */}
           <div style={{ marginTop: 18, borderTop: '1px solid var(--paper-line)', paddingTop: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '9px 0', fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '9px 0', fontSize: 13.5 }}>
               <span style={{ color: 'var(--paper-muted)' }}>{typicalLabel}</span>
               <span aria-hidden style={{ flex: 1, borderBottom: '1px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
               <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{typical != null ? formatPrice(typical) : '—'}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0 2px', fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0 2px', fontSize: 13.5 }}>
               <span style={{ color: 'var(--paper-muted)' }}>Record sale</span>
               <span aria-hidden style={{ flex: 1, borderBottom: '1px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
               <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{record ? formatPrice(record.priceUsd) : '—'}</span>
             </div>
             {record && (
-              <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--paper-muted)', marginTop: 1 }}>{record.maker}</div>
+              <div style={{ textAlign: 'right', fontSize: 11.5, color: 'var(--paper-muted)', marginTop: 1 }}>{record.maker}</div>
             )}
           </div>
 
@@ -193,7 +193,7 @@ export default function ApprBarometer({
         >
           <span style={{ ...microcap, whiteSpace: 'nowrap' }}>Barometer</span>
           <span aria-hidden style={{ flex: 1, borderBottom: '1px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
-          <span style={{ fontSize: 12, color: 'var(--paper-muted)', whiteSpace: 'nowrap' }}>appreciation</span>
+          <span style={{ fontSize: 12.5, color: 'var(--paper-muted)', whiteSpace: 'nowrap' }}>appreciation</span>
           <span style={{ fontSize: 14, fontWeight: 700, color: heat, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
             {up ? '+' : ''}{value.toFixed(1)}%
           </span>
@@ -251,7 +251,7 @@ export default function ApprBarometer({
               <div style={{ fontSize: 10.5, color: 'var(--paper-muted)', marginTop: 4 }}>appreciation · annualized, 3-yr window · sales-weighted</div>
             </div>
             {typical != null && (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8, fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8, fontSize: 12.5 }}>
                 <span style={{ color: 'var(--paper-muted)', whiteSpace: 'nowrap' }}>Typical sale</span>
                 <span aria-hidden style={{ flex: 1, borderBottom: '1px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
                 <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatPrice(typical)}</span>

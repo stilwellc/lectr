@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '46px 0 10px' };
+const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 22, fontWeight: 400, letterSpacing: '-0.015em', margin: '46px 0 10px' };
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.72, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '6px 0 20px', fontSize: 14 };
@@ -28,19 +28,19 @@ function Formula({ children, caption }: { children: React.ReactNode; caption?: s
         padding: '16px 18px', overflowX: 'auto',
       }}>
         <div style={{
-          fontFamily: 'var(--font-mono), ui-monospace, monospace', fontSize: 14.5, lineHeight: 1.9,
+          fontFamily: 'var(--font-mono), ui-monospace, monospace', fontSize: 13, lineHeight: 1.9,
           color: 'var(--color-fg)', whiteSpace: 'pre', textAlign: 'center', minWidth: 'fit-content', margin: '0 auto',
         }}>{children}</div>
       </div>
       {caption && (
-        <figcaption style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--color-text-muted)', margin: '8px 4px 0' }}>{caption}</figcaption>
+        <figcaption style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--color-text-muted)', margin: '8px 4px 0' }}>{caption}</figcaption>
       )}
     </figure>
   );
 }
 
 const V = ({ children }: { children: React.ReactNode }) => (
-  <code style={{ fontFamily: 'var(--font-mono), ui-monospace, monospace', fontSize: '0.92em', color: 'var(--color-fg)' }}>{children}</code>
+  <code style={{ fontFamily: 'var(--font-mono), ui-monospace, monospace', fontSize: 13, color: 'var(--color-fg)' }}>{children}</code>
 );
 
 export default function PricingEnginePost() {
@@ -52,7 +52,7 @@ export default function PricingEnginePost() {
           <p className="kicker" style={{ margin: '0 0 14px' }}>
             <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · July 24, 2026 · technical
           </p>
-          <h1 style={{ fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.15, margin: '0 0 14px' }}>
+          <h1 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 400, letterSpacing: '-0.015em', lineHeight: 1.15, margin: '0 0 14px' }}>
             How we built the price-movement engine
           </h1>
           <p style={{ ...p, fontSize: 16.5 }}>

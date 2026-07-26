@@ -111,7 +111,7 @@ export default function ValuePage() {
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
       <style>{`
-        .ray-value-section { padding-block: 40px 64px; }
+        .ray-value-section { padding-block: var(--sect-t) calc(var(--sect-b) + var(--space-4)); }
         .ray-value-row {
           display: grid;
           grid-template-columns: 56px minmax(0, 1fr) auto;
@@ -151,7 +151,7 @@ export default function ValuePage() {
           display: block;
         }
         .ray-value-row-maker {
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 600;
           white-space: nowrap;
           overflow: hidden;
@@ -166,7 +166,7 @@ export default function ValuePage() {
           text-overflow: ellipsis;
         }
         .ray-value-row-sig {
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 700;
           color: var(--color-up);
           text-align: right;
@@ -179,7 +179,7 @@ export default function ValuePage() {
           white-space: nowrap;
         }
         @media (max-width: 768px) {
-          .ray-value-section { padding-block: 32px 40px; }
+          .ray-value-section { padding-block: var(--sect-t) calc(var(--sect-b) + var(--space-2)); }
           .ray-value-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; }
           .ray-value-row-thumb { width: 44px; height: 36px; }
         }
@@ -206,13 +206,13 @@ export default function ValuePage() {
             padding: 12px 16px 9px;
             border-bottom: 1px solid var(--color-border);
           }
-          .ray-value-head .kicker { font-size: 9.5px; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .ray-value-head .kicker { font-size: 10px; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .ray-value-mob { display: none; }
           .ray-value-mobdate { display: none; }
           .ray-value-cell {
             display: block;
             font-family: var(--font-mono), monospace;
-            font-size: 12px;
+            font-size: var(--text-data);
             letter-spacing: -0.01em;
             font-variant-numeric: tabular-nums;
             color: var(--color-text-muted);
@@ -232,7 +232,7 @@ export default function ValuePage() {
 
       {fullError ? (
         <div style={{ padding: '120px 24px', textAlign: 'center' }}>
-          <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
+          <p style={{ fontSize: 15.5, color: 'var(--color-text-muted)', marginBottom: 24 }}>
             The sold archive didn&rsquo;t load. Check your connection and try again.
           </p>
           <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
@@ -243,11 +243,11 @@ export default function ValuePage() {
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
-          <div className="rail ray-enter" style={{ paddingTop: 16 }}><MarketSwitch compact /></div>
+          <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}><MarketSwitch compact /></div>
 
           {/* The certificate masthead — the flagged count and totals fold
               into the data subline; full numbers, no second display numeral. */}
-          <section className="rail ray-enter" style={{ paddingTop: 24 }}>
+          <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
             <Masthead
               kicker="The signal · ranked by comps gap"
               serial={lastCrawl || undefined}
@@ -267,7 +267,7 @@ export default function ValuePage() {
           </section>
 
           {call && (
-            <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 22 } as React.CSSProperties}>
+            <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
               {/* ONE CALLPLATE — the lander's component in compact density:
                   same pickCall lot, same numbers, the modal one click away. */}
               <CallPlate
@@ -345,7 +345,7 @@ export default function ValuePage() {
           <section className="ray-value-section rail">
             {deals.length === 0 ? (
               <div className="ray-enter" style={{ textAlign: 'center', padding: '40px 20px 100px', color: 'var(--color-text-faint)' }}>
-                <p style={{ fontSize: 14, marginBottom: 20 }}>Check back after the next crawl, or browse everything live.</p>
+                <p style={{ fontSize: 15.5, marginBottom: 20 }}>Check back after the next crawl, or browse everything live.</p>
                 <Link href="/" className="link-action" style={{ color: 'var(--color-fg)' }}>
                   Browse upcoming lots <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
                 </Link>

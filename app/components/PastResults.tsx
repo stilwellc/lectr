@@ -138,7 +138,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
   return (
     <section className="ray-results rail">
       <style>{`
-        .ray-results { padding-block: 40px 120px; }
+        .ray-results { padding-block: var(--sect-t) calc(var(--sect-b) + 72px); /* page-end breath, deliberate */ }
         .ray-result-row {
           position: relative;
           display: grid;
@@ -156,7 +156,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         .ray-result-row .ray-save-btn { width: 32px; height: 32px; }
         .ray-sort-pill {
           font-family: var(--font-sans), sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 600;
           letter-spacing: 0.1em;
           text-transform: uppercase;
@@ -183,7 +183,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         .ray-results .ray-sport-chips .ray-sort-pill i {
           font-style: normal;
           font-family: var(--font-mono), monospace;
-          font-size: 9.5px;
+          font-size: 10px;
           color: var(--color-text-faint);
           letter-spacing: 0;
         }
@@ -196,7 +196,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         .ray-result-badges { display: flex; }
         .ray-result-meta-mob { display: none; }
         @media (max-width: 768px) {
-          .ray-results { padding-block: 32px 80px; }
+          .ray-results { padding-block: var(--sect-t) calc(var(--sect-b) + 48px); /* page-end breath, deliberate */ }
           /* one row: title block · price · save — the Own-it button and the
              chip badges are desktop chrome; the freed width goes to the
              title. The stretched link still opens the lot at the house. */
@@ -228,14 +228,14 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           <div style={{ position: 'relative', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '16px 0 4px' }}>
           <div>
             <h2 style={{
-              fontFamily: 'var(--font-sans), sans-serif',
+              fontFamily: 'var(--font-serif), serif',
               fontSize: 24,
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
+              fontWeight: 400,
+              letterSpacing: '-0.015em',
             }}>
               Recent <span style={{ fontStyle: 'normal' }}>results</span>
             </h2>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
+            <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
               {filtered.length.toLocaleString()} results
               {categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}
             </p>
@@ -362,7 +362,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                       className="ray-result-maker"
                       onClick={e => e.stopPropagation()}
                       style={{
-                        fontSize: 12,
+                        fontSize: 12.5,
                         letterSpacing: '-0.01em',
                         textTransform: 'none',
                         color: 'var(--color-text-muted)',
@@ -392,7 +392,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   alignItems: 'center',
                   gap: 6,
                   marginTop: 3,
-                  fontSize: 12,
+                  fontSize: 12.5,
                   color: 'var(--color-text-faint)',
                 }}>
                   {lot.year && <span className="ray-result-year">{lot.year}</span>}
@@ -415,7 +415,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
 
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{
-                  fontSize: 15,
+                  fontSize: 15.5,
                   fontWeight: 500,
                   color: 'var(--color-fg)',
                   lineHeight: 1.3,
@@ -428,7 +428,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                       ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.92em' }}>Pending</span>
                       : '—'}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 1 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', marginTop: 1 }}>
                   {/* the product's core statistic, on every result it has one for */}
                   {(() => {
                     if (!lot.priceUsd || !lot.estimateLow || !lot.estimateHigh) return null;
@@ -459,7 +459,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     borderRadius: 100,
                     background: `color-mix(in srgb, ${catColor} 7%, transparent)`,
                     border: `1px solid color-mix(in srgb, ${catColor} 15%, transparent)`,
-                    fontSize: 12,
+                    fontSize: 12.5,
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: catColor,
@@ -474,7 +474,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                   borderRadius: 100,
                   background: `color-mix(in srgb, ${color} 7%, transparent)`,
                   border: `1px solid color-mix(in srgb, ${color} 15%, transparent)`,
-                  fontSize: 12,
+                  fontSize: 12.5,
                   letterSpacing: '-0.01em',
                   textTransform: 'none',
                   color: color,
@@ -553,7 +553,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               border: '1px solid var(--color-border)',
               borderRadius: 100,
               padding: '10px 32px',
-              fontSize: 12,
+              fontSize: 12.5,
               letterSpacing: '-0.01em',
               textTransform: 'none',
               color: 'var(--color-text-muted)',
