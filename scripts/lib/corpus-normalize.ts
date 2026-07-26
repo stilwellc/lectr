@@ -180,16 +180,43 @@ export function enrichWatchReferences(lots: Lot[]): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Orchestrator — run all three, log a one-line summary. Idempotent.
+// 4 · saleDate ← saleDateTime reconciliation.
+//
+// The crawler stamps `saleDate` with the CRAWL DAY as a fallback when it can't
+// read a real date off a search/artist page. `saleDateTime`, when present, is the
+// genuinely-parsed timestamp — so a lot re-seen on a listing page (a 2014 Prouvé,
+// a 2025 Ruth bat) ends up with saleDateTime=<real past date> but saleDate=<crawl
+// day>, and the "on the block" feed (which filters saleDate >= today) shows it as
+// live today. Reconcile saleDate DOWN to saleDateTime's day when the timestamp is
+// EARLIER — never push a sale later, so a genuine future lot is never touched.
+// ─────────────────────────────────────────────────────────────────────────────
+export function reconcileSaleDates(lots: Lot[]): number {
+  let fixed = 0;
+  for (const l of lots) {
+    const dt = l.saleDateTime;
+    if (!dt || !l.saleDate) continue;
+    const trueDay = dt.slice(0, 10);
+    if (trueDay.length === 10 && trueDay < l.saleDate.slice(0, 10)) {
+      l.saleDate = trueDay;
+      fixed++;
+    }
+  }
+  return fixed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Orchestrator — run all passes, log a one-line summary. Idempotent.
 // ─────────────────────────────────────────────────────────────────────────────
 export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
   const yearsNulled = clampImpossibleYears(ls);
   const reroute = rerouteScienceMisroutes(ls);
   const refsFilled = enrichWatchReferences(ls);
+  const datesFixed = reconcileSaleDates(ls);
   console.log(
     `[normalize] yearNum>${new Date().getFullYear() + 1} nulled=${yearsNulled} · ` +
     `science misroutes fixed=${reroute.total} (→art ${reroute.toArt}, →watches ${reroute.toWatch}, evicted ${reroute.evicted}) · ` +
-    `watch references filled=${refsFilled}`
+    `watch references filled=${refsFilled} · ` +
+    `saleDate←saleDateTime reconciled=${datesFixed}`
   );
 }

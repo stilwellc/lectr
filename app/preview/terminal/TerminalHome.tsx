@@ -164,6 +164,16 @@ function openCommandK() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_CK_EVENT));
 }
 
+// A lot's TRUE sale day. The crawler stamps `saleDate` with the CRAWL DAY as a
+// fallback when it can't read a real date off a search/artist page — so an old
+// sold lot re-seen there (a 2014 Prouvé, a 2025 Ruth bat) would otherwise show
+// as "on the block today". `saleDateTime`, when set, is the genuinely-parsed
+// timestamp and always wins. The live feed filters on this, never on the raw
+// (possibly crawl-day) saleDate.
+function trueSaleDay(l: AuctionLot): string {
+  return l.saleDateTime ? l.saleDateTime.slice(0, 10) : (l.saleDate || '');
+}
+
 export default function TerminalHomePage() {
   const ray = useRayData();
   const { allLots, statsByArtist, demand, realized, recentSold, backtest, market: marketData, tape, lastCrawl, loading, error, fromCache } = ray;
@@ -256,13 +266,12 @@ export default function TerminalHomePage() {
 
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    // results-pending grace: a just-sold lot is held 'upcoming' while results
-    // post, but cap it so a sale weeks past (e.g. Christie's results gated behind
-    // login and never scraped) doesn't linger in the feed as "on the block".
-    const graceCut = new Date(Date.now() - 864e5).toISOString().split('T')[0];
+    // On the block = the sale genuinely hasn't happened yet, judged on the TRUE
+    // day (saleDateTime over crawl-day saleDate). A lot whose real sale is past —
+    // even one held 'upcoming' with pending results — is not live and drops here.
     return marketLots
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate >= graceCut)))
-      .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
+      .filter(l => l.status === 'upcoming' && trueSaleDay(l) >= today)
+      .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
   }, [marketLots]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -480,10 +489,9 @@ export default function TerminalHomePage() {
     const mine = allLots.filter(l => idSet.has(l.id));
     if (mine.length === 0) return null;
     const today = new Date().toISOString().split('T')[0];
-    const graceCut = new Date(Date.now() - 864e5).toISOString().split('T')[0];
     const live = mine
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate >= graceCut)))
-      .sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0));
+      .filter(l => l.status === 'upcoming' && trueSaleDay(l) >= today)
+      .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
     let bestMove: { from: number; to: number } | null = null;
     for (const l of live) {
       const m = savedMeta[l.id];
@@ -493,7 +501,7 @@ export default function TerminalHomePage() {
       const delta = s.pct - m.signalPct;
       if (delta > 0 && (!bestMove || delta > bestMove.to - bestMove.from)) bestMove = { from: m.signalPct, to: s.pct };
     }
-    const future = live.filter(l => l.saleDate >= today);
+    const future = live.filter(l => trueSaleDay(l) >= today);
     return { count: mine.length, next: future[0] || null, bestMove };
   }, [savedIds, savedMeta, allLots]);
 
