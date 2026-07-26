@@ -141,7 +141,7 @@ jobs:
           done
           for p in $pids; do wait "$p" || rc=1; done
           exit $rc
-      - name: Pull previous totals + backtest (gate baseline + carry the record)
+      - name: Pull previous totals + backtest (gate baseline + carry the record + incremental state)
         run: bash scripts/data-store.sh pull-meta && bash scripts/data-store.sh pull-backtest
       - name: Assemble + engine (sanity-gated)
         run: npx tsx scripts/assemble.ts
@@ -159,6 +159,10 @@ jobs:
           path: public/data/ray/
           retention-days: 1
           if-no-files-found: error
+      # NOTE: the glob also carries data/corpus/backtest-state.json.gz (fetched
+      # by pull-backtest above) — the raw accumulator state the backtest job's
+      # NIGHTLY INCREMENTAL rehydrates to append newly-closed lots. Deliberate:
+      # the state must travel with the corpus it will be appended against.
       - name: Upload corpus artifact
         uses: actions/upload-artifact@v4
         with:
@@ -167,9 +171,18 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # The point-in-time backtest is a heavy replay (~25min) but the record barely
-  # moves night to night, so it runs OFF the critical path in parallel with the
-  # deploy and just refreshes the standalone backtest.json for the next cycle.
+  # The point-in-time backtest. The record is CUMULATIVE history that barely
+  # moves night to night, so the nightly path (Mon–Sat) runs the FAST INCREMENTAL
+  # (build-backtest-incremental.ts): it scores ONLY the lots that closed since the
+  # last run and APPENDS them, finishing in a small fraction of the full replay.
+  # SUNDAY runs the FULL replay (build-backtest.ts) as the correctness backstop —
+  # it re-scores every concluded lot from scratch, which is the only thing that
+  # corrects retroactive-prior drift (a backfilled lot dated before an
+  # already-scored target; see build-backtest-incremental.ts for the exact
+  # bound) and refreshes the recency-weighting anchor. Both paths call identical
+  # scoring code (backtest-core.ts), so incremental rows are byte-identical to a
+  # full replay's, and both carry forward the sidecar state (backtest-state.json)
+  # the incremental rehydrates. Runs OFF the critical path in parallel with deploy.
   backtest:
     needs: assemble
     if: always()
@@ -182,13 +195,14 @@ jobs:
     # (Root cause of the 2026-07-24/25 "cancelled" nights: this replay outgrew
     # its 70min cap as the corpus passed ~500k lots — the job self-cancelled on
     # timeout and dragged the whole run's conclusion to "cancelled" even though
-    # the site had already deployed fresh data successfully.)
+    # the site had already deployed fresh data successfully. The nightly
+    # incremental now finishes in minutes; only the weekly full needs headroom.)
     continue-on-error: true
-    # Real headroom for the grown replay: the O(targets×priors) replay now runs
-    # well past 70min at current corpus size. 300 (5h, under GH's 6h job cap)
-    # gives it room to finish; continue-on-error is the belt-and-braces so even
-    # an overrun can't gate the run. Revisit build-backtest.ts perf if it ever
-    # approaches this ceiling — see the progress logging added to that script.
+    # Headroom sized for the WEEKLY full replay (the O(targets×priors) pass runs
+    # well past 70min at current corpus size). 300 (5h, under GH's 6h job cap)
+    # gives the Sunday full room to finish; the Mon–Sat incremental returns in
+    # minutes and never approaches it. continue-on-error is the belt-and-braces
+    # so even an overrun can't gate the run.
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v5
@@ -217,9 +231,23 @@ jobs:
           else
             bash scripts/data-store.sh pull
           fi
-      - name: Rebuild point-in-time backtest
-        run: npx tsx scripts/build-backtest.ts
-      - name: Push refreshed backtest.json
+      # Sunday (day-of-week 7) → FULL rebuild backstop; Mon–Sat → fast incremental
+      # append. A day-of-week guard in the ONE step (not a separate scheduled
+      # job) keeps the artifact-first + R2-fallback plumbing above shared by both
+      # paths and lets BOTH ride the same-run corpus-payload artifact — a separate
+      # Sunday cron would be its own run with no assemble artifacts, forcing the
+      # slow R2 fallback every week. The incremental self-falls-back to a full
+      # build when no prior state exists (first run, or after a state-file gap).
+      - name: Rebuild point-in-time backtest (full on Sun, incremental Mon–Sat)
+        run: |
+          if [ "$(date -u +%u)" = "7" ]; then
+            echo "[backtest] Sunday — running FULL rebuild (correctness backstop)"
+            npx tsx scripts/build-backtest.ts
+          else
+            echo "[backtest] weekday — running INCREMENTAL append"
+            npx tsx scripts/build-backtest-incremental.ts
+          fi
+      - name: Push refreshed backtest.json (+ accumulator state)
         run: bash scripts/data-store.sh push-backtest
 
   deploy:
