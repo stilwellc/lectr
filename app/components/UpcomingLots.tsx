@@ -78,6 +78,10 @@ export default function UpcomingLots({
           grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 16px;
         }
+        /* grid children must be allowed to shrink below their content's
+           intrinsic width — without this, one long nowrap line inflates the
+           whole page past the viewport on mobile */
+        .ray-upcoming-grid > * { min-width: 0; }
         .ray-upcoming .ray-sort-pill {
           font-family: var(--font-sans), sans-serif;
           font-size: 12px;

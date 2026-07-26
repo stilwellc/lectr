@@ -241,7 +241,7 @@ function LotCard({
               href={`/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
-              style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+              style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
             >
               {makerLabel}
             </Link>

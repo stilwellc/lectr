@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 const wrap: React.CSSProperties = { maxWidth: 860, margin: '0 auto', padding: '0 24px' };
-const kicker: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 6px' };
+/* section labels use the global .kicker class (mono microcap, terminal voice) */
 const p: React.CSSProperties = { fontSize: 15, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 14px' };
 const li: React.CSSProperties = { fontSize: 15, lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: '0 0 8px' };
 const code: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace', fontSize: 13, background: 'var(--color-bg-elevated)', padding: '1px 6px', borderRadius: 5, color: 'var(--color-fg)' };
@@ -58,7 +58,7 @@ function Section({ ord, label, title, defaultOpen, children }: {
     <details className="ray-about-sec" open={defaultOpen} style={wrap}>
       <summary className="ray-about-sum">
         <span style={{ minWidth: 0 }}>
-          <span style={{ ...kicker, display: 'block' }}>{ord} · {label}</span>
+          <span className="kicker" style={{ display: 'block', margin: '0 0 6px' }}>{ord} · {label}</span>
           <span style={{ display: 'block', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-fg)', lineHeight: 1.3 }}>{title}</span>
         </span>
         <span className="ray-about-flick" aria-hidden>

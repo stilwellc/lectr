@@ -126,7 +126,7 @@
   z-index: 2;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 clamp(24px, 5vw, 56px) 80px;
+  padding: 0 var(--gutter) 80px;
 }
 
 /* THE OBSERVATORY — desktop hero. The chart is the STAGE (a full-width,
@@ -1307,7 +1307,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 
 @media (max-width: 900px) {
   .deskShell {
-    padding: 0 clamp(16px, 4vw, 28px) 64px;
+    padding: 0 var(--gutter) 64px;
   }
   .hero {
     grid-template-columns: 1fr;
@@ -1375,17 +1375,17 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
      edge so their inner content sits at the same 16px as everything else. */
   .mHeroCard,
   .ledgerBand {
-    margin-inline: calc(-1 * clamp(16px, 4vw, 28px)) !important;
+    margin-inline: calc(-1 * var(--gutter)) !important;
     border-radius: 0 !important;
     border-left: 0 !important;
     border-right: 0 !important;
   }
-  .mHeroCard { padding-inline: clamp(16px, 4vw, 28px); }
+  .mHeroCard { padding-inline: var(--gutter); }
   /* the ledger's inner wrapper carries an inline clamp(18px…30px) pad — pull it
      back to the standard gutter so its content lines up with the feed. */
-  .ledgerBand > div { padding-inline: clamp(16px, 4vw, 28px) !important; }
+  .ledgerBand > div { padding-inline: var(--gutter) !important; }
   .root :global(.ray-recordband) {
-    margin-inline: calc(-1 * clamp(16px, 4vw, 28px));
+    margin-inline: calc(-1 * var(--gutter));
     border-radius: 0;
     border-left: 0;
     border-right: 0;

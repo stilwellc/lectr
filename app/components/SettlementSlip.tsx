@@ -30,9 +30,9 @@ export default function SettlementSlip({
       <section className="rail">
         <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
         <div style={{ borderTop: '1px solid var(--paper-line)', marginBottom: 10 }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>
+        <div className="kicker" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', color: 'inherit', marginBottom: 6 }}>
           <span>The settlement</span>
-          <span style={{ color: 'var(--paper-muted)', fontWeight: 600 }}>{marketName}</span>
+          <span style={{ color: 'var(--paper-muted)' }}>{marketName}</span>
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px 40px', justifyContent: 'space-between' }}>
@@ -52,21 +52,22 @@ export default function SettlementSlip({
           </div>
           <button
             type="button"
+            className="kicker"
             onClick={onToggleArchive}
             aria-expanded={archiveOpen}
             style={{
               background: 'none', cursor: 'pointer',
               border: '1px solid var(--paper-ink)', borderRadius: 100,
-              padding: '9px 20px', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase',
-              color: 'var(--paper-ink)', fontWeight: 700,
-              fontFamily: 'var(--font-sans), sans-serif', marginBottom: 7, whiteSpace: 'nowrap',
+              padding: '9px 20px',
+              color: 'var(--paper-ink)',
+              marginBottom: 7, whiteSpace: 'nowrap',
             }}
           >
             {archiveOpen ? 'Hide the archive' : 'Show the archive'}
           </button>
         </div>
 
-        <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 8, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
+        <div className="kicker" style={{ borderTop: '1px solid var(--paper-line)', marginTop: 8, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: 'var(--paper-muted)' }}>
           <span>settled nightly, every hammer on the book</span>
           <span>no. {serial}</span>
         </div>

@@ -13,13 +13,8 @@ import React from 'react';
  * the sentence never is.
  */
 
-const micro: React.CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 700,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  lineHeight: 1.4,
-};
+/* label voice = the global .kicker class (mono microcap, terminal reference);
+   only per-slot color/numeric overrides live inline here */
 
 /** ONE accent, option A: the key word set in text-safe butter. */
 export function Accent({ children }: { children: React.ReactNode }) {
@@ -74,12 +69,10 @@ export default function Masthead({
           borderBottom: '1px solid var(--hairline, var(--color-border))',
         }}
       >
-        <span style={{ ...micro, color: 'var(--color-butter-text)' }}>{kicker}</span>
+        <span className="kicker" style={{ color: 'var(--color-butter-text)' }}>{kicker}</span>
         <span
+          className="kicker"
           style={{
-            ...micro,
-            fontWeight: 600,
-            color: 'var(--color-text-muted)',
             fontVariantNumeric: 'tabular-nums',
             whiteSpace: 'nowrap',
           }}

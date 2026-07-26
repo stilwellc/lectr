@@ -63,7 +63,8 @@ export default function RecordBand({
           margin-bottom: 8px;
         }
         .ray-recband-v {
-          font-size: 27px; font-weight: 700;
+          font-family: var(--font-mono), monospace;
+          font-size: 27px; font-weight: 500;
           letter-spacing: -0.02em; line-height: 1.1;
           font-variant-numeric: tabular-nums;
         }

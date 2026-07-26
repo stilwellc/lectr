@@ -282,7 +282,7 @@ function MarketStyles() {
       .ray-mi-title { font-size: 13px; font-weight: 650; color: var(--color-fg); }
       .ray-mi-method { font-size: 10.5px; color: var(--color-text-muted); text-align: right; }
       .ray-mi-hero { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
-      .ray-mi-num { font-size: 40px; font-weight: 750; letter-spacing: -2px; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+      .ray-mi-num { font-family: var(--font-mono), monospace; font-size: 40px; font-weight: 500; letter-spacing: -2px; color: var(--color-fg); font-variant-numeric: tabular-nums; }
       .ray-mi-num.sm { font-size: 28px; letter-spacing: -1px; }
       .ray-mi-delta { font-size: 13px; font-weight: 600; }
       .ray-mi-sub { font-size: 12px; color: var(--color-text-secondary); }

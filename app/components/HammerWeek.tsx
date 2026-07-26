@@ -143,12 +143,8 @@ export default function HammerWeek({
               onClick={() => onSelectDay(isActive ? null : day)}
               aria-label={`${DAY_LABELS[i]} ${dom} — ${n === 0 ? 'no hammers' : `${n} ${n === 1 ? 'lot hammers' : 'lots hammer'} across ${houseCount} ${houseCount === 1 ? 'house' : 'houses'}`}`}
             >
-              <span style={{
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: isActive ? 'var(--color-beige-text)' : 'var(--color-text-muted)',
+              <span className="kicker" style={{
+                color: isActive ? 'var(--color-beige-text)' : undefined,
                 whiteSpace: 'nowrap',
               }}>
                 {DAY_LABELS[i]} {dom}

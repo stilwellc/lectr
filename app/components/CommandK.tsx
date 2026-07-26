@@ -202,18 +202,11 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
                   key={`${item.kind}-${item.label}-${item.path}`}
                   role="option"
                   aria-selected={i === idx}
-                  className="ray-ck-item"
+                  className={isHeader ? 'ray-ck-item kicker' : 'ray-ck-item'}
                   data-active={i === idx}
                   onMouseEnter={() => setIdx(i)}
                   onClick={() => go(item)}
-                  style={isHeader ? {
-                    fontSize: 11,
-                    fontWeight: 600,
-                    letterSpacing: '0.14em',
-                    textTransform: 'uppercase',
-                    color: 'var(--color-text-faint)',
-                    marginTop: 6,
-                  } : undefined}
+                  style={isHeader ? { marginTop: 6 } : undefined}
                 >
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
                     {item.kind === 'maker' && <ArtistAvatar label={item.label} size={20} />}

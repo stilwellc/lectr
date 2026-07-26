@@ -30,8 +30,9 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
     watches: cal.beatRate.watches?.[i],
   }));
 
+  // section rhythm rides the tokens so the ≤768px override applies
   return (
-    <section className="ray-calibration rail" style={{ paddingBlock: '40px 48px' }}>
+    <section className="ray-calibration rail" style={{ paddingBlock: 'var(--sect-t) var(--sect-b)' }}>
       <div style={{ marginBottom: 4 }}>
         <h2 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
           What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>

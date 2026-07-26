@@ -239,6 +239,9 @@ export default function SavedPage() {
           grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
           gap: 30px 20px;
         }
+        /* grid children shrink below intrinsic width — one long nowrap line
+           must never inflate the page past the viewport */
+        .ray-saved-grid > * { min-width: 0; }
         .ray-saved-section { padding-block: 40px 48px; }
         .ray-saved-delta {
           margin: 8px 2px 0;
@@ -423,7 +426,7 @@ export default function SavedPage() {
                   </span>
                 </div>
                 {/* column heads */}
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '8px 0 6px', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+                <div className="kicker" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '8px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
                   <div style={{ flex: 1 }}>Piece</div>
                   <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
                   <div style={{ width: 118, textAlign: 'right' }}>lectr appraisal</div>

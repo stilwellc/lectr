@@ -620,8 +620,13 @@ export default function TerminalHomePage() {
                 sales-weighted "+X% appreciation" with no confidence interval,
                 which the honest hero + verified-movers deliberately avoid. The
                 homepage must not assert a return the engine won't defend. */}
+            {/* ray-board-belowrow arms the ≥900px two-column certificate
+                (plate 42% left, ruled leader rows right — Terminal.tsx
+                CALLPLATE_CSS); below 900px the plate keeps today's stack.
+                marginTop:0 neutralizes the class's own offset — the
+                instrumentRow already owns this row's rhythm. */}
             <div className={styles.instrumentRow}>
-              <div className={styles.callCol}>
+              <div className={`${styles.callCol} ray-board-belowrow`} style={{ marginTop: 0 }}>
                 {callPlateEl}
                 {watchStripEl}
               </div>

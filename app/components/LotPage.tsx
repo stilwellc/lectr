@@ -94,6 +94,11 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
   .lectr-lot .ray-plate-img{height:240px}
   .lectr-lot-noimg .ray-plate-img{height:160px}
   .lectr-lot-monoglyph{font-size:44px}
+  /* narrow screens: subs wrap, rows may stack, values ellipsize — the
+     desktop nowrap pair otherwise forces a >390px page render */
+  .lectr-lot-row{flex-wrap:wrap}
+  .lectr-lot-sub{white-space:normal}
+  .lectr-lot-v{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 }
 `;
 
@@ -213,7 +218,7 @@ function NotOnTheBook({ id }: { id: string }) {
   return (
     <div className="lectr-lot rail" style={{ paddingTop: 60, paddingBottom: 100, textAlign: 'center' }}>
       <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
-      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-text-faint)', marginBottom: 14, fontVariantNumeric: 'tabular-nums' }}>
+      <div className="kicker" style={{ marginBottom: 14, fontVariantNumeric: 'tabular-nums' }}>
         {id ? `no. ${id}` : 'no lot number'}
       </div>
       <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 650, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>

@@ -31,10 +31,12 @@
   --color-border-mid: rgba(212, 184, 150, 0.18);
   --color-nav-bg: rgba(13, 11, 8, 0.78);
 
-  /* Type scale */
-  --text-display: clamp(3rem, 8vw, 6.5rem);   /* Cormorant 300, lh 1.05, ls -0.02em */
+  /* Type scale — three voices: Inter (--font-inter, neutral UI),
+     Fraunces (--font-serif-display, editorial), IBM Plex Mono
+     (--font-mono-data, data/labels) */
+  --text-display: clamp(3rem, 8vw, 6.5rem);   /* Fraunces 300, lh 1.05, ls -0.02em */
   --text-title: clamp(1.75rem, 3vw, 2.5rem);
-  --text-body: 1.0625rem;                      /* Syne, lh 1.65, max 65ch */
+  --text-body: 1.0625rem;                      /* Inter, lh 1.65, max 65ch */
   --text-label: 0.75rem;                       /* 600, ls 0.18em, uppercase */
 
   /* Motion — one easing, three durations */
@@ -43,20 +45,32 @@
   --duration-base: 500ms;
   --duration-slow: 800ms;
 
-  /* Space — 8px rhythm */
-  --space-1: 8px;
-  --space-2: 16px;
-  --space-3: 24px;
-  --space-4: 40px;
-  --space-5: 64px;
-  --space-6: 104px;
-  --space-7: 168px;
+  /* Space — audit-derived scale (Wave 1). Micro steps 4/8/12/16; the old
+     8..168 ladder is retired (former call sites carry their literal px). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+
+  /* Layout rhythm — the one gutter, section rhythm, card pad */
+  --gutter: clamp(24px, 5vw, 56px);
+  --sect-t: 40px;
+  --sect-b: 48px;
+  --card-pad: 18px;
   --content-max: 1200px;
   --prose-max: 65ch;
 
   --grain-opacity: 0.03;
 
   color-scheme: dark;
+}
+
+/* the gutter narrows once, sitewide — every rail consumer follows */
+@media (max-width: 900px) {
+  :root { --gutter: clamp(16px, 4vw, 28px); }
+}
+@media (max-width: 768px) {
+  :root { --sect-t: 32px; --sect-b: 32px; --card-pad: 14px; }
 }
 
 [data-theme="light"] {
@@ -197,9 +211,9 @@ body {
 .skip-link {
   position: absolute;
   top: -100px;
-  left: var(--space-2);
+  left: var(--space-4);
   z-index: 200;
-  padding: 12px var(--space-2); /* >=44px touch target */
+  padding: 12px var(--space-4); /* >=44px touch target */
   background: var(--color-bg-elevated);
   color: var(--color-fg);
   border: 1px solid var(--color-border-mid);
@@ -212,7 +226,7 @@ body {
 }
 
 .skip-link:focus {
-  top: var(--space-2);
+  top: var(--space-4);
 }
 
 /* Static grain — no animation, ever */
@@ -534,8 +548,9 @@ h1 {
   width: 100%;
   max-width: var(--content-max);
   margin-inline: auto;
-  padding-inline: clamp(24px, 5vw, 56px);
+  padding-inline: var(--gutter);
 }
+
 
 /* LINK GRAMMAR — exactly two tiers, sitewide.
    Tier 1 .link-draw = inline/read links (underline draws in).
@@ -722,10 +737,10 @@ h1 {
     "num title arrow"
     "num desc arrow"
     "num meta arrow";
-  column-gap: var(--space-3);
+  column-gap: 24px;
   row-gap: 6px;
   align-items: baseline;
-  padding: var(--space-3) 0;
+  padding: 24px 0;
   border-bottom: 1px solid var(--color-border);
   text-decoration: none;
   color: var(--color-fg);
@@ -826,8 +841,8 @@ h1 {
   position: relative;
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-3);
-  padding: var(--space-4) 0;
+  gap: 24px;
+  padding: 40px 0;
   border-bottom: 1px solid var(--color-border);
   text-decoration: none;
   color: var(--color-fg);
@@ -837,7 +852,7 @@ h1 {
   .index-spread {
     grid-template-columns: 58% 1fr;
     align-items: center;
-    column-gap: var(--space-5);
+    column-gap: 64px;
   }
   .index-spread[data-reverse=true] {
     grid-template-columns: 1fr 58%;
@@ -855,7 +870,7 @@ h1 {
 .index-spread-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
   min-width: 0;
 }
 .index-spread-title {
@@ -875,7 +890,7 @@ h1 {
 .index-spread-meta {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.08em;
@@ -1429,7 +1444,7 @@ h1 {
   width: 100%;
   max-width: var(--content-max);
   margin-inline: auto;
-  padding-inline: clamp(24px, 5vw, 56px);
+  padding-inline: var(--gutter);
 }
 
 
@@ -1592,8 +1607,9 @@ h1 {
 }
 /* Figures block */
 .ray-lot-est {
+  font-family: var(--font-mono), monospace;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-fg);
   font-variant-numeric: tabular-nums;
 }
@@ -1684,10 +1700,11 @@ h1 {
 :root,
 [data-theme="light"],
 [data-theme="dark"] {
-  /* one voice */
+  /* three voices — Inter (neutral UI), Fraunces (editorial),
+     IBM Plex Mono (data/labels) */
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: var(--font-sans);
-  --font-mono: var(--font-sans);
+  --font-serif: var(--font-serif-display), Georgia, serif;
+  --font-mono: var(--font-mono-data), ui-monospace, 'SF Mono', monospace;
 
   /* ── SURFACES — warm depth ladder, same hierarchy as before ─────────── */
   --color-bg: #0F0E0A;            /* ground. was #08090B */
@@ -2062,7 +2079,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-ledger > div { background: var(--color-bg-board); padding: 10px 14px 12px; min-width: 0; }
 .ray-ledger > div:first-child { padding-left: 0; }
 .ray-ledger-k { font-size: 12px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 4px; }
-.ray-ledger-v { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ray-ledger-v { font-family: var(--font-mono), monospace; font-size: 20px; font-weight: 500; letter-spacing: -0.015em; color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1.1; }
 .ray-ledger-v.up { color: var(--color-up); }
 .ray-ledger-s { font-size: 11px; color: var(--color-text-faint); margin-top: 3px; }
 
@@ -2136,7 +2153,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
     var(--color-bg-deep);
   overflow: hidden;
 }
-.ray-close-in { padding: 52px 0 26px; }
+.ray-close-in { padding-block: 52px 26px; }
 .ray-close-sign { display: flex; justify-content: center; }
 .ray-close-mark {
   height: 118px;
@@ -2214,7 +2231,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   color: var(--color-text-faint);
 }
 @media (max-width: 899px) {
-  .ray-close-in { padding: 44px 0 88px; }
+  .ray-close-in { padding-block: 44px 88px; }
   .ray-close-mark { height: 84px; }
   .ray-close-ledger { gap: 32px; }
   .ray-close-map { grid-template-columns: 1fr 1fr; gap: 32px; }
@@ -2352,8 +2369,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   margin-bottom: 6px;
 }
 .ray-sigrow-pct {
+  font-family: var(--font-mono), monospace;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -2571,7 +2589,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   opacity: 0.9;
 }
 .ray-lot-plate-rule { background: var(--color-border-mid); }
-.ray-lot-est { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
+.ray-lot-est { font-size: 15.5px; font-weight: 500; letter-spacing: -0.01em; }
 .ray-lot-footer { border-top: none; margin-top: 10px; padding-top: 0; }
 .ray-lot-remind {
   text-transform: none;
@@ -3866,3 +3884,17 @@ body {
   font-weight: 600;
 }
 .ray-toolbar-pill.ray-cat-pill:hover { border-color: var(--color-butter); }
+
+/* THE KICKER — one sitewide label voice (terminal reference: sectionKicker).
+   Declared LAST so it wins cascade ties against component rulesets.
+   Mono microcap, wide-tracked, muted. Contexts that need another ink
+   (butter certificate heads, paper bands) override color inline. */
+.kicker {
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-text-muted); /* = --tt-muted, the reference ink */
+  line-height: 1.4;
+}

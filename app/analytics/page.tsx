@@ -57,7 +57,9 @@ function AnalyticsGrid({
   seasonality?: NonNullable<import('../hooks/useRayData').MarketData['seasonality']>[string] | null;
 }) {
   const nodes = [
-    marketSeries ? <MarketIntelligence key="mi" series={marketSeries} marketLabel={activeKey === 'all' ? 'the market' : activeKey} seasonality={seasonality} /> : null,
+    // the rail treatment — .ray-mi is a bordered panel band, so the rail
+    // geometry (content-max + gutter) rides a wrapper, like VerifiedMovers
+    marketSeries ? <div key="mi" className="rail"><MarketIntelligence series={marketSeries} marketLabel={activeKey === 'all' ? 'the market' : activeKey} seasonality={seasonality} /></div> : null,
     // the defensible price movement the descriptive index can't claim — scoped
     // to the active market (honest empty state where none clears the CI)
     <div key="verified" className="rail"><VerifiedMovers marketData={marketData} scope={activeKey} variant="card" /></div>,
