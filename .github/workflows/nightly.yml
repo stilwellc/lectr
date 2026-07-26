@@ -153,6 +153,11 @@ jobs:
         run: npx tsx scripts/build-upcoming.ts
       - name: Push corpus + served to R2
         run: bash scripts/data-store.sh push
+      # versions/ retention: each push adds ~176MB of write-once payloads; keep
+      # the newest 14 (a two-week manual-rollback ladder) and delete the rest.
+      # Non-fatal — a failed prune only defers cleanup to the next night.
+      - name: Prune old R2 versions (keep 14)
+        run: bash scripts/data-store.sh prune 14 || echo "prune failed (non-fatal, retries tomorrow)"
       # Same-run handoff to deploy/sync/backtest — immediately consistent, no
       # R2 round-trip at all. The R2 push above stays authoritative: it's what
       # reruns, manual dispatches and push-triggered deploy.yml read.
