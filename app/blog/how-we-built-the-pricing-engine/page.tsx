@@ -76,7 +76,52 @@ export default function PricingEnginePost() {
             one quantity, and refusing to state it when we can&rsquo;t.
           </p>
 
-          <h2 style={h2}>1 · The hedonic price-movement index</h2>
+          <h2 style={h2}>1 · The data underneath — from raw lot to labeled object</h2>
+          <p style={p}>
+            The index this whole post describes leans on controls — a reference, a form, a size, a
+            decade — that don&rsquo;t arrive labeled. A crawler pulls a <em>string</em>:{' '}
+            <V>PATEK PHILIPPE. A fine stainless steel automatic wristwatch, Ref. 5711/1A, circa 2015</V>.
+            Before any of the math below can hold quality constant, that string becomes a{' '}
+            <span style={strong}>structured object</span> — maker <V>patek-philippe</V>, reference{' '}
+            <V>5711</V>, form <V>wristwatch</V>, decade <V>2010s</V>, its native price a fact and its
+            USD a derivation. Quality has to be <em>labeled</em> before it can be held constant.
+          </p>
+          <p style={p}>
+            Every field the rest of this post relies on is parsed at crawl time
+            (<V>scripts/ray-crawl.ts</V>) and hardened over the whole corpus at build time
+            (<V>scripts/lib/corpus-normalize.ts</V>):
+          </p>
+          <table style={table}>
+            <thead>
+              <tr><th style={th}>Raw signal</th><th style={th}>Structured label</th><th style={th}>What consumes it</th></tr>
+            </thead>
+            <tbody>
+              <tr><td style={td}>title / creator line</td><td style={td}>maker · vertical (the router)</td><td style={td}>which market; the per-maker index</td></tr>
+              <tr><td style={td}>reference / model line</td><td style={td}>reference · modelKey (Daytona ≠ Datejust)</td><td style={td}>the within-maker mix control</td></tr>
+              <tr><td style={td}>catalogue wording</td><td style={td}>form (26-form taxonomy) · size · medium · decade</td><td style={td}>the hedonic controls + the comp gate</td></tr>
+              <tr><td style={td}>card title</td><td style={td}>_card fingerprint: player·year·set·cardNo·grade</td><td style={td}>the repeat-sales index key</td></tr>
+              <tr><td style={td}>native price + sale year</td><td style={td}>USD via a dated FX table</td><td style={td}>every money figure on the site</td></tr>
+            </tbody>
+          </table>
+          <p style={p}>
+            The discipline is the one the engine itself runs on: <span style={strong}>a label is a
+            gate, not a guess</span>. A field we can&rsquo;t read confidently is left <V>null</V>, never
+            invented — <V>unknown</V> comps nothing, a Daytona reference matches only another Daytona,
+            and a lot whose form we can&rsquo;t pin never enters a comp pool at all. A wrong label is
+            worse than a missing one, so we carry the blank.
+          </p>
+          <p style={p}>
+            And labeling is never a one-time migration. Every night a normalization pass re-derives the
+            corpus end to end — it clamps impossible years, reroutes mislabeled lots (a blue-chip print
+            misfiled under science), recovers references the parser missed, reconciles fallback sale
+            dates, and re-keys the card fingerprints — so a single fix to how we read a title heals the
+            entire back-catalogue at once. One object, labeled once, then feeds everything downstream:
+            the hedonic regresses on its controls, the comps engine matches on its identity, the
+            repeat-sales index keys on its fingerprint, the backtest replays it. The rest of this post is
+            what the engine <em>does</em> with a labeled object — the label is where the honesty starts.
+          </p>
+
+          <h2 style={h2}>2 · The hedonic price-movement index</h2>
           <p style={p}>
             The engine is a <span style={strong}>hedonic log-price regression</span>, fit per maker in{' '}
             <V>scripts/hedonic-index.ts</V>. We regress the log of the realized price on a set of quality
@@ -116,7 +161,7 @@ index_q  =  100 · exp( τ_q − τ_base )
 change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
           </Formula>
 
-          <h2 style={h2}>2 · Confidence gating — the part that abstains</h2>
+          <h2 style={h2}>3 · Confidence gating — the part that abstains</h2>
           <p style={p}>
             Here is the whole thesis. A horizon — 1Y, 3Y, 5Y — publishes a return{' '}
             <span style={strong}>only when its 95% confidence interval resolves the sign</span>. If the
@@ -147,7 +192,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             worse than an honest blank.
           </p>
 
-          <h2 style={h2}>3 · The verified movers</h2>
+          <h2 style={h2}>4 · The verified movers</h2>
           <p style={p}>
             The makers that clear the bar are the entire product. As of this writing there are{' '}
             <span style={strong}>three</span>, all watches, each surfaced at the longest horizon whose CI
@@ -173,7 +218,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             money, is the honest yield of a very large corpus.
           </p>
 
-          <h2 style={h2}>4 · Demand vs ROI: two reads, and the divergence flag</h2>
+          <h2 style={h2}>5 · Demand vs ROI: two reads, and the divergence flag</h2>
           <p style={p}>
             The hedonic index is one of two market reads, and they check each other.{' '}
             <span style={strong}>Demand</span> (<V>app/lib/demand.ts</V>) is the median percent a lot
@@ -192,7 +237,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             worth beating?&rdquo; The divergence is the interesting part.
           </p>
 
-          <h2 style={h2}>5 · Sub-markets: the strongest honest read</h2>
+          <h2 style={h2}>6 · Sub-markets: the strongest honest read</h2>
           <p style={p}>
             Not everything is a maker, and not every maker earns an index. So every tracked slug is a
             &ldquo;sub-market&rdquo; (<V>scripts/sub-markets.ts</V>) that carries the{' '}
@@ -218,7 +263,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             &ldquo;meteorites index is up 30%,&rdquo; so we don&rsquo;t.
           </p>
 
-          <h2 style={h2}>6 · Why not a naive market index</h2>
+          <h2 style={h2}>7 · Why not a naive market index</h2>
           <p style={p}>
             This engine replaced a legacy cohort/appreciation index, and the replacement is a reaction to
             specific artifacts that index produced — the reasons a marketplace-wide &ldquo;the whole
@@ -249,7 +294,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             The gate catches it and the maker abstains.
           </p>
 
-          <h2 style={h2}>7 · What this costs, and what it buys</h2>
+          <h2 style={h2}>8 · What this costs, and what it buys</h2>
           <p style={p}>
             The cost is coverage: three verified movers across a corpus of{' '}
             <span style={strong}>{meta.totalLots.toLocaleString()} lots</span> from {meta.sources.length}{' '}
