@@ -11,10 +11,15 @@ export function computeStats(lots: AuctionLot[], existingStats: MarketStats | nu
   const now = new Date();
   const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
-  const recentSold = sold.filter(l => {
-    const d = new Date(l.saleDate);
-    return !isNaN(d.getTime()) && d >= oneYearAgo;
-  });
+  // parse each sold lot's saleDate → Date ONCE (both the recent-window filter and
+  // the quarterly loop below need it; the quarter derives from LOCAL getFullYear/
+  // getMonth so a bare ms won't do). NaN getTime for invalid dates, preserving
+  // the isNaN gate exactly (`isNaN(saleMs[i])` == the old `isNaN(d.getTime())`).
+  const saleDates = sold.map(l => new Date(l.saleDate));
+  const saleMs = saleDates.map(d => d.getTime());
+  const oneYearAgoMs = oneYearAgo.getTime();
+
+  const recentSold = sold.filter((_l, i) => !isNaN(saleMs[i]) && saleMs[i] >= oneYearAgoMs);
 
   const prices = recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
   const avg = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : existingStats?.avgPriceLast12Months || 0;
@@ -25,13 +30,13 @@ export function computeStats(lots: AuctionLot[], existingStats: MarketStats | nu
 
   // Build quarterly price history
   const quarters = new Map<string, number[]>();
-  for (const lot of sold) {
-    const d = new Date(lot.saleDate);
-    if (isNaN(d.getTime())) continue;
+  sold.forEach((lot, i) => {
+    const d = saleDates[i];
+    if (isNaN(saleMs[i])) return;
     const q = `${d.getFullYear()}-Q${Math.ceil((d.getMonth() + 1) / 3)}`;
     if (!quarters.has(q)) quarters.set(q, []);
     quarters.get(q)!.push(lot.priceUsd!);
-  }
+  });
 
   const priceHistory: PricePoint[] = Array.from(quarters.entries())
     .sort(([a], [b]) => a.localeCompare(b))

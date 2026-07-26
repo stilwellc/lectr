@@ -136,6 +136,26 @@ export function runMarketBuild() {
   const soldPos = new Map(soldSorted.map((l, i) => [l.id, i]));
   console.log(`[market] ${all.length} lots · ${sold.length} priced sold · vocab ${Object.keys(tbl.df).length}`);
 
+  // bucket the FULL corpus by artist ONCE (order preserved from `all`) so the
+  // per-SLUG series below (maker indices, per-maker mini-series, the corpus-only
+  // stats rows) read their lots in O(1) instead of rescanning all ~507k lots per
+  // maker (~40 makers × 507k = ~20M ops). Map push preserves `all` order, so each
+  // bucket is identical to the old single-slug `all.filter` output → every
+  // downstream aggregate is byte-for-byte the same. Mirrors assemble.ts's
+  // group-by pass. (The few MULTI-slug market filters keep their gated single
+  // pass over `all` so a market's lots stay in `all`-ORDER — a stable price-sort
+  // in marketAnalytics.topSales tie-breaks on it.)
+  const allByArtist = new Map<string, AuctionLot[]>();
+  for (const l of all) { const a = allByArtist.get(l.artist); if (a) a.push(l); else allByArtist.set(l.artist, [l]); }
+  const lotsForSlug = (slug: string): AuctionLot[] => allByArtist.get(slug) || [];
+
+  // pre-parse each lot's saleDate → numeric ms ONCE (transient `_saleMs`, deleted
+  // before serialize below). The ttm windows in refs/players recompute
+  // new Date(saleDate).getTime() per lot otherwise. Invalid/absent dates parse to
+  // NaN — identical to the inline `new Date(l.saleDate!).getTime()` they replace
+  // (NaN > cut is false either way), so the isNaN behaviour is preserved exactly.
+  for (const l of all) (l as AuctionLot & { _saleMs?: number })._saleMs = new Date(l.saleDate as string).getTime();
+
   // ── 1 · value every UPCOMING lot (the live product) ──
   // bucket sold lots by maker ONCE (time-order preserved from soldSorted) so each
   // upcoming lot reads its same-maker pool in O(1) instead of rescanning all 36k.
@@ -211,6 +231,36 @@ export function runMarketBuild() {
     set.delete(i);
     return Array.from(set);
   };
+  // CHEAP PRE-CHECK — a pair can classify as 'physicalMatch' ONLY through one of
+  // similarity.ts::classify's physical branches, each gated on a hard STRUCTURED
+  // discriminator (matching real serial / real edition for makers, or
+  // both-photo-matched + same entity for sports/science objects). Those
+  // predicates are O(1) field reads; the full similarity() (cosine over the token
+  // vectors + the structured battery) is far heavier. Since the grouper unions
+  // ONLY on cls==='physicalMatch', skipping any pair that fails ALL physical
+  // branches here can never change a union — it just avoids scoring a pair whose
+  // best possible outcome is model/similar. Predicates are copied VERBATIM from
+  // classify() so the skip set is exactly the non-physical complement.
+  const SPORTS_SCIENCE_SLUGS = new Set([
+    'game-used', 'trophies-awards', 'tickets-passes',
+    'space-exploration', 'meteorites', 'fossils', 'scientific-instruments',
+  ]);
+  const realSerial = (s?: string | null) => !!s && s.length >= 4 && /\d/.test(s) && /^[a-z0-9./-]+$/i.test(s);
+  const canPhysicalMatch = (a: AuctionLot, b: AuctionLot): boolean => {
+    const isSportsSci = (SPORTS_SCIENCE_SLUGS.has(a.artist) || a.category === 'object') && a.entityClass !== 'maker';
+    if (isSportsSci) {
+      return !!(a.photoMatched && b.photoMatched && a.entity && a.entity === b.entity);
+    }
+    if (a.entityClass === 'maker') {
+      if (realSerial(a.serialNo) && a.serialNo === b.serialNo) return true;
+      const realEdition = a.editionMarker != null && a.editionOf && a.editionTotal
+        && a.editionOf <= a.editionTotal && a.editionTotal <= 500
+        && (a.category === 'print' || a.category === 'original');
+      return !!(realEdition && a.editionMarker === b.editionMarker
+        && a.editionOf === b.editionOf && a.editionTotal === b.editionTotal);
+    }
+    return false;
+  };
   const parent = new Map<string, string>();
   const find = (x: string): string => { let r = x; while (parent.get(r) && parent.get(r) !== r) r = parent.get(r)!; return r; };
   const union = (a: string, b: string) => { parent.set(find(a), find(b)); };
@@ -221,6 +271,10 @@ export function runMarketBuild() {
     const cands = candidatesOf(i).map(j => soldSorted[j]);
     for (const c of cands) {
       if (c.id <= lot.id) continue;   // dedup pair direction
+      // fast structured pre-check: skip the full score for any pair that can't
+      // reach 'physicalMatch' (the only class the grouper unions on) — identical
+      // union set, far fewer cosine evaluations.
+      if (!canPhysicalMatch(lot, c)) continue;
       const m = similarity(lot, c, tbl);
       if (m.cls === 'physicalMatch') {
         // price-sanity: the same physical object shouldn't swing >3x between two
@@ -268,7 +322,7 @@ export function runMarketBuild() {
   const makerRealized: Record<string, number> = {};
   const makerLotsBySlug = new Map<string, AuctionLot[]>();
   for (const slug of rosterSlugs) {
-    const ls = all.filter(l => l.artist === slug && !HEDONIC_EXCLUDE(l));
+    const ls = lotsForSlug(slug).filter(l => !HEDONIC_EXCLUDE(l));
     makerLotsBySlug.set(slug, ls);
     makerIndex[slug] = buildMakerIndex(ls);
     makerRealized[slug] = ls.reduce((s, l) => s + (l.status === 'sold' ? (l.realizedUsd || 0) : 0), 0);
@@ -315,12 +369,12 @@ export function runMarketBuild() {
   sold.forEach(l => makerCounts.set(l.artist, (makerCounts.get(l.artist) || 0) + 1));
   for (const [slug, n] of Array.from(makerCounts.entries())) {
     if (n < 120) continue;
-    makers[slug] = buildMarketSeries(all.filter(l => l.artist === slug), slug);
+    makers[slug] = buildMarketSeries(lotsForSlug(slug), slug);
   }
   // sports-cards is engine-excluded so it never enters `sold`/makerCounts —
   // build its maker series explicitly over the FULL card corpus, or the
   // /sports-cards analytics reads "insufficient data" against 288k real sales.
-  makers['sports-cards'] = buildMarketSeries(all.filter(l => l.artist === 'sports-cards'), 'sports-cards');
+  makers['sports-cards'] = buildMarketSeries(lotsForSlug('sports-cards'), 'sports-cards');
   console.log(`[market] makers series: ${Object.keys(makers).length} (sports-cards n=${makers['sports-cards'].n})`);
 
   // ── 3b · house calibration: per house×market estimate honesty ──
@@ -406,7 +460,7 @@ export function runMarketBuild() {
       .map(([y, v]) => ({ y, med: Math.round(median(v)), n: v.length }));
     const withEst = ls.filter(l => ((l as AuctionLot & { estHighUsd?: number }).estHighUsd || 0) > 0);
     const cut = Date.now() - 365 * 864e5;
-    const ttm = ls.filter(l => new Date(l.saleDate!).getTime() > cut).map(l => l.realizedUsd!);
+    const ttm = ls.filter(l => (l as AuctionLot & { _saleMs?: number })._saleMs! > cut).map(l => l.realizedUsd!);
     refsOut.push({
       key,
       maker: ls[0].artist,
@@ -437,6 +491,16 @@ export function runMarketBuild() {
   const tPl = Date.now();
   {
     const { parseCard, playerOf, cardKey, cardLadderKey } = require('../app/lib/cards');
+    // parseCard is a pure function of the title; the same card title recurs
+    // across the sold pass AND the live pass (and duplicate listings), so cache
+    // by title — each unique title is parsed once. The cached CardId is returned
+    // by reference; JSON serialization of `_card` stays value-identical.
+    const cardCache = new Map<string, ReturnType<typeof parseCard>>();
+    const parseCardCached = (title: string): ReturnType<typeof parseCard> => {
+      let c = cardCache.get(title);
+      if (c === undefined) { c = parseCard(title); cardCache.set(title, c); }
+      return c;
+    };
     const SPORT_SET = new Set(MARKETS.sports);
     const sportsSold = all.filter(l => SPORT_SET.has(l.artist) && l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate);
 
@@ -447,7 +511,7 @@ export function runMarketBuild() {
     const byLadderKey = new Map<string, AuctionLot[]>();
     for (const l of sportsSold as PLot[]) {
       if (l.artist === 'sports-cards') {
-        const c = parseCard(l.title || '');
+        const c = parseCardCached(l.title || '');
         l._card = c; l._pid = c.playerSlug; l._pname = c.player;
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
         const lk = cardLadderKey(c); if (lk) (byLadderKey.get(lk) || byLadderKey.set(lk, []).get(lk)!).push(l);
@@ -471,7 +535,7 @@ export function runMarketBuild() {
       for (const cat of ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']) {
         const cl = ls.filter(l => l.artist === cat);
         if (!cl.length) continue;
-        const ttm = cl.filter(l => new Date(l.saleDate!).getTime() > cut).map(l => l.realizedUsd!);
+        const ttm = cl.filter(l => (l as AuctionLot & { _saleMs?: number })._saleMs! > cut).map(l => l.realizedUsd!);
         cats[cat] = {
           n: cl.length,
           medUsd: Math.round(median(cl.map(l => l.realizedUsd!))),
@@ -509,7 +573,7 @@ export function runMarketBuild() {
       if (!SPORT_SET.has(l.artist) || l.status !== 'upcoming') continue;
       const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null; cardComps?: unknown };
       if (l.artist === 'sports-cards') {
-        const c = parseCard(l.title || '');
+        const c = parseCardCached(l.title || '');
         lw.playerSlug = c.playerSlug; lw.playerName = c.player;
         const ck = cardKey(c); const lk = cardLadderKey(c);
         const exact: AuctionLot[] = (ck ? byCardKey.get(ck) : undefined) || [];
@@ -559,7 +623,7 @@ export function runMarketBuild() {
     try {
       const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
       for (const slug of STATS_SLUGS) {
-        const slugLots = all.filter(l => l.artist === slug);
+        const slugLots = lotsForSlug(slug);
         if (!slugLots.length) continue;
         stats[slug] = computeStats(slugLots, stats[slug] || null);
         console.log(`[market] stats.json: ${slug} row (${slugLots.length} lots, record $${(stats[slug].recordPrice || 0).toLocaleString()})`);
@@ -605,13 +669,13 @@ export function runMarketBuild() {
   console.log(`[market] wrote market.json (${(fs.statSync(path.join(SERVED, 'market.json')).size / 1024).toFixed(0)}KB)`);
 
   // ── 4 · persist: full corpus (gz) + slim served (value flows to the client) ──
-  for (const l of all) delete (l as AuctionLot & { _v?: unknown })._v;
+  for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; delete t._v; delete t._saleMs; }
   const { writeCorpusAndServed } = require('./corpus-io');
   // Served sold-card SAMPLE: the artist page / archive surfaces need real card
   // rows (record sale, past results, realized cohort) but 288k would blow the
   // payload — ship the most-recent 1,500 + top 500 by price (the record lives
   // in the top slice) on the ON-DEMAND archive tier; the rest stay corpus-only.
-  const soldCards = all.filter(l => l.artist === 'sports-cards' && l.status === 'sold' && (l.realizedUsd || 0) > 0);
+  const soldCards = lotsForSlug('sports-cards').filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0);
   const cardSample = new Set<string>();
   soldCards.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => cardSample.add(String(l.id)));
   soldCards.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => cardSample.add(String(l.id)));
