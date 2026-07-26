@@ -973,8 +973,35 @@
   min-width: 0;
 }
 
-/* the movers board section */
-.moversSection { margin-top: clamp(44px, 6vw, 72px); }
+/* the condensed sub-market board riding the instrumentRow's second column */
+.boardCol { min-width: 0; align-self: start; }
+.condHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.condHead .sectionKicker { margin-bottom: 0; }
+.condLink {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tt-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 160ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.condLink:hover,
+.condLink:focus-visible { color: var(--tt-butter); }
+.condensed .subRow { height: 47px; }
+@media (max-width: 900px) {
+  .boardCol { display: none; }
+}
+
+/* the movers board section — scroll-margin admits the condensed board's anchor */
+.moversSection { margin-top: clamp(44px, 6vw, 72px); scroll-margin-top: 84px; }
 
 /* the feed section */
 .feedSection { margin-top: clamp(44px, 6vw, 72px); }

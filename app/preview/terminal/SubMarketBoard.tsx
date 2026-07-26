@@ -42,6 +42,9 @@ interface Props {
   onSelect: (key: Market) => void;
   /** mobile = card list; desktop = table */
   variant?: 'desktop' | 'mobile';
+  /** the condensed desktop board — top 5 rows, no show-more/foot, an
+      "all sub-markets ↓" link anchoring to the full section (#sub-markets) */
+  condensed?: boolean;
 }
 
 // how strong a demand read is — used to rank the cross-market roll-up
@@ -79,6 +82,12 @@ function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRea
     if (a.readType === 'demand') return demandStrength(b) - demandStrength(a);
     return b.lots - a.lots;
   });
+}
+
+/** Whether the active scope resolves any board rows — lets the home terminal
+    decide if the condensed board earns the call plate's second column. */
+export function hasSubMarketRows(market: MarketData | null, activeKey: Market): boolean {
+  return resolveRows(market, activeKey).length > 0;
 }
 
 // the small readType tag per row
@@ -130,7 +139,27 @@ function supportLine(r: SubMarketRead): string {
   return r.record ? `record ${fmtMoneyCompact(r.record.usd)}` : '—';
 }
 
-export default function SubMarketBoard({ market, activeKey, onSelect, variant = 'desktop' }: Props) {
+// One board row's five cells — shared by the animated table and the condensed board.
+function RowCells({ r }: { r: SubMarketRead }) {
+  const dir = dirFor(r);
+  const line = readLine(r);
+  return (
+    <>
+      <span className={styles.moversName}>
+        <span className={styles.moversTick} data-dir={dir} aria-hidden />
+        {r.label}
+      </span>
+      <span className={styles.subTag} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
+      <span className={styles.moversDelta} data-dir={dir}>
+        {line.primary} {line.per && <em>{line.per}</em>}
+      </span>
+      <span className={styles.subSupport}>{supportLine(r)}</span>
+      <span className={styles.moversN}>{fmtInt(r.lots)}</span>
+    </>
+  );
+}
+
+export default function SubMarketBoard({ market, activeKey, onSelect, variant = 'desktop', condensed = false }: Props) {
   const reduce = useReducedMotion();
   const [ref, seen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
@@ -145,6 +174,45 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
       {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
     </button>
   ) : null;
+
+  // The condensed board — rides beside Today's Call on desktop. Top CAP rows,
+  // static (no stagger — it's above the fold), a link down to the full board.
+  if (condensed) {
+    if (!rows.length) return null;
+    return (
+      <div className={`${styles.movers} ${styles.condensed}`}>
+        <div className={styles.condHead}>
+          <span className={styles.sectionKicker}>Sub-markets · live board</span>
+          <a className={styles.condLink} href="#sub-markets">all sub-markets ↓</a>
+        </div>
+        <div className={styles.subTable} role="table">
+          <div className={styles.subColHead} role="row">
+            <span role="columnheader">Sub-market</span>
+            <span role="columnheader">Read</span>
+            <span role="columnheader" className={styles.right}>Move / typical</span>
+            <span role="columnheader" className={styles.right}>Support</span>
+            <span role="columnheader" className={styles.right}>Lots</span>
+          </div>
+          {rows.slice(0, CAP).map((r) => {
+            const line = readLine(r);
+            return (
+              <button
+                key={`${r.vertical}:${r.slug}`}
+                type="button"
+                className={styles.subRow}
+                data-active={r.vertical === activeKey}
+                onClick={() => onSelect(r.vertical as Market)}
+                aria-label={`${r.label}: ${line.primary} ${line.per}, ${supportLine(r)} — switch the board to ${r.vertical}`}
+                aria-current={r.vertical === activeKey ? 'true' : undefined}
+              >
+                <RowCells r={r} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   const kicker = activeKey === 'all' ? 'Sub-markets · what’s moving everywhere' : 'Sub-markets · this vertical';
   const title = activeKey === 'all'
@@ -243,7 +311,6 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
           </div>
           <m.div variants={container} initial="hidden" animate={seen ? 'show' : 'hidden'}>
             {shown.map((r) => {
-              const dir = dirFor(r);
               const line = readLine(r);
               return (
                 <m.button
@@ -256,16 +323,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
                   aria-label={`${r.label}: ${line.primary} ${line.per}, ${supportLine(r)} — switch the board to ${r.vertical}`}
                   aria-current={r.vertical === activeKey ? 'true' : undefined}
                 >
-                  <span className={styles.moversName}>
-                    <span className={styles.moversTick} data-dir={dir} aria-hidden />
-                    {r.label}
-                  </span>
-                  <span className={styles.subTag} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
-                  <span className={styles.moversDelta} data-dir={dir}>
-                    {line.primary} {line.per && <em>{line.per}</em>}
-                  </span>
-                  <span className={styles.subSupport}>{supportLine(r)}</span>
-                  <span className={styles.moversN}>{fmtInt(r.lots)}</span>
+                  <RowCells r={r} />
                 </m.button>
               );
             })}

@@ -2986,8 +2986,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-feedtable th.num, .ray-feedtable td.num { text-align: right; }
 .ray-feedtable td {
-  padding: 10px 14px;
-  font-size: 13.5px;
+  padding: 7px 12px;
+  font-size: 13px;
   color: var(--color-text-secondary);
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
@@ -2996,19 +2996,36 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-feedtable tr { cursor: pointer; transition: background var(--duration-fast) var(--ease-signature); }
 .ray-feedtable tbody tr:hover { background: var(--color-hover-item); }
 .ray-feedtable .thumb {
-  width: 44px; height: 44px; border-radius: 8px; object-fit: cover; display: block;
+  width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block;
   background: var(--color-bg-elevated);
 }
 .ray-feedtable .thumb-plate {
-  width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
   position: relative; overflow: hidden;
   background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent-gold) 8%, transparent), transparent 72%), var(--color-bg-elevated);
   border: 1px solid color-mix(in srgb, var(--color-accent-gold) 13%, transparent);
   color: color-mix(in srgb, var(--color-accent-gold) 58%, var(--color-text-faint));
-  font-family: var(--font-serif), serif; font-style: italic; font-weight: 300; font-size: 21px; line-height: 1;
+  font-family: var(--font-serif), serif; font-style: italic; font-weight: 300; font-size: 19px; line-height: 1;
 }
-.ray-feedtable .t-artist { color: var(--color-fg); font-weight: 600; }
-.ray-feedtable .t-title { color: var(--color-text-muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+.ray-feedtable .t-artist { display: block; color: var(--color-fg); font-weight: 600; text-decoration: none; }
+.ray-feedtable a.t-artist:hover { text-decoration: underline; text-underline-offset: 2px; }
+.ray-feedtable .t-title { color: var(--color-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+/* the data cells speak mono — dates, days, bids, estimates, signals */
+.ray-feedtable .t-date, .ray-feedtable .t-days, .ray-feedtable .t-bids,
+.ray-feedtable .t-est, .ray-feedtable .t-sig-up, .ray-feedtable .t-sig-down {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ray-feedtable .t-date { color: var(--color-text-muted); }
+.ray-feedtable .t-days { color: var(--color-text-secondary); }
+.ray-feedtable .t-bids { color: var(--color-text-muted); }
+.ray-feedtable .t-cat {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
 .ray-feedtable .t-est { color: var(--color-fg); font-weight: 600; }
 .ray-feedtable .t-sig-up { color: var(--color-up); font-weight: 600; }
 .ray-feedtable .t-sig-down { color: var(--color-down); font-weight: 600; }
@@ -3685,6 +3702,95 @@ body {
   font-weight: 600;
   color: var(--color-fg);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── the mobile feed's compact row (terminal home, ≤640px) ──
+   Signal-less lots fold to the app's row grammar — thumb · maker ·
+   ellipsized title · est/bid · date — on a shared hairline; the
+   flagged/below-market lots keep their full cards. */
+.ray-feedrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 64px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  color: inherit;
+  padding: var(--space-2) 2px;
+  border-bottom: 1px solid var(--hairline-soft);
+  transition: background 120ms var(--ease-ui);
+}
+.ray-feedrow:hover { background: var(--color-hover-item); }
+.ray-feedrow-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-faint);
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 20px;
+  line-height: 1;
+}
+.ray-feedrow-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ray-feedrow-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ray-feedrow-maker {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ray-feedrow-title {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ray-feedrow-right {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-family: var(--font-mono), monospace;
+}
+.ray-feedrow-right b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ray-feedrow-right span {
+  font-size: 10.5px;
+  color: var(--color-text-faint);
+  white-space: nowrap;
 }
 
 /* ── mobile: density without loss — 900px is the fold ── */

@@ -43,7 +43,7 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
-import SubMarketBoard from './SubMarketBoard';
+import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
 import Tape from './Tape';
 import RecordBoard from './RecordBoard';
 import { useMediaQuery, useMounted } from './hooks';
@@ -174,6 +174,62 @@ function trueSaleDay(l: AuctionLot): string {
   return l.saleDateTime ? l.saleDateTime.slice(0, 10) : (l.saleDate || '');
 }
 
+// Ledger-table dressing: the category cell's short label, and the
+// days-to-hammer count (whole days from the crawl day to the true sale day).
+const CAT_LABEL: Record<string, string> = {
+  original: 'Original',
+  print: 'Print',
+  photograph: 'Photo',
+  sculpture: 'Sculpture',
+  design: 'Design',
+  object: 'Object',
+};
+function daysToHammer(l: AuctionLot, crawlDay: string): number | null {
+  const day = trueSaleDay(l);
+  if (!day) return null;
+  const d = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${crawlDay}T00:00:00Z`)) / 86_400_000);
+  return Number.isFinite(d) ? d : null;
+}
+
+// The mobile feed's compact row — signal-less lots fold to one ruled line
+// (thumb · maker · title · est/bid · date) instead of a full-bleed card.
+// Tapping opens the same comps context the card offers.
+function FeedRow({ lot, onOpen }: { lot: AuctionLot; onOpen: () => void }) {
+  const est =
+    lot.estimateLow || lot.estimateHigh
+      ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
+          ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}`
+          : formatPrice(lot.estimateLow || lot.estimateHigh!))
+      : lot.currentBid
+        ? `bid ${formatPrice(lot.currentBid)}`
+        : '—';
+  return (
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title)}`}>
+      <span className="ray-feedrow-thumb" aria-hidden>
+        {(lot.title || '?').charAt(0)}
+        {lot.imageUrl && (
+          <img
+            src={httpsImg(lot.imageUrl)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={e => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
+      </span>
+      <span className="ray-feedrow-main">
+        <span className="ray-feedrow-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+        <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
+      </span>
+      <span className="ray-feedrow-right">
+        <b>{est}</b>
+        <span>{formatDate(lot.saleDate)}</span>
+      </span>
+    </button>
+  );
+}
+
 export default function TerminalHomePage() {
   const ray = useRayData();
   const { allLots, statsByArtist, demand, realized, recentSold, backtest, market: marketData, tape, lastCrawl, loading, error, fromCache } = ray;
@@ -181,6 +237,9 @@ export default function TerminalHomePage() {
   const marketMeta = MARKETS.find(m => m.key === market)!;
   const mounted = useMounted();
   const isMobile = useMediaQuery('(max-width: 820px)', false);
+  // ≥900px — where the instrumentRow's two columns genuinely exist; gates the
+  // condensed sub-market board riding beside Today's Call.
+  const deskWide = useMediaQuery('(min-width: 900px)', false);
 
   // ONE TODAY, ONE SERIAL — the crawl day is the data's "today".
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
@@ -232,12 +291,17 @@ export default function TerminalHomePage() {
   const [showArchive, setShowArchive] = useState(false);
 
   // The layout choice persists — read after mount (SSR renders the default).
+  // A stored preference always wins; with none, desktop (≥900px) earns the
+  // ledger table by default while mobile keeps the cards.
   const [feedView, setFeedView] = useState<'grid' | 'table'>('grid');
   useEffect(() => {
     try {
       const v = localStorage.getItem('ray-feedview');
-      if (v === 'grid' || v === 'table') setFeedView(v);
-    } catch { /* storage blocked — session default */ }
+      if (v === 'grid' || v === 'table') { setFeedView(v); return; }
+    } catch { /* storage blocked — fall through to the width default */ }
+    if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 900px)').matches) {
+      setFeedView('table');
+    }
   }, []);
   const handleView = (v: 'grid' | 'table') => {
     setFeedView(v);
@@ -552,6 +616,16 @@ export default function TerminalHomePage() {
         @media (max-width: 768px) {
           .terminal-shell .ray-upcoming-grid { grid-template-columns: 1fr; gap: 24px; }
         }
+        /* ≤640px the feed reads as a ledger: compact rows stack flush on their
+           shared hairlines; the earned full cards keep their air around them */
+        @media (max-width: 640px) {
+          .terminal-shell .ray-upcoming-grid { gap: 0; }
+          .terminal-shell .ray-feeditem-card { margin-bottom: 24px; /* the old grid gap */ }
+          .terminal-shell .ray-feeditem-row + .ray-feeditem-card,
+          .terminal-shell .ray-feeditem-run + .ray-feeditem-card { margin-top: var(--space-3); }
+          .terminal-shell .ray-feeditem-card + .ray-feeditem-row { margin-top: var(--space-2); }
+          .terminal-shell .ray-feeditem-run { margin-block: var(--space-3); }
+        }
         /* the reused paper/record bands are self-contained; let them breathe
            full-width inside the dark shell rather than fight the deskShell rail */
         .terminal-shell .ray-recordband { border-radius: 14px; }
@@ -625,12 +699,33 @@ export default function TerminalHomePage() {
                 CALLPLATE_CSS); below 900px the plate keeps today's stack.
                 marginTop:0 neutralizes the class's own offset — the
                 instrumentRow already owns this row's rhythm. */}
-            <div className={styles.instrumentRow}>
-              <div className={`${styles.callCol} ray-board-belowrow`} style={{ marginTop: 0 }}>
-                {callPlateEl}
-                {watchStripEl}
-              </div>
-            </div>
+            {/* On desktop the second column carries a condensed sub-market board
+                (top 5 rows) beside the call — the plate keeps its STACKED
+                composition there (dropping ray-board-belowrow, whose ≥900px
+                two-column certificate needs the full width). With no board the
+                row collapses to one column and the wide certificate returns. */}
+            {(() => {
+              const boardBeside = mounted && deskWide && hasSubMarketRows(marketData, activeKey);
+              return (
+                <div className={styles.instrumentRow}>
+                  <div className={`${styles.callCol}${boardBeside ? '' : ' ray-board-belowrow'}`} style={{ marginTop: 0 }}>
+                    {callPlateEl}
+                    {watchStripEl}
+                  </div>
+                  {boardBeside && (
+                    <div className={styles.boardCol}>
+                      <SubMarketBoard
+                        market={marketData}
+                        activeKey={activeKey}
+                        onSelect={onMoverSelect}
+                        variant="desktop"
+                        condensed
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {backtest && backtest.flagged.n > 500 && (
               <a href="/value" className="ray-proofstrip" style={{ marginTop: 20 }}>
@@ -724,7 +819,10 @@ export default function TerminalHomePage() {
                           <th></th>
                           <th>Maker / work</th>
                           <th>House</th>
+                          <th>Cat.</th>
                           <th>Hammers</th>
+                          <th className="num">In</th>
+                          <th className="num">Bids</th>
                           <th className="num">Estimate</th>
                           <th>Signal</th>
                           <th></th>
@@ -733,6 +831,7 @@ export default function TerminalHomePage() {
                       <tbody>
                         {feed.slice(0, visibleUpcoming).map(lot => {
                           const sig = lotSignal(lot, marketLots);
+                          const dth = daysToHammer(lot, crawlDay);
                           return (
                             <tr
                               key={lot.id}
@@ -762,11 +861,22 @@ export default function TerminalHomePage() {
                                 </span>
                               </td>
                               <td>
-                                <div className="t-artist">{ARTIST_LABEL[lot.artist] || lot.artist}</div>
+                                <Link
+                                  href={`/${lot.artist}`}
+                                  className="t-artist"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  {ARTIST_LABEL[lot.artist] || lot.artist}
+                                </Link>
                                 <div className="t-title">{craftTitle(lot.title)}</div>
                               </td>
                               <td>{lot.auctionHouse}</td>
-                              <td>{formatDate(lot.saleDate)}</td>
+                              <td className="t-cat">{CAT_LABEL[lot.category] || '—'}</td>
+                              <td className="t-date">{formatDate(lot.saleDate)}</td>
+                              <td className="num t-days">
+                                {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
+                              </td>
+                              <td className="num t-bids">{typeof lot.bidCount === 'number' ? lot.bidCount.toLocaleString() : '—'}</td>
                               <td className="num t-est">
                                 {lot.estimateLow && lot.estimateHigh
                                   ? (formatPrice(lot.estimateLow) === formatPrice(lot.estimateHigh)
@@ -815,9 +925,20 @@ export default function TerminalHomePage() {
                   ) : (
                     feedItems.slice(0, visibleUpcoming).map((item, i) =>
                       item.type === 'lot' ? (
+                        // ≤640px: a signal-less lot folds to a compact ruled row
+                        // (the flagged/below-market cards keep their full frame).
+                        narrowView && !belowSignal.hasSig.has(item.lot.id) ? (
+                          <div
+                            key={item.lot.id}
+                            className="ray-feed-rekey ray-feeditem-row"
+                            style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                          >
+                            <FeedRow lot={item.lot} onOpen={() => setTableLot(item.lot)} />
+                          </div>
+                        ) : (
                         <div
                           key={item.lot.id}
-                          className="ray-feed-rekey"
+                          className="ray-feed-rekey ray-feeditem-card"
                           style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
                         >
                           <LotCard
@@ -829,10 +950,11 @@ export default function TerminalHomePage() {
                             lastCrawl={lastCrawl || undefined}
                           />
                         </div>
+                        )
                       ) : (
                         <div
                           key={item.key}
-                          className="ray-feed-rekey"
+                          className="ray-feed-rekey ray-feeditem-run"
                           style={{ gridColumn: '1 / -1', animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
                         >
                           <button
@@ -871,6 +993,15 @@ export default function TerminalHomePage() {
                             </span>
                           </button>
                           {expandedRuns[item.key] && (
+                            narrowView ? (
+                              // an expanded run's lots are signal-less by
+                              // construction — the compact row list carries them
+                              <div style={{ marginTop: 4 }}>
+                                {item.lots.map(lot => (
+                                  <FeedRow key={lot.id} lot={lot} onOpen={() => setTableLot(lot)} />
+                                ))}
+                              </div>
+                            ) : (
                             <div className="ray-upcoming-grid" style={{ marginTop: 24 }}>
                               {item.lots.map(lot => (
                                 <LotCard
@@ -884,6 +1015,7 @@ export default function TerminalHomePage() {
                                 />
                               ))}
                             </div>
+                            )
                           )}
                         </div>
                       )
@@ -924,7 +1056,7 @@ export default function TerminalHomePage() {
             {/* ══ THE SUB-MARKET BOARD — below the block; vertical → sub-markets,
                 each by its strongest honest read; a row is a market switch ══ */}
             {marketData?.subMarkets && (
-              <section className={styles.moversSection}>
+              <section id="sub-markets" className={styles.moversSection}>
                 <SubMarketBoard
                   market={marketData}
                   activeKey={activeKey}
