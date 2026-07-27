@@ -105,6 +105,21 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
 
   // hard gate: same broad form/category
   if (!sameForm(a, b)) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+  // hard gate: same PLAYER for sports/science non-maker OBJECT lots. A game-used
+  // object's identity IS its player — a Jordan jersey never comps a LeBron one,
+  // regardless of title cosine. Only reject when BOTH sides carry a player id and
+  // they DIFFER (don't over-prune the ~19% with no readable player). Best-
+  // available id: playerSlug (served lots carry it ~81%) else entity — so this
+  // also makes the CLIENT-side ComparableModal / computeDeepSignal comps
+  // same-player. The soft +0.05 same-entity bonus below still rewards the match.
+  {
+    const isSportsSci = (SPORTS_SCIENCE.has(a.artist) || a.category === 'object') && a.entityClass !== 'maker';
+    if (isSportsSci) {
+      const pa = (a as { playerSlug?: string | null }).playerSlug ?? a.entity;
+      const pb = (b as { playerSlug?: string | null }).playerSlug ?? b.entity;
+      if (pa && pb && pa !== pb) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+    }
+  }
   // hard gate: dimensions grossly different when both known
   const sr = sizeRatio(a, b);
   if (sr !== null && sr > 1.6) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
