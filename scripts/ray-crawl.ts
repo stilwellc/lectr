@@ -397,6 +397,41 @@ function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+// ── Bounded-concurrency worker pool ──
+// The nightly's per-house wall-time was dominated by the SEQUENTIAL sweep of
+// ~33 maker pages (fetch + pagination + a 1500ms inter-artist sleep each). This
+// runs at most N `worker` calls concurrently instead. No new deps — a plain
+// index-cursor pool: N workers each pull the next item until the queue drains.
+//
+// Rate-limit safety: the per-page politeness sleeps INSIDE each house crawler
+// are untouched, so N=CRAWL_CONCURRENCY only widens how many DISTINCT makers
+// are in flight; each maker's own request cadence is unchanged. A cold-start
+// stagger (worker i waits i*staggerMs before its first task) keeps N workers
+// from firing simultaneously. Dial CRAWL_CONCURRENCY down if a house 429s.
+//
+// Order of results does NOT match input order (workers race) — every caller
+// here dedupes/filters by id or artist.slug downstream, so that's fine.
+async function runPool<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+  staggerMs = 0,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const n = Math.max(1, Math.min(concurrency, items.length));
+  const runWorker = async (workerId: number): Promise<void> => {
+    if (staggerMs > 0 && workerId > 0) await sleep(workerId * staggerMs);
+    for (;;) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: n }, (_, w) => runWorker(w)));
+  return results;
+}
+
 // ── Phillips Crawler ──
 // Phillips embeds lot data as a JSON string in ReactDOM.hydrate props for ArtistLanding.
 // The "maker" prop contains a JSON-encoded string with pastLots.data[].
@@ -3117,11 +3152,39 @@ async function main() {
   const roster = only ? ARTISTS.filter(a => only.has(a.slug)) : ARTISTS;
   if (only) console.log(`[Ray] RAY_ONLY: crawling ${roster.map(a => a.slug).join(', ')}`);
   const freshLots: AuctionLot[] = [];
-  for (const artist of roster) {
-    const lots = await crawlArtist(artist);
-    freshLots.push(...lots);
-    if (artist !== roster[roster.length - 1]) await sleep(DELAY_MS);
+
+  // Bounded-concurrency maker sweep — replaces the old sequential loop (33
+  // makers × fetch+pagination+1500ms each = the ~40min christies / ~24min
+  // sothebys wall-time). N=CRAWL_CONCURRENCY (default 4, conservative) distinct
+  // makers crawl at once; the pool spaces requests naturally so the 1500ms
+  // inter-artist DELAY_MS is dropped from this path (per-page politeness sleeps
+  // INSIDE each house crawler stay). A 250ms cold-start stagger keeps the N
+  // workers from all firing on the same host at t=0. Dial CRAWL_CONCURRENCY
+  // down (env) if a house starts 429ing.
+  const CONCURRENCY = Math.max(1, Number(process.env.CRAWL_CONCURRENCY) || 4);
+  let makerFailures = 0;
+  const sweepStart = Date.now();
+  // Error isolation: crawlArtist already try/catches per house, but a wrapper
+  // guarantees one maker's throw can NEVER kill the pool or lose the others —
+  // it logs, tallies, and yields [] so the run continues.
+  const perMaker = await runPool(roster, CONCURRENCY, async (artist) => {
+    try {
+      return await crawlArtist(artist);
+    } catch (e) {
+      makerFailures++;
+      console.error(`[Ray] ${artist.slug} crawl failed: ${(e as Error).message}`);
+      return [] as AuctionLot[];
+    }
+  }, 250);
+  for (const lots of perMaker) freshLots.push(...lots);
+
+  // >25% of makers failing is a ban/outage signature — shout, but still write
+  // what succeeded (the segment-collapse guard at the segment write is the
+  // backstop against overwriting a good segment with a collapsed one).
+  if (makerFailures > roster.length * 0.25) {
+    console.warn(`[Ray] ⚠️  WARNING: ${makerFailures}/${roster.length} makers failed (>25%) — possible rate-limit ban or source outage; proceeding with what succeeded.`);
   }
+  console.log(`[Ray] maker sweep: ${roster.length} makers, ${CONCURRENCY} concurrency, ${Math.round((Date.now() - sweepStart) / 1000)}s`);
 
   // Sotheby's watch & science auctions ride the GraphQL API — one cross-roster
   // pass, not per-artist. Scope to whichever verticals this run touches.
