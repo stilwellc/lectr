@@ -266,6 +266,9 @@ export interface AuctionLot {
     vsBid: { label: string; pct: number } | null;
     confidence: 'high' | 'medium' | 'low';
     exact: { id: string; realizedUsd: number; saleDate: string; cls: string } | null;
+    /** 'card-comp' = tiered sports-card comp value (bid-only Goldin cards),
+     *  not the hedonic engine. Absent/'hedonic' = the engine value. */
+    basis?: 'hedonic' | 'card-comp';
   } | null;
 
   // ── v2 STATUS / TIME / PROVENANCE ──

@@ -198,6 +198,28 @@ function LotCard({
   // descriptive only, and never lights the red/green call row.
   const soldComp = lot.soldComp ?? null;
 
+  // Goldin sports CARDS carry a live bid but NO house estimate. build-market §3
+  // simulates a value from past sales of that EXACT card (else that player's
+  // cards) and stamps it as value.basis === 'card-comp' — a comp value, never
+  // the hedonic engine's signal (value.signal is always null on these). Show it
+  // as a secondary "comps ~$Y" read under the bid, tinted by the vs-bid call
+  // (the photo glow ring already fires from value.vsBid via cardTone). Non-card
+  // engine values (basis 'hedonic'/absent) are untouched — they render through
+  // buySignal / LotValueBlock as before.
+  const cardComp =
+    isUpcoming && lot.value && lot.value.basis === 'card-comp' && lot.value.estimateUsd
+      ? {
+          value: lot.value.estimateUsd,
+          tone:
+            lot.value.vsBid?.label === 'below recent comps'
+              ? ('up' as const)
+              : lot.value.vsBid?.label === 'above recent comps'
+              ? ('down' as const)
+              : undefined,
+          conf: lot.value.confidence,
+        }
+      : null;
+
   // Stretched primary action — keeps save/remind as sibling controls, not
   // descendants. Shared by both faces (photo card / compact row).
   const primaryAction = isUpcoming ? (
@@ -294,6 +316,23 @@ function LotCard({
             <span className="ray-sigrow-pct">
               {signalMagnitude(buySignal.label, buySignal.pct)}
             </span>
+          </div>
+        )}
+        {cardComp && (
+          <div
+            style={{
+              fontSize: 12,
+              letterSpacing: '-0.01em',
+              color:
+                cardComp.tone === 'up'
+                  ? 'var(--color-up)'
+                  : cardComp.tone === 'down'
+                  ? 'var(--color-down-text)'
+                  : 'var(--color-text-muted)',
+              fontWeight: 600,
+            }}
+          >
+            comps ~{formatPrice(cardComp.value)}
           </div>
         )}
         <span className="ray-lot-est" style={{ display: 'block' }}>{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
@@ -520,6 +559,30 @@ function LotCard({
                 aria-label={`${confidenceMeter(soldComp.confidence).word} confidence`}
               >
                 {confidenceMeter(soldComp.confidence).dots}
+              </span>
+            </div>
+          )}
+          {/* bid-only card: the simulated comp value as a secondary read, tinted
+              by the vs-bid call (up = bid below comps, down = above). */}
+          {cardComp && (
+            <div
+              data-tone={cardComp.tone}
+              style={{
+                fontSize: 12.5,
+                letterSpacing: '-0.01em',
+                marginBottom: 6,
+                color:
+                  cardComp.tone === 'up'
+                    ? 'var(--color-up)'
+                    : cardComp.tone === 'down'
+                    ? 'var(--color-down-text)'
+                    : 'var(--color-text-muted)',
+                fontWeight: 600,
+              }}
+            >
+              comps ~{formatPrice(cardComp.value)}
+              <span style={{ color: 'var(--color-text-faint)', fontWeight: 400, letterSpacing: '0.06em', marginLeft: 6 }}>
+                {confidenceMeter(cardComp.conf).dots}
               </span>
             </div>
           )}

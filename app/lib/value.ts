@@ -47,6 +47,11 @@ export interface ValueResult {
   tier?: 'main' | 'fallback';
   /** the strongest identity match found, if any (drives "this exact item…") */
   exact: { id: string; realizedUsd: number; saleDate: string; cls: 'physicalMatch' | 'modelMatch' } | null;
+  /** provenance of this value. Absent/'hedonic' = the estimateValue engine above.
+   *  'card-comp' = the tiered SPORTS-CARD comp value (build-market.ts §3): a live
+   *  bid-only Goldin card valued from past sales of that exact card / that player,
+   *  NOT the hedonic engine — signal is always null on these. */
+  basis?: 'hedonic' | 'card-comp';
 }
 
 const MIN_COS = 0.65;   // comp-pool inclusion (calibrated: below this is a different object)

@@ -590,6 +590,53 @@ export function runMarketBuild() {
     fs.writeFileSync(path.join(SERVED, 'players.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), players: playersOut }));
     console.log(`[market] players.json: ${playersOut.length} players (${(fs.statSync(path.join(SERVED, 'players.json')).size / 1048576).toFixed(1)}MB)`);
 
+    // ── TIERED CARD VALUE ESTIMATOR ──────────────────────────────────────
+    // Goldin cards carry a live bid but NO house estimate, so the hedonic
+    // value engine (which EXCLUDES cards for scale) leaves them with no value,
+    // no glow, no read. Here — in the O(n) §3 card pass, reusing the same
+    // hash-join maps the cardComps display already builds — we simulate a value
+    // from PAST SALES OF THAT EXACT CARD, else that player's cards, and stamp it
+    // as a ValueResult so the UI (glow ring + ComparableModal) reads it exactly
+    // like a real engine value. It is a CARD-COMP value, not the hedonic engine:
+    // signal is always null (no fabricated buy-signal), value.basis === 'card-comp'.
+    //
+    // Tier 1 — EXACT card (same player+year+set+cardNo+GRADE): median of the
+    //   cardKey pool if n≥2. confidence 'high'. This is the strongest identity.
+    // Tier 2 — SAME card, GRADE-ADJUSTED: exact-grade pool is thin (<2) but the
+    //   card sold at OTHER grades (ladderKey pool ≥2 across grades). Estimate this
+    //   grade from the ladder: take the rung with the grade NEAREST this card's
+    //   grade and scale it by an empirical PSA-style grade multiplier (a graded
+    //   card's value rises steeply with grade). The multiplier is a coarse,
+    //   published-market-shaped curve indexed by grade number (raw≈1, 8≈1, 9≈1.6,
+    //   9.5≈3, 10≈7) — scale = mult[target]/mult[nearest]. Defensible and simple;
+    //   confidence 'medium'. If the target grade can't be scored (no gradeNum),
+    //   fall back to the flat cross-grade ladder median.
+    // Tier 3 — that PLAYER's cards: median of the byPlayer sold-card pool,
+    //   filtered to a COMPARABLE grade tier (graded vs raw — a $5 raw common and
+    //   a $50K graded rookie must not average) AND recent (last 24 months, to
+    //   track the current market). Require n≥5. A broad player median is a weak
+    //   signal → confidence 'low'.
+    // If none seat → no value (null). Never fabricated.
+    const GRADE_CUT = Date.now() - 730 * 864e5; // 24 months (tier-3 recency)
+    // grade → relative value multiplier (coarse, monotone; graded market shape).
+    // Only RATIOS between rungs are used, so the absolute scale is irrelevant.
+    const gradeMult = (n: number | null | undefined): number => {
+      if (n == null) return 1;          // raw / ungradeable → base
+      if (n >= 10) return 7;
+      if (n >= 9.5) return 3;
+      if (n >= 9) return 1.6;
+      if (n >= 8.5) return 1.15;
+      if (n >= 8) return 1;
+      return 0.8;                        // 7 and below trade near/under the 8 floor
+    };
+    const cardVsBid = (bid: number, value: number): { label: 'below recent comps' | 'above recent comps' | 'in line'; pct: number } => {
+      // mirror value.ts's vsBid thresholds exactly (±12% band around the value)
+      const pct = Math.round((bid / value - 1) * 100);
+      return { label: pct <= -12 ? 'below recent comps' : pct >= 12 ? 'above recent comps' : 'in line', pct };
+    };
+    type CardTier = 'exact' | 'grade-adj' | 'player' | 'none';
+    const tierCounts: Record<CardTier, number> = { exact: 0, 'grade-adj': 0, player: 0, none: 0 };
+
     // live-card comps: exact cardKey → last sales; ladderKey → grade ladder.
     // Stamped on the LIVE lot objects (they're in `all`, so the stamp flows to
     // corpus + served shards + upcoming.json). playerSlug stamps every live
@@ -627,12 +674,107 @@ export function runMarketBuild() {
           stamped++;
           if (gradeLadder.length > 1) laddered++;
         }
+
+        // ── simulate a value for bid-only cards (live bid, no house estimate) ──
+        const lv = l as AuctionLot & {
+          currentBid?: number; estLowUsd?: number; estHighUsd?: number;
+          estimateLow?: number; estimateHigh?: number; value?: ValueResult | null;
+        };
+        const hasEstimate = (lv.estLowUsd! > 0 && lv.estHighUsd! > 0) || (lv.estimateLow! > 0 && lv.estimateHigh! > 0);
+        const bid = lv.currentBid || 0;
+        if (bid > 0 && !hasEstimate) {
+          let value: number | null = null;
+          let poolIds: string[] = [];
+          let poolN = 0;                 // true comp count (poolIds is capped for shard size)
+          let confidence: 'high' | 'medium' | 'low' = 'low';
+          let tier: CardTier = 'none';
+
+          if (exact.length >= 2) {
+            // Tier 1 — exact same card + grade.
+            value = Math.round(median(exact.map(s => s.realizedUsd!)));
+            poolIds = exact.map(s => s.id);
+            poolN = exact.length;
+            confidence = 'high';
+            tier = 'exact';
+          } else if (ladder.length >= 2) {
+            // Tier 2 — same card, cross-grade → grade-adjust to THIS grade.
+            // Rung = each grade's median from THIS card's ladder; pick the rung
+            // whose grade is nearest the live card's grade, scale by the grade
+            // multiplier ratio. If we can't score this card's grade, use the flat
+            // ladder median (a coarse cross-grade proxy).
+            const rungs = ladder.map(s => ({ n: (s as PLot)._card?.gradeNum ?? null, p: s.realizedUsd! }))
+              .filter(r => r.p > 0);
+            const target = c.gradeNum;
+            if (target != null && rungs.some(r => r.n != null)) {
+              const graded = rungs.filter(r => r.n != null) as { n: number; p: number }[];
+              // group by grade → median per rung, then nearest-grade rung
+              const byGrade = new Map<number, number[]>();
+              for (const r of graded) (byGrade.get(r.n) || byGrade.set(r.n, []).get(r.n)!).push(r.p);
+              const rungMeds = Array.from(byGrade.entries())
+                .map(([g, v]) => ({ g, med: median(v) }))
+                .sort((a, b) => Math.abs(a.g - target) - Math.abs(b.g - target));
+              const near = rungMeds[0];
+              value = Math.round(near.med * (gradeMult(target) / gradeMult(near.g)));
+            } else {
+              value = Math.round(median(ladder.map(s => s.realizedUsd!)));
+            }
+            poolIds = ladder.map(s => s.id);
+            poolN = ladder.length;
+            confidence = 'medium';
+            tier = 'grade-adj';
+          } else if (c.playerSlug) {
+            // Tier 3 — that player's cards. Match the live card's grade TIER
+            // (graded vs raw) so a raw common and a graded rookie don't average,
+            // and keep only the last ~24 months. Require n≥5. Weak → 'low'.
+            const isGraded = c.gradeNum != null;
+            const entry = byPlayer.get(c.playerSlug);
+            const pool = (entry?.lots || []).filter(s =>
+              s.artist === 'sports-cards' &&
+              ((s as PLot)._card?.gradeNum != null) === isGraded &&
+              (s as AuctionLot & { _saleMs?: number })._saleMs! > GRADE_CUT &&
+              (s.realizedUsd || 0) > 0);
+            if (pool.length >= 5) {
+              value = Math.round(median(pool.map(s => s.realizedUsd!)));
+              // cap the stamped ids at the 60 most recent (a player pool can be
+              // hundreds of sales) — keep `n` as the TRUE pool size for honesty.
+              poolIds = pool.slice().sort((a, b) =>
+                (b as AuctionLot & { _saleMs?: number })._saleMs! - (a as AuctionLot & { _saleMs?: number })._saleMs!)
+                .slice(0, 60).map(s => s.id);
+              poolN = pool.length;
+              confidence = 'low';
+              tier = 'player';
+            }
+          }
+
+          if (value != null && value > 0) {
+            lv.value = {
+              poolIds,
+              n: poolN,
+              compValueUsd: value,
+              low: value,
+              high: value,
+              compRatio: null,
+              signal: null, // never assert a hedonic buy-signal on cards
+              estimateUsd: value, // no house estimate — the comp value IS the estimate
+              vsBid: cardVsBid(bid, value),
+              confidence,
+              exact: null,
+              basis: 'card-comp', // marker: card-comp value, NOT the hedonic engine
+            } as ValueResult;
+            tierCounts[tier]++;
+          } else {
+            tierCounts.none++;
+          }
+        }
       } else {
         const p = playerOf(l.title || '', l.artist);
         lw.playerSlug = p.playerSlug; lw.playerName = p.player;
       }
     }
     console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
+    const cardValued = tierCounts.exact + tierCounts['grade-adj'] + tierCounts.player;
+    const cardBidOnly = cardValued + tierCounts.none;
+    console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · none=${tierCounts.none}`);
   }
 
   // ── 3f · stats.json rows for corpus-only / non-ARTISTS slugs ──

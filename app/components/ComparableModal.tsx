@@ -51,8 +51,61 @@ function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[
       )}
       {!dir && v.estimateUsd != null && (
         <div style={{ fontSize: 13.5 }}>
-          <span style={{ color: 'var(--color-fg)', fontWeight: 650 }}>lectr value {usd(v.low)}–{usd(v.high)}</span>
-          <span style={{ color: 'var(--color-text-muted)' }}> · {v.confidence} confidence · from {v.n} comparable sales{v.vsBid ? ` · bid ${v.vsBid.pct >= 0 ? '+' : ''}${v.vsBid.pct}% vs comps` : ''}</span>
+          <span style={{ color: 'var(--color-fg)', fontWeight: 650 }}>
+            lectr value {v.low === v.high ? usd(v.estimateUsd) : `${usd(v.low)}–${usd(v.high)}`}
+          </span>
+          {/* card-comp value: a point estimate from same-card / same-player sales
+              (build-market §3), so it reads "from N same-card sales" not a band */}
+          <span style={{ color: 'var(--color-text-muted)' }}> · {v.confidence} confidence · from {v.n} {v.basis === 'card-comp' ? 'comparable card sales' : 'comparable sales'}{v.vsBid ? ` · bid ${v.vsBid.pct >= 0 ? '+' : ''}${v.vsBid.pct}% vs comps` : ''}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── CardCompsBlock — the same-card / same-player evidence behind a bid-only
+// card's simulated value (build-market §3). The exact-card sale history and the
+// grade ladder ride on the lot itself (lot.cardComps) — no archive fetch — so
+// the reader can see WHAT the value was built from. The value.poolIds (the
+// exact sale ids used) are stamped in the data and inspectable there; here we
+// render the human-readable same-card sales the join produced.
+function CardCompsBlock({ lot }: { lot: AuctionLot }) {
+  const cc = (lot as AuctionLot & { cardComps?: NonNullable<AuctionLot['cardComps']> }).cardComps;
+  const v = (lot as AuctionLot & { value?: NonNullable<AuctionLot['value']> }).value;
+  if (!v || v.basis !== 'card-comp' || !cc) return null;
+  const sales = (cc.lastSales || []).filter(s => s.p > 0);
+  const ladder = cc.gradeLadder || [];
+  if (!sales.length && !ladder.length) return null;
+  return (
+    <div style={{ margin: '4px 0 2px' }}>
+      {sales.length > 0 && (
+        <div style={{ marginBottom: ladder.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12, letterSpacing: '-0.01em', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 6 }}>
+            This exact card — recent sales
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {sales.map((s, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                <span style={{ color: 'var(--color-text-faint)' }}>{s.d ? formatDate(s.d, { month: 'short', year: 'numeric' }) : '—'}</span>
+                <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{formatPrice(s.p)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {ladder.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, letterSpacing: '-0.01em', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 6 }}>
+            Grade ladder — same card, by grade
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {ladder.map((r, i) => (
+              <span key={i} style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', border: '1px solid var(--hairline)', borderRadius: 6, padding: '3px 8px' }}>
+                {r.g} <b style={{ color: 'var(--color-fg)' }}>{formatPrice(r.med)}</b>
+                <span style={{ color: 'var(--color-text-faint)' }}> · {r.n}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -399,6 +452,13 @@ export default function ComparableModal({
     }
     return signalWithPool(lot, allLots);
   }, [lot, allLots]);
+
+  // A bid-only sports CARD valued by the §3 card-comp estimator. Its evidence
+  // is the same-card sales / grade ladder rendered by CardCompsBlock in the
+  // header (the poolIds — sold-card ids — aren't in the client corpus, so the
+  // generic same-artist comps section would show a false "no comps found").
+  // Suppress that section for these lots; the card block IS the proof surface.
+  const isCardComp = (lot as AuctionLot & { value?: { basis?: string } | null }).value?.basis === 'card-comp';
 
   // The Goldin sold-archive is the 10MB tier — only sports/science object lots
   // (with no estimate-based call) can build a realized band, and only they need
@@ -796,6 +856,7 @@ export default function ComparableModal({
               {formatEstimate(lot)}
             </div>
             <LotValueBlock lot={lot} allLots={allLots} />
+            <CardCompsBlock lot={lot} />
             <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)' }}>
               {formatDate(lot.saleDate, { month: 'long', day: 'numeric', year: 'numeric' })}
               {lot.saleName ? ` · ${lot.saleName}` : ''}
@@ -893,7 +954,10 @@ export default function ComparableModal({
           </div>
         )}
 
-        {/* Comparables */}
+        {/* Comparables — suppressed for card-comp lots (CardCompsBlock in the
+            header already carries their same-card evidence; the poolIds resolve
+            to sold-card ids that aren't in the client corpus). */}
+        {!isCardComp && (
         <div className="comp-modal-comps">
           <div style={{
             fontSize: 12.5,
@@ -1084,6 +1148,7 @@ export default function ComparableModal({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   , document.body);
