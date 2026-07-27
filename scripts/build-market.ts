@@ -756,7 +756,13 @@ export function runMarketBuild() {
               compRatio: null,
               signal: null, // never assert a hedonic buy-signal on cards
               estimateUsd: value, // no house estimate — the comp value IS the estimate
-              vsBid: cardVsBid(bid, value),
+              // A below/above-BID call (and its glow) only fires when the value
+              // reflects THIS card — exact (tier 1) or grade-adjusted (tier 2). A
+              // bare PLAYER median (tier 3, 'low') can't call a specific card: a
+              // rare parallel/high grade collapses to the median and would print a
+              // wild ±% (a Jordan/Kobe refractor read '+782% over comps'). So tier 3
+              // carries the value as CONTEXT only — no vsBid, no glow, no call.
+              vsBid: confidence === 'low' || !(bid > 0) ? null : cardVsBid(bid, value),
               confidence,
               exact: null,
               basis: 'card-comp', // marker: card-comp value, NOT the hedonic engine

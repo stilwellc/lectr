@@ -332,7 +332,7 @@ function LotCard({
               fontWeight: 600,
             }}
           >
-            comps ~{formatPrice(cardComp.value)}
+            {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{formatPrice(cardComp.value)}
           </div>
         )}
         <span className="ray-lot-est" style={{ display: 'block' }}>{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
@@ -580,7 +580,7 @@ function LotCard({
                 fontWeight: 600,
               }}
             >
-              comps ~{formatPrice(cardComp.value)}
+              {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{formatPrice(cardComp.value)}
               <span style={{ color: 'var(--color-text-faint)', fontWeight: 400, letterSpacing: '0.06em', marginLeft: 6 }}>
                 {confidenceMeter(cardComp.conf).dots}
               </span>
