@@ -175,15 +175,41 @@ export function runMarketBuild() {
     if (s === undefined) { s = sportOf(l.title || ''); sportCache.set(l.id, s); }
     return s;
   };
+  // PLAYER identity of a sports lot — a game-used object must comp SAME PLAYER
+  // only, never merely same-sport. `entity` is only ~22% populated on game-used
+  // lots and _pid/playerSlug isn't stamped until the §3 player pass (which runs
+  // AFTER this valuation), so resolve it here: prefer an already-stamped id,
+  // else the served playerSlug/entity, else parse the title (playerOf — the same
+  // parser §3 uses). Cached per lot id (the title regex battery is not free).
+  const { playerOf: playerOfTitle } = require('../app/lib/cards');
+  const playerCache = new Map<string, string | null>();
+  const playerSlugOf = (l: AuctionLot): string | null => {
+    const cached = playerCache.get(l.id);
+    if (cached !== undefined) return cached;
+    const lw = l as { _pid?: string | null; playerSlug?: string | null; entity?: string | null };
+    const p: string | null = lw._pid ?? lw.playerSlug ?? lw.entity ?? playerOfTitle(l.title || '', l.artist).playerSlug ?? null;
+    playerCache.set(l.id, p);
+    return p;
+  };
   for (const lot of upcoming) {
     let pool = soldByArtist.get(lot.artist) || [];
     if (SPORTS_SET.has(lot.artist)) {
-      const ent = (lot as { entity?: string | null }).entity || null;
-      const sp = sportOfCached(lot);
-      if (ent || sp) {
-        const restricted = pool.filter(c =>
-          (ent && (c as { entity?: string | null }).entity === ent) || (sp && sportOfCached(c) === sp));
-        if (restricted.length >= 3) pool = restricted;
+      const pid = playerSlugOf(lot);
+      if (pid) {
+        // KNOWN player → same-player pool ONLY. Use it even if thin (<3): an
+        // honest thin same-player pool is correct, and if it comes up empty the
+        // lot simply won't seat enough comps and estimateValue abstains
+        // (value=null). Do NOT fall back to same-sport — that reintroduces the
+        // cross-player bug.
+        pool = pool.filter(c => playerSlugOf(c) === pid);
+      } else {
+        // NO readable player (~19% the title parser can't read) → same-SPORT is
+        // the best-available fallback, gated ≥3 as before.
+        const sp = sportOfCached(lot);
+        if (sp) {
+          const restricted = pool.filter(c => sportOfCached(c) === sp);
+          if (restricted.length >= 3) pool = restricted;
+        }
       }
     }
     const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl);
