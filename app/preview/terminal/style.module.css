@@ -1577,25 +1577,24 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    These are GLOBAL components (app/components/*) shared by the real
    homepage; we NEVER edit them or globals.css. Instead we re-flip the
    paper token ramp back to the Terminal's dark grammar INSIDE the
-   terminal root, so the ledger band, the ApprBarometer, and the
+   terminal root, so the ledger band and the
    SettlementSlip — all of which read from --paper-* + currentColor —
    inherit vellum-black surfaces, hairline rules, butter numerals, and
    mono/tabular data with zero global collision.
 
    The paper components set their own color tokens via .ray-band /
-   .ray-paper / .ray-appr.ray-paper; we out-specify them by prefixing
+   .ray-paper; we out-specify them by prefixing
    with the terminal root and re-pointing every paper token at a dark
-   value. currentColor (used for the certificate double-rules and the
-   barometer needle) follows `color`, so re-setting color to the fg
+   value. currentColor (used for the certificate double-rules)
+   follows `color`, so re-setting color to the fg
    ink recolors every drawn stroke too.
    ══════════════════════════════════════════════════════════════ */
 /* TWO-TONE BY DESIGN: the paper "certificate" cards (the ledger, the
-   appreciation barometer, the sold-record band) KEEP their warm beige —
+   sold-record band) KEEP their warm beige —
    a deliberate second colour that breaks up the dark terminal scroll and
    reads as the brand's certificate/paper motif. We do NOT dark-flip them.
    Only give them the Terminal's radius so they rhyme with the dark panels. */
-.root :global(.ray-band),
-.root :global(.ray-appr.ray-paper) {
+.root :global(.ray-band) {
   border-radius: 14px;
 }
 

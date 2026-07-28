@@ -8,8 +8,8 @@
    STRATEGY (per the build directive): this file copies the
    FUNCTIONAL logic of app/page.tsx verbatim — state, memos,
    market scoping, feed computation, save, phases, effects — and
-   only changes presentation: the BoardDemand hero is swapped for
-   the market-scoped IndexHero + MoversBoard + Tape + RecordBoard,
+   only changes presentation: the lander hero is swapped for
+   the market-scoped IndexHero + Tape + RecordBoard,
    and the whole page is composed inside the Terminal's dark
    shell. Every MUST-PRESERVE behavior survives because we start
    from the working logic. Reads eager phase-1 data only; phase-2
