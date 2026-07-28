@@ -641,9 +641,27 @@ export function runMarketBuild() {
     // Stamped on the LIVE lot objects (they're in `all`, so the stamp flows to
     // corpus + served shards + upcoming.json). playerSlug stamps every live
     // sports lot so the client links to /player without re-parsing.
-    let stamped = 0, laddered = 0;
+    let stamped = 0, laddered = 0, soldStamped = 0;
     for (const l of all) {
-      if (!SPORT_SET.has(l.artist) || l.status !== 'upcoming') continue;
+      if (!SPORT_SET.has(l.artist)) continue;
+      // Stamp playerSlug/playerName on SOLD sports OBJECT lots too (game-used,
+      // trophies-awards, tickets-passes, sports-memorabilia — NOT sports-cards,
+      // which are corpus-only/engine-excluded and keyed separately). Without
+      // this the client comp path (soldCompBand/compPoolRead) can't gate a
+      // realized band to the same PLAYER, so a Chad Ochocinco jersey comps
+      // against Trout/Bird/Jordan. The §3 pass already parsed these lots'
+      // player into _pid/_pname (same objects live in `all`), so reuse it —
+      // fall back to a fresh playerOf() parse for any lot §3 skipped (no
+      // realizedUsd/saleDate). Idempotent: re-running overwrites the same slug.
+      if (l.status === 'sold' && l.artist !== 'sports-cards') {
+        const sw = l as AuctionLot & { _pid?: string | null; _pname?: string | null; playerSlug?: string | null; playerName?: string | null };
+        let pid = sw._pid ?? null, pname = sw._pname ?? null;
+        if (pid == null) { const p = playerOf(l.title || '', l.artist); pid = p.playerSlug; pname = p.player; }
+        sw.playerSlug = pid; sw.playerName = pname;
+        if (pid) soldStamped++;
+        continue;
+      }
+      if (l.status !== 'upcoming') continue;
       const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null; cardComps?: unknown };
       if (l.artist === 'sports-cards') {
         const c = parseCardCached(l.title || '');
@@ -777,7 +795,7 @@ export function runMarketBuild() {
         lw.playerSlug = p.playerSlug; lw.playerName = p.player;
       }
     }
-    console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
+    console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · ${soldStamped} sold sports-object lots player-stamped · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
     const cardValued = tierCounts.exact + tierCounts['grade-adj'] + tierCounts.player;
     const cardBidOnly = cardValued + tierCounts.none;
     console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · none=${tierCounts.none}`);

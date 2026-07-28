@@ -439,6 +439,16 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   if (form === 'unknown') return null;
   const estMid = (est.low + est.high) / 2;
 
+  // Sports/science OBJECT lots (game-used jerseys, trophies, tickets) share
+  // one artist-slug per CATEGORY ('game-used'), not per maker — so an
+  // artist-only pool mixes every athlete. The realized band means nothing
+  // unless it's the SAME PLAYER, so gate hard on playerSlug (stamped on both
+  // upcoming and sold sports-object lots at build time). No player on the
+  // anchor → abstain (the surface shows nothing, never a stranger's comps).
+  // This never touches art/watch/design lots (isSportsScienceObject is false).
+  const samePlayerObject = isSportsScienceObject(lot);
+  if (samePlayerObject && !lot.playerSlug) return null;
+
   const sold = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id
     // Algolia-sourced Sotheby's lots are thin (title-only, no dimensions/medium/
@@ -446,6 +456,8 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
     // re-derives comps here, so guard them out too or a title-only lot pollutes
     // the comp pool for art/watch makers (picasso, patek, rolex, …).
     && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia'
+    // sports/science objects: same PLAYER only (never a cross-athlete jersey).
+    && (!samePlayerObject || l.playerSlug === lot.playerSlug)
   );
 
   // 1 · the same edition — the strongest comp there is
@@ -717,10 +729,18 @@ export function soldCompBand(lot: AuctionLot, allLots: AuctionLot[]): SoldComp |
   const form = compFormKey(lot);
   if (form === 'unknown') return null;
 
-  // same-slug sold, same comp form key
+  // Hard same-PLAYER gate. These lots share one artist-slug per CATEGORY
+  // ('game-used'), so a same-artist/same-form pool is every athlete's jersey.
+  // The band is honest ONLY when it's the same player, so abstain when the
+  // anchor carries no playerSlug (the UI shows no band — never a cross-player
+  // one). The entity/word tightening below is a SECONDARY sort WITHIN this pool.
+  if (!lot.playerSlug) return null;
+
+  // same-slug sold, same comp form key, SAME PLAYER
   const same = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id &&
-    isSportsScienceObject(l) && compFormKey(l) === form
+    isSportsScienceObject(l) && compFormKey(l) === form &&
+    l.playerSlug === lot.playerSlug
   );
   if (same.length < 3) return null;
 
