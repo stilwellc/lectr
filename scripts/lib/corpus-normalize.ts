@@ -1,5 +1,6 @@
 import type { AuctionLot } from '../../app/types';
 import { extractReference } from './identity-enrich';
+import { looksLikeCard } from '../../app/lib/cards';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -28,6 +29,12 @@ import { extractReference } from './identity-enrich';
           science index. Eviction introduces ZERO new misroutes elsewhere.
       This mutates `lots` IN PLACE (splice) so the caller's array — used for
       stats and the corpus write — reflects the removals.
+   2b. rerouteRelicCards — move game-used lots that are actually trading CARDS
+      (a game-used swatch on a manufactured card: "Topps Dynasty Autograph Patch
+      #DAP-SO Ohtani") from artist='game-used' → 'sports-cards', so they earn
+      their EXACT-card comp value instead of a broad player-median. Conservative:
+      fires only on the shared looksLikeCard detector (a card PRODUCT or a card
+      NUMBER in card context) — never on grading alone. Idempotent.
    3. enrichWatchReferences — fill `reference` for watch lots the live watchKey
       missed, via identity-enrich.extractReference (recovers "Ref:" colon forms,
       hyphen-suffixed refs, bare model codes). Only fills empties; never
@@ -161,6 +168,38 @@ export function rerouteScienceMisroutes(lots: Lot[]): {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 2b · relic-card reroute (game-used → sports-cards). Heals the back-catalogue.
+//
+// ~43% of "game-used" lots are actually trading CARDS carrying a game-used
+// swatch (a "Game-Used Relic CARD", a "Topps Dynasty Autograph Patch #DAP-SO
+// Ohtani") mis-filed as game-used by the pre-fix goldinRoute. As game-used they
+// get a broad player-median; as sports-cards they get their EXACT-card value
+// (build-market §3 stamps value.basis='card-comp' on artist==='sports-cards').
+//
+// Idempotent (a lot already at 'sports-cards' is not in SPORTS_OBJECT_SLUGS so
+// it never re-fires) and CONSERVATIVE — reroutes only on the shared looksLikeCard
+// detector (card PRODUCT token, or a card NUMBER in card context). A false
+// reroute of a real jersey is worse than a miss, so grading language alone is
+// never enough (a raw jersey can be PSA/DNA authenticated). Mutates in place;
+// artist/makerSlug are re-stamped so downstream markets read the new vertical.
+// ─────────────────────────────────────────────────────────────────────────────
+const SPORTS_OBJECT_SLUGS = new Set(['game-used', 'sports-memorabilia']);
+
+export function rerouteRelicCards(lots: Lot[]): { total: number; examples: string[] } {
+  let total = 0;
+  const examples: string[] = [];
+  for (const l of lots) {
+    if (!SPORTS_OBJECT_SLUGS.has(l.artist)) continue;
+    if (!looksLikeCard(l.title || '')) continue;
+    l.artist = 'sports-cards';
+    l.makerSlug = 'sports-cards';
+    total++;
+    if (examples.length < 8 && l.title) examples.push(l.title);
+  }
+  return { total, examples };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 3 · watch reference fallback.
 //
 // For a watch-maker lot missing `reference`, apply identity-enrich.extractReference
@@ -211,11 +250,16 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
   const yearsNulled = clampImpossibleYears(ls);
   const reroute = rerouteScienceMisroutes(ls);
+  const relic = rerouteRelicCards(ls);
   const refsFilled = enrichWatchReferences(ls);
   const datesFixed = reconcileSaleDates(ls);
+  if (relic.total) {
+    console.log(`[normalize] relic-card reroute: ${relic.total} game-used→sports-cards. e.g. ${relic.examples.slice(0, 3).map(s => JSON.stringify(s.slice(0, 70))).join(', ')}`);
+  }
   console.log(
     `[normalize] yearNum>${new Date().getFullYear() + 1} nulled=${yearsNulled} · ` +
     `science misroutes fixed=${reroute.total} (→art ${reroute.toArt}, →watches ${reroute.toWatch}, evicted ${reroute.evicted}) · ` +
+    `relic cards→sports-cards=${relic.total} · ` +
     `watch references filled=${refsFilled} · ` +
     `saleDate←saleDateTime reconciled=${datesFixed}`
   );
