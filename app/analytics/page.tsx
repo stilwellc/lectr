@@ -122,7 +122,11 @@ export default function AnalyticsPage() {
       <section className="rail" style={{ paddingTop: 28 }}>
       <Masthead
         kicker="The intelligence desk"
-        serial={lastCrawl || undefined}
+        // meta.lastCrawl (static import) as the fallback, NOT Masthead's
+        // new Date() default: this masthead prerenders (no loading gate), so a
+        // clock-derived serial bakes the build day into the static HTML and
+        // mismatches on hydration. Same pattern as /about and /blog.
+        serial={lastCrawl || meta.lastCrawl}
         title={<>Every market, read as <Underscore>one book</Underscore>.</>}
         sub={!fullLoaded
           ? ' ' /* reserve the line — no zero-count flash while the crawl delivers */

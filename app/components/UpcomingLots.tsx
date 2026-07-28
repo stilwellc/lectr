@@ -71,7 +71,11 @@ export default function UpcomingLots({
 
   return (
     <section className="ray-upcoming rail">
-      <style>{`
+      {/* __html, not a text child: this CSS carries a '>' child combinator,
+          which React entity-escapes in SSR text while the browser leaves
+          <style> raw text undecoded — a hydration mismatch whenever this
+          ships in prerendered HTML. RecordBand's pattern. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         .ray-upcoming { padding-block: var(--sect-t) var(--sect-b); }
         .ray-upcoming-grid {
           display: grid;
@@ -131,7 +135,7 @@ export default function UpcomingLots({
             gap: 14px;
           }
         }
-      `}</style>
+      ` }} />
 
       {/* Ghost ordinal clipped to the header band — never under the cards */}
       <div style={{ position: 'relative', overflow: 'hidden', marginBottom: 16 }}>

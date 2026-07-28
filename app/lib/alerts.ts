@@ -59,13 +59,17 @@ export function useSavedSearches() {
 
   const refresh = useCallback(async () => {
     if (!supabase || !user) { setSearches([]); setReady(true); return; }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('saved_searches')
       .select('id,name,query,created_at')
       .order('created_at', { ascending: false });
-    setSearches((data as SavedSearch[]) || []);
+    // on a fetch error keep the prior list — never wipe the UI to empty
+    if (!error && data) setSearches(data as SavedSearch[]);
     setReady(true);
-  }, [user]);
+    // user?.id, not the user object: Supabase mints a fresh user object on
+    // every auth event, and an object dep re-fires the whole chain needlessly
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -106,7 +110,9 @@ export function useAlerts() {
       if (!dead) { setAlerts((data as AlertRow[]) || []); setReady(true); }
     })();
     return () => { dead = true; };
-  }, [user]);
+    // user?.id, not the user object — see refresh above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const markAllSeen = useCallback(async () => {
     if (!supabase || !user) return;
@@ -132,6 +138,8 @@ export function useUnseenAlertCount(): number {
       if (!dead) setN(count || 0);
     })();
     return () => { dead = true; };
-  }, [user]);
+    // user?.id, not the user object — see refresh above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   return n;
 }

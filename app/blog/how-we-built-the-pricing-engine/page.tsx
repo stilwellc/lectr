@@ -91,6 +91,10 @@ export default function PricingEnginePost() {
             (<V>scripts/ray-crawl.ts</V>) and hardened over the whole corpus at build time
             (<V>scripts/lib/corpus-normalize.ts</V>):
           </p>
+          {/* overflow wrapper: the table's intrinsic width exceeds a 390px
+              viewport — scroll the table, never the page (the Formula blocks'
+              exact pattern) */}
+          <div style={{ overflowX: 'auto' }}>
           <table style={table}>
             <thead>
               <tr><th style={th}>Raw signal</th><th style={th}>Structured label</th><th style={th}>What consumes it</th></tr>
@@ -103,6 +107,7 @@ export default function PricingEnginePost() {
               <tr><td style={td}>native price + sale year</td><td style={td}>USD via a dated FX table</td><td style={td}>every money figure on the site</td></tr>
             </tbody>
           </table>
+          </div>
           <p style={p}>
             The discipline is the one the engine itself runs on: <span style={strong}>a label is a
             gate, not a guess</span>. A field we can&rsquo;t read confidently is left <V>null</V>, never
@@ -199,6 +204,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             resolves (5Y &gt; 3Y &gt; 1Y) — the numbers below are read straight out of{' '}
             <V>makerIndex</V> in <V>market.json</V>:
           </p>
+          <div style={{ overflowX: 'auto' }}>
           <table style={table}>
             <thead>
               <tr><th style={th}>Maker</th><th style={{ ...th, textAlign: 'right' }}>horizon</th><th style={{ ...th, textAlign: 'right' }}>change</th><th style={{ ...th, textAlign: 'right' }}>95% CI</th><th style={{ ...th, textAlign: 'right' }}>lots</th></tr>
@@ -209,6 +215,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
               <tr><td style={td}>Patek Philippe</td><td style={tdNum}>3Y</td><td style={tdNum}>−18.2%</td><td style={tdNum}>[−26, −9]</td><td style={tdNum}>24,325</td></tr>
             </tbody>
           </table>
+          </div>
           <p style={p}>
             Rolex also publishes a 3Y (<V>+14.6%</V>, CI <V>[2, 28]</V>) and Patek a 1Y
             (<V>−9.6%</V>, CI <V>[−18, −1]</V>) — same maker, shorter windows, still resolved. Everything
@@ -243,6 +250,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             &ldquo;sub-market&rdquo; (<V>scripts/sub-markets.ts</V>) that carries the{' '}
             <span style={strong}>strongest honest read its data supports</span>, and no stronger:
           </p>
+          <div style={{ overflowX: 'auto' }}>
           <table style={table}>
             <thead>
               <tr><th style={th}>read</th><th style={th}>when</th><th style={th}>what it shows</th></tr>
@@ -253,6 +261,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
               <tr><td style={td}><V>descriptive</V></td><td style={td}>no estimates, or not a maker</td><td style={td}>typical price · all-time record · volume — no appreciation</td></tr>
             </tbody>
           </table>
+          </div>
           <p style={p}>
             The last row is the discipline. A collectible <em>bucket</em> — meteorites, game-used,
             tickets-passes, trophies — is tagged <V>entityClass:&lsquo;category&rsquo;</V> in the type
@@ -269,6 +278,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             specific artifacts that index produced — the reasons a marketplace-wide &ldquo;the whole
             market is up X%&rdquo; number is a lie waiting to happen:
           </p>
+          <div style={{ overflowX: 'auto' }}>
           <table style={table}>
             <thead>
               <tr><th style={th}>Artifact</th><th style={th}>What it did</th></tr>
@@ -281,6 +291,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
               <tr><td style={td}>Card-dominated &lsquo;all&rsquo;</td><td style={td}>Sports-cards are 71–92% of the whole-corpus quarters under one slug — a shift in <em>which</em> cards sold masquerades as market movement</td></tr>
             </tbody>
           </table>
+          </div>
           <p style={p}>
             The honest engine answers each of these by <em>abstaining</em> rather than emitting a
             confident number. That card-dominance case is live: the market-wide <V>&lsquo;all&rsquo;</V>{' '}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
-import { craftTitle, formatDate, formatPrice, httpsImg } from '../utils';
+import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { lotFitsMarket, signalMagnitude } from '../lib/comps';
 import Flick from './Flick';
@@ -35,7 +35,8 @@ const CONF_RANK: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, 
     vertical the call must also be that vertical's kind of object (a ring
     never headlines watches) — lotFitsMarket gates by form class. */
 export function pickCall(lots: AuctionLot[], allLots: AuctionLot[], market: Market = 'all') {
-  const today = new Date().toISOString().split('T')[0];
+  // the reader's LOCAL day — a UTC "today" drops lots that hammer tonight
+  const today = localToday();
   // Today's call must be ACTIONABLE — only lots still open (saleDate today or
   // later). Results-pending lots have already hammered; they belong in the feed,
   // never headlining the call as if you could still bid.
@@ -370,7 +371,7 @@ export function Colophon({ record }: {
                 the settlement/proofstrip pass record={null} and get one line */}
             {record && record.n > 500 && (
               <p>
-                Flagged calls hammered <b className="up">+{record.medianPerfPct}% median</b> over their estimates across {record.n.toLocaleString()} replayed sales.
+                Flagged calls hammered <b className="up">{fmtSignedPct(record.medianPerfPct)} median</b> over their estimates across {record.n.toLocaleString()} replayed sales.
               </p>
             )}
             <Link href="/value" className="ray-close-cta">See the record <Flick size={12} /></Link>

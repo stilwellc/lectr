@@ -7,7 +7,7 @@ import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
-import { useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../hooks/useRayData';
+import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
@@ -29,7 +29,11 @@ function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[
   const v = (lot as AuctionLot & { value?: NonNullable<AuctionLot['value']> }).value;
   if (!v) return null;
   const exactLot = v.exact ? allLots.find(l => l.id === v.exact!.id) : null;
-  const dir = v.signal;
+  // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
+  // outside [1/5, 5] is a data fault the build killed at the source — never
+  // resurrect the directional call here.
+  const evSane = v.compRatio == null || (v.compRatio <= 5 && v.compRatio >= 1 / 5);
+  const dir = evSane ? v.signal : null;
   const under = dir && dir.label === 'below comparable market';
   const over = dir && dir.label === 'above comparable market';
   return (
@@ -354,7 +358,9 @@ export default function ComparableModal({
   // that isn't loaded yet, so kick it here — idempotent, and pages that already
   // mount useFullLots() are unaffected. The frozen call still renders instantly
   // from lot.value; the comparable-sales rows fill in as the corpus lands.
-  useEffect(() => { triggerFullLoad(); }, []);
+  // fullLoaded/fullError gate the CLIENT-computed read below: a "0 comparable
+  // sales (no call)" verdict must never print against a still-loading corpus.
+  const { fullLoaded, fullError } = useFullLots();
 
   // Bottom-sheet drag (under 900px): the handle tracks the finger, and a
   // decisive pull down dismisses — the native sheet gesture.
@@ -432,7 +438,12 @@ export default function ComparableModal({
   // fair — no call, no client second-guessing.
   const called = useMemo(() => {
     const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; compValueUsd?: number; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
-    if (ev && ev.signal && ev.compRatio != null) {
+    // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
+    // outside [1/5, 5] is a data fault the build killed at the source — the
+    // modal must never resurrect it. Treat it as no engine call and fall
+    // through to the uncalled-lot path.
+    const evSane = !ev || ev.compRatio == null || (ev.compRatio <= 5 && ev.compRatio >= 1 / 5);
+    if (ev && ev.signal && ev.compRatio != null && evSane) {
       if (ev.signal.label.startsWith('at')) return null;
       const below = ev.signal.label.startsWith('below');
       const byId = new Map(allLots.map(l => [l.id, l]));
@@ -483,6 +494,12 @@ export default function ComparableModal({
     () => (called ? null : isSportsScienceObject(lot) ? soldCompBand(lot, bandPoolLots) : null),
     [called, lot, bandPoolLots]
   );
+
+  // No frozen engine call and no realized band yet, while the phase-2 corpus
+  // is still downloading: the client read is running against a truncated pool,
+  // so a confident "0 comparable sales (no call)" would contradict the card
+  // glow. Show the loading state instead (LotPage's compsPending pattern).
+  const compsPending = !called && !band && !fullLoaded && !fullError;
 
   const comparables = useMemo(() => {
     if (called) {
@@ -894,19 +911,24 @@ export default function ComparableModal({
         {/* The decision picture: comps plotted against this lot's estimate.
             For a Goldin realized band there IS no estimate to plot — pass null
             band bounds and a null "below" so the median line stays neutral
-            (no red/green): realized prices are not a call. */}
-        {compStats && (
+            (no red/green): realized prices are not a call.
+            Gated on archiveLoaded/compsPending exactly like the rows below —
+            the band stats must never print from a truncated corpus and then
+            silently swap when the full pool lands.
+            1.3 green threshold matches the signal engine (lib/comps.ts):
+            1.2–1.3 is pure buyer's premium, not edge. */}
+        {compStats && archiveLoaded && !compsPending && (
           <PriceBand
             prices={comparables.map(c => c.lot.priceUsd!)}
             median={compStats.median}
             estLow={band ? null : lot.estimateLow}
             estHigh={band ? null : lot.estimateHigh}
-            below={band ? null : compStats.hammerVsEst === null ? null : compStats.hammerVsEst >= 1.2 ? true : compStats.hammerVsEst <= 0.75 ? false : null}
+            below={band ? null : compStats.hammerVsEst === null ? null : compStats.hammerVsEst >= 1.3 ? true : compStats.hammerVsEst <= 0.75 ? false : null}
           />
         )}
 
         {/* Summary Stats */}
-        {compStats && (
+        {compStats && archiveLoaded && !compsPending && (
           <div className="comp-modal-stats" style={{
             padding: '18px 28px',
             borderBottom: '1px solid var(--color-border)',
@@ -973,7 +995,9 @@ export default function ComparableModal({
                 : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}`
               : band
                 ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
-                : `Context — ${comparables.length} comparable sales (no call on this lot)`}
+                : compsPending
+                  ? 'Context — comparable sales'
+                  : `Context — ${comparables.length} comparable sales (no call on this lot)`}
           </div>
 
           {/* Realized prices are hammer + premium, not an estimate call —
@@ -1001,7 +1025,7 @@ export default function ComparableModal({
                 Try again
               </button>
             </div>
-          ) : wantsArchive && !archiveLoaded ? (
+          ) : (wantsArchive && !archiveLoaded) || compsPending ? (
             <div style={{
               padding: '40px 0',
               textAlign: 'center',

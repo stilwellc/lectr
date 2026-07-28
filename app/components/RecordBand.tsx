@@ -106,7 +106,8 @@ export default function RecordBand({
       {/* microtype footer, dated like every certificate on the site */}
       <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
         <span>{footer}</span>
-        <span style={{ whiteSpace: 'nowrap' }}>no. {no}</span>
+        {/* no serial → no line: a dangling "no. " is a misprint */}
+        {no && <span style={{ whiteSpace: 'nowrap' }}>no. {no}</span>}
       </div>
     </div>
   );
