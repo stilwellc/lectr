@@ -338,9 +338,28 @@ export function Colophon({ record }: {
   return (
     <footer className={`ray-close${inView ? ' ray-close-on' : ''}`} ref={ref}>
       <div className="rail ray-close-in">
-        {/* the sign, lit over the closed floor */}
+        {/* the sign, lit over the closed floor — written in BUTTER with a soft
+            halo (M19): the white PNG becomes a CSS mask over a butter fill so
+            the mark renders in the brand's own light, exactly #E8DAB6. The
+            .ray-close-mark class still carries the write-on + sizing. */}
         <div className="ray-close-sign">
-          <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />
+          {/* halo on the wrapper so the drop-shadow follows the MASKED
+              silhouette (filter-before-mask on one element would clip it) */}
+          <span style={{ display: 'block', filter: 'drop-shadow(0 0 24px rgba(232, 218, 182, 0.22)) drop-shadow(0 0 8px rgba(232, 218, 182, 0.18))' }}>
+            <span
+              role="img"
+              aria-label="lectr"
+              className="ray-close-mark"
+              style={{
+                display: 'block',
+                aspectRatio: '1146 / 735',
+                background: '#e8dab6',
+                WebkitMask: 'url(/brand/lectr.png) center / contain no-repeat',
+                mask: 'url(/brand/lectr.png) center / contain no-repeat',
+                filter: 'none',
+              }}
+            />
+          </span>
         </div>
         <p className="ray-close-thesis">Every estimate, read against every hammer.</p>
 

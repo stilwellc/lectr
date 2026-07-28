@@ -25,8 +25,8 @@ import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '.
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
-import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
-import { dealScore, signalMagnitude } from '../../lib/comps';
+import LotCard, { lotSignal, confidenceMeter, formatEstimate } from '../../components/LotCard';
+import { dealScore } from '../../lib/comps';
 import ComparableModal from '../../components/ComparableModal';
 import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
@@ -43,6 +43,7 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
+import TonightsWall, { gapGrammar, type WallItem } from './TonightsWall';
 import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
 import Tape from './Tape';
 import RecordBoard from './RecordBoard';
@@ -181,6 +182,39 @@ function daysToHammer(l: AuctionLot, todayDay: string): number | null {
   return Number.isFinite(d) ? d : null;
 }
 
+// M13 — the desktop feed's hover preview: a 236px mat plate floating beside
+// the table row under the pointer. Photo on the warm mat (object-fit contain,
+// never cropped), maker, estimate, and the verdict ring when the engine has a
+// call. One plate at a time, 150ms intent delay upstream, instant leave.
+function HoverPlate({ lot, x, y, tone, sig }: {
+  lot: AuctionLot;
+  x: number;
+  y: number;
+  tone?: 'up' | 'down';
+  sig: ReturnType<typeof lotSignal>;
+}) {
+  if (!lot.imageUrl) return null;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const left = Math.min(x + 14, vw - 252);
+  const top = Math.max(70, Math.min(y - 24, vh - 320));
+  return (
+    <div className={styles.hoverPlate} style={{ left, top }} data-tone={tone} aria-hidden>
+      <span className={styles.hoverPlateMat}>
+        <img src={httpsImg(lot.imageUrl)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"
+          onError={e => { (e.currentTarget.parentElement!.parentElement as HTMLElement).style.display = 'none'; }} />
+      </span>
+      <span className={styles.hoverPlateMaker}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+      <span className={styles.hoverPlateEst}>{formatEstimate(lot)}</span>
+      {sig && (
+        <span className={styles.hoverPlateSig} data-dir={sig.label === 'Below Market' ? 'up' : 'down'}>
+          {gapGrammar(sig.label, sig.pct)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // The mobile feed's compact row — signal-less lots fold to one ruled line
 // (thumb · maker · title · est/bid · date) instead of a full-bleed card.
 // Tapping opens the same comps context the card offers.
@@ -201,7 +235,7 @@ function feedTone(lot: AuctionLot, belowIds: Set<string>, hasSig: Set<string>): 
   return undefined;
 }
 
-function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down' }) {
+function FeedRow({ lot, onOpen, tone, signal }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; signal?: ReturnType<typeof lotSignal> }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -228,6 +262,12 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
       <span className="ray-feedrow-main">
         <span className="ray-feedrow-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
         <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
+        {/* R8 — the mobile deal-scan line: the one signal grammar + confidence */}
+        {signal && (
+          <span className={styles.feedrowSig} data-dir={signal.label === 'Below Market' ? 'up' : 'down'}>
+            {gapGrammar(signal.label, signal.pct)} · <em>{confidenceMeter(signal.confidence).dots}</em>
+          </span>
+        )}
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
@@ -486,6 +526,7 @@ export default function TerminalHomePage() {
     return perf[Math.floor(perf.length / 2)];
   }, [sold]);
 
+
   const recentRows = useMemo(
     () => (isSportsScience ? ((recentSold[activeKey] as RecentSoldRow[] | undefined) || []) : []),
     [isSportsScience, recentSold, activeKey]
@@ -544,21 +585,32 @@ export default function TerminalHomePage() {
     const hammersSub = thisWeek === 0
       ? 'none scheduled this week'
       : `across ${hammerWeek.houses} ${hammerWeek.houses === 1 ? 'house' : 'houses'}`;
+    // R15 — a dead "0" is a zero-state, not a figure: when nothing hammers this
+    // week, the cell answers the reader's actual question — when's the NEXT one.
+    const hammersItem: StripItem =
+      thisWeek === 0 && nextHammer
+        ? {
+            k: 'Next hammer',
+            to: 0,
+            format: () => formatDate(nextHammer.lot.saleDate),
+            s: `${nextHammer.word} · ${nextHammer.lot.auctionHouse}`,
+          }
+        : { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub };
     if (estValue === 0 && active.length > 0) {
       return [
         { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
         { k: 'On the block', to: active.length, format: asComma, s: 'live lots — bid sales, no estimates' },
-        { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
+        hammersItem,
         { k: 'Live houses', to: liveHouses, format: asComma, s: 'sourcing this market' },
       ];
     }
     return [
       { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
       { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
-      { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
+      hammersItem,
       { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up', lens: true },
     ];
-  }, [upcoming, belowIds, totalRealized, topArtist, hammerWeek]);
+  }, [upcoming, belowIds, totalRealized, topArtist, hammerWeek, nextHammer]);
 
   // The watchlist strip — what changed since you saved.
   const watchStrip = useMemo(() => {
@@ -609,6 +661,78 @@ export default function TerminalHomePage() {
   }, [tape, activeKey]);
 
   const onMoverSelect = (key: Market) => setMarket(key);
+
+  // M17 — the mobile hero swipe steps through the LIVE markets in pill order,
+  // driving the exact same setMarket the pills use.
+  const onMarketStep = (dir: 1 | -1) => {
+    const live = MARKETS.filter(m => m.live);
+    const i = live.findIndex(m => m.key === market);
+    const next = live[(i + dir + live.length) % live.length];
+    setMarket(next.key);
+  };
+
+  // M6 — TONIGHT'S WALL: the call lot + the next best flagged-with-image, then
+  // photographed lots in hammer order as backfill. MORE than 5 candidates ship
+  // so a dead image drops out and the next one hangs in its place.
+  const wallItems = useMemo<WallItem[]>(() => {
+    const withImg = upcoming.filter(l => l.imageUrl);
+    const pct = belowSignal.pct;
+    const flagged = withImg
+      .filter(l => belowIds.has(l.id))
+      .sort((a, b) => dealScore(b, pct.get(b.id) || 0) - dealScore(a, pct.get(a.id) || 0));
+    const call = flagged[0] || null;
+    const rest = [...flagged.slice(1), ...withImg.filter(l => !belowIds.has(l.id))];
+    const ordered = call ? [call, ...rest] : withImg;
+    return ordered.slice(0, 14).map(l => ({
+      lot: l,
+      flagged: belowIds.has(l.id),
+      pct: pct.get(l.id),
+      call: !!call && l.id === call.id,
+    }));
+  }, [upcoming, belowIds, belowSignal]);
+  const wallEl = wallItems.length >= 3 ? (
+    <TonightsWall
+      items={wallItems}
+      onOpen={setTableLot}
+      variant={mounted && isMobile ? 'mobile' : 'desktop'}
+      play={!fromCache}
+    />
+  ) : null;
+
+  // M15 — THE BELOW-MARKET SWEEP: activating the lens sends a butter tracer
+  // down the toolbar hairline and ignites the flagged rings in DOM order;
+  // clearing reverses the sweep (the rings persist — they're data).
+  const prevBelow = React.useRef(feedFilters.belowOnly);
+  const [sweep, setSweep] = useState<null | 'on' | 'off'>(null);
+  useEffect(() => {
+    if (prevBelow.current === feedFilters.belowOnly) return;
+    prevBelow.current = feedFilters.belowOnly;
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setSweep(feedFilters.belowOnly ? 'on' : 'off');
+    const t = setTimeout(() => setSweep(null), 1500);
+    return () => clearTimeout(t);
+  }, [feedFilters.belowOnly]);
+
+  // M13 — the feed hover preview (desktop table only): 150ms intent delay,
+  // one floating mat plate at a time, instant leave. Lazy by construction —
+  // the plate (and its image request) exists only while hovered.
+  const hoverFine = useMediaQuery('(hover: hover) and (pointer: fine)', false);
+  const [hoverPrev, setHoverPrev] = useState<{ lot: AuctionLot; y: number; x: number } | null>(null);
+  const hoverTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rowEnter = (lot: AuctionLot) => (e: React.MouseEvent<HTMLTableRowElement>) => {
+    if (!hoverFine) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setHoverPrev({ lot, y: r.top, x: r.right }), 150);
+  };
+  const rowLeave = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+    setHoverPrev(null);
+  };
+  useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
+  // the preview follows the feed, never a stale market/filter set
+  useEffect(() => { setHoverPrev(null); }, [feedKey, activeKey]);
 
   return (
     <>
@@ -684,7 +808,9 @@ export default function TerminalHomePage() {
               bidComp={bidComp[activeKey]}
               totalLots={totalLots}
               totalSold={meta.totalSold ?? 0}
-              houses={new Set(marketLots.map(l => l.auctionHouse)).size || (ray.sources?.length ?? 7)}
+              /* R1 — the corpus line is a FULL-CORPUS truth (507,107 lots · 7
+                 houses): the crawl's source list, not the eager slice's houses */
+              houses={ray.sources?.length || new Set(marketLots.map(l => l.auctionHouse)).size || 7}
               belowMkt={belowMktCount}
               onOpenBelow={openBelowLens}
               onCommand={openCommandK}
@@ -692,6 +818,9 @@ export default function TerminalHomePage() {
               onBlock={upcoming.length}
               play={!fromCache}
               isMobile={mounted && isMobile}
+              backtest={backtest}
+              wall={wallEl}
+              onMarketStep={onMarketStep}
             />
 
             {/* ══ the live tape — realized hammers, scoped to the market ══ */}
@@ -786,7 +915,7 @@ export default function TerminalHomePage() {
 
             {/* ══ THE FEED — On the block (full parity) ══ */}
             {upcoming.length > 0 && (
-              <section id="on-the-block" className={styles.feedSection}>
+              <section id="on-the-block" className={styles.feedSection} data-sweep={sweep ?? undefined}>
                 <div
                   style={{
                     display: 'flex',
@@ -797,7 +926,8 @@ export default function TerminalHomePage() {
                     padding: '10px 0 14px',
                   }}
                 >
-                  <h2 className={styles.feedTitle}>On the block</h2>
+                  {/* M11 — the section head earns the serif voice, one italic butter word */}
+                  <h2 className={styles.feedTitle}>On the <em>block</em></h2>
                   {nextHammer && (
                     <span style={{ fontSize: 13, color: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data), monospace' }}>
                       Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}
@@ -805,20 +935,24 @@ export default function TerminalHomePage() {
                   )}
                 </div>
 
-                <FeedToolbar
-                  lots={upcoming}
-                  belowIds={belowIds}
-                  filters={feedFilters}
-                  onChange={handleFilters}
-                  shown={feed.length}
-                  total={upcoming.length}
-                  market={activeKey}
-                  onMarketReset={() => setMarket('all')}
-                  view={effectiveView}
-                  onViewChange={handleView}
-                  pageSize={pageSize}
-                  showToggle={!narrowView}
-                />
+                <div className={styles.toolbarSweepWrap}>
+                  <FeedToolbar
+                    lots={upcoming}
+                    belowIds={belowIds}
+                    filters={feedFilters}
+                    onChange={handleFilters}
+                    shown={feed.length}
+                    total={upcoming.length}
+                    market={activeKey}
+                    onMarketReset={() => setMarket('all')}
+                    view={effectiveView}
+                    onViewChange={handleView}
+                    pageSize={pageSize}
+                    showToggle={!narrowView}
+                  />
+                  {/* M15 — the lens tracer riding the toolbar hairline */}
+                  {sweep && <span key={sweep} className={styles.lensTracer} data-dir={sweep} aria-hidden />}
+                </div>
 
                 {effectiveView === 'table' && feed.length > 0 ? (
                   <div key={feedKey} className="ray-feed-rekey" style={{ overflowX: 'auto' }}>
@@ -838,7 +972,7 @@ export default function TerminalHomePage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {feed.slice(0, visibleUpcoming).map(lot => {
+                        {feed.slice(0, visibleUpcoming).map((lot, ri) => {
                           const sig = lotSignal(lot, marketLots);
                           const dth = daysToHammer(lot, localToday());
                           return (
@@ -846,10 +980,12 @@ export default function TerminalHomePage() {
                               key={lot.id}
                               onClick={() => setTableLot(lot)}
                               onKeyDown={e => { if (e.key === 'Enter') setTableLot(lot); }}
+                              onMouseEnter={rowEnter(lot)}
+                              onMouseLeave={rowLeave}
                               tabIndex={0}
                               role="button"
                               aria-label={`Comps for ${craftTitle(lot.title)}`}
-                              style={{ cursor: 'pointer' }}
+                              style={{ cursor: 'pointer', ['--ring-i' as string]: Math.min(ri, 14) }}
                             >
                               <td style={{ width: 56 }}>
                                 <span className="thumb-plate" data-tone={feedTone(lot, belowIds, belowSignal.hasSig)} style={{ position: 'relative' }}>
@@ -896,7 +1032,8 @@ export default function TerminalHomePage() {
                               <td>
                                 {sig
                                   ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
-                                      {signalMagnitude(sig.label, sig.pct)}<span style={{ color: 'var(--color-text-faint)', marginLeft: 5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
+                                      {/* R18 — the one signal grammar */}
+                                      {gapGrammar(sig.label, sig.pct)}
                                       <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
                                         {confidenceMeter(sig.confidence).dots}
                                       </span>
@@ -943,19 +1080,20 @@ export default function TerminalHomePage() {
                         <div
                           key={lot.id}
                           className="ray-feed-rekey ray-feeditem-row"
-                          style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                          style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0, ['--ring-i' as string]: Math.min(i, 14) }}
                         >
                           <FeedRow
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
                             tone={feedTone(lot, belowIds, belowSignal.hasSig)}
+                            signal={lotSignal(lot, marketLots)}
                           />
                         </div>
                       ) : (
                         <div
                           key={lot.id}
                           className="ray-feed-rekey ray-feeditem-card"
-                          style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                          style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0, ['--ring-i' as string]: Math.min(i, 14) }}
                         >
                           <LotCard
                             lot={lot}
@@ -970,6 +1108,17 @@ export default function TerminalHomePage() {
                     )
                   )}
                 </div>
+                )}
+
+                {/* M13 — the floating preview plate (desktop table, fine pointers) */}
+                {hoverFine && effectiveView === 'table' && hoverPrev && !tableLot && (
+                  <HoverPlate
+                    lot={hoverPrev.lot}
+                    x={hoverPrev.x}
+                    y={hoverPrev.y}
+                    tone={feedTone(hoverPrev.lot, belowIds, belowSignal.hasSig)}
+                    sig={lotSignal(hoverPrev.lot, marketLots)}
+                  />
                 )}
 
                 {tableLot && (
