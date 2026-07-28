@@ -92,10 +92,34 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   // (never art/design), so these checks can't hijack a Nakashima "fossilized
   // walnut" table or a KAWS "Companion" into science forms — and vice versa.
   if (lot.category === 'object') {
-    // horology & jewelry — explicit jewelry nouns first (a Panthère brooch is
-    // jewelry even though Panthère is also a watch line)
+    // horology & jewelry
     if (/\bpocket ?watch\b/.test(tm)) return 'pocket-watch';
+    // Explicit jewelry nouns first (a Panthère brooch is jewelry even though
+    // Panthère is also a watch line). SINGULAR forms — unchanged from before.
     if (/\b(ring|necklace|brooch|earrings?|pendant|bangle|choker|cufflinks)\b/.test(t)) return 'jewelry';
+    // Plural / set jewelry forms the singular gate missed. A watch-MODEL word
+    // (Ellipse, Tank, Santos, Panthère) is ALSO a jewelry line, so a lot whose
+    // OBJECT noun is jewelry (a ring SET, a pair of bangles) must resolve to
+    // jewelry BEFORE the watch-model cues below fire. Concrete leak:
+    //   "…GEM-SET 'ELLIPSE' RINGS"  →  jewelry, not a wristwatch.
+    // But an actual WATCH lot can also say "set of … wristwatches" (a boxed set
+    // of watches) or "wristwatch with … bracelet and set of golf clubs" — so the
+    // plural/set jewelry gate must NOT fire when the title describes a watch.
+    // The substring "watch" (wristwatch/watches/"bracelet watch"/…) — plus
+    // montre / chronograph, which never contain it — marks watch context and
+    // keeps the lot a wristwatch. A genuine jewelry set never says "watch".
+    const watchWord = /watch/.test(tm) || /\b(montre|chronograph|chronometer|chronometre)\b/.test(tm);
+    if (!watchWord) {
+      // (a) a "SET OF … <jewelry noun>" construction — the lot IS the jewelry
+      //     set. 'rings'/'clips' are safe here: "chapter rings"/"tie clip" never
+      //     appear inside a bare "set of …" jewelry phrase.
+      if (/\bset of\b/.test(t)
+        && /\b(rings?|brooch(?:es)?|earrings?|necklaces?|bracelets?|pendants?|bangles?|cufflinks|studs?|clips?)\b/.test(t)) return 'jewelry';
+      // (b) an unambiguously-plural jewelry noun that is never a watch/dial/
+      //     hardware feature word. 'rings'/'clips' are DELIBERATELY excluded here
+      //     ("chapter rings" a dial, "wrist rings" a spacesuit, "tie/paper clip").
+      if (/\b(necklaces|brooches|bangles|pendants|earrings|tiaras?|anklets)\b/.test(t)) return 'jewelry';
+    }
     // watch titles are catalog-style ("Cosmograph Daytona, Ref: 16518",
     // "Montre bracelet en or…") — the word "watch" is often absent
     if (/\b(wristwatch|wrist ?watch|montre)\b/.test(tm)
@@ -438,6 +462,18 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   const form = formOf(lot);
   if (form === 'unknown') return null;
   const estMid = (est.low + est.high) / 2;
+
+  // Watches with NO reference/model identity → abstain. watchKey is null when
+  // the title carries neither a reference number nor a model line ("Omega,
+  // wristwatch, 32,5 mm."). Its pool would be EVERY no-reference wristwatch of
+  // the maker ($37–$6.25M for Rolex, $90–$10.3M for Patek) — the comparableTo
+  // gate matches all watchKey===null siblings, and the dispersion guard lets
+  // Patek slip through at IQR/med 2.30. A blank beats a wrong number: without a
+  // reference there is no legitimate comp cohort, so produce no signal. This
+  // MATCHES the server engine, which abstains on the same lots — its title
+  // cosine across catalog-style watch titles falls under the 0.45 gate with no
+  // reference bonus to lift it, so resolveComps/estimateValue seat no pool.
+  if (WATCHES.has(form) && watchKeyOf(lot) === null) return null;
 
   // Sports/science OBJECT lots (game-used jerseys, trophies, tickets) share
   // one artist-slug per CATEGORY ('game-used'), not per maker — so an
