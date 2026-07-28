@@ -111,7 +111,10 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
       .map(l => ({
         label: craftTitle(l.title),
         hint: `${ARTIST_LABEL[l.artist] || l.artist} · on the block`,
-        path: `/${l.artist}#on-the-block`,
+        // The lot permalink — /lot?id=<id> resolves any lot client-side (see
+        // app/lot/page.tsx). Was the maker lander (/<artist>#on-the-block),
+        // which dropped the collector onto the feed instead of the lot.
+        path: `/lot?id=${encodeURIComponent(l.id)}`,
         kind: 'lot' as const,
       }));
     return [...itemMatches, ...lotMatches];
