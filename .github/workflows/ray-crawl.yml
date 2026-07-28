@@ -6,6 +6,18 @@ name: Ray - Crawl Auction Data (monolith — manual fallback)
 # cron, so it never double-fires with nightly.yml). It writes the full corpus
 # (data/corpus/{lots,sold-archive}.json.gz) directly, which the segmented
 # pipeline can re-bootstrap from. Use only if the staged pipeline is wedged.
+#
+# ============================================================================
+# KNOWN GAP — READ BEFORE DISPATCHING: this monolith does NOT write the
+# per-house segment files (data/corpus/segments/<house>.ndjson.gz) that
+# nightly.yml treats as its store of record. Any lots a fallback run crawls
+# live ONLY in the full corpus it pushes — the NEXT segmented nightly pulls
+# the (older) segments, reunions them, and will silently REVERT this run's
+# crawl data. To make a fallback run stick, immediately afterwards run
+# scripts/bootstrap-segments.ts against the fresh corpus and push each
+# segment with `scripts/data-store.sh push-segment <house>` so the segments
+# catch up before the next nightly fires.
+# ============================================================================
 
 on:
   workflow_dispatch:

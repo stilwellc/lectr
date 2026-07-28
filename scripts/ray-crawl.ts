@@ -1139,8 +1139,8 @@ function parseWrightBasicItem(item: any, session: any, sessionKey: string, artis
   // origin platform when the selling house differs (identity §1a / W12). W12
   // also renamespaces the id: a Rago lot is `rago-*` (invariant 6, id prefix
   // matches the SELLING house), with `platform:'wright'` carrying the origin.
-  // Existing wright-* Rago rows are renamespaced by migrate-v2, so born-v2
-  // crawler ids line up after the migration lands.
+  // Existing wright-* Rago rows were renamespaced by the (completed, since
+  // removed) migrate-v2 backfill, so born-v2 crawler ids line up with it.
   const platform = auctionHouse === 'Rago' ? 'wright' : null;
   const idPrefix = auctionHouse === 'Rago' ? 'rago' : 'wright';
 
@@ -2659,8 +2659,8 @@ type MoneyBlock = Pick<AuctionLot,
 function stampMoney(m: MoneyIn): MoneyBlock {
   const { rate, asOf } = fxRateFor(m.nativeCurrency, m.saleDate);
   // conversion goes through toUsdDated (normalize.ts) so the fresh row's USD
-  // rounding is byte-identical to the backfill's — ONE definition of "native →
-  // dated USD", shared by crawler + migrate-v2.
+  // rounding is byte-identical to the (completed) v2 backfill's — ONE
+  // definition of "native → dated USD".
   const conv = (n: number | null) => toUsdDated(n, m.nativeCurrency, m.saleDate).usd;
 
   // estimates are ALWAYS native + derived (present on sold and upcoming alike)

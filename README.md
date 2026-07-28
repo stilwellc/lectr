@@ -136,7 +136,6 @@ scripts/corpus-io.ts        write the split:
 - **`corpus-io.ts`** — the corpus/served split. The full corpus is the source of truth (gzipped, persisted to R2); the served files are a null-omitted display projection, sharded under Cloudflare's 25 MB/file limit.
 - **`data-store.sh`** — the R2 store: write-once `versions/<stamp>/` payloads behind `latest/pointer.txt`, legacy-path migration, and the keep-14 `prune`.
 - **`lib/corpus-normalize.ts`** — deterministic, **idempotent corpus-hygiene passes** run in both assemble and build-market before anything is built or persisted: clamp impossible years, reroute/evict science misroutes (the 501 leaked art/watch lots → 0, using the detectors from `audit-data-quality.ts`), fill missing watch references via `lib/identity-enrich.ts` (coverage 63.5% → 71.5%), and reconcile `saleDate` down to `saleDateTime`'s day — killing the crawl-day fallback dates that made long-sold lots look live on the block.
-- **`migrate-v2.ts`** — the one-time backfill that brought the existing corpus to v2 (`--dry-run` prints a diff report; `--commit` rewrites). Idempotent.
 - **`build-upcoming.ts`** — the eager payload: upcoming lots + precomputed signals + the tape + per-market demand.
 - **`build-backtest.ts`** / **`build-backtest-incremental.ts`** — the point-in-time replay of flagged vs. unflagged calls, split for speed: both are thin entries over the shared **`backtest-core.ts`** engine. The nightly (Mon–Sat) incremental rehydrates a gzipped sidecar accumulator state, scores *only* lots that closed since the last run, and republishes — **~17s where the full replay ran ~54min**, validated byte-identical against a full rebuild. Sunday runs the full replay as the correctness backstop (a late-ingested prior enters an already-scored target's pool only on a full pass; drift is bounded to one week).
 - **`assemble.ts`** — reunions the per-segment crawl output into the full corpus, runs the hygiene passes and the sanity gate (refuses to publish a shrunken or empty book), then drives the market build.
@@ -170,7 +169,7 @@ The lander pairs the two: the hero shows **demand**, the ledger rail shows **yea
 
 The card vertical is the largest in the corpus and carries **no estimates** (Goldin publishes none), so neither demand nor the hedonic can run there. But the same physical card resold twice *is* its own control — no mix bias, no hedonic dummies. [`scripts/repeat-sales.ts`](scripts/repeat-sales.ts) implements the **Bailey-Muth-Nourse repeat-sales regression** (the Case-Shiller method): consecutive-sale pairs of the same object regress log-price relatives onto the period design, with the standard 3-stage GLS gap-weighting to de-bias long holding intervals, and the same honesty gates as the hedonic — a horizon publishes only past minimum pair and distinct-object counts *and* a sign-resolving 95% CI.
 
-Objects are linked by a caller-supplied key, never guessed. For cards it's the composite `_card` fingerprint — **player + year + set + card number + grade + serial** — with grades parsed by [`scripts/lib/card-identity.ts`](scripts/lib/card-identity.ts) (a structured grader on ~87% of cards, a numeric grade on ~75%; grading-cert numbers are absent from the source data, so the fingerprint stands in). Live in production: **sports-cards publishes 3Y +87% [79, 95]** on 14,482 linked objects / 18,156 pairs — the estimate-less card market went from a descriptive read to a real, CI'd index.
+Objects are linked by a caller-supplied key, never guessed. For cards it's the composite `_card` fingerprint — **player + year + set + card number + grade + serial** — with grades parsed by [`app/lib/cards.ts`](app/lib/cards.ts) (a structured grader on ~87% of cards, a numeric grade on ~75%; grading-cert numbers are absent from the source data, so the fingerprint stands in). Live in production: **sports-cards publishes 3Y +87% [79, 95]** on 14,482 linked objects / 18,156 pairs — the estimate-less card market went from a descriptive read to a real, CI'd index.
 
 **Sub-markets** ([`scripts/sub-markets.ts`](scripts/sub-markets.ts)) view every vertical as a hierarchy. A bucket like *meteorites* or *game-used* is a sub-market, not a maker — so it carries no hedonic index — but each sub-market shows the strongest honest read its data supports: a verified CI'd move (hedonic where a real maker clears the bar, **repeat-sales** where the card fingerprint links resales), else measured demand where it carries estimates, else a descriptive read (typical price · all-time record · volume). Each indexed row carries an `indexMethod` (`'hedonic' | 'repeat-sale'`) surfaced in the UI, so the two are never conflated. Nothing prints an appreciation the engine won't defend.
 
@@ -180,7 +179,7 @@ Objects are linked by a caller-supplied key, never guessed. For cards it's the c
 app/
   page.tsx                 renders the Terminal home
   preview/terminal/        the Terminal implementation — IndexHero, SubMarketBoard,
-                           MoversBoard, VerifiedMovers, RecordBoard, MarketChart, VerticalGhost
+                           VerifiedMovers, RecordBoard, MarketChart, VerticalGhost
   [artist]/                per-maker market pages
   {art,design,watches,     market landers (static, re-scope the terminal)
    sports,science,culture,
@@ -200,7 +199,6 @@ scripts/
   ray-crawl.ts             the crawler (incremental Mon–Sat, full sweep Sunday)
   corpus-io.ts             corpus/served split
   data-store.sh            R2 store — write-once versions/ + pointer + prune
-  migrate-v2.ts            one-time v2 backfill
   assemble.ts              reunion + hygiene passes + sanity gate + market build
   build-market.ts          per-market series + indices + sub-markets
   hedonic-index.ts         confidence-gated hedonic price-movement engine
@@ -214,7 +212,6 @@ scripts/
   build-og.tsx             static share cards
   lib/
     corpus-normalize.ts    idempotent corpus-hygiene passes
-    card-identity.ts       card grader/grade parser (the _card fingerprint)
     identity-enrich.ts     objectFingerprint + watch reference extractor
     skip-set.ts            incremental-crawl "fully resolved sale" predicate
     fetch-retry.ts         transient-failure retry (5xx/network/timeout only)

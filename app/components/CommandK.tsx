@@ -17,7 +17,7 @@ interface Item {
 }
 
 /** Any surface can open the palette by dispatching this window event —
- *  the nav's Find-a-maker pill and the ⌘K hint button both use it. */
+ *  the nav's Find-a-maker pill and the Terminal's search affordance use it. */
 export const OPEN_CK_EVENT = 'lectr:open-ck';
 
 /**

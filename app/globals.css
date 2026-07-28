@@ -238,34 +238,12 @@ body {
 }
 
 /* Static grain — no animation, ever */
-.grain-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
-  opacity: var(--grain-opacity);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 200px 200px;
-}
 
 /* ============================================================
    Footer — mobile touch targets & narrow-viewport safety
    ============================================================ */
 
 /* Long email never forces horizontal scroll at 320px */
-.footer-email {
-  display: inline-block;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 768px) {
-  /* Reach ~44px touch targets on phones. The email link keeps its
-     inline padding-bottom (underline stays tight), so pad the top. */
-  .footer-email { padding-top: 18px; margin-top: -8px; }
-  .footer-link { padding: 11px 0; }
-}
 
 /* ============================================================
    Keyframes — only what earns its place
@@ -463,67 +441,12 @@ h1 {
 }
 
 /* The room the glass lives in — ambient light so blur has something to bend */
-.ambient-field {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  overflow: hidden;
-}
-.ambient-field .orb-gold,
-.ambient-field .orb-wine {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-}
-.ambient-field .orb-gold {
-  width: min(44vw, 560px);
-  height: min(44vw, 560px);
-  top: -8%;
-  right: -6%;
-  background: radial-gradient(circle, rgba(212, 184, 150, 0.07) 0%, transparent 65%);
-  animation: floatSlow 26s ease-in-out infinite;
-}
-.ambient-field .orb-wine {
-  width: min(36vw, 460px);
-  height: min(36vw, 460px);
-  bottom: -10%;
-  left: -8%;
-  background: radial-gradient(circle, rgba(193, 102, 107, 0.05) 0%, transparent 65%);
-  animation: floatSlow 32s ease-in-out infinite reverse;
-}
-[data-theme="light"] .ambient-field .orb-gold {
-  background: radial-gradient(circle, rgba(168, 135, 93, 0.10) 0%, transparent 65%);
-}
-[data-theme="light"] .ambient-field .orb-wine {
-  background: radial-gradient(circle, rgba(143, 65, 73, 0.07) 0%, transparent 65%);
-}
 
 /* Cursor veil — a faint light that travels with the pointer (fine pointers only) */
-.cursor-veil {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 560px;
-  height: 560px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgb(var(--glass-shimmer) / 0.028) 0%, transparent 65%);
-  pointer-events: none;
-  z-index: 0;
-  transform: translate(-50%, -50%);
-  opacity: 0;
-  transition: opacity 0.6s ease;
-  will-change: transform;
-}
-.cursor-veil.on { opacity: 1; }
-@media (hover: none), (pointer: coarse) {
-  .cursor-veil { display: none; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .glass::before { background: linear-gradient(180deg, var(--glass-specular) 0%, transparent 45%); }
-  .cursor-veil { display: none; }
-  .ambient-field .orb-gold, .ambient-field .orb-wine { animation: none; }
+
 }
 
 @keyframes floatSlow {
@@ -550,8 +473,7 @@ h1 {
 
 /* THE RAIL — one left edge for the entire site.
    Every page container, Nav inner, hero, Index, Philosophy,
-   Footer migrates here. Sole sanctioned exception: the home
-   hero's full-bleed bottom Horizon. */
+   Footer migrates here. */
 .rail {
   width: 100%;
   max-width: var(--content-max);
@@ -559,31 +481,8 @@ h1 {
   padding-inline: var(--gutter);
 }
 
-
-/* LINK GRAMMAR — exactly two tiers, sitewide.
-   Tier 1 .link-draw = inline/read links (underline draws in).
-   Tier 2 .link-action = labeled actions; arrow glyph goes inside
-   <span class=arrow> (data-dir=back for left-pointing links). */
-.link-draw {
-  position: relative;
-  text-decoration: none;
-}
-.link-draw::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -2px;
-  width: 100%;
-  height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform var(--duration-base) var(--ease-signature);
-}
-.link-draw:hover::after,
-.link-draw:focus-visible::after {
-  transform: scaleX(1);
-}
+/* LINK GRAMMAR — .link-action = labeled actions; arrow glyph goes
+   inside <span class=arrow> (data-dir=back for left-pointing links). */
 
 .link-action {
   position: relative;
@@ -598,7 +497,6 @@ h1 {
 /* Invisible hit-area expander — inline links reach the 24px tap
    minimum (WCAG 2.5.8) without moving a pixel of layout. Vertical
    only, so neighboring links never overlap horizontally. */
-.link-draw::before,
 .link-action::before {
   content: "";
   position: absolute;
@@ -617,98 +515,6 @@ h1 {
   transform: translateX(-2px);
 }
 
-/* ROUTE RITUAL — consumed by app/template.tsx.
-   Horizon first, then light: the line draws (480ms), content
-   rises 20px into place (600ms, 90ms behind). data-entered
-   releases the transform containing block after arrival. */
-@keyframes routeDraw {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-@keyframes routeRise {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.route-line {
-  height: 1px;
-  transform-origin: left;
-  animation: routeDraw 480ms var(--ease-signature) both;
-}
-.route-content {
-  animation: routeRise 600ms var(--ease-signature) 90ms both;
-}
-.route-content[data-entered=true] {
-  animation: none; /* releases the transform containing block */
-}
-
-/* MASKED LINE REVEALS — consumed by RevealLines.
-   inview: server HTML ships .rl-revealed (visible without JS); the
-   component arms the mask on mount, then reveals on intersection.
-   mount: server HTML ships .rl-mount (lines masked) and the reveal
-   is this CSS animation on the paint clock — the same clock as the
-   other entrance beats, no hydration beat, and it plays without JS
-   (a noscript override in the component makes no-JS instant). */
-.rl-mask {
-  display: block;
-  overflow: hidden;
-}
-.rl-line {
-  display: block;
-  transform: translateY(110%);
-}
-.rl-revealed .rl-line {
-  transform: translateY(0);
-  transition: transform 600ms var(--ease-signature);
-}
-.rl-mount .rl-line {
-  animation: rlLineRise 600ms var(--ease-signature) both;
-}
-@keyframes rlLineRise {
-  from { transform: translateY(110%); }
-  to { transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .rl-mount .rl-line { animation: none; transform: none; }
-}
-
-/* EDITORIAL UNVEIL — consumed by Reveal variant=unveil.
-   Classes are applied by JS on mount only (no-JS HTML stays
-   visible). --unveil-delay carries the optional stagger. */
-.unveil {
-  clip-path: inset(100% 0 0 0);
-}
-.unveil img,
-.unveil .unveil-img {
-  transform: scale(1.06);
-}
-.unveil.is-shown {
-  clip-path: inset(0 0 0 0);
-  transition: clip-path var(--duration-slow) var(--ease-signature);
-  transition-delay: var(--unveil-delay, 0ms);
-}
-.unveil.is-shown img,
-.unveil.is-shown .unveil-img {
-  transform: scale(1);
-  transition: transform var(--duration-slow) var(--ease-signature);
-  transition-delay: var(--unveil-delay, 0ms);
-}
-
-/* HORIZON DRAW — consumed by Horizon draw prop.
-   Applied by JS on mount only; no-JS HTML keeps the full line. */
-.horizon-draw {
-  transform: scaleX(0);
-}
-.horizon-draw[data-origin=center] {
-  transform-origin: center;
-}
-.horizon-draw[data-origin=left] {
-  transform-origin: left;
-}
-.horizon-draw.is-drawn {
-  transform: scaleX(1);
-  transition: transform var(--duration-slow) var(--ease-signature);
-}
-
 /* SECTION MARK — the ghost numeral. Static, aria-hidden,
    never above 4%. Component: app/components/motion/SectionMark. */
 .section-mark {
@@ -717,125 +523,6 @@ h1 {
 }
 [data-theme=light] .section-mark {
   opacity: 0.04;
-}
-
-/* ============================================================
-   ROUTE-AWARE AMBIENT — each orb is two stacked gradient layers;
-   ONLY opacity transitions (never background). Shell applier
-   renders: .ambient-field > .orb.orb-a / .orb.orb-b, each
-   containing .orb-layer-gold + .orb-layer-wine, and sets
-   data-ambient=neutral|wine|gold on the field div.
-   Legacy single-layer .orb-gold/.orb-wine rules above remain
-   until Shell migrates the markup.
-   ============================================================ */
-.ambient-field .orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-}
-.ambient-field .orb-a {
-  width: min(44vw, 560px);
-  height: min(44vw, 560px);
-  top: -8%;
-  right: -6%;
-  animation: floatSlow 26s ease-in-out infinite;
-}
-.ambient-field .orb-b {
-  width: min(36vw, 460px);
-  height: min(36vw, 460px);
-  bottom: -10%;
-  left: -8%;
-  animation: floatSlow 32s ease-in-out infinite reverse;
-}
-.ambient-field .orb-layer-gold,
-.ambient-field .orb-layer-wine {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  transition: opacity 1600ms var(--ease-signature);
-}
-.ambient-field .orb-layer-gold {
-  background: radial-gradient(circle, rgba(212, 184, 150, 0.07) 0%, transparent 65%);
-}
-.ambient-field .orb-layer-wine {
-  background: radial-gradient(circle, rgba(193, 102, 107, 0.05) 0%, transparent 65%);
-}
-[data-theme=light] .ambient-field .orb-layer-gold {
-  background: radial-gradient(circle, rgba(168, 135, 93, 0.10) 0%, transparent 65%);
-}
-[data-theme=light] .ambient-field .orb-layer-wine {
-  background: radial-gradient(circle, rgba(143, 65, 73, 0.07) 0%, transparent 65%);
-}
-/* Default = current balance: gold top-right, wine bottom-left */
-.ambient-field .orb-a .orb-layer-gold { opacity: 1; }
-.ambient-field .orb-a .orb-layer-wine { opacity: 0; }
-.ambient-field .orb-b .orb-layer-gold { opacity: 0; }
-.ambient-field .orb-b .orb-layer-wine { opacity: 1; }
-/* Section tints */
-.ambient-field[data-ambient=wine] .orb .orb-layer-wine { opacity: 1; }
-.ambient-field[data-ambient=wine] .orb .orb-layer-gold { opacity: 0.35; }
-.ambient-field[data-ambient=gold] .orb .orb-layer-gold { opacity: 1; }
-.ambient-field[data-ambient=gold] .orb .orb-layer-wine { opacity: 0.35; }
-/* Neutral restores the default balance (wins on specificity) */
-.ambient-field[data-ambient=neutral] .orb-a .orb-layer-gold { opacity: 1; }
-.ambient-field[data-ambient=neutral] .orb-a .orb-layer-wine { opacity: 0; }
-.ambient-field[data-ambient=neutral] .orb-b .orb-layer-gold { opacity: 0; }
-.ambient-field[data-ambient=neutral] .orb-b .orb-layer-wine { opacity: 1; }
-
-@media (prefers-reduced-motion: reduce) {
-  .ambient-field .orb { animation: none; }
-}
-
-/* ══════════════════════════════════════════════════════════════
-   STAT CARDS — a shared, alive treatment across every Ray page
-   (overview, artist, analytics). A wine signature tick anchors the
-   figure; the card lifts and warms its border on hover so the whole
-   surface reads as considered, not a flat grid of boxes.
-   ══════════════════════════════════════════════════════════════ */
-.ray-stat-card,
-.ray-portfolio-card {
-  transition:
-    transform 280ms var(--ease-signature),
-    box-shadow 280ms var(--ease-signature),
-    border-color 280ms var(--ease-signature);
-}
-.ray-stat-card::after,
-.ray-portfolio-card::after {
-  content: '';
-  position: absolute;
-  top: 22px;
-  left: -1px; /* sit on the card's own left border */
-  width: 2px;
-  height: 26px;
-  border-radius: 0 2px 2px 0;
-  background: linear-gradient(180deg, var(--color-accent-wine), transparent);
-  opacity: 0.85;
-  transition: height 280ms var(--ease-signature), opacity 280ms var(--ease-signature);
-}
-.ray-stat-card:hover,
-.ray-portfolio-card:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--color-accent-wine) 32%, var(--glass-border));
-  box-shadow:
-    0 1px 0 0 rgba(232, 213, 188, 0.06) inset,
-    0 18px 40px rgba(8, 6, 3, 0.30);
-}
-[data-theme="light"] .ray-stat-card:hover,
-[data-theme="light"] .ray-portfolio-card:hover {
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
-    0 18px 36px rgba(93, 74, 48, 0.12);
-}
-.ray-stat-card:hover::after,
-.ray-portfolio-card:hover::after {
-  height: 34px;
-  opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ray-stat-card,
-  .ray-portfolio-card { transition: none; }
-  .ray-stat-card:hover,
-  .ray-portfolio-card:hover { transform: none; }
 }
 
 /* LOT CARDS — the feed should respond to the cursor: a gentle lift, a
@@ -1017,12 +704,10 @@ h1 {
   color: var(--paper-ink);
 }
 .ray-band { border-block: 1px solid var(--paper-edge); }
-/* two-class specificity: .ray-appr's own dark background is declared later
-   in the sheet — the paper must win on the composed element */
-.ray-appr.ray-paper { background: var(--paper); }
+
 /* the ledger's dark cells go transparent — ink sits DIRECTLY on the paper */
 /* the printed ledger line — centered columns ruled like a table in a
-   catalogue's front matter, matching the barometer's certificate language */
+   catalogue's front matter, in the brand's certificate language */
 .ray-band .ray-ledger { background: var(--paper-line); border-block: none; }
 .ray-band .ray-ledger > * { background: var(--paper) !important; text-align: center; padding: 15px 14px 17px; }
 .ray-band .ray-ledger > *:first-child { padding-left: 14px; }
@@ -1036,7 +721,7 @@ h1 {
 .ray-band .ray-ledger-v.up { color: var(--paper-up); }
 .ray-band .ray-ledger-s { color: var(--paper-muted); font-size: 11.5px; margin-top: 6px; }
 /* small captions stay on the (AA-passing) muted ink, never the faint ramp */
-.ray-band .ray-ledger-s, .ray-band .ray-strip-s { color: var(--paper-muted); }
+.ray-band .ray-ledger-s { color: var(--paper-muted); }
 @media (max-width: 899px) {
   /* 2x2 ledger: reserve two label lines so all four numerals share a
      baseline even when one label wraps — labels stay top-anchored */
@@ -1044,13 +729,6 @@ h1 {
 }
 .ray-band .ray-h2 { color: var(--paper-ink); }
 /* full-bleed band whose direct children keep the content rail's geometry */
-.rail-band-pad > * {
-  width: 100%;
-  max-width: var(--content-max);
-  margin-inline: auto;
-  padding-inline: var(--gutter);
-}
-
 
 .ray-toolbar-pill {
   display: inline-flex;
@@ -1419,8 +1097,8 @@ h1 {
 }
 
 /* kill the decorative layer wholesale */
-.grain-overlay, .ambient-field, .route-line { display: none !important; }
-[class*="section-mark"], .sm-ghost { display: none !important; }
+
+[class*="section-mark"] { display: none !important; }
 .glass, .glass-quiet, .glass-noblur, .glass-pill {
   background: var(--color-bg-elevated) !important;
   border: none !important;
@@ -1432,18 +1110,9 @@ h1 {
 body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 
 /* flat cards do not levitate — hover is a fill shift, images may breathe */
-.ray-stat-card, .ray-portfolio-card {
-  transition: background var(--duration-fast) var(--ease-signature);
-}
+
 /* lot cards keep their real hover (lift + border + shadow, defined at :1027) —
    only the static stat/portfolio cards are held flat here. */
-.ray-stat-card:hover, .ray-portfolio-card:hover {
-  transform: none !important;
-  box-shadow: none !important;
-  border-color: transparent !important;
-  background: var(--color-bg-elevated);
-}
-.ray-stat-card::after, .ray-portfolio-card::after { display: none; }
 
 /* ───────────────────────── app bar ───────────────────────── */
 .ray-artist-nav { padding-block: 10px; }
@@ -1541,21 +1210,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-range-btn[data-active=true] { color: var(--color-fg); background: var(--color-bg-elevated); }
 
 /* the live strip under the hero: flat columns, hairline dividers */
-.ray-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-  margin-top: 26px;
-}
-.ray-strip > div {
-  padding: 18px 20px 20px;
-  border-left: 1px solid var(--color-border);
-}
-.ray-strip > div:first-child { border-left: none; padding-left: 0; }
-.ray-strip-k { font-size: 12.5px; font-weight: 500; color: var(--color-text-muted); margin-bottom: 6px; }
-.ray-strip-v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); line-height: 1.1; }
-.ray-strip-s { font-size: 12.5px; color: var(--color-text-faint); margin-top: 4px; }
 
 /* ═══════════════════════════════════════════════════════════════════
    RAY TERMINAL — the trading floor, settled (committee build spec 1.0)
@@ -1583,7 +1237,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 
 /* R4 · the board — seamed 1fr/396px grid; the 1px gap IS the seam */
-.ray-board-wrap { padding: 20px 0 0; }
+
 .ray-board {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 396px;
@@ -1732,16 +1386,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   padding: 48px 0 56px;
   margin-top: 48px;
 }
-.ray-record-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1px;
-  background: var(--hairline);
-  border: 1px solid var(--hairline);
-}
-.ray-record-left { background: var(--panel); min-width: 0; padding: 4px 0 0; }
-.ray-record-left .ray-results { padding-block: 0 12px; }
-.ray-record-left .rail { padding-inline: var(--gutter); max-width: none; }
+
 @media (max-width: 1000px) {
   .ray-board { grid-template-columns: 1fr; }
   .ray-numrow .ray-hero2-value { font-size: 40px; }
@@ -1783,23 +1428,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   letter-spacing: -0.01em;
   color: var(--color-text-secondary);
 }
-.ray-close-ledger {
-  display: flex;
-  justify-content: center;
-  gap: 64px;
-  margin-top: 26px;
-  padding-top: 0;
-}
-.ray-close-ledger > div { text-align: center; }
-.ray-close-ledger b {
-  display: block;
-  font-size: 26px;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  color: var(--color-fg);
-  font-variant-numeric: tabular-nums;
-}
-.ray-close-ledger span { display: block; margin-top: 4px; font-size: 11.5px; color: var(--color-text-muted); }
+
 .ray-close-map {
   display: grid;
   grid-template-columns: 1fr 1fr 1.6fr;
@@ -1841,7 +1470,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 @media (max-width: 899px) {
   .ray-close-in { padding-block: 44px 88px; }
   .ray-close-mark { height: 84px; }
-  .ray-close-ledger { gap: 32px; }
+
   .ray-close-map { grid-template-columns: 1fr 1fr; gap: 32px; }
   .ray-close-record { grid-column: 1 / -1; }
   .ray-close-base { flex-direction: column; gap: 6px; }
@@ -1850,12 +1479,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* seam-draw + panel entrance choreography */
 @keyframes raySeamX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes rayPanelIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.ray-choreo .ray-board { transform-origin: left center; animation: raySeamX 500ms var(--ease-ui) both; }
-.ray-choreo .ray-board > * { animation: rayPanelIn 400ms var(--ease-ui) both; animation-delay: 120ms; }
-.ray-choreo .ray-proofstrip { animation: rayPanelIn 400ms var(--ease-ui) both; animation-delay: 300ms; }
-@media (prefers-reduced-motion: reduce) {
-  .ray-choreo .ray-board, .ray-choreo .ray-board > *, .ray-choreo .ray-proofstrip { animation: none; }
-}
 
 /* ── the command deck: the lander as an instrument, not a page ── */
 .ray-deck {
@@ -1864,35 +1487,13 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   gap: 28px;
   align-items: start;
 }
-.ray-deckcard {
-  display: block;
-  border-radius: 16px;
-  padding: 16px 18px;
-  background: linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
-  text-decoration: none;
-  color: inherit;
-}
-.ray-deckcard-k {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--color-text-muted);
-  margin-bottom: 10px;
-}
+
 .ray-deckcall { transition: transform 160ms var(--ease-signature), box-shadow var(--duration-fast) var(--ease-signature); }
 .ray-deckcall:hover {
   transform: translateY(-2px);
   box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.08), 0 12px 32px rgba(8, 6, 3, 0.4);
 }
-.ray-deckcall-img {
-  height: 150px;
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 12px;
-  background: var(--color-bg);
-}
-.ray-deckcall-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 .ray-deckcall-maker { font-size: 13.5px; font-weight: 700; color: var(--color-fg); }
 .ray-deckcall-title {
   font-size: 12.5px;
@@ -1921,52 +1522,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-deckcall:hover .ray-deckcall-cta::after { transform: scaleX(1); }
 
-/* the movers — every maker gets a pulse */
-.ray-movers-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
-.ray-movers-sub { font-size: 12.5px; color: var(--color-text-faint); }
-.ray-movers {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 4px;
-  scroll-snap-type: x proximity;
-}
-.ray-movers::-webkit-scrollbar { display: none; }
-.ray-mover {
-  flex: none;
-  scroll-snap-align: start;
-  width: 168px;
-  border-radius: 14px;
-  padding: 13px 14px;
-  background: linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
-  text-decoration: none;
-  color: inherit;
-  transition: transform 160ms var(--ease-signature);
-}
-.ray-mover:hover { transform: translateY(-2px); }
-.ray-mover-name {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--color-fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 8px;
-}
-.ray-mover-spark { display: block; margin-bottom: 8px; }
-.ray-mover[data-tone=up] .ray-mover-spark { color: var(--color-up); }
-.ray-mover[data-tone=down] .ray-mover-spark { color: var(--color-down); }
-.ray-mover-figures { display: flex; align-items: baseline; justify-content: space-between; }
-.ray-mover-now { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--color-fg); }
-.ray-mover-delta { font-size: 10.5px; font-weight: 700; }
-.ray-mover[data-tone=up] .ray-mover-delta { color: var(--color-up); }
-.ray-mover[data-tone=down] .ray-mover-delta { color: var(--color-down-text); }
-
 @media (max-width: 1000px) {
   .ray-deck { grid-template-columns: 1fr; gap: 8px; }
-  .ray-deckcall-img { height: 120px; }
 }
 
 /* ── the signal row: the number IS the card's rank ── */
@@ -2016,26 +1573,16 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-proof b.up { color: var(--color-up); font-weight: 700; }
 
 /* the context sentence: beside the trend on desktop, below the chart on mobile */
-.ray-hero2-ctx {
-  display: none;
-  margin: 12px 0 0;
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--color-text-muted);
-}
+
 @media (max-width: 768px) {
-  .ray-strip { grid-template-columns: 1fr 1fr; margin-top: 34px; }
-  .ray-strip > div { padding: 14px 16px 15px; }
-  .ray-strip > div:nth-child(odd) { border-left: none; padding-left: 0; }
-  .ray-strip > div:nth-child(-n+2) { border-bottom: 1px solid var(--color-border); }
-  .ray-strip-v { font-size: 23px; }
+
   .ray-hero2 { padding-block: 14px 0; }
   .ray-hero2-label { font-size: 13.5px; margin-bottom: 4px; }
-  .ray-hero2-label-tail { display: none; }
+
   .ray-hero2-value { font-size: 40px; }
   .ray-hero2-delta { margin-top: 8px; font-size: 14px; gap: 5px 10px; }
   .ray-hero2-delta .ctx { display: none; }
-  .ray-hero2-ctx { display: block; }
+
   .ray-hero2-chart { height: 168px; margin-top: 10px; }
   /* section rhythm: tight inside a section, a full breath between sections */
 }
@@ -2062,7 +1609,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   transition: color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
 }
 .ray-seg-btn[data-active=true] { color: var(--color-bg); background: var(--color-fg); }
-
 
 /* ───────────────────────── toolbar, humanized ───────────────────────── */
 .ray-toolbar { border-bottom-color: var(--color-border); }
@@ -2224,11 +1770,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
     from { stroke-dashoffset: 24; }
     to { stroke-dashoffset: 0; }
   }
-  .lectr-flick-draw polyline {
-    stroke-dasharray: 24;
-    stroke-dashoffset: 0;
-    animation: lectrFlickDraw 500ms var(--ease-draw) both;
-  }
+
 }
 
 /* ── the loader: the sign writes itself (RayLoading brand slot) ── */
@@ -2443,23 +1985,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   overflow: hidden;
   margin-top: 26px;
 }
-.ray-call-copy { padding: clamp(24px, 3vw, 40px); min-width: 0; display: flex; flex-direction: column; }
-.ray-call-eyebrow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--color-butter-text); /* label, not a directional number — butter, never green */
-  margin-bottom: 14px;
-}
+
 .ray-call-artist { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); }
 .ray-call-title { font-size: 15.5px; color: var(--color-text-muted); margin: 3px 0 2px; line-height: 1.45; }
-.ray-call-meta { font-size: 13.5px; color: var(--color-text-faint); margin-bottom: 6px; }
-.ray-call-band { margin: 4px -10px 0; }
-.ray-call-line { font-size: 15.5px; font-weight: 600; color: var(--color-up); letter-spacing: -0.01em; margin: 4px 0 18px; }
+
 .ray-call-ctas { display: flex; gap: 10px; margin-top: auto; }
 .ray-call-btn {
   display: inline-flex;
@@ -2586,27 +2115,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* the toggle survives mobile: grid maps to the compact card, table to rows */
 
 /* ── freshness pulse ── */
-.ray-fresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--color-text-faint);
-  white-space: nowrap;
-}
-.ray-fresh-dot { width: 7px; height: 7px; border-radius: 100px; background: var(--color-up); position: relative; }
-.ray-fresh-dot::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 100px;
-  border: 1.5px solid var(--color-up);
-  opacity: 0;
-  animation: rayPulse 2.4s var(--ease-signature) infinite;
-}
+
 @keyframes rayPulse { 0% { transform: scale(0.5); opacity: 0.6; } 70% { transform: scale(1.15); opacity: 0; } 100% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .ray-fresh-dot::after { animation: none; } }
 
 /* ── the mark: the sign in the nav ── */
 .ray-wordmark { display: inline-flex !important; align-items: center; gap: 9px; }
@@ -2662,10 +2172,6 @@ body {
 }
 .ray-lot-img {
   box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.04), 0 10px 30px rgba(8, 6, 3, 0.35);
-}
-.ray-strip {
-  background: linear-gradient(180deg, rgba(242, 238, 227, 0.02), transparent);
-  border-radius: 14px 14px 0 0;
 }
 
 /* no aurora — the deepened ground replaces ambience with darkness */
@@ -2870,15 +2376,6 @@ body {
 .ray-markets-fade::-webkit-scrollbar { display: none; }
 /* center-oriented pill rail (the lander): drop the scroll fade and center the
    pills when they fit; fall back to a left-aligned scroll on narrow phones. */
-.ray-markets-center { -webkit-mask-image: none; mask-image: none; }
-.ray-markets-center .ray-markets { justify-content: center; }
-@media (max-width: 680px) {
-  .ray-markets-center .ray-markets { justify-content: flex-start; }
-  .ray-markets-center {
-    -webkit-mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
-    mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
-  }
-}
 
 /* ── the verticals as a shelf: each market is a card with its own pulse ── */
 .ray-mkt-cards {
@@ -2989,37 +2486,6 @@ body {
 }
 
 /* coming-soon market state */
-.ray-soon {
-  margin-top: 34px;
-  padding: clamp(40px, 6vw, 80px) clamp(24px, 4vw, 56px);
-  border-radius: 20px;
-  text-align: left;
-  background:
-    radial-gradient(600px 220px at 20% 0%, rgba(242, 238, 227, 0.05), transparent 70%),
-    linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05), 0 20px 60px rgba(8, 6, 3, 0.4);
-}
-.ray-soon-k {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin-bottom: 10px;
-}
-.ray-soon h2 {
-  font-size: clamp(30px, 4vw, 44px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  margin: 0 0 12px;
-  color: var(--color-fg);
-}
-.ray-soon p {
-  font-size: 15.5px;
-  line-height: 1.6;
-  color: var(--color-text-muted);
-  max-width: 56ch;
-  margin: 0 0 22px;
-}
-.ray-soon p b { color: var(--color-text-secondary); }
 
 /* the pane keeps the chart primary: slimmer numeral, tighter head */
 .ray-pane .ray-board-demand { padding: 16px 20px 12px; }
@@ -3036,69 +2502,15 @@ body {
    ════════════════════════════════════════════════════════════════════ */
 
 /* the board owns viewport 1: board left, call + watchlist rail right */
-.ray-board-rail {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 1px;
-  background: var(--hairline);
-  border: 1px solid var(--hairline);
-  align-items: stretch;
-}
 
 /* Appreciation — a stat panel to the right of the graph on desktop, seamed to
    the chart with the same 1px hairline; collapses to a gray banner on mobile. */
-.ray-appr {
-  background: var(--color-bg-board);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: stretch;
-  text-align: left;
-  padding: 26px 28px;
-  min-width: 0;
-}
-.ray-appr-k { font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 14px; }
-.ray-appr-v { font-family: var(--font-sans), sans-serif; font-size: 46px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
-.ray-appr-v.up { color: var(--color-up); }
-.ray-appr-v.down { color: var(--color-down); }
-.ray-appr-s { font-size: 12.5px; color: var(--color-text-muted); margin-top: 14px; }
-.ray-appr-banner { display: none; }
+
 .ray-board-belowrow { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
-@media (max-width: 899px) {
-  /* mobile: the panel becomes a one-line gray banner between chart and call */
-  .ray-appr {
-    background: rgba(242, 238, 227, 0.045);
-    padding: 13px 16px;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-  }
-  .ray-appr-stat { display: none; }
-  /* the aside itself is the solid paper banner (.ray-paper) — the inner
-     element carries only type */
-  .ray-appr-banner { display: block; font-size: 13.5px; line-height: 1.4; color: var(--color-text-secondary); }
-  .ray-appr-banner b { color: var(--color-fg); font-weight: 650; }
-  .ray-appr-banner b.up { color: var(--color-up); }
-  .ray-appr-banner b.down { color: var(--color-down); }
-}
-.ray-board-rail > * { min-width: 0; }
+
 /* the rail column fills its height intentionally: the call plate grows to
    meet the board's bottom edge instead of leaving raw grid ground exposed —
    DESKTOP ONLY (on mobile the rail stacks and growth just adds dead air) */
-@media (min-width: 900px) {
-  /* the plate fills the rail column; its content stacks with the CTA pinned
-     to the bottom edge — the mat space between belongs to the plate, not to
-     raw grid ground. display:flex on the Link is what makes flex-grow bite. */
-  .ray-board-rail > aside .ray-deckcall {
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-  }
-  .ray-board-rail > aside .ray-deckcall .ray-deckcall-cta { margin-top: auto; padding-top: 14px; }
-}
-@media (max-width: 899px) {
-  .ray-board-rail { grid-template-columns: minmax(0, 1fr); }
-}
 
 /* the watchlist strip — the rail answers "what changed" in one card */
 .ray-watchstrip {
@@ -3115,56 +2527,8 @@ body {
 .ray-watchstrip-line { display: block; font-size: 13.5px; color: var(--color-text-secondary); line-height: 1.5; }
 .ray-watchstrip-line b.up { font-weight: 650; }
 .ray-watchstrip-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--color-fg); margin-top: 8px; }
-.ray-watchstrip-stats { display: flex; align-items: baseline; gap: 20px; }
-.ray-watchstrip-stat { min-width: 0; }
-.ray-watchstrip-stat b {
-  display: block;
-  font-size: 16px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  color: var(--color-fg);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ray-watchstrip-stat b.up { color: var(--color-up); }
-.ray-watchstrip-stat b.down { color: var(--color-down); }
-.ray-watchstrip-stat span { font-size: 11.5px; color: var(--color-text-faint); white-space: nowrap; }
-.ray-watchstrip-link { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; }
-.ray-watchstrip:hover .ray-watchstrip-link { color: var(--color-fg); }
 
 /* the record collapses to one honest sentence + a door to the archive */
-.ray-results-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  border: 1px solid var(--hairline);
-  background: var(--panel);
-  padding: 12px 20px;
-  font-size: 13.5px;
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-}
-.ray-results-row b { color: var(--color-fg); font-weight: 600; }
-.ray-results-row b.up { color: var(--color-up); }
-.ray-results-row b.down { color: var(--color-down-text); }
-.ray-results-row button {
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--color-text-secondary);
-  background: var(--color-bg-elevated);
-  border-radius: 10px;
-  padding: 8px 14px;
-  transition:
-    color var(--duration-fast) var(--ease-signature),
-    background var(--duration-fast) var(--ease-signature);
-}
-.ray-results-row button:hover { color: var(--color-fg); background: var(--glass-bg-hover); }
 
 /* "New today" — white ink only; freshness is a fact, not a signal */
 .ray-lot-img { position: relative; }
@@ -3185,16 +2549,9 @@ body {
 }
 
 /* 44×44 answers the thumb — save and close never miss */
-.ray-touch44 {
-  min-width: 44px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 
 /* /value: one hero call plate, then the tape as compact rows */
-.ray-value-rows { display: flex; flex-direction: column; margin-top: 18px; }
+
 .ray-value-row {
   display: flex;
   align-items: center;
@@ -3212,14 +2569,7 @@ body {
   transition: background 120ms var(--ease-ui);
 }
 .ray-value-row:hover { background: var(--color-hover-item); }
-.ray-value-thumb {
-  width: 56px;
-  height: 56px;
-  flex: none;
-  border-radius: 10px;
-  object-fit: cover;
-  background: var(--color-bg-elevated);
-}
+
 .ray-value-row-maker {
   flex: 1;
   min-width: 0;
@@ -3444,7 +2794,6 @@ body {
   .ray-toolbar { transition: none; }
 }
 
-
 /* ── restructure: mobile budget (first lot ≤ ~1,000px) ───────────────── */
 .ray-demand-chartbox { height: 320px; }
 @media (max-width: 899px) {
@@ -3459,7 +2808,6 @@ body {
   /* feed header tighter */
   #on-the-block h2 { font-size: 22px; margin: 12px 0 4px; }
 }
-
 
 /* ── the categories POP: identity inks on the compact pills ─────────────
    The photographic tiles' approved per-market hues live on as pill inks —
@@ -3533,7 +2881,6 @@ body {
     grid-column: 1 / -1;
   }
 }
-
 
 /* ── THE GREETING — the sign writes itself once per session ───────────── */
 .ray-greeting {

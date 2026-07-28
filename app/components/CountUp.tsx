@@ -43,7 +43,7 @@ export default function CountUp({
   // change mid-animation compares/starts against the screen, not the last
   // settled value (which would early-return and freeze mid-count)
   const shownRef = useRef(animate ? 0 : (Number.isFinite(to) ? to : 0));
-  // Whether we've ever run the tween. The armed callers (BoardDemand pass
+  // Whether we've ever run the tween. Armed callers (passing
   // animate={armed}) flip animate false→true AFTER mount, like RayEntrance —
   // so the instant init above may have already seeded shownRef at `to`. On the
   // first armed pass we must sweep from 0 regardless, or the count never plays.

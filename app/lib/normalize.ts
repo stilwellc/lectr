@@ -1,7 +1,7 @@
 /**
  * normalize.ts — the pure, deterministic normalization layer. THE single source
- * of truth shared by the crawler (fresh rows) and the one-time backfill
- * (scripts/migrate-v2.ts) so a fresh row and a migrated row are byte-identical.
+ * of truth shared by the crawler (fresh rows) and the completed one-time v2
+ * backfill, so a fresh row and a migrated row are byte-identical.
  *
  * NO I/O except imageHash (which fetches an image to dHash it). Everything else
  * is a pure function of its arguments — same input → same output, forever,
@@ -883,16 +883,4 @@ async function loadSharp(): Promise<SharpFactory | null> {
     _sharp = null;
   }
   return _sharp;
-}
-
-/** Hamming distance between two dHash hex strings (helper for the step-2 repeat-
-    sale grouper; exported so the matcher shares ONE definition). */
-export function hashDistance(a: string | null, b: string | null): number {
-  if (!a || !b || a.length !== b.length) return 64;
-  let d = 0;
-  for (let i = 0; i < a.length; i++) {
-    let x = parseInt(a[i], 16) ^ parseInt(b[i], 16);
-    while (x) { d += x & 1; x >>= 1; }
-  }
-  return d;
 }
