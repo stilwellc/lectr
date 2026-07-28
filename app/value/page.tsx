@@ -134,6 +134,21 @@ export default function ValuePage() {
         }
         .ray-value-row:last-child { border-bottom: none; }
         .ray-value-row:hover { background: var(--color-hover-item); }
+        .ray-value-row { text-decoration: none; }
+        /* the compact record strip pinned under the headline — the proof in
+           one mono line, linking the full certificate at /record */
+        .ray-value-recstrip {
+          margin: 14px 0 0;
+          font-family: var(--font-mono), monospace;
+          font-size: 12px;
+          letter-spacing: 0.02em;
+          font-variant-numeric: tabular-nums;
+          color: var(--color-text-muted);
+        }
+        .ray-value-recstrip b.up { color: var(--color-up); font-weight: 600; }
+        .ray-value-recstrip b.down { color: var(--color-down-text); font-weight: 600; }
+        .ray-value-recstrip a { color: var(--color-butter-text); text-decoration: none; }
+        .ray-value-recstrip a:hover { text-decoration: underline; text-underline-offset: 3px; }
         .ray-value-row-thumb {
           width: 56px;
           height: 44px;
@@ -200,7 +215,7 @@ export default function ValuePage() {
         @media (min-width: 900px) {
           .ray-value-row,
           .ray-value-head {
-            grid-template-columns: 56px minmax(0, 1fr) 92px 88px 118px 84px 52px 64px;
+            grid-template-columns: 56px minmax(0, 1fr) 92px 88px 118px 84px 68px 64px;
             gap: 16px;
           }
           .ray-value-head {
@@ -268,6 +283,15 @@ export default function ValuePage() {
                   </>
                 : 'No lots are flagged below market right now — the crawl refreshes daily.'}
             />
+            {/* the record strip — real replay numbers, pinned to the headline */}
+            {backtest && backtest.flagged.n >= 100 && (
+              <p className="ray-value-recstrip">
+                Flagged <b className="up">{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</b>
+                {' '}· unflagged <b className="down">{fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)}</b>
+                {' '}· {backtest.flagged.n.toLocaleString()} replayed{' '}
+                <Link href="/record">→ the record</Link>
+              </p>
+            )}
           </section>
 
           {call && (
@@ -296,7 +320,7 @@ export default function ValuePage() {
           )}
 
           {backtest && backtest.flagged.n >= 100 && (
-            <div className="ray-band" style={{ marginTop: 34, paddingBlock: '28px 34px' }}>
+            <div className="ray-band" id="record" style={{ marginTop: 34, paddingBlock: '28px 34px' }}>
             <section className="rail ray-enter" style={{ '--enter-delay': '90ms', paddingTop: 0 } as React.CSSProperties}>
               {/* HAMMER BASIS leads — estimates are hammer-basis while realized
                   prices include the buyer's premium (~25%), so the hammer read
@@ -370,17 +394,19 @@ export default function ValuePage() {
                     <span className="kicker">Hammers</span>
                     <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
                     <span className="kicker" style={{ textAlign: 'right' }}>Comps med</span>
-                    <span className="kicker" style={{ textAlign: 'right' }}>Odds</span>
+                    <span className="kicker" style={{ textAlign: 'right' }}>Beat odds</span>
                     <span className="kicker" style={{ textAlign: 'right' }}>Gap</span>
                   </div>
                   {gridDeals.slice(0, shown).map((d, i) => (
-                    <button
+                    /* R3 — the row's primary click is lectr's OWN lot page;
+                       the comps modal stays one click away on the plate above
+                       and on the lot page itself */
+                    <Link
                       key={d.lot.id}
-                      type="button"
+                      href={`/lot?id=${encodeURIComponent(d.lot.id)}`}
                       className="ray-value-row ray-enter-card"
                       style={{ '--enter-delay': `${Math.min(i, 8) * 40}ms` } as React.CSSProperties}
-                      onClick={() => setModalLot(d.lot)}
-                      aria-label={`${ARTIST_LABEL[d.lot.artist] || d.lot.artist} — see the comps`}
+                      aria-label={`${ARTIST_LABEL[d.lot.artist] || d.lot.artist} — open the lot page`}
                     >
                       {/* Thumbnail — serif-initial plate always behind, photo overlays;
                           on a hotlink-block the plate shows through, never a gap */}
@@ -450,9 +476,13 @@ export default function ValuePage() {
                           {formatEstimate(d.lot)}
                         </span>
                       </span>
-                    </button>
+                    </Link>
                   ))}
                 </div>
+                {/* R21 — what "Beat odds" measures, said plainly */}
+                <p className="ray-enter" style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: '10px 2px 0', lineHeight: 1.5 }}>
+                  Beat odds — share of past flags like this that beat their estimate — measured, not modeled
+                </p>
                 {gridDeals.length > shown && (
                   <div className="ray-enter" style={{ textAlign: 'center', marginTop: 20 }}>
                     <button

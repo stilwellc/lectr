@@ -9,6 +9,8 @@ import CommandK, { OPEN_CK_EVENT } from './CommandK';
 import Flick from './Flick';
 import { useAuth } from '../lib/account';
 import { useUnseenAlertCount } from '../lib/alerts';
+import { useRayData } from '../hooks/useRayData';
+import { isLiveUpcoming, localToday, fmtSignedPct } from '../utils';
 
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
@@ -18,6 +20,20 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   const [showAll, setShowAll] = useState(false);
   const { authEnabled, user, openLogin } = useAuth();
   const unseenAlerts = useUnseenAlertCount();
+  // The live Calls count + the record line, from the EAGER payload only —
+  // every page already loads phase 1, so this costs the nav nothing. The
+  // count is the crawl-stamped below-market signals on the live book (the
+  // same statistic /value ranks); it renders client-side after the payload
+  // lands, so SSR markup never disagrees.
+  const { allLots, backtest } = useRayData();
+  const callsCount = useMemo(() => {
+    const today = localToday();
+    let n = 0;
+    for (const l of allLots) {
+      if (l.signal && l.signal.label === 'Below Market' && isLiveUpcoming(l, today)) n++;
+    }
+    return n;
+  }, [allLots]);
   // On phones the maker finder is a full-screen sheet (portaled to <body> to
   // escape the nav's backdrop-filter containing block), not a cramped dropdown.
   const [isMobile, setIsMobile] = useState(false);
@@ -109,13 +125,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   // maker finder.
   const sections = [
     { label: 'Overview', path: homePath, active: activeSlug === null },
-    { label: 'Value', path: '/value', active: activeSlug === 'value' },
+    { label: `Calls${callsCount > 0 ? ` · ${callsCount}` : ''}`, path: '/value', active: activeSlug === 'value' },
     { label: 'Makers', path: '/artists', active: activeSlug === 'artists' },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
-    // ONE identity entry: signed in (or auth unconfigured) → My profile;
-    // signed out → the sheet's Sign in row stands alone instead.
-    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' }] : []),
-    { label: 'Blog', path: '/blog', active: activeSlug === 'blog' },
+    // Saved always rides the menu — signed out it lands on the sign-in gate,
+    // which explains itself better than a missing entry ever could.
+    { label: `Saved${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' },
+    { label: 'How it works', path: '/method', active: activeSlug === 'method' },
+    { label: 'Notes', path: '/blog', active: activeSlug === 'blog' },
   ];
 
   // Shared finder pieces — the filter input and the grouped maker list — reused
@@ -483,6 +500,26 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           text-transform: uppercase;
           color: var(--color-text-faint);
         }
+        .ray-maker-recline {
+          display: block;
+          width: 100%;
+          text-align: left;
+          padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+          margin-top: 10px;
+          border: none;
+          border-top: 1px solid var(--color-border);
+          background: transparent;
+          cursor: pointer;
+          font-family: var(--font-mono), monospace;
+          font-size: 11.5px;
+          letter-spacing: 0.02em;
+          line-height: 1.6;
+          color: var(--color-text-muted);
+          font-variant-numeric: tabular-nums;
+        }
+        .ray-maker-recline .up { color: var(--color-up); font-weight: 600; }
+        .ray-maker-recline .down { color: var(--color-down-text); font-weight: 600; }
+        .ray-maker-recline .go { color: var(--color-butter-text); font-weight: 600; }
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
@@ -495,13 +532,16 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             the artist index. Hidden on mobile where the dropdown covers all. */}
         <nav className="ray-nav-links" aria-label="Sections">
           <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>Overview</button>
-          <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
+          <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')} aria-label={callsCount > 0 ? `Calls — ${callsCount} live below-market flags` : 'Calls'}>
+            Calls
+            {callsCount > 0 && <span className="ray-nav-callcount">{callsCount}</span>}
+          </button>
           <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Blog</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Notes</button>
           {(!authEnabled || user) ? (
             <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')} title={user?.email || undefined}>
-              My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
+              Saved{savedCount > 0 ? ` · ${savedCount}` : ''}
               {unseenAlerts > 0 && (
                 // butter marker: the nightly crawl left unread search matches
                 <span aria-label={`${unseenAlerts} new matches`} style={{
@@ -653,6 +693,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     Browse all makers <Flick size={11} style={{ marginLeft: 0 }} />
                   </button>
                 </>
+              )}
+              {/* R22 — the record at the menu foot: real replay numbers */}
+              {backtest && backtest.flagged.n >= 100 && (
+                <button className="ray-maker-recline" onClick={() => navigate('/record')}>
+                  Flagged <span className="up">{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</span>
+                  {' '}· unflagged <span className="down">{fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)}</span>
+                  {' '}· {backtest.flagged.n.toLocaleString()} replayed <span className="go">→ the record</span>
+                </button>
               )}
             </div>
           </div>

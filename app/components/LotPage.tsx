@@ -6,11 +6,12 @@ import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
 import { useFullLots, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
+import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors, refLabel, fmtSignedPct, compsAskMultiple } from '../utils';
 import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude } from '../lib/comps';
-import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
+import { formatEstimate, lotSignal, confidenceMeter, showSavedToast } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
+import MethodologyNote from './MethodologyNote';
 import Flick from './Flick';
 
 /**
@@ -43,7 +44,7 @@ const COPY_BTN_CSS = `
 // exported for RefPage, which reuses the comp-row ledger grammar
 export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot{padding-block:26px 64px}
-.lectr-lot-grid{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr);column-gap:44px;row-gap:26px;align-items:start}
+.lectr-lot-grid{display:grid;grid-template-columns:minmax(0,46%) minmax(0,1fr);column-gap:44px;row-gap:26px;align-items:start}
 /* ≥900px the two columns are independent flows: the certificate column
    carries the comps ledger under the leader rows, and provenance / the grade
    ladder ride the plate column — no dead space under the plate, no
@@ -68,9 +69,25 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
 .lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(242,238,227,0.28) 4px,rgba(242,238,227,0.28) 5px)}
 .lectr-lot-monoglyph{font-size:64px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
-.lectr-lot .ray-plate-mat{padding:18px;margin-bottom:0}
-.lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
+/* M7 — HANG THE WORK. The mat is a warm dark ground (never pure white on the
+   dark page — white belongs only inside paper-material surfaces), a soft
+   spotlight falls from above, and the frame throws a real shadow. */
+.lectr-lot .ray-plate-mat{position:relative;padding:18px;margin-bottom:0;background:radial-gradient(60% 50% at 50% 30%, rgba(232,218,182,0.05), transparent 70%), #1C1A14;border-color:rgba(242,238,227,0.08);box-shadow:0 24px 48px -20px rgba(0,0,0,0.6)}
+.lectr-lot .ray-plate-img{height:380px;background:#1C1A14}
 .lectr-lot .ray-plate-img img{object-fit:contain}
+/* the verdict ring — below-market only, fading in 240ms AFTER the photograph
+   arrives. Reduced motion: it simply appears. */
+.lectr-lot .ray-plate-img[data-tone=up]{transition:outline-color 240ms var(--ease-signature),box-shadow 240ms var(--ease-signature)}
+.lectr-lot .ray-plate-img[data-tone=up][data-loaded=true]{outline:1.5px solid color-mix(in srgb, var(--color-up) 55%, transparent);outline-offset:-1.5px;box-shadow:0 0 28px -6px color-mix(in srgb, var(--color-up) 28%, transparent)}
+@media (prefers-reduced-motion: reduce){.lectr-lot .ray-plate-img[data-tone=up]{transition:none}}
+/* R24 — the abstention, said quietly on the certificate itself */
+.lectr-lot-abstain{margin:14px 0 0;font-size:12.5px;color:var(--color-text-faint);line-height:1.55}
+/* R4 — the receipts line at the moment of skepticism */
+.lectr-lot-record{margin-top:26px;border-top:1px solid var(--hairline);padding-top:12px;font-size:12.5px;color:var(--color-text-faint);line-height:1.6}
+.lectr-lot-record a{color:var(--color-butter-text);text-decoration:none}
+.lectr-lot-record a:hover{text-decoration:underline;text-underline-offset:3px}
+.lectr-lot-record b.up{color:var(--color-up);font-weight:600}
+.lectr-lot-record b.down{color:var(--color-down-text);font-weight:600}
 .lectr-lot .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11px;color:var(--color-text-muted);text-align:left}
 .lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--hairline)}
 .lectr-lot-comps{margin-top:44px}
@@ -262,13 +279,16 @@ export default function LotPage({ lotId, initialLot }: {
   // useFullLots: a permalink to a lot outside the eager slice (rolled-off or
   // sold) settles only once fullLoaded||fullError, and comps/appraisal read the
   // full corpus — so this route must trigger phase 2.
-  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots } = useFullLots();
+  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots, backtest } = useFullLots();
   const { savedIds, isSaved, toggle } = useSavedLots();
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const [imgFailed, setImgFailed] = useState(false);
+  // the verdict ring waits for the photograph — it must never glow over the
+  // monogram fallback or a still-loading plate
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   const live = useMemo(() => allLots.find(l => l.id === lotId) || null, [allLots, lotId]);
 
@@ -472,15 +492,24 @@ export default function LotPage({ lotId, initialLot }: {
               the house blocks the hotlink (CallPlate's exact fallback) */}
           <figure className={`ray-plate-mat${imgOk ? '' : ' lectr-lot-noimg'}`} style={{ margin: 0 }}>
             {imgOk ? (
-              <div className="ray-plate-img">
+              <div
+                className="ray-plate-img"
+                data-tone={isUpcoming && sig?.label === 'Below Market' ? 'up' : undefined}
+                data-loaded={imgLoaded ? 'true' : undefined}
+              >
                 <img
                   src={httpsImg(lot.imageUrl)}
                   alt={craftTitle(lot.title)}
                   referrerPolicy="no-referrer"
+                  onLoad={() => setImgLoaded(true)}
                   onError={() => setImgFailed(true)}
                   // cache hits never fire onError — complete with zero
                   // naturalWidth at attach is a cached failure
-                  ref={el => { if (el && el.complete && el.naturalWidth === 0) setImgFailed(true); }}
+                  ref={el => {
+                    if (!el || !el.complete) return;
+                    if (el.naturalWidth === 0) setImgFailed(true);
+                    else setImgLoaded(true);
+                  }}
                 />
               </div>
             ) : (
@@ -602,7 +631,11 @@ export default function LotPage({ lotId, initialLot }: {
                   tone={sig.label === 'Below Market' ? 'up' : 'down'}
                   sub={beatRate != null
                     ? `${beatRate}% of flags like this beat their estimate`
-                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
+                    : (() => {
+                        // R18 grammar — the one sentence the signal speaks
+                        const x = compsAskMultiple(sig.label as 'Below Market' | 'Above Market', sig.pct);
+                        return x ? `comps sell at ${x}× this ask` : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask';
+                      })()}
                 />
               )}
               {isUpcoming && sig && (
@@ -668,28 +701,77 @@ export default function LotPage({ lotId, initialLot }: {
               )}
             </div>
 
+            {/* R24 — the abstention, per lot: no signal, no value, no band
+                once the corpus has settled. Absence of a call is a statement. */}
+            {isUpcoming && !sig && !band && !called && !lot.value?.estimateUsd && (fullLoaded || fullError) && (
+              <p className="lectr-lot-abstain">
+                No call on this lot — fewer than 3 true comparables. Silence over noise.
+              </p>
+            )}
+
+            {/* R13 — the primary act on a live lot is lectr's: save it and be
+                scored. The house demotes to the explicit secondary "Bid at". */}
             <div className="lectr-lot-ctas">
-              <a className="ray-call-btn ray-call-btn-primary" href={lot.url} target="_blank" rel="noopener noreferrer">
-                View at {lot.auctionHouse} <Flick size={11} style={{ marginLeft: 2 }} />
-              </a>
-              <button
-                type="button"
-                className="ray-call-btn ray-call-btn-quiet"
-                style={{ cursor: 'pointer', background: saved ? 'var(--color-bg-elevated)' : 'var(--color-bg)' }}
-                onClick={() => toggle(lot.id, lot)}
-                aria-pressed={saved}
-              >
-                <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
-                  <path
-                    d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
-                    fill={saved ? 'currentColor' : 'none'}
-                    stroke="currentColor"
-                    strokeWidth="1.1"
-                  />
-                </svg>
-                {saved ? 'Saved' : 'Save'}
-              </button>
-              <CopyLinkButton id={lot.id} />
+              {isUpcoming && !isPastPending ? (
+                <>
+                  <button
+                    type="button"
+                    className="ray-call-btn ray-call-btn-primary"
+                    style={{ width: '100%', justifyContent: 'center', cursor: 'pointer' }}
+                    onClick={() => { if (!saved) showSavedToast(); toggle(lot.id, lot); }}
+                    aria-pressed={saved}
+                  >
+                    <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
+                      <path
+                        d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+                        fill={saved ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        strokeWidth="1.1"
+                      />
+                    </svg>
+                    {saved ? 'Saved · we’ll score the hammer against our call' : 'Save · remind me before it hammers'}
+                  </button>
+                  <a
+                    className="ray-call-btn ray-call-btn-quiet"
+                    style={{ border: '1px solid var(--color-border)' }}
+                    href={lot.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Bid at {lot.auctionHouse} <Flick size={11} style={{ marginLeft: 2 }} />
+                  </a>
+                  <CopyLinkButton id={lot.id} />
+                </>
+              ) : (
+                <>
+                  <a className="ray-call-btn ray-call-btn-primary" href={lot.url} target="_blank" rel="noopener noreferrer">
+                    View at {lot.auctionHouse} <Flick size={11} style={{ marginLeft: 2 }} />
+                  </a>
+                  <button
+                    type="button"
+                    className="ray-call-btn ray-call-btn-quiet"
+                    style={{ cursor: 'pointer', background: saved ? 'var(--color-bg-elevated)' : 'var(--color-bg)' }}
+                    onClick={() => { if (!saved) showSavedToast(); toggle(lot.id, lot); }}
+                    aria-pressed={saved}
+                  >
+                    <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
+                      <path
+                        d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+                        fill={saved ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        strokeWidth="1.1"
+                      />
+                    </svg>
+                    {saved ? 'Saved' : 'Save'}
+                  </button>
+                  <CopyLinkButton id={lot.id} />
+                </>
+              )}
+            </div>
+
+            {/* the trust trigger, at the point of judgment */}
+            <div style={{ marginTop: 12 }}>
+              <MethodologyNote />
             </div>
           </div>
 
@@ -750,6 +832,18 @@ export default function LotPage({ lotId, initialLot }: {
                 </a>
               ))}
             </div>
+          )}
+
+          {/* R4 — the receipts, permanent: the whole method's replayed record,
+              with real numbers, at the exact moment of skepticism */}
+          {backtest && backtest.flagged.n >= 100 && (
+            <p className="lectr-lot-record">
+              Every call is replayed against history: flagged lots hammered{' '}
+              <b className="up">{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</b> vs{' '}
+              <b className="down">{fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)}</b> unflagged,
+              across {backtest.flagged.n.toLocaleString()} sales.{' '}
+              <Link href="/record">See the record →</Link>
+            </p>
           )}
         </section>
           </div>

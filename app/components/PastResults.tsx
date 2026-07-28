@@ -8,6 +8,7 @@ import { ARTIST_LABEL, marketOf } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle, overEstimatePct } from '../utils';
 import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
 import SectionMark from './SectionMark';
+import { showSavedToast } from './LotCard';
 
 /** Known irregular plurals the naive strip-s would mangle ("wristwatches" →
  *  "wristwatche"). Checked before the default rule. */
@@ -344,12 +345,11 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 borderBottom: i < shown.length - 1 ? '1px solid var(--color-border)' : 'none',
               }}
             >
-              {/* Stretched primary link — save button stays a sibling, not a descendant */}
-              <a
-                href={lot.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
+              {/* Stretched primary link — lectr's own lot page; the house
+                  stays reachable via the ↗ chip. Save stays a sibling. */}
+              <Link
+                href={`/lot?id=${encodeURIComponent(lot.id)}`}
+                aria-label={`${lot.title} — open the lot page`}
                 style={{ position: 'absolute', inset: 0, zIndex: 1 }}
               />
               <div style={{ minWidth: 0 }}>
@@ -472,20 +472,31 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     {catBadge}
                   </span>
                 )}
-                <span style={{
-                  padding: '3px 10px',
-                  borderRadius: 100,
-                  background: `color-mix(in srgb, ${color} 7%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${color} 15%, transparent)`,
-                  fontSize: 12.5,
-                  letterSpacing: '-0.01em',
-                  textTransform: 'none',
-                  color: color,
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                }}>
-                  {lot.auctionHouse}
-                </span>
+                {/* the demoted house action — the ↗ chip opens the house
+                    record; the row itself now lands on lectr's lot page */}
+                <a
+                  href={lot.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  aria-label={`View at ${lot.auctionHouse}`}
+                  style={{
+                    position: 'relative',
+                    zIndex: 2,
+                    padding: '3px 10px',
+                    borderRadius: 100,
+                    background: `color-mix(in srgb, ${color} 7%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${color} 15%, transparent)`,
+                    fontSize: 12.5,
+                    letterSpacing: '-0.01em',
+                    textTransform: 'none',
+                    textDecoration: 'none',
+                    color: color,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                  }}>
+                  {lot.auctionHouse}&thinsp;↗
+                </a>
               </div>
 
               {onToggleOwned && (
@@ -516,7 +527,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               {onToggleSave && (
                 <button
                   className="ray-save-btn"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!savedIds.includes(lot.id)) showSavedToast(); onToggleSave(lot.id, lot); }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

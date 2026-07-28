@@ -140,9 +140,36 @@ export function localToday(): string {
 }
 
 /** Upgrade http:// image URLs to https:// so they don't trip mixed-content on
- *  our HTTPS pages (all our image hosts serve https). Undefined-safe. */
+ *  our HTTPS pages (all our image hosts serve https). Undefined-safe.
+ *
+ *  THIRD-PARTY IMAGE PROXY — deliberate, minimal, removable. Two hosts block
+ *  browser hotlinking for EVERY origin (images2.bonhams.com serves
+ *  Cross-Origin-Resource-Policy: same-origin; www.wright20.com 403s foreign
+ *  referrers), so their photos never render on lectr. ONLY those hosts route
+ *  through the images.weserv.nl proxy (verified live: both return 200
+ *  image/webp through it); every other host stays direct, and the callers'
+ *  onError fallbacks are untouched. To remove the proxy entirely, delete
+ *  PROXIED_IMG_HOSTS and the if-block below. */
+const PROXIED_IMG_HOSTS = new Set(['images2.bonhams.com', 'www.wright20.com']);
 export function httpsImg(u?: string | null): string | undefined {
-  return u ? u.replace(/^http:\/\//i, 'https://') : undefined;
+  if (!u) return undefined;
+  const https = u.replace(/^http:\/\//i, 'https://');
+  try {
+    if (PROXIED_IMG_HOSTS.has(new URL(https).hostname)) {
+      return `https://images.weserv.nl/?url=${encodeURIComponent(https)}&w=800&output=webp`;
+    }
+  } catch { /* malformed URL — serve it direct, the onError fallback catches it */ }
+  return https;
+}
+
+/** R18 signal grammar — "comps sell at {X}× this ask". One multiplier from the
+ *  signed gap pct (Below Market: comps over ask → 1 + pct/100; Above Market:
+ *  comps under ask → 1 − pct/100). Returns e.g. "1.6" — null when the ratio
+ *  degenerates (≤0 from a broken pct). */
+export function compsAskMultiple(label: 'Below Market' | 'Above Market', pct: number): string | null {
+  const ratio = label === 'Below Market' ? 1 + pct / 100 : 1 - pct / 100;
+  if (!(ratio > 0)) return null;
+  return ratio >= 10 ? String(Math.round(ratio)) : ratio.toFixed(1).replace(/\.0$/, '');
 }
 
 /** ONE signed-percent formatter: '+' for gains, a TRUE MINUS (U+2212) for
