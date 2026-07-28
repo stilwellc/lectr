@@ -25,13 +25,18 @@ export interface RefEntry {
   recent: { id: string; d: string; h: string; p: number; t: string; img: string | null }[];
 }
 
-// module cache — one fetch per session, shared across ref pages
+// module cache — one fetch per session, shared across ref pages. The failure
+// flag is NOT part of the cache contract: it clears on the next mount so one
+// flaky fetch never bricks every /ref page for the whole session.
 let refsCache: RefEntry[] | null = null;
 let refsFailed = false;
 function useRefs(): { refs: RefEntry[] | null; failed: boolean } {
-  const [state, setState] = useState<{ refs: RefEntry[] | null; failed: boolean }>({ refs: refsCache, failed: refsFailed });
+  // fresh mounts start un-failed (the effect below retries the fetch) — a
+  // stale module flag must not paint the error state before the retry runs
+  const [state, setState] = useState<{ refs: RefEntry[] | null; failed: boolean }>({ refs: refsCache, failed: false });
   useEffect(() => {
-    if (refsCache || refsFailed) return;
+    if (refsCache) return;
+    refsFailed = false; // retry on every fresh mount — never a permanent latch
     let dead = false;
     fetch('/data/ray/refs.json')
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))

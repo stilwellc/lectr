@@ -9,7 +9,7 @@ import type { AuctionLot, LotCategory, MarketStats } from '../types';
 import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useMarket } from '../lib/market';
-import { getUpcomingCounts, formatDate } from '../utils';
+import { getUpcomingCounts, formatDate, localToday } from '../utils';
 
 import ArtistNav from '../components/ArtistNav';
 import ArtistHero from '../components/ArtistHero';
@@ -177,7 +177,7 @@ export default function ArtistDetailPage() {
   // inside PriceChart/PastResults from re-aggregating the whole history
   const { lots, upcoming } = useMemo(() => {
     const lots = allLots.filter(l => l.artist === slug);
-    const today = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD string
+    const today = localToday(); // the reader's local YYYY-MM-DD
     const upcoming = lots
       .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate.slice(0, 10) >= today)))
       .sort((a, b) => {

@@ -132,6 +132,7 @@ function LotCard({
     e.preventDefault();
     e.stopPropagation();
     const ics = makeAuctionIcs(lot);
+    if (!ics) return; // malformed saleDate — no calendar file to mint, no throw
     const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     // window.open preserves the user-gesture context on iOS Safari so the

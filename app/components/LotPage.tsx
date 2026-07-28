@@ -344,7 +344,16 @@ export default function LotPage({ lotId, initialLot }: {
   const called = useMemo(() => {
     if (!lot || band) return null;
     const ev = lot.value;
-    if (ev && ev.signal && ev.compRatio != null && !ev.signal.label.startsWith('at')) {
+    // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
+    // outside [1/5, 5] is a data fault the build killed at the source — the
+    // certificate must never resurrect it. Treat it as no engine call and fall
+    // through to the uncalled-lot path.
+    const evSane = !ev || ev.compRatio == null || (ev.compRatio <= 5 && ev.compRatio >= 1 / 5);
+    if (ev && ev.signal && ev.compRatio != null && evSane) {
+      // 'at comparable market' = the engine looked and called it fair — no
+      // call, no comp pool, no client second-guessing (ComparableModal's
+      // exact doctrine).
+      if (ev.signal.label.startsWith('at')) return null;
       const byId = new Map(allLots.map(l => [l.id, l]));
       const pool = (ev.poolIds || []).map(id => byId.get(id)).filter((x): x is AuctionLot => !!x);
       if (pool.length) return { pool, n: ev.n || pool.length, med: ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };

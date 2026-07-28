@@ -2,6 +2,7 @@
 
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import type { Backtest } from '../hooks/useRayData';
+import { fmtSignedPct } from '../utils';
 
 /**
  * RecordByYear — the backtest's per-year series, rendered for the first time:
@@ -45,8 +46,9 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                   return (
                     <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px', fontFamily: 'var(--font-sans), sans-serif' }}>
                       <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 5 }}>{label} · {d.nFlagged} flagged lots</div>
-                      <div style={{ fontSize: 13.5, color: 'var(--color-up)', fontWeight: 600 }}>flagged +{d.flaggedMedianPct}%</div>
-                      <div style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>unflagged {d.unflaggedMedianPct >= 0 ? '+' : ''}{d.unflaggedMedianPct}%</div>
+                      {/* signed formatter — a down year must print "−12%", never "+-12%" */}
+                      <div style={{ fontSize: 13.5, color: 'var(--color-up)', fontWeight: 600 }}>flagged {fmtSignedPct(d.flaggedMedianPct)}</div>
+                      <div style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>unflagged {fmtSignedPct(d.unflaggedMedianPct)}</div>
                     </div>
                   );
                 }}

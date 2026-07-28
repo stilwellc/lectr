@@ -64,5 +64,7 @@ export function generateMetadata({ params }: { params: { id: string } }): Metada
 
 export default function StaticLotPage({ params }: { params: { id: string } }) {
   const lot = flaggedLots().find(l => l.id === params.id) || null;
-  return <LotPage lotId={params.id} initialLot={lot} />;
+  // key: navigating between static lot pages must remount (fresh dbLot/
+  // imgFailed state) — same doctrine as the /lot?id= query route.
+  return <LotPage key={params.id} lotId={params.id} initialLot={lot} />;
 }

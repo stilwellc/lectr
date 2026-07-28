@@ -18,16 +18,21 @@ import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import meta from '../../public/data/ray/meta.json';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday } from '../utils';
 import { ARTIST_LABEL } from '../constants';
 
+/** Whole calendar days from the reader's LOCAL day to the sale day — signed:
+    a past date counts negative (no clamp-to-today; a lot that hammered days
+    ago must never read "today" forever). */
 function daysUntil(dateStr: string): number {
-  const t = new Date(dateStr).getTime();
+  const day = (dateStr || '').slice(0, 10);
+  const t = Date.parse(`${day}T00:00:00Z`);
   if (isNaN(t)) return NaN;
-  return Math.max(0, Math.ceil((t - Date.now()) / 86_400_000));
+  return Math.round((t - Date.parse(`${localToday()}T00:00:00Z`)) / 86_400_000);
 }
 function hammerWord(days: number): string {
   if (isNaN(days)) return 'scheduled';   // never render "in NaN days"
+  if (days < 0) return `hammered ${-days} ${days === -1 ? 'day' : 'days'} ago`;
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
@@ -117,7 +122,7 @@ export default function SavedPage() {
   // pricing computation (verdict, appraisals, comps, engine) already excludes
   // it structurally; nothing pending can leak into a number.
   const isPastPending = (l: AuctionLot) =>
-    l.status === 'upcoming' && !!l.resultsPending && !!l.saleDate && l.saleDate.slice(0, 10) < new Date().toISOString().slice(0, 10);
+    l.status === 'upcoming' && !!l.resultsPending && !!l.saleDate && l.saleDate.slice(0, 10) < localToday();
 
   const upcoming = useMemo(() =>
     savedLots
@@ -200,7 +205,7 @@ export default function SavedPage() {
     }).length;
     // next hammer = genuinely future only (past-dated resultsPending lots are
     // watched, but they already hammered — they can't be "next")
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = localToday();
     const next = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= todayIso) || null;
     return { totalEst, flagged, next };
   }, [upcoming, allLots]);
@@ -253,7 +258,11 @@ export default function SavedPage() {
       color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
-      <style>{`
+      {/* __html, not a text child: this CSS carries '>' child combinators,
+          which React entity-escapes in SSR text while the browser leaves
+          <style> raw text undecoded — a guaranteed hydration mismatch
+          (React #418/#423/#425) on every load. RecordBand's pattern. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         .ray-saved-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
@@ -337,7 +346,7 @@ export default function SavedPage() {
           .ray-saved-grid { grid-template-columns: 1fr; gap: 26px; }
           .ray-saved-section { padding-block: 32px 32px; }
         }
-      `}</style>
+      ` }} />
 
       <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 

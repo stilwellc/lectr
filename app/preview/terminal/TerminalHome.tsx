@@ -23,7 +23,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constan
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct } from '../../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct, localToday } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
 import { dealScore, signalMagnitude } from '../../lib/comps';
@@ -169,7 +169,9 @@ function trueSaleDay(l: AuctionLot): string {
 }
 
 // Ledger-table dressing: the category cell's short label, and the
-// days-to-hammer count (whole days from the crawl day to the true sale day).
+// days-to-hammer count (whole days from the reader's local day to the true
+// sale day — "In 2d" is a promise to the user, so it runs on the user's clock,
+// the same one the feed filter uses).
 const CAT_LABEL: Record<string, string> = {
   original: 'Original',
   print: 'Print',
@@ -178,10 +180,10 @@ const CAT_LABEL: Record<string, string> = {
   design: 'Design',
   object: 'Object',
 };
-function daysToHammer(l: AuctionLot, crawlDay: string): number | null {
+function daysToHammer(l: AuctionLot, todayDay: string): number | null {
   const day = trueSaleDay(l);
   if (!day) return null;
-  const d = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${crawlDay}T00:00:00Z`)) / 86_400_000);
+  const d = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${todayDay}T00:00:00Z`)) / 86_400_000);
   return Number.isFinite(d) ? d : null;
 }
 
@@ -365,7 +367,9 @@ export default function TerminalHomePage() {
   }, [activeKey]);
 
   const upcoming = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    // the READER's calendar day — a UTC "today" runs a day ahead every US
+    // evening and drops lots that genuinely hammer today
+    const today = localToday();
     // On the block = the sale genuinely hasn't happened yet, judged on the TRUE
     // day (saleDateTime over crawl-day saleDate). A lot whose real sale is past —
     // even one held 'upcoming' with pending results — is not live and drops here.
@@ -518,12 +522,16 @@ export default function TerminalHomePage() {
   }, [upcoming, crawlDay]);
 
   const nextHammer = useMemo(() => {
-    const lot = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= crawlDay) || null;
+    // "today / tomorrow / in Nd" reads to the USER — count from the reader's
+    // local day, the same clock the feed filter runs on (never the crawl day,
+    // which can lag and print "in 2d" for tomorrow's hammer).
+    const today = localToday();
+    const lot = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= today) || null;
     if (!lot) return null;
-    const d = Math.round((Date.parse(`${lot.saleDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${crawlDay}T00:00:00Z`)) / 86_400_000);
+    const d = Math.round((Date.parse(`${lot.saleDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
     const word = d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d}d`;
     return { lot, word };
-  }, [upcoming, crawlDay]);
+  }, [upcoming]);
 
   const strip = useMemo<StripItem[]>(() => {
     const active = upcoming;
@@ -562,7 +570,7 @@ export default function TerminalHomePage() {
     const idSet = new Set(savedIds);
     const mine = allLots.filter(l => idSet.has(l.id));
     if (mine.length === 0) return null;
-    const today = new Date().toISOString().split('T')[0];
+    const today = localToday();
     const live = mine
       .filter(l => l.status === 'upcoming' && trueSaleDay(l) >= today)
       .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
@@ -733,8 +741,8 @@ export default function TerminalHomePage() {
 
             {backtest && backtest.flagged.n > 500 && (
               <a href="/value" className="ray-proofstrip" style={{ marginTop: 20 }}>
-                Flagged calls hammered <b className="up">+{backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct}%</b> over
-                their estimates — unflagged hammered {(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct) >= 0 ? '+' : ''}{backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct}% — across {backtest.flagged.n.toLocaleString()} replayed
+                Flagged calls hammered <b className="up">{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</b> over
+                their estimates — unflagged hammered {fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} — across {backtest.flagged.n.toLocaleString()} replayed
                 sales{activeKey !== 'all' ? ' · all markets' : ''} · the record <Flick size={12} />
               </a>
             )}
@@ -835,7 +843,7 @@ export default function TerminalHomePage() {
                       <tbody>
                         {feed.slice(0, visibleUpcoming).map(lot => {
                           const sig = lotSignal(lot, marketLots);
-                          const dth = daysToHammer(lot, crawlDay);
+                          const dth = daysToHammer(lot, localToday());
                           return (
                             <tr
                               key={lot.id}

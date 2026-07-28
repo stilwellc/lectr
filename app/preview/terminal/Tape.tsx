@@ -36,8 +36,11 @@ export default function Tape({ items, speed = 64 }: Props) {
 
   if (!clean.length) return null;
 
-  const Row = ({ it, k }: { it: TapeItem; k: string }) => (
-    <span className={styles.tapeItem} key={k}>
+  // `key` rides the JSX element in the map (React's reconciliation contract) —
+  // a `k` prop passed INTO the component never reaches React, so every list
+  // item was keyless.
+  const Row = ({ it }: { it: TapeItem }) => (
+    <span className={styles.tapeItem}>
       <span className={styles.tapeDot} aria-hidden />
       <span className={styles.tapeMaker}>{it.artist}</span>
       <span className={styles.tapeTitle}>{it.title}</span>
@@ -51,7 +54,7 @@ export default function Tape({ items, speed = 64 }: Props) {
       <div className={styles.tape} role="marquee" aria-label="Recently realized hammers">
         <div className={styles.tapeStatic}>
           {clean.map((it, i) => (
-            <Row it={it} k={`s${i}`} />
+            <Row key={`s${i}`} it={it} />
           ))}
         </div>
       </div>
@@ -62,11 +65,11 @@ export default function Tape({ items, speed = 64 }: Props) {
     <div className={styles.tape} role="marquee" aria-label="Recently realized hammers">
       <div className={styles.tapeTrack} style={{ ['--tape-dur' as string]: `${speed}s` }}>
         {clean.map((it, i) => (
-          <Row it={it} k={`a${i}`} />
+          <Row key={`a${i}`} it={it} />
         ))}
         {/* duplicate for a seamless loop */}
         {clean.map((it, i) => (
-          <Row it={it} k={`b${i}`} />
+          <Row key={`b${i}`} it={it} />
         ))}
       </div>
     </div>

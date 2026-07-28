@@ -129,6 +129,16 @@ export function formatDate(
   return d.toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' });
 }
 
+/** The user's LOCAL calendar day as YYYY-MM-DD — the ONE "today" for every
+ *  client-render comparison against date-only saleDate strings. A UTC "today"
+ *  (toISOString().slice(0, 10)) runs a day ahead of every US evening, so lots
+ *  hammering "today" read as past and day-counts go off by one. Build-time
+ *  scripts stay UTC on purpose — this is for what the READER's calendar says. */
+export function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Upgrade http:// image URLs to https:// so they don't trip mixed-content on
  *  our HTTPS pages (all our image hosts serve https). Undefined-safe. */
 export function httpsImg(u?: string | null): string | undefined {
@@ -234,10 +244,13 @@ export function makeAuctionIcs(lot: {
   currency: string;
   url: string;
   artist: string;
-}): string {
+}): string | null {
+  // A malformed/absent saleDate must return null (caller no-ops) — never
+  // throw inside the click handler that builds the calendar file.
+  const d = new Date((lot.saleDate || '') + 'T12:00:00');
+  if (!lot.saleDate || !/^\d{4}-\d{2}-\d{2}/.test(lot.saleDate) || isNaN(d.getTime())) return null;
   const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
   const fmtDate = (iso: string) => iso.replace(/-/g, '').slice(0, 8);
-  const d = new Date(lot.saleDate + 'T12:00:00');
   const nextDay = new Date(d.getTime() + 86_400_000);
 
   const fmtPrice = (n: number) =>
@@ -279,7 +292,7 @@ export function makeAuctionIcs(lot: {
 }
 
 export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; artist: string; resultsPending?: boolean }>): Record<string, number> {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
   const counts: Record<string, number> = {};
   for (const lot of lots) {
     if (lot.status === 'upcoming' && lot.saleDate && (lot.saleDate >= today || (lot.resultsPending && lot.saleDate.slice(0, 10) >= today))) {

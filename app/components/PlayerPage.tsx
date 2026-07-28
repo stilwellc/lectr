@@ -33,12 +33,17 @@ const CAT_LABEL: Record<string, string> = {
   'sports-memorabilia': 'Memorabilia',
 };
 
+// module cache — one fetch per session. The failure flag is NOT part of the
+// cache contract: it clears on the next mount so one flaky fetch never bricks
+// every /player page for the whole session (RefPage's exact pattern).
 let cache: PlayerEntry[] | null = null;
 let failed = false;
 function usePlayers(): { players: PlayerEntry[] | null; failed: boolean } {
-  const [state, setState] = useState({ players: cache, failed });
+  // fresh mounts start un-failed — the effect below retries the fetch
+  const [state, setState] = useState({ players: cache, failed: false });
   useEffect(() => {
-    if (cache || failed) return;
+    if (cache) return;
+    failed = false; // retry on every fresh mount — never a permanent latch
     let dead = false;
     fetch('/data/ray/players.json')
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))

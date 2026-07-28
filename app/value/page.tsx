@@ -26,7 +26,7 @@ import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import meta from '../../public/data/ray/meta.json';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
 const ROWS_PAGE = 12;
@@ -52,7 +52,7 @@ export default function ValuePage() {
   const [shown, setShown] = useState(ROWS_PAGE);
 
   const deals = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localToday();
     // THE ONE FLAGGED RANKING — dealScore (lib/comps): calibrated odds first,
     // then the gap capped at 400%. Same ordering as every other surface.
     return marketLots
@@ -110,7 +110,11 @@ export default function ValuePage() {
       color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
-      <style>{`
+      {/* __html, not a text child: this CSS carries '<date>' inside a comment
+          (and any '>'/'<' gets entity-escaped by SSR while the browser leaves
+          <style> raw text undecoded) — a guaranteed hydration mismatch
+          (React #418/#423/#425) on every load. RecordBand's pattern. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         .ray-value-section { padding-block: var(--sect-t) calc(var(--sect-b) + var(--space-4)); }
         .ray-value-row {
           display: grid;
@@ -226,7 +230,7 @@ export default function ValuePage() {
           .ray-value-cell-odds { color: var(--color-text-secondary); font-weight: 600; }
           .ray-value-cell-est { color: var(--color-fg); }
         }
-      `}</style>
+      ` }} />
 
       <ArtistNav activeSlug="value" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
@@ -400,7 +404,7 @@ export default function ValuePage() {
                         <span className="ray-value-row-title" style={{ display: 'block' }}>
                           {craftTitle(d.lot.title)}
                           <span className="ray-value-mobdate">
-                            {' '}· {d.lot.saleDate && d.lot.saleDate.slice(0, 10) < new Date().toISOString().slice(0, 10) ? 'hammered' : 'hammers'} {formatDate(d.lot.saleDate)}
+                            {' '}· {d.lot.saleDate && d.lot.saleDate.slice(0, 10) < localToday() ? 'hammered' : 'hammers'} {formatDate(d.lot.saleDate)}
                           </span>
                         </span>
                       </span>
