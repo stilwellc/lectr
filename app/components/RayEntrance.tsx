@@ -100,7 +100,22 @@ export function RayLoading() {
       {/* skeleton styles live in globals.css — raw-text style blocks with
           quotes/apostrophes break hydration (React escapes them server-side) */}
       <div className="lectr-loader">
-        <img src="/brand/lectr-nav.png" alt="" className="lectr-write" style={{ height: 40, width: 'auto' }} />
+        {/* the mark writes in BUTTER (the brand's opening color, M1) — the white
+            PNG is a CSS mask over a butter fill, with the soft halo carried by
+            the wrapper so the drop-shadow follows the masked silhouette */}
+        <span aria-hidden style={{ display: 'block', filter: 'drop-shadow(0 0 12px rgba(232, 218, 182, 0.35))' }}>
+          <span
+            className="lectr-write"
+            style={{
+              display: 'block',
+              height: 40,
+              aspectRatio: '249 / 160',
+              background: '#e8dab6',
+              WebkitMask: 'url(/brand/lectr-nav.png) center / contain no-repeat',
+              mask: 'url(/brand/lectr-nav.png) center / contain no-repeat',
+            }}
+          />
+        </span>
         <div className="lectr-lead" />
       </div>
       <div className="ray-sk" style={{ width: 280, height: 56, marginBottom: 14 }} />

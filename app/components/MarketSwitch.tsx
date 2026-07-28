@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { MARKETS } from '../constants';
 import { useMarket } from '../lib/market';
@@ -95,15 +95,40 @@ export default function MarketSwitch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // THE TAPE CUT's pill beat (M2, Terminal only via `emblems`): on a market
+  // change the INCOMING active pill gets one ignite ripple (the existing
+  // switch-on keyframe); the outgoing active simply fades through the pills'
+  // own transitions. Reduced motion: no ripple, the active state just moves.
+  const prevMkt = useRef(market);
+  const [ignite, setIgnite] = useState<string | null>(null);
+  useEffect(() => {
+    if (prevMkt.current === market) return;
+    prevMkt.current = market;
+    if (!emblems || !compact) return;
+    try {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    } catch { return; }
+    setIgnite(market);
+    const t = setTimeout(() => setIgnite(null), 520);
+    return () => clearTimeout(t);
+  }, [market, emblems, compact]);
+
   if (compact) {
     return (
       <div className={`ray-markets ray-markets-compact${ripple ? ' ray-mkt-open' : ''}`} role="tablist" aria-label="Markets">
+        <style>{`
+          @media (prefers-reduced-motion: no-preference) {
+            .ray-market-tab.ray-pill-cutignite {
+              animation: lectrPillIgnite 420ms var(--ease-signature) both;
+            }
+          }
+        `}</style>
         {MARKETS.map((m, i) => (
           <button
             key={m.key}
             role="tab"
             aria-selected={market === m.key}
-            className={`ray-market-tab${market === m.key && lit ? ' lit' : ''}`}
+            className={`ray-market-tab${market === m.key && lit ? ' lit' : ''}${ignite === m.key ? ' ray-pill-cutignite' : ''}`}
             data-market={m.key}
             data-active={market === m.key}
             data-live={m.live}
