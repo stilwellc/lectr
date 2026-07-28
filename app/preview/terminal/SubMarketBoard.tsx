@@ -128,10 +128,14 @@ function readLine(r: SubMarketRead): { primary: string; per: string } {
   return { primary: r.typicalUsd != null ? `typical ${fmtMoneyCompact(r.typicalUsd)}` : '—', per: '' };
 }
 
-// the secondary cell — the CI for an index, else typical/record support
+// the secondary cell — the CI for an index, else typical/record support. On the
+// cards row the CI is joined by the bid-competition demand read (median bids/lot
+// from Goldin's bidCount) — a demand primitive alongside the CI'd price index,
+// never masquerading as the index itself.
 function supportLine(r: SubMarketRead): string {
   if (r.readType === 'index' && r.index) {
-    return `[${r.index.ciLoPct.toFixed(0)}, ${r.index.ciHiPct.toFixed(0)}]`;
+    const ci = `[${r.index.ciLoPct.toFixed(0)}, ${r.index.ciHiPct.toFixed(0)}]`;
+    return r.bidCompNow != null ? `${ci} · ${r.bidCompNow} bids/lot` : ci;
   }
   if (r.readType === 'demand') {
     if (r.typicalUsd != null) return `typical ${fmtMoneyCompact(r.typicalUsd)}`;

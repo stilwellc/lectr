@@ -19,10 +19,10 @@ import { readCorpus as readCorpusShared } from './corpus-io';
 import {
   computeDeepSignal, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
-import { demandSeries, realizedCohortSeries } from '../app/lib/demand';
+import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app/lib/demand';
 import { ARTIST_LABEL, marketArtists, MARKETS } from '../app/constants';
 import type { AuctionLot as EngineLot } from '../app/types';
-import type { AuctionLot, RealizedPoint } from '../app/types';
+import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
 interface Lot {
   id: string;
@@ -251,11 +251,24 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     }),
   };
 
-  const out = { generatedAt: new Date().toISOString(), tape, demand, realized, recentSold, lots: upcoming };
+  // bidComp['sports'] — the honest CARDS demand read. Goldin publishes no
+  // estimate, so cards get no %-over-estimate demand series (nor a hedonic
+  // move); but every Goldin lot carries bidCount, a genuine demand primitive
+  // (competitive tension). This is the quarterly MEDIAN bids-per-sold-lot on
+  // the sports-cards slug — a bare count (bids/lot), typed BidCompetitionPoint,
+  // NOT a % and NOT a $. It's ADDITIVE to (never a substitute for) the CI'd
+  // repeat-sale index that headlines the cards sub-market. Coverage is deep
+  // (287k sold Goldin card lots, 99.9% with bidCount>0) so the series is real.
+  const bidComp: Record<string, BidCompetitionPoint[]> = {
+    sports: bidCompetitionSeries(lots as unknown as AuctionLot[], { slug: 'sports-cards' }),
+  };
+
+  const out = { generatedAt: new Date().toISOString(), tape, demand, realized, bidComp, recentSold, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
   const recentCounts = Object.keys(recentSold).map(k => `${k}:${recentSold[k].length}`).join(' ');
-  console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], recentSold[${recentCounts}], realized.sports:${realized.sports.length}, ${kb}KB`);
+  const bcLast = bidComp.sports.length ? bidComp.sports[bidComp.sports.length - 1] : null;
+  console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], recentSold[${recentCounts}], realized.sports:${realized.sports.length}, bidComp.sports:${bidComp.sports.length}${bcLast ? ` (now ${bcLast.value} bids/lot)` : ''}, ${kb}KB`);
 }
 
 // standalone entry

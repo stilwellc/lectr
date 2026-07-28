@@ -60,6 +60,19 @@ export interface RealizedPoint {
   n: number;
 }
 
+/** One quarter of a bid-competition series: the MEDIAN number of bids drawn per
+    sold lot (a Goldin `bidCount`) over the trailing year. A DEMAND primitive —
+    competitive tension per lot — NOT a price return and NOT %-over-estimate.
+    `value` is a bare count (bids/lot), so it's typed distinctly from DemandPoint
+    (a `%`) and RealizedPoint (a `$`) — the three can never share a caption. */
+export interface BidCompetitionPoint {
+  date: string;
+  /** median bids per sold lot in the trailing-year window, e.g. 21 */
+  value: number;
+  /** sold lots carrying bidCount>0 inside the window */
+  n: number;
+}
+
 export interface AuctionLot {
   id: string;
   artist: string;

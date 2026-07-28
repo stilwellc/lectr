@@ -9,7 +9,7 @@
  * prices, which makes over-estimate performance the LEADING demand signal —
  * price levels follow. Median (not mean) keeps single freak results out.
  */
-import { AuctionLot, RealizedPoint } from '../types';
+import { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../types';
 import { isSportsScienceObject, sportsForm, classifyForm } from './comps';
 
 export interface DemandPoint {
@@ -154,4 +154,99 @@ export function realizedCohortSeries(lots: AuctionLot[], opts: RealizedCohortOpt
   }
 
   return points;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BID-COMPETITION SERIES — the honest cards demand read.
+
+   Goldin publishes NO house estimate, so neither the Demand Index (%-over-
+   estimate) nor a hedonic move can run on the cards vertical — but every Goldin
+   lot carries `bidCount`, the number of bids it drew. That is a genuine DEMAND
+   primitive: how much competitive tension the object attracted. This series is
+   the quarterly MEDIAN bidCount per SOLD lot, over the same trailing-twelve-
+   calendar-month window + quarter-key discipline as demandSeries/
+   realizedCohortSeries (never adjacent array keys).
+
+   Coverage (measured on the full corpus, sports-cards slug): 288,237 sold lots,
+   287,834 (99.9%) carry bidCount>0, spanning 2022-07 → 2026-07 — so sold lots
+   RETAIN a final bidCount and a real SERIES over time is supported (not just a
+   live-book snapshot). Quarterly median steps ~8 → ~21 bids/lot across 2023→2026.
+
+   WHAT IT IS NOT — the honesty doctrine:
+   - NOT a price return, NOT %-over-estimate, NOT appreciation. `value` is a bare
+     bids-per-lot count (typed BidCompetitionPoint, distinct from the `%`
+     DemandPoint and the `$` RealizedPoint) so it can never render through a
+     price/percent caption.
+   LIMITS:
+   - A SOLD lot's final bidCount is the whole auction's competition on that lot,
+     not a live snapshot — it measures realized tension, not current book depth.
+   - More bids/lot need not mean higher prices: a flood of cheap lots can draw
+     many small competing bids. It reads competitive INTEREST, not value.
+   - Goldin-only (the only house that ships bidCount); it describes the bid-
+     auction cards market, not the estimate houses' curated-sale cards.
+
+   This is ADDITIVE — it does not call, edit, or feed demandSeries or the CI'd
+   repeat-sale index; it is a separate demand signal alongside them.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+export interface BidCompetitionOpts {
+  /** the object-slug the series is drawn from (carried as lot.artist), e.g.
+      'sports-cards'. Required — the read is single-slug by construction. */
+  slug: string;
+  /** evaluation "now" — defaults to Date.now(). Sales after it are clamped out. */
+  now?: number;
+}
+
+// per-quarter trailing-window floor — same gate spirit as demandSeries; bid
+// auctions are high-volume so this clears easily on any live quarter.
+const MIN_BIDCOMP_QUARTER = 15;
+
+export function bidCompetitionSeries(lots: AuctionLot[], opts: BidCompetitionOpts): BidCompetitionPoint[] {
+  const now = opts.now ?? Date.now();
+  const sales: { t: number; bids: number }[] = [];
+  const quarterEnd: Record<string, number> = {};
+
+  for (const l of lots) {
+    if (l.status !== 'sold' || l.artist !== opts.slug) continue;
+    const bids = (l as { bidCount?: number }).bidCount ?? 0;
+    if (!(bids > 0)) continue; // only lots that actually drew bids
+    const d = new Date(l.saleDate);
+    if (isNaN(d.getTime())) continue;
+    const t = d.getTime();
+    if (t > now) continue; // clamp future/phantom rows
+    const q = Math.floor(d.getUTCMonth() / 3);
+    const key = `${d.getUTCFullYear()} Q${q + 1}`;
+    sales.push({ t, bids });
+    quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
+  }
+
+  const quarters = Object.keys(quarterEnd).sort();
+  const points: BidCompetitionPoint[] = [];
+  for (const qk of quarters) {
+    const end = quarterEnd[qk];
+    if (end - YEAR_MS > now) continue;
+    const window = sales
+      .filter(s => s.t < end && s.t >= end - YEAR_MS)
+      .map(s => s.bids)
+      .sort((a, b) => a - b);
+    if (window.length < MIN_BIDCOMP_QUARTER) continue;
+    const m = Math.floor(window.length / 2);
+    const med = window.length % 2 === 0 ? (window[m - 1] + window[m]) / 2 : window[m];
+    points.push({ date: qk, value: med, n: window.length });
+  }
+
+  // isStale gate (mirrors realizedCohortSeries): a series whose freshest quarter
+  // closed over a year before 'now' has gone dark — emit nothing rather than
+  // wear a stale count as today's read.
+  if (points.length) {
+    const lastEnd = quarterEnd[points[points.length - 1].date];
+    if (now - lastEnd > YEAR_MS) return [];
+  }
+
+  return points;
+}
+
+/** Format a bids-per-lot count for display — e.g. "21 bids/lot". Never a % or $. */
+export function formatBidComp(n: number): string {
+  return `${Math.round(n)} bids/lot`;
 }
