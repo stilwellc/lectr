@@ -18,8 +18,8 @@ import { extractReference } from './identity-enrich';
       that were swept into the science slugs. Uses the SAME high-confidence
       signals as scripts/audit-data-quality.ts (§1). Two outcomes, matching the
       established corpus doctrine (ray-crawl.ts §SCI_GUARD evicts wristwatch-form
-      lots from science; fix-science-misroutes.ts re-routes tracked makers and
-      evicts untracked ones — "untracked makers are never kept"):
+      lots from science; the completed one-time misroute fix re-routed tracked
+      makers and evicted untracked ones — "untracked makers are never kept"):
         · a lot whose maker names a TRACKED roster slug is re-routed to it;
         · a lot that is confidently NON-science but names no tracked slug
           (untracked blue-chips like Hockney/Basquiat/Rauschenberg, Gemini G.E.L.

@@ -1,7 +1,7 @@
 /**
  * normalize.ts — the pure, deterministic normalization layer. THE single source
- * of truth shared by the crawler (fresh rows) and the one-time backfill
- * (scripts/migrate-v2.ts) so a fresh row and a migrated row are byte-identical.
+ * of truth shared by the crawler (fresh rows) and the completed one-time v2
+ * backfill, so a fresh row and a migrated row are byte-identical.
  *
  * NO I/O except imageHash (which fetches an image to dHash it). Everything else
  * is a pure function of its arguments — same input → same output, forever,
