@@ -34,6 +34,7 @@ import {
   modelKey as normModelKey, watchKey as normWatchKey,
   normalizeTitle as normNormalizeTitle,
 } from '../app/lib/normalize';
+import { looksLikeCard } from '../app/lib/cards';
 
 // ── Lot Classification ──
 // Classifies a lot as original, print, photograph, sculpture, design, or unknown
@@ -1983,6 +1984,16 @@ function goldinRoute(title: string, sportScoped = false): string | null {
     : GOLDIN_TROPHY.test(t) ? 'trophies-awards'
     : GOLDIN_TICKET.test(t) ? 'tickets-passes'
     : null;
+  // RELIC-CARD GATE (sport-scoped only): a "Game-Used Relic CARD" / "Autograph
+  // Patch #DAP-SO" fires the game-used OBJECT signal above, but it IS a trading
+  // card (a card product + card number) and must comp on its EXACT-card value —
+  // not a broad player-median in the game-used vertical. When the lot clearly
+  // reads as a card, the card wins over the object signal → 'sports-cards'. This
+  // is the SPORT card path (Pokémon/TCG already excluded from category:['Sport']),
+  // so it honours the never-non-sport-cards doctrine. A RAW object (jersey/bat/
+  // ball with game-used wording but no card product/number) has looksLikeCard
+  // false and keeps the object routing below.
+  if (sportScoped && looksLikeCard(title)) return 'sports-cards';
   if (sportScoped) return objectSignal || 'sports-cards';
   if (objectSignal) return objectSignal;
   // space first — Apollo/NASA artifacts head the science vertical's space slug

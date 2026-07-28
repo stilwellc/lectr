@@ -126,6 +126,118 @@ export function playerOf(title: string, slug: string): { player: string | null; 
   return { player: name, playerSlug: playerSlugOf(name) };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Relic-card detector — "is this title a trading CARD?" (shared by the crawler's
+// goldinRoute and the build-time corpus reroute).
+//
+// The problem it solves: a "Game-Used Relic CARD" (a manufactured trading card
+// carrying a swatch of game-used cloth) is a CARD — it has a card product and a
+// card number, and comps on its EXACT-card value — not raw memorabilia. But a
+// game-used object signal ("relic"/"patch"/"game-used") alone would route it to
+// the game-used vertical and price it as a generic player-median.
+//
+// A CARD = a card-PRODUCT token (Topps/Panini/… — the manufacturer set) OR a
+// card-NUMBER token (a #-prefixed alphanumeric like #DAP-SO, #SS-MJ, #111) that
+// sits in CARD CONTEXT (Autograph/Relic/Patch/Rookie/Refractor/serial-numbered/
+// graded). Grading alone (PSA/DNA on a raw jersey) is NOT sufficient — a raw
+// jersey can be PSA/DNA authenticated without being a card. We require a PRODUCT
+// or a NUMBER, never grading alone.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// UNAMBIGUOUS card brands: proper nouns / multi-word set names that never appear
+// as plain English (or as provenance) in a memorabilia title. Any one IS a card
+// product. Deliberately EXCLUDES bare "Museum Collection" / "Exquisite" — those
+// ride in as provenance ("EX-HELMS MUSEUM COLLECTION") or as prose ("Exquisite
+// music box"); the branded forms "Topps Museum" / "Upper Deck Exquisite" are
+// caught by their leading brand (Topps/Upper Deck) instead.
+const CARD_PRODUCT_STRONG_RE =
+  /\b(topps|upper deck|panini|bowman|donruss|fleer|sp authentic|sp game(?:[- ]used)?|prizm|immaculate|national treasures|stadium club|goudey|play ball|cracker jack|allen (?:&|and) ginter|o-pee-chee|skybox|pinnacle)\b/i;
+
+// AMBIGUOUS card-set words that are ALSO common English (Finest/Select/Score/
+// Chrome/Flawless/Dynasty/Sapphire/Leaf/Exquisite/Mosaic). Alone they mean
+// nothing — a "FINEST CONDITION" signed baseball, an "Exquisite music box", or a
+// "CERAMIC MOSAIC" club crest is not a card. They only count as a card product
+// when CORROBORATED by a card number or clear card context (so "Topps Finest #…
+// Refractor" and "Panini Mosaic #… Auto" read, but "FINEST KNOWN" does not).
+const CARD_PRODUCT_WEAK_RE =
+  /\b(finest|select|score|chrome|flawless|dynasty|sapphire|leaf|exquisite|mosaic|obsidian)\b/i;
+
+// A card NUMBER: #-prefixed alphanumeric (allows the hyphenated insert codes:
+// #DAP-SO, #SS-MJ, #111, #RA-LJ). Requires at least one alphanumeric char.
+const CARD_NUMBER_RE = /#[A-Za-z0-9][A-Za-z0-9/-]*/;
+
+// CARD CONTEXT: card-collateral words that, alongside a card number or a weak
+// brand, confirm a trading card. Deliberately NARROW — the phrases that describe
+// a CARD, not memorabilia. Bare "autograph"/"auto" is EXCLUDED: a signed baseball
+// or jersey is "autographed" but is not a card (that's what mis-fired the raw
+// Babe Ruth ball). The real relic cards carry a brand (Topps/Panini) or a serial,
+// which seat them via the strong-brand or serial paths instead.
+const CARD_CONTEXT_RE =
+  /\b(refractor|rookie card|patch card|relic card|patch rookie|die[- ]?cut short print|\bssp\b|strip card|tobacco card|trading card|autograph patch|autographed patch)\b/i;
+const SERIAL_NUMBERED_RE = /\(#?\s*\d+\s*\/\s*\d{1,4}\)|\s\/\d{1,4}\b/; // "(#06/10)", " /99"
+// A card GRADE NUMBER — PSA/BGS/SGC/CGC followed by a numeric grade. Excludes the
+// autograph-auth form "PSA/DNA" (which authenticates raw signed memorabilia, not
+// cards) by requiring the grader NOT be immediately followed by "/DNA".
+const CARD_GRADE_RE = /\b(psa|bgs|sgc|cgc)(?!\/dna)\s*\d/i;
+
+// RAW MEMORABILIA object nouns. When one of these physical objects is named, the
+// lot is (probably) actual memorabilia — a jersey/bat/ball — and a bare brand
+// token is NOT enough to call it a card: those brand tokens ride in as an
+// AUTHENTICATOR ("Upper Deck LOA", "Panini COA", "Topps LOA"), a SPONSOR ("Panini
+// Rising Stars Challenge … Game-Used Jersey"), or a PLAYER SURNAME ("Ky Bowman …
+// Game-Used Jersey", "Aubrey Huff … Pinnacle … Bat"). So when a raw-object noun is
+// present we demand an EXPLICIT card signal (a card number, the word "card(s)", a
+// serial print-run, or relic-card phrasing) before rerouting. The genuine relic
+// CARDS always carry one — "Patch Card", "Relic Card", "#DAP-SO", "(#06/10)".
+const RAW_OBJECT_RE =
+  /\b(jersey|jerseys|uniform|bat|bats|baseball|basketball|football|glove|gloves|cleats|boots|helmet|trunks|shorts|cap\b|caps\b|jacket|shoe|shoes|sneakers?|shirt|shirts|ball|pennant|banner|trophy|ring\b|belt)\b/i;
+// The explicit card signals that survive a raw-object noun.
+const CARD_WORD_RE = /\bcards?\b/i;
+
+/**
+ * Is this title a trading CARD (including a game-used RELIC card)? Conservative.
+ *
+ * A card signal = a card NUMBER, an explicit "card(s)" word, a serial print-run
+ * "(#/N)" / "/NN", a numeric grade (never PSA/DNA), or relic-card phrasing.
+ *
+ *  · strong brand (Topps/Panini/…): a card, UNLESS a raw-object noun (jersey/bat/
+ *    ball…) is present — then a card signal is REQUIRED (the brand is an
+ *    authenticator/sponsor/surname, not the set).
+ *  · a card NUMBER in card context: a card.
+ *  · a weak/ambiguous brand word (Finest/Mosaic/…): a card only WHEN corroborated.
+ *
+ * Grading language alone is never enough (a raw jersey can be PSA/DNA'd).
+ */
+export function looksLikeCard(title: string): boolean {
+  const t = (title || '').trim();
+  if (!t) return false;
+
+  const hasNumber = CARD_NUMBER_RE.test(t);
+  // an EXPLICIT card signal — enough to override a raw-object noun.
+  const cardSignal =
+    (hasNumber && (CARD_CONTEXT_RE.test(t) || SERIAL_NUMBERED_RE.test(t) || CARD_GRADE_RE.test(t)))
+    || CARD_WORD_RE.test(t)
+    || SERIAL_NUMBERED_RE.test(t)
+    || CARD_CONTEXT_RE.test(t);
+  const rawObject = RAW_OBJECT_RE.test(t);
+
+  // 1) unambiguous card brand → a card. But if a raw-object noun is present, the
+  //    brand is likely an authenticator/sponsor/surname → require a card signal.
+  if (CARD_PRODUCT_STRONG_RE.test(t)) {
+    if (!rawObject) return true;
+    if (cardSignal) return true;
+  }
+  // 2) a card number seated in card context → a card (even with an object noun:
+  //    "#DAP-SO … Patch Card" IS the relic card).
+  if (hasNumber && (CARD_CONTEXT_RE.test(t) || SERIAL_NUMBERED_RE.test(t) || CARD_GRADE_RE.test(t))) {
+    return true;
+  }
+  // 3) an ambiguous brand word (Finest/Mosaic/…) only counts WHEN corroborated by
+  //    a card signal (which also covers the raw-object case).
+  if (CARD_PRODUCT_WEAK_RE.test(t) && cardSignal) return true;
+  return false;
+}
+
 /** The exact-identity key a card COMPS on: same player+year+set+number+grade =
  *  the same tradable thing. Null when the identity is too partial to trust. */
 export function cardKey(id: CardId): string | null {
