@@ -9,7 +9,7 @@ import type { AuctionLot, LotCategory, MarketStats } from '../types';
 import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useMarket } from '../lib/market';
-import { getUpcomingCounts, formatDate, localToday } from '../utils';
+import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming } from '../utils';
 
 import ArtistNav from '../components/ArtistNav';
 import ArtistHero from '../components/ArtistHero';
@@ -179,7 +179,7 @@ export default function ArtistDetailPage() {
     const lots = allLots.filter(l => l.artist === slug);
     const today = localToday(); // the reader's local YYYY-MM-DD
     const upcoming = lots
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate.slice(0, 10) >= today)))
+      .filter(l => isLiveUpcoming(l, today))
       .sort((a, b) => {
         if (!a.saleDate) return 1;
         if (!b.saleDate) return -1;

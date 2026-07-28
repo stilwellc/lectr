@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AuctionLot } from '../types';
 import type { LotCategory } from '../types';
 import { ARTIST_LABEL, marketOf } from '../constants';
-import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle } from '../utils';
+import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle, overEstimatePct } from '../utils';
 import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
 import SectionMark from './SectionMark';
 
@@ -429,12 +429,15 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                       : '—'}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', marginTop: 1 }}>
-                  {/* the product's core statistic, on every result it has one for */}
+                  {/* the product's core statistic, on every result it has one
+                      for — HAMMER BASIS via overEstimatePct (realized prices
+                      are premium-inclusive, estimates are hammer-basis), the
+                      same statistic every other surface prints */}
                   {(() => {
                     if (!lot.priceUsd || !lot.estimateLow || !lot.estimateHigh) return null;
-                    const mid = (lot.estimateLow + lot.estimateHigh) / 2;
-                    if (mid <= 0) return null;
-                    const pct = Math.round((lot.priceUsd / mid - 1) * 100);
+                    const raw = overEstimatePct(lot);
+                    if (raw == null) return null;
+                    const pct = Math.round(raw);
                     if (Math.abs(pct) > 2000) return null; // bad estimate data — say nothing
                     return (
                       <span style={{ color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 600 }}>

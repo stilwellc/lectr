@@ -26,7 +26,7 @@ import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import meta from '../../public/data/ray/meta.json';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
 const ROWS_PAGE = 12;
@@ -56,7 +56,7 @@ export default function ValuePage() {
     // THE ONE FLAGGED RANKING — dealScore (lib/comps): calibrated odds first,
     // then the gap capped at 400%. Same ordering as every other surface.
     return marketLots
-      .filter(l => l.status === 'upcoming' && l.saleDate && (l.saleDate >= today || (l.resultsPending && l.saleDate.slice(0, 10) >= today)))
+      .filter(l => isLiveUpcoming(l, today))
       .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
       .sort((a, b) => dealScore(b.lot, b.signal!.pct) - dealScore(a.lot, a.signal!.pct));

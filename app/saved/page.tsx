@@ -18,7 +18,7 @@ import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import meta from '../../public/data/ray/meta.json';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
 import { ARTIST_LABEL } from '../constants';
 
 /** Whole calendar days from the reader's LOCAL day to the sale day — signed:
@@ -232,9 +232,15 @@ export default function SavedPage() {
   const verdict = useMemo<React.ReactNode>(() => {
     const judged = sold.filter(l => l.priceUsd && l.estimateLow && l.estimateHigh);
     if (!judged.length) return undefined;
+    // HAMMER BASIS — realized prices are premium-inclusive while estimates are
+    // hammer-basis; overEstimatePct divides the premium out, so "vs estimate"
+    // here means the same thing it does on every other surface (the old inline
+    // priceUsd/estMid read overstated every figure by ~25pts).
     const pcts = judged
-      .map(l => (l.priceUsd! / ((l.estimateLow! + l.estimateHigh!) / 2) - 1) * 100)
+      .map(l => overEstimatePct(l))
+      .filter((p): p is number => p != null)
       .sort((a, b) => a - b);
+    if (!pcts.length) return undefined;
     const medianPct = Math.round(pcts.length % 2 === 0
       ? (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2
       : pcts[Math.floor(pcts.length / 2)]);

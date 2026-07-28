@@ -291,11 +291,44 @@ export function makeAuctionIcs(lot: {
   ].join('\r\n');
 }
 
-export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; artist: string; resultsPending?: boolean }>): Record<string, number> {
+/** A lot's TRUE sale day (YYYY-MM-DD). The crawler stamps `saleDate` with the
+ *  CRAWL DAY as a fallback when it can't read a real date off a search/artist
+ *  page — so an old sold lot re-seen there would otherwise show as "on the
+ *  block today". `saleDateTime`, when set, is the genuinely-parsed timestamp
+ *  and always wins. Every liveness comparison runs on this, never on the raw
+ *  (possibly crawl-day) saleDate. */
+export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string | null }): string {
+  return l.saleDateTime ? l.saleDateTime.slice(0, 10) : (l.saleDate || '').slice(0, 10);
+}
+
+/** THE upcoming-visibility predicate — ONE definition of "live" for every
+ *  surface (feed, /value, /[artist], nav counts), mirroring build-upcoming's
+ *  semantics: a lot is live while its true sale day is still ahead, OR — when
+ *  it closed but the house hasn't posted results (`resultsPending`) — through
+ *  a short grace window (default 1 day) while results post. The old inline
+ *  predicates wrote `saleDate >= today || (resultsPending && saleDate >= today)`
+ *  whose second disjunct was subsumed and never admitted anything, so those
+ *  surfaces hid results-pending lots a day earlier than the lander's payload
+ *  intended. Pass the reader's localToday() client-side. */
+export function isLiveUpcoming(
+  l: { status: string; saleDate?: string | null; saleDateTime?: string | null; resultsPending?: boolean },
+  todayIso: string = localToday(),
+  graceDays = 1,
+): boolean {
+  if (l.status !== 'upcoming') return false;
+  const day = trueSaleDay(l);
+  if (!day) return false;
+  if (day >= todayIso) return true;
+  if (!l.resultsPending) return false;
+  const graceCut = new Date(Date.parse(`${todayIso}T00:00:00Z`) - graceDays * 864e5).toISOString().slice(0, 10);
+  return day >= graceCut;
+}
+
+export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; saleDateTime?: string | null; artist: string; resultsPending?: boolean }>): Record<string, number> {
   const today = localToday();
   const counts: Record<string, number> = {};
   for (const lot of lots) {
-    if (lot.status === 'upcoming' && lot.saleDate && (lot.saleDate >= today || (lot.resultsPending && lot.saleDate.slice(0, 10) >= today))) {
+    if (isLiveUpcoming(lot, today)) {
       counts[lot.artist] = (counts[lot.artist] || 0) + 1;
     }
   }

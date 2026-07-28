@@ -15,7 +15,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { readCorpus as readCorpusShared } from './corpus-io';
+import { readCorpus as readCorpusShared, slimForClient } from './corpus-io';
 import {
   computeDeepSignal, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
@@ -123,25 +123,46 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       } else {
         signal = computeDeepSignal(lot, lots as unknown as AuctionLot[]);
       }
-      const withSignal = { ...l, signal };
+      // EAGER-SLIM (the leak kill): this map used to spread the RAW corpus row
+      // into the payload, so every eager lot shipped the full engine schema —
+      // titleTokens, objectFingerprint, fx*, hammer/realized twins, bidHistory
+      // (corpus-only by doctrine) and description (can carry internal house
+      // notes). Project through the SAME slimForClient the served shards use,
+      // PLUS an explicit KEEP addendum for what the client reads on eager lots
+      // but slim strips:
+      //   saleDateTime — trueSaleDay() (feed filter / isLiveUpcoming / "In 2d")
+      //     prefers it over the possibly-crawl-day saleDate fallback.
+      // Everything else the eager surfaces read (currentBid, bidCount, value,
+      // cardComps, playerSlug/Name, firstSeen, resultsPending, soldComp, url,
+      // formKey, …) survives slimForClient already — verified against the
+      // consumers before this list was settled.
+      const emitted = slimForClient(l);
+      const sdt = (l as { saleDateTime?: string | null }).saleDateTime;
+      if (sdt != null) emitted.saleDateTime = sdt;
+      // `signal` is stamped EXPLICITLY — even when null. lotSignal() treats
+      // undefined as "not precomputed → recompute client-side", and a client
+      // recompute could resurrect a flag the build's ×5 sanity guard killed.
+      // null must survive serialization as null, never be omitted as a "null
+      // weight" the way slimForClient does for corpus fields.
+      emitted.signal = signal;
       // W5 · precompute soldComp for upcoming sports/science lots, analogous to
       // signal — so a card/modal can paint the realized band before the archive
       // loads. soldCompBand returns null for every non-sports/science-object lot
       // (single choke point), so this is a no-op for art/design/watches.
       if (isSportsScienceObject(lot)) {
         const band = soldCompBand(lot, lots as unknown as AuctionLot[]);
-        (withSignal as { soldComp?: unknown }).soldComp = band
+        emitted.soldComp = band
           ? { median: band.median, low: band.low, high: band.high, n: band.n, confidence: band.confidence, form: band.form }
           : null;
       }
-      return withSignal;
+      return emitted;
     });
 
   // pre-parse saleDate → numeric ms ONCE for the recency sorts below (tape +
   // recentSold each parse both operands per comparison otherwise, over the full
-  // corpus). Stamped AFTER the `upcoming` map so the `{...l}` spread there never
-  // copies it into the payload; the comparators read `_saleMs` off the SAME lot
-  // objects. Invalid/absent dates → NaN, matching the inline `new Date(...)` they
+  // corpus). Stamped AFTER the `upcoming` map so the slimForClient copy there
+  // never carries it into the payload; the comparators read `_saleMs` off the
+  // SAME lot objects. Invalid/absent dates → NaN, matching the inline `new Date(...)` they
   // replace (NaN in a subtract sort yields NaN, treated as 0 by V8 — identical).
   for (const l of lots) (l as { _saleMs?: number })._saleMs = new Date(l.saleDate).getTime();
   const saleMs = (l: Lot) => (l as { _saleMs?: number })._saleMs ?? NaN;
