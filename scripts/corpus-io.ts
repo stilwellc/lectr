@@ -98,6 +98,10 @@ export function splitIntoSegments(allLots: Record<string, unknown>[]): Record<st
 // `reference` and `repeatSaleGroupId` are deliberately NOT stripped: the client
 // links watch lots to /ref pages and renders provenance timelines from them,
 // and nulls are omitted below so they only cost bytes where actually set.
+// `formKey` is deliberately NOT stripped either: ComparableModal/LotPage print
+// the "N comparable <form>" headline straight off lot.formKey (no classifyForm
+// fallback there), so stripping it made every shard-loaded lot read 'unknown'.
+// It's a short string and nulls are omitted, so the cost is a few bytes/lot.
 const STRIP = new Set([
   'titleTokens','normalizedTitle','objectFingerprint','modelKey',
   'materialTokens','mediumCanon','authCert','gradeLabel','description','titleRaw',
@@ -106,7 +110,7 @@ const STRIP = new Set([
   'schemaVersion','validatedAt','firstSeenKnown','platform','saleDateTime',
   'buyerPremiumPct','hammerNative','premiumNative','realizedNative','hammerUsd',
   'premiumUsd','estLowNative','estHighNative','nativeCurrency','makerSlug',
-  'entityClass','formKey','imageHash',
+  'entityClass','imageHash',
   // engine-only USD twins — the client renders the estimateLow/estimateHigh/
   // priceUsd aliases (which carry USD), so these are pure duplicate weight.
   'estLowUsd','estHighUsd','realizedUsd',

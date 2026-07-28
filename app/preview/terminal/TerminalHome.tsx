@@ -23,7 +23,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constan
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct, localToday } from '../../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
 import { dealScore, signalMagnitude } from '../../lib/comps';
@@ -158,15 +158,9 @@ function openCommandK() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_CK_EVENT));
 }
 
-// A lot's TRUE sale day. The crawler stamps `saleDate` with the CRAWL DAY as a
-// fallback when it can't read a real date off a search/artist page — so an old
-// sold lot re-seen there (a 2014 Prouvé, a 2025 Ruth bat) would otherwise show
-// as "on the block today". `saleDateTime`, when set, is the genuinely-parsed
-// timestamp and always wins. The live feed filters on this, never on the raw
-// (possibly crawl-day) saleDate.
-function trueSaleDay(l: AuctionLot): string {
-  return l.saleDateTime ? l.saleDateTime.slice(0, 10) : (l.saleDate || '');
-}
+// A lot's TRUE sale day (saleDateTime over crawl-day saleDate) now lives in
+// app/utils.ts as `trueSaleDay`, shared with isLiveUpcoming so the feed, the
+// nav counts, /value and /[artist] all judge liveness on the same day string.
 
 // Ledger-table dressing: the category cell's short label, and the
 // days-to-hammer count (whole days from the reader's local day to the true
@@ -370,11 +364,13 @@ export default function TerminalHomePage() {
     // the READER's calendar day — a UTC "today" runs a day ahead every US
     // evening and drops lots that genuinely hammer today
     const today = localToday();
-    // On the block = the sale genuinely hasn't happened yet, judged on the TRUE
-    // day (saleDateTime over crawl-day saleDate). A lot whose real sale is past —
-    // even one held 'upcoming' with pending results — is not live and drops here.
+    // On the block = isLiveUpcoming: the sale genuinely hasn't happened yet,
+    // judged on the TRUE day (saleDateTime over crawl-day saleDate) — plus the
+    // 1-day results-pending grace build-upcoming serves, so a just-closed lot
+    // stays visible (sorted to the end, dressed as "results pending" by the
+    // card) while the house posts results, exactly as on /value and /[artist].
     return marketLots
-      .filter(l => l.status === 'upcoming' && trueSaleDay(l) >= today)
+      .filter(l => isLiveUpcoming(l, today))
       .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
   }, [marketLots]);
 
@@ -429,7 +425,7 @@ export default function TerminalHomePage() {
       const seen = (l: AuctionLot) => l.firstSeen || '';
       arr = [...arr].sort((a, b) => (seen(a) < seen(b) ? 1 : seen(a) > seen(b) ? -1 : 0));
     } else {
-      const past = (l: AuctionLot) => !!l.resultsPending && !!l.saleDate && l.saleDate.slice(0, 10) < crawlDay;
+      const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
       arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];
       if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
         arr = diversifyFeed(arr, pageSize);

@@ -147,9 +147,13 @@ export interface AuctionLot {
       flips to 'sold', or drops once the results window lapses). */
   resultsPending?: boolean;
   url: string;
-  /** Precomputed at crawl time for upcoming lots (comps median vs estimate
-      midpoint) so the feed can paint before the full history downloads.
-      undefined = not precomputed (compute client-side from allLots). */
+  /** Stamped at BUILD time by scripts/build-upcoming.ts onto the eager
+      upcoming.json lots ONLY (comps median vs estimate midpoint, or the
+      engine's translated call) so the feed can paint before the full history
+      downloads — the served shards never carry it; useRayData re-attaches it
+      to the phase-2 lots by id. undefined = not precomputed (compute
+      client-side from allLots); null = the build looked and stamped NO flag —
+      the client must never recompute past a null. */
   signal?: { label: 'Below Market' | 'Above Market'; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string; confidence?: 'very-high' | 'high' | 'medium' | 'low' } | null;
   /** ISO date (YYYY-MM-DD) the crawler first saw this lot id. Stamped once at
       merge time on genuinely-new ids and carried forward on every later crawl.
@@ -194,7 +198,9 @@ export interface AuctionLot {
   platform?: string | null;
   /** unmodified source title (provenance — re-clean without re-crawl) */
   titleRaw?: string;
-  /** persisted classifyForm() output (the FORM_LABEL keyspace) */
+  /** persisted classifyForm() output (the FORM_LABEL keyspace). SERVED to the
+      client (not stripped): ComparableModal/LotPage print the
+      "N comparable <form>" headline straight off it. */
   formKey?: string | null;
   /** persisted modelKey() — furniture code/named series (lc2, pk22, conoid) */
   modelKey?: string | null;
@@ -236,7 +242,9 @@ export interface AuctionLot {
   authCert?: string[];
   /** third-party grade (PSA 10, BGS 9.5) */
   gradeLabel?: string | null;
-  /** retained raw lot description — non-destructive re-parse source */
+  /** retained raw lot description — non-destructive re-parse source.
+      CORPUS-ONLY: stripped from every served payload (shards AND the eager
+      upcoming.json) — it can carry internal house notes. */
   description?: string | null;
   /** perceptual hash of imageUrl (dHash) — cross-sale same-object matching */
   imageHash?: string | null;
@@ -249,7 +257,10 @@ export interface AuctionLot {
   playerSlug?: string | null;
   playerName?: string | null;
   /** parsed trading-card identity — the composite fingerprint keying the card
-      repeat-sales index (same player+year+set+cardNo+grade = the same product). */
+      repeat-sales index (same player+year+set+cardNo+grade = the same product).
+      PERSISTED at build time (lives in the corpus and rides the served card
+      sample), not a transient parse — downstream readers may rely on it being
+      on the row. */
   _card?: {
     player?: string | null;
     playerSlug?: string | null;
@@ -285,7 +296,9 @@ export interface AuctionLot {
   } | null;
 
   // ── v2 STATUS / TIME / PROVENANCE ──
-  /** full timestamp only when genuinely known (watch paths) */
+  /** full timestamp only when genuinely known (watch paths). Stripped from the
+      served shards, but KEPT on the eager upcoming.json lots — trueSaleDay()
+      (app/utils.ts) prefers it over a possibly-crawl-day saleDate. */
   saleDateTime?: string | null;
   /** distinguishes "predates tracking" from genuinely "new" */
   firstSeenKnown?: boolean;
