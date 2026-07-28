@@ -1,6 +1,6 @@
 /**
  * bootstrap-segments.ts — one-time: split the current full corpus into per-
- * vertical segment files (data/corpus/segments/<name>.json.gz). After this the
+ * vertical segment files (data/corpus/segments/<name>.ndjson.gz). After this the
  * nightly maintains each segment independently; assemble.ts reunions them.
  * Run: npx tsx scripts/bootstrap-segments.ts
  */

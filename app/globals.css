@@ -473,8 +473,7 @@ h1 {
 
 /* THE RAIL — one left edge for the entire site.
    Every page container, Nav inner, hero, Index, Philosophy,
-   Footer migrates here. Sole sanctioned exception: the home
-   hero's full-bleed bottom Horizon. */
+   Footer migrates here. */
 .rail {
   width: 100%;
   max-width: var(--content-max);

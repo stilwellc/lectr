@@ -10,8 +10,9 @@
 #   versions/<UTC>-<sha>/served.tar.gz  WRITE-ONCE served payloads (public/data/ray/)
 #   latest/pointer.txt     tiny pointer to the current versions/ prefix — the
 #                          ONLY overwritten object a pull ever has to wait on
-#   latest/corpus.tar      LEGACY dual-write for old-code readers — remove the
-#   latest/served.tar.gz   dual-write block in push() after a few green nightlies
+#   latest/corpus.tar      FROZEN legacy keys from before the pointer migration
+#   latest/served.tar.gz   (no longer written; pull() keeps them as a last-resort
+#                          fallback for a pointer-less bucket)
 #   snapshots/YYYYMMDD/corpus.tar   daily corpus snapshot (30-day lifecycle)
 #
 # Retention: versions/ accumulates ~176MB/day (corpus.tar + served.tar.gz per
@@ -181,7 +182,8 @@ pull() {
       return
     fi
     # A pointer naming an unreadable version should never happen (push writes
-    # the payloads BEFORE the pointer) — dual-write means legacy still works.
+    # the payloads BEFORE the pointer) — the frozen legacy keys still resolve
+    # (stale, from before the pointer migration); the freshness guard decides.
     echo "[data-store] WARNING: pointer names $ver but its payload is unreadable — falling back to legacy keys"
   fi
   # Route 2 — LEGACY latest/ keys: pre-migration bucket (no pointer yet) or a
@@ -219,11 +221,6 @@ push() {
   # already fully stored and etag-verified above.
   printf '%s' "$ver" > "$TMP/pointer.txt"
   obj_put "latest/pointer.txt" "$TMP/pointer.txt"
-  # LEGACY dual-write: keeps an old-code reader (unmerged branch, rerun of an
-  # old workflow revision) working through the transition. REMOVE these two
-  # puts — and nothing else — after a few green nightlies on the pointer path.
-  obj_put "latest/corpus.tar" "$TMP/corpus.tar"
-  obj_put "latest/served.tar.gz" "$TMP/served.tar.gz"
   # standalone meta.json — a tiny object so assemble can read the PREVIOUS
   # totals for its sanity gate without unpacking the 18MB served tarball.
   obj_put "latest/meta.json" "public/data/ray/meta.json"
@@ -236,7 +233,7 @@ push() {
   day=$(stamp_of public/data/ray/meta.json | cut -c1-10 | tr -d '-')
   [ -n "$day" ] || day=$(date -u +%Y%m%d)
   obj_put "snapshots/$day/corpus.tar" "$TMP/corpus.tar"
-  echo "[data-store] pushed $ver (+ legacy latest/) + snapshot $day"
+  echo "[data-store] pushed $ver + snapshot $day"
 }
 
 prune() { # keep the newest N versions/ prefixes (default 14), delete the rest.
@@ -265,7 +262,7 @@ prune() { # keep the newest N versions/ prefixes (default 14), delete the rest.
 
 # ── SEGMENTS: per-house corpus slices for the staged nightly. Each crawl job
 # pull/push-es ONE segment (isolated); assemble pulls them all. R2 key:
-# latest/segments/<name>.json.gz. A pull miss (new segment) is non-fatal.
+# latest/segments/<name>.ndjson.gz. A pull miss (new segment) is non-fatal.
 SEGMENTS="goldin sothebys christies bonhams phillips wright other"
 push_segment() {
   local name="$1" f="data/corpus/segments/$1.ndjson.gz"

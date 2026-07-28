@@ -35,3 +35,6 @@ next-env.d.ts
 # auction data lives in R2 (bucket lectr-data), not git — see docs/data-pipeline.md
 /data/corpus/
 /public/data/ray/
+
+# wrangler local state
+.wrangler/

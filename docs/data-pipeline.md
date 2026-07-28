@@ -4,20 +4,32 @@ The auction data does NOT live in git. It lives in two places:
 
 ## 1. Cloudflare R2 — the store of record
 
-Bucket **`lectr-data`** (account 5bcc5f43136c9ba6b6cb7f949813f473):
+Bucket **`lectr-data`** (account 5bcc5f43136c9ba6b6cb7f949813f473). Payloads
+are **write-once**: every push lands under a fresh `versions/<UTC>-<sha>/`
+prefix and only the tiny `latest/pointer.txt` is ever overwritten (this
+sidesteps R2's GET-lag on overwritten keys — see the header of
+`scripts/data-store.sh`).
 
 | object | contents |
 | --- | --- |
-| `latest/corpus.tar` | `data/corpus/{lots,sold-archive}.json.gz` — the full v2 corpus (~76 fields/lot), engine + build only, never served |
-| `latest/served.tar.gz` | `public/data/ray/` — the slim client payloads (shards, meta, market, backtest…) |
+| `latest/pointer.txt` | names the current `versions/` prefix — the only overwritten object a pull waits on |
+| `versions/<stamp>/corpus.tar` | `data/corpus/{lots,sold-archive}.json.gz` — the full v2 corpus (~76 fields/lot), engine + build only, never served |
+| `versions/<stamp>/served.tar.gz` | `public/data/ray/` — the slim client payloads (shards, meta, market, backtest…) |
+| `latest/segments/<house>.ndjson.gz` | per-house corpus segments (`data/corpus/segments/`) — the staged nightly's unit of crawl; `assemble.ts` reunions them into the full corpus |
 | `snapshots/YYYYMMDD/corpus.tar` | nightly corpus snapshot, auto-expired after 30 days (lifecycle rule `expire-snapshots`) — the rollback ladder |
+
+(The pre-migration `latest/corpus.tar` / `latest/served.tar.gz` keys are
+frozen — no longer written; `pull` keeps them only as a last-resort fallback
+for a pointer-less bucket.)
 
 Moved by `scripts/data-store.sh` (`npm run data:pull` / `npm run data:push`):
 
-- **pull** — best-effort; compares `meta.json` `lastCrawl` and refuses to
-  overwrite newer local data with older R2 data.
-- **push** — fails loud if there is nothing to push; writes `latest/` + the
-  dated snapshot.
+- **pull** — resolves the pointer, fetches its write-once version; compares
+  `meta.json` `lastCrawl` and refuses to overwrite newer local data with
+  older R2 data.
+- **push** — fails loud if there is nothing to push; writes the payloads
+  first, the pointer last, plus the dated snapshot.
+- **prune** — keeps the newest 14 `versions/` prefixes.
 
 Auth: locally wrangler's OAuth session; in CI `CLOUDFLARE_API_TOKEN` +
 `CLOUDFLARE_ACCOUNT_ID` (the token needs **Account → Workers R2 Storage →
