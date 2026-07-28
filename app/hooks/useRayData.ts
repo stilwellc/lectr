@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { AuctionLot, MarketStats, RealizedPoint } from '../types';
+import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
 // would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
@@ -12,6 +12,10 @@ export type TapeByMarket = Record<string, TapeItem[]>;
 export interface DemandPoint { date: string; value: number; n: number }
 export type DemandByMarket = Record<string, DemandPoint[]>;
 export type RealizedByMarket = Record<string, RealizedPoint[]>;
+/** bid-competition (median bids/lot, quarterly) per market — sports/cards only.
+    A DEMAND primitive from Goldin's bidCount; a bare count, distinct from both
+    demand (%) and realized ($) so it never renders as a price or a percent. */
+export type BidCompByMarket = Record<string, BidCompetitionPoint[]>;
 export type RecentSoldByMarket = Record<string, unknown[]>;
 export interface Backtest {
   flagged: BacktestBucket;
@@ -49,6 +53,10 @@ interface RayData {
   /** realized-cohort ($) series per market — sports only; distinct from demand
       (a %-over-estimate index). Eager, from upcoming.json. */
   realized: RealizedByMarket;
+  /** bid-competition (bids/lot) series per market — sports/cards only; a demand
+      primitive from Goldin's bidCount, distinct from demand (%) and realized
+      ($). Eager, from upcoming.json. */
+  bidComp: BidCompByMarket;
   /** lightweight last-N Goldin closes per sports/science market so the home
       Recent-results row paints without the 10MB archive. Eager. */
   recentSold: RecentSoldByMarket;
@@ -103,6 +111,10 @@ export interface SubMarketRead {
   /** readType 'demand': measured %-over-estimate */
   demandNow: number | null;
   demandSeries: { period: string; value: number; n: number }[];
+  /** bid-competition secondary read (cards): latest-quarter median bids/lot —
+      a demand primitive from Goldin's bidCount, rides beside the headline read
+      (never a price move / %-over-estimate). null where no bidCount is shipped. */
+  bidCompNow?: number | null;
   /** always-available descriptive layer */
   typicalUsd: number | null;        // median price, last 12 months
   record: { usd: number; title: string; date: string | null; house: string | null } | null;
@@ -141,6 +153,7 @@ interface RayPayload {
   tape: TapeByMarket;
   demand: DemandByMarket;
   realized: RealizedByMarket;
+  bidComp: BidCompByMarket;
   recentSold: RecentSoldByMarket;
   backtest: Backtest | null;
   lastCrawl: string;
@@ -243,6 +256,7 @@ function loadRayData(): Promise<RayPayload> {
           tape?: TapeByMarket | TapeItem[];
           demand?: DemandByMarket | DemandPoint[];
           realized?: RealizedByMarket;
+          bidComp?: BidCompByMarket;
           recentSold?: RecentSoldByMarket;
           lots?: AuctionLot[];
         })
@@ -255,6 +269,7 @@ function loadRayData(): Promise<RayPayload> {
         tape: Array.isArray(up.tape) ? { all: up.tape } : (up.tape || {}),
         demand: Array.isArray(up.demand) ? { art: up.demand } : (up.demand || {}),
         realized: up.realized || {},
+        bidComp: up.bidComp || {},
         recentSold: up.recentSold || {},
         backtest,
         market,
@@ -343,6 +358,7 @@ function loadRayData(): Promise<RayPayload> {
       tape: {},
       demand: {},
       realized: {},
+      bidComp: {},
       recentSold: {},
       market: null,
       backtest,
@@ -449,6 +465,7 @@ export function useRayData(): RayData {
     tape: data?.tape || {},
     demand: data?.demand || {},
     realized: data?.realized || {},
+    bidComp: data?.bidComp || {},
     recentSold: data?.recentSold || {},
     backtest: data?.backtest || null,
     market: data?.market || null,

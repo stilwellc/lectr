@@ -245,7 +245,7 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
 
 export default function TerminalHomePage() {
   const ray = useRayData();
-  const { allLots, statsByArtist, demand, realized, recentSold, backtest, market: marketData, tape, lastCrawl, loading, error, fromCache } = ray;
+  const { allLots, statsByArtist, demand, realized, bidComp, recentSold, backtest, market: marketData, tape, lastCrawl, loading, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
   const mounted = useMounted();
@@ -685,6 +685,7 @@ export default function TerminalHomePage() {
               market={marketData}
               demand={demand[activeKey]}
               realized={realized}
+              bidComp={bidComp[activeKey]}
               totalLots={totalLots}
               totalSold={meta.totalSold ?? 0}
               houses={new Set(marketLots.map(l => l.auctionHouse)).size || (ray.sources?.length ?? 7)}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, RealizedByMarket } from '../../hooks/useRayData';
-import type { RealizedPoint } from '../../types';
+import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import type { Market } from '../../constants';
 import RollingNumber from './RollingNumber';
 import MarketChart, { type IndexPoint } from './MarketChart';
@@ -25,6 +25,14 @@ import styles from './style.module.css';
      2. realized[market] ($ median) — sports, which has no estimates
    The horizon toggle scopes the window; the chart draws the same
    series. Market-scoped end to end.
+
+   BID-COMPETITION READ (sports/cards): Goldin publishes no estimate, so cards
+   get no %-over-estimate demand — but every lot carries bidCount, a genuine
+   demand primitive. bidComp[market] (median bids/lot, quarterly) surfaces in
+   the rail as an ADDITIONAL, distinctly-labelled read ("Bid competition · N
+   bids/lot") — never as a % move or a price. It rides ALONGSIDE the headline
+   (which stays the realized-$ cohort median for sports) and never masquerades
+   as the CI'd repeat-sale index.
    ============================================================ */
 
 const EASE = [0.23, 1, 0.32, 1] as const;
@@ -37,6 +45,10 @@ interface Props {
   market: MarketData | null;
   demand: DemandPoint[] | undefined;
   realized: RealizedByMarket;
+  /** bid-competition series (median bids/lot, quarterly) for the scoped market —
+      populated for sports/cards only. A DEMAND primitive from Goldin's bidCount,
+      surfaced as a distinct rail read, never a % move or a price. */
+  bidComp?: BidCompetitionPoint[] | undefined;
   /** honest full-corpus totals for the thesis line */
   totalLots: number;
   totalSold: number;
@@ -105,6 +117,7 @@ export default function IndexHero({
   market,
   demand,
   realized,
+  bidComp,
   totalLots,
   belowMkt,
   appreciation,
@@ -160,6 +173,23 @@ export default function IndexHero({
   // the verified movers scoped to this market — the only defensible price moves
   const movers = useMemo(() => verifiedMovers(market, activeKey), [market, activeKey]);
 
+  // ── BID-COMPETITION read (sports/cards). Goldin publishes no estimate, so the
+  // cards vertical has no %-over-estimate demand — but every lot carries a
+  // bidCount, a genuine demand primitive (competitive tension). Surface the
+  // latest quarter's MEDIAN bids/lot + its quarter-over-quarter trend as a
+  // distinct rail read. This is NOT a % move and NOT a price — it's labelled
+  // "bids/lot" and can never render through fmtPct/fmtMoneyCompact.
+  const bc = useMemo(() => {
+    const s = bidComp || [];
+    if (s.length < 2) return null; // need at least a level + a prior quarter to trend
+    const now = s[s.length - 1].value;
+    const prev = s[s.length - 2].value;
+    // dir tints the read by its quarter-over-quarter move (rising/falling
+    // competition) — never implies price appreciation.
+    const dir: 'up' | 'down' | undefined = now === prev ? undefined : now > prev ? 'up' : 'down';
+    return { now: Math.round(now), dir };
+  }, [bidComp]);
+
   const rise = (delay: number) => ({
     initial: reduce ? false : { opacity: 0, y: 16, scale: 0.98 },
     animate: { opacity: 1, y: 0, scale: 1 },
@@ -214,10 +244,17 @@ export default function IndexHero({
               <span className={styles.mStatLabel}>Yearly ROI</span>
               {roiFlag && <span className={styles.statFlag}>⚠ {roiFlag}</span>}
             </span>
-            <span className={styles.mStat}>
-              <span className={styles.mStatVal}>{fmtInt(onBlock)}</span>
-              <span className={styles.mStatLabel}>On the block</span>
-            </span>
+            {bc ? (
+              <span className={styles.mStat} title="Median bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
+                <span className={styles.mStatVal} data-dir={bc.dir}>{bc.now}</span>
+                <span className={styles.mStatLabel}>Bids/lot</span>
+              </span>
+            ) : (
+              <span className={styles.mStat}>
+                <span className={styles.mStatVal}>{fmtInt(onBlock)}</span>
+                <span className={styles.mStatLabel}>On the block</span>
+              </span>
+            )}
             {belowMkt ? (
               <button type="button" className={styles.mStat} data-accent="true" onClick={onOpenBelow} aria-label={`${belowMkt} below-market lots — see them`}>
                 <span className={styles.mStatVal}>{fmtInt(belowMkt)}</span>
@@ -289,6 +326,12 @@ export default function IndexHero({
             <span className={styles.railLabel}>On the block</span>
             <span className={styles.railVal}>{fmtInt(onBlock)}</span>
           </div>
+          {bc && (
+            <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
+              <span className={styles.railLabel}>Bid competition</span>
+              <span className={styles.railVal} data-dir={bc.dir}>{bc.now} bids/lot</span>
+            </div>
+          )}
           {belowMkt ? (
             <button type="button" className={styles.railBtn} onClick={onOpenBelow}
               aria-label={`${belowMkt} below-market lots — see them`}>

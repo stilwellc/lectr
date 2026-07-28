@@ -21,6 +21,7 @@ import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';
 import type { MakerIndexResult } from './hedonic-index';
 import { buildRepeatSaleIndex } from './repeat-sales';
+import { bidCompetitionSeries } from '../app/lib/demand';
 
 // ── the emitted row (mirrors SubMarketRead in app/hooks/useRayData.ts) ──
 export interface SubMarketRead {
@@ -35,6 +36,12 @@ export interface SubMarketRead {
   indexMethod: 'hedonic' | 'repeat-sale' | null;
   demandNow: number | null;
   demandSeries: { period: string; value: number; n: number }[];
+  // BID-COMPETITION secondary read (cards): median bids drawn per SOLD lot in the
+  // latest quarter — a demand primitive from Goldin's bidCount, NOT a price move
+  // and NOT %-over-estimate. Present only where the slug ships bidCount (cards);
+  // null everywhere else. Rides ALONGSIDE the row's headline read (the CI'd
+  // repeat-sale index for cards) as support, never as the index itself.
+  bidCompNow: number | null;
   typicalUsd: number | null;
   record: { usd: number; title: string; date: string | null; house: string | null } | null;
   lots: number;
@@ -195,6 +202,12 @@ export function buildSubMarkets(
     const demandSeries = slugDemandSeries(sold);
     const demandNow = demandSeries.length ? demandSeries[demandSeries.length - 1].value : null;
 
+    // ── bid-competition secondary read (cards): latest-quarter median bids/lot.
+    // A demand primitive from Goldin's bidCount — only the cards slug ships it,
+    // so this is null for every other sub-market. NOT a price move / % over est.
+    const bidCompSeries = bidCompetitionSeries(sold, { slug });
+    const bidCompNow = bidCompSeries.length ? Math.round(bidCompSeries[bidCompSeries.length - 1].value) : null;
+
     // ── verified maker index: the longest horizon whose CI resolves the sign ──
     const mi = makerIndex[slug];
     let index: SubMarketRead['index'] = null;
@@ -248,6 +261,10 @@ export function buildSubMarkets(
       // headline is the CI'd move.
       demandNow: readType === 'demand' ? demandNow : null,
       demandSeries: readType === 'demand' ? demandSeries : [],
+      // bidCompNow rides on ANY read type (it's support, not the headline) — on
+      // the cards row it sits beside the CI'd repeat-sale index as a demand
+      // secondary. null wherever the slug ships no bidCount.
+      bidCompNow,
       typicalUsd,
       record,
       lots: lotCount,
