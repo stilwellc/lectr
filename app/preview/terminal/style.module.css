@@ -24,7 +24,10 @@
 
   position: relative;
   min-height: 100vh;
-  background: var(--tt-bg);
+  /* M22 — the golden-hour air (pool + grain) is GLOBAL now (globals.css
+     body). Transparent here so the terminal sits in the same air as every
+     other room; --tt-bg is identical to the body ground beneath. */
+  background: transparent;
   color: var(--tt-fg);
   font-family: var(--font-inter), system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
@@ -32,25 +35,8 @@
   isolation: isolate;
 }
 
-/* atmosphere — one quiet radial pool of gold light, no blob-hero */
-.bgField {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(120% 80% at 78% -10%, rgba(232, 218, 182, 0.06), transparent 60%),
-    radial-gradient(90% 60% at 8% 108%, rgba(232, 218, 182, 0.03), transparent 55%);
-}
-.grain {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  opacity: 0.028;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
-}
+/* atmosphere — promoted to the global shell (M22): the pool + grain live on
+   body in globals.css. The local .bgField/.grain layers are retired. */
 
 /* shared kicker — mono label voice */
 .sectionKicker {
@@ -488,10 +474,11 @@
   border-radius: 6px;
   border: 1px solid var(--tt-hair-2);
   border-bottom-color: rgba(0, 0, 0, 0.4);
-  background: rgba(232, 218, 182, 0.06);
+  background: rgba(232, 218, 182, 0.08);
   font-family: var(--font-mono-data), monospace;
   font-size: 12.5px;
-  color: var(--tt-fg);
+  /* M12 — the shortcut chips wear butter on the wash */
+  color: var(--tt-butter);
 }
 .cmdLabel {
   font-variant-numeric: tabular-nums;
@@ -856,7 +843,17 @@
 }
 
 /* ── record board ─────────────────────────────────────────── */
-.recordSection { margin-top: clamp(56px, 7vw, calc(var(--sect-t) + var(--sect-b) + var(--space-2))); }
+/* M18 — the record board is a chapter too: the same full-bleed well, so the
+   page alternates ground → paper → ground → well on every width. */
+.recordSection {
+  margin-top: clamp(56px, 7vw, calc(var(--sect-t) + var(--sect-b) + var(--space-2)));
+  margin-inline: calc(50% - 50vw);
+  padding-inline: max(var(--gutter), calc(50vw - 600px + var(--gutter)));
+  padding-block: clamp(28px, 4vw, 44px);
+  background: var(--well, #141209);
+  border-block: 1px solid var(--hairline, rgba(242, 238, 227, 0.09));
+  box-shadow: var(--well-shadow, inset 0 1px 0 rgba(0, 0, 0, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.18));
+}
 .recordBoard { min-width: 0; }
 .recordHead {
   display: flex;
@@ -1004,8 +1001,19 @@
   .boardCol { display: none; }
 }
 
-/* the movers board section — scroll-margin admits the condensed board's anchor */
-.moversSection { margin-top: clamp(44px, 6vw, calc(var(--sect-t) + var(--sect-b) - var(--space-4))); scroll-margin-top: 84px; }
+/* the movers board section — scroll-margin admits the condensed board's anchor.
+   M18 — the section is a chapter: a FULL-BLEED WELL (#141209) the board sits
+   inside, sunk with the inset shadow, ruled top and bottom. */
+.moversSection {
+  margin-top: clamp(44px, 6vw, calc(var(--sect-t) + var(--sect-b) - var(--space-4)));
+  scroll-margin-top: 84px;
+  margin-inline: calc(50% - 50vw);
+  padding-inline: max(var(--gutter), calc(50vw - 600px + var(--gutter)));
+  padding-block: clamp(28px, 4vw, 44px);
+  background: var(--well, #141209);
+  border-block: 1px solid var(--hairline, rgba(242, 238, 227, 0.09));
+  box-shadow: var(--well-shadow, inset 0 1px 0 rgba(0, 0, 0, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.18));
+}
 
 /* the feed section */
 .feedSection { margin-top: clamp(44px, 6vw, calc(var(--sect-t) + var(--sect-b) - var(--space-4))); }
@@ -1968,7 +1976,8 @@ a.recordObj:focus-visible {
 /* the numeral owns the light — demote the active market pill from the solid
    butter block to butter TEXT on a quiet wash (≤12%), halo off (M5) */
 .root :global(.ray-market-tab[data-active='true']) {
-  background: rgba(232, 218, 182, 0.1);
+  /* M9 — the wash carries the market's own tint (≤12%) */
+  background: color-mix(in srgb, var(--market-tint, #e8dab6) 11%, transparent);
   color: var(--tt-butter);
   box-shadow: none;
 }

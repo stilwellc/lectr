@@ -67,7 +67,7 @@ export default function RecordPage() {
   const serial = (backtest as unknown as { generatedAt?: string }).generatedAt || undefined;
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: 'transparent', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       <section className="rail" style={{ paddingTop: 'var(--space-4, 24px)' }}>

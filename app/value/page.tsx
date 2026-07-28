@@ -106,7 +106,7 @@ export default function ValuePage() {
   return (
     <div className="ray-mobnav-pad" style={{
       minHeight: '100vh',
-      background: 'var(--color-bg)',
+      background: 'transparent',
       color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>

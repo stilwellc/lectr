@@ -288,6 +288,29 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     dot={false}
                     connectNulls={false}
                   />
+                  {/* M23 — the hero grammar's last-point glow dot: the series
+                      ends on a lit point (halo + dot), raw data untouched */}
+                  {data.length >= 2 && data[data.length - 1].avgPrice > 0 && (
+                    <ReferenceDot
+                      x={data[data.length - 1].date}
+                      y={data[data.length - 1].avgPrice}
+                      r={7}
+                      fill="rgba(232, 218, 182, 0.18)"
+                      stroke="none"
+                      isFront
+                    />
+                  )}
+                  {data.length >= 2 && data[data.length - 1].avgPrice > 0 && (
+                    <ReferenceDot
+                      x={data[data.length - 1].date}
+                      y={data[data.length - 1].avgPrice}
+                      r={3}
+                      fill="var(--color-fg)"
+                      stroke="var(--color-bg)"
+                      strokeWidth={1.5}
+                      isFront
+                    />
+                  )}
                   {record && (
                     <ReferenceDot
                       x={record.date}

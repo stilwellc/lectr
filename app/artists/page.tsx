@@ -52,7 +52,7 @@ export default function ArtistsPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'var(--color-bg)',
+      background: 'transparent',
       color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>

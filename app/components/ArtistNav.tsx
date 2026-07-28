@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import CommandK, { OPEN_CK_EVENT } from './CommandK';
+import MobileDock from './MobileDock';
 import Flick from './Flick';
 import { useAuth } from '../lib/account';
 import { useUnseenAlertCount } from '../lib/alerts';
@@ -709,6 +710,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       )}
 
       <CommandK upcomingCounts={upcomingCounts} savedCount={savedCount} />
+      {/* M16 — the dock rides every page that carries the nav; CSS keeps it
+          to <900px and the shell pads its bottom (globals). */}
+      <MobileDock savedCount={savedCount} />
     </>
   );
 }

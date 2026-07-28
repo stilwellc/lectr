@@ -55,7 +55,7 @@ function Section({ ord, label, title, children }: { ord: string; label: string; 
 
 export default function MethodPage() {
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: 'transparent', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug={null} />
 
       <section className="rail" style={{ paddingTop: 24 }}>

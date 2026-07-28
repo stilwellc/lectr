@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import { useRayData } from '../hooks/useRayData';
-import { craftTitle } from '../utils';
+import { craftTitle, httpsImg } from '../utils';
 import ArtistAvatar from './ArtistAvatar';
 
 interface Item {
@@ -39,6 +39,17 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   const { allLots } = useRayData();
   const upcomingLots = useMemo(() => allLots.filter(l => l.status === 'upcoming' && l.title), [allLots]);
 
+  // M12 — maker rows carry a 36px thumb plate: the maker's first photographed
+  // live lot, straight from the eager payload (zero extra fetches). Makers
+  // without one keep the avatar glyph on the same plate.
+  const makerThumb = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const l of upcomingLots) {
+      if (l.imageUrl && !m[l.artist]) m[l.artist] = l.imageUrl;
+    }
+    return m;
+  }, [upcomingLots]);
+
   const items = useMemo<Item[]>(() => {
     // "On the block" is scoped to the current lander — the count says only
     // what that feed will actually render.
@@ -50,7 +61,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
       { label: 'Value', hint: 'below-market lots', path: '/value', kind: 'section' as const },
       { label: 'Makers', hint: 'the roster, as demand curves', path: '/artists', kind: 'section' as const },
       { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics', kind: 'section' as const },
-      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/saved', kind: 'section' as const },
+      { label: `Saved${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/saved', kind: 'section' as const },
       { label: 'Blog', hint: 'quarterly market notes + how we built the engine', path: '/blog', kind: 'section' as const },
       { label: 'How lectr works', hint: 'the engine, for engineers', path: '/about', kind: 'section' as const },
       {
@@ -211,8 +222,19 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
                   onClick={() => go(item)}
                   style={isHeader ? { marginTop: 6 } : undefined}
                 >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-                    {item.kind === 'maker' && <ArtistAvatar label={item.label} size={20} />}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    {item.kind === 'maker' && (() => {
+                      const slug = item.path.slice(1);
+                      const img = makerThumb[slug];
+                      return (
+                        <span className="ray-ck-thumb" aria-hidden>
+                          {img
+                            ? <img src={httpsImg(img)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"
+                                onError={e => { e.currentTarget.style.display = 'none'; }} />
+                            : <ArtistAvatar label={item.label} size={24} />}
+                        </span>
+                      );
+                    })()}
                     {item.label}
                   </span>
                   <span className="ray-ck-hint">{item.hint}</span>

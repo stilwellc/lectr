@@ -380,8 +380,8 @@ export function Colophon({ record }: {
             <Link href="/value">Value</Link>
             <Link href="/artists">Makers</Link>
             <Link href="/analytics">Analytics</Link>
-            <Link href="/saved">My profile</Link>
-            <Link href="/about">How it works</Link>
+            <Link href="/saved">Saved</Link>
+            <Link href="/method">How it works</Link>
             <Link href="/blog">Notes from the desk</Link>
           </div>
           <div className="ray-close-col ray-close-record">
@@ -393,7 +393,7 @@ export function Colophon({ record }: {
                 Flagged calls hammered <b className="up">{fmtSignedPct(record.medianPerfPct)} median</b> over their estimates across {record.n.toLocaleString()} replayed sales.
               </p>
             )}
-            <Link href="/value" className="ray-close-cta">See the record <Flick size={12} /></Link>
+            <Link href="/record" className="ray-close-cta">See the record <Flick size={12} /></Link>
           </div>
         </div>
 

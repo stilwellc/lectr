@@ -13,7 +13,8 @@ export const metadata: Metadata = {
 
 // `href` is the special case — a card that lives outside /blog/* (the systems
 // walk-through at /about). Cards without it link to /blog/{slug} as before.
-const POSTS: { slug: string; date: string; title: string; dek: string; href?: string }[] = [
+// `img` (M21) — the note's headline plate, reused from the post's own hero.
+const POSTS: { slug: string; date: string; title: string; dek: string; href?: string; img?: string }[] = [
   {
     slug: 'how-lectr-works',
     href: '/about',
@@ -23,30 +24,35 @@ const POSTS: { slug: string; date: string; title: string; dek: string; href?: st
   },
   {
     slug: 'q2-2026-art',
+    img: '/blog/q2-2026-picasso-fernande.jpg',
     date: '2026-07-16',
     title: 'Art in Q2: a two-speed market',
     dek: 'A $240M quarter carried by one Christie’s evening — masterpieces cleared, the middle got picky (56% sell-through), and KAWS kept repricing.',
   },
   {
     slug: 'q2-2026-watches',
+    img: 'https://dist.phillips.com/auction-assets/HK080226/234083_001.jpg?bg-color=ffffff&pad=0&fit=bounds&height=550&optimize=medium&width=605',
     date: '2026-07-16',
     title: 'Watches in Q2: everything sells, the middle repriced',
     dek: '96% sell-through across 728 lots — but the median fell 19% while Patek Philippe ran +67%. A sorting, not a downturn.',
   },
   {
     slug: 'q2-2026-design',
+    img: '/blog/q2-2026-jeanneret-library-table.jpg',
     date: '2026-07-16',
     title: 'Design in Q2: small money, real heat',
     dek: 'The smallest market we track posted the strongest demand of the quarter: 43% of lots beat their high estimate, and Eames woke up.',
   },
   {
     slug: 'q2-2026-sports',
+    img: 'https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202603-2415-1559-28920969-4255-4ef8-a4c8-1338eba9fb2a/74314742-97a8-459a-bdbd-3945dd7cd26e@1x',
     date: '2026-07-16',
     title: 'Sports in Q2: game-used doubled',
     dek: 'A $1.34M four-player jersey group on top, Messi debut shirts behind it, and the typical sale up 73% — broad participation, not two whales.',
   },
   {
     slug: 'q2-2026-science',
+    img: 'https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202602-0514-5819-e0456ff9-b1c4-4f4f-98bb-1bcf5f9254ee/SF00002634015copy__496bbefb-821d-4844-8756-87738a0f0b24@1x',
     date: '2026-07-16',
     title: 'Science in Q2: the quiet quarter',
     dek: 'Ten sales — the honest number. Apollo photographs led, and the real season (241 lots on the block) closes in Q3.',
@@ -107,7 +113,26 @@ const BLOG_CSS = `
   .ray-blog-entry .ray-blog-dek{grid-column:2;font-size:13px;line-height:1.5;color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ray-blog-entry .ray-blog-read{display:none}
   .ray-blog-entry-flick{display:block;grid-column:3;grid-row:1;color:var(--color-text-faint)}
+  /* M21 — thumbed rows admit the 88px mat plate as a leading column */
+  .ray-blog-entry[data-thumbed]{grid-template-columns:88px 118px 1fr auto;align-items:center}
+  .ray-blog-entry[data-thumbed] .ray-blog-thumb{grid-column:1;grid-row:1 / span 2;align-self:center}
+  .ray-blog-entry[data-thumbed] .ray-blog-date{grid-column:2}
+  .ray-blog-entry[data-thumbed] .ray-blog-title{grid-column:3}
+  .ray-blog-entry[data-thumbed] .ray-blog-dek{grid-column:3}
+  .ray-blog-entry[data-thumbed] .ray-blog-entry-flick{grid-column:4}
 }
+@media (max-width:899px){
+  /* M21 — the card leads with its plate: image left, the note right */
+  .ray-blog-entry[data-thumbed]{display:grid;grid-template-columns:88px 1fr;column-gap:16px;align-items:start}
+  .ray-blog-entry[data-thumbed] .ray-blog-thumb{grid-column:1;grid-row:1 / span 4}
+  .ray-blog-entry[data-thumbed] .ray-blog-date,
+  .ray-blog-entry[data-thumbed] .ray-blog-title,
+  .ray-blog-entry[data-thumbed] .ray-blog-dek,
+  .ray-blog-entry[data-thumbed] .ray-blog-read{grid-column:2}
+}
+.ray-blog-thumb{position:relative}
+.ray-blog-thumb-mono{font-family:var(--font-serif),serif;font-style:italic;font-weight:300;font-size:26px;color:var(--color-text-faint)}
+.ray-blog-thumb img{position:absolute;inset:0;padding:6px}
 `;
 
 export default function BlogIndex() {
@@ -115,7 +140,7 @@ export default function BlogIndex() {
   const posts = [...POSTS].sort((a, b) => b.date.localeCompare(a.date));
   const [lead, ...rest] = posts;
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: 'transparent', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <style dangerouslySetInnerHTML={{ __html: BLOG_CSS }} />
       <ArtistNav activeSlug="blog" />
       <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
@@ -153,7 +178,14 @@ export default function BlogIndex() {
               <span className="kicker">Note</span>
             </div>
             {rest.map(p => (
-              <Link key={p.slug} href={p.href ?? `/blog/${p.slug}`} className="ray-blog-card ray-blog-entry">
+              <Link key={p.slug} href={p.href ?? `/blog/${p.slug}`} className="ray-blog-card ray-blog-entry" data-thumbed={p.img ? 'true' : undefined}>
+                {/* M21 — the note wears its picture: an 88px mat plate */}
+                {p.img && (
+                  <span className="ray-blog-thumb" aria-hidden>
+                    <span className="ray-blog-thumb-mono">{p.title.charAt(0)}</span>
+                    <img src={p.img} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                  </span>
+                )}
                 <div className="ray-blog-date">{fmtShort(p.date)}</div>
                 <h2 className="ray-blog-title">{p.title}</h2>
                 <p className="ray-blog-dek">{p.dek}</p>
