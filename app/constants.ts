@@ -67,8 +67,6 @@ export const ARTISTS = [
   { slug: 'entertainment-memorabilia', label: 'Entertainment & Icons', market: 'culture' },
 ] as const;
 
-export type ArtistSlug = (typeof ARTISTS)[number]['slug'];
-
 export const ARTIST_LABEL: Record<string, string> = Object.fromEntries(
   ARTISTS.map(a => [a.slug, a.label])
 );
