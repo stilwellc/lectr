@@ -477,13 +477,15 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
 
   // Sports/science OBJECT lots (game-used jerseys, trophies, tickets) share
   // one artist-slug per CATEGORY ('game-used'), not per maker — so an
-  // artist-only pool mixes every athlete. The realized band means nothing
-  // unless it's the SAME PLAYER, so gate hard on playerSlug (stamped on both
-  // upcoming and sold sports-object lots at build time). No player on the
-  // anchor → abstain (the surface shows nothing, never a stranger's comps).
-  // This never touches art/watch/design lots (isSportsScienceObject is false).
-  const samePlayerObject = isSportsScienceObject(lot);
-  if (samePlayerObject && !lot.playerSlug) return null;
+  // artist-only pool mixes every athlete/specimen. The realized read means
+  // nothing unless it's the SAME identity — the athlete for sports objects
+  // (playerSlug), the subject/specimen tag for science objects (entity; a
+  // meteorite has no player, and gating science on playerSlug killed its whole
+  // comp layer). No identity on the anchor → abstain (the surface shows
+  // nothing, never a stranger's comps). Never touches art/watch/design lots.
+  const identityObject = isSportsScienceObject(lot);
+  const idKey = identityObject ? objectIdentityKey(lot) : null;
+  if (identityObject && !idKey) return null;
 
   const sold = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id
@@ -492,8 +494,9 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
     // re-derives comps here, so guard them out too or a title-only lot pollutes
     // the comp pool for art/watch makers (picasso, patek, rolex, …).
     && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia'
-    // sports/science objects: same PLAYER only (never a cross-athlete jersey).
-    && (!samePlayerObject || l.playerSlug === lot.playerSlug)
+    // sports/science objects: same identity only (never a cross-athlete jersey
+    // or a cross-specimen meteorite).
+    && (!identityObject || objectIdentityKey(l) === idKey)
   );
 
   // 1 · the same edition — the strongest comp there is
@@ -656,6 +659,18 @@ export function isSportsScienceObject(lot: Pick<AuctionLot, 'category' | 'artist
   return lot.category === 'object' && SPORTS_SCIENCE_SLUGS.has(lot.artist);
 }
 
+/** The identity a sports/science OBJECT comps on — the axis where "same kind
+    of object" becomes "same subject". Sports → the ATHLETE (playerSlug, build-
+    stamped both sides). Science → the SUBJECT/SPECIMEN tag (entity: a named
+    meteorite, a mission, an instrument line — science has no player, and
+    gating it on playerSlug silenced the whole vertical's comp layer). Free-
+    text entity compares case-insensitively. Null = no identity → the caller
+    abstains rather than pool strangers. */
+function objectIdentityKey(l: Pick<AuctionLot, 'artist' | 'entity'> & { playerSlug?: string | null }): string | null {
+  if (SPORTS_SLUGS.has(l.artist)) return l.playerSlug || null;
+  return l.entity ? l.entity.toLowerCase().trim() : null;
+}
+
 /** Strip crawl-leaked prefixes from a Goldin title: a leading internal
     "do not list…" note up to its first dash, and a leading date prefix
     ("Month DD, YYYY - " or "YYYY-YY - "). Pure; safe on any string. */
@@ -765,18 +780,21 @@ export function soldCompBand(lot: AuctionLot, allLots: AuctionLot[]): SoldComp |
   const form = compFormKey(lot);
   if (form === 'unknown') return null;
 
-  // Hard same-PLAYER gate. These lots share one artist-slug per CATEGORY
-  // ('game-used'), so a same-artist/same-form pool is every athlete's jersey.
-  // The band is honest ONLY when it's the same player, so abstain when the
-  // anchor carries no playerSlug (the UI shows no band — never a cross-player
-  // one). The entity/word tightening below is a SECONDARY sort WITHIN this pool.
-  if (!lot.playerSlug) return null;
+  // Hard same-IDENTITY gate. These lots share one artist-slug per CATEGORY
+  // ('game-used', 'meteorites'), so a same-artist/same-form pool is every
+  // athlete's jersey / every specimen's rock. The band is honest ONLY for the
+  // same identity — the athlete (playerSlug) for sports objects, the subject/
+  // specimen tag (entity) for science objects (a meteorite has no player).
+  // No identity on the anchor → abstain (the UI shows no band — never a
+  // stranger's). The entity/word tightening below stays a SECONDARY sort.
+  const bandIdKey = objectIdentityKey(lot);
+  if (!bandIdKey) return null;
 
-  // same-slug sold, same comp form key, SAME PLAYER
+  // same-slug sold, same comp form key, SAME IDENTITY
   const same = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id &&
     isSportsScienceObject(l) && compFormKey(l) === form &&
-    l.playerSlug === lot.playerSlug
+    objectIdentityKey(l) === bandIdKey
   );
   if (same.length < 3) return null;
 
