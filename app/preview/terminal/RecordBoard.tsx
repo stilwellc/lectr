@@ -1,9 +1,12 @@
 'use client';
 
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 import { MARKETS, type Market } from '../../constants';
 import { RECORD_BOARD, type RecordEntry } from './records';
-import { fmtMoneyCompact } from './hooks';
+import { fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import styles from './style.module.css';
+
+const EASE = [0.23, 1, 0.32, 1] as const;
 
 /* ============================================================
    THE RECORD BOARD — the museum wall. All-time hammer records
@@ -77,6 +80,8 @@ interface Props {
 }
 
 export default function RecordBoard({ market = 'all' }: Props) {
+  const reduce = useReducedMotion();
+  const [ref, seen] = useInView<HTMLDivElement>();
   const scoped = market !== 'all';
   const marketLabel = MARKETS.find((m) => m.key === market)?.label ?? '';
   const ranked = [...RECORD_BOARD]
@@ -91,38 +96,56 @@ export default function RecordBoard({ market = 'all' }: Props) {
   const mids = pyramid ? ranked.slice(1, 4) : ranked;
   const minis = pyramid ? ranked.slice(4) : [];
 
-  return (
-    <div className={styles.recordBoard}>
-      <div className={styles.cardRoomHead}>
-        <h2 className={styles.roomTitle}>The record <em>board</em></h2>
-        <p className={styles.roomSub}>
-          {scoped
-            ? `All-time ${marketLabel.toLowerCase()} hammer records — curated highs, source-flagged, all-in.`
-            : 'All-time hammer records in every category — curated highs, source-flagged, all-in.'}
-        </p>
-      </div>
+  // the plaques rise in sequence as the wall scrolls into view — transform
+  // only, so every record stays readable even if the observer never fires.
+  const riseV = {
+    hidden: reduce ? {} : { y: 16 },
+    show: { y: 0, transition: { duration: 0.6, ease: EASE } },
+  };
 
-      {ranked.length === 0 ? (
-        <p className={styles.recordEmpty}>
-          No all-time record curated for {marketLabel.toLowerCase()} yet.
-        </p>
-      ) : (
-        <div className={styles.plaqueWall}>
-          {hero && <Plaque r={hero} rank={1} size="hero" />}
-          <div className={styles.plaqueMidRow} data-scoped={!pyramid || undefined}>
-            {mids.map((r, i) => (
-              <Plaque key={r.title} r={r} rank={(pyramid ? 2 : 1) + i} size="mid" />
-            ))}
-          </div>
-          {minis.length > 0 && (
-            <div className={styles.plaqueMiniRow}>
-              {minis.map((r, i) => (
-                <Plaque key={r.title} r={r} rank={5 + i} size="mini" />
+  return (
+    <LazyMotion features={domAnimation} strict>
+      <div className={styles.recordBoard} ref={ref}>
+        <div className={styles.cardRoomHead}>
+          <h2 className={styles.roomTitle}>The record <em>board</em></h2>
+          <p className={styles.roomSub}>
+            {scoped
+              ? `All-time ${marketLabel.toLowerCase()} hammer records — curated highs, source-flagged, all-in.`
+              : 'All-time hammer records in every category — curated highs, source-flagged, all-in.'}
+          </p>
+        </div>
+
+        {ranked.length === 0 ? (
+          <p className={styles.recordEmpty}>
+            No all-time record curated for {marketLabel.toLowerCase()} yet.
+          </p>
+        ) : (
+          <m.div
+            className={styles.plaqueWall}
+            variants={{ hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.06 } } }}
+            initial="hidden"
+            animate={seen ? 'show' : 'hidden'}
+          >
+            {hero && <m.div variants={riseV}><Plaque r={hero} rank={1} size="hero" /></m.div>}
+            <div className={styles.plaqueMidRow} data-scoped={!pyramid || undefined}>
+              {mids.map((r, i) => (
+                <m.div key={r.title} variants={riseV}>
+                  <Plaque r={r} rank={(pyramid ? 2 : 1) + i} size="mid" />
+                </m.div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-    </div>
+            {minis.length > 0 && (
+              <div className={styles.plaqueMiniRow}>
+                {minis.map((r, i) => (
+                  <m.div key={r.title} variants={riseV}>
+                    <Plaque r={r} rank={5 + i} size="mini" />
+                  </m.div>
+                ))}
+              </div>
+            )}
+          </m.div>
+        )}
+      </div>
+    </LazyMotion>
   );
 }

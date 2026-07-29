@@ -6,6 +6,7 @@ import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { type Market } from '../../constants';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
+import RollingNumber from './RollingNumber';
 import styles from './style.module.css';
 
 /* ============================================================
@@ -150,15 +151,20 @@ function supportLine(r: SubMarketRead): string {
 
 /* ── THE CERTIFIED READ CARD ─────────────────────────────────
    The paper room's grammar: every sub-market is a curated card,
-   not a table row. Each card draws its own data — an index read
-   draws its 95% confidence band, a demand read draws its real
-   quarterly series, a descriptive read prints its record. The
-   method seal is an ink stamp; the % speaks mono; everything
-   else is ink on cream. */
+   not a table row, composed as a bento — the strongest read is
+   the FLAGSHIP, an inverted ink card (the dark market speaking
+   inside the paper room). Each card draws its own data live on
+   scroll: an index read sweeps in its 95% confidence band, a
+   demand read traces its real quarterly series, a descriptive
+   read prints its record. The % speaks mono; everything else
+   is ink on cream (or cream on ink). */
+
+const bandT = { duration: 0.9, ease: EASE, delay: 0.25 };
 
 /** The drawn 95% CI band: a zero-anchored scale with the confidence
-    interval as a filled band and the point estimate as a marker. */
-function CIBand({ lo, hi, point, dir }: { lo: number; hi: number; point: number; dir?: 'up' | 'down' }) {
+    interval as a filled band and the point estimate as a marker.
+    The band sweeps in and the dot lands when the card scrolls into view. */
+function CIBand({ lo, hi, point, dir, play }: { lo: number; hi: number; point: number; dir?: 'up' | 'down'; play: boolean }) {
   const min = Math.min(0, lo);
   const max = Math.max(0, hi);
   const span = max - min || 1;
@@ -166,12 +172,24 @@ function CIBand({ lo, hi, point, dir }: { lo: number; hi: number; point: number;
   const x = (v: number) => ((v - min + pad) / (span + pad * 2)) * 100;
   return (
     <div className={styles.ciBand} data-dir={dir} aria-label={`95% confidence band ${lo.toFixed(0)} to ${hi.toFixed(0)}`}>
-      <svg viewBox="0 0 100 12" preserveAspectRatio="none" className={styles.ciSvg} aria-hidden>
-        <line x1="0" y1="6" x2="100" y2="6" className={styles.ciAxis} vectorEffect="non-scaling-stroke" />
-        <line x1={x(0)} y1="1.5" x2={x(0)} y2="10.5" className={styles.ciZero} vectorEffect="non-scaling-stroke" />
-        <rect x={x(lo)} y="3.5" width={Math.max(0.5, x(hi) - x(lo))} height="5" rx="2.5" className={styles.ciFill} />
-        <circle cx={x(point)} cy="6" r="2.2" className={styles.ciDot} />
-      </svg>
+      <div className={styles.ciTrack} aria-hidden>
+        <span className={styles.ciAxisLine} />
+        <span className={styles.ciZeroTick} style={{ left: `${x(0)}%` }} />
+        <m.span
+          className={styles.ciFillBar}
+          style={{ left: `${x(lo)}%`, width: `${Math.max(0.5, x(hi) - x(lo))}%`, transformOrigin: 'left center' }}
+          initial={{ scaleX: 0 }}
+          animate={play ? { scaleX: 1 } : { scaleX: 0 }}
+          transition={bandT}
+        />
+        <m.span
+          className={styles.ciPointDot}
+          style={{ left: `${x(point)}%` }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={play ? { scale: 1, opacity: 1 } : { scale: 0, opacity: 0 }}
+          transition={{ duration: 0.4, ease: EASE, delay: 1.0 }}
+        />
+      </div>
       <div className={styles.ciEnds}>
         <span className={styles.pctData}>{lo.toFixed(0)}</span>
         <span className={styles.ciTag}>95% band</span>
@@ -181,8 +199,9 @@ function CIBand({ lo, hi, point, dir }: { lo: number; hi: number; point: number;
   );
 }
 
-/** The drawn demand series: the real quarterly %-over-estimate line. */
-function DemandSpark({ series, dir }: { series: { period: string; value: number }[]; dir?: 'up' | 'down' }) {
+/** The drawn demand series: the real quarterly %-over-estimate line,
+    tracing itself in on scroll. */
+function DemandSpark({ series, dir, play }: { series: { period: string; value: number }[]; dir?: 'up' | 'down'; play: boolean }) {
   const vals = series.map((s) => s.value);
   if (vals.length < 2) return null;
   const min = Math.min(...vals, 0);
@@ -190,13 +209,26 @@ function DemandSpark({ series, dir }: { series: { period: string; value: number 
   const span = max - min || 1;
   const px = (i: number) => (i / (vals.length - 1)) * 100;
   const py = (v: number) => 11 - ((v - min) / span) * 10;
-  const pts = vals.map((v, i) => `${px(i)},${py(v)}`).join(' ');
+  const d = vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${px(i)} ${py(v)}`).join(' ');
   return (
     <div className={styles.ciBand} data-dir={dir} aria-label="Demand by quarter">
       <svg viewBox="0 0 100 12" preserveAspectRatio="none" className={styles.ciSvg} aria-hidden>
         {min < 0 && <line x1="0" y1={py(0)} x2="100" y2={py(0)} className={styles.ciAxis} vectorEffect="non-scaling-stroke" />}
-        <polyline points={pts} className={styles.sparkLine} vectorEffect="non-scaling-stroke" fill="none" />
-        <circle cx="100" cy={py(vals[vals.length - 1])} r="2.2" className={styles.ciDot} />
+        <m.path
+          d={d}
+          className={styles.sparkLine}
+          vectorEffect="non-scaling-stroke"
+          fill="none"
+          initial={{ pathLength: 0 }}
+          animate={play ? { pathLength: 1 } : { pathLength: 0 }}
+          transition={{ duration: 1.4, ease: EASE, delay: 0.25 }}
+        />
+        <m.circle
+          cx="100" cy={py(vals[vals.length - 1])} r="2.2" className={styles.ciDot}
+          initial={{ opacity: 0 }}
+          animate={play ? { opacity: 1 } : { opacity: 0 }}
+          transition={{ duration: 0.3, delay: 1.55 }}
+        />
       </svg>
       <div className={styles.ciEnds}>
         <span className={styles.ciTag}>{series[0].period}</span>
@@ -207,18 +239,29 @@ function DemandSpark({ series, dir }: { series: { period: string; value: number 
   );
 }
 
-/** One certified read card. */
-function ReadCard({ r, active, onSelect }: { r: SubMarketRead; active: boolean; onSelect: (k: Market) => void }) {
+/** One certified read card. size: 'flag' (the inverted ink flagship,
+    2×2 in the bento), 'wide' (2×1), or 'std'. */
+function ReadCard({ r, active, onSelect, size = 'std', play }: {
+  r: SubMarketRead; active: boolean; onSelect: (k: Market) => void;
+  size?: 'flag' | 'wide' | 'std'; play: boolean;
+}) {
   const dir = dirFor(r);
   const line = readLine(r);
   const foot: string[] = [`${fmtInt(r.lots)} lots`];
   if (r.readType !== 'descriptive' && r.typicalUsd != null) foot.push(`typical ${fmtMoneyCompact(r.typicalUsd)}`);
   if (r.bidCompNow != null) foot.push(`${r.bidCompNow} bids/lot`);
   if (r.readType === 'descriptive' && r.sellThroughPct != null) foot.push(`${Math.round(r.sellThroughPct)}% sell-through`);
+  // the flagship states its method in plain words — the wow is the certainty
+  const methodLine = size === 'flag' && r.readType === 'index'
+    ? (r.indexMethod === 'repeat-sale'
+        ? 'Repeat-sales index — the same card, the same grade, resold. Mix-immune, 95% confidence.'
+        : 'Quality-controlled price index across this maker’s verified sales. 95% confidence.')
+    : null;
   return (
     <button
       type="button"
       className={styles.readCard}
+      data-size={size}
       data-active={active || undefined}
       onClick={() => onSelect(r.vertical as Market)}
       aria-label={`${r.label}: ${line.primary} ${line.per}, ${supportLine(r)} — switch the board to ${r.vertical}`}
@@ -231,7 +274,19 @@ function ReadCard({ r, active, onSelect }: { r: SubMarketRead; active: boolean; 
       <div className={styles.readCardRead} data-dir={dir}>
         {r.readType === 'index' && r.index ? (
           <>
-            <span className={`${styles.readCardPct} ${styles.pctData}`}>{fmtPct(r.index.changePct)}</span>
+            {size === 'flag' ? (
+              <RollingNumber
+                className={`${styles.readCardPct} ${styles.pctData}`}
+                value={r.index.changePct}
+                from={0}
+                format={fmtPct}
+                duration={1400}
+                delay={150}
+                play={play}
+              />
+            ) : (
+              <span className={`${styles.readCardPct} ${styles.pctData}`}>{fmtPct(r.index.changePct)}</span>
+            )}
             <span className={styles.readCardPer}>{r.index.horizon}</span>
           </>
         ) : r.readType === 'demand' && r.demandNow != null ? (
@@ -246,10 +301,11 @@ function ReadCard({ r, active, onSelect }: { r: SubMarketRead; active: boolean; 
           </>
         )}
       </div>
+      {methodLine && <div className={styles.readCardMethod}>{methodLine}</div>}
       {r.readType === 'index' && r.index ? (
-        <CIBand lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} />
+        <CIBand lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} play={play} />
       ) : r.readType === 'demand' && r.demandSeries.length >= 2 ? (
-        <DemandSpark series={r.demandSeries} dir={dir} />
+        <DemandSpark series={r.demandSeries} dir={dir} play={play} />
       ) : r.record ? (
         <div className={styles.readCardRecord}>
           <span className={styles.readCardRecordLabel}>record</span>
@@ -383,25 +439,41 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
     );
   }
 
-  // ── THE PAPER ROOM: the certified card wall (both viewports; CSS reflows
-  // the grid — 3-up on desktop, 1-col dense on mobile).
+  // ── THE PAPER ROOM: the certified bento (both viewports; CSS reflows the
+  // mosaic — 4-col with a 2×2 ink flagship on desktop, stacked on mobile).
+  // The strongest read anchors the composition as the inverted flagship;
+  // every card draws its data in as the room scrolls into view.
   if (paper) {
-    const CARD_CAP = 6; // two clean desktop rows
+    const CARD_CAP = 8; // flagship (2×2) + wide (2×1) + six singles = a full mosaic
     const shownCards = expanded ? rows : rows.slice(0, CARD_CAP);
+    const sizeAt = (i: number): 'flag' | 'wide' | 'std' => (i === 0 ? 'flag' : i === 1 ? 'wide' : 'std');
+    const cardV = {
+      hidden: reduce ? { opacity: 1 } : { opacity: 0, y: 14 },
+      show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
+    };
     return (
-      <div className={styles.moversPaper} ref={ref}>
-        {head}
-        <div className={styles.readCardGrid}>
-          {shownCards.map((r) => (
-            <ReadCard key={`${r.vertical}:${r.slug}`} r={r} active={r.vertical === activeKey} onSelect={onSelect} />
-          ))}
+      <LazyMotion features={domAnimation} strict>
+        <div className={styles.moversPaper} ref={ref}>
+          {head}
+          <m.div
+            className={styles.bento}
+            variants={{ hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.07 } } }}
+            initial="hidden"
+            animate={seen ? 'show' : 'hidden'}
+          >
+            {shownCards.map((r, i) => (
+              <m.div key={`${r.vertical}:${r.slug}`} className={styles.bentoCell} data-size={sizeAt(i)} variants={cardV}>
+                <ReadCard r={r} active={r.vertical === activeKey} onSelect={onSelect} size={sizeAt(i)} play={seen && !reduce} />
+              </m.div>
+            ))}
+          </m.div>
+          {rows.length > CARD_CAP && (
+            <button type="button" className={styles.subShowMore} onClick={() => setExpanded((v) => !v)}>
+              {expanded ? 'Show less' : `Show ${rows.length - CARD_CAP} more`}
+            </button>
+          )}
         </div>
-        {rows.length > CARD_CAP && (
-          <button type="button" className={styles.subShowMore} onClick={() => setExpanded((v) => !v)}>
-            {expanded ? 'Show less' : `Show ${rows.length - CARD_CAP} more`}
-          </button>
-        )}
-      </div>
+      </LazyMotion>
     );
   }
 
