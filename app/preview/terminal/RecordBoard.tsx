@@ -184,12 +184,6 @@ export default function RecordBoard({ market = 'all', asOf = null }: Props) {
           Records as reported by the houses · USD at sale date · unsourced entries flagged, not hidden
           {asOf ? ` · data as of ${asOf}` : ''}.
         </div>
-
-        {/* the finale — the plate mark, half-sunk into the closing seam */}
-        <div className={styles.plateMark} aria-hidden>
-          <img src="/brand/lectr-ink.png" alt="" />
-        </div>
-        <h2 className={styles.srOnly}>lectr</h2>
       </div>
     </LazyMotion>
   );

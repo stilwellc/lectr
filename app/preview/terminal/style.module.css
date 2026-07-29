@@ -3072,14 +3072,16 @@ a.recordObj:focus-visible {
    ════════════════════════════════════════════════════════════════ */
 .roomB { position: relative; padding-top: clamp(28px, 3.4vw, 52px); }
 
-/* the settlement slip straddles the dark→paper seam — the page's one
-   seam-crossing artifact. Empty branches collapse to nothing. */
-.slipStraddle {
+/* the settlement slip now sits at the FOOT of the record room — a quiet
+   close under the records. Empty branches collapse to nothing. */
+.slipBottom {
   position: relative;
-  z-index: 2;
-  margin-top: calc(-1 * clamp(120px, 14vw, 200px));
+  z-index: 1;
+  margin-top: clamp(40px, 5vw, 72px);
+  display: flex;
+  justify-content: center;
 }
-.slipStraddle:empty { display: none; }
+.slipBottom:empty { display: none; }
 
 /* ── the plate: record №01 ── */
 .plateZone {
@@ -3205,32 +3207,11 @@ a.recordObj:focus-visible {
   color: var(--paper-muted, #5A5240);
 }
 
-/* ── the finale: the plate mark, half-sunk into the closing seam ── */
-.plateMark {
-  margin-top: clamp(36px, 5vw, 80px);
-  height: clamp(72px, 12vw, 170px);
-  overflow: hidden;
-  display: flex;
-  justify-content: center;
-}
-.plateMark img {
-  width: min(1240px, 94vw);
-  height: auto;
-  display: block;
-  opacity: 0.96;
-}
-.srOnly {
-  position: absolute;
-  width: 1px; height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
 
 /* ── Room B mobile ── */
 @media (max-width: 900px) {
   .roomB { padding-top: 40px; }
-  .slipStraddle { margin-top: -72px; }
+  .slipBottom { margin-top: 32px; }
   .plateTitle { font-size: 21px; }
   .plateFigure { font-size: clamp(52px, 15vw, 68px); }
   .strikeRule { margin-top: 16px; }
@@ -3242,6 +3223,4 @@ a.recordObj:focus-visible {
   .catChip, .tapeOut { display: none; }
   .tapePrice { font-size: 16px; }
   .register { font-size: 12px; }
-  .plateMark { height: clamp(72px, 18vw, 110px); }
-  .plateMark img { width: 94vw; }
 }

@@ -898,12 +898,15 @@ export default function TerminalHomePage() {
                 corpus; the sentinel starts that fetch as the reader approaches */}
             <Phase2Sentinel />
 
-            {/* ══ ROOM · THE RECORD — settlement + all-time records, one paper chapter.
-                The settlement slip is the page's single seam-crossing artifact:
-                it straddles the dark→paper cut. ══ */}
+            {/* ══ ROOM · THE RECORD — all-time records, then the settlement slip
+                at the foot of the room. ══ */}
             <section className={styles.roomPaper}>
             <div className={styles.roomInner}>
-            <div className={styles.slipStraddle}>
+            <div className={styles.recordSection}>
+              <RecordBoard market={activeKey} asOf={marketData?.generatedAt?.slice(0, 10) ?? null} />
+            </div>
+
+            <div className={styles.slipBottom}>
             {isSportsScience ? (
               recentRows.length > 0 && (
                 <div className={styles.recordBandWrap}>
@@ -953,10 +956,6 @@ export default function TerminalHomePage() {
                 </div>
               </div>
             ))}
-            </div>
-
-            <div className={styles.recordSection}>
-              <RecordBoard market={activeKey} asOf={marketData?.generatedAt?.slice(0, 10) ?? null} />
             </div>
             </div>
             </section>
