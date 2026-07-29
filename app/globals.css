@@ -1399,7 +1399,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
    The footer is the identity's one display-scale moment: the sign writes
    itself in its own light over the provenance the product stands on. */
 .ray-close {
-  position: relative;
   margin-top: 48px;
   border-top: 1px solid var(--hairline);
   background:
@@ -1424,75 +1423,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-close-thesis {
   text-align: center;
-  margin: 26px auto 0;
-  max-width: 22ch;
-  font-family: var(--font-serif-display), serif;
-  font-size: clamp(30px, 3.6vw, 48px);
-  font-weight: 400;
-  line-height: 1.14;
-  letter-spacing: -0.015em;
-  color: var(--color-fg, #ede6da);
-}
-
-/* ── the tick rain — hammer ticks falling behind the statement ── */
-.ray-close-rain {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.ray-close-rain span {
-  position: absolute;
-  top: -24px;
-  width: 1.5px;
-  border-radius: 1px;
-  background: rgba(232, 218, 182, 0.22);
-  animation: rayTickFall linear infinite;
-  animation-play-state: paused;
-  opacity: 0;
-}
-.ray-close-on .ray-close-rain span { animation-play-state: running; }
-@keyframes rayTickFall {
-  0% { transform: translateY(0); opacity: 0; }
-  8% { opacity: 1; }
-  86% { opacity: 1; }
-  100% { transform: translateY(min(72vh, 640px)); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ray-close-rain { display: none; }
-}
-
-/* ── the method — three drafted marks, thin butter line art ── */
-.ray-close-method {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(18px, 4vw, 56px);
-  max-width: 860px;
-  margin: clamp(40px, 5vw, 64px) auto 0;
-}
-.ray-close-m {
-  text-align: center;
-}
-.ray-close-m svg {
-  width: clamp(48px, 5vw, 64px);
-  height: auto;
-  display: block;
-  margin: 0 auto 14px;
-  stroke: rgba(232, 218, 182, 0.75);
-  stroke-width: 1.25;
-  fill: none;
-}
-.ray-close-m svg .fill { fill: rgba(232, 218, 182, 0.75); stroke: none; }
-.ray-close-m p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
+  margin: 20px 0 0;
+  font-size: 15.5px;
+  letter-spacing: -0.01em;
   color: var(--color-text-secondary);
-}
-@media (max-width: 640px) {
-  .ray-close-method { grid-template-columns: 1fr; gap: 16px; max-width: 320px; }
-  .ray-close-m { display: flex; align-items: center; gap: 16px; text-align: left; }
-  .ray-close-m svg { width: 38px; margin: 0; flex: none; }
-  .ray-close-m p { font-size: 12.5px; }
 }
 
 .ray-close-map {

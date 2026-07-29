@@ -337,55 +337,12 @@ export function Colophon({ record }: {
 
   return (
     <footer className={`ray-close${inView ? ' ray-close-on' : ''}`} ref={ref}>
-      {/* the tick rain — a slow fall of hammer ticks behind the statement,
-          deterministic per index (no Math.random: SSR-stable) */}
-      <div className="ray-close-rain" aria-hidden>
-        {Array.from({ length: 42 }, (_, i) => (
-          <span
-            key={i}
-            style={{
-              left: `${(i * 61) % 100}%`,
-              animationDelay: `${((i * 37) % 80) / 10}s`,
-              animationDuration: `${7 + ((i * 13) % 50) / 10}s`,
-              height: `${10 + ((i * 29) % 3) * 4}px`,
-            }}
-          />
-        ))}
-      </div>
       <div className="rail ray-close-in">
         {/* the sign, lit over the closed floor */}
         <div className="ray-close-sign">
           <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />
         </div>
         <p className="ray-close-thesis">Every estimate, read against every hammer.</p>
-
-        {/* the method — three drafted marks for how a read earns the board */}
-        <div className="ray-close-method">
-          <div className="ray-close-m">
-            <svg viewBox="0 0 64 64" aria-hidden>
-              <circle cx="32" cy="32" r="13" />
-              <ellipse cx="32" cy="32" rx="27" ry="10.5" transform="rotate(-24 32 32)" />
-              <circle cx="53.5" cy="21.5" r="2.6" className="fill" />
-            </svg>
-            <p>Crawled nightly across the major houses.</p>
-          </div>
-          <div className="ray-close-m">
-            <svg viewBox="0 0 64 64" aria-hidden>
-              <circle cx="24.5" cy="32" r="14" />
-              <circle cx="39.5" cy="32" r="14" />
-            </svg>
-            <p>Repeat sales matched — the same object, resold.</p>
-          </div>
-          <div className="ray-close-m">
-            <svg viewBox="0 0 64 64" aria-hidden>
-              <path d="M4 52 C 20 52, 24 14, 32 14 C 40 14, 44 52, 60 52" />
-              <line x1="23" y1="52" x2="23" y2="30.5" strokeDasharray="2.5 3" />
-              <line x1="41" y1="52" x2="41" y2="30.5" strokeDasharray="2.5 3" />
-              <line x1="4" y1="52" x2="60" y2="52" opacity="0.5" />
-            </svg>
-            <p>Published only at 95% confidence.</p>
-          </div>
-        </div>
 
         {/* the map of the house */}
         <div className="ray-close-map">
