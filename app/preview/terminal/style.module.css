@@ -2267,59 +2267,40 @@ a.recordObj:focus-visible {
 .roomPaper:last-of-type { margin-bottom: 0; }
 
 /* ════════════════════════════════════════════════════════════
-   THE CURATED CARD ROOMS — the two paper rooms break from the
-   page's table grammar and go full object design: certified
-   read cards (the verified board) and museum plaques (the
-   record board). Script titles — the lectr hand. Low
-   whitespace, every element drawn.
+   THE CURATED CARD ROOMS — the two paper rooms carry the page's
+   object design: certified read cards (the verified board) and
+   record plaques (the record board). Same brand grammar as every
+   room — Fraunces title, Inter everywhere else — with precision
+   surfaces: hairlines, tabular figures, drawn data. Nothing
+   decorative that isn't data.
    ════════════════════════════════════════════════════════════ */
 
 /* the paper rooms breathe less than the dark rooms — dense, curated */
 .roomPaper { padding-block: clamp(40px, 5vw, 64px); }
 
 .cardRoomHead { margin-bottom: clamp(18px, 2.4vw, 26px); }
-.scriptTitle {
-  font-family: var(--font-script), cursive;
-  font-weight: 400;
-  font-size: clamp(44px, 4.8vw, 62px);
-  line-height: 1.05;
-  letter-spacing: 0.005em;
-  color: var(--paper-ink, #1C1712);
-  margin: 0 0 6px;
-}
+.cardRoomHead .roomTitle { color: var(--paper-ink, #1C1712); }
+.cardRoomHead .roomTitle em { color: #8a6a2a; }
 .cardRoomHead .roomSub { margin-bottom: 0; color: var(--paper-muted, #5A5240); }
 
-/* ── shared card material: layered cream, hairline frame, inner mat ── */
+/* ── shared card material: a clean elevated surface on the paper ── */
 .readCard,
 .plaque {
   position: relative;
   background:
-    linear-gradient(160deg, rgba(255, 250, 238, 0.55), rgba(255, 250, 238, 0) 55%),
-    #ECE4D1;
-  border: 1px solid rgba(28, 23, 18, 0.30);
-  border-radius: 3px;
+    linear-gradient(178deg, rgba(255, 251, 241, 0.6), rgba(255, 251, 241, 0) 40%),
+    #EBE3D0;
+  border: 1px solid rgba(28, 23, 18, 0.16);
+  border-radius: 12px;
   color: var(--paper-ink, #1C1712);
-  box-shadow:
-    0 1px 0 rgba(28, 23, 18, 0.12),
-    0 12px 26px -20px rgba(28, 23, 18, 0.55);
+  box-shadow: 0 1px 2px rgba(28, 23, 18, 0.06), 0 10px 24px -18px rgba(28, 23, 18, 0.35);
   transition: transform 0.28s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.28s, border-color 0.28s;
-}
-.readCard::before,
-.plaque::before {
-  content: '';
-  position: absolute;
-  inset: 5px;
-  border: 1px solid rgba(28, 23, 18, 0.13);
-  border-radius: 2px;
-  pointer-events: none;
 }
 .readCard:hover,
 .plaque:hover {
-  transform: translateY(-3px);
-  border-color: rgba(28, 23, 18, 0.52);
-  box-shadow:
-    0 2px 0 rgba(28, 23, 18, 0.10),
-    0 22px 38px -20px rgba(28, 23, 18, 0.6);
+  transform: translateY(-2px);
+  border-color: rgba(28, 23, 18, 0.3);
+  box-shadow: 0 1px 2px rgba(28, 23, 18, 0.05), 0 18px 34px -18px rgba(28, 23, 18, 0.42);
 }
 
 /* ── THE CERTIFIED READ CARDS (verified board) ── */
@@ -2351,23 +2332,19 @@ a.recordObj:focus-visible {
   line-height: 1.2;
   padding-top: 2px;
 }
-/* the method seal — an ink stamp, tilted like it was pressed by hand */
+/* the method tag — a quiet tinted pill naming the read's certification */
 .readSeal {
   flex: none;
-  font-family: var(--font-mono-data), monospace;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  padding: 3.5px 8px 2.5px;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-  transform: rotate(-2.5deg);
-  opacity: 0.9;
+  letter-spacing: 0.02em;
+  padding: 3.5px 9px;
+  border-radius: 999px;
+  background: rgba(28, 23, 18, 0.055);
 }
-.readSeal[data-type='index'] { color: #234a70; }
-.readSeal[data-type='demand'] { color: #7a5a20; }
-.readSeal[data-type='descriptive'] { color: rgba(28, 23, 18, 0.55); }
+.readSeal[data-type='index'] { color: #2c4d6e; background: rgba(44, 77, 110, 0.09); }
+.readSeal[data-type='demand'] { color: #7a5a20; background: rgba(122, 90, 32, 0.09); }
+.readSeal[data-type='descriptive'] { color: rgba(28, 23, 18, 0.6); }
 .readCardRead { display: flex; align-items: baseline; gap: 9px; }
 .readCardPct {
   font-size: 31px;
@@ -2438,19 +2415,6 @@ a.recordObj:focus-visible {
   text-decoration: none;
   overflow: hidden;
 }
-.plaqueGhost {
-  position: absolute;
-  top: -14px;
-  right: 6px;
-  font-family: var(--font-serif-display), serif;
-  font-size: 104px;
-  font-weight: 500;
-  font-style: italic;
-  line-height: 1;
-  color: rgba(28, 23, 18, 0.065);
-  pointer-events: none;
-  user-select: none;
-}
 .plaqueTopRow {
   display: flex;
   align-items: center;
@@ -2459,24 +2423,21 @@ a.recordObj:focus-visible {
   margin-bottom: 7px;
 }
 .plaqueNo {
-  font-family: var(--font-serif-display), serif;
-  font-style: italic;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 11.5px;
+  font-weight: 650;
   line-height: 1;
-  letter-spacing: 0.02em;
-  color: rgba(28, 23, 18, 0.7);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: rgba(28, 23, 18, 0.45);
 }
 .plaqueCat {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  padding: 2.5px 8px 2px;
-  border: 1px solid currentColor;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
   border-radius: 999px;
-  opacity: 0.85;
 }
+.plaqueCat[data-cat] { background: rgba(28, 23, 18, 0.055); }
 .plaqueCat[data-cat='Art'] { color: #9a4a32; }
 .plaqueCat[data-cat='Watches'] { color: #3f5f7a; }
 .plaqueCat[data-cat='Design'] { color: #6b6b3a; }
@@ -2535,14 +2496,12 @@ a.recordObj:focus-visible {
   margin-top: 0;
 }
 .plaque[data-size='hero'] .plaqueFoot { grid-column: 1 / -1; margin-top: 13px; }
-.plaque[data-size='hero'] .plaqueGhost { font-size: 170px; top: -30px; right: 14px; }
-.plaque[data-size='hero'] .plaqueNo { font-size: 18px; }
+.plaque[data-size='hero'] .plaqueNo { font-size: 12.5px; }
 
 /* №5–10 — the minis: dense, one-line titles */
 .plaque[data-size='mini'] { padding: 11px 13px 9px; }
 .plaque[data-size='mini'] .plaqueTopRow { margin-bottom: 5px; }
-.plaque[data-size='mini'] .plaqueNo { font-size: 13px; }
-.plaque[data-size='mini'] .plaqueGhost { font-size: 64px; top: -8px; }
+.plaque[data-size='mini'] .plaqueNo { font-size: 10.5px; }
 .plaque[data-size='mini'] .plaqueTitle { font-size: 13.5px; -webkit-line-clamp: 1; }
 .plaque[data-size='mini'] .plaquePrice { font-size: 19px; margin-top: 7px; }
 .plaque[data-size='mini'] .plaqueFoot { margin-top: 7px; padding-top: 6px; font-size: 9.5px; }
@@ -2562,10 +2521,8 @@ a.recordObj:focus-visible {
   }
   .plaque[data-size='hero'] .plaquePrice { font-size: 34px; margin-top: 10px; justify-self: start; }
   .plaque[data-size='hero'] .plaqueTitle { font-size: 20px; }
-  .plaque[data-size='hero'] .plaqueGhost { font-size: 110px; top: -18px; }
   .plaque[data-size='mini'] .plaqueFoot { display: none; }
   .plaque[data-size='mini'] .plaqueTitle { -webkit-line-clamp: 2; font-size: 12.5px; }
-  .scriptTitle { font-size: clamp(40px, 11.5vw, 52px); }
 }
 
 /* the 3-up stat chips regained a third tile (Yearly ROI) — the label fit

@@ -341,10 +341,10 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
 
   const head = paper ? (
     <div className={styles.cardRoomHead}>
-      <h2 className={styles.scriptTitle}>The verified board</h2>
+      <h2 className={styles.roomTitle}>The verified <em>board</em></h2>
       <p className={styles.roomSub}>
         {activeKey === 'all'
-          ? 'Every read the engine will stand behind — drawn from its own data, certified card by card.'
+          ? 'Every read the engine will stand behind — drawn from its own data, card by card.'
           : 'This market’s certified reads — each drawn from its own data, card by card.'}
       </p>
     </div>

@@ -49,9 +49,8 @@ function Plaque({ r, rank, size }: { r: RecordEntry; rank: number; size: 'hero' 
       rel="noopener noreferrer"
       aria-label={`No. ${rank}: ${r.title} — ${fmtMoneyCompact(r.usd)} at ${r.house}. Open the sale.`}
     >
-      <span className={styles.plaqueGhost} aria-hidden>{no}</span>
       <span className={styles.plaqueTopRow}>
-        <span className={styles.plaqueNo}>№ {rank}</span>
+        <span className={styles.plaqueNo}>{no}</span>
         <span className={styles.plaqueCat} data-cat={r.category}>{r.category}</span>
       </span>
       <span className={styles.plaqueTitle}>{r.title}</span>
@@ -95,7 +94,7 @@ export default function RecordBoard({ market = 'all' }: Props) {
   return (
     <div className={styles.recordBoard}>
       <div className={styles.cardRoomHead}>
-        <h2 className={styles.scriptTitle}>The record board</h2>
+        <h2 className={styles.roomTitle}>The record <em>board</em></h2>
         <p className={styles.roomSub}>
           {scoped
             ? `All-time ${marketLabel.toLowerCase()} hammer records — curated highs, source-flagged, all-in.`
