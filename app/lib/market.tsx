@@ -34,19 +34,6 @@ const PATH_MARKET: Record<string, Market> = {
   '/culture': 'culture',
 };
 
-/* M9 — the market's tint, fed ONLY to the light pool, the active-pill wash
-   and the chart cursor (globals.css consumes --market-tint). Never chart
-   lines, deltas or text. */
-const MARKET_TINT: Record<Market, string> = {
-  all: '#E8DAB6',
-  art: '#D2BC8C',
-  design: '#B3AC9E',
-  watches: '#8C9DAF',
-  sports: '#B99F72',
-  science: '#9AA8B4',
-  culture: '#C6907E',
-};
-
 const MarketContext = createContext<{ market: Market; setMarket: (m: Market) => void }>({
   market: 'all',
   setMarket: () => {},
@@ -98,14 +85,6 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   }, [urlMarket]);
 
   const market = onLander ? urlMarket : stored;
-
-  // M9 — the whole shell breathes the market's air: set the tint custom
-  // property on <html> so the body's light pool (and only the light) follows.
-  useEffect(() => {
-    try {
-      document.documentElement.style.setProperty('--market-tint', MARKET_TINT[market] || MARKET_TINT.all);
-    } catch { /* SSR/no-DOM — the CSS default (#E8DAB6) stands */ }
-  }, [market]);
 
   // THE TAPE PRINTS — a pushState'd market switch leaves the title behind, so
   // keep it read true (covers back/forward too; harmlessly re-asserts the

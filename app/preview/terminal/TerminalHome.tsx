@@ -186,16 +186,12 @@ function daysToHammer(l: AuctionLot, todayDay: string): number | null {
 // the table row under the pointer. Photo on the warm mat (object-fit contain,
 // never cropped), maker, estimate, and the verdict ring when the engine has a
 // call. One plate at a time, 150ms intent delay upstream, instant leave.
-function HoverPlate({ lot, x, y, tone, sig, onEnter, onLeave }: {
+function HoverPlate({ lot, x, y, tone, sig }: {
   lot: AuctionLot;
   x: number;
   y: number;
   tone?: 'up' | 'down';
   sig: ReturnType<typeof lotSignal>;
-  /** R3 — the plate is CLICKABLE (→ /lot); these keep it alive while the
-      pointer crosses the gap from the row */
-  onEnter: () => void;
-  onLeave: () => void;
 }) {
   if (!lot.imageUrl) return null;
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -203,15 +199,7 @@ function HoverPlate({ lot, x, y, tone, sig, onEnter, onLeave }: {
   const left = Math.min(x + 14, vw - 252);
   const top = Math.max(70, Math.min(y - 24, vh - 320));
   return (
-    <Link
-      href={`/lot?id=${encodeURIComponent(lot.id)}`}
-      className={styles.hoverPlate}
-      style={{ left, top, pointerEvents: 'auto', textDecoration: 'none', cursor: 'pointer' }}
-      data-tone={tone}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-      aria-label={`Open the lot page for ${craftTitle(lot.title)}`}
-    >
+    <div className={styles.hoverPlate} style={{ left, top }} data-tone={tone} aria-hidden>
       <span className={styles.hoverPlateMat}>
         <img src={httpsImg(lot.imageUrl)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"
           onError={e => { (e.currentTarget.parentElement!.parentElement as HTMLElement).style.display = 'none'; }} />
@@ -223,7 +211,7 @@ function HoverPlate({ lot, x, y, tone, sig, onEnter, onLeave }: {
           {gapGrammar(sig.label, sig.pct)}
         </span>
       )}
-    </Link>
+    </div>
   );
 }
 
@@ -257,17 +245,7 @@ function FeedRow({ lot, onOpen, tone, signal }: { lot: AuctionLot; onOpen: () =>
         ? `bid ${formatPrice(lot.currentBid)}`
         : '—';
   return (
-    // R3 — the row is a div (not a button) so the explicit lot-page door can
-    // be a real <a> inside it: the row body keeps the comps modal, the
-    // trailing → navigates to /lot?id=…
-    <div
-      className="ray-feedrow"
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      aria-label={`Comps for ${craftTitle(lot.title)}`}
-    >
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title)}`}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -295,15 +273,7 @@ function FeedRow({ lot, onOpen, tone, signal }: { lot: AuctionLot; onOpen: () =>
         <b>{est}</b>
         <span>{formatDate(lot.saleDate)}</span>
       </span>
-      <Link
-        href={`/lot?id=${encodeURIComponent(lot.id)}`}
-        className="ray-feedrow-go"
-        aria-label={`Open the lot page for ${craftTitle(lot.title)}`}
-        onClick={e => e.stopPropagation()}
-      >
-        →
-      </Link>
-    </div>
+    </button>
   );
 }
 
@@ -755,54 +725,14 @@ export default function TerminalHomePage() {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     hoverTimer.current = setTimeout(() => setHoverPrev({ lot, y: r.top, x: r.right }), 150);
   };
-  // R3 — the plate is clickable now: leaving the ROW hides it after a 140ms
-  // grace so the pointer can cross onto the plate; entering the plate cancels
-  // the hide, leaving the plate hides at once.
-  const hideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const rowLeave = () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     hoverTimer.current = null;
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setHoverPrev(null), 140);
+    setHoverPrev(null);
   };
-  const plateEnter = () => { if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; } };
-  const plateLeave = () => setHoverPrev(null);
-  useEffect(() => () => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-  }, []);
+  useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
   // the preview follows the feed, never a stale market/filter set
   useEffect(() => { setHoverPrev(null); }, [feedKey, activeKey]);
-
-  // M18 — the paper bands PRINT themselves once as the reader arrives: an
-  // IO-armed clip reveal (600ms, globals.css). Reduced motion / no IO:
-  // instant. Each band plays once — the data-reveal stamp survives
-  // re-renders because React reuses the DOM node.
-  useEffect(() => {
-    if (loading || error || typeof IntersectionObserver === 'undefined') return;
-    const fresh = document.querySelectorAll<HTMLElement>('.ray-band:not([data-reveal])');
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      fresh.forEach(b => b.setAttribute('data-reveal', 'on'));
-      return;
-    }
-    fresh.forEach(b => b.setAttribute('data-reveal', 'armed'));
-    // observe EVERY still-armed band, not just the fresh ones — this effect
-    // re-runs when the data hooks settle, and the cleanup below disconnects
-    // the previous observer; armed-but-unrevealed bands must be re-adopted
-    // or they stay clipped forever.
-    const armed = document.querySelectorAll<HTMLElement>('.ray-band[data-reveal="armed"]');
-    if (armed.length === 0) return;
-    const io = new IntersectionObserver(entries => {
-      entries.forEach(e => {
-        if (e.isIntersecting) {
-          (e.target as HTMLElement).setAttribute('data-reveal', 'on');
-          io.unobserve(e.target);
-        }
-      });
-    }, { threshold: 0.12 });
-    armed.forEach(b => io.observe(b));
-    return () => io.disconnect();
-  }, [loading, error, activeKey]);
 
   return (
     <>
@@ -836,8 +766,8 @@ export default function TerminalHomePage() {
            full-width inside the dark shell rather than fight the deskShell rail */
         .terminal-shell .ray-recordband { border-radius: 14px; }
       `}</style>
-      {/* M22 — the golden-hour air (pool + grain) is global now: globals.css
-          paints it on body, tinted per market (M9). No local layers. */}
+      <div className={styles.bgField} aria-hidden />
+      <div className={styles.grain} aria-hidden />
 
       {/* REAL CHROME — ArtistNav mounts CommandK (⌘K search, alerts, mobile sheet) */}
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
@@ -1083,18 +1013,7 @@ export default function TerminalHomePage() {
                                 >
                                   {ARTIST_LABEL[lot.artist] || lot.artist}
                                 </Link>
-                                {/* R3 — the title is the explicit door to the
-                                    lot page; the row body keeps the comps modal */}
-                                <Link
-                                  href={`/lot?id=${encodeURIComponent(lot.id)}`}
-                                  className="t-title t-lotlink"
-                                  title="Open the lot page"
-                                  onClick={e => e.stopPropagation()}
-                                  style={{ display: 'block', textDecoration: 'none' }}
-                                >
-                                  {craftTitle(lot.title)}
-                                  <span className="t-lotgo" aria-hidden> →</span>
-                                </Link>
+                                <div className="t-title">{craftTitle(lot.title)}</div>
                               </td>
                               <td>{lot.auctionHouse}</td>
                               <td className="t-cat">{CAT_LABEL[lot.category] || '—'}</td>
@@ -1199,8 +1118,6 @@ export default function TerminalHomePage() {
                     y={hoverPrev.y}
                     tone={feedTone(hoverPrev.lot, belowIds, belowSignal.hasSig)}
                     sig={lotSignal(hoverPrev.lot, marketLots)}
-                    onEnter={plateEnter}
-                    onLeave={plateLeave}
                   />
                 )}
 

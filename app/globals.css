@@ -535,22 +535,21 @@ h1 {
 }
 .ray-lot-card .ray-lot-img { overflow: hidden; }
 .ray-lot-card .ray-lot-img img {
-  transition: opacity 400ms var(--ease-signature), transform 500ms var(--ease-signature);
+  transition: opacity 400ms var(--ease-signature), transform 700ms var(--ease-signature);
 }
-/* M20 — perceptible hover: a real 5px lift, a real shadow */
 .ray-lot-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-3px);
   border-color: color-mix(in srgb, var(--color-accent-wine) 26%, var(--glass-border));
   box-shadow:
     0 1px 0 0 rgba(232, 213, 188, 0.06) inset,
-    0 20px 44px rgba(8, 6, 3, 0.4);
+    0 18px 40px rgba(8, 6, 3, 0.32);
 }
 [data-theme="light"] .ray-lot-card:hover {
   box-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
     0 18px 36px rgba(93, 74, 48, 0.13);
 }
-.ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.06); }
+.ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.045); }
 @media (prefers-reduced-motion: reduce) {
   .ray-lot-card { transition: none; }
   .ray-lot-card:hover { transform: none; }
@@ -993,23 +992,6 @@ h1 {
   --color-bg: #0F0E0A;            /* ground. was #08090B */
   --color-bg-deep: #0B0A07;       /* greeting splash / deepest wells */
   --color-bg-board: #141209;      /* chart wells, board/ledger/appr fills */
-
-  /* ── M4 · THE DEPTH LADDER — three grounds + one floating instrument.
-     ground (page body) → well (chart stages, board interiors, deep
-     sections; sinks via inset shadow) → plate (cards, rows, mats; a warm
-     top edge catches the light) → float (exactly ONE per view: the comps
-     modal, the open ⌘K palette, the /lot certificate). ── */
-  --ground: #0F0E0A;
-  --well: #141209;
-  --plate: #1C1A14;
-  --well-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.4), inset 0 0 40px rgba(0, 0, 0, 0.18);
-  --plate-edge: inset 0 1px 0 rgba(232, 218, 182, 0.07);
-  --float-edge: inset 0 1px 0 rgba(232, 218, 182, 0.12);
-
-  /* ── M9 · per-market tint — feeds ONLY the global light pool, the active
-     pill wash and the chart cursor. Never chart lines, deltas or text.
-     Set per market on <html> by MarketProvider. ── */
-  --market-tint: #E8DAB6;
   --panel: #17150F;               /* board side panels, tooltips */
   --color-bg-elevated: #1C1A14;   /* cards, dropdowns, chips */
   --panel-mat: #1C1A14;           /* image mats = elevated; NEVER #000 (warm seam vs photos) */
@@ -1075,7 +1057,7 @@ h1 {
   --chart-tick: #8F887A;                  /* axis ticks/labels */
   --chart-line-2: #8A8070;                /* comparison series — never competes with hero */
   --chart-ink: var(--color-text-muted);   /* chart captions */
-  --chart-cursor: color-mix(in srgb, var(--market-tint) 30%, transparent);
+  --chart-cursor: rgba(232, 218, 182, 0.30);
 
   /* ── HOUSES / CATEGORIES — categorical only, warm inks, chroma-cut slates.
      All ≥6.2:1 on elevated for 12px legends. ── */
@@ -1101,9 +1083,7 @@ h1 {
   --shadow-pop: 0 12px 32px rgba(8, 6, 3, 0.45);     /* dropdowns, cmd-k */
   --shadow-modal: 0 24px 64px rgba(8, 6, 3, 0.60), 0 4px 16px rgba(8, 6, 3, 0.40);
 
-  /* M22 — the film grain rides every page now (static SVG turbulence,
-     fixed, zero animation). ≤.03 by law. */
-  --grain-opacity: 0.022;
+  --grain-opacity: 0;
   color-scheme: dark;
 }
 
@@ -1116,28 +1096,18 @@ h1 {
   box-shadow: var(--glow-lit);
 }
 
-/* kill the decorative layer wholesale — then stand the DEPTH LADDER (M4)
-   on the cleared ground. Glass surfaces become PLATES: the #1C1A14 fill, a
-   warm top edge catching the light, a real (small) drop. NO blur here —
-   blur belongs to exactly two surfaces sitewide (the open ⌘K panel and the
-   mobile dock). */
+/* kill the decorative layer wholesale */
 
 [class*="section-mark"] { display: none !important; }
 .glass, .glass-quiet, .glass-noblur, .glass-pill {
-  background: var(--plate) !important;
+  background: var(--color-bg-elevated) !important;
   border: none !important;
-  box-shadow: var(--plate-edge), 0 8px 24px rgba(8, 6, 3, 0.28) !important;
+  box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   border-radius: 16px;
 }
 body { font-family: var(--font-sans); letter-spacing: -0.011em; }
-
-/* the WELL — chart stages and board interiors sink a step below the ground */
-.ray-board-demand,
-.ray-recordband {
-  box-shadow: var(--well-shadow);
-}
 
 /* flat cards do not levitate — hover is a fill shift, images may breathe */
 
@@ -1707,7 +1677,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
     inset 0 -46px 60px -34px rgba(12, 10, 6, 0.6),
     inset 0 34px 44px -38px rgba(12, 10, 6, 0.4);
 }
-.ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.06); }
+.ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.035); }
 .ray-lot-plate { background: var(--color-bg-elevated); }
 .ray-lot-plate::before { inset: 14px; border-color: var(--color-border-mid); }
 .ray-lot-plate::after { display: none; }
@@ -1880,9 +1850,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ── mobile: the shell clears the fixed dock (M16) ── */
-@media (max-width: 899px) {
-  .ray-shell { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+/* ── mobile bottom tab bar ── */
+@media (max-width: 768px) {
+  /* clear the bar at page bottom */
+  .ray-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }
 /* Value link lights butter when active — green is reserved for direction */
 .ray-nav-link-value[data-active=true] { color: var(--color-butter-text) !important; }
@@ -1894,23 +1865,19 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-family: var(--font-mono-data), ui-monospace, monospace;
   font-size: 10.5px;
   letter-spacing: 0.04em;
-  /* M12 — the shortcut chips wear butter on a subtle wash */
-  color: var(--color-butter-text);
-  background: rgba(232, 218, 182, 0.08);
+  color: var(--color-text-faint);
+  background: color-mix(in srgb, var(--color-fg) 7%, transparent);
   border-radius: 5px;
   padding: 1px 5px;
   margin-left: 2px;
 }
 /* the pill carries the right-side auto-margin now that the hint button is gone */
 @media (min-width: 900px) { .ray-artist-select-wrap { margin-left: auto !important; } }
-/* M12 — the desk's INSTRUMENT: the palette is one of exactly two true-glass
-   surfaces sitewide (the other is the mobile dock). Blur is budgeted here on
-   purpose — one floating pane of smoked glass over the room. */
 .ray-ck-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(8, 6, 3, 0.65);
+  background: rgba(8, 6, 3, 0.6);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1919,19 +1886,12 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-ck {
   width: 100%;
-  max-width: 640px;
-  background: rgba(28, 26, 20, 0.82);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(232, 218, 182, 0.1);
+  max-width: 560px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-mid);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: var(--float-edge), var(--shadow-modal), 0 30px 80px rgba(8, 6, 3, 0.5);
-  animation: rayCkIn 200ms var(--ease-signature) both;
-}
-@keyframes rayCkIn {
-  from { opacity: 0; transform: translateY(8px) scale(0.97); }
-  to { opacity: 1; transform: none; }
+  box-shadow: 0 30px 80px rgba(8, 6, 3, 0.5);
 }
 .ray-ck-input {
   width: 100%;
@@ -1939,56 +1899,17 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   outline: none;
   background: none;
   padding: 17px 20px;
-  font-family: var(--font-serif), serif;
-  font-style: italic;
-  font-size: 20px;
+  font-family: var(--font-sans);
+  font-size: 16px;
   color: var(--color-fg);
-  caret-color: var(--color-butter);
   border-bottom: 1px solid var(--color-border);
 }
 .ray-ck-input::placeholder { color: var(--color-text-faint); }
 .ray-ck-list { max-height: 46vh; overflow-y: auto; padding: 6px; }
-/* the maker rows hang a 36px thumb plate — the lot's photo on a warm mat
-   when the eager payload has one, the monogram glyph otherwise */
-.ray-ck-thumb {
-  width: 36px;
-  height: 36px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--plate);
-  box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.1);
-}
-.ray-ck-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-/* mobile: the palette presents as a full sheet in the same material */
-@media (max-width: 640px) {
-  .ray-ck-overlay { padding: 0; align-items: stretch; }
-  .ray-ck {
-    max-width: none;
-    height: 100dvh;
-    border-radius: 0;
-    border: none;
-    display: flex;
-    flex-direction: column;
-  }
-  .ray-ck-input { padding-top: calc(17px + env(safe-area-inset-top, 0px)); }
-  .ray-ck-list { max-height: none; flex: 1; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ray-ck { animation: none; }
-}
 .ray-ck-item {
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   border: none;
@@ -2229,32 +2150,20 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
    information-bearing, nothing decorative for its own sake.
    ════════════════════════════════════════════════════════════════════ */
 
-/* canvas: the GOLDEN-HOUR AIR (M22 + M9) — the terminal home's light pool,
-   promoted to every page. One radial pool of the market's tint (≤8% alpha,
-   top-right) + a fainter answer bottom-left, fixed to the viewport so every
-   room sits in the same air. The tint feeds the LIGHT only — never data. */
+/* canvas: not dead-flat — a faint top light like every terminal */
 body {
   background:
-    radial-gradient(120% 80% at 78% -10%, color-mix(in srgb, var(--market-tint) 8%, transparent), transparent 60%),
-    radial-gradient(90% 60% at 8% 108%, color-mix(in srgb, var(--market-tint) 4%, transparent), transparent 55%),
+    radial-gradient(1200px 500px at 50% -100px, rgba(242, 238, 227, 0.03), transparent 70%),
     var(--color-bg);
-  background-attachment: fixed, fixed, scroll;
 }
 
-/* M22 — the film grain: static SVG turbulence, fixed, zero animation.
-   Sits over the whole frame at --grain-opacity (0.022) like print stock —
-   paper bands included (ink on paper carries grain in any catalogue). */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  pointer-events: none;
-  opacity: var(--grain-opacity);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
+/* surfaces: luminous gradient + inner top highlight + real shadow */
+.glass, .glass-quiet, .glass-noblur, .glass-pill {
+  background: linear-gradient(180deg, var(--glass-bg-hover) 0%, var(--panel) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(242, 238, 227, 0.045),
+    0 8px 28px rgba(8, 6, 3, 0.35) !important;
 }
-
 .ray-lot-card,
 .ray-lot-card.glass,
 .ray-lot-card.glass-quiet {
@@ -3074,302 +2983,6 @@ body::after {
   }
 }
 .lectr-toast-out { opacity: 0; transition: opacity 400ms var(--ease-signature); }
-
-/* ══════════════════════════════════════════════════════════════════════════
-   WAVE C APPEND — the material system + the remaining rooms (append-only)
-   ══════════════════════════════════════════════════════════════════════════ */
-
-/* M4 — the FLOATING INSTRUMENT: exactly one per view. The comps modal and
-   the /lot certificate wear the strong shadow + the bright warm top edge.
-   (The open ⌘K palette carries its own float treatment above.) Declared here,
-   late, so it beats the .glass plate reset. */
-.comp-modal-panel.glass {
-  box-shadow: var(--float-edge), var(--shadow-modal) !important;
-}
-/* the /lot page's floating instrument is the HUNG WORK — keep M7's throw,
-   add the float's bright warm top edge */
-.lectr-lot .ray-plate-mat {
-  box-shadow: var(--float-edge), 0 24px 48px -20px rgba(0, 0, 0, 0.6) !important;
-}
-.ray-method {
-  box-shadow: var(--float-edge), var(--shadow-modal);
-}
-
-/* M20 — the price answers the hover: value → butter, 150ms */
-.ray-lot-est,
-.ray-feedtable .t-est,
-.ray-feedrow-right b,
-.ray-value-row-est {
-  transition: color 150ms var(--ease-signature);
-}
-.ray-lot-card:hover .ray-lot-est,
-.ray-feedtable tbody tr:hover .t-est,
-.ray-feedrow:hover .ray-feedrow-right b,
-.ray-value-row:hover .ray-value-row-est {
-  color: var(--color-butter-text);
-}
-
-/* R3 — the explicit doors to the lot page: the ledger-table title link (the
-   row body keeps the comps modal) and the mobile row's trailing → */
-.ray-feedtable .t-lotlink { color: var(--color-text-muted); }
-.ray-feedtable .t-lotlink .t-lotgo {
-  opacity: 0;
-  color: var(--color-butter-text);
-  transition: opacity 150ms var(--ease-signature);
-}
-.ray-feedtable tbody tr:hover .t-lotlink .t-lotgo,
-.ray-feedtable .t-lotlink:focus-visible .t-lotgo { opacity: 1; }
-.ray-feedtable .t-lotlink:hover { color: var(--color-fg); text-decoration: underline; text-underline-offset: 2px; }
-.ray-feedrow-go {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  min-height: 44px;
-  margin: -8px -6px -8px 0;
-  color: var(--color-text-faint);
-  font-size: 15px;
-  text-decoration: none;
-  border-left: 1px solid var(--hairline-soft);
-}
-.ray-feedrow-go:hover, .ray-feedrow-go:focus-visible { color: var(--color-butter-text); }
-
-/* M18 — paper bands print themselves once: an IO-armed reveal. The clip
-   lives on a ground-colored CURTAIN pseudo (not the band itself — Chromium
-   folds an element's own clip-path into its IntersectionObserver geometry,
-   so a self-clipped band never reports intersection and never un-clips).
-   armed = curtain covers; on = curtain clips away top→down over 600ms. */
-.ray-band[data-reveal] { position: relative; }
-.ray-band[data-reveal]::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  background: var(--ground, #0F0E0A);
-  pointer-events: none;
-  z-index: 3;
-}
-.ray-band[data-reveal='on']::after {
-  clip-path: inset(100% 0 0 0);
-  transition: clip-path 600ms var(--ease-signature);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ray-band[data-reveal]::after { display: none; }
-}
-
-/* M16 + R9 — THE MOBILE DOCK. Fixed bottom bar under 900px; mobile's ONE
-   blur surface (true glass). Three affordances, no 5-tab app cliché:
-   [⌘K search] · [current market] · [Saved · n]. Sits under every sheet/modal
-   (z 90 < scrims at 200/300/1300) so it never rides inside them. */
-.lectr-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 90;
-  display: none;
-  align-items: center;
-  gap: 8px;
-  height: calc(56px + env(safe-area-inset-bottom, 0px));
-  padding: 0 12px env(safe-area-inset-bottom, 0px);
-  background: rgba(28, 26, 20, 0.82);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-top: 1px solid rgba(232, 218, 182, 0.1);
-  box-shadow: inset 0 1px 0 rgba(232, 218, 182, 0.07), 0 -12px 32px rgba(8, 6, 3, 0.35);
-}
-@media (max-width: 899px) {
-  .lectr-dock { display: flex; }
-}
-.lectr-dock-search {
-  flex: 1;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 100px;
-  background: rgba(232, 218, 182, 0.07);
-  color: var(--color-text-secondary);
-  font-family: var(--font-sans), sans-serif;
-  font-size: 13.5px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.lectr-dock-search svg { width: 15px; height: 15px; flex: none; color: var(--color-text-muted); }
-.lectr-dock-search .ray-nav-kbd { margin-left: auto; }
-.lectr-dock-chip {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 40px;
-  padding: 0 13px;
-  border: none;
-  border-radius: 100px;
-  background: none;
-  color: var(--color-fg);
-  font-family: var(--font-sans), sans-serif;
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.lectr-dock-chip svg { width: 15px; height: 15px; color: var(--color-text-muted); }
-.lectr-dock-chip i {
-  font-style: normal;
-  font-family: var(--font-mono), monospace;
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
-}
-.lectr-dock-chip[data-market] {
-  background: color-mix(in srgb, var(--market-tint) 9%, transparent);
-  color: var(--color-butter-text);
-}
-
-/* M8 — the dossier name speaks Fraunces display */
-.lectr-dossier-name {
-  font-family: var(--font-serif), serif;
-  font-size: clamp(44px, 5.5vw, 72px);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.02;
-  margin: 0;
-  text-wrap: balance;
-}
-
-/* M8 — the dossier hero grid: head left, the record plate filling the dead
-   right quadrant at ≥900px; stacked below. */
-.lectr-dossier-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-@media (min-width: 900px) {
-  .lectr-dossier-hero { grid-template-columns: minmax(0, 1fr) clamp(260px, 30vw, 360px); gap: clamp(28px, 4vw, 56px); }
-}
-
-/* M8 — THE RECORD PLATE: the record sale as a framed object. Certificate
-   fallback first (engraved figure + date + house in the certificate voice);
-   the photograph hangs on the warm mat only when the data carries one. */
-.lectr-recplate {
-  display: block;
-  background: var(--plate);
-  border: 1px solid var(--hairline);
-  padding: 12px;
-  text-decoration: none;
-  color: inherit;
-}
-.lectr-recplate-img {
-  position: relative;
-  height: 190px;
-  background: var(--well);
-  outline: 1px solid rgba(242, 238, 227, 0.1);
-  outline-offset: -1px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.lectr-recplate-img img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-.lectr-recplate-k {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 2px 8px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-beige-text);
-  border-top: 2px solid var(--color-fg);
-  position: relative;
-  margin-top: 12px;
-}
-.lectr-recplate-k::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 0;
-  right: 0;
-  border-top: 1px solid var(--hairline);
-}
-.lectr-recplate-img + .lectr-recplate-k { margin-top: 12px; }
-.lectr-recplate-cert { padding: 4px 2px 2px; }
-.lectr-recplate-fig {
-  font-family: var(--font-mono), monospace;
-  font-size: clamp(26px, 2.6vw, 34px);
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-fg);
-  line-height: 1.1;
-}
-.lectr-recplate-sub {
-  font-size: 12.5px;
-  color: var(--color-text-muted);
-  line-height: 1.5;
-  margin-top: 6px;
-}
-.lectr-recplate-title {
-  font-family: var(--font-serif), serif;
-  font-style: italic;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  line-height: 1.4;
-  margin-top: 8px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* M23 — dossier chart dignity: IO-armed draw-in (JS flips data-drawn) */
-.lectr-lineplot { position: relative; }
-.lectr-lineplot[data-arm='true'] svg { clip-path: inset(0 100% 0 0); }
-.lectr-lineplot[data-arm='true'][data-drawn='true'] svg {
-  clip-path: inset(0 0 0 0);
-  transition: clip-path 900ms var(--ease-signature);
-}
-@media (prefers-reduced-motion: reduce) {
-  .lectr-lineplot[data-arm='true'] svg { clip-path: none; transition: none; }
-}
-
-/* M21 — the blog wears its pictures: 88px mat thumbs on the shelf rows */
-.ray-blog-thumb {
-  width: 88px;
-  height: 88px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--plate);
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.ray-blog-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  padding: 6px;
-}
 
 /* the nav Calls badge — the live below-market count, in signal ink */
 .ray-nav-callcount {

@@ -72,7 +72,7 @@ function Section({ ord, label, title, defaultOpen, children }: {
 
 export default function AboutPage() {
   return (
-    <div style={{ minHeight: '100vh', background: 'transparent', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       {/* NOTE: keep this style block free of quotes, apostrophes and angle
           brackets — React escapes them in server-rendered raw-text elements
           and the browser keeps the entity literally. */}

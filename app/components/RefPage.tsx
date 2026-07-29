@@ -12,10 +12,8 @@ import ArtistNav from './ArtistNav';
 import { LOTPAGE_CSS } from './LotPage';
 import { Colophon } from './Terminal';
 import Flick from './Flick';
-import RecordPlate from './RecordPlate';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { useChartDraw } from '../hooks/useChartDraw';
 import { ARTIST_LABEL } from '../constants';
 import { formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel } from '../utils';
 
@@ -49,39 +47,22 @@ function useRefs(): { refs: RefEntry[] | null; failed: boolean } {
   return state;
 }
 
-/** The yearly median as a monoline — the numeral IS the line. M23: the raw
-    points stay exactly as computed (no smoothing); the line gains the hero
-    chart's grammar — a soft area fill, a last-point glow dot, and an
-    IO-armed 900ms draw-in on first view. */
+/** The yearly median as a plain monoline — the numeral IS the line. */
 function RefLine({ yearly }: { yearly: RefEntry['yearly'] }) {
-  const drawRef = useChartDraw();
   if (yearly.length < 3) return null;
   const W = 640, H = 150, PAD = 6;
   const vals = yearly.map(p => p.med);
   const min = Math.min(...vals), max = Math.max(...vals);
   const span = max - min || 1;
-  const xy = yearly.map((p, i) => [
-    PAD + (i / (yearly.length - 1)) * (W - PAD * 2),
-    H - PAD - ((p.med - min) / span) * (H - PAD * 2),
-  ] as const);
-  const pts = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const last = xy[xy.length - 1];
+  const pts = yearly.map((p, i) => {
+    const x = PAD + (i / (yearly.length - 1)) * (W - PAD * 2);
+    const y = H - PAD - ((p.med - min) / span) * (H - PAD * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
   return (
-    <div className="lectr-lineplot" data-arm="true" ref={drawRef} style={{ marginTop: 18 }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }} aria-label="Yearly median sale price">
-        <defs>
-          <linearGradient id="refLineFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-fg)" stopOpacity="0.09" />
-            <stop offset="100%" stopColor="var(--color-fg)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon
-          points={`${PAD.toFixed(1)},${(H - PAD).toFixed(1)} ${pts} ${(W - PAD).toFixed(1)},${(H - PAD).toFixed(1)}`}
-          fill="url(#refLineFill)"
-        />
+    <div style={{ marginTop: 18 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="Yearly median sale price">
         <polyline points={pts} fill="none" stroke="var(--color-fg)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={last[0]} cy={last[1]} r="7" fill="rgba(232, 218, 182, 0.18)" />
-        <circle cx={last[0]} cy={last[1]} r="3" fill="var(--color-fg)" stroke="var(--color-bg)" strokeWidth="1.5" />
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
         <span>{yearly[0].y} · {formatPrice(yearly[0].med)}</span>
@@ -131,57 +112,36 @@ export default function RefPage({ refKey }: { refKey: string }) {
   const makerName = ARTIST_LABEL[entry.maker] || entry.maker;
   const delta = entry.ttmMedianUsd != null && entry.medianUsd > 0
     ? Math.round(100 * (entry.ttmMedianUsd / entry.medianUsd - 1)) : null;
-  // M8 — the hero's right quadrant: the strongest of the recent sales as a
-  // framed plate. Labeled for exactly what it is (the ref book keeps recent
-  // sales, not an all-time record) — the honesty doctrine names the data.
-  const topRecent = entry.recent.reduce<RefEntry['recent'][number] | null>(
-    (best, s) => (!best || s.p > best.p ? s : best), null);
 
   return (
     <>
       {nav}
       <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
-        <div className="lectr-dossier-hero">
-          <div style={{ minWidth: 0 }}>
-            <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
-              <Link href={`/${entry.maker}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
-              {' · reference dossier'}
-            </p>
-            {/* M8 — the dossier name speaks Fraunces display */}
-            <h1 className="lectr-dossier-name">
-              {refLabel(entry.ref)}
-            </h1>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 13.5, margin: '10px 0 0', lineHeight: 1.55 }}>
-              {entry.n.toLocaleString()} sales on the book · median {formatPrice(entry.medianUsd)}
-              {entry.ttmMedianUsd != null && (
-                <>
-                  {' '}· past year {formatPrice(entry.ttmMedianUsd)}
-                  {delta != null && delta !== 0 && (
-                    <b style={{ color: delta > 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 650 }}>
-                      {' '}{delta > 0 ? '+' : ''}{delta}%
-                    </b>
-                  )}
-                </>
+        <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
+          <Link href={`/${entry.maker}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
+          {' · reference dossier'}
+        </p>
+        <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 750, letterSpacing: '-0.02em', margin: 0 }}>
+          {refLabel(entry.ref)}
+        </h1>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: 13.5, margin: '10px 0 0', lineHeight: 1.55 }}>
+          {entry.n.toLocaleString()} sales on the book · median {formatPrice(entry.medianUsd)}
+          {entry.ttmMedianUsd != null && (
+            <>
+              {' '}· past year {formatPrice(entry.ttmMedianUsd)}
+              {delta != null && delta !== 0 && (
+                <b style={{ color: delta > 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 650 }}>
+                  {' '}{delta > 0 ? '+' : ''}{delta}%
+                </b>
               )}
-              {entry.beatHighPct != null && <> · {entry.beatHighPct}% beat the high estimate</>}
-              {' '}· {entry.houses.join(', ')}
-            </p>
-
-            <RefLine yearly={entry.yearly} />
-          </div>
-          {topRecent && (
-            <RecordPlate
-              label="Top recent sale"
-              figure={topRecent.p}
-              date={topRecent.d}
-              house={topRecent.h}
-              title={craftTitle(topRecent.t)}
-              imageUrl={topRecent.img}
-              href={`/lot?id=${encodeURIComponent(topRecent.id)}`}
-            />
+            </>
           )}
-        </div>
+          {entry.beatHighPct != null && <> · {entry.beatHighPct}% beat the high estimate</>}
+          {' '}· {entry.houses.join(', ')}
+        </p>
+
+        <RefLine yearly={entry.yearly} />
 
         {onBlock.length > 0 && (
           <section style={{ marginTop: 34 }} aria-label="On the block now">

@@ -49,7 +49,7 @@ export default function QuarterInsight({
   headline?: HeadlineLot;
 }) {
   return (
-    <div style={{ minHeight: '100vh', background: 'transparent', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="blog" />
       <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 6 }}>
@@ -59,39 +59,6 @@ export default function QuarterInsight({
           <h1 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 'clamp(28px, 4vw, 36px)', fontWeight: 400, letterSpacing: '-0.015em', lineHeight: 1.16, margin: '0 0 12px' }}>{title}</h1>
           <p style={{ ...p, fontSize: 16 }}>{dek}</p>
         </header>
-
-        {/* M21 — the note OPENS with its picture: the lot of the quarter as a
-            full-width matted hero plate (photo on the warm mat, settle
-            vignette, caption rule) BEFORE the stat band. */}
-        {headline && (
-          <figure style={{ ...wrap, margin: '22px auto 8px' }}>
-            <div style={{
-              position: 'relative', borderRadius: 14, overflow: 'hidden',
-              border: '1px solid var(--hairline)', background: 'var(--color-bg-elevated)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 220, maxHeight: 460,
-            }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={headline.image}
-                alt={headline.caption}
-                referrerPolicy="no-referrer"
-                style={{ width: '100%', maxHeight: 460, objectFit: 'contain', display: 'block', padding: 18 }}
-              />
-              <span aria-hidden style={{
-                position: 'absolute', inset: 0, pointerEvents: 'none',
-                boxShadow: 'inset 0 0 0 1px rgba(242,238,227,0.05), inset 0 -46px 60px -34px rgba(12,10,6,0.55), inset 0 34px 44px -38px rgba(12,10,6,0.35)',
-              }} />
-            </div>
-            <figcaption style={{
-              display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px',
-              padding: '12px 2px 0', fontSize: 13.5, color: 'var(--color-text-muted)',
-            }}>
-              <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{headline.caption}</span>
-              <span>{headline.house} · {headline.saleLine}</span>
-              <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', fontWeight: 700 }}>{formatPrice(headline.priceUsd)}</span>
-            </figcaption>
-          </figure>
-        )}
 
         {/* stat band */}
         <div style={{ ...wrap, margin: '18px auto 6px' }}>
@@ -108,9 +75,39 @@ export default function QuarterInsight({
 
         <article style={wrap}>
           {headline && (
-            <div style={{ margin: '26px 0 0' }}>
-              <p style={{ ...p, margin: 0 }}>{headline.para}</p>
-            </div>
+            <figure style={{ margin: '30px 0 34px' }}>
+              {/* the lot of the quarter, presented as a catalogue plate: matted
+                  photo with the settle vignette, caption rule, its own paragraph */}
+              <div style={{
+                position: 'relative', borderRadius: 14, overflow: 'hidden',
+                border: '1px solid var(--hairline)', background: 'var(--color-bg-elevated)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 220, maxHeight: 460,
+              }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={headline.image}
+                  alt={headline.caption}
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  style={{ width: '100%', maxHeight: 460, objectFit: 'contain', display: 'block', padding: 18 }}
+                />
+                <span aria-hidden style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none',
+                  boxShadow: 'inset 0 0 0 1px rgba(242,238,227,0.05), inset 0 -46px 60px -34px rgba(12,10,6,0.55), inset 0 34px 44px -38px rgba(12,10,6,0.35)',
+                }} />
+              </div>
+              <figcaption style={{
+                display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px',
+                padding: '12px 2px 0', fontSize: 13.5, color: 'var(--color-text-muted)',
+              }}>
+                <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{headline.caption}</span>
+                <span>{headline.house} · {headline.saleLine}</span>
+                <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', fontWeight: 700 }}>{formatPrice(headline.priceUsd)}</span>
+              </figcaption>
+              <div style={{ marginTop: 14 }}>
+                <p style={{ ...p, margin: 0 }}>{headline.para}</p>
+              </div>
+            </figure>
           )}
           {children}
 

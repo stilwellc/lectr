@@ -12,10 +12,8 @@ import Link from 'next/link';
 import ArtistNav from './ArtistNav';
 import { LOTPAGE_CSS } from './LotPage';
 import { Colophon } from './Terminal';
-import RecordPlate from './RecordPlate';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { useChartDraw } from '../hooks/useChartDraw';
 import { formatPrice, formatDate, getUpcomingCounts } from '../utils';
 import FollowButton from './FollowButton';
 import type { AuctionLot } from '../types';
@@ -34,16 +32,6 @@ const CAT_LABEL: Record<string, string> = {
   'trophies-awards': 'Trophies & awards', 'tickets-passes': 'Tickets & passes',
   'sports-memorabilia': 'Memorabilia',
 };
-
-/** M8 — some player-book names arrive as catalogue shout ("MICHAEL JORDAN");
-    the Fraunces display face wants a proper name. Title-case ONLY fully
-    uppercase strings — mixed-case names (LeBron James) pass through. */
-function displayName(name: string): string {
-  if (name !== name.toUpperCase()) return name;
-  return name
-    .toLowerCase()
-    .replace(/(^|[\s\-'.])([a-z])/g, (_, sep: string, c: string) => sep + c.toUpperCase());
-}
 
 // module cache — one fetch per session. The failure flag is NOT part of the
 // cache contract: it clears on the next mount so one flaky fetch never bricks
@@ -66,38 +54,21 @@ function usePlayers(): { players: PlayerEntry[] | null; failed: boolean } {
   return state;
 }
 
-/* M23 — the raw yearly points stay exactly as computed (no smoothing); the
-   line gains the hero chart's grammar: soft area fill, last-point glow dot,
-   and an IO-armed 900ms draw-in on first view. */
 function TrendLine({ yearly }: { yearly: PlayerEntry['yearly'] }) {
-  const drawRef = useChartDraw();
   if (yearly.length < 3) return null;
   const W = 640, H = 130, PAD = 6;
   const vals = yearly.map(p => p.med);
   const min = Math.min(...vals), max = Math.max(...vals);
   const span = max - min || 1;
-  const xy = yearly.map((p, i) => [
-    PAD + (i / (yearly.length - 1)) * (W - PAD * 2),
-    H - PAD - ((p.med - min) / span) * (H - PAD * 2),
-  ] as const);
-  const pts = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const last = xy[xy.length - 1];
+  const pts = yearly.map((p, i) => {
+    const x = PAD + (i / (yearly.length - 1)) * (W - PAD * 2);
+    const y = H - PAD - ((p.med - min) / span) * (H - PAD * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
   return (
-    <div className="lectr-lineplot" data-arm="true" ref={drawRef} style={{ marginTop: 16 }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }} aria-label="Yearly median card sale">
-        <defs>
-          <linearGradient id="playerLineFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-fg)" stopOpacity="0.09" />
-            <stop offset="100%" stopColor="var(--color-fg)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon
-          points={`${PAD.toFixed(1)},${(H - PAD).toFixed(1)} ${pts} ${(W - PAD).toFixed(1)},${(H - PAD).toFixed(1)}`}
-          fill="url(#playerLineFill)"
-        />
+    <div style={{ marginTop: 16 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="Yearly median card sale">
         <polyline points={pts} fill="none" stroke="var(--color-fg)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={last[0]} cy={last[1]} r="7" fill="rgba(232, 218, 182, 0.18)" />
-        <circle cx={last[0]} cy={last[1]} r="3" fill="var(--color-fg)" stroke="var(--color-bg)" strokeWidth="1.5" />
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
         <span>{yearly[0].y} · {formatPrice(yearly[0].med)} card median</span>
@@ -149,78 +120,54 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
 
   const cardMed = entry.cats['sports-cards']?.medUsd ?? null;
   const gearMed = entry.cats['game-used']?.medUsd ?? null;
-  // M8 — the hero's right quadrant: the strongest result on the book (marquee
-  // objects + recent sales). The player book carries no images, so the plate
-  // stands as the engraved mini-certificate — figure, date, category.
-  const topResult = (() => {
-    let best: { p: number; d: string; t: string; cat: string; id?: string } | null = null;
-    for (const o of entry.objects) if (!best || o.p > best.p) best = o;
-    for (const s of entry.recent) if (!best || s.p > best.p) best = s;
-    return best;
-  })();
 
   return (
     <>
       {nav}
       <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
-        <div className="lectr-dossier-hero">
-          <div style={{ minWidth: 0 }}>
-            <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
-              {entry.sport ? `${entry.sport} · ` : ''}player dossier
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              {/* M8 — the dossier name speaks Fraunces display */}
-              <h1 className="lectr-dossier-name">
-                {displayName(entry.name)}
-              </h1>
-              <FollowButton slug={entry.slug} name={entry.name} />
-            </div>
-            {/* medians of WHAT SOLD, deliberately uncolored — a shift in the mix
-                (premium cards trading more lately) is not appreciation, and green
-                here would claim it is. The yearly line below is the honest trend. */}
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 13.5, margin: '10px 0 0', lineHeight: 1.55 }}>
-              {entry.n.toLocaleString()} sales across the book
-              {cardMed != null && <> · cards median {formatPrice(cardMed)}</>}
-              {gearMed != null && <> · game-worn median {formatPrice(gearMed)}</>}
-            </p>
-
-            {/* the wider market, one row per category */}
-            <div className="lectr-lot-leaders" style={{ marginTop: 20, maxWidth: 560 }}>
-              {(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'] as const).map(cat => {
-                const c = entry.cats[cat];
-                if (!c) return null;
-                return (
-                  <div key={cat} className="lectr-lot-row">
-                    <span className="lectr-lot-k">{CAT_LABEL[cat]}</span>
-                    <span className="lectr-lot-fill" aria-hidden />
-                    <span className="lectr-lot-sub">{c.n.toLocaleString()} sales</span>
-                    <span className="lectr-lot-v">
-                      {formatPrice(c.medUsd)}
-                      {c.ttmMedUsd != null && c.ttmMedUsd !== c.medUsd && (
-                        <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                          {formatPrice(c.ttmMedUsd)} past yr
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <TrendLine yearly={entry.yearly} />
-          </div>
-          {topResult && (
-            <RecordPlate
-              label="Top result on the book"
-              figure={topResult.p}
-              date={topResult.d}
-              house={CAT_LABEL[topResult.cat] || topResult.cat}
-              title={topResult.t}
-              href={topResult.id ? `/lot?id=${encodeURIComponent(topResult.id)}` : null}
-            />
-          )}
+        <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
+          {entry.sport ? `${entry.sport} · ` : ''}player dossier
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 750, letterSpacing: '-0.02em', margin: 0 }}>
+            {entry.name}
+          </h1>
+          <FollowButton slug={entry.slug} name={entry.name} />
         </div>
+        {/* medians of WHAT SOLD, deliberately uncolored — a shift in the mix
+            (premium cards trading more lately) is not appreciation, and green
+            here would claim it is. The yearly line below is the honest trend. */}
+        <p style={{ color: 'var(--color-text-muted)', fontSize: 13.5, margin: '10px 0 0', lineHeight: 1.55 }}>
+          {entry.n.toLocaleString()} sales across the book
+          {cardMed != null && <> · cards median {formatPrice(cardMed)}</>}
+          {gearMed != null && <> · game-worn median {formatPrice(gearMed)}</>}
+        </p>
+
+        {/* the wider market, one row per category */}
+        <div className="lectr-lot-leaders" style={{ marginTop: 20, maxWidth: 560 }}>
+          {(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'] as const).map(cat => {
+            const c = entry.cats[cat];
+            if (!c) return null;
+            return (
+              <div key={cat} className="lectr-lot-row">
+                <span className="lectr-lot-k">{CAT_LABEL[cat]}</span>
+                <span className="lectr-lot-fill" aria-hidden />
+                <span className="lectr-lot-sub">{c.n.toLocaleString()} sales</span>
+                <span className="lectr-lot-v">
+                  {formatPrice(c.medUsd)}
+                  {c.ttmMedUsd != null && c.ttmMedUsd !== c.medUsd && (
+                    <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                      {formatPrice(c.ttmMedUsd)} past yr
+                    </span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <TrendLine yearly={entry.yearly} />
 
         {live.length > 0 && (
           <section style={{ marginTop: 34 }} aria-label="On the block now">

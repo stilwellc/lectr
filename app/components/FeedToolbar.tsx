@@ -7,7 +7,6 @@ import { categoryLabels, sportOf } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 import Flick from './Flick';
 import SaveSearch from './SaveSearch';
-import RollingNumber from '../preview/terminal/RollingNumber';
 
 export type FeedSort = 'soonest' | 'gap-desc' | 'newest' | 'est-desc' | 'est-asc';
 
@@ -688,12 +687,7 @@ export default function FeedToolbar({
       <span className="ray-toolbar-count">
         {isFiltered ? (
           <>
-            {/* the count ROLLS to the filtered N on lens change — always a
-                true-value → true-value roll (RollingNumber's contract) */}
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <RollingNumber value={shown} format={n => Math.round(n).toLocaleString()} duration={1} from={shown} switchDuration={500} />
-              {' of '}{total.toLocaleString()}
-            </span>
+            {shown.toLocaleString()} of {total.toLocaleString()}
             <button className="ray-toolbar-reset" onClick={() => onChange({ ...FEED_DEFAULTS, sort: filters.sort })}>
               Clear
             </button>

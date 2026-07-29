@@ -7,7 +7,6 @@ import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
 import RecordBand from './RecordBand';
-import RecordPlate from './RecordPlate';
 import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
@@ -191,52 +190,39 @@ export default function ArtistHero({
   const recordYear = stats?.recordDate ? new Date(stats.recordDate).getUTCFullYear() : null;
   const lensWord = lens === 'original' ? 'unique work' : lens === 'print' ? 'edition' : 'sale';
 
-  // M8 — the record sale as a framed plate in the hero's right quadrant.
-  // The photograph hangs only when the loaded lots actually carry the record
-  // sale's image; the engraved certificate stands either way.
-  const recordLot = useMemo(() => {
-    if (!stats?.recordPrice) return null;
-    return lots.find(l => l.status === 'sold' && l.priceUsd === stats.recordPrice && l.imageUrl) || null;
-  }, [lots, stats]);
-
   return (
     <section className="ray-hero2 rail" data-tone={dir >= 0 ? 'up' : 'down'}>
-      <div className="lectr-dossier-hero" style={{ marginBottom: 4 }}>
-        <div style={{ minWidth: 0 }}>
-          {/* M8 — the maker's name in Fraunces display (was buried in the label line) */}
-          <h1 className="lectr-dossier-name" style={{ marginBottom: 10 }}>{label}</h1>
-          <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-              <ArtistAvatar label={label} size={26} />
-              {bidMarket
-                ? (hover ? `Median realized sale · ${hover.date}` : 'Median realized sale, by quarter')
-                : hover
-                  ? `Typical ${lensWord} vs estimate · 12 months to ${hover.date}`
-                  : fresh
-                    ? `Typical ${lensWord} vs its estimate, trailing 12 months`
-                    : 'Recent sales'}
-            </span>
-            <MethodologyNote trigger="what is this?" />
-            {slug && <span style={{ marginLeft: 'auto' }}><FollowButton slug={slug} name={label} /></span>}
-          </p>
-          {/* the maker's hero numeral speaks the terminal numeral register —
-              mono 500 tabular (scoped here: .ray-hero2-value is shared with
-              /saved and the board, which keep their own faces). The NAME is
-              the page's h1 now; the numeral is display, not heading. */}
-          {hover ? (
-            <div className="ray-hero2-value" style={heroNumStyle}>{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</div>
-          ) : (
-            <div className="ray-hero2-value" style={heroNumStyle}>
-              {series.length && fresh
-                ? <CountUp to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
-                : typicalSale !== null
-                  ? <CountUp to={typicalSale} format={formatPrice} duration={1000} />
-                  : stats?.recordPrice
-                    ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1000} />
-                    : '—'}
-            </div>
-          )}
-          <p className="ray-hero2-delta">
+      <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+          <ArtistAvatar label={label} size={26} />
+          {bidMarket
+            ? (hover ? `${label} · median realized sale · ${hover.date}` : `${label} · median realized sale, by quarter`)
+            : hover
+              ? `${label} · typical ${lensWord} vs estimate · 12 months to ${hover.date}`
+              : fresh
+                ? `${label} · typical ${lensWord} vs its estimate, trailing 12 months`
+                : `${label} · recent sales`}
+        </span>
+        <MethodologyNote trigger="what is this?" />
+        {slug && <span style={{ marginLeft: 'auto' }}><FollowButton slug={slug} name={label} /></span>}
+      </p>
+      {/* the maker's hero numeral speaks the terminal numeral register —
+          mono 500 tabular (scoped here: .ray-hero2-value is shared with
+          /saved and the board, which keep their own faces) */}
+      {hover ? (
+        <h1 className="ray-hero2-value" style={heroNumStyle}>{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</h1>
+      ) : (
+        <h1 className="ray-hero2-value" style={heroNumStyle}>
+          {series.length && fresh
+            ? <CountUp to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
+            : typicalSale !== null
+              ? <CountUp to={typicalSale} format={formatPrice} duration={1000} />
+              : stats?.recordPrice
+                ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1000} />
+                : '—'}
+        </h1>
+      )}
+      <p className="ray-hero2-delta">
         {fresh && delta !== null && Math.round(delta) !== 0 && yearAgo !== null && (
           <span className={delta > 0 ? 'up' : 'down'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <Flick size={10} style={{ transform: delta > 0 ? undefined : 'scaleY(-1)' }} />
@@ -268,23 +254,8 @@ export default function ArtistHero({
         </span>
       </p>
 
-          {/* the market's current-quarter note from the desk */}
-          {market && <DeskNote market={market} style={{ marginTop: 6 }} />}
-        </div>
-
-        {/* M8 — the record plate fills the dead right quadrant (≥900px) */}
-        {stats?.recordPrice ? (
-          <RecordPlate
-            label="Record sale"
-            figure={stats.recordPrice}
-            date={stats.recordDate || null}
-            house={stats.recordHouse || null}
-            title={stats.recordTitle || null}
-            imageUrl={recordLot?.imageUrl || null}
-            href={recordLot ? `/lot?id=${encodeURIComponent(recordLot.id)}` : null}
-          />
-        ) : null}
-      </div>
+      {/* the market's current-quarter note from the desk */}
+      {market && <DeskNote market={market} style={{ marginTop: 6 }} />}
 
       {visible.length >= 2 && (
         <>

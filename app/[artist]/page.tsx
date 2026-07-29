@@ -193,7 +193,7 @@ export default function ArtistDetailPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'transparent',
+      background: 'var(--color-bg)',
       color: 'var(--color-fg)',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
