@@ -4,7 +4,7 @@ import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import Link from 'next/link';
 import { AuctionLot, MarketStats } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, compsAskMultiple } from '../utils';
+import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
@@ -61,23 +61,6 @@ export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]) {
   return computeDeepSignal(lot, allLots);
 }
 
-/** The save reward — one quiet toast, no library. Reused by every surface
- *  that saves a lot (cards, rows, the lot page, the comps modal). Styles live
- *  in globals.css (.lectr-toast); reduced-motion gets a plain fade there. */
-const TOAST_ID = 'lectr-save-toast';
-export function showSavedToast(msg = 'Saved — we’ll score the hammer against our call') {
-  if (typeof document === 'undefined') return;
-  document.getElementById(TOAST_ID)?.remove();
-  const el = document.createElement('div');
-  el.id = TOAST_ID;
-  el.className = 'lectr-toast';
-  el.setAttribute('role', 'status');
-  el.textContent = msg;
-  document.body.appendChild(el);
-  window.setTimeout(() => el.classList.add('lectr-toast-out'), 2200);
-  window.setTimeout(() => el.remove(), 2650);
-}
-
 // The card's static CSS, injected into <head> exactly once — the home grid
 // mounts 48+ cards (and remounts them all on every feedKey rekey), so a
 // per-instance <style> multiplies into dozens of identical nodes and repeats
@@ -95,31 +78,13 @@ const LOT_CARD_CSS = `
      initial sits in flow behind and reads instead */
   .ray-lot-img img[data-error=true] { opacity: 0; }
   .ray-save-btn:hover { opacity: 0.85; }
-  .ray-lot-card .ray-save-btn { width: auto; min-width: 32px; height: 32px; gap: 6px; padding: 0; }
-  /* the save affordance says its name — on hover (desktop), always (mobile) */
-  .ray-lot-card .ray-save-label {
-    display: none;
-    font-family: var(--font-sans), sans-serif;
-    font-size: 11.5px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1;
-  }
-  @media (hover: hover) {
-    .ray-lot-card:hover .ray-save-btn { padding: 0 11px; }
-    .ray-lot-card:hover .ray-save-btn .ray-save-label { display: inline; }
-  }
+  .ray-lot-card .ray-save-btn { width: 32px; height: 32px; }
   .ray-lot-maker { position: relative; z-index: 2; }
   .ray-lot-maker:hover { text-decoration: underline; }
-  /* the house link — the explicit external action; the card itself now
-     stretches to lectr's own lot page */
-  .ray-lot-house-link { position: relative; z-index: 2; color: inherit; text-decoration: none; }
-  .ray-lot-house-link:hover { color: var(--color-fg); text-decoration: underline; }
   @media (max-width: 900px) {
     /* compact mobile card: shorter image, 44px touch target on save */
     .ray-lot-img { height: 140px; }
-    .ray-lot-card .ray-save-btn { width: auto; min-width: 44px; height: 44px; padding: 0 12px; }
-    .ray-lot-card .ray-save-btn .ray-save-label { display: inline; }
+    .ray-lot-card .ray-save-btn { width: 44px; height: 44px; }
   }
 `;
 function useLotCardStyles() {
@@ -256,14 +221,29 @@ function LotCard({
         }
       : null;
 
-  // Stretched primary action — LECTR'S OWN LOT PAGE, always. The card's
-  // primary click lands on /lot?id=…; the auction house becomes the explicit
-  // secondary "↗" affordance on the meta line, and comps keep their own
-  // trigger in the footer. Shared by both faces (photo card / compact row).
-  const primaryAction = (
-    <Link
-      href={`/lot?id=${encodeURIComponent(lot.id)}`}
-      aria-label={`${lot.title} — open the lot page`}
+  // Stretched primary action — keeps save/remind as sibling controls, not
+  // descendants. Shared by both faces (photo card / compact row).
+  const primaryAction = isUpcoming ? (
+    <button
+      onClick={() => setModalOpen(true)}
+      aria-label={`View comparable sales for ${lot.title}`}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        borderRadius: 18,
+      }}
+    />
+  ) : (
+    <a
+      href={lot.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
       style={{
         position: 'absolute',
         inset: 0,
@@ -271,20 +251,6 @@ function LotCard({
         borderRadius: 18,
       }}
     />
-  );
-
-  // the demoted house action — a small external link on the meta line
-  const houseLink = (
-    <a
-      className="ray-lot-house-link"
-      href={lot.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={e => e.stopPropagation()}
-      aria-label={`Bid at ${lot.auctionHouse}`}
-    >
-      {lot.auctionHouse}&thinsp;↗
-    </a>
   );
 
   // No photograph (or the house hotlink-blocked it) → the card renders as a
@@ -336,7 +302,7 @@ function LotCard({
         </div>
         <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isNewToday && <span className="ray-newchip" style={{ marginRight: 6 }}>New today</span>}
-          {houseLink}
+          {lot.auctionHouse}
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
@@ -375,7 +341,7 @@ function LotCard({
       {onToggleSave && (
         <button
           className="ray-save-btn"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!saved) showSavedToast(); onToggleSave(lot.id, lot); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
           style={{
             flexShrink: 0,
             display: 'flex',
@@ -385,6 +351,7 @@ function LotCard({
             border: 'none',
             borderRadius: 100,
             cursor: 'pointer',
+            padding: 0,
             zIndex: 2,
           }}
           aria-label={saved ? 'Remove from saved' : 'Save lot'}
@@ -397,9 +364,6 @@ function LotCard({
               strokeWidth="0.8"
             />
           </svg>
-          <span className="ray-save-label" style={{ color: saved ? 'var(--color-bg)' : 'var(--color-text-muted)' }}>
-            {saved ? 'Saved' : 'Save'}
-          </span>
         </button>
       )}
     </div>
@@ -473,7 +437,7 @@ function LotCard({
         {onToggleSave && (
           <button
             className="ray-save-btn"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!saved) showSavedToast(); onToggleSave(lot.id, lot); }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
             style={{
               position: 'absolute',
               top: 6,
@@ -485,6 +449,7 @@ function LotCard({
               border: 'none',
               borderRadius: 100,
               cursor: 'pointer',
+              padding: 0,
               zIndex: 2,
             }}
             aria-label={saved ? 'Remove from saved' : 'Save lot'}
@@ -497,9 +462,6 @@ function LotCard({
                 strokeWidth="0.8"
               />
             </svg>
-            <span className="ray-save-label" style={{ color: saved ? 'var(--color-bg)' : 'var(--color-fg)' }}>
-              {saved ? 'Saved' : 'Save'}
-            </span>
           </button>
         )}
       </div>
@@ -542,7 +504,7 @@ function LotCard({
           </h3>
         )}
         <div style={{ fontSize: 13.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
-          {houseLink}
+          {lot.auctionHouse}
           {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
@@ -560,13 +522,7 @@ function LotCard({
               <span className="ray-sigrow-ctx">
                 {buySignal.kind === 'edition'
                   ? <>this edition&rsquo;s sales run {buySignal.label === 'Below Market' ? 'over' : 'under'} the ask · {buySignal.basis} sales</>
-                  : (() => {
-                      // R18 grammar: one sentence, everywhere the signal speaks
-                      const x = compsAskMultiple(buySignal.label as 'Below Market' | 'Above Market', buySignal.pct);
-                      return x
-                        ? <>comps sell at {x}&times; this ask · {buySignal.basis} {(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}</>
-                        : <>comps median vs ask · {buySignal.basis} {(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}</>;
-                    })()}
+                  : <>comps median vs ask · {buySignal.basis} {(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}</>}
                 <span
                   className="ray-sigrow-dots"
                   title={`${confidenceMeter(buySignal.confidence).word} confidence`}
@@ -658,25 +614,9 @@ function LotCard({
               {reminded ? 'Added to calendar' : 'Remind me'}
             </button>
             )}
-            <button
-              type="button"
-              className="ray-lot-comps"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setModalOpen(true); }}
-              aria-haspopup="dialog"
-              aria-label={`View comparable sales for ${lot.title}`}
-              style={{
-                position: 'relative',
-                zIndex: 2,
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                ...(isPastPending ? { marginLeft: 'auto' } : null),
-              }}
-            >
+            <span className="ray-lot-comps" aria-hidden="true" style={isPastPending ? { marginLeft: 'auto' } : undefined}>
               Comps <Flick size={10} />
-            </button>
+            </span>
           </div>
         )}
       </div>

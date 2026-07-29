@@ -10,7 +10,7 @@ const BASE = 'https://lectr.bid';
  *  build-time set app/lot/[id] prerenders) are appended so each night's
  *  below-market calls are crawlable the day they're flagged. */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes = ['', '/art', '/design', '/watches', '/science', '/sports', '/culture', '/value', '/record', '/method', '/analytics', '/artists', '/about', '/blog',
+  const staticRoutes = ['', '/art', '/design', '/watches', '/science', '/sports', '/culture', '/value', '/analytics', '/artists', '/about', '/blog',
     '/blog/how-we-built-the-pricing-engine', '/blog/q2-2026-art', '/blog/q2-2026-watches', '/blog/q2-2026-design', '/blog/q2-2026-sports', '/blog/q2-2026-science'];
   const now = new Date().toISOString().slice(0, 10);
   return [

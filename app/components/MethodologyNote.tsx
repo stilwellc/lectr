@@ -24,9 +24,7 @@ export default function MethodologyNote({ trigger = 'How lectr calls it' }: { tr
         <span aria-hidden="true">ⓘ</span> {trigger}
       </button>
       {open && typeof document !== 'undefined' && createPortal(
-        /* zIndex 1200: the note now also mounts INSIDE the comps modal
-           (overlay z 1000) — it must print above every surface it rides on */
-        <div className="ray-ck-overlay" style={{ zIndex: 1200 }} onClick={() => setOpen(false)} role="presentation">
+        <div className="ray-ck-overlay" onClick={() => setOpen(false)} role="presentation">
           <div className="ray-method" role="dialog" aria-modal="true" aria-label="How lectr calls it" onClick={e => e.stopPropagation()}>
             <h3>How lectr calls it</h3>
             <p className="ray-method-lede">
@@ -75,10 +73,7 @@ export default function MethodologyNote({ trigger = 'How lectr calls it' }: { tr
               The record: every historical call is replayed point-in-time — using
               only sales that had already happened — and flagged lots have
               outperformed unflagged ones on both median result and the rate of
-              beating the high estimate.{' '}
-              <a href="/record" style={{ color: 'var(--color-butter-text)' }}>See the record</a>
-              {' '}·{' '}
-              <a href="/method" style={{ color: 'var(--color-butter-text)' }}>the full method</a>
+              beating the high estimate. See &ldquo;The record&rdquo; on the Value page.
             </p>
             <p className="ray-method-foot">
               Every figure links to the auction house record it came from. Estimates

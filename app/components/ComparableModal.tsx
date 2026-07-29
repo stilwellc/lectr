@@ -1,19 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText, fmtSignedPct, compsAskMultiple } from '../utils';
+import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
-import { formatEstimate, showSavedToast } from './LotCard';
+import { formatEstimate } from './LotCard';
 import { CopyLinkButton } from './LotPage';
-import MethodologyNote from './MethodologyNote';
 import Flick from './Flick';
 
 // ── LotValueBlock — the engine's under/over-valued read + the exact-item moment.
@@ -48,9 +47,7 @@ function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[
       )}
       {dir && (
         <div style={{ fontSize: 13.5 }}>
-          {/* M14 — the verdict line prints LAST: the green underline draws
-              once the certificate's rows have finished printing */}
-          <span className={under ? 'comp-verdict-draw' : undefined} style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-down-text)' : 'var(--color-text-secondary)', fontWeight: 650 }}>
+          <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-down-text)' : 'var(--color-text-secondary)', fontWeight: 650 }}>
             {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
           </span>
           <span style={{ color: 'var(--color-text-muted)' }}> · comparable sales carry a {dir.beatRatePct}% rate of beating estimates like this · {v.n} sales</span>
@@ -363,8 +360,7 @@ export default function ComparableModal({
   // from lot.value; the comparable-sales rows fill in as the corpus lands.
   // fullLoaded/fullError gate the CLIENT-computed read below: a "0 comparable
   // sales (no call)" verdict must never print against a still-loading corpus.
-  // backtest feeds the permanent receipts footer (R4) — real replay numbers.
-  const { fullLoaded, fullError, backtest } = useFullLots();
+  const { fullLoaded, fullError } = useFullLots();
 
   // Bottom-sheet drag (under 900px): the handle tracks the finger, and a
   // decisive pull down dismisses — the native sheet gesture.
@@ -601,52 +597,13 @@ export default function ComparableModal({
           whenever this ships in prerendered HTML. */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes compModalFade { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes compModalRise { from { opacity: 0; transform: translateY(24px) scale(0.985); } to { opacity: 1; transform: none; } }
+        @keyframes compModalRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: no-preference) {
           .comp-modal-overlay { animation: compModalFade 160ms cubic-bezier(0.22, 0.9, 0.24, 1) both; }
         }
-        /* desktop — the sheet rises 24px and settles from scale(.985) */
+        /* desktop only — under 901px the .ray-sheet bottom-sheet entrance owns the motion */
         @media (min-width: 901px) and (prefers-reduced-motion: no-preference) {
-          .comp-modal-panel { animation: compModalRise 300ms cubic-bezier(0.22, 0.9, 0.24, 1) backwards; }
-        }
-        /* M14 — THE CERTIFICATE PRINTS. After the sheet settles, the header
-           stamps first, then each row prints top-down (clip reveal + 8px
-           rise, 45ms stagger), and the verdict underline draws LAST. */
-        @media (prefers-reduced-motion: no-preference) {
-          .comp-print {
-            animation: compPrint 240ms cubic-bezier(0.22, 0.9, 0.24, 1) both;
-            animation-delay: calc(300ms + var(--pi, 0) * 45ms);
-          }
-          @keyframes compPrint {
-            from { clip-path: inset(0 0 100% 0); transform: translateY(8px); }
-            to { clip-path: inset(0 0 0 0); transform: none; }
-          }
-          .comp-verdict-draw { position: relative; }
-          .comp-verdict-draw::after {
-            content: '';
-            position: absolute;
-            left: 0; right: 0; bottom: -3px;
-            height: 1.5px;
-            background: var(--color-up);
-            transform: scaleX(0);
-            transform-origin: left;
-            animation: compVerdictDraw 240ms cubic-bezier(0.22, 0.9, 0.24, 1) forwards;
-            animation-delay: calc(300ms + var(--pi, 10) * 45ms + 140ms);
-          }
-          @keyframes compVerdictDraw { to { transform: scaleX(1); } }
-        }
-        /* mobile sheet — drag-dismiss stays; the entrance takes the long
-           settle curve, and the same row-print rides after it */
-        @media (max-width: 900px) and (prefers-reduced-motion: no-preference) {
-          .comp-modal-panel { animation: compSheetIn 420ms cubic-bezier(0.32, 0.72, 0, 1) backwards; }
-          @keyframes compSheetIn { from { transform: translateY(100%); } to { transform: none; } }
-          .comp-print { animation-delay: calc(420ms + var(--pi, 0) * 45ms); }
-          .comp-verdict-draw::after { animation-delay: calc(420ms + var(--pi, 10) * 45ms + 140ms); }
-        }
-        /* reduced motion — fade only, nothing moves, nothing prints */
-        @media (prefers-reduced-motion: reduce) {
-          .comp-modal-overlay { animation: compModalFade 160ms both; }
-          .comp-modal-panel { animation: compModalFade 200ms both; }
+          .comp-modal-panel { animation: compModalRise 220ms cubic-bezier(0.22, 0.9, 0.24, 1) backwards; }
         }
         .comp-modal-row:hover { background: var(--color-bg-elevated) !important; }
         .comp-modal-close:hover { color: var(--color-fg) !important; }
@@ -780,7 +737,7 @@ export default function ComparableModal({
         {onToggleSave && (
           <button
             className="ray-save-btn"
-            onClick={() => { if (!saved) showSavedToast(); onToggleSave(lot.id); }}
+            onClick={() => onToggleSave(lot.id)}
             aria-label={saved ? 'Remove from saved' : 'Save lot'}
             style={{
               position: 'sticky',
@@ -812,11 +769,10 @@ export default function ComparableModal({
           </button>
         )}
 
-        {/* Header: image + lot info — the stamp, printed first */}
-        <div className="comp-modal-header comp-print" style={{
+        {/* Header: image + lot info */}
+        <div className="comp-modal-header" style={{
           borderBottom: '1px solid var(--color-border)',
-          '--pi': 0,
-        } as CSSProperties}>
+        }}>
           <div className="comp-modal-img" style={{
             flexShrink: 0,
             background: `linear-gradient(135deg, var(--color-bg-elevated) 0%, var(--color-bg) 100%)`,
@@ -962,26 +918,23 @@ export default function ComparableModal({
             1.3 green threshold matches the signal engine (lib/comps.ts):
             1.2–1.3 is pure buyer's premium, not edge. */}
         {compStats && archiveLoaded && !compsPending && (
-          <div className="comp-print" style={{ '--pi': 1 } as CSSProperties}>
-            <PriceBand
-              prices={comparables.map(c => c.lot.priceUsd!)}
-              median={compStats.median}
-              estLow={band ? null : lot.estimateLow}
-              estHigh={band ? null : lot.estimateHigh}
-              below={band ? null : compStats.hammerVsEst === null ? null : compStats.hammerVsEst >= 1.3 ? true : compStats.hammerVsEst <= 0.75 ? false : null}
-            />
-          </div>
+          <PriceBand
+            prices={comparables.map(c => c.lot.priceUsd!)}
+            median={compStats.median}
+            estLow={band ? null : lot.estimateLow}
+            estHigh={band ? null : lot.estimateHigh}
+            below={band ? null : compStats.hammerVsEst === null ? null : compStats.hammerVsEst >= 1.3 ? true : compStats.hammerVsEst <= 0.75 ? false : null}
+          />
         )}
 
         {/* Summary Stats */}
         {compStats && archiveLoaded && !compsPending && (
-          <div className="comp-modal-stats comp-print" style={{
+          <div className="comp-modal-stats" style={{
             padding: '18px 28px',
             borderBottom: '1px solid var(--color-border)',
             display: 'flex',
             gap: 0,
-            '--pi': 2,
-          } as CSSProperties}>
+          }}>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontFamily: "var(--font-serif), serif" }}>
                 {formatPrice(compStats.median)}
@@ -1028,23 +981,18 @@ export default function ComparableModal({
             to sold-card ids that aren't in the client corpus). */}
         {!isCardComp && (
         <div className="comp-modal-comps">
-          <div className="comp-print" style={{
+          <div style={{
             fontSize: 12.5,
             letterSpacing: '-0.01em',
             textTransform: 'none',
             color: 'var(--color-text-muted)',
             fontWeight: 600,
             marginBottom: band ? 6 : 16,
-            '--pi': 3,
-          } as CSSProperties}>
+          }}>
             {called
               ? called.signal.kind === 'edition'
                 ? `The call — this exact work, sold ${comparables.length} times`
-                : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}${(() => {
-                    // R18 grammar — the standard sentence, here too
-                    const x = compsAskMultiple(called.signal.label, called.signal.pct);
-                    return x ? ` · comps sell at ${x}× this ask` : '';
-                  })()}`
+                : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}`
               : band
                 ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
                 : compsPending
@@ -1112,7 +1060,7 @@ export default function ComparableModal({
                     href={comp.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="comp-modal-row comp-print"
+                    className="comp-modal-row"
                     style={{
                       display: 'block',
                       padding: '10px 12px',
@@ -1120,8 +1068,7 @@ export default function ComparableModal({
                       textDecoration: 'none',
                       color: 'inherit',
                       transition: 'background var(--duration-fast) var(--ease-signature)',
-                      '--pi': 4 + Math.min(i, 12),
-                    } as CSSProperties}
+                    }}
                   >
                     <div className="comp-modal-row-inner">
                       {/* Rank */}
@@ -1226,26 +1173,6 @@ export default function ComparableModal({
           )}
         </div>
         )}
-
-        {/* R4 — the receipts, permanent, at the moment of skepticism: the
-            replayed record with real numbers, and the method one tap away */}
-        <div className="comp-modal-recfoot" style={{
-          padding: isCardComp ? '18px 28px 24px' : '4px 28px 24px',
-          borderTop: '1px solid var(--color-border)',
-          marginTop: isCardComp ? 0 : -4,
-          paddingTop: 14,
-        }}>
-          {backtest && backtest.flagged.n >= 100 && (
-            <p style={{ fontSize: 12.5, color: 'var(--color-text-faint)', lineHeight: 1.6, margin: '0 0 8px' }}>
-              Every call is replayed against history: flagged lots hammered{' '}
-              <b style={{ color: 'var(--color-up)', fontWeight: 600 }}>{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</b> vs{' '}
-              <b style={{ color: 'var(--color-down-text)', fontWeight: 600 }}>{fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)}</b> unflagged,
-              across {backtest.flagged.n.toLocaleString()} sales.{' '}
-              <Link href="/record" style={{ color: 'var(--color-butter-text)', textDecoration: 'none' }}>See the record →</Link>
-            </p>
-          )}
-          <MethodologyNote />
-        </div>
       </div>
     </div>
   , document.body);

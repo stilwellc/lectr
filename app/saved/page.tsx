@@ -429,7 +429,7 @@ export default function SavedPage() {
           <section className="rail ray-enter" style={{ paddingTop: 24 }}>
             {/* the certificate masthead — the stake IS the accent figure */}
             <Masthead
-              kicker="Saved"
+              kicker="My profile"
               serial={lastCrawl || undefined}
               title={summary.totalEst > 0
                 ? <>
