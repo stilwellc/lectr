@@ -2280,12 +2280,12 @@ a.recordObj:focus-visible {
 .cardRoomHead { margin-bottom: clamp(18px, 2.4vw, 26px); }
 .scriptTitle {
   font-family: var(--font-script), cursive;
-  font-weight: 600;
-  font-size: clamp(42px, 4.6vw, 60px);
-  line-height: 0.95;
-  letter-spacing: 0.01em;
+  font-weight: 400;
+  font-size: clamp(44px, 4.8vw, 62px);
+  line-height: 1.05;
+  letter-spacing: 0.005em;
   color: var(--paper-ink, #1C1712);
-  margin: 0 0 4px;
+  margin: 0 0 6px;
 }
 .cardRoomHead .roomSub { margin-bottom: 0; color: var(--paper-muted, #5A5240); }
 
@@ -2459,11 +2459,13 @@ a.recordObj:focus-visible {
   margin-bottom: 7px;
 }
 .plaqueNo {
-  font-family: var(--font-script), cursive;
-  font-size: 21px;
+  font-family: var(--font-serif-display), serif;
+  font-style: italic;
+  font-size: 15px;
   font-weight: 500;
   line-height: 1;
-  color: rgba(28, 23, 18, 0.72);
+  letter-spacing: 0.02em;
+  color: rgba(28, 23, 18, 0.7);
 }
 .plaqueCat {
   font-size: 9.5px;
@@ -2534,12 +2536,12 @@ a.recordObj:focus-visible {
 }
 .plaque[data-size='hero'] .plaqueFoot { grid-column: 1 / -1; margin-top: 13px; }
 .plaque[data-size='hero'] .plaqueGhost { font-size: 170px; top: -30px; right: 14px; }
-.plaque[data-size='hero'] .plaqueNo { font-size: 26px; }
+.plaque[data-size='hero'] .plaqueNo { font-size: 18px; }
 
 /* №5–10 — the minis: dense, one-line titles */
 .plaque[data-size='mini'] { padding: 11px 13px 9px; }
 .plaque[data-size='mini'] .plaqueTopRow { margin-bottom: 5px; }
-.plaque[data-size='mini'] .plaqueNo { font-size: 17px; }
+.plaque[data-size='mini'] .plaqueNo { font-size: 13px; }
 .plaque[data-size='mini'] .plaqueGhost { font-size: 64px; top: -8px; }
 .plaque[data-size='mini'] .plaqueTitle { font-size: 13.5px; -webkit-line-clamp: 1; }
 .plaque[data-size='mini'] .plaquePrice { font-size: 19px; margin-top: 7px; }
@@ -2563,7 +2565,7 @@ a.recordObj:focus-visible {
   .plaque[data-size='hero'] .plaqueGhost { font-size: 110px; top: -18px; }
   .plaque[data-size='mini'] .plaqueFoot { display: none; }
   .plaque[data-size='mini'] .plaqueTitle { -webkit-line-clamp: 2; font-size: 12.5px; }
-  .scriptTitle { font-size: clamp(38px, 11vw, 48px); }
+  .scriptTitle { font-size: clamp(40px, 11.5vw, 52px); }
 }
 
 /* the 3-up stat chips regained a third tile (Yearly ROI) — the label fit

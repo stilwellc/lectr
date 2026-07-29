@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Inter, Fraunces, IBM_Plex_Mono, Caveat } from 'next/font/google';
+import { Inter, Fraunces, IBM_Plex_Mono, Sacramento } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
@@ -34,11 +34,11 @@ const plexMono = IBM_Plex_Mono({
   display: 'swap',
 });
 
-// The script accent — the closest webfont voice to the hand-drawn lectr mark.
-// Speaks ONLY in the two "curated card" rooms (verified board / record board).
-const script = Caveat({
+// The script accent — a thin MONOLINE connected cursive, the same pen as the
+// hand-drawn lectr mark. Speaks ONLY in the curated-card room titles.
+const script = Sacramento({
   subsets: ['latin'],
-  weight: ['500', '600'],
+  weight: '400',
   variable: '--font-script',
 });
 
