@@ -48,6 +48,8 @@ interface Props {
   /** how many rows the condensed board renders — sized by the caller to fill
       the call plate's height (rows flex to eat the remaining slack). */
   maxRows?: number;
+  /** printed on the paper room (home) — ink palette swaps, layout unchanged */
+  paper?: boolean;
 }
 
 // how strong a demand read is — used to rank the cross-market roll-up
@@ -166,7 +168,7 @@ function RowCells({ r }: { r: SubMarketRead }) {
   );
 }
 
-export default function SubMarketBoard({ market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows }: Props) {
+export default function SubMarketBoard({ market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows, paper = false }: Props) {
   const reduce = useReducedMotion();
   const [ref, seen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
@@ -223,16 +225,15 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
     );
   }
 
-  const kicker = activeKey === 'all' ? 'Sub-markets · what’s moving everywhere' : 'Sub-markets · this vertical';
-  const title = activeKey === 'all'
-    ? 'The market, by sub-market.'
-    : 'Inside this market — the honest read per sub-market.';
-
   const head = (
     <div className={styles.moversHead}>
       <div>
-        <span className={styles.sectionKicker}>{kicker}</span>
-        <h2 className={styles.moversTitle}>{title}</h2>
+        <h2 className={styles.roomTitle}>The verified <em>board</em></h2>
+        <p className={styles.roomSub}>
+          {activeKey === 'all'
+            ? 'Every read the engine will stand behind — price indices at 95% confidence, measured demand where estimates exist, and the plain record everywhere else.'
+            : 'This market’s certified reads — indices at 95% confidence, measured demand, and the plain record.'}
+        </p>
       </div>
     </div>
   );
@@ -248,7 +249,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
 
   if (!rows.length) {
     return (
-      <div className={styles.movers} ref={ref}>
+      <div className={`${styles.movers}${paper ? ` ${styles.moversPaper}` : ''}`} ref={ref}>
         {head}
         <div className={styles.moversEmpty}>
           No tracked sub-markets in {activeKey === 'all' ? 'the market' : `${activeKey}`} yet — as coverage deepens,
@@ -261,7 +262,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
 
   if (variant === 'mobile') {
     return (
-      <div ref={ref}>
+      <div ref={ref} className={paper ? styles.moversPaper : undefined}>
         {head}
         <div className={styles.mobSubList}>
           {shown.map((r) => {
@@ -289,7 +290,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
                   </span>
                   <span className={styles.subSupport}>{supportLine(r)}</span>
                 </div>
-                <div className={styles.subMeta}>{fmtInt(r.lots)} lots{r.record?.title ? ` · ${r.record.title}` : ''}</div>
+                <div className={styles.subMeta}>{fmtInt(r.lots)} lots{r.record ? ` · record ${fmtMoneyCompact(r.record.usd)}` : ''}</div>
               </button>
             );
           })}
@@ -308,7 +309,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <div className={styles.movers} ref={ref}>
+      <div className={`${styles.movers}${paper ? ` ${styles.moversPaper}` : ''}`} ref={ref}>
         {head}
         <div className={styles.subTable} role="table">
           <div className={styles.subColHead} role="row">

@@ -98,8 +98,10 @@ export default function TonightsWall({
       data-seen={!mobile || seen ? 'true' : undefined}
     >
       <div className={styles.wallHead}>
-        <span className={styles.wallKicker}>Tonight&rsquo;s wall</span>
-        <span className={styles.wallSub}>the call + the strongest flags on the block</span>
+        <div>
+          <h2 className={styles.roomTitle}>Tonight&rsquo;s <em>wall</em></h2>
+          <p className={styles.roomSub}>Today&rsquo;s call and the strongest flagged lots on the block — priced under where their comparables sell.</p>
+        </div>
       </div>
       <div className={styles.wallRow}>
         {shown.map((it, i) => (

@@ -92,7 +92,7 @@ function useHeroSeries(
       return {
         idx,
         kicker: activeKey === 'all' ? 'The collectibles market' : `The ${activeKey} market`,
-        explain: 'how much lots beat their estimates',
+        explain: 'How far lots hammer above their estimates',
         unit: 'demand' as const,
       };
     }
@@ -103,7 +103,7 @@ function useHeroSeries(
       return {
         idx,
         kicker: `The ${activeKey} market`,
-        explain: 'typical price paid at hammer',
+        explain: 'Typical price paid at hammer',
         unit: 'realized' as const,
       };
     }
@@ -207,8 +207,7 @@ export default function IndexHero({
           <m.div className={styles.mHeroCard} {...rise(0.04)}>
             <div className={styles.mHeroHead}>
               <span className={styles.mHeroLabel}>{hero.kicker}</span>
-              <span className={styles.mHeroReturnTag}>{metricLabel}</span>
-            </div>
+              </div>
             <div className={styles.mHeroNumRow}>
               <RollingNumber
                 className={`${styles.mHeroNum} ${styles.roiNeutral}`}
@@ -239,11 +238,6 @@ export default function IndexHero({
           </m.div>
 
           <m.div className={styles.mHeroStats} {...rise(0.12)}>
-            <span className={styles.mStat} data-flag={roiFlag ? 'true' : undefined}>
-              <span className={styles.mStatVal} data-dir={roiDir}>{roi != null ? fmtPct(roi) : '—'}</span>
-              <span className={styles.mStatLabel}>Yearly ROI</span>
-              {roiFlag && <span className={styles.statFlag}>⚠ {roiFlag}</span>}
-            </span>
             {bc ? (
               <span className={styles.mStat} title="Median bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
                 <span className={styles.mStatVal} data-dir={bc.dir}>{bc.now}</span>
@@ -268,7 +262,6 @@ export default function IndexHero({
             )}
           </m.div>
 
-          <VerifiedStrip movers={movers} activeKey={activeKey} market={market} compact />
 
           <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
             <kbd className={styles.kbd}>⌘K</kbd>
@@ -291,7 +284,6 @@ export default function IndexHero({
         <m.div className={styles.heroHead} {...rise(0.05)}>
           <div className={styles.heroTopRow}>
             <span className={styles.sectionKicker}>{hero.kicker}</span>
-            <span className={styles.heroReturnTag}>{metricLabel}</span>
           </div>
           <div className={styles.heroNumberRow}>
             <RollingNumber
@@ -317,11 +309,6 @@ export default function IndexHero({
 
         {/* RAIL — the side metrics as a right-hand ledger: label · hairline · value */}
         <m.div className={styles.heroRail} {...rise(0.12)}>
-          <div className={styles.railRow}>
-            <span className={styles.railLabel}>Yearly ROI</span>
-            <span className={styles.railVal} data-dir={roiDir}>{roi != null ? fmtPct(roi) : '—'}</span>
-          </div>
-          {roiFlag && <div className={styles.railFlagLine}>⚠ {roiFlag}</div>}
           <div className={styles.railRow}>
             <span className={styles.railLabel}>On the block</span>
             <span className={styles.railVal}>{fmtInt(onBlock)}</span>
@@ -369,10 +356,6 @@ export default function IndexHero({
           )}
         </m.div>
 
-        {/* MOVERS BAND — the verified ledger running under the landscape */}
-        <m.div className={styles.heroMoversArea} {...rise(0.2)}>
-          <MoversBand movers={movers} activeKey={activeKey} market={market} />
-        </m.div>
       </section>
     </LazyMotion>
   );

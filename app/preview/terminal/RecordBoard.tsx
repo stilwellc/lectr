@@ -54,14 +54,13 @@ export default function RecordBoard({ variant = 'desktop', market = 'all' }: Pro
     <div className={styles.recordBoard} ref={ref}>
       <div className={styles.recordHead}>
         <div>
-          <span className={styles.sectionKicker}>The Record Board</span>
-          <h2 className={styles.recordTitle}>
-            {scoped ? `All-time ${marketLabel.toLowerCase()} hammer records.` : 'All-time hammer records, every category.'}
-          </h2>
+          <h2 className={styles.roomTitle}>The record <em>board</em></h2>
+          <p className={styles.roomSub}>
+            {scoped
+              ? `All-time ${marketLabel.toLowerCase()} hammer records — curated highs, source-flagged, all-in.`
+              : 'All-time hammer records in every category — curated highs, source-flagged, all-in.'}
+          </p>
         </div>
-        <span className={styles.recordCaption}>
-          {scoped ? 'Curated highs · source-flagged, all-in' : 'Curated cross-category highs · source-flagged, all-in'}
-        </span>
       </div>
 
       {ranked.length === 0 ? (

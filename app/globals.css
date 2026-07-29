@@ -2866,14 +2866,22 @@ body {
 @media (max-width: 899px) {
   .ray-markets-fade { mask-image: none; -webkit-mask-image: none; overflow: visible; }
   .ray-markets-compact {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: nowrap;
     gap: 8px;
-    overflow: visible;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    margin-inline: calc(-1 * var(--gutter, 16px));
+    padding-inline: var(--gutter, 16px);
   }
+  .ray-markets-compact::-webkit-scrollbar { display: none; }
   .ray-markets-compact .ray-market-tab {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
     justify-content: center;
-    padding: 10px 6px;
+    padding: 10px 14px;
     font-size: 12.5px;
   }
   /* the whole market ('all') takes the entire top row as one wide pill */

@@ -9,7 +9,7 @@
    FUNCTIONAL logic of app/page.tsx verbatim — state, memos,
    market scoping, feed computation, save, phases, effects — and
    only changes presentation: the lander hero is swapped for
-   the market-scoped IndexHero + Tape + RecordBoard,
+   the market-scoped IndexHero + RecordBoard,
    and the whole page is composed inside the Terminal's dark
    shell. Every MUST-PRESERVE behavior survives because we start
    from the working logic. Reads eager phase-1 data only; phase-2
@@ -36,7 +36,7 @@ import SettlementSlip from '../../components/SettlementSlip';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedToolbar';
 import { weekDaysFor } from '../../components/HammerWeek';
-import { CallPlate, Colophon, daysWord } from '../../components/Terminal';
+import { Colophon, daysWord } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
 import { OPEN_CK_EVENT } from '../../components/CommandK';
@@ -44,12 +44,10 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
 import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
-import Tape from './Tape';
 import TonightsWall, { type WallItem } from './TonightsWall';
 import RecordBoard from './RecordBoard';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
-import { CardEmblem } from './emblems';
 
 // W13 contract: useSavedLots grows a savedMeta record (hook agent's edit).
 type SavedMeta = Record<string, { savedAt: string; estMid: number | null; signalPct: number | null; bidCount: number | null }>;
@@ -58,16 +56,6 @@ const EMPTY_SAVED_META: SavedMeta = {};
 // The eager recentSold slice (from upcoming.json) — lightweight Goldin closes.
 type RecentSoldRow = { id: string; title: string; artist: string; priceUsd?: number; house?: string; saleDate?: string; url?: string; priceBasis?: string; category?: string; objectType?: string; eventKey?: string };
 
-
-// The ledger line's cells.
-type StripItem = {
-  k: string;
-  to: number;
-  format: (n: number) => string;
-  s: string;
-  tone?: 'up';
-  lens?: boolean;
-};
 
 // The default view's diversity cap: max 8 lots per maker per page window.
 const MAKER_CAP = 8;
@@ -254,30 +242,6 @@ export default function TerminalHomePage() {
   const editionSerial = crawlDay.replace(/-/g, '');
   const activeKey = market;
 
-  // The condensed sub-market board rides the instrumentRow's second column
-  // beside Today's Call — and it's the ONLY board on desktop (the full section
-  // below is desktop-duplicative, so it renders only when this one doesn't:
-  // mobile, or narrow desktop, or a scope with no rows).
-  const boardBeside = mounted && deskWide && hasSubMarketRows(marketData, activeKey);
-  // Fill that column to the call plate's height — measure the left column and
-  // render as many rows as fit, so no white space sits beside the plate. Rows
-  // then flex to eat the remaining slack for an exact height match.
-  const callColRef = React.useRef<HTMLDivElement>(null);
-  const [boardRows, setBoardRows] = useState(6);
-  useEffect(() => {
-    if (!boardBeside || typeof ResizeObserver === 'undefined') return;
-    const el = callColRef.current;
-    if (!el) return;
-    const measure = () => {
-      // overhead ≈ condHead + column header (~72px); divide by a conservative
-      // 50px (rows are 47px min) so the board never overshoots the plate.
-      setBoardRows(Math.max(4, Math.floor((el.offsetHeight - 72) / 50)));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [boardBeside, activeKey]);
 
   // Sales-weighted appreciation across the active market's artists.
   const appreciation = useMemo(() => {
@@ -559,36 +523,6 @@ export default function TerminalHomePage() {
     return { lot, word };
   }, [upcoming]);
 
-  const strip = useMemo<StripItem[]>(() => {
-    const active = upcoming;
-    const withEst = active.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
-    const estValue = withEst.reduce((sum, l) => {
-      const lo = l.estimateLow || l.estimateHigh || 0;
-      const hi = l.estimateHigh || l.estimateLow || 0;
-      return sum + (lo + hi) / 2;
-    }, 0);
-    const liveHouses = new Set(active.map(l => l.auctionHouse)).size;
-    const asComma = (n: number) => Math.round(n).toLocaleString();
-    const thisWeek = hammerWeek.count;
-    const priceOrDash = (n: number) => (n > 0 ? formatPrice(n) : '—');
-    const hammersSub = thisWeek === 0
-      ? 'none scheduled this week'
-      : `across ${hammerWeek.houses} ${hammerWeek.houses === 1 ? 'house' : 'houses'}`;
-    if (estValue === 0 && active.length > 0) {
-      return [
-        { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
-        { k: 'On the block', to: active.length, format: asComma, s: 'live lots — bid sales, no estimates' },
-        { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
-        { k: 'Live houses', to: liveHouses, format: asComma, s: 'sourcing this market' },
-      ];
-    }
-    return [
-      { k: 'Realized all-time', to: totalRealized, format: priceOrDash, s: topArtist ? `led by ${topArtist}` : 'across the market' },
-      { k: 'On the block', to: estValue, format: priceOrDash, s: estValue > 0 ? `${asComma(active.length)} lots, mid-estimates` : `${asComma(active.length)} lots — bid sales, no estimates` },
-      { k: 'Hammers this week', to: thisWeek, format: asComma, s: hammersSub },
-      { k: 'Flagged below market', to: belowIds.size, format: asComma, s: 'against true comps', tone: 'up', lens: true },
-    ];
-  }, [upcoming, belowIds, totalRealized, topArtist, hammerWeek]);
 
   // The watchlist strip — what changed since you saved.
   const watchStrip = useMemo(() => {
@@ -613,9 +547,6 @@ export default function TerminalHomePage() {
     return { count: mine.length, next: future[0] || null, bestMove };
   }, [savedIds, savedMeta, allLots]);
 
-  const callPlateEl = (
-    <CallPlate lots={marketLots} allLots={marketLots} market={activeKey} isSaved={isSaved} onToggleSave={toggle} />
-  );
   const watchStripEl = watchStrip ? (
     <Link href="/saved" className="ray-watchstrip" aria-label={`Your watchlist — ${watchStrip.count} saved`}>
       <span className="ray-watchstrip-k">Your watchlist</span>
@@ -634,9 +565,6 @@ export default function TerminalHomePage() {
   // below-market count for the hero stat (scoped to the live book)
   const belowMktCount = belowIds.size;
   // tape items for the active market (fall back to 'all', then any).
-  const tapeItems = useMemo(() => {
-    return tape[activeKey] ?? tape.all ?? tape[Object.keys(tape)[0]] ?? [];
-  }, [tape, activeKey]);
 
   const onMoverSelect = (key: Market) => setMarket(key);
 
@@ -727,95 +655,33 @@ export default function TerminalHomePage() {
             {/* ══ TONIGHT'S WALL — the photographed front row (kept) ══ */}
             {wallEl}
 
-            {/* ══ the live tape — realized hammers, scoped to the market ══ */}
-            {tapeItems.length > 0 && (
-              <section className={styles.tapeSection}>
-                <span className={styles.tapeLabel}>Realized</span>
-                <Tape items={tapeItems} />
-              </section>
-            )}
-
-            {/* ══ Today's call + watchlist (the working rail) ══
-                NOTE: the appreciation barometer was removed here — it printed a
-                sales-weighted "+X% appreciation" with no confidence interval,
-                which the honest hero + verified-movers deliberately avoid. The
-                homepage must not assert a return the engine won't defend. */}
-            {/* ray-board-belowrow arms the ≥900px two-column certificate
-                (plate 42% left, ruled leader rows right — Terminal.tsx
-                CALLPLATE_CSS); below 900px the plate keeps today's stack.
-                marginTop:0 neutralizes the class's own offset — the
-                instrumentRow already owns this row's rhythm. */}
-            {/* On desktop the second column carries a condensed sub-market board
-                (top 5 rows) beside the call — the plate keeps its STACKED
-                composition there (dropping ray-board-belowrow, whose ≥900px
-                two-column certificate needs the full width). With no board the
-                row collapses to one column and the wide certificate returns. */}
-            <div className={styles.instrumentRow}>
-              <div ref={callColRef} className={`${styles.callCol}${boardBeside ? '' : ' ray-board-belowrow'}`} style={{ marginTop: 0 }}>
-                {callPlateEl}
-                {watchStripEl}
-              </div>
-              {boardBeside && (
-                <div className={styles.boardCol}>
+            {/* ══ ROOM · THE VERIFIED BOARD — every certified read, on paper.
+                The movers ARE the board's top rows (one table, no duplicate
+                strip); the record sentence prints ONCE as the room's footer. ══ */}
+            {marketData?.subMarkets && (
+              <section className={styles.roomPaper}>
+                <div className={styles.roomInner}>
                   <SubMarketBoard
                     market={marketData}
                     activeKey={activeKey}
                     onSelect={onMoverSelect}
-                    variant="desktop"
-                    condensed
-                    maxRows={boardRows}
+                    variant={mounted && isMobile ? 'mobile' : 'desktop'}
+                    paper
                   />
+                  {backtest && backtest.flagged.n > 500 && (
+                    <a href="/value" className={styles.roomProof}>
+                      Every call above is replayed against history: flagged lots hammered{' '}
+                      <b>{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</b> over
+                      their estimates, unflagged {fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} — across{' '}
+                      {backtest.flagged.n.toLocaleString()} replayed sales. See the record →
+                    </a>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {backtest && backtest.flagged.n > 500 && (
-              <a href="/value" className="ray-proofstrip" style={{ marginTop: 20 }}>
-                Flagged calls hammered <b className="up">{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</b> over
-                their estimates — unflagged hammered {fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} — across {backtest.flagged.n.toLocaleString()} replayed
-                sales{activeKey !== 'all' ? ' · all markets' : ''} · the record <Flick size={12} />
-              </a>
+              </section>
             )}
 
-            {/* ══ THE LEDGER — the market in four figures; flagged IS the lens ══ */}
-            <div className={`ray-band ${styles.ledgerBand}`} style={{ marginTop: 40, paddingBlock: '22px 18px', borderRadius: 14 }}>
-              <div style={{ padding: '0 clamp(18px, 3vw, 30px)' }}>
-                <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
-                <div style={{ borderTop: '1px solid var(--paper-line)', marginBottom: 10 }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 10 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <CardEmblem kind="ledger" />
-                    The ledger
-                  </span>
-                  <span style={{ color: 'var(--paper-muted)', fontWeight: 600 }}>{marketName}</span>
-                </div>
-                <div className="ray-ledger" style={{ margin: 0 }}>
-                  {strip.map((item, i) => item.lens && item.to > 0 ? (
-                    <button
-                      key={item.k}
-                      type="button"
-                      onClick={openBelowLens}
-                      aria-label="See flagged lots on the block, biggest gap first"
-                      style={{ background: 'none', border: 'none', margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
-                    >
-                      <div className="ray-ledger-k">{item.k}</div>
-                      <CountUp to={item.to} format={item.format} duration={900} animate={!fromCache} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
-                      <div className="ray-ledger-s">{item.s} <Flick size={10} /></div>
-                    </button>
-                  ) : (
-                    <div key={item.k}>
-                      <div className="ray-ledger-k">{item.k}</div>
-                      <CountUp to={item.to} format={item.format} duration={900} animate={!fromCache} delay={Math.min(i, 3) * 60} className={`ray-ledger-v${item.tone === 'up' ? ' up' : ''}`} style={{ display: 'block' }} />
-                      <div className="ray-ledger-s">{item.s}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
-                  <span>every estimate, read against every hammer</span>
-                  <span>no. {editionSerial}</span>
-                </div>
-              </div>
-            </div>
+            {/* the watchlist strip — the reader's saved lots (small, personal) */}
+            {watchStripEl}
 
             {/* ══ THE FEED — On the block (full parity) ══ */}
             {upcoming.length > 0 && (
@@ -1018,9 +884,7 @@ export default function TerminalHomePage() {
                         border: '1px solid var(--tt-hair-2)',
                         borderRadius: 100,
                         padding: '10px 32px',
-                        fontSize: 12.5,
-                        letterSpacing: '0.12em',
-                        textTransform: 'uppercase',
+                        fontSize: 13,
                         color: 'var(--tt-muted)',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -1034,25 +898,9 @@ export default function TerminalHomePage() {
               </section>
             )}
 
-            {/* ══ THE SUB-MARKET BOARD — the FULL board, only where the condensed
-                board beside Today's Call isn't already showing it (mobile, or
-                narrow desktop). On wide desktop the board rides beside the call
-                and this section is dropped as duplicative. ══ */}
-            {marketData?.subMarkets && !boardBeside && (
-              <section id="sub-markets" className={styles.moversSection}>
-                <SubMarketBoard
-                  market={marketData}
-                  activeKey={activeKey}
-                  onSelect={onMoverSelect}
-                  variant={mounted && isMobile ? 'mobile' : 'desktop'}
-                />
-              </section>
-            )}
-
-            {/* Phase-2 lazy trigger for the art/design/watches/all Record band */}
-            {!isSportsScience && <Phase2Sentinel />}
-
-            {/* ══ THE RECORD — the functional sold band (parity) ══ */}
+            {/* ══ ROOM · THE RECORD — settlement + all-time records, one paper chapter ══ */}
+            <section className={styles.roomPaper}>
+            <div className={styles.roomInner}>
             {isSportsScience ? (
               recentRows.length > 0 && (
                 <div className={styles.recordBandWrap}>
@@ -1103,9 +951,10 @@ export default function TerminalHomePage() {
               </div>
             ))}
 
-            {/* ══ THE RECORD BOARD — the Terminal flourish (curated cross-cat highs) ══ */}
-            <section className={styles.recordSection}>
+            <div className={styles.recordSection}>
               <RecordBoard variant={mounted && isMobile ? 'mobile' : 'desktop'} market={activeKey} />
+            </div>
+            </div>
             </section>
           </div>
 

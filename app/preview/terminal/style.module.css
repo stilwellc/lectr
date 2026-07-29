@@ -55,7 +55,7 @@
 /* shared kicker — mono label voice */
 .sectionKicker {
   display: block;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: var(--text-label);
   font-weight: 500;
   letter-spacing: 0.22em;
@@ -73,7 +73,7 @@
   gap: 14px;
   padding: 16px 0;
   border-bottom: 1px solid var(--tt-hair);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 11.5px;
   letter-spacing: 0.1em;
   color: var(--tt-muted);
@@ -175,7 +175,7 @@
 .railBtn:hover { background: rgba(232, 218, 182, 0.04); }
 .railBtn:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
 .railLabel {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -183,7 +183,7 @@
   white-space: nowrap;
 }
 .railVal {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 19px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -201,7 +201,7 @@
   opacity: 0.85;
 }
 .railFlagLine {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.05em;
   color: #d8a24a;
@@ -238,7 +238,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 20px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -260,7 +260,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -296,7 +296,7 @@
   color: var(--tt-fg);
 }
 .moverCellChg {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 13.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -312,7 +312,7 @@
   margin-left: 2px;
 }
 .moverCellCi {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   color: var(--tt-faint);
   font-variant-numeric: tabular-nums;
@@ -336,7 +336,7 @@
   margin-bottom: 14px;
 }
 .heroNumber {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 500;
   /* sized so the FULL stage (chart + movers band) lands pre-scroll */
   font-size: clamp(56px, 6.6vw, 92px);
@@ -351,7 +351,7 @@
   padding-bottom: 12px;
 }
 .heroDelta {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 13.5px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -370,7 +370,7 @@
 .heroExplain {
   display: block;
   margin-top: 14px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 11.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -388,7 +388,7 @@
 .heroThesis strong {
   color: var(--tt-fg);
   font-weight: 600;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 0.86em;
 }
 
@@ -425,14 +425,14 @@
   padding: 20px 0 12px;
 }
 .heroSparkFallback .chartCardTag {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--tt-faint);
 }
 .statVal {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 24px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -442,7 +442,7 @@
   color: var(--tt-butter);
 }
 .statLabel {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -489,7 +489,7 @@
   border: 1px solid var(--tt-hair-2);
   border-bottom-color: rgba(0, 0, 0, 0.4);
   background: rgba(232, 218, 182, 0.06);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
   color: var(--tt-fg);
 }
@@ -499,7 +499,7 @@
 .cmdArrow {
   margin-left: 4px;
   color: var(--tt-faint);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
 }
 
 /* the chart card */
@@ -517,7 +517,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -539,7 +539,7 @@
   border: 1px solid var(--tt-hair-2);
   background: rgba(13, 11, 8, 0.92);
   backdrop-filter: blur(6px);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
 }
 .chartTipPeriod {
   font-size: 10px;
@@ -567,7 +567,7 @@
 }
 .tapeLabel {
   flex: none;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -606,7 +606,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 22px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
   border-right: 1px solid var(--tt-hair);
 }
@@ -678,7 +678,7 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.1em;
   color: var(--tt-faint);
@@ -713,7 +713,7 @@
   padding-top: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--tt-hair);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -730,7 +730,7 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   transition: background 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .moversRow:hover {
@@ -786,7 +786,7 @@
 }
 .moversFoot {
   margin: 14px 4px 0;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.04em;
   color: var(--tt-faint);
@@ -809,7 +809,7 @@
   border-bottom: 1px solid var(--tt-hair);
 }
 .edgeStatNum {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 52px;
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -840,7 +840,7 @@
   color: var(--tt-muted);
 }
 .edgeRowVal {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 14px;
   font-weight: 500;
   color: var(--tt-secondary);
@@ -849,7 +849,7 @@
 .edgeRowVal[data-dir='down'] { color: var(--color-down); }
 .edgeFoot {
   margin: 16px 0 0;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   color: var(--tt-faint);
   line-height: 1.5;
@@ -866,7 +866,7 @@
   margin-bottom: 24px;
 }
 .recordCaption {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.08em;
   color: var(--tt-faint);
@@ -887,12 +887,12 @@
   border-bottom: 1px solid var(--tt-hair);
 }
 .recordRank {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
   color: var(--tt-faint);
 }
 .recordCat {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -939,14 +939,14 @@
   border-radius: 3px;
 }
 .recordPrice {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 16px;
   font-weight: 500;
   color: var(--tt-butter);
   text-align: right;
 }
 .recordSource {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.02em;
   color: var(--tt-faint);
@@ -989,7 +989,7 @@
 }
 .condHead .sectionKicker { margin-bottom: 0; }
 .condCount {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1032,7 +1032,7 @@
   margin-top: 72px;
   padding-top: 24px;
   border-top: 1px solid var(--tt-hair);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.06em;
   color: var(--tt-muted);
@@ -1057,7 +1057,7 @@
 }
 .mobIndexNum {
   display: block;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 500;
   font-size: clamp(80px, 30vw, 128px);
   line-height: 0.86;
@@ -1081,7 +1081,7 @@
 }
 .mobThesis strong {
   color: var(--tt-fg);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 0.9em;
 }
 
@@ -1139,7 +1139,7 @@
   gap: 8px;
 }
 .mobMoverIndex {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 26px;
   font-weight: 500;
   color: var(--tt-secondary);
@@ -1183,7 +1183,7 @@
   text-align: left;
 }
 .mobEdgeNum {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 56px;
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -1239,13 +1239,13 @@
 }
 .mHeroHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .mHeroLabel {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--tt-muted);
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mHeroLive {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-faint);
 }
 .mHeroLive i {
@@ -1259,12 +1259,12 @@
 }
 .mHeroNumRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .mHeroNum {
-  font-family: var(--font-mono-data), monospace; font-weight: 500;
+  font-family: var(--font-inter), sans-serif; font-weight: 500;
   font-size: clamp(40px, 13.5vw, 58px); line-height: 0.9; letter-spacing: -0.02em; color: var(--tt-fg);
 }
 .mHeroDeltas { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-bottom: 4px; }
-.mHeroDelta { font-family: var(--font-mono-data), monospace; font-size: 15.5px; font-weight: 500; }
-.mHeroDeltaSub { font-family: var(--font-mono-data), monospace; font-size: 12.5px; font-weight: 500; opacity: 0.82; }
+.mHeroDelta { font-family: var(--font-inter), sans-serif; font-size: 15.5px; font-weight: 500; }
+.mHeroDeltaSub { font-family: var(--font-inter), sans-serif; font-size: 12.5px; font-weight: 500; opacity: 0.82; }
 .mHeroDelta em, .mHeroDeltaSub em {
   font-style: normal; color: var(--tt-faint); font-size: 0.6em;
   letter-spacing: 0.1em; text-transform: uppercase; margin-left: 4px;
@@ -1273,7 +1273,7 @@
 .mHeroDelta[data-dir='down'], .mHeroDeltaSub[data-dir='down'] { color: var(--color-down); }
 .mHeroChart { margin: 0 -4px; }
 .mHeroTag {
-  font-family: var(--font-mono-data), monospace; font-size: 10px;
+  font-family: var(--font-inter), sans-serif; font-size: 10px;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-faint); margin-top: 6px;
 }
 .mHeroStats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -1285,12 +1285,12 @@
 button.mStat { cursor: pointer; font: inherit; }
 button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
 .mStat[data-accent='true'] { border-color: rgba(232, 218, 182, 0.24); }
-.mStatVal { font-family: var(--font-mono-data), monospace; font-size: 18px; font-weight: 500; letter-spacing: -0.01em; color: var(--tt-fg); }
+.mStatVal { font-family: var(--font-inter), sans-serif; font-size: 18px; font-weight: 500; letter-spacing: -0.01em; color: var(--tt-fg); }
 .mStat[data-accent='true'] .mStatVal { color: var(--tt-butter); }
 .mStatLabel {
   /* merged 8.5→10 (type audit); tracking eased 0.08em→0.03em so the longest
      label ("Below market ↗") still fits the 3-up tiles on a 390px screen */
-  font-family: var(--font-mono-data), monospace; font-size: 10px; letter-spacing: 0.03em;
+  font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.03em;
   text-transform: uppercase; color: var(--tt-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .mHero .cmdPillFull { width: 100%; justify-content: center; padding: 14px; }
@@ -1304,7 +1304,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   border: 1px solid var(--tt-hair-2); border-radius: 10px; background: rgba(0, 0, 0, 0.22);
 }
 .tfChip {
-  font-family: var(--font-mono-data), monospace; font-size: 11.5px; letter-spacing: 0.04em;
+  font-family: var(--font-inter), sans-serif; font-size: 11.5px; letter-spacing: 0.04em;
   padding: 5px 11px; border-radius: 7px; border: none; background: none; color: var(--tt-muted);
   cursor: pointer; transition: background 180ms var(--ease-signature, cubic-bezier(0.23,1,0.32,1)), color 180ms;
 }
@@ -1314,11 +1314,11 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 
 /* mobile return card */
 .mHeroReturnTag {
-  font-family: var(--font-mono-data), monospace; font-size: 10px; letter-spacing: 0.14em;
+  font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--tt-faint); flex: none;
 }
 .mHeroReturnPer {
-  font-family: var(--font-mono-data), monospace; font-size: 11.5px; letter-spacing: 0.05em;
+  font-family: var(--font-inter), sans-serif; font-size: 11.5px; letter-spacing: 0.05em;
   text-transform: uppercase; color: var(--tt-faint); padding-bottom: 8px;
 }
 .mHero .tfToggle { margin: 2px 0 12px; }
@@ -1328,12 +1328,12 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 /* desktop return head */
 .heroTopRow { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
 .heroReturnTag {
-  font-family: var(--font-mono-data), monospace; font-size: 10px; letter-spacing: 0.14em;
+  font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--tt-faint);
   padding: 3px 8px; border: 1px solid var(--tt-hair-2); border-radius: 6px;
 }
 .heroReturnPer {
-  font-family: var(--font-mono-data), monospace; font-size: 13.5px; letter-spacing: 0.04em;
+  font-family: var(--font-inter), sans-serif; font-size: 13.5px; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--tt-faint); padding-bottom: 16px;
 }
 .hero .tfToggle { margin-top: 14px; }
@@ -1448,7 +1448,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   padding-top: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--tt-hair);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -1463,7 +1463,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   color: inherit;
   text-align: left;
   cursor: pointer;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   transition: background 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .subRow:hover { background: rgba(232, 218, 182, 0.03); }
@@ -1478,7 +1478,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .subTag {
   justify-self: start;
   display: inline-block;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1504,7 +1504,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 }
 .subSupport {
   text-align: right;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
   color: var(--tt-secondary);
   white-space: nowrap;
@@ -1513,7 +1513,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 }
 .subMeta {
   margin-top: 8px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   color: var(--tt-faint);
   white-space: nowrap;
@@ -1687,7 +1687,7 @@ a.recordObj:focus-visible {
 }
 .recordEmpty {
   padding: 22px 4px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
   color: var(--tt-muted);
 }
@@ -1700,7 +1700,7 @@ a.recordObj:focus-visible {
 
 .heroExplainLine {
   margin-top: 6px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 11.5px;
   letter-spacing: 0.02em;
   color: var(--tt-muted);
@@ -1720,7 +1720,7 @@ a.recordObj:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1736,7 +1736,7 @@ a.recordObj:focus-visible {
   gap: 10px;
   padding: 5px 0;
   border-bottom: 1px solid var(--tt-hair);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
 }
 .verifiedRow:last-child { border-bottom: none; }
 .verifiedName {
@@ -1769,7 +1769,7 @@ a.recordObj:focus-visible {
   gap: 8px;
   border-top: 1px solid var(--tt-hair);
   padding-top: 12px;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--tt-muted);
@@ -1786,7 +1786,7 @@ a.recordObj:focus-visible {
 /* movers board: verified-maker additions */
 .moversCi {
   text-align: right;
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
   color: var(--tt-faint);
 }
@@ -1797,7 +1797,7 @@ a.recordObj:focus-visible {
   border: 1px solid var(--tt-hair-2);
   border-radius: 14px;
   background: rgba(232, 218, 182, 0.02);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--tt-muted);
@@ -1890,7 +1890,7 @@ a.recordObj:focus-visible {
 
 /* ── ROI × demand divergence flag on the hero stat tile ── */
 .statFlag {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1933,10 +1933,9 @@ a.recordObj:focus-visible {
   border-radius: 100px;
   background: none;
   color: var(--tt-secondary);
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 11.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  
   cursor: pointer;
   transition: border-color 160ms, color 160ms;
 }
@@ -1959,14 +1958,14 @@ a.recordObj:focus-visible {
   margin-bottom: 10px;
 }
 .wallKicker {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--tt-muted);
 }
 .wallSub {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2026,7 +2025,7 @@ a.recordObj:focus-visible {
   text-overflow: ellipsis;
 }
 .wallEst {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   color: var(--tt-muted);
   font-variant-numeric: tabular-nums;
@@ -2043,7 +2042,7 @@ a.recordObj:focus-visible {
   font-size: 9px;
 }
 .wallSignal {
-  font-family: var(--font-mono-data), monospace;
+  font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   color: var(--color-up);
   white-space: nowrap;
@@ -2111,3 +2110,151 @@ a.recordObj:focus-visible {
 /* the On-the-block serif head — one italic butter word (kept) */
 .feedTitle { font-size: clamp(30px, 3.2vw, 42px); }
 .feedTitle em { font-style: italic; color: var(--tt-butter); }
+
+/* ═══════════════ THE FIVE-ROOM SYSTEM (home redesign) ═══════════════
+   Material logic: DARK = the live market · PAPER = certified proof.
+   Rooms are full-bleed ground changes with generous, consistent padding —
+   the scroll reads as chapters, not one continuous block. */
+.roomPaper {
+  margin-inline: calc(50% - 50vw);
+  background:
+    linear-gradient(180deg, rgba(28, 23, 18, 0.05), transparent 90px),
+    var(--paper, #E2D9C4);
+  border-block: 1px solid var(--paper-edge, rgba(28, 23, 18, 0.25));
+  box-shadow:
+    inset 0 10px 18px -14px rgba(28, 23, 18, 0.5),
+    inset 0 -8px 14px -12px rgba(28, 23, 18, 0.35);
+  padding-block: clamp(56px, 7vw, 96px);
+  margin-block: clamp(56px, 7vw, 96px);
+}
+.roomInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+  min-width: 0;
+}
+/* the certified footer sentence — printed once, on the paper */
+.roomProof {
+  display: block;
+  margin-top: clamp(28px, 4vw, 44px);
+  padding-top: 18px;
+  border-top: 1px solid var(--paper-line, rgba(28, 23, 18, 0.16));
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--paper-secondary, #3D3830);
+  text-decoration: none;
+  max-width: 62ch;
+}
+.roomProof b { color: var(--paper-ink, #1C1712); font-weight: 650; }
+.roomProof:hover { color: var(--paper-ink, #1C1712); }
+
+/* room header grammar — every room introduces itself the same way:
+   Fraunces title (the "On the block" keeper format) + one purpose line */
+.roomTitle {
+  font-family: var(--font-serif-display), serif;
+  font-weight: 400;
+  font-size: clamp(30px, 3.2vw, 42px);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  margin: 0 0 6px;
+}
+.roomTitle em { font-style: italic; color: var(--tt-butter); }
+.roomPaper .roomTitle { color: var(--paper-ink, #1C1712); }
+.roomPaper .roomTitle em { color: var(--paper-ink, #1C1712); }
+.roomSub {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--tt-muted);
+  margin: 0 0 clamp(24px, 3vw, 36px);
+  max-width: 58ch;
+}
+.roomPaper .roomSub { color: var(--paper-muted, #5A5240); }
+
+/* ── the board, printed on paper (ink swaps; layout unchanged) ── */
+.moversPaper .moversTitle,
+.moversPaper .moversName { color: var(--paper-ink, #1C1712); }
+.moversPaper .subColHead { color: var(--paper-muted, #5A5240); border-bottom-color: var(--paper-line); }
+.moversPaper .subTable { border-top-color: var(--paper-edge, rgba(28,23,18,0.25)); }
+.moversPaper .subRow { border-bottom-color: var(--paper-line); }
+.moversPaper .subRow:hover { background: rgba(28, 23, 18, 0.045); }
+.moversPaper .subRow[data-active='true'] { background: rgba(28, 23, 18, 0.07); }
+.moversPaper .subRow[data-active='true'] .moversName { color: var(--paper-ink); }
+.moversPaper .subSupport, .moversPaper .moversN { color: var(--paper-muted, #5A5240); }
+.moversPaper .moversDelta { color: var(--paper-secondary); }
+.moversPaper .moversDelta[data-dir='up'] { color: #1e7a4d; }
+.moversPaper .moversDelta[data-dir='down'] { color: #a03d2e; }
+.moversPaper .subTag {
+  color: var(--paper-muted);
+  border-color: var(--paper-line);
+  background: rgba(28, 23, 18, 0.05);
+}
+.moversPaper .subTag[data-type='index'] { color: #1e7a4d; border-color: rgba(30, 122, 77, 0.35); background: rgba(30, 122, 77, 0.07); }
+.moversPaper .moversFoot { color: var(--paper-faint, #665F4B); }
+.moversPaper .subShowMore { color: var(--paper-secondary); border-color: var(--paper-line); }
+.moversPaper .subShowMore:hover { color: var(--paper-ink); }
+.moversPaper .moversTick[data-dir='up'] { background: #1e7a4d; }
+.moversPaper .moversTick[data-dir='down'] { background: #a03d2e; }
+.moversPaper .mobSubCard { background: rgba(28,23,18,0.04); border: 1px solid var(--paper-line); }
+.moversPaper .mobSubName { color: var(--paper-ink); }
+.moversPaper .mobSubBot .subSupport { color: var(--paper-muted); }
+
+/* ═══ TWO-FACE TYPOGRAPHY — the label grammar (no caps gimmick, no tracking) ═══
+   Labels: Inter 12/600, sentence case, muted. Values: Inter, tabular figures.
+   Fraunces speaks only in room titles and select display moments. */
+.sectionKicker,
+.heroExplainLine,
+.heroReturnPer,
+.railLabel,
+.stageMeta,
+.mHeroLabel,
+.mHeroTag,
+.mHeroReturnPer,
+.mStatLabel,
+.subColHead,
+.condCount,
+.wallKicker,
+.moversFoot {
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 600;
+}
+.sectionKicker { font-size: 13px; color: var(--tt-muted); margin-bottom: 10px; }
+.heroExplainLine { font-size: 14px; font-weight: 500; color: var(--tt-muted); }
+.heroReturnPer { font-size: 13px; font-weight: 500; color: var(--tt-faint); }
+.railLabel { font-size: 12.5px; color: var(--tt-muted); }
+.railVal { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.stageMeta { font-size: 12.5px; font-weight: 500; color: var(--tt-faint); }
+.mHeroLabel { font-size: 13px; color: var(--tt-muted); }
+.mStatLabel { font-size: 12px; color: var(--tt-muted); }
+.mStatVal { font-variant-numeric: tabular-nums; }
+.subColHead { font-size: 12px; }
+.wallKicker { font-size: 13px; color: var(--tt-muted); }
+.wallSub { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.heroNumber { font-variant-numeric: tabular-nums; letter-spacing: -0.035em; font-weight: 650; }
+.mHeroNum { font-variant-numeric: tabular-nums; letter-spacing: -0.03em; font-weight: 650; }
+.tfChip { letter-spacing: 0.02em; }
+.subTag { letter-spacing: 0.02em; text-transform: none; font-weight: 600; }
+.moversDelta, .subSupport, .moversN { font-variant-numeric: tabular-nums; }
+
+/* ── THE RECORD room: the board printed on paper; the settlement slip loses
+   its own card chrome (it sits ON the room's paper, not on a card) ── */
+.roomPaper :global(.ray-band) { background: transparent; border-block: 0; margin-top: 0; padding-block: 0 8px; }
+.roomPaper :global(.kicker) { letter-spacing: 0; text-transform: none; font-weight: 600; font-size: 13px; }
+.roomPaper .recordSection { margin-top: clamp(32px, 4vw, 52px); }
+.roomPaper .recordTitle,
+.roomPaper .recordObj,
+.roomPaper .recordPrice { color: var(--paper-ink, #1C1712); }
+.roomPaper .recordRank { color: var(--paper-faint, #665F4B); }
+.roomPaper .recordMeta,
+.roomPaper .recordSource,
+.roomPaper .recordCaption { color: var(--paper-muted, #5A5240); }
+.roomPaper .recordRow { border-bottom: 1px solid var(--paper-line, rgba(28,23,18,0.16)); }
+.roomPaper .recordBarTrack { background: rgba(28, 23, 18, 0.1); }
+.roomPaper .recordBar { background: var(--paper-ink, #1C1712); }
+.roomPaper .recordCat { color: var(--paper-muted); border-color: var(--paper-line); }
+.roomPaper .recordEmpty { color: var(--paper-muted); }
+.roomPaper .recordObj:hover { color: var(--paper-secondary); }
+.moversPaper .moversFoot { display: none; }
+/* the last paper room hands off to the colophon without stacked gaps */
+.deskShell { padding-bottom: 0; }
+.roomPaper:last-of-type { margin-bottom: 0; }
