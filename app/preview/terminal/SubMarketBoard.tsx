@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { type Market } from '../../constants';
@@ -297,18 +297,18 @@ function ReceiptChip({ value, dir, seen }: { value: string; dir?: 'up' | 'down';
 }
 
 /* ── one tape row ── */
-function TapeRow({ r, scoped, onSelect }: { r: SubMarketRead; scoped: boolean; onSelect: (k: Market) => void }) {
+function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onPick: () => void }) {
   const isIndex = r.readType === 'index' && r.index;
   const dir = isIndex ? (r.index!.changePct >= 0 ? 'up' : 'down') : undefined;
   return (
     <button
       type="button"
       className={styles.tapeRow}
-      data-scoped={scoped || undefined}
-      aria-pressed={scoped}
-      onClick={() => onSelect(r.vertical as Market)}
+      data-scoped={active || undefined}
+      aria-pressed={active}
+      onClick={onPick}
     >
-      {scoped && <m.span layoutId="brassRule" className={styles.brassRule} transition={{ duration: 0.25, ease: EASE }} />}
+      {active && <m.span layoutId="brassRule" className={styles.brassRule} transition={{ duration: 0.25, ease: EASE }} />}
       <span className={styles.tapeLabelBlock}>
         <span className={styles.tapeLabel}>{r.label}</span>
         <span className={styles.tapeTag}>{tapeTag(r)}</span>
@@ -361,11 +361,18 @@ export default function SubMarketBoard({
 
   const CAP = 7;
   const [expanded, setExpanded] = useState(false);
+  // which read the monument shows — a LOCAL pick, independent of page scope.
+  // Clicking a tape row only re-points the monument; it never re-scopes the
+  // page (which would reshuffle the whole table). Resets when the page scope
+  // changes via the top nav.
+  const keyOf = (r: SubMarketRead) => `${r.vertical}:${r.slug}`;
+  const [pickKey, setPickKey] = useState<string | null>(null);
+  useEffect(() => { setPickKey(null); }, [activeKey]);
 
   /* ════ ROOM A — Plate & Tape (the home's paper room) ════ */
   if (paper) {
     if (!rows.length) return null;
-    const flag = rows[0];
+    const flag = rows.find((r) => keyOf(r) === pickKey) ?? rows[0];
     const shown = expanded ? rows : rows.slice(0, CAP);
     const play = seen && !reduce;
     return (
@@ -405,12 +412,12 @@ export default function SubMarketBoard({
           <div className={styles.tape}>
             <div className={styles.tapeCol}>
               {shown.slice(0, Math.ceil(shown.length / 2)).map((r) => (
-                <TapeRow key={`${r.vertical}:${r.slug}`} r={r} scoped={r.vertical === activeKey && activeKey !== 'all'} onSelect={onSelect} />
+                <TapeRow key={keyOf(r)} r={r} active={keyOf(r) === keyOf(flag)} onPick={() => setPickKey(keyOf(r))} />
               ))}
             </div>
             <div className={styles.tapeCol}>
               {shown.slice(Math.ceil(shown.length / 2)).map((r) => (
-                <TapeRow key={`${r.vertical}:${r.slug}`} r={r} scoped={r.vertical === activeKey && activeKey !== 'all'} onSelect={onSelect} />
+                <TapeRow key={keyOf(r)} r={r} active={keyOf(r) === keyOf(flag)} onPick={() => setPickKey(keyOf(r))} />
               ))}
             </div>
             {rows.length > CAP && (
