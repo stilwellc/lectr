@@ -46,8 +46,6 @@ import IndexHero from './IndexHero';
 import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
 import TonightsWall, { type WallItem } from './TonightsWall';
 import RecordBoard from './RecordBoard';
-import PaperGuarantee from './PaperGuarantee';
-import PaperRain from './PaperRain';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
 
@@ -669,16 +667,12 @@ export default function TerminalHomePage() {
                     onSelect={onMoverSelect}
                     variant={mounted && isMobile ? 'mobile' : 'desktop'}
                     paper
+                    receipts={backtest ? {
+                      flaggedPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct,
+                      unflaggedPct: backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct,
+                      n: backtest.flagged.n,
+                    } : null}
                   />
-                  <PaperGuarantee />
-                  {backtest && backtest.flagged.n > 500 && (
-                    <a href="/value" className={styles.roomProof}>
-                      Every call above is replayed against history: flagged lots hammered{' '}
-                      <b>{fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct)}</b> over
-                      their estimates, unflagged {fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} — across{' '}
-                      {backtest.flagged.n.toLocaleString()} replayed sales. See the record →
-                    </a>
-                  )}
                 </div>
               </section>
             )}
@@ -900,10 +894,16 @@ export default function TerminalHomePage() {
               </section>
             )}
 
-            {/* ══ ROOM · THE RECORD — settlement + all-time records, one paper chapter ══ */}
+            {/* phase-2 trigger — the settlement slip below reads the full sold
+                corpus; the sentinel starts that fetch as the reader approaches */}
+            <Phase2Sentinel />
+
+            {/* ══ ROOM · THE RECORD — settlement + all-time records, one paper chapter.
+                The settlement slip is the page's single seam-crossing artifact:
+                it straddles the dark→paper cut. ══ */}
             <section className={styles.roomPaper}>
-            <PaperRain fall={2000} />
             <div className={styles.roomInner}>
+            <div className={styles.slipStraddle}>
             {isSportsScience ? (
               recentRows.length > 0 && (
                 <div className={styles.recordBandWrap}>
@@ -953,9 +953,10 @@ export default function TerminalHomePage() {
                 </div>
               </div>
             ))}
+            </div>
 
             <div className={styles.recordSection}>
-              <RecordBoard variant={mounted && isMobile ? 'mobile' : 'desktop'} market={activeKey} />
+              <RecordBoard market={activeKey} asOf={marketData?.generatedAt?.slice(0, 10) ?? null} />
             </div>
             </div>
             </section>

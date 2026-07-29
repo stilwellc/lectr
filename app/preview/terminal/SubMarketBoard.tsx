@@ -1,73 +1,60 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { LazyMotion, domAnimation, m } from 'framer-motion';
+import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { type Market } from '../../constants';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
-import RollingNumber from './RollingNumber';
 import styles from './style.module.css';
 
 /* ============================================================
-   THE SUB-MARKET BOARD — the market as a hierarchy: vertical →
-   sub-markets. Each tracked sub-market shows the STRONGEST HONEST
-   read its data supports, in one of three grammars so nothing
-   masquerades as a return:
+   ROOM A — "THE VERIFIED BOARD" · Plate & Tape
+   ------------------------------------------------------------
+   The room is exactly two elements:
 
-     · index       a verified, CI'd hedonic move
-                   `label · +25.1% 5Y · [12, 39]`  (95% CI tag)
-     · demand      a measured %-over-estimate
-                   `label · demand +X%`  + typical / record
-     · descriptive `label · typical $X · record $Y · N lots`
-                   — NEVER a % appreciation.
+     · THE MONUMENT — the scoped market's flagship read, stamped
+       as an engraved letterpress plate: Fraunces at ~200px with
+       its 95% CI drawn beneath as a beam instrument. Numbers
+       are STAMPED, never spun — a clip reveal of the whole
+       figure; no count-ups, no rolling digits, ever.
+     · THE TAPE — every sub-market read as a full-bleed
+       broadsheet row. Zero cards, zero boxes, zero radius.
+       Zebra stripes ±4% off the paper; a 3px brass rule at the
+       viewport edge marks the scoped row and slides between
+       rows on scope change.
 
-   Scoping (activeKey):
-     · 'all'    — cross-market leaders: the CI'd index sub-markets
-                  first (today's verified movers), then the
-                  strongest demand sub-markets across verticals.
-     · vertical — that vertical's sub-markets, ordered index →
-                  demand → descriptive. This is the key win: on
-                  Science it shows meteorites/fossils/etc. with
-                  demand + records instead of an empty bar.
-
-   A row click re-scopes the page to that read's vertical.
-   Desktop = table; mobile = card list — the movers grammar.
+   Typography encodes epistemology: Fraunces speaks only in the
+   headline and the monument; Plex Mono speaks only in percent-
+   change figures; levels (demand %, prices) stay neutral ink.
+   Descriptive markets wear their abstention as a badge.
+   The room closes on THE RECEIPTS: a line-drawn replay seal
+   over the backtest sentence, its three figures flipped in
+   whole ("—" → value), never interpolated.
    ============================================================ */
 
-const EASE = [0.23, 1, 0.32, 1] as const;
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+interface Receipts { flaggedPct: number; unflaggedPct: number; n: number }
 
 interface Props {
   market: MarketData | null;
   activeKey: Market;
   onSelect: (key: Market) => void;
-  /** mobile = card list; desktop = table */
   variant?: 'desktop' | 'mobile';
-  /** the condensed desktop board — rides beside Today's Call, no show-more/foot.
-      It's the only board on desktop; CI'd reads lead, demand fills the rest. */
   condensed?: boolean;
-  /** how many rows the condensed board renders — sized by the caller to fill
-      the call plate's height (rows flex to eat the remaining slack). */
   maxRows?: number;
-  /** printed on the paper room (home) — ink palette swaps, layout unchanged */
+  /** printed on the paper room (home) — the Plate & Tape treatment */
   paper?: boolean;
+  /** the backtest receipts — flagged/unflagged median % + replayed count */
+  receipts?: Receipts | null;
 }
 
-// how strong a demand read is — used to rank the cross-market roll-up
 const demandStrength = (r: SubMarketRead) => r.demandNow ?? -Infinity;
 
-/**
- * Resolve the ordered rows for the active scope.
- * - 'all': every vertical's 'index' sub-markets (ranked by |move|), then the
- *   strongest 'demand' sub-markets across verticals — a roll-up of what's
- *   moving everywhere. Descriptive buckets stay off the cross-market board.
- * - a vertical: that vertical's sub-markets, ordered index → demand →
- *   descriptive (each group internally by its own strength).
- */
 function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRead[] {
   const sm = market?.subMarkets;
   if (!sm) return [];
-
   if (activeKey === 'all') {
     const all: SubMarketRead[] = Object.values(sm).flat();
     const index = all
@@ -78,288 +65,370 @@ function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRea
       .sort((a, b) => demandStrength(b) - demandStrength(a));
     return [...index, ...demand];
   }
-
   const rows = sm[activeKey] || [];
   const rank = { index: 0, demand: 1, descriptive: 2 } as const;
   return [...rows].sort((a, b) => {
     if (rank[a.readType] !== rank[b.readType]) return rank[a.readType] - rank[b.readType];
-    // within a group: index by |move|, demand by demandNow, descriptive by lots
     if (a.readType === 'index' && a.index && b.index) return Math.abs(b.index.changePct) - Math.abs(a.index.changePct);
     if (a.readType === 'demand') return demandStrength(b) - demandStrength(a);
     return b.lots - a.lots;
   });
 }
 
-/** Whether the active scope resolves any board rows — lets the home terminal
-    decide if the condensed board earns the call plate's second column. */
 export function hasSubMarketRows(market: MarketData | null, activeKey: Market): boolean {
   return resolveRows(market, activeKey).length > 0;
 }
 
-// the small readType tag per row
-function tagFor(r: SubMarketRead): string {
-  if (r.readType === 'index') return '95% CI';
-  if (r.readType === 'demand') return 'demand';
-  return 'typical';
+// the readType tag, caps-tracked on the tape
+function tapeTag(r: SubMarketRead): string {
+  if (r.readType === 'index') return r.indexMethod === 'repeat-sale' ? 'Repeat-sale index' : 'Hedonic index';
+  if (r.readType === 'demand') return 'Demand read';
+  return 'Descriptive — no index';
 }
 
-// hover-title naming the method behind an index read — both are 95% CI'd, but a
-// hedonic maker move and a mix-immune repeat-sales index are different animals.
-function methodTitle(r: SubMarketRead): string | undefined {
-  if (r.readType !== 'index') return undefined;
-  return r.indexMethod === 'repeat-sale'
-    ? 'Repeat-sales index — same card, same grade, resold 2+ times (mix-immune Bailey-Muth-Nourse, 95% CI)'
-    : 'Hedonic index — quality-controlled per-maker price regression (95% CI)';
-}
+// signed integer for CI terminals: +79 / −4
+const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
-// the direction for tinting — index by CI'd move, demand by sign, descriptive neutral
-function dirFor(r: SubMarketRead): 'up' | 'down' | undefined {
-  if (r.readType === 'index' && r.index) return r.index.changePct >= 0 ? 'up' : 'down';
-  if (r.readType === 'demand' && r.demandNow != null) return r.demandNow >= 0 ? 'up' : 'down';
-  return undefined;
-}
-
-// the headline cell — the strongest honest read (never a fake %)
-function readLine(r: SubMarketRead): { primary: string; per: string } {
-  if (r.readType === 'index' && r.index) {
-    return { primary: fmtPct(r.index.changePct), per: r.index.horizon };
-  }
-  if (r.readType === 'demand' && r.demandNow != null) {
-    return { primary: `demand ${fmtPct(r.demandNow)}`, per: 'over est.' };
-  }
-  // descriptive — the typical price is the headline; no appreciation
-  return { primary: r.typicalUsd != null ? `typical ${fmtMoneyCompact(r.typicalUsd)}` : '—', per: '' };
-}
-
-// the secondary cell — the CI for an index, else typical/record support. On the
-// cards row the CI is joined by the bid-competition demand read (median bids/lot
-// from Goldin's bidCount) — a demand primitive alongside the CI'd price index,
-// never masquerading as the index itself.
-function supportLine(r: SubMarketRead): string {
-  if (r.readType === 'index' && r.index) {
-    const ci = `[${r.index.ciLoPct.toFixed(0)}, ${r.index.ciHiPct.toFixed(0)}]`;
-    return r.bidCompNow != null ? `${ci} · ${r.bidCompNow} bids/lot` : ci;
-  }
-  if (r.readType === 'demand') {
-    if (r.typicalUsd != null) return `typical ${fmtMoneyCompact(r.typicalUsd)}`;
-    if (r.record) return `record ${fmtMoneyCompact(r.record.usd)}`;
-    return '—';
-  }
-  // descriptive — the record is the support
-  return r.record ? `record ${fmtMoneyCompact(r.record.usd)}` : '—';
-}
-
-/* ── THE CERTIFIED READ CARD ─────────────────────────────────
-   The paper room's grammar: every sub-market is a curated card,
-   not a table row, composed as a bento — the strongest read is
-   the FLAGSHIP, an inverted ink card (the dark market speaking
-   inside the paper room). Each card draws its own data live on
-   scroll: an index read sweeps in its 95% confidence band, a
-   demand read traces its real quarterly series, a descriptive
-   read prints its record. The % speaks mono; everything else
-   is ink on cream (or cream on ink). */
-
-const bandT = { duration: 0.9, ease: EASE, delay: 0.25 };
-
-/** The drawn 95% CI band: a zero-anchored scale with the confidence
-    interval as a filled band and the point estimate as a marker.
-    The band sweeps in and the dot lands when the card scrolls into view. */
-function CIBand({ lo, hi, point, dir, play }: { lo: number; hi: number; point: number; dir?: 'up' | 'down'; play: boolean }) {
-  const min = Math.min(0, lo);
-  const max = Math.max(0, hi);
-  const span = max - min || 1;
-  const pad = span * 0.08;
-  const x = (v: number) => ((v - min + pad) / (span + pad * 2)) * 100;
-  return (
-    <div className={styles.ciBand} data-dir={dir} aria-label={`95% confidence band ${lo.toFixed(0)} to ${hi.toFixed(0)}`}>
-      <div className={styles.ciTrack} aria-hidden>
-        <span className={styles.ciAxisLine} />
-        <span className={styles.ciZeroTick} style={{ left: `${x(0)}%` }} />
-        <m.span
-          className={styles.ciFillBar}
-          style={{ left: `${x(lo)}%`, width: `${Math.max(0.5, x(hi) - x(lo))}%`, transformOrigin: 'left center' }}
-          initial={{ scaleX: 0 }}
-          animate={play ? { scaleX: 1 } : { scaleX: 0 }}
-          transition={bandT}
-        />
-        <m.span
-          className={styles.ciPointDot}
-          style={{ left: `${x(point)}%` }}
-          initial={{ scale: 0, opacity: 0 }}
-          animate={play ? { scale: 1, opacity: 1 } : { scale: 0, opacity: 0 }}
-          transition={{ duration: 0.4, ease: EASE, delay: 1.0 }}
-        />
-      </div>
-      <div className={styles.ciEnds}>
-        <span className={styles.pctData}>{lo.toFixed(0)}</span>
-        <span className={styles.ciTag}>95% band</span>
-        <span className={styles.pctData}>{hi.toFixed(0)}</span>
-      </div>
-    </div>
-  );
-}
-
-/** The drawn demand series: the real quarterly %-over-estimate line,
-    tracing itself in on scroll. */
-function DemandSpark({ series, dir, play }: { series: { period: string; value: number }[]; dir?: 'up' | 'down'; play: boolean }) {
-  const vals = series.map((s) => s.value);
-  if (vals.length < 2) return null;
-  const min = Math.min(...vals, 0);
-  const max = Math.max(...vals, 0);
-  const span = max - min || 1;
-  const px = (i: number) => (i / (vals.length - 1)) * 100;
-  const py = (v: number) => 11 - ((v - min) / span) * 10;
-  const d = vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${px(i)} ${py(v)}`).join(' ');
-  return (
-    <div className={styles.ciBand} data-dir={dir} aria-label="Demand by quarter">
-      <svg viewBox="0 0 100 12" preserveAspectRatio="none" className={styles.ciSvg} aria-hidden>
-        {min < 0 && <line x1="0" y1={py(0)} x2="100" y2={py(0)} className={styles.ciAxis} vectorEffect="non-scaling-stroke" />}
-        <m.path
-          d={d}
-          className={styles.sparkLine}
-          vectorEffect="non-scaling-stroke"
-          fill="none"
-          initial={{ pathLength: 0 }}
-          animate={play ? { pathLength: 1 } : { pathLength: 0 }}
-          transition={{ duration: 1.4, ease: EASE, delay: 0.25 }}
-        />
-        <m.circle
-          cx="100" cy={py(vals[vals.length - 1])} r="2.2" className={styles.ciDot}
-          initial={{ opacity: 0 }}
-          animate={play ? { opacity: 1 } : { opacity: 0 }}
-          transition={{ duration: 0.3, delay: 1.55 }}
-        />
-      </svg>
-      <div className={styles.ciEnds}>
-        <span className={styles.ciTag}>{series[0].period}</span>
-        <span className={styles.ciTag}>sold over estimate · by quarter</span>
-        <span className={styles.ciTag}>{series[series.length - 1].period}</span>
-      </div>
-    </div>
-  );
-}
-
-/** One certified read card. size: 'flag' (the inverted ink flagship,
-    2×2 in the bento), 'wide' (2×1), or 'std'. */
-function ReadCard({ r, active, onSelect, size = 'std', play }: {
-  r: SubMarketRead; active: boolean; onSelect: (k: Market) => void;
-  size?: 'flag' | 'wide' | 'std'; play: boolean;
+/* ── THE CI BEAM — the caliper. A 1px rule, tick terminals at the
+   95% bounds, a solid diamond at the point estimate. Never a slider. */
+function CIBeam({ lo, hi, point, dir, mini = false, play = true }: {
+  lo: number; hi: number; point: number; dir?: 'up' | 'down'; mini?: boolean; play?: boolean;
 }) {
-  const dir = dirFor(r);
-  const line = readLine(r);
-  const foot: string[] = [`${fmtInt(r.lots)} lots`];
-  if (r.readType !== 'descriptive' && r.typicalUsd != null) foot.push(`typical ${fmtMoneyCompact(r.typicalUsd)}`);
-  if (r.bidCompNow != null) foot.push(`${r.bidCompNow} bids/lot`);
-  if (r.readType === 'descriptive' && r.sellThroughPct != null) foot.push(`${Math.round(r.sellThroughPct)}% sell-through`);
-  // the flagship states its method in plain words — the wow is the certainty
-  const methodLine = size === 'flag' && r.readType === 'index'
-    ? (r.indexMethod === 'repeat-sale'
-        ? 'Repeat-sales index — the same card, the same grade, resold. Mix-immune, 95% confidence.'
-        : 'Quality-controlled price index across this maker’s verified sales. 95% confidence.')
-    : null;
+  // the beam IS the interval: lo→hi spans the instrument, terminals at the
+  // ends, the diamond at the point estimate. Zero gets a dashed witness tick
+  // only when the interval actually crosses it.
+  const span = (hi - lo) || 1;
+  const pad = span * 0.06;
+  const x = (v: number) => ((v - lo + pad) / (span + pad * 2)) * 100;
+  const tick = mini ? 4 : 6;   // half-height of terminals
+  const dia = mini ? 3.2 : 5;  // half-diagonal of the diamond
+  return (
+    <div className={mini ? styles.beamMini : styles.beam} data-dir={dir} aria-hidden>
+      {!mini && <span className={styles.beamLabel}>95% CI</span>}
+      <div className={styles.beamStage}>
+        <m.svg
+          viewBox="0 0 100 24" preserveAspectRatio="none" className={styles.beamSvg}
+          initial={play ? { scaleX: 0.6, opacity: 0 } : false}
+          animate={{ scaleX: 1, opacity: 1 }}
+          transition={{ duration: 0.5, ease: EASE, delay: 0.3 }}
+        >
+          <line x1={x(lo)} y1="12" x2={x(hi)} y2="12" className={styles.beamRule} vectorEffect="non-scaling-stroke" />
+          <line x1={x(lo)} y1={12 - tick} x2={x(lo)} y2={12 + tick} className={styles.beamRule} vectorEffect="non-scaling-stroke" />
+          <line x1={x(hi)} y1={12 - tick} x2={x(hi)} y2={12 + tick} className={styles.beamRule} vectorEffect="non-scaling-stroke" />
+          {lo < 0 && hi > 0 && (
+            <line x1={x(0)} y1={12 - tick - 2} x2={x(0)} y2={12 + tick + 2} className={styles.beamZero} vectorEffect="non-scaling-stroke" />
+          )}
+        </m.svg>
+        <m.span
+          className={styles.beamDiamond}
+          style={{ left: `${x(point)}%`, width: dia * 2, height: dia * 2 }}
+          initial={play ? { scale: 0 } : false}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.18, ease: EASE, delay: play ? 0.8 : 0 }}
+        />
+      </div>
+      {!mini && (
+        <div className={styles.beamEnds}>
+          <span className={styles.pctData}>{fmtCI(lo)}</span>
+          <span className={styles.pctData}>{fmtCI(hi)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── the demand line — the real quarterly series over its median. */
+function DemandLine({ series, mini = false }: { series: { period: string; value: number }[]; mini?: boolean }) {
+  const pts = useMemo(() => {
+    // decimate to ≤48 points
+    const step = Math.max(1, Math.ceil(series.length / 48));
+    const vals = series.filter((_, i) => i % step === 0 || i === series.length - 1).map((s) => s.value);
+    if (vals.length < 2) return null;
+    const sorted = [...vals].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const span = (hi - lo) || 1;
+    const px = (i: number) => (i / (vals.length - 1)) * 100;
+    const py = (v: number) => 66 - ((v - lo) / span) * 60;
+    return {
+      d: vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${px(i).toFixed(2)} ${py(v).toFixed(2)}`).join(' '),
+      medianY: py(median),
+      endY: py(vals[vals.length - 1]),
+      first: series[0].period,
+      last: series[series.length - 1].period,
+    };
+  }, [series]);
+  if (!pts) return null;
+  return (
+    <div className={mini ? styles.demandLineMini : styles.demandLine} aria-hidden>
+      <svg viewBox="0 0 100 72" preserveAspectRatio="none" className={styles.demandSvg}>
+        <line x1="0" y1={pts.medianY} x2="100" y2={pts.medianY} className={styles.demandBase} vectorEffect="non-scaling-stroke" />
+        <path d={pts.d} className={styles.demandPath} fill="none" vectorEffect="non-scaling-stroke" />
+        <circle cx="100" cy={pts.endY} r="2.6" className={styles.demandDot} />
+      </svg>
+      {!mini && (
+        <div className={styles.demandEnds}>
+          <span>{pts.first}</span>
+          <span>sold over estimate · by quarter</span>
+          <span>{pts.last}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── THE MONUMENT — the scoped read as an engraved plate.
+   Fixed-height zone; the figure stamps in whole (clip reveal). */
+function Monument({ r, play }: { r: SubMarketRead; play: boolean }) {
+  const stamp = {
+    initial: play ? { clipPath: 'inset(100% 0 0 0)', opacity: 0.6 } : false,
+    animate: { clipPath: 'inset(0% 0 0 0)', opacity: 1 },
+    transition: { duration: 0.7, ease: EASE, delay: 0.15 },
+  } as const;
+
+  if (r.readType === 'index' && r.index) {
+    const dir = r.index.changePct >= 0 ? 'up' : 'down';
+    return (
+      <div className={styles.monBody}>
+        <m.div className={styles.monFigureRow} {...stamp}>
+          <span className={`${styles.monFigure} ${styles.monDelta}`} data-dir={dir}>
+            <sup>{r.index.changePct >= 0 ? '+' : '−'}</sup>
+            {Math.abs(r.index.changePct).toFixed(1)}
+            <sup>%</sup>
+          </span>
+          <span className={styles.monHorizon}>{r.index.horizon}</span>
+        </m.div>
+        <CIBeam lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} play={play} />
+        <div className={styles.monChip}>{tapeTag(r)} · {fmtInt(r.lots)} lots</div>
+        {r.bidCompNow != null && <div className={styles.monBids}>{r.bidCompNow} median bids per lot</div>}
+      </div>
+    );
+  }
+
+  if (r.readType === 'demand' && r.demandNow != null) {
+    return (
+      <div className={styles.monBody}>
+        <m.div className={styles.monFigureRow} {...stamp}>
+          <span className={styles.monFigure}>
+            <sup>{r.demandNow >= 0 ? '+' : '−'}</sup>
+            {Math.abs(r.demandNow).toFixed(1)}
+            <sup>%</sup>
+          </span>
+          <span className={styles.monHorizon}>demand now</span>
+        </m.div>
+        {r.demandSeries.length >= 2 && <DemandLine series={r.demandSeries} />}
+        <div className={styles.monChip}>Demand read · quarterly · {fmtInt(r.lots)} lots</div>
+      </div>
+    );
+  }
+
+  // descriptive — the abstention worn as the room's most confident badge
+  return (
+    <div className={styles.monBody}>
+      <m.div className={styles.monFigureRow} {...stamp}>
+        <span className={`${styles.monFigure} ${styles.monFigureDesc}`}>
+          <span className={styles.monDescLabel}>Typical</span>{' '}
+          {r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : '—'}
+        </span>
+      </m.div>
+      {r.record && <div className={styles.monRecordLine}>Record {fmtMoneyCompact(r.record.usd)}</div>}
+      <div className={styles.monChip} data-abstain="true">Descriptive market — no index published</div>
+    </div>
+  );
+}
+
+/* ── THE REPLAY SEAL — a line-drawn hallmark; draws once on entry. */
+function ReplaySeal({ n, play }: { n: number; play: boolean }) {
+  const draw = (delay: number) => ({
+    initial: play ? { pathLength: 0 } : false,
+    animate: { pathLength: 1 },
+    transition: { duration: 0.9, ease: 'easeOut' as const, delay },
+  });
+  const ticks = Array.from({ length: 24 }, (_, i) => {
+    const a = (i / 24) * Math.PI * 2;
+    const r1 = 40, r2 = 45;
+    return { x1: 48 + Math.cos(a) * r1, y1: 48 + Math.sin(a) * r1, x2: 48 + Math.cos(a) * r2, y2: 48 + Math.sin(a) * r2 };
+  });
+  return (
+    <div className={styles.seal} aria-label={`Replayed against ${fmtInt(n)} historical sales`}>
+      <svg viewBox="0 0 96 96">
+        <m.circle cx="48" cy="48" r="46" {...draw(0)} />
+        <m.circle cx="48" cy="48" r="38" {...draw(0.15)} />
+        {ticks.map((t, i) => (
+          <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} className={styles.sealTick} />
+        ))}
+        {/* the gavel: two parallel head strokes over a baseline dash */}
+        <m.line x1="34" y1="40" x2="52" y2="52" {...draw(0.5)} />
+        <m.line x1="38" y1="34" x2="56" y2="46" {...draw(0.55)} />
+        <m.line x1="50" y1="42" x2="62" y2="30" {...draw(0.6)} />
+        <m.line x1="36" y1="62" x2="60" y2="62" strokeDasharray="4 3" {...draw(0.7)} />
+      </svg>
+    </div>
+  );
+}
+
+/* ── the receipts chips — "—" flips to the whole value on entry. */
+function ReceiptChip({ value, dir, seen }: { value: string; dir?: 'up' | 'down'; seen: boolean }) {
+  return (
+    <span className={styles.receiptChip} data-dir={dir}>
+      <AnimatePresence mode="wait" initial={false}>
+        <m.span
+          key={seen ? 'v' : 'dash'}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className={dir ? styles.pctData : undefined}
+        >
+          {seen ? value : '—'}
+        </m.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
+/* ── one tape row ── */
+function TapeRow({ r, scoped, onSelect }: { r: SubMarketRead; scoped: boolean; onSelect: (k: Market) => void }) {
+  const isIndex = r.readType === 'index' && r.index;
+  const dir = isIndex ? (r.index!.changePct >= 0 ? 'up' : 'down') : undefined;
   return (
     <button
       type="button"
-      className={styles.readCard}
-      data-size={size}
-      data-active={active || undefined}
+      className={styles.tapeRow}
+      data-scoped={scoped || undefined}
+      aria-pressed={scoped}
       onClick={() => onSelect(r.vertical as Market)}
-      aria-label={`${r.label}: ${line.primary} ${line.per}, ${supportLine(r)} — switch the board to ${r.vertical}`}
-      aria-current={active ? 'true' : undefined}
     >
-      <div className={styles.readCardHead}>
-        <span className={styles.readCardName}>{r.label}</span>
-        <span className={styles.readSeal} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
-      </div>
-      <div className={styles.readCardRead} data-dir={dir}>
-        {r.readType === 'index' && r.index ? (
+      {scoped && <m.span layoutId="brassRule" className={styles.brassRule} transition={{ duration: 0.25, ease: EASE }} />}
+      <span className={styles.tapeLabelBlock}>
+        <span className={styles.tapeLabel}>{r.label}</span>
+        <span className={styles.tapeTag}>{tapeTag(r)}</span>
+      </span>
+      <span className={styles.tapeInstrument} aria-hidden>
+        {isIndex ? (
+          <CIBeam lo={r.index!.ciLoPct} hi={r.index!.ciHiPct} point={r.index!.changePct} dir={dir} mini play={false} />
+        ) : r.readType === 'demand' && r.demandSeries.length >= 2 ? (
+          <DemandLine series={r.demandSeries} mini />
+        ) : (
+          <span className={styles.tapeAbstain}>—</span>
+        )}
+      </span>
+      <span className={styles.tapeRight}>
+        {isIndex ? (
           <>
-            {size === 'flag' ? (
-              <RollingNumber
-                className={`${styles.readCardPct} ${styles.pctData}`}
-                value={r.index.changePct}
-                from={0}
-                format={fmtPct}
-                duration={1400}
-                delay={150}
-                play={play}
-              />
-            ) : (
-              <span className={`${styles.readCardPct} ${styles.pctData}`}>{fmtPct(r.index.changePct)}</span>
-            )}
-            <span className={styles.readCardPer}>{r.index.horizon}</span>
+            <span className={`${styles.tapeFigure} ${styles.pctData}`} data-dir={dir}>
+              <span className={styles.tri} data-dir={dir} aria-hidden />
+              {fmtPct(r.index!.changePct)} · {r.index!.horizon}
+            </span>
+            <span className={styles.tapeSub}>CI {fmtCI(r.index!.ciLoPct)} to {fmtCI(r.index!.ciHiPct)} · {fmtInt(r.lots)} lots</span>
           </>
         ) : r.readType === 'demand' && r.demandNow != null ? (
           <>
-            <span className={`${styles.readCardPct} ${styles.pctData}`}>{fmtPct(r.demandNow)}</span>
-            <span className={styles.readCardPer}>demand · over est.</span>
+            <span className={styles.tapeFigure}>Demand {fmtPct(r.demandNow)}</span>
+            <span className={styles.tapeSub}>over estimate · {fmtInt(r.lots)} lots</span>
           </>
         ) : (
           <>
-            <span className={styles.readCardMoney}>{r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : '—'}</span>
-            <span className={styles.readCardPer}>typical price</span>
+            <span className={styles.tapeFigureDesc}>
+              {r.typicalUsd != null ? `Typical ${fmtMoneyCompact(r.typicalUsd)}` : '—'}
+              {r.record ? ` · Record ${fmtMoneyCompact(r.record.usd)}` : ''}
+            </span>
+            <span className={styles.tapeSub}>{fmtInt(r.lots)} lots</span>
           </>
         )}
-      </div>
-      {methodLine && <div className={styles.readCardMethod}>{methodLine}</div>}
-      {r.readType === 'index' && r.index ? (
-        <CIBand lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} play={play} />
-      ) : r.readType === 'demand' && r.demandSeries.length >= 2 ? (
-        <DemandSpark series={r.demandSeries} dir={dir} play={play} />
-      ) : r.record ? (
-        <div className={styles.readCardRecord}>
-          <span className={styles.readCardRecordLabel}>record</span>
-          <span className={styles.readCardRecordVal}>{fmtMoneyCompact(r.record.usd)}</span>
-          <span className={styles.readCardRecordTitle}>{r.record.title}</span>
-        </div>
-      ) : null}
-      <div className={styles.readCardFoot}>{foot.join(' · ')}</div>
+      </span>
+      <span className={styles.tapeChevron} aria-hidden />
     </button>
   );
 }
 
-// One board row's five cells — shared by the animated table and the condensed board.
-function RowCells({ r }: { r: SubMarketRead }) {
-  const dir = dirFor(r);
-  const line = readLine(r);
-  return (
-    <>
-      <span className={styles.moversName}>
-        <span className={styles.moversTick} data-dir={dir} aria-hidden />
-        {r.label}
-      </span>
-      <span className={styles.subTag} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
-      <span className={styles.moversDelta} data-dir={dir}>
-        {line.primary} {line.per && <em>{line.per}</em>}
-      </span>
-      <span className={styles.subSupport}>{supportLine(r)}</span>
-      <span className={styles.moversN}>{fmtInt(r.lots)}</span>
-    </>
-  );
-}
-
-export default function SubMarketBoard({ market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows, paper = false }: Props) {
+export default function SubMarketBoard({
+  market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows, paper = false, receipts = null,
+}: Props) {
   const reduce = useReducedMotion();
   const [ref, seen] = useInView<HTMLDivElement>();
+  const [receiptsRef, receiptsSeen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
 
-  // cap the visible rows; the rest reveal behind a "show more"
-  const CAP = 5;
+  const CAP = 8;
   const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? rows : rows.slice(0, CAP);
-  const hasMore = rows.length > CAP;
-  const moreBtn = hasMore ? (
-    <button type="button" className={styles.subShowMore} onClick={() => setExpanded((v) => !v)}>
-      {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
-    </button>
-  ) : null;
 
-  // The condensed board — rides beside Today's Call and IS the desktop board.
-  // CI'd reads lead (resolveRows), demand fills the rest; the caller sizes
-  // maxRows to the call plate's height and the rows flex to fill it exactly.
+  /* ════ ROOM A — Plate & Tape (the home's paper room) ════ */
+  if (paper) {
+    if (!rows.length) return null;
+    const flag = rows[0];
+    const shown = expanded ? rows : rows.slice(0, CAP);
+    const play = seen && !reduce;
+    return (
+      <LazyMotion features={domAnimation} strict>
+        <div className={styles.roomA} ref={ref}>
+          {/* the altar — centered on the page axis */}
+          <div className={styles.altar}>
+            <div className={styles.eyebrow}>
+              <img src="/brand/lectr-ink.png" alt="" className={styles.eyebrowMark} aria-hidden />
+              <span>The verified board</span>
+            </div>
+            <h2 className={styles.altarHead}>Every price here <em>survived</em>.</h2>
+            <p className={styles.altarSub}>
+              Sub-market reads built from the full auction corpus. Where the data cannot
+              carry an index, we say so — and publish nothing.
+            </p>
+          </div>
+
+          {/* the monument — fixed zone, scoped read, stamped whole */}
+          <div className={styles.monument}>
+            <div className={styles.tickRain} aria-hidden />
+            <AnimatePresence mode="wait" initial={false}>
+              <m.div
+                key={`${flag.vertical}:${flag.slug}`}
+                className={styles.monSwap}
+                initial={reduce ? false : { clipPath: 'inset(0 0 100% 0)' }}
+                animate={{ clipPath: 'inset(0 0 0% 0)' }}
+                exit={reduce ? undefined : { clipPath: 'inset(100% 0 0 0)' }}
+                transition={{ duration: 0.26, ease: EASE }}
+              >
+                <Monument r={flag} play={play} />
+              </m.div>
+            </AnimatePresence>
+          </div>
+
+          {/* the tape — full-bleed broadsheet rows */}
+          <div className={styles.tape}>
+            {shown.map((r) => (
+              <TapeRow key={`${r.vertical}:${r.slug}`} r={r} scoped={r.vertical === activeKey && activeKey !== 'all'} onSelect={onSelect} />
+            ))}
+            {rows.length > CAP && (
+              <button type="button" className={styles.tapeMore} onClick={() => setExpanded((v) => !v)}>
+                {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
+              </button>
+            )}
+          </div>
+
+          {/* the receipts — seal, sentence, chips, the room's one pill */}
+          {receipts && receipts.n > 500 && (
+            <div className={styles.receipts} ref={receiptsRef}>
+              <ReplaySeal n={receipts.n} play={receiptsSeen && !reduce} />
+              <div className={styles.receiptsKicker}>The receipts</div>
+              <p className={styles.receiptsLine}>
+                Flagged lots hammered{' '}
+                <ReceiptChip value={fmtPct(receipts.flaggedPct)} dir="up" seen={receiptsSeen} />{' '}
+                median over estimate; unflagged{' '}
+                <ReceiptChip value={fmtPct(receipts.unflaggedPct)} dir="down" seen={receiptsSeen} />{' '}
+                — across <ReceiptChip value={fmtInt(receipts.n)} seen={receiptsSeen} /> replayed sales.
+              </p>
+              <a href="/value" className={styles.roomPill}>See the backtest record</a>
+            </div>
+          )}
+        </div>
+      </LazyMotion>
+    );
+  }
+
+  /* ── legacy non-paper paths (condensed board etc.) — unchanged grammar ── */
   if (condensed) {
     if (!rows.length) return null;
-    const shownCond = rows.slice(0, Math.max(1, maxRows ?? CAP));
+    const shownCond = rows.slice(0, Math.max(1, maxRows ?? 5));
     return (
       <div className={`${styles.movers} ${styles.condensed}`}>
         <div className={styles.condHead}>
@@ -367,26 +436,19 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
           <span className={styles.condCount}>{rows.length} tracked</span>
         </div>
         <div className={styles.subTable} role="table">
-          <div className={styles.subColHead} role="row">
-            <span role="columnheader">Sub-market</span>
-            <span role="columnheader">Read</span>
-            <span role="columnheader" className={styles.right}>Move / typical</span>
-            <span role="columnheader" className={styles.right}>Support</span>
-            <span role="columnheader" className={styles.right}>Lots</span>
-          </div>
           {shownCond.map((r) => {
-            const line = readLine(r);
+            const isIndex = r.readType === 'index' && r.index;
+            const dir = isIndex ? (r.index!.changePct >= 0 ? 'up' : 'down') : undefined;
             return (
-              <button
-                key={`${r.vertical}:${r.slug}`}
-                type="button"
-                className={styles.subRow}
-                data-active={r.vertical === activeKey}
-                onClick={() => onSelect(r.vertical as Market)}
-                aria-label={`${r.label}: ${line.primary} ${line.per}, ${supportLine(r)} — switch the board to ${r.vertical}`}
-                aria-current={r.vertical === activeKey ? 'true' : undefined}
-              >
-                <RowCells r={r} />
+              <button key={`${r.vertical}:${r.slug}`} type="button" className={styles.subRow}
+                onClick={() => onSelect(r.vertical as Market)}>
+                <span className={styles.moversName}>{r.label}</span>
+                <span className={styles.moversDelta} data-dir={dir}>
+                  {isIndex ? `${fmtPct(r.index!.changePct)} ${r.index!.horizon}`
+                    : r.readType === 'demand' && r.demandNow != null ? `demand ${fmtPct(r.demandNow)}`
+                    : r.typicalUsd != null ? `typical ${fmtMoneyCompact(r.typicalUsd)}` : '—'}
+                </span>
+                <span className={styles.moversN}>{fmtInt(r.lots)}</span>
               </button>
             );
           })}
@@ -395,171 +457,5 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
     );
   }
 
-  const head = paper ? (
-    <div className={styles.cardRoomHead}>
-      <img src="/brand/lectr.png" alt="" className={styles.inkMark} aria-hidden />
-      <h2 className={styles.roomTitle}>The verified <em>board</em></h2>
-      <p className={styles.roomSub}>
-        {activeKey === 'all'
-          ? 'Every read the engine will stand behind — drawn from its own data, card by card.'
-          : 'This market’s certified reads — each drawn from its own data, card by card.'}
-      </p>
-    </div>
-  ) : (
-    <div className={styles.moversHead}>
-      <div>
-        <h2 className={styles.roomTitle}>The verified <em>board</em></h2>
-        <p className={styles.roomSub}>
-          {activeKey === 'all'
-            ? 'Every read the engine will stand behind — price indices at 95% confidence, measured demand where estimates exist, and the plain record everywhere else.'
-            : 'This market’s certified reads — indices at 95% confidence, measured demand, and the plain record.'}
-        </p>
-      </div>
-    </div>
-  );
-
-  const foot = (
-    <p className={styles.moversFoot}>
-      Each sub-market shows the strongest read its data supports — a 95%-CI index (a hedonic maker move where
-      estimates exist, a mix-immune repeat-sales index where they don&apos;t, as with cards), else measured demand
-      over estimate, else the descriptive record (typical · record · volume). No sub-market prints an
-      appreciation the engine won&apos;t defend.
-    </p>
-  );
-
-  if (!rows.length) {
-    return (
-      <div className={`${styles.movers}${paper ? ` ${styles.moversPaper}` : ''}`} ref={ref}>
-        {head}
-        <div className={styles.moversEmpty}>
-          No tracked sub-markets in {activeKey === 'all' ? 'the market' : `${activeKey}`} yet — as coverage deepens,
-          each vertical&apos;s sub-markets surface here with the strongest read they can honestly support.
-        </div>
-        {foot}
-      </div>
-    );
-  }
-
-  // ── THE PAPER ROOM: the certified bento (both viewports; CSS reflows the
-  // mosaic — 4-col with a 2×2 ink flagship on desktop, stacked on mobile).
-  // The strongest read anchors the composition as the inverted flagship;
-  // every card draws its data in as the room scrolls into view.
-  if (paper) {
-    const CARD_CAP = 8; // flagship (2×2) + wide (2×1) + six singles = a full mosaic
-    const shownCards = expanded ? rows : rows.slice(0, CARD_CAP);
-    const sizeAt = (i: number): 'flag' | 'wide' | 'std' => (i === 0 ? 'flag' : i === 1 ? 'wide' : 'std');
-    const cardV = {
-      hidden: reduce ? { opacity: 1 } : { opacity: 0, y: 14 },
-      show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
-    };
-    return (
-      <LazyMotion features={domAnimation} strict>
-        <div className={styles.moversPaper} ref={ref}>
-          {head}
-          <m.div
-            className={styles.bento}
-            variants={{ hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.07 } } }}
-            initial="hidden"
-            animate={seen ? 'show' : 'hidden'}
-          >
-            {shownCards.map((r, i) => (
-              <m.div key={`${r.vertical}:${r.slug}`} className={styles.bentoCell} data-size={sizeAt(i)} variants={cardV}>
-                <ReadCard r={r} active={r.vertical === activeKey} onSelect={onSelect} size={sizeAt(i)} play={seen && !reduce} />
-              </m.div>
-            ))}
-          </m.div>
-          {rows.length > CARD_CAP && (
-            <button type="button" className={styles.subShowMore} onClick={() => setExpanded((v) => !v)}>
-              {expanded ? 'Show less' : `Show ${rows.length - CARD_CAP} more`}
-            </button>
-          )}
-        </div>
-      </LazyMotion>
-    );
-  }
-
-  if (variant === 'mobile') {
-    return (
-      <div ref={ref} className={paper ? styles.moversPaper : undefined}>
-        {head}
-        <div className={styles.mobSubList}>
-          {shown.map((r) => {
-            const dir = dirFor(r);
-            const line = readLine(r);
-            return (
-              <button
-                key={`${r.vertical}:${r.slug}`}
-                type="button"
-                className={styles.mobSubCard}
-                data-active={r.vertical === activeKey}
-                onClick={() => onSelect(r.vertical as Market)}
-                aria-label={`${r.label}: ${line.primary} ${line.per} — switch to ${r.vertical}`}
-              >
-                <div className={styles.mobSubTop}>
-                  <span className={styles.mobSubName}>
-                    <span className={styles.moversTick} data-dir={dir} aria-hidden />
-                    {r.label}
-                  </span>
-                  <span className={styles.subTag} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
-                </div>
-                <div className={styles.mobSubBot}>
-                  <span className={styles.moversDelta} data-dir={dir}>
-                    {line.primary} {line.per && <em>{line.per}</em>}
-                  </span>
-                  <span className={styles.subSupport}>{supportLine(r)}</span>
-                </div>
-                <div className={styles.subMeta}>{fmtInt(r.lots)} lots{r.record ? ` · record ${fmtMoneyCompact(r.record.usd)}` : ''}</div>
-              </button>
-            );
-          })}
-        </div>
-        {moreBtn}
-        {foot}
-      </div>
-    );
-  }
-
-  const container = { hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.05 } } };
-  const rowV = {
-    hidden: reduce ? { opacity: 1 } : { opacity: 0, y: 8 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE } },
-  };
-
-  return (
-    <LazyMotion features={domAnimation} strict>
-      <div className={`${styles.movers}${paper ? ` ${styles.moversPaper}` : ''}`} ref={ref}>
-        {head}
-        <div className={styles.subTable} role="table">
-          <div className={styles.subColHead} role="row">
-            <span role="columnheader">Sub-market</span>
-            <span role="columnheader">Read</span>
-            <span role="columnheader" className={styles.right}>Move / typical</span>
-            <span role="columnheader" className={styles.right}>Support</span>
-            <span role="columnheader" className={styles.right}>Lots</span>
-          </div>
-          <m.div variants={container} initial="hidden" animate={seen ? 'show' : 'hidden'}>
-            {shown.map((r) => {
-              const line = readLine(r);
-              return (
-                <m.button
-                  key={`${r.vertical}:${r.slug}`}
-                  type="button"
-                  className={styles.subRow}
-                  data-active={r.vertical === activeKey}
-                  variants={rowV}
-                  onClick={() => onSelect(r.vertical as Market)}
-                  aria-label={`${r.label}: ${line.primary} ${line.per}, ${supportLine(r)} — switch the board to ${r.vertical}`}
-                  aria-current={r.vertical === activeKey ? 'true' : undefined}
-                >
-                  <RowCells r={r} />
-                </m.button>
-              );
-            })}
-          </m.div>
-        </div>
-        {moreBtn}
-        {foot}
-      </div>
-    </LazyMotion>
-  );
+  return null;
 }

@@ -6,146 +6,190 @@ import { RECORD_BOARD, type RecordEntry } from './records';
 import { fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import styles from './style.module.css';
 
-const EASE = [0.23, 1, 0.32, 1] as const;
-
 /* ============================================================
-   THE RECORD BOARD — the museum wall. All-time hammer records
-   as a ranked wall of plaques rather than a table:
+   ROOM B — "THE RECORD BOARD" · Plate & Tape
+   ------------------------------------------------------------
+   Two elements:
 
-     · №1     the hero plaque — full-width, the record record
-     · №2–4   three medium plaques in a row
-     · №5–10  six compact plaques, dense
+     · THE MONUMENT — record №01 as an engraved plate: rank,
+       Fraunces title, maker, the price at ~200px in NEUTRAL ink
+       (a record is a level — never green, never mono), stamped
+       whole from the baseline, then the HAMMER-STRIKE RULE —
+       a 2px ink rule that strikes in beneath it, the gavel's
+       full stop. Provenance beneath with a source diamond ✦
+       (or an ARCHIVAL chip — flagged, not hidden).
+     · THE TAPE — records 02–10 as full-bleed broadsheet rows:
+       rank, title — maker, category chip, the price in Inter
+       Semibold tabular neutral ink, house · year. Rows are
+       anchors out to the sale (the ↗ dialect; Room A's rows
+       are buttons with chevrons — different glyph, different
+       role).
 
-   Each plaque is a designed object: double-rule mat frame,
-   ghost rank numeral, tinted category chip, Fraunces title,
-   the price as the centerpiece, house · source at the foot.
-   Curated + source-flagged (full/stats tier). Market-scoped by
-   the top selector; every plaque links out to its sale.
+   Behind the plate: a diagonal hatch field (Room A rains
+   vertical ticks; Room B hatches at 45° — same drafting system,
+   different mood). The room closes on a dated colophon register
+   and THE PLATE MARK: the script wordmark as a letterpress
+   plate half-sunk into the closing seam.
    ============================================================ */
 
-// record category → the market key the top selector uses
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 const CAT_MARKET: Record<RecordEntry['category'], Market> = {
   Art: 'art', Watches: 'watches', Design: 'design',
   Sports: 'sports', Science: 'science', Culture: 'culture',
 };
 
-// every record is clickable — a direct sale link when we have one, otherwise a
-// title+house search that reliably resolves to the sale (these are curated
-// historical records, not live corpus lots with permalinks).
 function auctionHref(r: RecordEntry): string {
   return r.url ?? `https://www.google.com/search?q=${encodeURIComponent(`${r.title} ${r.house.replace(/·/g, ' ')} auction`)}`;
 }
 
-/** One plaque. size: 'hero' | 'mid' | 'mini' */
-function Plaque({ r, rank, size }: { r: RecordEntry; rank: number; size: 'hero' | 'mid' | 'mini' }) {
-  const no = String(rank).padStart(2, '0');
-  // the foot dedupes itself: when the source flag opens with the same house
-  // ("Christie's · 2022" vs "Christie's, May 2022"), only the fuller source prints.
-  const houseWord = r.house.split(/[·,]/)[0].trim().toLowerCase();
-  const dupe = r.source.trim().toLowerCase().startsWith(houseWord);
+/** the price, split so $ and the magnitude letter demote to 0.5em */
+function PlatePrice({ usd }: { usd: number }) {
+  const text = fmtMoneyCompact(usd); // e.g. "$195.0M"
+  const match = text.match(/^\$([\d,.]+)([A-Z]*)$/);
+  if (!match) return <>{text}</>;
   return (
-    <a
-      className={styles.plaque}
-      data-size={size}
-      href={auctionHref(r)}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`No. ${rank}: ${r.title} — ${fmtMoneyCompact(r.usd)} at ${r.house}. Open the sale.`}
-    >
-      <span className={styles.plaqueTopRow}>
-        <span className={styles.plaqueNo}>{no}</span>
-        <span className={styles.plaqueCat} data-cat={r.category}>{r.category}</span>
-      </span>
-      <span className={styles.plaqueTitle}>{r.title}</span>
-      {size !== 'mini' && <span className={styles.plaqueMaker}>{r.maker}</span>}
-      <span className={styles.plaquePrice}>{fmtMoneyCompact(r.usd)}</span>
-      <span className={styles.plaqueFoot}>
-        {dupe ? (
-          <span className={styles.plaqueHouse}>{r.source}</span>
-        ) : (
-          <>
-            <span className={styles.plaqueHouse}>{r.house}</span>
-            <span className={styles.plaqueSource}>{r.source}</span>
-          </>
-        )}
-      </span>
-    </a>
+    <>
+      <sup>$</sup>
+      {match[1]}
+      {match[2] && <sup>{match[2]}</sup>}
+    </>
   );
 }
 
 interface Props {
   variant?: 'desktop' | 'mobile';
-  /** the active market from the top selector — the board filters to it */
   market?: Market;
+  /** data-as-of date for the colophon register (from market.generatedAt) */
+  asOf?: string | null;
 }
 
-export default function RecordBoard({ market = 'all' }: Props) {
+export default function RecordBoard({ market = 'all', asOf = null }: Props) {
   const reduce = useReducedMotion();
   const [ref, seen] = useInView<HTMLDivElement>();
+
   const scoped = market !== 'all';
-  const marketLabel = MARKETS.find((m) => m.key === market)?.label ?? '';
+  const marketLabel = MARKETS.find((mk) => mk.key === market)?.label ?? '';
   const ranked = [...RECORD_BOARD]
     .filter((r) => !scoped || CAT_MARKET[r.category] === market)
     .sort((a, b) => b.usd - a.usd);
 
-  // the wall's tiers — only the full board earns the 1 · 3 · 6 pyramid; a
-  // scoped (smaller) board hangs everything at mid size. CSS reflows the
-  // tiers per viewport (mids 3-up → 1-col, minis 3-up → 2-up).
-  const pyramid = ranked.length >= 7;
-  const hero = pyramid ? ranked[0] : null;
-  const mids = pyramid ? ranked.slice(1, 4) : ranked;
-  const minis = pyramid ? ranked.slice(4) : [];
+  if (ranked.length === 0) {
+    return (
+      <div className={styles.roomB}>
+        <div className={styles.altar}>
+          <div className={styles.eyebrow}>
+            <img src="/brand/lectr-ink.png" alt="" className={styles.eyebrowMark} aria-hidden />
+            <span>All-time records</span>
+          </div>
+          <h2 className={styles.altarHead}>The record <em>board</em></h2>
+          <p className={styles.altarSub}>No all-time record curated for {marketLabel.toLowerCase()} yet.</p>
+        </div>
+      </div>
+    );
+  }
 
-  // the plaques rise in sequence as the wall scrolls into view — transform
-  // only, so every record stays readable even if the observer never fires.
-  const riseV = {
-    hidden: reduce ? {} : { y: 16 },
-    show: { y: 0, transition: { duration: 0.6, ease: EASE } },
-  };
+  const top = ranked[0];
+  const tape = ranked.slice(1);
+  const play = seen && !reduce;
+  const stamp = {
+    initial: play ? { clipPath: 'inset(100% 0 0 0)', opacity: 0.6 } : false,
+    animate: { clipPath: 'inset(0% 0 0 0)', opacity: 1 },
+    transition: { duration: 0.8, ease: EASE, delay: 0.2 },
+  } as const;
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <div className={styles.recordBoard} ref={ref}>
-        <div className={styles.cardRoomHead}>
-          <img src="/brand/lectr.png" alt="" className={styles.inkMark} aria-hidden />
-          <h2 className={styles.roomTitle}>The record <em>board</em></h2>
-          <p className={styles.roomSub}>
+      <div className={styles.roomB} ref={ref}>
+        {/* the altar */}
+        <div className={styles.altar}>
+          <div className={styles.eyebrow}>
+            <img src="/brand/lectr-ink.png" alt="" className={styles.eyebrowMark} aria-hidden />
+            <span>All-time records</span>
+          </div>
+          <h2 className={styles.altarHead}>The record <em>board</em></h2>
+          <p className={styles.altarSub}>
             {scoped
-              ? `All-time ${marketLabel.toLowerCase()} hammer records — curated highs, source-flagged, all-in.`
-              : 'All-time hammer records in every category — curated highs, source-flagged, all-in.'}
+              ? `All-time ${marketLabel.toLowerCase()} hammer records — all-in prices, every figure flagged to its source.`
+              : 'All-time hammer records in every category we cover — all-in prices, every figure flagged to its source.'}
           </p>
         </div>
 
-        {ranked.length === 0 ? (
-          <p className={styles.recordEmpty}>
-            No all-time record curated for {marketLabel.toLowerCase()} yet.
-          </p>
-        ) : (
-          <m.div
-            className={styles.plaqueWall}
-            variants={{ hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.06 } } }}
-            initial="hidden"
-            animate={seen ? 'show' : 'hidden'}
-          >
-            {hero && <m.div variants={riseV}><Plaque r={hero} rank={1} size="hero" /></m.div>}
-            <div className={styles.plaqueMidRow} data-scoped={!pyramid || undefined}>
-              {mids.map((r, i) => (
-                <m.div key={r.title} variants={riseV}>
-                  <Plaque r={r} rank={(pyramid ? 2 : 1) + i} size="mid" />
-                </m.div>
-              ))}
-            </div>
-            {minis.length > 0 && (
-              <div className={styles.plaqueMiniRow}>
-                {minis.map((r, i) => (
-                  <m.div key={r.title} variants={riseV}>
-                    <Plaque r={r} rank={5 + i} size="mini" />
-                  </m.div>
-                ))}
-              </div>
-            )}
-          </m.div>
-        )}
+        {/* the monument — record №01 as a plate */}
+        <div className={styles.plateZone}>
+          <div className={styles.hatchField} aria-hidden />
+          <div className={styles.plate}>
+            <span className={styles.plateRank}>01</span>
+            <a className={styles.plateTitle} href={auctionHref(top)} target="_blank" rel="noopener noreferrer">
+              {top.title}
+            </a>
+            <span className={styles.plateMaker}>{top.maker}</span>
+            <m.div className={styles.plateFigure} {...stamp}>
+              <PlatePrice usd={top.usd} />
+            </m.div>
+            <m.div
+              className={styles.strikeRule}
+              initial={play ? { scaleX: 0 } : false}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.24, ease: 'easeOut', delay: play ? 1.05 : 0 }}
+              aria-hidden
+            />
+            <span className={styles.plateProv}>
+              {top.house}
+              {top.url ? (
+                <>
+                  <span className={styles.srcDiamond} aria-hidden />
+                  <a href={top.url} target="_blank" rel="noopener noreferrer" className={styles.srcLink}>source</a>
+                </>
+              ) : !top.source.trim().toLowerCase().startsWith(top.house.split(/[·,]/)[0].trim().toLowerCase()) ? (
+                <span className={styles.provSource}>{top.source}</span>
+              ) : null}
+            </span>
+          </div>
+        </div>
+
+        {/* the tape — records 02–10 */}
+        <div className={styles.tape}>
+          {tape.map((r, i) => (
+            <a
+              key={r.title}
+              className={`${styles.tapeRow} ${styles.tapeRowB}`}
+              href={auctionHref(r)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`No. ${i + 2}: ${r.title} — ${fmtMoneyCompact(r.usd)} at ${r.house}. Open the sale.`}
+            >
+              <span className={styles.tapeRank}>{String(i + 2).padStart(2, '0')}</span>
+              <span className={styles.tapeLabelBlock}>
+                <span className={styles.tapeTitleB}>
+                  {r.title}
+                  <span className={styles.tapeMakerB}> — {r.maker}</span>
+                </span>
+              </span>
+              <span className={styles.catChip}>{r.category}</span>
+              <span className={styles.tapeRight}>
+                <span className={styles.tapePrice}>{fmtMoneyCompact(r.usd)}</span>
+                <span className={styles.tapeSub}>
+                  {r.house}
+                  {r.url && <span className={styles.srcDiamondSm} aria-hidden />}
+                </span>
+              </span>
+              <span className={styles.tapeOut} aria-hidden>↗</span>
+            </a>
+          ))}
+        </div>
+
+        {/* the colophon register */}
+        <div className={styles.register}>
+          Records as reported by the houses · USD at sale date · unsourced entries flagged, not hidden
+          {asOf ? ` · data as of ${asOf}` : ''}.
+        </div>
+
+        {/* the finale — the plate mark, half-sunk into the closing seam */}
+        <div className={styles.plateMark} aria-hidden>
+          <img src="/brand/lectr-ink.png" alt="" />
+        </div>
+        <h2 className={styles.srOnly}>lectr</h2>
       </div>
     </LazyMotion>
   );
