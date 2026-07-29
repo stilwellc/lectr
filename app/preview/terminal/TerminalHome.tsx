@@ -689,16 +689,15 @@ export default function TerminalHomePage() {
                 <div
                   style={{
                     display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: 12,
-                    padding: '10px 0 14px',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '10px 0 18px',
                   }}
                 >
                   <h2 className={styles.feedTitle}>On the <em>block</em></h2>
                   {nextHammer && (
-                    <span style={{ fontSize: 13, color: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data), monospace' }}>
+                    <span style={{ fontSize: 13.5, color: 'var(--tt-muted)' }}>
                       Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}
                     </span>
                   )}
