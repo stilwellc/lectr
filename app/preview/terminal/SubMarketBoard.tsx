@@ -102,8 +102,8 @@ const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
 /* ── THE CI BEAM — the caliper. A 1px rule, tick terminals at the
    95% bounds, a solid diamond at the point estimate. Never a slider. */
-function CIBeam({ lo, hi, point, dir, mini = false, play = true }: {
-  lo: number; hi: number; point: number; dir?: 'up' | 'down'; mini?: boolean; play?: boolean;
+function CIBeam({ lo, hi, point, dir, mini = false, play = true, large = false }: {
+  lo: number; hi: number; point: number; dir?: 'up' | 'down'; mini?: boolean; play?: boolean; large?: boolean;
 }) {
   // the beam IS the interval: lo→hi spans the instrument, terminals at the
   // ends, the diamond at the point estimate. Zero gets a dashed witness tick
@@ -114,8 +114,8 @@ function CIBeam({ lo, hi, point, dir, mini = false, play = true }: {
   const tick = mini ? 4 : 6;   // half-height of terminals
   const dia = mini ? 3.2 : 5;  // half-diagonal of the diamond
   return (
-    <div className={mini ? styles.beamMini : styles.beam} data-dir={dir} aria-hidden>
-      {!mini && <span className={styles.beamLabel}>95% CI</span>}
+    <div className={`${mini ? styles.beamMini : styles.beam}${large ? ` ${styles.beamLarge}` : ''}`} data-dir={dir} aria-hidden>
+      {!mini && <span className={styles.beamLabel}>95% confidence range</span>}
       <div className={styles.beamStage}>
         <m.svg
           viewBox="0 0 100 24" preserveAspectRatio="none" className={styles.beamSvg}
@@ -201,17 +201,14 @@ function Monument({ r, play }: { r: SubMarketRead; play: boolean }) {
   if (r.readType === 'index' && r.index) {
     const dir = r.index.changePct >= 0 ? 'up' : 'down';
     return (
+      // no single point figure — a lone "+86.9%" reads as a precise market
+      // headline when the honest picture is the 95% RANGE. The beam is the
+      // monument; the number lives on its own row in the tape below.
       <div className={styles.monBody}>
-        <m.div className={styles.monFigureRow} {...stamp}>
-          <span className={`${styles.monFigure} ${styles.monDelta}`} data-dir={dir}>
-            <sup>{r.index.changePct >= 0 ? '+' : '−'}</sup>
-            {Math.abs(r.index.changePct).toFixed(1)}
-            <sup>%</sup>
-          </span>
-          <span className={styles.monHorizon}>{r.index.horizon}</span>
+        <m.div className={styles.monBeamStamp} {...stamp}>
+          <CIBeam lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} play={play} large />
         </m.div>
-        <CIBeam lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} play={play} />
-        <div className={styles.monChip}>{tapeTag(r)} · {fmtInt(r.lots)} lots</div>
+        <div className={styles.monChip}>{tapeTag(r)} · {r.index.horizon} · {fmtInt(r.lots)} lots</div>
         {r.bidCompNow != null && <div className={styles.monBids}>{r.bidCompNow} median bids per lot</div>}
       </div>
     );

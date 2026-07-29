@@ -2770,6 +2770,7 @@ a.recordObj:focus-visible {
   height: 300px;
   margin-top: clamp(28px, 3.4vw, 48px);
   display: flex;
+  align-items: center;
   justify-content: center;
 }
 .monSwap { position: relative; z-index: 1; }
@@ -2862,6 +2863,18 @@ a.recordObj:focus-visible {
 }
 .beamEnds .pctData { color: inherit; }
 .beamMini { width: 160px; cursor: default; }
+/* the monument CI beam — the range IS the headline; larger, taller terminals */
+.monBeamStamp { display: flex; justify-content: center; }
+.beamLarge { width: min(620px, 86vw); }
+.beamLarge .beamStage { height: 40px; }
+.beamLarge .beamLabel { font-size: 12px; margin-bottom: 12px; }
+.beamLarge .beamEnds { margin-top: 12px; font-size: clamp(22px, 2.4vw, 34px); font-weight: 500; color: var(--paper-ink, #1C1712); }
+.beamLarge .beamRule { stroke-width: 1.5; }
+.beamLarge[data-dir='up'] .beamEnds { color: #1e7a4d; }
+.beamLarge[data-dir='down'] .beamEnds { color: #a03d2e; }
+.beamLarge .beamDiamond::before { background: currentColor; }
+.beamLarge[data-dir='up'] { color: #1e7a4d; }
+.beamLarge[data-dir='down'] { color: #a03d2e; }
 .beamMini .beamStage { height: 36px; }
 
 /* ── the demand line — the real series over its median ── */
