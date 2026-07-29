@@ -2865,24 +2865,18 @@ body {
    verticals sit as two rows of three beneath it */
 @media (max-width: 899px) {
   .ray-markets-fade { mask-image: none; -webkit-mask-image: none; overflow: visible; }
+  /* three lines: all-collectibles across the top, then the six verticals as
+     two rows of three */
   .ray-markets-compact {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-    justify-content: flex-start;
-    margin-inline: calc(-1 * var(--gutter, 16px));
-    padding-inline: var(--gutter, 16px);
   }
-  .ray-markets-compact::-webkit-scrollbar { display: none; }
   .ray-markets-compact .ray-market-tab {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
     justify-content: center;
-    padding: 10px 14px;
+    padding: 10px 8px;
     font-size: 12.5px;
+    min-width: 0;
   }
   /* the whole market ('all') takes the entire top row as one wide pill */
   .ray-markets-compact .ray-market-tab[data-market="all"] {
