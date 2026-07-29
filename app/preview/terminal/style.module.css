@@ -2115,7 +2115,6 @@ a.recordObj:focus-visible {
    right third. ≤5% opacity, aria-hidden, crossfading on the tape cut (the
    keyed remount runs the fade-in; the outgoing one simply unmounts under it). ── */
 .stageGhost {
-  display: block;          /* a span ignores width while inline */
   position: absolute;
   right: 2%;
   top: 50%;
@@ -2131,19 +2130,12 @@ a.recordObj:focus-visible {
 .stageGhost svg { width: 100%; height: auto; display: block; }
 .heroStage { position: relative; isolation: isolate; }
 .heroStage > * { position: relative; z-index: 1; }
-.heroStage > .stageGhost {
-  /* MUST restate position here: the `.heroStage > *` relative rule above wins
-     by order at equal specificity and would drop the ghost into normal flow —
-     a 1088px in-flow clock shoving the chart off the fold (the prod bug). */
-  position: absolute;
-  z-index: 0;
-}
+.heroStage > .stageGhost { z-index: 0; }
 @keyframes ttGhostIn {
   from { opacity: 0; }
   to { opacity: 0.04; }
 }
 .mHeroGhost {
-  display: block;          /* span ignores width while inline */
   position: absolute;
   right: -6px;
   top: 8px;
