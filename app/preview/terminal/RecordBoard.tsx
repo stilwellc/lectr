@@ -107,6 +107,7 @@ export default function RecordBoard({ market = 'all' }: Props) {
     <LazyMotion features={domAnimation} strict>
       <div className={styles.recordBoard} ref={ref}>
         <div className={styles.cardRoomHead}>
+          <img src="/brand/lectr.png" alt="" className={styles.inkMark} aria-hidden />
           <h2 className={styles.roomTitle}>The record <em>board</em></h2>
           <p className={styles.roomSub}>
             {scoped

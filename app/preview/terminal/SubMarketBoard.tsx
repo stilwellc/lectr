@@ -397,6 +397,7 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
 
   const head = paper ? (
     <div className={styles.cardRoomHead}>
+      <img src="/brand/lectr.png" alt="" className={styles.inkMark} aria-hidden />
       <h2 className={styles.roomTitle}>The verified <em>board</em></h2>
       <p className={styles.roomSub}>
         {activeKey === 'all'

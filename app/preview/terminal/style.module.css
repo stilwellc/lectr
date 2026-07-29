@@ -2636,3 +2636,48 @@ a.recordObj:focus-visible {
 /* the paper rooms breathe like posters again — the density lives in the
    cards, the room keeps the monument's air */
 .roomPaper { padding-block: clamp(52px, 6.5vw, 88px); }
+
+/* ── ROOM GEOMETRY — the paper rooms' drafted mega-shapes ── */
+.roomGeo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.roomGeo svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.geoLine {
+  stroke: rgba(28, 23, 18, 0.13);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+/* top-anchored geometry (the bell dome) — spans the head zone, not the room */
+.roomGeo svg.geoTop {
+  height: min(58%, 480px);
+  bottom: auto;
+}
+@media (max-width: 900px) {
+  /* keep the dome's proportions on narrow screens — the room edges crop it */
+  .roomGeo svg.geoTop {
+    width: 900px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 300px;
+  }
+}
+.geoDot { fill: rgba(28, 23, 18, 0.16); }
+/* content rides above the geometry */
+.roomInner { position: relative; z-index: 1; }
+
+/* the mark as punctuation — the hand, in ink, above the monument */
+.inkMark {
+  display: block;
+  height: 34px;
+  width: auto;
+  margin: 0 auto 12px;
+  filter: invert(1) opacity(0.8);
+}

@@ -46,6 +46,7 @@ import IndexHero from './IndexHero';
 import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
 import TonightsWall, { type WallItem } from './TonightsWall';
 import RecordBoard from './RecordBoard';
+import RoomGeometry from './RoomGeometry';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
 
@@ -660,6 +661,7 @@ export default function TerminalHomePage() {
                 strip); the record sentence prints ONCE as the room's footer. ══ */}
             {marketData?.subMarkets && (
               <section className={styles.roomPaper}>
+                <RoomGeometry kind="bell" />
                 <div className={styles.roomInner}>
                   <SubMarketBoard
                     market={marketData}
@@ -899,6 +901,7 @@ export default function TerminalHomePage() {
 
             {/* ══ ROOM · THE RECORD — settlement + all-time records, one paper chapter ══ */}
             <section className={styles.roomPaper}>
+            <RoomGeometry kind="arcs" />
             <div className={styles.roomInner}>
             {isSportsScience ? (
               recentRows.length > 0 && (
