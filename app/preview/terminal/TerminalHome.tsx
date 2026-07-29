@@ -45,6 +45,7 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 import IndexHero from './IndexHero';
 import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
 import Tape from './Tape';
+import TonightsWall, { type WallItem } from './TonightsWall';
 import RecordBoard from './RecordBoard';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
@@ -390,6 +391,35 @@ export default function TerminalHomePage() {
   }, [upcoming, marketLots]);
   const belowIds = belowSignal.ids;
 
+  // TONIGHT'S WALL — the call lot + the next best flagged-with-image, then
+  // photographed lots in hammer order as backfill. MORE than 5 candidates ship
+  // so a dead image drops out and the next one hangs in its place.
+  const wallItems = useMemo<WallItem[]>(() => {
+    const withImg = upcoming.filter(l => l.imageUrl);
+    const pct = belowSignal.pct;
+    const flagged = withImg
+      .filter(l => belowIds.has(l.id))
+      .sort((a, b) => dealScore(b, pct.get(b.id) || 0) - dealScore(a, pct.get(a.id) || 0));
+    const call = flagged[0] || null;
+    const rest = [...flagged.slice(1), ...withImg.filter(l => !belowIds.has(l.id))];
+    const ordered = call ? [call, ...rest] : withImg;
+    return ordered.slice(0, 14).map(l => ({
+      lot: l,
+      flagged: belowIds.has(l.id),
+      pct: pct.get(l.id),
+      call: !!call && l.id === call.id,
+    }));
+  }, [upcoming, belowIds, belowSignal]);
+  const wallEl = wallItems.length >= 3 ? (
+    <TonightsWall
+      items={wallItems}
+      onOpen={setTableLot}
+      variant={mounted && isMobile ? 'mobile' : 'desktop'}
+      play={!fromCache}
+    />
+  ) : null;
+
+
   // The feed the reader actually sees — search + lenses + sort applied.
   const feed = useMemo(() => {
     const f = feedFilters;
@@ -694,6 +724,9 @@ export default function TerminalHomePage() {
               isMobile={mounted && isMobile}
             />
 
+            {/* ══ TONIGHT'S WALL — the photographed front row (kept) ══ */}
+            {wallEl}
+
             {/* ══ the live tape — realized hammers, scoped to the market ══ */}
             {tapeItems.length > 0 && (
               <section className={styles.tapeSection}>
@@ -797,7 +830,7 @@ export default function TerminalHomePage() {
                     padding: '10px 0 14px',
                   }}
                 >
-                  <h2 className={styles.feedTitle}>On the block</h2>
+                  <h2 className={styles.feedTitle}>On the <em>block</em></h2>
                   {nextHammer && (
                     <span style={{ fontSize: 13, color: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data), monospace' }}>
                       Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}

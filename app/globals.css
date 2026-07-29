@@ -2945,3 +2945,108 @@ body {
   color: var(--color-text-muted); /* = --tt-muted, the reference ink */
   line-height: 1.4;
 }
+
+/* ── THE RECORD-SALE PLATE + dossier name (kept from the design program) ── */
+/* M8 — the dossier name speaks Fraunces display */
+.lectr-dossier-name {
+  font-family: var(--font-serif), serif;
+  font-size: clamp(44px, 5.5vw, 72px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* M8 — the dossier hero grid: head left, the record plate filling the dead
+   right quadrant at ≥900px; stacked below. */
+.lectr-dossier-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .lectr-dossier-hero { grid-template-columns: minmax(0, 1fr) clamp(260px, 30vw, 360px); gap: clamp(28px, 4vw, 56px); }
+}
+
+/* M8 — THE RECORD PLATE: the record sale as a framed object. Certificate
+   fallback first (engraved figure + date + house in the certificate voice);
+   the photograph hangs on the warm mat only when the data carries one. */
+.lectr-recplate {
+  display: block;
+  background: var(--plate);
+  border: 1px solid var(--hairline);
+  padding: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.lectr-recplate-img {
+  position: relative;
+  height: 190px;
+  background: var(--well);
+  outline: 1px solid rgba(242, 238, 227, 0.1);
+  outline-offset: -1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.lectr-recplate-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.lectr-recplate-k {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 2px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-beige-text);
+  border-top: 2px solid var(--color-fg);
+  position: relative;
+  margin-top: 12px;
+}
+.lectr-recplate-k::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--hairline);
+}
+.lectr-recplate-img + .lectr-recplate-k { margin-top: 12px; }
+.lectr-recplate-cert { padding: 4px 2px 2px; }
+.lectr-recplate-fig {
+  font-family: var(--font-mono), monospace;
+  font-size: clamp(26px, 2.6vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg);
+  line-height: 1.1;
+}
+.lectr-recplate-sub {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.lectr-recplate-title {
+  font-family: var(--font-serif), serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin-top: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

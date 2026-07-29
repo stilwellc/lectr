@@ -1941,3 +1941,173 @@ a.recordObj:focus-visible {
   transition: border-color 160ms, color 160ms;
 }
 .subShowMore:hover, .subShowMore:focus-visible { border-color: var(--tt-butter); color: var(--tt-butter); }
+
+/* ── TONIGHT'S WALL (kept from the design program) ── */
+.wall { grid-area: wall; min-width: 0; margin-top: 22px; }
+.hero {
+  grid-template-areas:
+    "head  rail"
+    "stage stage"
+    "movers movers"
+    "wall wall";
+}
+.wallHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.wallKicker {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tt-muted);
+}
+.wallSub {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tt-faint);
+}
+.wallRow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.wallPlate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.wallPlate:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 3px; }
+.wallMat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 116px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #1c1a14;
+  border: 1px solid rgba(232, 218, 182, 0.07);
+  overflow: hidden;
+  transition: border-color 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.wallMat img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain; /* never crop artwork */
+  display: block;
+}
+.wallPlate:hover .wallMat { border-color: rgba(232, 218, 182, 0.22); }
+/* the verdict ring — the same green the feed's rings speak (real signal only) */
+.wallPlate[data-tone='up'] .wallMat {
+  box-shadow: inset 0 0 0 2px rgba(87, 190, 135, 0.9), 0 0 14px 1px rgba(87, 190, 135, 0.28);
+  border-color: rgba(87, 190, 135, 0.5);
+}
+.wallMeta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wallMaker {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tt-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wallEst {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10.5px;
+  color: var(--tt-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wallCallTag {
+  font-style: normal;
+  margin-left: 6px;
+  color: var(--tt-butter);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+.wallSignal {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
+  color: var(--color-up);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* entrance: plates rise 12px, 80ms stagger, from the open's T+1200 */
+.wall[data-anim='true'] .wallPlate {
+  opacity: 0;
+  animation: ttWallRise 520ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
+  animation-delay: calc(var(--wall-base, 0ms) + var(--wall-i, 0) * 80ms);
+}
+@keyframes ttWallRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* the mobile strip — horizontal snap scroll under the hero card */
+.wallStrip { min-width: 0; margin: 2px 0 0; }
+.wallStrip .wallKicker { white-space: nowrap; }
+@media (max-width: 640px) {
+  /* the sub-line crowds a 390px head — the kicker carries the row alone */
+  .wallSub { display: none; }
+}
+.wallStrip .wallRow {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+  margin-inline: calc(-1 * var(--gutter, 16px));
+  padding-inline: var(--gutter, 16px);
+}
+.wallStrip .wallRow::-webkit-scrollbar { display: none; }
+.wallStrip .wallPlate {
+  flex: 0 0 auto;
+  width: 168px;
+  scroll-snap-align: start;
+}
+.wallStrip .wallMat { height: 132px; }
+/* plates rise as the strip enters view; rings light left→right */
+.wallStrip[data-anim='true'] .wallPlate {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.wallStrip[data-anim='true'][data-seen='true'] .wallPlate {
+  animation: ttWallRise 520ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
+  animation-delay: calc(var(--wall-i, 0) * 80ms);
+}
+.wallStrip[data-anim='true'][data-seen='true'] .wallPlate[data-tone='up'] .wallMat {
+  animation: ttRingIgnite 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) both;
+  animation-delay: calc(260ms + var(--wall-i, 0) * 60ms);
+}
+
+/* ── M11 · the serif section head — one italic butter word ── */
+.feedTitle {
+  font-size: clamp(30px, 3.2vw, 42px);
+}
+.feedTitle em {
+  font-style: italic;
+  color: var(--tt-butter);
+}
+
+/* the On-the-block serif head — one italic butter word (kept) */
+.feedTitle { font-size: clamp(30px, 3.2vw, 42px); }
+.feedTitle em { font-style: italic; color: var(--tt-butter); }
