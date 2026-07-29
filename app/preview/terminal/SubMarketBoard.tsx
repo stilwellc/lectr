@@ -148,6 +148,120 @@ function supportLine(r: SubMarketRead): string {
   return r.record ? `record ${fmtMoneyCompact(r.record.usd)}` : '—';
 }
 
+/* ── THE CERTIFIED READ CARD ─────────────────────────────────
+   The paper room's grammar: every sub-market is a curated card,
+   not a table row. Each card draws its own data — an index read
+   draws its 95% confidence band, a demand read draws its real
+   quarterly series, a descriptive read prints its record. The
+   method seal is an ink stamp; the % speaks mono; everything
+   else is ink on cream. */
+
+/** The drawn 95% CI band: a zero-anchored scale with the confidence
+    interval as a filled band and the point estimate as a marker. */
+function CIBand({ lo, hi, point, dir }: { lo: number; hi: number; point: number; dir?: 'up' | 'down' }) {
+  const min = Math.min(0, lo);
+  const max = Math.max(0, hi);
+  const span = max - min || 1;
+  const pad = span * 0.08;
+  const x = (v: number) => ((v - min + pad) / (span + pad * 2)) * 100;
+  return (
+    <div className={styles.ciBand} data-dir={dir} aria-label={`95% confidence band ${lo.toFixed(0)} to ${hi.toFixed(0)}`}>
+      <svg viewBox="0 0 100 12" preserveAspectRatio="none" className={styles.ciSvg} aria-hidden>
+        <line x1="0" y1="6" x2="100" y2="6" className={styles.ciAxis} vectorEffect="non-scaling-stroke" />
+        <line x1={x(0)} y1="1.5" x2={x(0)} y2="10.5" className={styles.ciZero} vectorEffect="non-scaling-stroke" />
+        <rect x={x(lo)} y="3.5" width={Math.max(0.5, x(hi) - x(lo))} height="5" rx="2.5" className={styles.ciFill} />
+        <circle cx={x(point)} cy="6" r="2.2" className={styles.ciDot} />
+      </svg>
+      <div className={styles.ciEnds}>
+        <span className={styles.pctData}>{lo.toFixed(0)}</span>
+        <span className={styles.ciTag}>95% band</span>
+        <span className={styles.pctData}>{hi.toFixed(0)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** The drawn demand series: the real quarterly %-over-estimate line. */
+function DemandSpark({ series, dir }: { series: { period: string; value: number }[]; dir?: 'up' | 'down' }) {
+  const vals = series.map((s) => s.value);
+  if (vals.length < 2) return null;
+  const min = Math.min(...vals, 0);
+  const max = Math.max(...vals, 0);
+  const span = max - min || 1;
+  const px = (i: number) => (i / (vals.length - 1)) * 100;
+  const py = (v: number) => 11 - ((v - min) / span) * 10;
+  const pts = vals.map((v, i) => `${px(i)},${py(v)}`).join(' ');
+  return (
+    <div className={styles.ciBand} data-dir={dir} aria-label="Demand by quarter">
+      <svg viewBox="0 0 100 12" preserveAspectRatio="none" className={styles.ciSvg} aria-hidden>
+        {min < 0 && <line x1="0" y1={py(0)} x2="100" y2={py(0)} className={styles.ciAxis} vectorEffect="non-scaling-stroke" />}
+        <polyline points={pts} className={styles.sparkLine} vectorEffect="non-scaling-stroke" fill="none" />
+        <circle cx="100" cy={py(vals[vals.length - 1])} r="2.2" className={styles.ciDot} />
+      </svg>
+      <div className={styles.ciEnds}>
+        <span className={styles.ciTag}>{series[0].period}</span>
+        <span className={styles.ciTag}>sold over estimate · by quarter</span>
+        <span className={styles.ciTag}>{series[series.length - 1].period}</span>
+      </div>
+    </div>
+  );
+}
+
+/** One certified read card. */
+function ReadCard({ r, active, onSelect }: { r: SubMarketRead; active: boolean; onSelect: (k: Market) => void }) {
+  const dir = dirFor(r);
+  const line = readLine(r);
+  const foot: string[] = [`${fmtInt(r.lots)} lots`];
+  if (r.readType !== 'descriptive' && r.typicalUsd != null) foot.push(`typical ${fmtMoneyCompact(r.typicalUsd)}`);
+  if (r.bidCompNow != null) foot.push(`${r.bidCompNow} bids/lot`);
+  if (r.readType === 'descriptive' && r.sellThroughPct != null) foot.push(`${Math.round(r.sellThroughPct)}% sell-through`);
+  return (
+    <button
+      type="button"
+      className={styles.readCard}
+      data-active={active || undefined}
+      onClick={() => onSelect(r.vertical as Market)}
+      aria-label={`${r.label}: ${line.primary} ${line.per}, ${supportLine(r)} — switch the board to ${r.vertical}`}
+      aria-current={active ? 'true' : undefined}
+    >
+      <div className={styles.readCardHead}>
+        <span className={styles.readCardName}>{r.label}</span>
+        <span className={styles.readSeal} data-type={r.readType} title={methodTitle(r)}>{tagFor(r)}</span>
+      </div>
+      <div className={styles.readCardRead} data-dir={dir}>
+        {r.readType === 'index' && r.index ? (
+          <>
+            <span className={`${styles.readCardPct} ${styles.pctData}`}>{fmtPct(r.index.changePct)}</span>
+            <span className={styles.readCardPer}>{r.index.horizon}</span>
+          </>
+        ) : r.readType === 'demand' && r.demandNow != null ? (
+          <>
+            <span className={`${styles.readCardPct} ${styles.pctData}`}>{fmtPct(r.demandNow)}</span>
+            <span className={styles.readCardPer}>demand · over est.</span>
+          </>
+        ) : (
+          <>
+            <span className={styles.readCardMoney}>{r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : '—'}</span>
+            <span className={styles.readCardPer}>typical price</span>
+          </>
+        )}
+      </div>
+      {r.readType === 'index' && r.index ? (
+        <CIBand lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} />
+      ) : r.readType === 'demand' && r.demandSeries.length >= 2 ? (
+        <DemandSpark series={r.demandSeries} dir={dir} />
+      ) : r.record ? (
+        <div className={styles.readCardRecord}>
+          <span className={styles.readCardRecordLabel}>record</span>
+          <span className={styles.readCardRecordVal}>{fmtMoneyCompact(r.record.usd)}</span>
+          <span className={styles.readCardRecordTitle}>{r.record.title}</span>
+        </div>
+      ) : null}
+      <div className={styles.readCardFoot}>{foot.join(' · ')}</div>
+    </button>
+  );
+}
+
 // One board row's five cells — shared by the animated table and the condensed board.
 function RowCells({ r }: { r: SubMarketRead }) {
   const dir = dirFor(r);
@@ -225,7 +339,16 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
     );
   }
 
-  const head = (
+  const head = paper ? (
+    <div className={styles.cardRoomHead}>
+      <h2 className={styles.scriptTitle}>The verified board</h2>
+      <p className={styles.roomSub}>
+        {activeKey === 'all'
+          ? 'Every read the engine will stand behind — drawn from its own data, certified card by card.'
+          : 'This market’s certified reads — each drawn from its own data, card by card.'}
+      </p>
+    </div>
+  ) : (
     <div className={styles.moversHead}>
       <div>
         <h2 className={styles.roomTitle}>The verified <em>board</em></h2>
@@ -256,6 +379,28 @@ export default function SubMarketBoard({ market, activeKey, onSelect, variant = 
           each vertical&apos;s sub-markets surface here with the strongest read they can honestly support.
         </div>
         {foot}
+      </div>
+    );
+  }
+
+  // ── THE PAPER ROOM: the certified card wall (both viewports; CSS reflows
+  // the grid — 3-up on desktop, 1-col dense on mobile).
+  if (paper) {
+    const CARD_CAP = 6; // two clean desktop rows
+    const shownCards = expanded ? rows : rows.slice(0, CARD_CAP);
+    return (
+      <div className={styles.moversPaper} ref={ref}>
+        {head}
+        <div className={styles.readCardGrid}>
+          {shownCards.map((r) => (
+            <ReadCard key={`${r.vertical}:${r.slug}`} r={r} active={r.vertical === activeKey} onSelect={onSelect} />
+          ))}
+        </div>
+        {rows.length > CARD_CAP && (
+          <button type="button" className={styles.subShowMore} onClick={() => setExpanded((v) => !v)}>
+            {expanded ? 'Show less' : `Show ${rows.length - CARD_CAP} more`}
+          </button>
+        )}
       </div>
     );
   }

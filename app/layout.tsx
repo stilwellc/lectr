@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Inter, Fraunces, IBM_Plex_Mono } from 'next/font/google';
+import { Inter, Fraunces, IBM_Plex_Mono, Caveat } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
@@ -34,6 +34,14 @@ const plexMono = IBM_Plex_Mono({
   display: 'swap',
 });
 
+// The script accent — the closest webfont voice to the hand-drawn lectr mark.
+// Speaks ONLY in the two "curated card" rooms (verified board / record board).
+const script = Caveat({
+  subsets: ['latin'],
+  weight: ['500', '600'],
+  variable: '--font-script',
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://lectr.bid'),
   alternates: { canonical: './' },
@@ -63,7 +71,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable} ${plexMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable} ${plexMono.variable} ${script.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{

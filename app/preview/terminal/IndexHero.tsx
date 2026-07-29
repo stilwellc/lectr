@@ -210,7 +210,7 @@ export default function IndexHero({
               </div>
             <div className={styles.mHeroNumRow}>
               <RollingNumber
-                className={`${styles.mHeroNum} ${styles.roiNeutral}`}
+                className={`${styles.mHeroNum} ${styles.roiNeutral}${isMoney ? '' : ` ${styles.pctData}`}`}
                 value={headline}
                 from={reduce ? headline : 0}
                 format={fmtHeadline}
@@ -238,6 +238,12 @@ export default function IndexHero({
           </m.div>
 
           <m.div className={styles.mHeroStats} {...rise(0.12)}>
+            {roi != null && (
+              <span className={styles.mStat} title="Sales-weighted annualized value trend across this market's verified repeat comparisons.">
+                <span className={`${styles.mStatVal} ${styles.pctData}`} data-dir={roiDir}>{fmtPct(roi)}</span>
+                <span className={styles.mStatLabel}>Yearly ROI</span>
+              </span>
+            )}
             {bc ? (
               <span className={styles.mStat} title="Median bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
                 <span className={styles.mStatVal} data-dir={bc.dir}>{bc.now}</span>
@@ -287,7 +293,7 @@ export default function IndexHero({
           </div>
           <div className={styles.heroNumberRow}>
             <RollingNumber
-              className={`${styles.heroNumber} ${styles.roiNeutral}`}
+              className={`${styles.heroNumber} ${styles.roiNeutral}${isMoney ? '' : ` ${styles.pctData}`}`}
               value={headline}
               from={reduce ? headline : 0}
               format={fmtHeadline}
@@ -313,6 +319,13 @@ export default function IndexHero({
             <span className={styles.railLabel}>On the block</span>
             <span className={styles.railVal}>{fmtInt(onBlock)}</span>
           </div>
+          {roi != null && (
+            <div className={styles.railRow} title="Sales-weighted annualized value trend across this market's verified repeat comparisons — the absolute check on demand.">
+              <span className={styles.railLabel}>Yearly ROI</span>
+              <span className={`${styles.railVal} ${styles.pctData}`} data-dir={roiDir}>{fmtPct(roi)}</span>
+            </div>
+          )}
+          {roiFlag && <div className={styles.railFlagLine}>{roiFlag}</div>}
           {bc && (
             <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
               <span className={styles.railLabel}>Bid competition</span>
