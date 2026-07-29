@@ -2973,14 +2973,7 @@ a.recordObj:focus-visible {
 .tapeMore:hover { color: var(--paper-ink, #1C1712); }
 
 /* ── the receipts ── */
-.receipts { position: relative; text-align: center; margin-top: clamp(40px, 5vw, 64px); }
-.receipts::before {
-  content: '';
-  display: block;
-  width: min(1000px, 88%);
-  margin: 0 auto clamp(40px, 5vw, 64px);
-  border-top: 1px solid rgba(28, 23, 18, 0.12);
-}
+.receipts { position: relative; text-align: center; margin-top: clamp(24px, 3vw, 44px); }
 .seal { width: 96px; margin: 0 auto; }
 .seal svg {
   width: 100%;
