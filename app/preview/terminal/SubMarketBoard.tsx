@@ -52,6 +52,11 @@ interface Props {
 
 const demandStrength = (r: SubMarketRead) => r.demandNow ?? -Infinity;
 
+// the curated marquee — the reads that lead the cross-market board before it
+// expands to the full list. Matched by label (case-insensitive), rendered in
+// this exact order; anything not present is simply skipped.
+const FEATURED = ['sports cards', 'cartier', 'rolex', 'patek philippe', 'audemars piguet', 'pablo picasso', 'andy warhol'];
+
 function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRead[] {
   const sm = market?.subMarkets;
   if (!sm) return [];
@@ -63,7 +68,13 @@ function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRea
     const demand = all
       .filter((r) => r.readType === 'demand')
       .sort((a, b) => demandStrength(b) - demandStrength(a));
-    return [...index, ...demand];
+    const ranked = [...index, ...demand];
+    // front-load the marquee in curated order, then the rest (deduped)
+    const featured = FEATURED
+      .map((name) => ranked.find((r) => r.label.toLowerCase() === name))
+      .filter((r): r is SubMarketRead => !!r);
+    const featuredSet = new Set(featured);
+    return [...featured, ...ranked.filter((r) => !featuredSet.has(r))];
   }
   const rows = sm[activeKey] || [];
   const rank = { index: 0, demand: 1, descriptive: 2 } as const;
@@ -351,7 +362,7 @@ export default function SubMarketBoard({
   const [receiptsRef, receiptsSeen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
 
-  const CAP = 8;
+  const CAP = 7;
   const [expanded, setExpanded] = useState(false);
 
   /* ════ ROOM A — Plate & Tape (the home's paper room) ════ */
