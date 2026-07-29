@@ -652,8 +652,9 @@ export default function TerminalHomePage() {
               isMobile={mounted && isMobile}
             />
 
-            {/* ══ TONIGHT'S WALL — the photographed front row (kept) ══ */}
-            {wallEl}
+            {/* ══ TONIGHT'S WALL — the photographed front row (kept). A padded
+                seam sets it apart from the hero's search. ══ */}
+            {wallEl && <div className={styles.wallSeparator}>{wallEl}</div>}
 
             {/* ══ ROOM · THE VERIFIED BOARD — every certified read, on paper.
                 The movers ARE the board's top rows (one table, no duplicate

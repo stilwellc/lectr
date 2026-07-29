@@ -3225,3 +3225,14 @@ a.recordObj:focus-visible {
   .tapePrice { font-size: 16px; }
   .register { font-size: 12px; }
 }
+
+/* a padded seam between the hero's search and Tonight's Wall — reads as a
+   separate area, with a hairline rule to mark the transition */
+.wallSeparator {
+  margin-top: clamp(40px, 6vw, 88px);
+  padding-top: clamp(40px, 6vw, 88px);
+  border-top: 1px solid var(--tt-hair-2, rgba(232, 218, 182, 0.14));
+}
+@media (max-width: 900px) {
+  .wallSeparator { margin-top: 32px; padding-top: 32px; }
+}
