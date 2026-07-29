@@ -148,34 +148,41 @@ export default function RecordBoard({ market = 'all', asOf = null }: Props) {
           </div>
         </div>
 
-        {/* the tape — records 02–10 */}
+        {/* the tape — records 02–10, two columns (first half left, rest right) */}
         <div className={styles.tape}>
-          {tape.map((r, i) => (
-            <a
-              key={r.title}
-              className={`${styles.tapeRow} ${styles.tapeRowB}`}
-              href={auctionHref(r)}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`No. ${i + 2}: ${r.title} — ${fmtMoneyCompact(r.usd)} at ${r.house}. Open the sale.`}
-            >
-              <span className={styles.tapeRank}>{String(i + 2).padStart(2, '0')}</span>
-              <span className={styles.tapeLabelBlock}>
-                <span className={styles.tapeTitleB}>
-                  {r.title}
-                  <span className={styles.tapeMakerB}> — {r.maker}</span>
-                </span>
-              </span>
-              <span className={styles.catChip}>{r.category}</span>
-              <span className={styles.tapeRight}>
-                <span className={styles.tapePrice}>{fmtMoneyCompact(r.usd)}</span>
-                <span className={styles.tapeSub}>
-                  {r.house}
-                  {r.url && <span className={styles.srcDiamondSm} aria-hidden />}
-                </span>
-              </span>
-              <span className={styles.tapeOut} aria-hidden>↗</span>
-            </a>
+          {[tape.slice(0, Math.ceil(tape.length / 2)), tape.slice(Math.ceil(tape.length / 2))].map((col, ci) => (
+            <div key={ci} className={styles.tapeCol}>
+              {col.map((r, j) => {
+                const idx = ci === 0 ? j : Math.ceil(tape.length / 2) + j; // 0-based tape index
+                return (
+                  <a
+                    key={r.title}
+                    className={`${styles.tapeRow} ${styles.tapeRowB}`}
+                    href={auctionHref(r)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`No. ${idx + 2}: ${r.title} — ${fmtMoneyCompact(r.usd)} at ${r.house}. Open the sale.`}
+                  >
+                    <span className={styles.tapeRank}>{String(idx + 2).padStart(2, '0')}</span>
+                    <span className={styles.tapeLabelBlock}>
+                      <span className={styles.tapeTitleB}>
+                        {r.title}
+                        <span className={styles.tapeMakerB}> — {r.maker}</span>
+                      </span>
+                    </span>
+                    <span className={styles.catChip}>{r.category}</span>
+                    <span className={styles.tapeRight}>
+                      <span className={styles.tapePrice}>{fmtMoneyCompact(r.usd)}</span>
+                      <span className={styles.tapeSub}>
+                        {r.house}
+                        {r.url && <span className={styles.srcDiamondSm} aria-hidden />}
+                      </span>
+                    </span>
+                    <span className={styles.tapeOut} aria-hidden>↗</span>
+                  </a>
+                );
+              })}
+            </div>
           ))}
         </div>
 

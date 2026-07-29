@@ -2881,20 +2881,26 @@ a.recordObj:focus-visible {
 .demandLineMini .demandSvg { height: 36px; }
 
 /* ── the tape: full-bleed broadsheet rows ── */
+/* the tape — two columns on desktop, first half of the list left, rest right */
 .tape {
-  margin-top: clamp(36px, 4.4vw, 64px);
-  margin-inline: calc(50% - 50vw);
-  border-top: 1px solid rgba(28, 23, 18, 0.12);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: clamp(28px, 3vw, 56px);
+  max-width: 1240px;
+  margin: clamp(36px, 4.4vw, 64px) auto 0;
+  padding: 0 clamp(24px, 4vw, 56px);
 }
+.tapeCol { border-top: 1px solid rgba(28, 23, 18, 0.12); }
+.tapeMore { grid-column: 1 / -1; }
 .tapeRow {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) 200px minmax(0, 1fr) 40px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
   align-items: center;
   width: 100%;
-  min-height: 84px;
-  padding: 0 max(48px, calc(50vw - 656px));
+  min-height: 88px;
+  padding: 0 18px;
   border: 0;
   border-bottom: 1px solid rgba(28, 23, 18, 0.12);
   border-radius: 0;
@@ -2931,7 +2937,7 @@ a.recordObj:focus-visible {
   text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
-.tapeInstrument { display: flex; align-items: center; }
+.tapeInstrument { display: none; }
 .tapeAbstain { font-size: 28px; color: var(--paper-muted, #5A5240); }
 .tapeRight { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0; text-align: right; }
 .tapeFigure { font-size: clamp(15px, 1.4vw, 20px); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -2949,15 +2955,7 @@ a.recordObj:focus-visible {
 }
 .tri[data-dir='up'] { border-bottom: 8px solid currentColor; }
 .tri[data-dir='down'] { border-top: 8px solid currentColor; }
-.tapeChevron {
-  width: 0; height: 0;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-left: 8px solid rgba(28, 23, 18, 0.65);
-  opacity: 0;
-  transition: opacity 0.2s;
-  justify-self: end;
-}
+.tapeChevron { display: none; }
 .tapeMore {
   display: block;
   width: 100%;
@@ -3049,12 +3047,13 @@ a.recordObj:focus-visible {
   .monChip { margin-top: 20px; font-size: 11px; }
   .beam, .demandLine { width: min(260px, 80vw); margin-top: 22px; }
   .demandSvg { height: 56px; }
-  .tape { margin-top: 32px; }
+  .tape { grid-template-columns: 1fr; column-gap: 0; margin-top: 32px; padding: 0 20px; }
+  .tapeCol + .tapeCol { border-top: 0; }
   .tapeRow {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
     min-height: 68px;
-    padding: 11px 20px;
+    padding: 11px 4px;
   }
   .tapeInstrument, .tapeChevron { display: none; }
   .tapeLabel { font-size: 15.5px; }
@@ -3162,10 +3161,12 @@ a.recordObj:focus-visible {
 
 /* ── Room B tape rows: the anchor dialect ── */
 .tapeRowB {
-  grid-template-columns: 56px minmax(0, 1.7fr) auto minmax(0, 0.9fr) 28px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   text-decoration: none;
   cursor: pointer;
 }
+.tapeRowB .catChip,
+.tapeRowB .tapeOut { display: none; }
 .tapeRank { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--paper-muted, #5A5240); }
 .tapeTitleB {
   font-size: clamp(15px, 1.35vw, 19px);

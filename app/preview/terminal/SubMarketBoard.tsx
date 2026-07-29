@@ -404,11 +404,18 @@ export default function SubMarketBoard({
             </AnimatePresence>
           </div>
 
-          {/* the tape — full-bleed broadsheet rows */}
+          {/* the tape — two columns, first half left, second half right */}
           <div className={styles.tape}>
-            {shown.map((r) => (
-              <TapeRow key={`${r.vertical}:${r.slug}`} r={r} scoped={r.vertical === activeKey && activeKey !== 'all'} onSelect={onSelect} />
-            ))}
+            <div className={styles.tapeCol}>
+              {shown.slice(0, Math.ceil(shown.length / 2)).map((r) => (
+                <TapeRow key={`${r.vertical}:${r.slug}`} r={r} scoped={r.vertical === activeKey && activeKey !== 'all'} onSelect={onSelect} />
+              ))}
+            </div>
+            <div className={styles.tapeCol}>
+              {shown.slice(Math.ceil(shown.length / 2)).map((r) => (
+                <TapeRow key={`${r.vertical}:${r.slug}`} r={r} scoped={r.vertical === activeKey && activeKey !== 'all'} onSelect={onSelect} />
+              ))}
+            </div>
             {rows.length > CAP && (
               <button type="button" className={styles.tapeMore} onClick={() => setExpanded((v) => !v)}>
                 {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
