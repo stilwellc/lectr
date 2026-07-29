@@ -34,10 +34,6 @@ interface Props {
   height?: number;
   /** compact = mobile card variant (fewer ticks, shorter) */
   compact?: boolean;
-  /** ms; the line's draw-in (1100 first load, 700 on a market/horizon switch) */
-  drawMs?: number;
-  /** ms; hold before the draw begins (the entrance choreography) */
-  beginDelay?: number;
 }
 
 function TerminalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: IndexPoint }> }) {
@@ -52,7 +48,7 @@ function TerminalTooltip({ active, payload }: { active?: boolean; payload?: Arra
   );
 }
 
-export default function MarketChart({ data, play, height = 260, compact = false, drawMs = 1100, beginDelay = 0 }: Props) {
+export default function MarketChart({ data, play, height = 260, compact = false }: Props) {
   const reduce = useReducedMotion();
   const rows = useMemo(() => data.map((d) => ({ ...d })), [data]);
 
@@ -86,12 +82,7 @@ export default function MarketChart({ data, play, height = 260, compact = false,
   const animate = play && !reduce;
 
   return (
-    <div
-      className={styles.chartWrap}
-      style={{ height, ['--area-delay' as string]: `${Math.max(0, beginDelay + drawMs - 400)}ms` }}
-      data-dir={dir}
-      data-anim={animate ? 'true' : undefined}
-    >
+    <div className={styles.chartWrap} style={{ height }} data-dir={dir}>
       {/* colored directional drop-shadow — a soft blurred glow the chart casts,
           tinted by the series direction. Purely decorative, sits beneath the plot. */}
       <div className={styles.chartGlow} data-dir={dir} aria-hidden />
@@ -110,15 +101,15 @@ export default function MarketChart({ data, play, height = 260, compact = false,
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--tt-hair)" strokeDasharray="0" vertical={false} />
-          {/* the transparent directional fill beneath the line — shape renders
-              resolved; its FADE-UP over the draw's last 400ms is CSS on
-              .recharts-area-area (see ttAreaFade), timed via --area-delay */}
+          {/* the transparent directional fill beneath the line */}
           <Area
             type="monotone"
             dataKey="value"
             stroke="none"
             fill="url(#tt-area)"
-            isAnimationActive={false}
+            isAnimationActive={animate}
+            animationDuration={animate ? 1100 : 0}
+            animationEasing="ease-out"
           />
           <XAxis
             dataKey="period"
@@ -159,8 +150,7 @@ export default function MarketChart({ data, play, height = 260, compact = false,
             dot={false}
             activeDot={{ r: 3.5, fill: 'var(--tt-butter)', stroke: 'var(--tt-bg)', strokeWidth: 1.5 }}
             isAnimationActive={animate}
-            animationBegin={animate ? beginDelay : 0}
-            animationDuration={animate ? drawMs : 0}
+            animationDuration={animate ? 1100 : 0}
             animationEasing="ease-out"
           />
         </ComposedChart>
