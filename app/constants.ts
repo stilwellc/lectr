@@ -51,6 +51,7 @@ export const ARTISTS = [
   { slug: 'fossils', label: 'Fossils & Dinosaurs', market: 'science' },
   { slug: 'space-exploration', label: 'Space Exploration', market: 'science' },
   { slug: 'scientific-instruments', label: 'Scientific Instruments', market: 'science' },
+  { slug: 'science-tech', label: 'Science & Technology', market: 'science' },
   // the sports vertical: Goldin cards + objects, plus Sotheby's/Christie's
   // sports-sale memorabilia (the catch-all: autographs, photos, equipment,
   // pennants — everything in a sports sale that isn't specifically the above)

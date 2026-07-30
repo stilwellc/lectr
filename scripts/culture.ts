@@ -32,7 +32,7 @@ function isNumberedLot(t: string): boolean {
 // film & TV: something USED in a production, not merch about it
 const MOVIE_TV = /\b(screen[- ](used|matched|worn)|hero prop|production[- ]used|prop from|\bprop\b|costume worn in|worn (in|on)[- ]?(screen|the film|the show)|film[- ]used|movie[- ]used|screen[- ]worn|animatronic|maquette|matte painting|storyboard|shooting script|call sheet|continuity|studio prop|filming (miniature|model)|worn by .* in (the )?(film|movie|series|show))\b/i;
 // music: worn/played on stage, or the words themselves
-const MUSIC = /\b(stage[- ](worn|played|used)|performance[- ]worn|concert[- ]worn|tour[- ](worn|used)|played on stage|worn on stage|handwritten lyric|original lyric|autograph(ed)? lyric|lyric sheet|working lyric|manuscript.*(song|lyric)|played (guitar|bass|drums?|piano)|smashed guitar|owned and played|road[- ]used|riaa|gold record award|platinum record award|signed (guitar|drumhead|drum head|bass))\b/i;
+const MUSIC = /\b(stage[- ](worn|played|used)|performance[- ]worn|concert[- ]worn|tour[- ](worn|used)|played on stage|worn on stage|handwritten lyrics?|original lyrics?|autograph(ed)? lyrics?|lyric sheet|working lyrics?|manuscript.*(song|lyric)|played (guitar|bass|drums?|piano)|smashed guitar|owned and played|road[- ]used|riaa|gold record award|platinum record award|signed (guitar|drumhead|drum head|bass))\b/i;
 
 /** Route a lot KNOWN to be pop-culture (Goldin curated sub-cat, or a pop-
  *  culture sale) → a culture slug, or null to drop it as mass/graded. */
