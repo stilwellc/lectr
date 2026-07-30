@@ -4,38 +4,42 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { type Market } from '../../constants';
+import type { AuctionLot } from '../../types';
+import { formatPrice, httpsImg } from '../../utils';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
+import { gapGrammar } from './TonightsWall';
 import styles from './style.module.css';
 
 /* ============================================================
-   ROOM A — "THE VERIFIED BOARD" · Plate & Tape
-   ------------------------------------------------------------
-   The room is exactly two elements:
+   ROOM A — "THE VALUE ENGINE" · the platform's sell, in three
+   chapters down one page axis:
 
-     · THE MONUMENT — the scoped market's flagship read, stamped
-       as an engraved letterpress plate: Fraunces at ~200px with
-       its 95% CI drawn beneath as a beam instrument. Numbers
-       are STAMPED, never spun — a clip reveal of the whole
-       figure; no count-ups, no rolling digits, ever.
-     · THE TAPE — every sub-market read as a full-bleed
-       broadsheet row. Zero cards, zero boxes, zero radius.
-       Zebra stripes ±4% off the paper; a 3px brass rule at the
-       viewport edge marks the scoped row and slides between
-       rows on scope change.
+     01 · THE ENGINE — live lots the engine has flagged under
+          their comparables: real plates with the read spelled
+          out (est vs where comps actually sell), plus the
+          method in one honest line. Picked to NOT duplicate
+          Tonight's Wall above.
+     02 · THE MARKETS — the verified board: the scoped read as
+          a monument (95% CI beam — the range IS the headline)
+          over the full-market tape. Plate & Tape grammar.
+     03 · THE RECEIPT — the backtest, printed as an actual
+          thermal receipt: perforated edges, mono line items,
+          the replay seal stamped in red ink, a barcode footer.
+          It PRINTS itself on scroll. Fun, but every figure on
+          it is real — stamped, never spun.
 
-   Typography encodes epistemology: Fraunces speaks only in the
-   headline and the monument; Plex Mono speaks only in percent-
-   change figures; levels (demand %, prices) stay neutral ink.
-   Descriptive markets wear their abstention as a badge.
-   The room closes on THE RECEIPTS: a line-drawn replay seal
-   over the backtest sentence, its three figures flipped in
-   whole ("—" → value), never interpolated.
+   Typography: Fraunces speaks in the headline + monument; Plex
+   Mono in percent-change figures — and on the receipt, which
+   is a printed ARTIFACT, mono carries the whole slip.
    ============================================================ */
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-interface Receipts { flaggedPct: number; unflaggedPct: number; n: number }
+interface Receipts { flaggedPct: number; unflaggedPct: number; n: number; asOf?: string | null }
+
+/** a flagged lot for the chapter-01 showcase */
+export interface FlagShowcase { lot: AuctionLot; pct: number }
 
 interface Props {
   market: MarketData | null;
@@ -44,10 +48,14 @@ interface Props {
   variant?: 'desktop' | 'mobile';
   condensed?: boolean;
   maxRows?: number;
-  /** printed on the paper room (home) — the Plate & Tape treatment */
+  /** printed on the paper room (home) — the Value Engine treatment */
   paper?: boolean;
   /** the backtest receipts — flagged/unflagged median % + replayed count */
   receipts?: Receipts | null;
+  /** chapter 01: below-market lots to showcase (disjoint from the wall) */
+  showcase?: FlagShowcase[];
+  /** open a showcased lot in the comparables modal */
+  onOpenLot?: (lot: AuctionLot) => void;
 }
 
 const demandStrength = (r: SubMarketRead) => r.demandNow ?? -Infinity;
@@ -276,23 +284,67 @@ function ReplaySeal({ n, play }: { n: number; play: boolean }) {
   );
 }
 
-/* ── the receipts chips — "—" flips to the whole value on entry. */
-function ReceiptChip({ value, dir, seen }: { value: string; dir?: 'up' | 'down'; seen: boolean }) {
+/* ── a chapter marker — "01 · The engine", hairlines either side ── */
+function Chapter({ no, label }: { no: string; label: string }) {
   return (
-    <span className={styles.receiptChip} data-dir={dir}>
-      <AnimatePresence mode="wait" initial={false}>
-        <m.span
-          key={seen ? 'v' : 'dash'}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className={dir ? styles.pctData : undefined}
-        >
-          {seen ? value : '—'}
-        </m.span>
-      </AnimatePresence>
-    </span>
+    <div className={styles.chapter}>
+      <b>{no}</b> · {label}
+    </div>
+  );
+}
+
+/* ── chapter 01: one flagged lot as a plate — the engine's read, shown ── */
+function FlagPlate({ f, onOpen }: { f: FlagShowcase; onOpen?: (lot: AuctionLot) => void }) {
+  const { lot, pct } = f;
+  const est = (lot.estimateLow || lot.estimateHigh)
+    ? `est ${formatPrice(lot.estimateLow || lot.estimateHigh!)}${lot.estimateHigh && lot.estimateLow && lot.estimateHigh !== lot.estimateLow ? `–${formatPrice(lot.estimateHigh)}` : ''}`
+    : lot.currentBid ? `bid ${formatPrice(lot.currentBid)}` : '';
+  return (
+    <button type="button" className={styles.flagPlate} onClick={() => onOpen?.(lot)}>
+      <span className={styles.flagImg}>
+        {lot.imageUrl && <img src={httpsImg(lot.imageUrl)} alt="" loading="lazy" />}
+      </span>
+      <span className={styles.flagMaker}>{lot.artist.replace(/-/g, ' ')}</span>
+      <span className={styles.flagTitle}>{lot.title}</span>
+      {est && <span className={styles.flagEst}>{est} · {lot.auctionHouse}</span>}
+      <span className={styles.flagSignal}>{gapGrammar('Below Market', pct)}</span>
+    </button>
+  );
+}
+
+/* ── chapter 03: THE RECEIPT — the backtest as a thermal slip. Every figure
+   real; the slip prints itself (clip reveal), the replay seal stamps it in
+   red ink. Mono carries the whole artifact — a receipt IS a printed thing. */
+function ValueReceipt({ r, play }: { r: Receipts; play: boolean }) {
+  const spread = r.flaggedPct - r.unflaggedPct;
+  const reduce = useReducedMotion();
+  return (
+    <div className={styles.rcptWrap}>
+      <m.div
+        className={styles.rcpt}
+        initial={reduce ? false : { clipPath: 'inset(0 0 100% 0)' }}
+        animate={play || reduce ? { clipPath: 'inset(0 0 0% 0)' } : undefined}
+        transition={{ duration: 1.1, ease: 'easeOut' as const, delay: 0.2 }}
+      >
+        <div className={styles.rcptHead}>lectr · value engine</div>
+        <div className={styles.rcptSub}>backtest receipt — every flag replayed against history</div>
+        <div className={styles.rcptRule} />
+        <div className={styles.rcptRow}><span>Replayed sales</span><span className={styles.rcptDots} /><span>{fmtInt(r.n)}</span></div>
+        <div className={styles.rcptRow}><span>Flagged · median vs est</span><span className={styles.rcptDots} /><span className={styles.rcptUp}>{fmtPct(r.flaggedPct)}</span></div>
+        <div className={styles.rcptRow}><span>Unflagged</span><span className={styles.rcptDots} /><span className={styles.rcptDown}>{fmtPct(r.unflaggedPct)}</span></div>
+        <div className={styles.rcptRule} />
+        <div className={`${styles.rcptRow} ${styles.rcptTotal}`}><span>The edge (flag − rest)</span><span className={styles.rcptDots} /><span>{spread >= 0 ? '+' : '−'}{Math.abs(spread).toFixed(1)} pts</span></div>
+        <div className={styles.rcptRule} />
+        <div className={styles.rcptMeta}>settled nightly{r.asOf ? ` · as of ${r.asOf}` : ''}</div>
+        <div className={styles.rcptBarcode} aria-hidden />
+        <div className={styles.rcptNo}>no. {fmtInt(r.n)}</div>
+        <a href="/value" className={styles.rcptLink}>see the full record →</a>
+        {/* the stamp — the replay seal pressed in red ink over the totals */}
+        <div className={styles.rcptStamp} aria-hidden>
+          <ReplaySeal n={r.n} play={play && !reduce} />
+        </div>
+      </m.div>
+    </div>
   );
 }
 
@@ -353,6 +405,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
 
 export default function SubMarketBoard({
   market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows, paper = false, receipts = null,
+  showcase, onOpenLot,
 }: Props) {
   const reduce = useReducedMotion();
   const [ref, seen] = useInView<HTMLDivElement>();
@@ -382,14 +435,33 @@ export default function SubMarketBoard({
           <div className={styles.altar}>
             <div className={styles.eyebrow}>
               <img src="/brand/lectr-ink.png" alt="" className={styles.eyebrowMark} aria-hidden />
-              <span>The verified board</span>
+              <span>The value engine</span>
             </div>
-            <h2 className={styles.altarHead}>Every price here <em>survived</em>.</h2>
+            <h2 className={styles.altarHead}>We find what the room <em>misprices</em>.</h2>
             <p className={styles.altarSub}>
-              Sub-market reads built from the full auction corpus. Where the data cannot
-              carry an index, we say so — and publish nothing.
+              Live lots flagged under their comparables, the market indices behind them,
+              and the replayed record that keeps us honest.
             </p>
           </div>
+
+          {/* ── 01 · THE ENGINE — flagged lots, the read spelled out ── */}
+          {showcase && showcase.length >= 3 && (
+            <>
+              <Chapter no="01" label="The engine" />
+              <div className={styles.flagRow}>
+                {showcase.slice(0, 3).map((f) => (
+                  <FlagPlate key={f.lot.id} f={f} onOpen={onOpenLot} />
+                ))}
+              </div>
+              <p className={styles.engineLine}>
+                Same maker, same form, size-banded&ensp;→&ensp;the comps&rsquo; median&ensp;→&ensp;the
+                gap gets flagged. Medians, never means — and never a guess.
+              </p>
+            </>
+          )}
+
+          {/* ── 02 · THE MARKETS — the verified board ── */}
+          <Chapter no="02" label="The markets" />
 
           {/* the monument — fixed zone, scoped read, stamped whole */}
           <div className={styles.monument}>
@@ -427,19 +499,11 @@ export default function SubMarketBoard({
             )}
           </div>
 
-          {/* the receipts — seal, sentence, chips, the room's one pill */}
+          {/* ── 03 · THE RECEIPT — the backtest, printed ── */}
           {receipts && receipts.n > 500 && (
-            <div className={styles.receipts} ref={receiptsRef}>
-              <ReplaySeal n={receipts.n} play={receiptsSeen && !reduce} />
-              <div className={styles.receiptsKicker}>The receipts</div>
-              <p className={styles.receiptsLine}>
-                Flagged lots hammered{' '}
-                <ReceiptChip value={fmtPct(receipts.flaggedPct)} dir="up" seen={receiptsSeen} />{' '}
-                median over estimate; unflagged{' '}
-                <ReceiptChip value={fmtPct(receipts.unflaggedPct)} dir="down" seen={receiptsSeen} />{' '}
-                — across <ReceiptChip value={fmtInt(receipts.n)} seen={receiptsSeen} /> replayed sales.
-              </p>
-              <a href="/value" className={styles.roomPill}>See the backtest record</a>
+            <div ref={receiptsRef}>
+              <Chapter no="03" label="The receipt" />
+              <ValueReceipt r={receipts} play={receiptsSeen && !reduce} />
             </div>
           )}
         </div>

@@ -383,6 +383,21 @@ export default function TerminalHomePage() {
     />
   ) : null;
 
+  // The Value Engine's chapter-01 showcase: the strongest flagged lots NOT
+  // already hanging on Tonight's Wall (no lot appears in two rooms). Falls
+  // back to wall overlap only when the below-market book runs shallow.
+  const engineShowcase = useMemo(() => {
+    const wallSet = new Set(wallItems.map(w => w.lot.id));
+    const pct = belowSignal.pct;
+    const score = (l: AuctionLot) => dealScore(l, pct.get(l.id) || 0);
+    const flagged = upcoming
+      .filter(l => l.imageUrl && belowIds.has(l.id))
+      .sort((a, b) => score(b) - score(a));
+    const fresh = flagged.filter(l => !wallSet.has(l.id));
+    const pick = [...fresh, ...flagged.filter(l => wallSet.has(l.id))].slice(0, 3);
+    return pick.map(l => ({ lot: l, pct: pct.get(l.id) || 0 }));
+  }, [upcoming, belowIds, belowSignal, wallItems]);
+
 
   // The feed the reader actually sees — search + lenses + sort applied.
   const feed = useMemo(() => {
@@ -672,7 +687,10 @@ export default function TerminalHomePage() {
                       flaggedPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct,
                       unflaggedPct: backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct,
                       n: backtest.flagged.n,
+                      asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
                     } : null}
+                    showcase={engineShowcase}
+                    onOpenLot={setTableLot}
                   />
                 </div>
               </section>
