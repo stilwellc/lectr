@@ -540,10 +540,11 @@
 .chartTip {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 11px;
-  border-radius: 9px;
-  border: 1px solid var(--tt-hair-2);
+  gap: 3px;
+  padding: 9px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 218, 182, 0.22);
+  box-shadow: 0 10px 26px -12px rgba(0, 0, 0, 0.6);
   background: rgba(13, 11, 8, 0.92);
   backdrop-filter: blur(6px);
   font-family: var(--font-inter), sans-serif;
@@ -554,8 +555,15 @@
   color: var(--tt-faint);
 }
 .chartTipVal {
-  font-size: 18px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--tt-butter);
+}
+.chartTipN {
+  border-top: 1px dotted rgba(232, 218, 182, 0.2);
+  padding-top: 4px;
+  margin-top: 2px;
 }
 .chartTipN {
   font-size: 10px;
@@ -3683,3 +3691,56 @@ a.recordObj:focus-visible {
   margin: 0 1px;
 }
 .legendFill { fill: rgba(28, 23, 18, 0.6); stroke: none; }
+
+/* ════ THE MARKET CHART, redrawn — the hero's instrument ════ */
+/* dotted horizontal rules across the plot: the soft-transition grammar */
+.chartRules {
+  position: absolute;
+  inset: 24px 16px 26px 10px;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(33.33% - 1px),
+    transparent calc(33.33% - 1px)
+  );
+}
+.chartRules::before,
+.chartRules::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dotted rgba(232, 218, 182, 0.13);
+}
+.chartRules::before { top: 33%; }
+.chartRules::after { top: 66%; }
+/* the plot breathes out of the frame edges */
+.chartMask {
+  position: relative;
+  height: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 2.5%, #000 97.5%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 2.5%, #000 97.5%, transparent 100%);
+}
+/* peak/trough anchors — quiet butter, the series' own unit */
+.chartAnno {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  fill: rgba(232, 218, 182, 0.7);
+}
+text.chartAnno.pctData { font-family: var(--font-mono-data), monospace; }
+/* the live terminus — the series' now */
+.chartTerminus circle { transform-box: fill-box; transform-origin: center; }
+.chartTerminusHalo {
+  opacity: 0.5;
+  animation: ttTerminusPulse 2.4s ease-out infinite;
+}
+@keyframes ttTerminusPulse {
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chartTerminusHalo { animation: none; opacity: 0; }
+}

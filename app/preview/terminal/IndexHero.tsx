@@ -229,7 +229,7 @@ export default function IndexHero({
             </div>
             <div className={styles.mHeroChart}>
               {hasChart ? (
-                <MarketChart data={windowIdx} play={play} height={168} compact />
+                <MarketChart data={windowIdx} play={play} height={168} compact format={fmtHeadline} isPct={!isMoney} />
               ) : (
                 <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={360} height={90} strokeWidth={1.8} />
               )}
@@ -360,7 +360,7 @@ export default function IndexHero({
             <span>{marketLabel.toLowerCase()}</span>
           </div>
           {hasChart ? (
-            <MarketChart data={windowIdx} play={play} height={264} />
+            <MarketChart data={windowIdx} play={play} height={264} format={fmtHeadline} isPct={!isMoney} />
           ) : (
             <div className={styles.heroSparkFallback}>
               <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={720} height={140} strokeWidth={1.8} />

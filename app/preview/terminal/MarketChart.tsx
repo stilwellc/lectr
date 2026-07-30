@@ -10,16 +10,30 @@ import {
   YAxis,
   XAxis,
   Tooltip,
-  CartesianGrid,
+  ReferenceDot,
 } from 'recharts';
 import { useReducedMotion } from './hooks';
 import styles from './style.module.css';
 
 /* ============================================================
-   The market chart — a dollar-normalized index. Raw per-quarter
-   cohort points sit UNDER a smooth trend line (WatchCharts "we
-   show the raw data" credibility). On enter the line draws in
-   over ~1.1s ease-out; reduced-motion renders it resolved.
+   THE MARKET CHART — the hero's instrument, drawn in the house
+   language:
+
+     · the trend line at full strength (butter, rounded joins),
+       closing on a LIVE TERMINUS — a pulsing endpoint dot
+     · a luminous directional fill (green up / red down), not
+       a smear — bright at the line, gone by two-thirds
+     · DOTTED horizontal rules (soft-transition grammar) and a
+       dotted crosshair — never solid lines inside the plot
+     · honest anchors: the series' PEAK and TROUGH annotated
+       with real values in the series' own unit (mono only
+       when the unit is %)
+     · raw per-quarter cohort dots kept visible under the trend
+       ("we show the raw data" credibility)
+     · edge-masked so the line breathes out of the frame edges
+
+   Stamped, never spun: the draw-in reveals the real line; no
+   value ever interpolates. Reduced-motion renders resolved.
    ============================================================ */
 
 export interface IndexPoint {
@@ -34,127 +48,179 @@ interface Props {
   height?: number;
   /** compact = mobile card variant (fewer ticks, shorter) */
   compact?: boolean;
+  /** format a value in the series' own unit (fmtPct / fmtMoneyCompact) */
+  format?: (n: number) => string;
+  /** the unit is a percent — annotations + tooltip values speak mono */
+  isPct?: boolean;
 }
 
-function TerminalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: IndexPoint }> }) {
+function TerminalTooltip({ active, payload, format, isPct }: {
+  active?: boolean; payload?: Array<{ payload: IndexPoint }>;
+  format: (n: number) => string; isPct: boolean;
+}) {
   if (!active || !payload || !payload.length) return null;
   const p = payload[0].payload;
   return (
     <div className={styles.chartTip}>
       <span className={styles.chartTipPeriod}>{p.period}</span>
-      <span className={styles.chartTipVal}>{p.value}</span>
+      <span className={`${styles.chartTipVal}${isPct ? ` ${styles.pctData}` : ''}`}>{format(p.value)}</span>
       <span className={styles.chartTipN}>{p.n.toLocaleString('en-US')} lots</span>
     </div>
   );
 }
 
-export default function MarketChart({ data, play, height = 260, compact = false }: Props) {
+export default function MarketChart({
+  data, play, height = 260, compact = false,
+  format = (n) => String(Math.round(n)), isPct = false,
+}: Props) {
   const reduce = useReducedMotion();
   const rows = useMemo(() => data.map((d) => ({ ...d })), [data]);
 
-  // y-domain auto-scales to the series so the line uses the chart's height.
-  // (This reads DEMAND / typical price now — not a rebased-100 index — so we no
-  // longer force 100 into range, which pinned the line to the bottom.)
   const vals = rows.map((r) => r.value);
   const min = vals.length ? Math.min(...vals) : 0;
   const max = vals.length ? Math.max(...vals) : 100;
-  const pad = Math.max(2, (max - min) * 0.25);
+  const pad = Math.max(2, (max - min) * 0.22);
 
-  // DIRECTION — derived from this component's OWN data: last vs first, with a
-  // small flat deadband so a negligible drift reads gray, not colored. Drives
-  // the colored drop-shadow glow beneath the plot (green up / red down / gray flat).
+  // direction from the series' own endpoints (deadband so drift reads flat)
   const dir = useMemo<'up' | 'down' | 'flat'>(() => {
     if (vals.length < 2) return 'flat';
     const first = vals[0];
     const last = vals[vals.length - 1];
     if (!first) return 'flat';
     const pct = ((last - first) / Math.abs(first)) * 100;
-    const DEADBAND = 1.5; // ±1.5% reads flat
-    if (pct > DEADBAND) return 'up';
-    if (pct < -DEADBAND) return 'down';
+    if (pct > 1.5) return 'up';
+    if (pct < -1.5) return 'down';
     return 'flat';
   }, [vals]);
-
-  // the area under the line fills with the direction color (green up / red down
-  // / grey flat), fading to transparent toward the axis — the pop.
   const fillColor = dir === 'up' ? '#57be87' : dir === 'down' ? '#cc6a5c' : '#9a8f7d';
+
+  // the honest anchors: peak + trough of the visible window (skipped when the
+  // window is short, flat, or the extreme IS the endpoint the terminus marks)
+  const peakIdx = vals.indexOf(max);
+  const troughIdx = vals.indexOf(min);
+  const annotate = rows.length >= 8 && max !== min;
+  const last = rows.length ? rows[rows.length - 1] : null;
 
   const animate = play && !reduce;
 
   return (
     <div className={styles.chartWrap} style={{ height }} data-dir={dir}>
-      {/* colored directional drop-shadow — a soft blurred glow the chart casts,
-          tinted by the series direction. Purely decorative, sits beneath the plot. */}
+      {/* colored directional under-glow — decorative, beneath the plot */}
       <div className={styles.chartGlow} data-dir={dir} aria-hidden />
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 8, right: 6, bottom: 4, left: 0 }}>
-          <defs>
-            <linearGradient id="tt-line" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="var(--tt-butter)" stopOpacity="0.55" />
-              <stop offset="100%" stopColor="var(--tt-butter)" stopOpacity="1" />
-            </linearGradient>
-            {/* directional area fill — colored near the line, fading to nothing */}
-            <linearGradient id="tt-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={fillColor} stopOpacity="0.34" />
-              <stop offset="72%" stopColor={fillColor} stopOpacity="0.06" />
-              <stop offset="100%" stopColor={fillColor} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <CartesianGrid stroke="var(--tt-hair)" strokeDasharray="0" vertical={false} />
-          {/* the transparent directional fill beneath the line */}
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke="none"
-            fill="url(#tt-area)"
-            isAnimationActive={animate}
-            animationDuration={animate ? 1100 : 0}
-            animationEasing="ease-out"
-          />
-          <XAxis
-            dataKey="period"
-            tick={{ fontSize: 10, fill: 'var(--tt-faint)', fontFamily: 'var(--font-mono-data)' }}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--tt-hair)' }}
-            interval={compact ? Math.max(1, Math.floor(rows.length / 3)) : Math.max(1, Math.floor(rows.length / 6))}
-            minTickGap={16}
-          />
-          {/* y-axis drives the scale but renders NO numbers — an abstract index
-              level on the axis ("127") just confuses; the shape + the % deltas
-              tell the story. */}
-          <YAxis domain={[Math.floor(min - pad), Math.ceil(max + pad)]} hide />
-          <Tooltip
-            content={<TerminalTooltip />}
-            cursor={{ stroke: 'var(--tt-butter)', strokeOpacity: 0.3, strokeWidth: 1 }}
-          />
-          {/* raw cohort points under the trend */}
-          <Scatter
-            dataKey="value"
-            fill="var(--tt-faint)"
-            fillOpacity={0.5}
-            isAnimationActive={false}
-            shape={(props: { cx?: number; cy?: number }) =>
-              props.cx == null || props.cy == null ? (
-                <g />
-              ) : (
-                <circle cx={props.cx} cy={props.cy} r={1.7} fill="var(--tt-faint)" fillOpacity={0.55} />
-              )
-            }
-          />
-          {/* the smooth trend line — cinematic draw-in */}
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="url(#tt-line)"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 3.5, fill: 'var(--tt-butter)', stroke: 'var(--tt-bg)', strokeWidth: 1.5 }}
-            isAnimationActive={animate}
-            animationDuration={animate ? 1100 : 0}
-            animationEasing="ease-out"
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+      {/* dotted horizontal rules — the soft-transition grammar, drawn in CSS */}
+      <div className={styles.chartRules} aria-hidden />
+      <div className={styles.chartMask}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={rows} margin={{ top: 24, right: 16, bottom: 4, left: 10 }}>
+            <defs>
+              <linearGradient id="tt-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={fillColor} stopOpacity="0.26" />
+                <stop offset="62%" stopColor={fillColor} stopOpacity="0.04" />
+                <stop offset="100%" stopColor={fillColor} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="none"
+              fill="url(#tt-area)"
+              isAnimationActive={animate}
+              animationDuration={animate ? 1100 : 0}
+              animationEasing="ease-out"
+            />
+            <XAxis
+              dataKey="period"
+              tick={{ fontSize: 10.5, fill: 'var(--tt-faint)', fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.04em' }}
+              tickLine={false}
+              axisLine={false}
+              interval={compact ? Math.max(1, Math.floor(rows.length / 3)) : Math.max(1, Math.floor(rows.length / 6))}
+              minTickGap={28}
+              tickMargin={9}
+            />
+            {/* y drives the scale, renders no abstract levels — the anchors +
+                the headline speak the values */}
+            <YAxis domain={[Math.floor(min - pad), Math.ceil(max + pad)]} hide />
+            <Tooltip
+              content={<TerminalTooltip format={format} isPct={isPct} />}
+              cursor={{ stroke: 'var(--tt-butter)', strokeOpacity: 0.45, strokeWidth: 1, strokeDasharray: '2 4' }}
+            />
+            {/* raw cohort points — visible, quiet */}
+            <Scatter
+              dataKey="value"
+              isAnimationActive={false}
+              shape={(props: { cx?: number; cy?: number }) =>
+                props.cx == null || props.cy == null ? (
+                  <g />
+                ) : (
+                  <circle cx={props.cx} cy={props.cy} r={1.9} fill="var(--tt-butter)" fillOpacity={0.28} />
+                )
+              }
+            />
+            {/* the trend — full-strength butter, cinematic draw-in */}
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke="var(--tt-butter)"
+              strokeWidth={2.25}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              dot={false}
+              activeDot={{ r: 4, fill: 'var(--tt-butter)', stroke: 'var(--tt-bg, #17130e)', strokeWidth: 1.5 }}
+              isAnimationActive={animate}
+              animationDuration={animate ? 1100 : 0}
+              animationEasing="ease-out"
+            />
+            {/* honest anchors: peak + trough in the series' own unit */}
+            {annotate && !compact && peakIdx !== rows.length - 1 && (
+              <ReferenceDot
+                x={rows[peakIdx].period}
+                y={rows[peakIdx].value}
+                r={0}
+                isFront
+                label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
+                  <g transform={`translate(${viewBox?.x ?? 0}, ${(viewBox?.y ?? 0) - 9})`}>
+                    <circle cx="0" cy="7" r="2" fill="var(--tt-butter)" fillOpacity="0.75" />
+                    <text x="0" y="-2" textAnchor="middle" className={`${styles.chartAnno}${isPct ? ` ${styles.pctData}` : ''}`}>
+                      {format(rows[peakIdx].value)}
+                    </text>
+                  </g>
+                )}
+              />
+            )}
+            {annotate && !compact && troughIdx !== 0 && troughIdx !== rows.length - 1 && troughIdx !== peakIdx && (
+              <ReferenceDot
+                x={rows[troughIdx].period}
+                y={rows[troughIdx].value}
+                r={0}
+                isFront
+                label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
+                  <g transform={`translate(${viewBox?.x ?? 0}, ${(viewBox?.y ?? 0) + 9})`}>
+                    <circle cx="0" cy="-7" r="2" fill="var(--tt-butter)" fillOpacity="0.75" />
+                    <text x="0" y="13" textAnchor="middle" className={`${styles.chartAnno}${isPct ? ` ${styles.pctData}` : ''}`}>
+                      {format(rows[troughIdx].value)}
+                    </text>
+                  </g>
+                )}
+              />
+            )}
+            {/* THE LIVE TERMINUS — the series' now, pulsing */}
+            {last && (
+              <ReferenceDot
+                x={last.period}
+                y={last.value}
+                r={0}
+                isFront
+                label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
+                  <g transform={`translate(${viewBox?.x ?? 0}, ${viewBox?.y ?? 0})`} className={styles.chartTerminus}>
+                    {!reduce && <circle className={styles.chartTerminusHalo} r="4" fill={fillColor} />}
+                    <circle r="3.4" fill="var(--tt-butter)" stroke="var(--tt-bg, #17130e)" strokeWidth="1.5" />
+                  </g>
+                )}
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
