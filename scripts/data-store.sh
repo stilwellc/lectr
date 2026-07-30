@@ -263,7 +263,7 @@ prune() { # keep the newest N versions/ prefixes (default 14), delete the rest.
 # ── SEGMENTS: per-house corpus slices for the staged nightly. Each crawl job
 # pull/push-es ONE segment (isolated); assemble pulls them all. R2 key:
 # latest/segments/<name>.ndjson.gz. A pull miss (new segment) is non-fatal.
-SEGMENTS="goldin sothebys christies bonhams phillips wright other"
+SEGMENTS="goldin sothebys christies bonhams phillips wright rrauction other"
 push_segment() {
   local name="$1" f="data/corpus/segments/$1.ndjson.gz"
   test -f "$f" || { echo "[data-store] no segment $name to push — skipping"; return 0; }

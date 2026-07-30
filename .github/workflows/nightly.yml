@@ -59,6 +59,10 @@ env:
   NODE_OPTIONS: --max-old-space-size=10240
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  # playwright is a devDep for the one headless leg (rrauction). Skip its
+  # postinstall browser download in EVERY job's `npm ci` — only the rrauction
+  # leg installs a browser, explicitly, via `npx playwright install chrome`.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
 jobs:
   crawl:
@@ -66,7 +70,11 @@ jobs:
     strategy:
       fail-fast: false          # one house failing must NOT cancel the others
       matrix:
-        house: [goldin, sothebys, christies, bonhams, phillips, wright]
+        # rrauction is the one HEADLESS leg (Cloudflare-gated — no fetch/API
+        # path): it installs Chrome + runs the Playwright resolver, isolated so
+        # its browser dependency and any CF flakiness can never touch the other
+        # houses' segments.
+        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -84,8 +92,19 @@ jobs:
       - run: npm ci
       - name: Pull this house's segment (last-good)
         run: bash scripts/data-store.sh pull-segment ${{ matrix.house }}
+      # RR Auction only: install Chrome for the headless resolver. Scoped to
+      # this leg so no other house pays the browser-install cost.
+      - name: Install Chrome (rrauction only)
+        if: matrix.house == 'rrauction'
+        run: npx playwright install --with-deps chrome
+      # every fetch-based house crawls via the monolith; RR runs its headless
+      # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
+        if: matrix.house != 'rrauction'
         run: npx tsx scripts/ray-crawl.ts
+      - name: Crawl rrauction (headless)
+        if: matrix.house == 'rrauction'
+        run: npx tsx scripts/resolve-rrauction.ts --write
       # Christie's online-only + Sotheby's ResultHidden sales gate results away
       # from the crawl paths; the resolvers pull them from the public sources
       # (onlineonly pages / the Algolia search index) so closed lots can't rot
@@ -136,7 +155,7 @@ jobs:
         run: |
           mkdir -p data/corpus/segments
           pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright other; do
+          for h in goldin sothebys christies bonhams phillips wright rrauction other; do
             if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
               echo "segment $h fresh from artifact — skipping R2"
             else

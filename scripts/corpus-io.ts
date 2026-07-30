@@ -22,12 +22,13 @@ export const SERVED_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
 // clean concat. Each house's crawlers own their segment. Wright+Rago share a
 // crawler → one 'wright' segment.
 export const SEGMENTS_DIR = path.join(CORPUS_DIR, 'segments');
-export const SEGMENT_NAMES = ['goldin', 'sothebys', 'christies', 'bonhams', 'phillips', 'wright', 'other'] as const;
+export const SEGMENT_NAMES = ['goldin', 'sothebys', 'christies', 'bonhams', 'phillips', 'wright', 'rrauction', 'other'] as const;
 export type SegmentName = (typeof SEGMENT_NAMES)[number];
 
 const HOUSE_TO_SEGMENT: Record<string, SegmentName> = {
   'Goldin': 'goldin', "Sotheby's": 'sothebys', 'Sothebys': 'sothebys', "Christie's": 'christies',
   'Christies': 'christies', 'Bonhams': 'bonhams', 'Phillips': 'phillips', 'Wright': 'wright', 'Rago': 'wright',
+  'RR Auction': 'rrauction',
 };
 /** Which segment a lot belongs to — keyed on its auction house. */
 export function segmentOf(auctionHouse: string): SegmentName {
