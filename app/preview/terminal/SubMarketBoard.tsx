@@ -447,20 +447,23 @@ export default function SubMarketBoard({
 
   const CAP = 7;
   const [expanded, setExpanded] = useState(false);
-  // which read the monument shows — a LOCAL pick, independent of page scope.
-  // Clicking a tape row only re-points the monument; it never re-scopes the
-  // page (which would reshuffle the whole table). Resets when the page scope
-  // changes via the top nav.
+  // the pop-up read: tapping a row opens its full instrument (the CI beam /
+  // demand series at monument scale) in an overlay — the tape stays compact,
+  // the deep read is one tap away. Purely local; never re-scopes the page.
   const keyOf = (r: SubMarketRead) => `${r.vertical}:${r.slug}`;
-  const [pickKey, setPickKey] = useState<string | null>(null);
-  useEffect(() => { setPickKey(null); }, [activeKey]);
+  const [openRead, setOpenRead] = useState<SubMarketRead | null>(null);
+  useEffect(() => { setOpenRead(null); }, [activeKey]);
+  useEffect(() => {
+    if (!openRead) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenRead(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openRead]);
 
   /* ════ ROOM A — Plate & Tape (the home's paper room) ════ */
   if (paper) {
     if (!rows.length) return null;
-    const flag = rows.find((r) => keyOf(r) === pickKey) ?? rows[0];
     const shown = expanded ? rows : rows.slice(0, CAP);
-    const play = seen && !reduce;
     return (
       <LazyMotion features={domAnimation} strict>
         <div className={styles.roomA} ref={ref}>
@@ -485,36 +488,23 @@ export default function SubMarketBoard({
             </>
           )}
 
-          {/* ── 02 · THE MARKETS — the verified board ── */}
+          {/* ── 02 · THE MARKETS — the tape IS the story; tap a row for the
+              full instrument in a pop-up read card ── */}
           <Chapter no="02" label="The markets" />
+          <p className={styles.chapterSub}>
+            {fmtInt(rows.length)} sub-markets, each read at the strength its data
+            supports — tap any row for the full instrument.
+          </p>
 
-          {/* the monument — fixed zone, scoped read, stamped whole */}
-          <div className={styles.monument}>
-            <div className={styles.tickRain} aria-hidden />
-            <AnimatePresence mode="wait" initial={false}>
-              <m.div
-                key={`${flag.vertical}:${flag.slug}`}
-                className={styles.monSwap}
-                initial={reduce ? false : { clipPath: 'inset(0 0 100% 0)' }}
-                animate={{ clipPath: 'inset(0 0 0% 0)' }}
-                exit={reduce ? undefined : { clipPath: 'inset(100% 0 0 0)' }}
-                transition={{ duration: 0.26, ease: EASE }}
-              >
-                <Monument r={flag} play={play} />
-              </m.div>
-            </AnimatePresence>
-          </div>
-
-          {/* the tape — two columns, first half left, second half right */}
           <div className={styles.tape}>
             <div className={styles.tapeCol}>
               {shown.slice(0, Math.ceil(shown.length / 2)).map((r) => (
-                <TapeRow key={keyOf(r)} r={r} active={keyOf(r) === keyOf(flag)} onPick={() => setPickKey(keyOf(r))} />
+                <TapeRow key={keyOf(r)} r={r} active={!!openRead && keyOf(openRead) === keyOf(r)} onPick={() => setOpenRead(r)} />
               ))}
             </div>
             <div className={styles.tapeCol}>
               {shown.slice(Math.ceil(shown.length / 2)).map((r) => (
-                <TapeRow key={keyOf(r)} r={r} active={keyOf(r) === keyOf(flag)} onPick={() => setPickKey(keyOf(r))} />
+                <TapeRow key={keyOf(r)} r={r} active={!!openRead && keyOf(openRead) === keyOf(r)} onPick={() => setOpenRead(r)} />
               ))}
             </div>
             {rows.length > CAP && (
@@ -523,6 +513,38 @@ export default function SubMarketBoard({
               </button>
             )}
           </div>
+
+          {/* the pop-up read card — the monument, summoned */}
+          <AnimatePresence>
+            {openRead && (
+              <m.div
+                className={styles.readPop}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                onClick={() => setOpenRead(null)}
+                role="dialog"
+                aria-modal="true"
+                aria-label={`${openRead.label} — the full read`}
+              >
+                <m.div
+                  className={styles.readPopCard}
+                  initial={reduce ? false : { opacity: 0, y: 14, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={reduce ? undefined : { opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.22, ease: EASE }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className={styles.readPopHead}>
+                    <span className={styles.readPopTitle}>{openRead.label}</span>
+                    <button type="button" className={styles.readPopClose} onClick={() => setOpenRead(null)} aria-label="Close">×</button>
+                  </div>
+                  <Monument r={openRead} play={!reduce} />
+                </m.div>
+              </m.div>
+            )}
+          </AnimatePresence>
 
           {/* ── 03 · THE RECEIPT — the backtest, printed ── */}
           {receipts && receipts.n > 500 && (

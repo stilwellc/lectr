@@ -2909,11 +2909,11 @@ a.recordObj:focus-visible {
 .tapeRow {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.25fr) 104px auto;
+  gap: 14px;
   align-items: center;
   width: 100%;
-  min-height: 88px;
+  min-height: 84px;
   padding: 0 18px;
   border: 0;
   border-bottom: 1px solid rgba(28, 23, 18, 0.12);
@@ -2934,7 +2934,7 @@ a.recordObj:focus-visible {
 .tapeRow[data-scoped] .tapeFigure { color: #8A7440; }
 .tapeLabelBlock { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .tapeLabel {
-  font-size: clamp(16px, 1.4vw, 20px);
+  font-size: clamp(15px, 1.2vw, 17px);
   font-weight: 500;
   text-transform: none;
   letter-spacing: -0.01em;
@@ -2945,13 +2945,16 @@ a.recordObj:focus-visible {
   text-overflow: ellipsis;
 }
 .tapeTag {
-  font-size: 11px;
+  white-space: nowrap;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
-.tapeInstrument { display: none; }
+.tapeInstrument { display: flex; align-items: center; justify-content: center; }
+.tapeInstrument .beamMini { width: 100px; }
+.tapeInstrument .demandLineMini { width: 100px; }
 .tapeAbstain { font-size: 28px; color: var(--paper-muted, #5A5240); }
 .tapeRight { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0; text-align: right; }
 .tapeFigure { font-size: clamp(15px, 1.4vw, 20px); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -3591,4 +3594,68 @@ a.recordObj:focus-visible {
   .ehVerdictCap { font-size: 12px; }
   .ehRow { font-size: 12.5px; }
   .ehCta { padding-top: 14px; }
+}
+
+/* ── 02: the chapter sub-line + the pop-up read card ── */
+.chapterSub {
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--paper-muted, #5A5240);
+  max-width: 520px;
+  margin: -10px auto 26px;
+}
+.readPop {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  background: rgba(16, 13, 9, 0.52);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.readPopCard {
+  position: relative;
+  width: min(560px, 94vw);
+  background:
+    linear-gradient(178deg, rgba(255, 251, 241, 0.6), rgba(255, 251, 241, 0) 40%),
+    #E9E1CE;
+  border: 1px solid rgba(28, 23, 18, 0.25);
+  border-radius: 16px;
+  padding: 22px 26px 30px;
+  color: var(--paper-ink, #1C1712);
+  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.55);
+}
+.readPopHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.readPopTitle { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.readPopClose {
+  border: 0;
+  background: rgba(28, 23, 18, 0.08);
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--paper-ink, #1C1712);
+  cursor: pointer;
+}
+.readPopClose:hover { background: rgba(28, 23, 18, 0.16); }
+/* the monument, scaled to the card */
+.readPopCard .monBody { align-items: center; text-align: center; }
+.readPopCard .monFigure { font-size: clamp(56px, 9vw, 84px); }
+.readPopCard .monFigureDesc { font-size: clamp(40px, 7vw, 56px); }
+.readPopCard .beam,
+.readPopCard .demandLine { width: min(420px, 78vw); margin-top: 26px; }
+.readPopCard .beamLarge { width: min(440px, 80vw); }
+.readPopCard .beamLarge .beamEnds { font-size: clamp(20px, 2vw, 28px); }
+@media (max-width: 900px) {
+  .chapterSub { font-size: 12px; margin: -8px 28px 20px; }
+  .readPopCard { padding: 18px 18px 24px; }
 }
