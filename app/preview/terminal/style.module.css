@@ -2124,13 +2124,19 @@ a.recordObj:focus-visible {
    Rooms are full-bleed ground changes with generous, consistent padding —
    the scroll reads as chapters, not one continuous block. */
 .roomPaper {
-  /* PLATE & TAPE: a razor-cut paper field. No border, no gradient, no inset
-     shadow — the value jump IS the divider. Rooms own their padding. */
+  /* the paper rooms are giant ROUNDED CELLS floating on the dark ground —
+     slim dark gutters at the sides so the corners read (the soft design
+     language applies to the room slabs themselves, not just their cells).
+     Rooms own their padding. */
   position: relative;
-  margin-inline: calc(50% - 50vw);
+  margin-inline: calc(50% - 50vw + clamp(10px, 1.2vw, 18px));
   background: var(--paper, #E2D9C4);
+  border-radius: clamp(22px, 2.8vw, 36px);
   padding-block: 0;
   margin-block: clamp(56px, 7vw, 96px);
+}
+@media (max-width: 900px) {
+  .roomPaper { margin-inline: calc(50% - 50vw + 8px); border-radius: 20px; }
 }
 .roomInner {
   max-width: 1200px;
