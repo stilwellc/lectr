@@ -383,20 +383,24 @@ export default function TerminalHomePage() {
     />
   ) : null;
 
-  // The Value Engine's chapter-01 showcase: the strongest flagged lots NOT
-  // already hanging on Tonight's Wall (no lot appears in two rooms). Falls
-  // back to wall overlap only when the below-market book runs shallow.
-  const engineShowcase = useMemo(() => {
+  // The Value Engine's chapter-01 hero: ONE lot — the highest-confidence,
+  // deepest-value flag on the book (confidence tier first, then gap depth).
+  // Prefers a lot not already hanging on Tonight's Wall; falls back to the
+  // absolute best when no high-confidence flag exists off the wall.
+  const engineHero = useMemo(() => {
+    const CONF: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, low: 0 };
     const wallSet = new Set(wallItems.map(w => w.lot.id));
-    const pct = belowSignal.pct;
-    const score = (l: AuctionLot) => dealScore(l, pct.get(l.id) || 0);
-    const flagged = upcoming
+    const cands = upcoming
       .filter(l => l.imageUrl && belowIds.has(l.id))
-      .sort((a, b) => score(b) - score(a));
-    const fresh = flagged.filter(l => !wallSet.has(l.id));
-    const pick = [...fresh, ...flagged.filter(l => wallSet.has(l.id))].slice(0, 3);
-    return pick.map(l => ({ lot: l, pct: pct.get(l.id) || 0 }));
-  }, [upcoming, belowIds, belowSignal, wallItems]);
+      .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
+      .filter((x): x is { lot: AuctionLot; signal: NonNullable<ReturnType<typeof lotSignal>> } =>
+        !!x.signal && x.signal.label === 'Below Market')
+      .sort((a, b) =>
+        (CONF[b.signal.confidence || 'low'] - CONF[a.signal.confidence || 'low'])
+        || (b.signal.pct - a.signal.pct));
+    const offWall = cands.find(x => !wallSet.has(x.lot.id) && CONF[x.signal.confidence || 'low'] >= 2);
+    return offWall ?? cands[0] ?? null;
+  }, [upcoming, belowIds, allLots, wallItems]);
 
 
   // The feed the reader actually sees — search + lenses + sort applied.
@@ -689,7 +693,7 @@ export default function TerminalHomePage() {
                       n: backtest.flagged.n,
                       asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
                     } : null}
-                    showcase={engineShowcase}
+                    hero={engineHero}
                     onOpenLot={setTableLot}
                   />
                 </div>

@@ -8,7 +8,8 @@ import type { AuctionLot } from '../../types';
 import { formatPrice, httpsImg } from '../../utils';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
-import { gapGrammar } from './TonightsWall';
+import { daysWord } from '../../components/Terminal';
+import { confidenceMeter } from '../../components/LotCard';
 import styles from './style.module.css';
 
 /* ============================================================
@@ -38,8 +39,11 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 interface Receipts { flaggedPct: number; unflaggedPct: number; n: number; asOf?: string | null }
 
-/** a flagged lot for the chapter-01 showcase */
-export interface FlagShowcase { lot: AuctionLot; pct: number }
+/** the chapter-01 hero: the highest-confidence, deepest-value flagged lot */
+export interface EngineHeroData {
+  lot: AuctionLot;
+  signal: { pct: number; basis?: number; med?: number; confidence?: 'very-high' | 'high' | 'medium' | 'low' };
+}
 
 interface Props {
   market: MarketData | null;
@@ -52,8 +56,8 @@ interface Props {
   paper?: boolean;
   /** the backtest receipts — flagged/unflagged median % + replayed count */
   receipts?: Receipts | null;
-  /** chapter 01: below-market lots to showcase (disjoint from the wall) */
-  showcase?: FlagShowcase[];
+  /** chapter 01: the single hero lot the engine showcases */
+  hero?: EngineHeroData | null;
   /** open a showcased lot in the comparables modal */
   onOpenLot?: (lot: AuctionLot) => void;
 }
@@ -293,21 +297,50 @@ function Chapter({ no, label }: { no: string; label: string }) {
   );
 }
 
-/* ── chapter 01: one flagged lot as a plate — the engine's read, shown ── */
-function FlagPlate({ f, onOpen }: { f: FlagShowcase; onOpen?: (lot: AuctionLot) => void }) {
-  const { lot, pct } = f;
-  const est = (lot.estimateLow || lot.estimateHigh)
-    ? `est ${formatPrice(lot.estimateLow || lot.estimateHigh!)}${lot.estimateHigh && lot.estimateLow && lot.estimateHigh !== lot.estimateLow ? `–${formatPrice(lot.estimateHigh)}` : ''}`
-    : lot.currentBid ? `bid ${formatPrice(lot.currentBid)}` : '';
+/* ── chapter 01: THE ENGINE, demonstrated on ONE lot — the highest-
+   confidence, deepest-value flag on the book. A dossier: the photograph
+   matted left, the engine's full read right (ask · comps median · basis ·
+   confidence), the verdict as a small monument (the multiple, in green),
+   and the method as fine print. The whole plate opens the comparables. ── */
+function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLot) => void }) {
+  const { lot, signal } = h;
+  const estLo = lot.estimateLow ?? lot.estimateHigh ?? null;
+  const estHi = lot.estimateHigh ?? lot.estimateLow ?? null;
+  const askText = estLo != null
+    ? (estLo === estHi ? `${formatPrice(estLo)}` : `${formatPrice(estLo!)}–${formatPrice(estHi!)}`)
+    : lot.currentBid ? `${formatPrice(lot.currentBid)} bid` : '—';
+  // comps median: the engine's shipped value, else the vetted derivation from
+  // the estimate midpoint × the measured gap (the old CallPlate's exact rule)
+  const estMid = estLo != null && estHi != null ? (estLo + estHi) / 2 : (lot.currentBid ?? null);
+  const med = (signal as { med?: number }).med
+    ?? (estMid != null ? Math.round(estMid * (1 + signal.pct / 100)) : null);
+  const ratioText = signal.pct > 400 ? '5×+' : `${(signal.pct / 100 + 1).toFixed(1)}×`;
+  const conf = confidenceMeter(signal.confidence);
   return (
-    <button type="button" className={styles.flagPlate} onClick={() => onOpen?.(lot)}>
-      <span className={styles.flagImg}>
+    <button type="button" className={styles.engineHero} onClick={() => onOpen?.(lot)}>
+      <span className={styles.ehImg}>
         {lot.imageUrl && <img src={httpsImg(lot.imageUrl)} alt="" loading="lazy" />}
       </span>
-      <span className={styles.flagMaker}>{lot.artist.replace(/-/g, ' ')}</span>
-      <span className={styles.flagTitle}>{lot.title}</span>
-      {est && <span className={styles.flagEst}>{est} · {lot.auctionHouse}</span>}
-      <span className={styles.flagSignal}>{gapGrammar('Below Market', pct)}</span>
+      <span className={styles.ehRead}>
+        <span className={styles.ehTopRow}>
+          <span className={styles.ehMaker}>{lot.artist.replace(/-/g, ' ')}</span>
+          <span className={styles.ehWhen}>{lot.auctionHouse} · hammers {daysWord(lot.saleDate)}</span>
+        </span>
+        <span className={styles.ehTitle}>{lot.title}</span>
+        <span className={styles.ehVerdict}>
+          <span className={styles.ehRatio}>{ratioText}</span>
+          <span className={styles.ehVerdictCap}>its comparables sell above<br />this ask, at the median</span>
+        </span>
+        <span className={styles.ehRows}>
+          <span className={styles.ehRow}><span>The ask</span><span className={styles.ehDots} /><span>{askText}</span></span>
+          {med != null && (
+            <span className={styles.ehRow}><span>Comps median</span><span className={styles.ehDots} /><span>{formatPrice(med)}{signal.basis ? ` · ${signal.basis} sales` : ''}</span></span>
+          )}
+          <span className={styles.ehRow}><span>Confidence</span><span className={styles.ehDots} /><span><b className={styles.ehConfDots}>{conf.dots}</b> {conf.word}</span></span>
+        </span>
+        <span className={styles.ehFine}>read from same-maker, same-form, size-banded comps · medians, never means</span>
+        <span className={styles.ehCta}>Open the full read →</span>
+      </span>
     </button>
   );
 }
@@ -405,7 +438,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
 
 export default function SubMarketBoard({
   market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows, paper = false, receipts = null,
-  showcase, onOpenLot,
+  hero, onOpenLot,
 }: Props) {
   const reduce = useReducedMotion();
   const [ref, seen] = useInView<HTMLDivElement>();
@@ -444,19 +477,11 @@ export default function SubMarketBoard({
             </p>
           </div>
 
-          {/* ── 01 · THE ENGINE — flagged lots, the read spelled out ── */}
-          {showcase && showcase.length >= 3 && (
+          {/* ── 01 · THE ENGINE — demonstrated on one lot ── */}
+          {hero && (
             <>
               <Chapter no="01" label="The engine" />
-              <div className={styles.flagRow}>
-                {showcase.slice(0, 3).map((f) => (
-                  <FlagPlate key={f.lot.id} f={f} onOpen={onOpenLot} />
-                ))}
-              </div>
-              <p className={styles.engineLine}>
-                Same maker, same form, size-banded&ensp;→&ensp;the comps&rsquo; median&ensp;→&ensp;the
-                gap gets flagged. Medians, never means — and never a guess.
-              </p>
+              <EngineHero h={hero} onOpen={onOpenLot} />
             </>
           )}
 

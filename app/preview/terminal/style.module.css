@@ -3464,3 +3464,131 @@ a.recordObj:focus-visible {
   .rcptStamp { top: 96px; width: 76px; }
   .rcptStamp .seal { width: 76px; }
 }
+
+/* ════ 01 · THE ENGINE HERO — one lot, the engine demonstrated ════
+   Desktop: the photograph matted left, the dossier right — verdict as a
+   small monument (the multiple), leader rows for the read, fine print.
+   Mobile: photograph on top, the read stacked beneath. */
+.engineHero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(18px, 2.6vw, 36px);
+  align-items: stretch;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: clamp(14px, 1.8vw, 22px);
+  background: #EBE3D0;
+  border: 1px solid rgba(28, 23, 18, 0.18);
+  border-radius: 14px;
+  color: var(--paper-ink, #1C1712);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s;
+}
+.engineHero:hover { transform: translateY(-3px); border-color: rgba(28, 23, 18, 0.36); }
+.ehImg {
+  border-radius: 10px;
+  background: #F4EFE0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 320px;
+}
+.ehImg img { max-width: 100%; max-height: 380px; object-fit: contain; }
+.ehRead { display: flex; flex-direction: column; min-width: 0; padding: 6px 4px 2px 0; }
+.ehTopRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ehMaker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper-muted, #5A5240);
+}
+.ehWhen { font-size: 11.5px; color: var(--paper-muted, #5A5240); white-space: nowrap; }
+.ehTitle {
+  font-family: var(--font-serif-display), serif;
+  font-weight: 400;
+  font-size: clamp(19px, 1.9vw, 26px);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin-top: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* the verdict — the multiple as a small monument */
+.ehVerdict {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: clamp(14px, 1.8vw, 22px);
+}
+.ehRatio {
+  font-family: var(--font-serif-display), serif;
+  font-weight: 400;
+  font-size: clamp(46px, 4.6vw, 68px);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: #1e7a4d;
+}
+.ehVerdictCap {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--paper-muted, #5A5240);
+  max-width: 200px;
+}
+.ehRows { margin-top: clamp(12px, 1.6vw, 18px); border-top: 1px solid rgba(28, 23, 18, 0.16); padding-top: 6px; }
+.ehRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.ehRow > span:first-child { color: var(--paper-muted, #5A5240); }
+.ehRow > span:last-child { font-weight: 600; }
+.ehDots { flex: 1; border-bottom: 1px dotted rgba(28, 23, 18, 0.35); transform: translateY(-3px); }
+.ehConfDots { letter-spacing: 2px; font-weight: 400; color: #8A7440; }
+.ehFine {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(28, 23, 18, 0.5);
+}
+.ehCta {
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--paper-ink, #1C1712);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+@media (max-width: 900px) {
+  .engineHero {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-inline: 16px;
+    padding: 12px 14px 16px;
+  }
+  .ehImg { min-height: 0; height: 230px; }
+  .ehImg img { max-height: 220px; }
+  .ehRead { padding: 0 2px; }
+  .ehWhen { white-space: normal; text-align: right; }
+  .ehTitle { font-size: 19px; }
+  .ehRatio { font-size: 48px; }
+  .ehVerdictCap { font-size: 12px; }
+  .ehRow { font-size: 12.5px; }
+  .ehCta { padding-top: 14px; }
+}
