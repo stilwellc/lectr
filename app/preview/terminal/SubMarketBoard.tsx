@@ -492,27 +492,48 @@ export default function SubMarketBoard({
               full instrument in a pop-up read card ── */}
           <Chapter no="02" label="The markets" />
           <p className={styles.chapterSub}>
-            {fmtInt(rows.length)} sub-markets, each read at the strength its data
-            supports — tap any row for the full instrument.
+            {fmtInt(rows.length)} sub-markets, each read at the strength its data supports —{' '}
+            <svg className={styles.legendGlyph} viewBox="0 0 34 12" aria-label="confidence-range glyph">
+              <line x1="3" y1="6" x2="31" y2="6" /><line x1="3" y1="2.5" x2="3" y2="9.5" /><line x1="31" y1="2.5" x2="31" y2="9.5" />
+              <path d="M20 2.8 L23.2 6 L20 9.2 L16.8 6 Z" className={styles.legendFill} />
+            </svg>{' '}
+            a 95% confidence range,{' '}
+            <svg className={styles.legendGlyph} viewBox="0 0 34 12" aria-label="demand-series glyph">
+              <path d="M2 8.5 C5 8.5 5 3.5 8.5 3.5 S12 8.5 15.5 8.5 19 3.5 22.5 3.5 26 8.5 29 8 32 6 32 6" fill="none" />
+            </svg>{' '}
+            demand against estimate. Tap any row for the full instrument.
           </p>
 
-          <div className={styles.tape}>
-            <div className={styles.tapeCol}>
-              {shown.slice(0, Math.ceil(shown.length / 2)).map((r) => (
-                <TapeRow key={keyOf(r)} r={r} active={!!openRead && keyOf(openRead) === keyOf(r)} onPick={() => setOpenRead(r)} />
-              ))}
-            </div>
-            <div className={styles.tapeCol}>
-              {shown.slice(Math.ceil(shown.length / 2)).map((r) => (
-                <TapeRow key={keyOf(r)} r={r} active={!!openRead && keyOf(openRead) === keyOf(r)} onPick={() => setOpenRead(r)} />
-              ))}
-            </div>
-            {rows.length > CAP && (
-              <button type="button" className={styles.tapeMore} onClick={() => setExpanded((v) => !v)}>
-                {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
-              </button>
-            )}
-          </div>
+          {(() => {
+            const left = shown.slice(0, Math.ceil(shown.length / 2));
+            const right = shown.slice(Math.ceil(shown.length / 2));
+            // type headers only when the split is pure (the curated marquee is:
+            // certified indices left, demand reads right)
+            const pure = !expanded
+              && left.length > 0 && left.every((r) => r.readType === 'index')
+              && right.length > 0 && right.every((r) => r.readType !== 'index');
+            return (
+              <div className={styles.tape}>
+                <div className={styles.tapeCol}>
+                  {pure && <div className={styles.colHead}>Certified indices · 95% CI</div>}
+                  {left.map((r) => (
+                    <TapeRow key={keyOf(r)} r={r} active={!!openRead && keyOf(openRead) === keyOf(r)} onPick={() => setOpenRead(r)} />
+                  ))}
+                </div>
+                <div className={styles.tapeCol}>
+                  {pure && <div className={styles.colHead}>Demand reads · vs estimate</div>}
+                  {right.map((r) => (
+                    <TapeRow key={keyOf(r)} r={r} active={!!openRead && keyOf(openRead) === keyOf(r)} onPick={() => setOpenRead(r)} />
+                  ))}
+                </div>
+                {rows.length > CAP && (
+                  <button type="button" className={styles.tapeMore} onClick={() => setExpanded((v) => !v)}>
+                    {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* the pop-up read card — the monument, summoned */}
           <AnimatePresence>

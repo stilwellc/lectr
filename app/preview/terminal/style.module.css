@@ -2719,7 +2719,7 @@ a.recordObj:focus-visible {
    ════════════════════════════════════════════════════════════════ */
 .roomA {
   position: relative;
-  padding: clamp(64px, 8vw, 104px) 0 clamp(56px, 7vw, 88px);
+  padding: clamp(44px, 5.5vw, 68px) 0 clamp(36px, 4.5vw, 56px);
 }
 
 /* ── the altar ── */
@@ -2743,7 +2743,7 @@ a.recordObj:focus-visible {
   line-height: 1.08;
   letter-spacing: -0.012em;
   color: var(--paper-ink, #1C1712);
-  margin: 18px 0 0;
+  margin: 14px 0 0;
 }
 .altarHead em { font-style: italic; color: #8A7440; }
 .altarSub {
@@ -2751,7 +2751,7 @@ a.recordObj:focus-visible {
   line-height: 1.5;
   color: var(--paper-muted, #5A5240);
   max-width: 620px;
-  margin: 16px auto 0;
+  margin: 12px auto 0;
 }
 
 /* ── the monument: fixed zone; the figure stamps in whole ── */
@@ -2889,12 +2889,29 @@ a.recordObj:focus-visible {
 .tape {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  column-gap: clamp(28px, 3vw, 56px);
+  column-gap: clamp(20px, 2.2vw, 36px);
   max-width: 1240px;
-  margin: clamp(36px, 4.4vw, 64px) auto 0;
+  margin: clamp(16px, 2vw, 28px) auto 0;
   padding: 0 clamp(24px, 4vw, 56px);
 }
-.tapeCol { border-top: 1px solid rgba(28, 23, 18, 0.12); }
+.tapeCol {
+  align-self: start;
+  border: 1px solid rgba(28, 23, 18, 0.18);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #E7DFCC;
+}
+.tapeCol .tapeRow:last-child { border-bottom: 0; }
+.colHead {
+  padding: 9px 18px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper-muted, #5A5240);
+  background: rgba(28, 23, 18, 0.05);
+  border-bottom: 1px solid rgba(28, 23, 18, 0.14);
+}
 .tapeMore { grid-column: 1 / -1; }
 .tapeRow {
   position: relative;
@@ -2915,7 +2932,7 @@ a.recordObj:focus-visible {
   font-family: inherit;
   transition: background 0.16s ease-out;
 }
-.tapeRow:nth-child(even) { background: #DCD2BB; }
+.tapeRow:nth-of-type(even) { background: #DCD2BB; }
 .tapeRow:hover { background: #D5CBB2; }
 .tapeRow:hover .tapeChevron { opacity: 1; }
 .tapeRow:hover .tapeLabel { transform: translateX(4px); }
@@ -2966,13 +2983,13 @@ a.recordObj:focus-visible {
 .tapeMore {
   display: block;
   width: 100%;
-  padding: 19px;
+  padding: 13px;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(28, 23, 18, 0.12);
+  border-bottom: 0;
   border-radius: 0;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--paper-muted, #5A5240);
   cursor: pointer;
@@ -3035,10 +3052,10 @@ a.recordObj:focus-visible {
 
 /* ── Room A mobile ── */
 @media (max-width: 900px) {
-  .roomA { padding: 52px 0 60px; }
+  .roomA { padding: 34px 0 42px; }
   .eyebrowMark { height: 18px; }
   .altarHead { font-size: clamp(28px, 8vw, 34px); line-height: 1.1; }
-  .altarSub { font-size: 13.5px; margin: 14px 24px 0; }
+  .altarSub { font-size: 13.5px; margin: 10px 24px 0; }
   .monument { height: 220px; margin-top: 24px; }
   .monFigure { font-size: clamp(56px, 17vw, 72px); }
   .monHorizon { font-size: 16px; }
@@ -3046,13 +3063,13 @@ a.recordObj:focus-visible {
   .monChip { margin-top: 20px; font-size: 11px; }
   .beam, .demandLine { width: min(260px, 80vw); margin-top: 22px; }
   .demandSvg { height: 56px; }
-  .tape { grid-template-columns: 1fr; column-gap: 0; margin-top: 32px; padding: 0 20px; }
+  .tape { grid-template-columns: 1fr; column-gap: 0; row-gap: 12px; margin-top: 14px; padding: 0 20px; }
   .tapeCol + .tapeCol { border-top: 0; }
   .tapeRow {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
-    min-height: 68px;
-    padding: 11px 4px;
+    min-height: 56px;
+    padding: 8px 14px;
   }
   .tapeInstrument, .tapeChevron { display: none; }
   .tapeLabel { font-size: 15.5px; }
@@ -3242,7 +3259,7 @@ a.recordObj:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: clamp(44px, 5.5vw, 76px) 0 clamp(20px, 2.6vw, 32px);
+  margin: clamp(28px, 3.6vw, 46px) 0 clamp(14px, 1.8vw, 20px);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.15em;
@@ -3574,8 +3591,8 @@ a.recordObj:focus-visible {
     margin-inline: 16px;
     padding: 12px 14px 16px;
   }
-  .ehImg { min-height: 0; height: 230px; }
-  .ehImg img { max-height: 220px; }
+  .ehImg { min-height: 0; height: 195px; }
+  .ehImg img { max-height: 190px; }
   .ehRead { padding: 0 2px; }
   .ehWhen { white-space: normal; text-align: right; }
   .ehTitle { font-size: 19px; }
@@ -3591,8 +3608,8 @@ a.recordObj:focus-visible {
   font-size: 13px;
   line-height: 1.5;
   color: var(--paper-muted, #5A5240);
-  max-width: 520px;
-  margin: -10px auto 26px;
+  max-width: 560px;
+  margin: -4px auto 18px;
 }
 .readPop {
   position: fixed;
@@ -3648,3 +3665,15 @@ a.recordObj:focus-visible {
   .chapterSub { font-size: 12px; margin: -8px 28px 20px; }
   .readPopCard { padding: 18px 18px 24px; }
 }
+
+/* the chapter-02 legend glyphs — the instruments, drawn inline in the sub */
+.legendGlyph {
+  display: inline-block;
+  width: 32px;
+  height: 12px;
+  vertical-align: -1.5px;
+  stroke: rgba(28, 23, 18, 0.6);
+  stroke-width: 1.2;
+  margin: 0 1px;
+}
+.legendFill { fill: rgba(28, 23, 18, 0.6); stroke: none; }
