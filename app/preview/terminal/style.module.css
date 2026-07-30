@@ -2721,16 +2721,6 @@ a.recordObj:focus-visible {
   position: relative;
   padding: clamp(64px, 8vw, 104px) 0 clamp(56px, 7vw, 88px);
 }
-/* the plumb line — stitches the seam to the altar on the page axis */
-.roomA::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 0;
-  height: 120px;
-  border-left: 1px dashed rgba(28, 23, 18, 0.4);
-  pointer-events: none;
-}
 
 /* ── the altar ── */
 .altar { position: relative; text-align: center; z-index: 1; }
@@ -3046,7 +3036,6 @@ a.recordObj:focus-visible {
 /* ── Room A mobile ── */
 @media (max-width: 900px) {
   .roomA { padding: 52px 0 60px; }
-  .roomA::before { height: 52px; }
   .eyebrowMark { height: 18px; }
   .altarHead { font-size: clamp(28px, 8vw, 34px); line-height: 1.1; }
   .altarSub { font-size: 13.5px; margin: 14px 24px 0; }
