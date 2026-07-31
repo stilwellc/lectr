@@ -165,7 +165,7 @@ export default function IndexHero({
       if (!(base > 0)) return null;
       pts = pts.map((p) => ({ ...p, value: ((p.value / base) - 1) * 100 }));
     }
-    return { chart: { key: l.key, label: l.label, points: pts }, kind: l.kind, last: pts[pts.length - 1].value };
+    return { chart: { key: l.key, label: l.label, color: l.color, points: pts }, kind: l.kind, last: pts[pts.length - 1].value };
   };
   const mainLayers = layerDefs.main.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
   const subLayers = layerDefs.sub.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
@@ -186,6 +186,7 @@ export default function IndexHero({
         onClick={() => setLitLayer((cur) => (cur === x.chart.key ? null : x.chart.key))}
         aria-pressed={on}
       >
+        <span className={styles.layerChipDot} style={{ background: x.chart.color }} aria-hidden />
         {x.chart.label}
         <span className={`${styles.layerChipVal}${x.kind === 'volume' ? '' : ` ${styles.pctData}`}`} data-dir={dir}>{val}</span>
       </button>

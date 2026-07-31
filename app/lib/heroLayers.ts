@@ -23,9 +23,16 @@ export interface HeroLayer {
   key: string;
   label: string;
   kind: LayerKind;
+  /** the layer's line color — a muted terminal hue (dusty, mid-luminance)
+      kept visually apart from the saturated direction green/red, so a line's
+      color indexes it to its chip without ever implying up/down */
+  color: string;
   /** quarterly points on the shared 'YYYY Qn' axis */
   points: { period: string; value: number; n: number }[];
 }
+
+/** the layer palette — six dusty hues tuned for the #0A0B0D ground */
+export const LAYER_PALETTE = ['#7EA4CC', '#A98BC8', '#6FB5AC', '#C9A96E', '#C98B94', '#8F9BA8'];
 
 interface LayerRef { key: string; label: string; source: 'markets' | 'drills' | 'subs'; vertical?: string; slug?: string; kind: LayerKind }
 
@@ -95,12 +102,15 @@ function resolveRef(ref: LayerRef, market: MarketData | null): HeroLayer | null 
     else points = row.demandSeries?.map(p => ({ period: p.period, value: p.value, n: p.n }));
   }
   if (!points || points.length < 6) return null;
-  return { key: ref.key, label: ref.label, kind: ref.kind, points };
+  return { key: ref.key, label: ref.label, kind: ref.kind, color: '', points };
 }
 
 export function resolveHeroLayers(activeKey: string, market: MarketData | null): { main: HeroLayer[]; sub: HeroLayer[]; subLabel: string | null } {
   const main = (MAIN[activeKey] || []).map(r => resolveRef(r, market)).filter((x): x is HeroLayer => !!x);
   const sub = (SUB[activeKey] || []).map(r => resolveRef(r, market)).filter((x): x is HeroLayer => !!x);
+  // colors assigned by position across BOTH bands — stable per view, and a
+  // main line can never share its hue with a subpane line on the same stage
+  [...main, ...sub].forEach((l, i) => { l.color = LAYER_PALETTE[i % LAYER_PALETTE.length]; });
   const subLabel = !sub.length ? null
     : sub[0].kind === 'volume' ? 'sales volume · quarterly'
     : 'card era indexes · repeat-sale, rebased';

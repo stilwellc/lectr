@@ -3749,7 +3749,7 @@ text.chartAnno.pctData { font-family: var(--font-mono-data), monospace; }
 }
 .layerChip {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 7px;
   padding: 5px 12px;
   border: 2px dotted color-mix(in srgb, var(--tt-fg, #E8EAED) 14%, transparent);
@@ -3764,6 +3764,13 @@ text.chartAnno.pctData { font-family: var(--font-mono-data), monospace; }
 }
 .layerChip:hover { border-color: color-mix(in srgb, var(--tt-fg, #E8EAED) 34%, transparent); opacity: 1; }
 .layerChip[data-on='true'] { border-color: color-mix(in srgb, var(--tt-fg, #E8EAED) 55%, transparent); opacity: 1; }
+.layerChipDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  align-self: center;
+  flex: none;
+}
 .layerChipVal { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--tt-faint, #7A8087); }
 .layerChipVal[data-dir='up'] { color: var(--tt-up, #2FBF71); }
 .layerChipVal[data-dir='down'] { color: var(--tt-down, #E5484D); }

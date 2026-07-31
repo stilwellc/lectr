@@ -46,6 +46,7 @@ export interface IndexPoint {
 export interface ChartLayer {
   key: string;
   label: string;
+  color: string;
   points: IndexPoint[];
 }
 
@@ -184,8 +185,8 @@ export default function MarketChart({
                   key={l.key}
                   type="monotone"
                   dataKey={`ly_${l.key}`}
-                  stroke="var(--tt-fg, #E8EAED)"
-                  strokeOpacity={lit ? 0.92 : ghost ? 0.10 : 0.30}
+                  stroke={l.color || 'var(--tt-fg, #E8EAED)'}
+                  strokeOpacity={lit ? 1 : ghost ? 0.12 : 0.55}
                   strokeWidth={lit ? 1.9 : 1.4}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -210,7 +211,7 @@ export default function MarketChart({
                   r={0}
                   isFront
                   label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
-                    <text x={(viewBox?.x ?? 0) + 7} y={(viewBox?.y ?? 0) + 3} className={styles.chartLayerLabel}>
+                    <text x={(viewBox?.x ?? 0) + 7} y={(viewBox?.y ?? 0) + 3} className={styles.chartLayerLabel} fill={l.color || undefined}>
                       {l.label}
                     </text>
                   )}
@@ -334,8 +335,8 @@ export function LayerPane({ layers, highlight, height = 76 }: {
                 key={l.key}
                 type="monotone"
                 dataKey={`ly_${l.key}`}
-                stroke="var(--tt-fg, #E8EAED)"
-                strokeOpacity={lit ? 0.92 : ghost ? 0.10 : 0.34}
+                stroke={l.color || 'var(--tt-fg, #E8EAED)'}
+                strokeOpacity={lit ? 1 : ghost ? 0.12 : 0.55}
                 strokeWidth={lit ? 1.8 : 1.3}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -351,7 +352,7 @@ export function LayerPane({ layers, highlight, height = 76 }: {
             return (
               <ReferenceDot key={`lbl-${l.key}`} x={lp.period} y={lp.value} r={0} isFront
                 label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
-                  <text x={(viewBox?.x ?? 0) + 7} y={(viewBox?.y ?? 0) + 3} className={styles.chartLayerLabel}>
+                  <text x={(viewBox?.x ?? 0) + 7} y={(viewBox?.y ?? 0) + 3} className={styles.chartLayerLabel} fill={l.color || undefined}>
                     {l.label}
                   </text>
                 )} />
