@@ -67,7 +67,7 @@ const demandStrength = (r: SubMarketRead) => r.demandNow ?? -Infinity;
 // the curated marquee — the reads that lead the cross-market board before it
 // expands to the full list. Matched by label (case-insensitive), rendered in
 // this exact order; anything not present is simply skipped.
-const FEATURED = ['sports cards', 'cartier', 'rolex', 'patek philippe', 'audemars piguet', 'pablo picasso', 'andy warhol'];
+const FEATURED = ['sports cards', 'cartier', 'rolex', 'patek philippe', 'audemars piguet', 'pablo picasso', 'andy warhol', 'space exploration'];
 
 function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRead[] {
   const sm = market?.subMarkets;
@@ -445,7 +445,7 @@ export default function SubMarketBoard({
   const [receiptsRef, receiptsSeen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
 
-  const CAP = 7;
+  const CAP = 8;
   const [expanded, setExpanded] = useState(false);
   // the pop-up read: tapping a row opens its full instrument (the CI beam /
   // demand series at monument scale) in an overlay — the tape stays compact,
@@ -463,7 +463,12 @@ export default function SubMarketBoard({
   /* ════ ROOM A — Plate & Tape (the home's paper room) ════ */
   if (paper) {
     if (!rows.length) return null;
-    const shown = expanded ? rows : rows.slice(0, CAP);
+    // mobile collapses further: only the certified indices until expanded —
+    // the demand reads join on "Show more" (less scroll, same data one tap away)
+    const capped = rows.slice(0, CAP);
+    const shown = expanded ? rows
+      : variant === 'mobile' ? capped.filter((r) => r.readType === 'index')
+      : capped;
     return (
       <LazyMotion features={domAnimation} strict>
         <div className={styles.roomA} ref={ref}>
@@ -529,11 +534,11 @@ export default function SubMarketBoard({
                     <TapeRow key={keyOf(r)} r={r} active={!!openRead && keyOf(openRead) === keyOf(r)} onPick={() => setOpenRead(r)} />
                   ))}
                 </div>
-                {rows.length > CAP && (
+                {rows.length > shown.length || expanded ? (
                   <button type="button" className={styles.tapeMore} onClick={() => setExpanded((v) => !v)}>
-                    {expanded ? 'Show less' : `Show ${rows.length - CAP} more`}
+                    {expanded ? 'Show less' : `Show ${rows.length - shown.length} more`}
                   </button>
-                )}
+                ) : null}
               </div>
             );
           })()}
