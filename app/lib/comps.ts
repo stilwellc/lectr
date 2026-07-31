@@ -155,7 +155,20 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
     if (/\b(bed|headboard)\b/.test(t)) return 'bed';
     if (/\b(lamp|sconce|chandelier|lighting|light fixture|lantern)\b/.test(t)) return 'lighting';
     if (/\bmirror\b/.test(t)) return 'mirror';
-    if (isDesign) return 'design-other';
+    if (isDesign) {
+      // plural / compound / French rescue (ENGINE SPEC v2 §2.4 Gate 2):
+      // 'design-other' held 48.6% of the vertical; ~1.4k of its 5.3k rows are
+      // plainly-nameable seating/tables the singular ladder missed. Ordered
+      // AFTER the bench/stool/sofa checks above.
+      if (/\b(chairs|armchairs?|fauteuils?|chaises?)\b/.test(t) || /\w+chairs?\b/.test(t)) return 'seating-chair';
+      if (/\b(stools|tabourets?)\b/.test(t)) return 'seating-stool';
+      if (/\bbenches\b/.test(t)) return 'seating-bench';
+      if (/\btables\b/.test(t)) return 'table';
+      if (/\bbureau\b/.test(t)) return 'desk';
+      if (/\blit\b/.test(t)) return 'bed';
+      if (/\bmiroir\b/.test(t)) return 'mirror';
+      return 'design-other';
+    }
   }
 
   if (lot.category === 'sculpture') return 'sculpture';
@@ -267,6 +280,32 @@ export function watchKey(lot: Pick<AuctionLot, 'title'>): string | null {
   return null;
 }
 
+/** How the watch key was derived — an explicit REFERENCE number is a tight
+    cohort; a bare model-line NAME ("daytona") pools decades and materials.
+    Measured: ref-keyed pools IQR/med 0.53 vs model-name 1.27 (2.4× looser),
+    so model-name keys cap confidence at 'medium' (H1) and cannot flag without
+    a material-pure pool (§1.3). */
+export function watchKeyKind(lot: Pick<AuctionLot, 'title'>): 'ref' | 'model-name' | null {
+  const t = (lot.title || '').toLowerCase();
+  if (/\bref(?:erence)?\.?,?\s*([a-z]?\d{3,6}[a-z]{0,4}(?:\/\d+[a-z]?)?)\b/.test(t)) return 'ref';
+  if (WATCH_MODELS.test(t)) return 'model-name';
+  return null;
+}
+
+/** Coarse watch material from title+medium. Gold shades deliberately collapse
+    (fine split measured no better: 0.305 vs 0.303). */
+export function coarseWatchMaterial(lot: Pick<AuctionLot, 'title' | 'medium'>): string | null {
+  const t = `${(lot.title || '')} ${(lot.medium || '')}`.toLowerCase();
+  const gold = /\b(gold|or jaune|or gris|or rose|or blanc)\b|\b18k\b|\b14k\b|\b18ct\b|\b9ct\b/.test(t);
+  const steel = /\b(steel|stainless|acier)\b/.test(t);
+  if ((gold && steel) || /two[- ]tone/.test(t)) return 'two-tone';
+  if (/platinum|platine/.test(t)) return 'platinum';
+  if (gold) return 'gold';
+  if (steel) return 'steel';
+  if (/titanium/.test(t)) return 'titanium';
+  return null;
+}
+
 const WATCHES = new Set<Form>(['wristwatch', 'pocket-watch']);
 
 /* ── object class & market form gates (W17) ─────────────────────────────
@@ -340,6 +379,8 @@ function watchKeyOf(lot: AuctionLot): string | null {
   return lot.reference !== undefined ? lot.reference : watchKey(lot);
 }
 
+const ART_2D_TIGHT = new Set<Form>(['print', 'poster', 'painting', 'work-on-paper', 'original-2d', 'photograph']);
+
 /** The hard gate, curried: classify/key/measure the ANCHOR once, then test
     many candidates — `sold.filter(comparableTo(lot))` instead of re-deriving
     the anchor's form, model/watch key and dims per candidate. */
@@ -350,6 +391,7 @@ export function comparableTo(lot: AuctionLot): (candidate: AuctionLot) => boolea
   const isWatch = WATCHES.has(a);
   const keyA = isFurniture ? modelKeyOf(lot) : null;
   const refA = isWatch ? watchKeyOf(lot) : null;
+  const matA = isWatch ? coarseWatchMaterial(lot) : null;
   const da = parseDims(lot.dimensions);
 
   return (candidate: AuctionLot) => {
@@ -363,6 +405,11 @@ export function comparableTo(lot: AuctionLot): (candidate: AuctionLot) => boolea
     // watches bifurcate by reference: Daytona comps Daytona, never Datejust
     if (isWatch && refA !== watchKeyOf(candidate)) return false;
 
+    // STRICT material gate (measured: −3.4% reads for medAbsErr 0.311→0.300;
+    // steel Daytona $47.5K vs two-tone $11.2K sat in one pool). Strict per
+    // doctrine: an unparsed-material candidate is a loose comp — excluded.
+    if (isWatch && matA && coarseWatchMaterial(candidate) !== matA) return false;
+
     // opportunistic size gate when both sides are measurable
     if (da) {
       const db = parseDims(candidate.dimensions);
@@ -372,8 +419,12 @@ export function comparableTo(lot: AuctionLot): (candidate: AuctionLot) => boolea
           const la = Math.max(...da), lb = Math.max(...db);
           if (la > 0 && lb > 0 && (la / lb > 2.2 || lb / la > 2.2)) return false;
         } else {
+          // art 2D forms take the measured tighter band (4→2.5×: retained-pool
+          // err 0.535→0.476 on the affected reads, aggregate unchanged) —
+          // still opportunistic (dims-required measured WORSE, 0.427→0.433)
+          const areaMax = ART_2D_TIGHT.has(a) ? 2.5 : 4;
           const areaA = da[0] * da[1], areaB = db[0] * db[1];
-          if (areaA > 0 && areaB > 0 && (areaA / areaB > 4 || areaB / areaA > 4)) return false;
+          if (areaA > 0 && areaB > 0 && (areaA / areaB > areaMax || areaB / areaA > areaMax)) return false;
         }
       }
     }
@@ -399,6 +450,14 @@ function estUsdBand(lot: AuctionLot): { low: number | null; high: number | null 
     low: lot.estLowUsd ?? lot.estimateLow,
     high: lot.estHighUsd ?? lot.estimateHigh,
   };
+}
+
+/** the named series of a print title ("…, from Jazz (…)") — normalized, ≥3 chars */
+function seriesOf(t: string | null | undefined): string | null {
+  const m = (t || '').match(/(?:,|\s)from\s+(?:the\s+)?(.{3,50}?)(?:\s*\(|,|\s*\d*\s*$)/i);
+  if (!m) return null;
+  const s = normalizeTitle(m[1]);
+  return s.length >= 3 ? s : null;
 }
 
 export function normalizeTitle(t: string | null | undefined): string {
@@ -451,12 +510,22 @@ interface CompRead {
   form: Form;
   confidence: DeepSignal['confidence'];
   estMid: number;
+  /** measured dishonest-flag classes may still be APPRAISED but never FLAG */
+  flagEligible: boolean;
 }
 
 /** The shared comp-pool read: same pools, same guards, same confidence as the
  *  card signal — but it returns the MEDIAN unconditionally, so an appraisal
  *  exists even when the lot sits between the signal thresholds. */
+const CULTURE_SLUGS_ENGINE = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia']);
+
 function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
+  // Culture never enters the frozen engine: repeated subject-header titles
+  // ('walt disney studios' ×368) mint false very-high editions, simulated
+  // flags ran 61.7% beat at 1.20 median ratio (< the 1.25 premium break-even
+  // — negative edge), and the band is 2× worse than the specialist estimate.
+  // Culture reads live in cultureReferenceBand (descriptive, never a flag).
+  if (CULTURE_SLUGS_ENGINE.has(lot.artist)) return null;
   const est = estUsdBand(lot);
   if (!est.low || !est.high) return null;
   const form = formOf(lot);
@@ -493,6 +562,9 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
     // reference/titleTokens) and are engine-EXCLUDED at build time; the client
     // re-derives comps here, so guard them out too or a title-only lot pollutes
     // the comp pool for art/watch makers (picasso, patek, rolex, …).
+    // NOTE (spec §2.2): soldCompBand deliberately does NOT share this
+    // exclusion — game-used titles carry their identity and priceUsd is real;
+    // re-adding it there re-zeroes the sports vertical.
     && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia'
     // sports/science objects: same identity only (never a cross-athlete jersey
     // or a cross-specimen meteorite).
@@ -542,7 +614,25 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
 
   if (pool.length < 3) return null;
 
-  const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
+  // PRINT series availability (form path only): an anchor naming its series
+  // ("…, from Jazz") whose pool holds <3 same-series sales abstains — the
+  // measured abstained cohort read at err 0.587 vs 0.427 overall. The pool is
+  // NOT hard-filtered to the series (measured worse: 0.345→0.388) — the
+  // overlap scorer above already series-sorts.
+  if (form === 'print' && kind === 'form') {
+    const sa = seriesOf(lot.title);
+    if (sa && pool.filter((c) => seriesOf(c.title) === sa).length < 3) return null;
+  }
+
+  // DESIGN set normalization (form path only — the edition path is same-title,
+  // same set size by construction): a 'pair of' anchor read against singles
+  // carried a +17% directional bias; per-unit normalize with the measured
+  // sub-linear scale table, then re-scale to the anchor's own set size.
+  const setNorm = kind === 'form' && FURNITURE.has(form);
+  const anchorSet = setNorm ? setSizeOf(lot.title) : 1;
+  const prices = pool
+    .map(l => setNorm ? (l.priceUsd! / setScale(setSizeOf(l.title))) * setScale(anchorSet) : l.priceUsd!)
+    .sort((a, b) => a - b);
   const med = median(prices);
 
   // dispersion guard: if the pool disagrees with itself, say nothing
@@ -568,18 +658,81 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
     for (const w of normalizeTitle(l.title).split(' ')) if (words.has(w)) hits++;
     return hits >= 2;
   }).length;
-  const confidence: DeepSignal['confidence'] =
+  let confidence: DeepSignal['confidence'] =
     kind === 'edition' ? 'very-high'
     : (pool.length >= 12 && spread <= 1.0) || (titleKin >= 6 && spread <= 1.5) ? 'high'
     : pool.length >= 6 && spread <= 1.8 ? 'medium'
     : 'low';
 
-  return { pool, med, kind, form, confidence, estMid };
+  // ── demotion hooks (ENGINE SPEC v2 §1.2) — measured, applied after the ladder ──
+  const CONF_ORDER: DeepSignal['confidence'][] = ['low', 'medium', 'high', 'very-high'];
+  const capConf = (cap: DeepSignal['confidence']) => {
+    if (CONF_ORDER.indexOf(confidence) > CONF_ORDER.indexOf(cap)) confidence = cap;
+  };
+  const isWatchForm = WATCHES.has(form);
+  const wkk = isWatchForm ? watchKeyKind(lot) : null;
+  // H1 · model-name watch keys pool 2.4× looser than references → cap medium
+  if (wkk === 'model-name') capConf('medium');
+  // H2 · design: wood-mixed form pool → demote one notch (belowWin 67% vs 74%)
+  if (kind === 'form' && FURNITURE.has(form)) {
+    const anchorWood = woodOf(lot);
+    if (anchorWood) {
+      const diff = pool.filter((c) => { const w = woodOf(c); return w && w !== anchorWood; }).length / pool.length;
+      if (diff > 0.34) {
+        const i = CONF_ORDER.indexOf(confidence);
+        if (i > 0) confidence = CONF_ORDER[i - 1];
+      }
+    }
+  }
+  // H3 · a category-reclassified anchor reads through healed but young data
+  if ((lot as AuctionLot & { catReclass?: string }).catReclass === 'o2p') capConf('low');
+
+  // ── flag eligibility (§1.3) — appraisal survives, flags don't ──
+  let flagEligible = true;
+  if ((lot as AuctionLot & { catReclass?: string }).catReclass === 'o2p') flagEligible = false;
+  if (wkk === 'model-name') {
+    const matA = coarseWatchMaterial(lot);
+    const pure = matA ? pool.filter((c) => coarseWatchMaterial(c) === matA).length / pool.length : 0;
+    if (pure < 0.8) flagEligible = false; // 39% Below-Market hold on this class
+  }
+
+  return { pool, med, kind, form, confidence, estMid, flagEligible };
+}
+
+/** set size named in a design title ("pair of", "set of six", "Two Early LCW
+    Chairs") — 1 when unstated. */
+const NUM_WORDS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12, deux: 2, trois: 3, quatre: 4, six_fr: 6, huit: 8 };
+function setSizeOf(title: string | null | undefined): number {
+  const t = (title || '').toLowerCase();
+  if (/\bpair of\b|\bpaire de\b/.test(t)) return 2;
+  const m = t.match(/\b(?:set of|suite de|ensemble de)\s+(\w+)\b/);
+  if (m) {
+    const w = m[1];
+    if (/^\d+$/.test(w)) return Math.min(24, parseInt(w, 10));
+    if (NUM_WORDS[w]) return NUM_WORDS[w];
+  }
+  const lead = t.match(/^(two|three|four|five|six|seven|eight|ten|twelve)\b/);
+  if (lead) return NUM_WORDS[lead[1]] || 1;
+  return 1;
+}
+/** measured sub-linear set→price scale (linear /N over-corrects: +0.416) */
+const SET_SCALE: Record<number, number> = { 1: 1, 2: 1.25, 4: 1.3, 6: 2.27, 8: 2.75 };
+function setScale(n: number): number {
+  if (SET_SCALE[n] != null) return SET_SCALE[n];
+  return n > 1 ? Math.sqrt(n) : 1;
+}
+
+/** coarse wood token for design pools (Nakashima walnut ≠ rosewood pricing) */
+function woodOf(l: Pick<AuctionLot, 'title' | 'medium'>): string | null {
+  const m = `${l.title || ''} ${l.medium || ''}`.toLowerCase()
+    .match(/\b(walnut|rosewood|teak|oak|maple|cherry|mahogany|pine|elm|ash|birch|cedar|ebony|laurel|redwood|hickory|persimmon|myrtle|buckeye|chestnut|sycamore)\b/);
+  return m ? m[1] : null;
 }
 
 export function signalWithPool(lot: AuctionLot, allLots: AuctionLot[]): { signal: DeepSignal; pool: AuctionLot[] } | null {
   const read = compPoolRead(lot, allLots);
   if (!read) return null;
+  if (!read.flagEligible) return null; // appraiseLot still values these; they never flag
   const { pool, med, kind, form, confidence, estMid } = read;
   const ratio = med / estMid;
   // 1.3 threshold (raised from 1.2): sold prices are premium-inclusive (~1.25×
@@ -713,10 +866,13 @@ const OBJECT_TYPE_RULES: [RegExp, ObjectType][] = [
   [/\b(sneakers?|shoes?|cleats?|boots?)\b/, 'sneakers'],
   [/\bbat\b/, 'bat'],
   [/\bpuck\b/, 'puck'],
-  [/\bball\b/, 'ball'],
+  // helmet/cap/pants MUST outrank ball ('football helmet' is a helmet), and
+  // the ball rule must catch the compounds — 183/707 sold 'other' rows were
+  // baseballs/basketballs/footballs the bare \bball\b boundary missed.
   [/\b(glove|mitt)\b/, 'glove'],
   [/\bhelmet\b/, 'helmet'],
   [/\b(cap\b|hat\b)/, 'cap'],
+  [/\b(baseball|basketball|football|volleyball|soccer ball|ball)s?\b/, 'ball'],
   [/\b(pants|shorts|trousers)\b/, 'pants'],
   [/\b(belt|championship belt)\b/, 'belt'],
   [/\b(ring|pendant)\b/, 'ring'],
@@ -765,6 +921,14 @@ export function extractSportsTags(title: string, slug: string): {
 
 /** The form key a sports/science object comps ON: its sportsForm when it's a
     sports slug, else the frozen classifyForm (science slugs). */
+/** the stamped objectType, else derived from the title via OBJECT_TYPE_RULES */
+function objTypeOf(l: AuctionLot): ObjectType | null {
+  if (l.objectType) return l.objectType;
+  const t = ` ${cleanGoldinTitle(l.title || '').toLowerCase()} `;
+  for (const [re, ty] of OBJECT_TYPE_RULES) if (re.test(t)) return ty;
+  return null;
+}
+
 function compFormKey(lot: AuctionLot): Form {
   return sportsForm(lot) ?? classifyForm(lot);
 }
@@ -790,10 +954,18 @@ export function soldCompBand(lot: AuctionLot, allLots: AuctionLot[]): SoldComp |
   const bandIdKey = objectIdentityKey(lot);
   if (!bandIdKey) return null;
 
-  // same-slug sold, same comp form key, SAME IDENTITY
+  // GAME-USED item gate: objectType EQUALITY replaces the coarse form key —
+  // sportsForm's 'sports-worn' lumps pants/sneakers/helmet/cap into one
+  // bucket; objectType coverage is 100% on sold rows. Measured trade: −3pp
+  // band coverage for err.med 0.395→0.359 (take the accuracy).
+  const anchorObjType = lot.artist === 'game-used' ? objTypeOf(lot) : null;
+  if (lot.artist === 'game-used' && !anchorObjType) return null;
+
+  // same-slug sold, same comp form key (game-used: same OBJECT TYPE), SAME IDENTITY
   const same = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id &&
-    isSportsScienceObject(l) && compFormKey(l) === form &&
+    isSportsScienceObject(l) &&
+    (anchorObjType ? objTypeOf(l) === anchorObjType : compFormKey(l) === form) &&
     objectIdentityKey(l) === bandIdKey
   );
   if (same.length < 3) return null;
@@ -848,4 +1020,180 @@ export function soldCompBand(lot: AuctionLot, allLots: AuctionLot[]): SoldComp |
     : 'low';
 
   return { form, pool, median: med, low: prices[0], high: prices[prices.length - 1], n: pool.length, confidence };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REFERENCE BANDS (ENGINE SPEC v2 §2.5/§2.6) — the looser tiers for the
+   verticals whose objects rarely repeat. Both are ADDITIVE and STRUCTURALLY
+   unable to flag: neither is called from compPoolRead / signalWithPool /
+   dealScore / any value list; they return a descriptive RANGE labeled
+   'reference', confidence pinned 'low'. Abstain > wrong still governs —
+   no identity, no band.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+export interface ReferenceBand {
+  kind: 'reference' | 'edition-like';
+  confidence: 'low';
+  med: number;
+  q1: number;
+  q3: number;
+  n: number;
+}
+
+// ── science identities (curated, from the measured reference tier) ──
+const SCI_METEORITE_NAMES = /\b(nwa ?\d+|sikhote[- ]alin|seymchan|campo del cielo|gujba|willamette|admire|dronino|muonionalusta|canyon diablo|gibeon|esquel|imilac|fukang|allende|murchison|chelyabinsk|aletai|tamentit|brenham|odessa|nantan|toluca|henbury|chinga|zagami|tissint|erg chech|aguas zarcas|tisserlitine)\b/;
+const SCI_METEORITE_TYPES = /\b(pallasite|mesosiderite|octahedrite|ataxite|hexahedrite|chondrite|achondrite|shergottite|lunar|moon rock|slice of the moon|martian|mars rock)\b/;
+const SCI_FOSSIL_GENERA = /\b(ammonite|trilobite|megalodon|mammoth|mosasaur|tyrannosaurus|t[.\- ]rex|triceratops|ichthyosaur|plesiosaur|pterosaur|pteranodon|sabre[- ]tooth|saber[- ]tooth|allosaurus|diplodocus|stegosaurus|velociraptor|raptor|edmontosaurus|spinosaurus|cave bear|woolly rhino|crinoid|sea lily|stromatolite|coprolite|orthoceras|keichousaurus|shark tooth|dinosaur egg|amber)\b/;
+const SCI_INSTRUMENT_TYPES = /\b(telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|sundial|globe|slide rule|chronometer|compass|calculator|typewriter|enigma|computer|camera)\b/;
+const SCI_SPACE_MISSIONS = /\b(apollo[- ]?(?:\d{1,2}|[ivx]{1,4})|apollo|gemini[- ]?\d{0,2}|mercury|soyuz|skylab|sputnik|vostok|space shuttle|shuttle|sts-\d+|iss|mir)\b/;
+const SCI_ROMAN: Record<string, string> = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9', x: '10', xi: '11', xii: '12', xiii: '13', xiv: '14', xv: '15', xvi: '16', xvii: '17' };
+const SCI_SLUG_FORMS: Record<string, Set<Form>> = {
+  meteorites: new Set<Form>(['meteorite']),
+  fossils: new Set<Form>(['fossil']),
+  'scientific-instruments': new Set<Form>(['instrument', 'tech']),
+  'space-exploration': new Set<Form>(['space']),
+};
+// artist-dated parenthetical = a leaked art lot riding a science slug
+const SCI_ART_PARENS = /\([^)]*\b(1[4-9]\d{2}|20[0-2]\d)\b[^)]*\)/;
+const SCI_SPACE_NOUN = /\b(nasa|flown|lunar|astronaut|cosmonaut|spacecraft|space[- ]?flight|mission|module|orbit|capsule|rocket|launch|crew|emblem|patch|beta cloth|kapton|checklist|flight plan)\b/i;
+const SCI_MISSION_NUM = /\b(apollo|gemini|soyuz|sts)[- ]?(\d{1,2}|[ivx]{1,4})\b/i;
+
+function sciLeakedArt(l: Pick<AuctionLot, 'title' | 'artist'>): boolean {
+  const t = l.title || '';
+  if (SCI_ART_PARENS.test(t)) return true;
+  if (l.artist === 'fossils' && /\b(photograph|panoramic|panorama)\b/i.test(t)) return true;
+  return false;
+}
+function sciTitleIdentity(l: Pick<AuctionLot, 'title' | 'artist'>): string | null {
+  const t = ` ${(l.title || '').toLowerCase()} `;
+  let m: RegExpMatchArray | null;
+  switch (l.artist) {
+    case 'meteorites':
+      if ((m = t.match(SCI_METEORITE_NAMES))) return 'name:' + m[1].replace(/[- ]/g, '');
+      if ((m = t.match(SCI_METEORITE_TYPES))) return 'type:' + (/lunar|moon/.test(m[1]) ? 'lunar' : /martian|mars/.test(m[1]) ? 'martian' : m[1]);
+      return null;
+    case 'fossils':
+      if ((m = t.match(SCI_FOSSIL_GENERA))) return 'genus:' + m[1].replace(/[.\- ]/g, '');
+      return null;
+    case 'scientific-instruments':
+      if ((m = t.match(SCI_INSTRUMENT_TYPES))) return 'inst:' + m[1];
+      return null;
+    case 'space-exploration': {
+      if ((m = t.match(SCI_SPACE_MISSIONS))) {
+        let id = m[1].replace(/[- ]/g, '');
+        const r = id.match(/^apollo([ivx]+)$/);
+        if (r && SCI_ROMAN[r[1]]) id = 'apollo' + SCI_ROMAN[r[1]];
+        return 'mission:' + id;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Science reference band — same slug + canonical form + (entity OR curated
+ *  title identity), fossils get a ≥3-word-overlap fallback when the anchor
+ *  has no identity. Measured: coverage 5.0%→38.5% (7.6×), med|err| 50–55%,
+ *  worst residual capped ~1,234% (from 227,281% naive). */
+export function scienceReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): ReferenceBand | null {
+  if (!isSportsScienceObject(lot)) return null;
+  const forms = SCI_SLUG_FORMS[lot.artist];
+  if (!forms) return null;
+  const form = formOf(lot);
+  if (!forms.has(form)) return null;
+  if (sciLeakedArt(lot)) return null;
+  const title = lot.title || '';
+  if (lot.artist === 'space-exploration') {
+    if (!(SCI_MISSION_NUM.test(title) || SCI_SPACE_NOUN.test(title))) return null; // bare 'apollo' is an old master
+    const sig = new Set(normalizeTitle(title).split(' ').filter(w => w.length > 3));
+    if (sig.size < 3 && !lot.entity) return null; // '[Apollo 11]' carries no information
+  }
+  const ent = lot.entity ? lot.entity.toLowerCase().trim() : null;
+  const tid = sciTitleIdentity(lot);
+  const words = new Set(normalizeTitle(title).split(' ').filter(w => w.length > 3));
+  const scored: [number, AuctionLot][] = [];
+  for (const l of allLots) {
+    if (l.id === lot.id || l.artist !== lot.artist || l.status !== 'sold' || !l.priceUsd) continue;
+    if (!forms.has(formOf(l)) || sciLeakedArt(l)) continue;
+    let idHit = false, sc = 0;
+    if (ent && l.entity && l.entity.toLowerCase().trim() === ent) { idHit = true; sc += 3; }
+    const lid = sciTitleIdentity(l);
+    if (tid && lid && lid === tid) { idHit = true; sc += 3; }
+    let ov = 0;
+    for (const w of normalizeTitle(l.title).split(' ')) if (words.has(w)) ov++;
+    sc += ov;
+    // fossils ONLY: word-overlap admission when the anchor carries no identity
+    const fossilFallback = lot.artist === 'fossils' && !tid && !ent && ov >= 3;
+    if (idHit || fossilFallback) scored.push([sc, l]);
+  }
+  if (scored.length < 3) return null;
+  const pool = scored
+    .sort((a, b) => (b[0] - a[0]) || (new Date(b[1].saleDate).getTime() - new Date(a[1].saleDate).getTime()))
+    .slice(0, 24)
+    .map(x => x[1]);
+  const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
+  const med = median(prices);
+  const q1 = prices[Math.floor(prices.length * 0.25)];
+  const q3 = prices[Math.floor(prices.length * 0.75)];
+  if (med > 0 && (q3 - q1) / med > 2.5) return null;
+  const est = estUsdBand(lot);
+  const em = est.low && est.high ? (est.low + est.high) / 2 : null;
+  if (em && (med > em * 5 || med < em / 5)) return null;
+  return { kind: 'reference', confidence: 'low', med, q1, q3, n: pool.length };
+}
+
+/** Culture reference band — Goldin edition-like tier (same normalized title,
+ *  ≥5 distinctive tokens) else the subject×itemClass reference tier from the
+ *  crawl-stamped axes. Measured: Goldin edition-like 0.25 med|err| / 85.2%
+ *  within 2×; strict itemClass gate (loose degrades within-2× 72.3→66.5%). */
+export function cultureReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): ReferenceBand | null {
+  if (!CULTURE_SLUGS_ENGINE.has(lot.artist)) return null;
+  const sold = allLots.filter(l =>
+    l.id !== lot.id && CULTURE_SLUGS_ENGINE.has(l.artist) && l.status === 'sold' && l.priceUsd
+    && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
+  const nt = normalizeTitle(cleanGoldinTitle(lot.title || ''));
+  const bandOf = (pool: AuctionLot[], kind: ReferenceBand['kind']): ReferenceBand | null => {
+    if (pool.length < 3) return null;
+    const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
+    const med = median(prices);
+    const q1 = prices[Math.floor(prices.length * 0.25)];
+    const q3 = prices[Math.floor(prices.length * 0.75)];
+    if (med > 0 && (q3 - q1) / med > 2.5) return null;
+    const est = estUsdBand(lot);
+    const em = est.low && est.high ? (est.low + est.high) / 2 : null;
+    if (em && (med > em * 5 || med < em / 5)) return null;
+    return { kind, confidence: 'low', med, q1, q3, n: pool.length };
+  };
+  // TIER E — GOLDIN ONLY (measured to FAIL at Christie's: 0.60/47.3%)
+  const house = (lot.auctionHouse || '').toLowerCase();
+  const distinctive = nt.split(' ').filter(w => w.length >= 3).length;
+  if (house === 'goldin' && distinctive >= 5) {
+    const same = sold.filter(l => normalizeTitle(cleanGoldinTitle(l.title || '')) === nt);
+    const b = bandOf(same, 'edition-like');
+    if (b) return b;
+  }
+  // TIER R — subjects × STRICT itemClass from the crawl-stamped axes
+  const subjects = (lot as AuctionLot & { subjectKeys?: string[] }).subjectKeys || [];
+  const cls = (lot as AuctionLot & { itemClass?: string }).itemClass || null;
+  if (!subjects.length || !cls) return null; // no identity → abstain, never stranger pools
+  const subjSet = new Set(subjects);
+  let pool = sold.filter(l => {
+    const ls = (l as AuctionLot & { subjectKeys?: string[] }).subjectKeys || [];
+    const lc = (l as AuctionLot & { itemClass?: string }).itemClass || null;
+    return lc === cls && ls.some(x => subjSet.has(x));
+  });
+  if (cls === 'other' && pool.length < 6) return null; // weakest cohort needs more
+  if (pool.length > 24) {
+    const words = new Set(nt.split(' ').filter(w => w.length > 3));
+    pool = pool
+      .map(l => {
+        let ov = 0;
+        for (const w of normalizeTitle(cleanGoldinTitle(l.title || '')).split(' ')) if (words.has(w)) ov++;
+        return [ov, new Date(l.saleDate).getTime(), l] as const;
+      })
+      .sort((a, b) => (b[0] - a[0]) || (b[1] - a[1]))
+      .slice(0, 24)
+      .map(x => x[2]);
+  }
+  return bandOf(pool, 'reference');
 }

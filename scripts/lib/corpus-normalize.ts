@@ -1,6 +1,8 @@
 import type { AuctionLot } from '../../app/types';
 import { extractReference } from './identity-enrich';
-import { looksLikeCard } from '../../app/lib/cards';
+import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
+import { classifyForm, objectClassOf, cleanGoldinTitle } from '../../app/lib/comps';
+import { ARTIST_MARKET } from '../../app/constants';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -248,11 +250,17 @@ export function reconcileSaleDates(lots: Lot[]): number {
 // ─────────────────────────────────────────────────────────────────────────────
 export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
+  // ENGINE SPEC v2 order: category flips (2c) run BEFORE identity work;
+  // restampIdentityKeys (5) runs LAST so every flip re-derives its formKey.
   const yearsNulled = clampImpossibleYears(ls);
   const reroute = rerouteScienceMisroutes(ls);
   const relic = rerouteRelicCards(ls);
+  const cat = normalizeArtCategory(ls);
   const refsFilled = enrichWatchReferences(ls);
+  const players = recoverPlayerSlugs(ls);
+  const cultureStamped = stampCultureAxes(ls);
   const datesFixed = reconcileSaleDates(ls);
+  const restamped = restampIdentityKeys(ls);
   if (relic.total) {
     console.log(`[normalize] relic-card reroute: ${relic.total} game-used→sports-cards. e.g. ${relic.examples.slice(0, 3).map(s => JSON.stringify(s.slice(0, 70))).join(', ')}`);
   }
@@ -260,7 +268,254 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `[normalize] yearNum>${new Date().getFullYear() + 1} nulled=${yearsNulled} · ` +
     `science misroutes fixed=${reroute.total} (→art ${reroute.toArt}, →watches ${reroute.toWatch}, evicted ${reroute.evicted}) · ` +
     `relic cards→sports-cards=${relic.total} · ` +
+    `art category heal o2p=${cat.o2p} p2o=${cat.p2o} · ` +
     `watch references filled=${refsFilled} · ` +
-    `saleDate←saleDateTime reconciled=${datesFixed}`
+    `playerSlug stamped=${players.stamped} (coverage ${(players.coverage * 100).toFixed(1)}%) · ` +
+    `culture axes stamped=${cultureStamped} · ` +
+    `saleDate←saleDateTime reconciled=${datesFixed} · ` +
+    `formKey restamped=${restamped}`
   );
+  // BUILD CANARY (spec §3.4): game-used identity is a maintained-list parser —
+  // a Sotheby's title-format change must fail the build, not silently starve
+  // the sports comp layer. 85% floor vs the measured 93.9%.
+  if (players.total >= 200 && players.coverage < 0.85) {
+    throw new Error(`[normalize] game-used playerSlug coverage ${(players.coverage * 100).toFixed(1)}% < 85% floor — title parser drifted; refusing to publish`);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ENGINE SPEC v2 HEALING PASSES (★2c, ★3b, ★3c, ★5) — every regex/threshold
+   below is the measured winner from the 7-vertical engine investigation
+   (98.8→99.4% adjudicated precision on the category rules; 93.9% sold
+   identity coverage on the player extractor; see ENGINE_SPEC_V2).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// ── ★2c · normalizeArtCategory — print↔original re-derivation, art makers only.
+const PRINT_PROCESS = /\b(lithograph(?:s|e|ie)?|silkscreen|screen\s?print(?:s|ing)?|s[ée]rigraph(?:s|y|ie)?|etching(?:s)?|aquatint|engraving(?:s)?|woodcut(?:s)?|wood engraving|linocut(?:s)?|drypoint|mezzotint|pochoirs?|photogravure|h[ée]liogravure|gicl[ée]e|offset (?:lithograph|print)|monotype|monoprint|intaglio|chine coll[ée]|linoleum cut)\b/i;
+const PLATE_FROM = /\b(?:pl\.?|plates?)\s*(?:[IVXLCDM]+\b|\d{1,3}\b)?[,]?\s*from\b|\b(?:one|two|three|four|five|six|seven|eight|\d{1,2})\s+plates?\b|\bplate\s+(?:[IVXLCDM]+|\d{1,3})\b/i;
+const FROM_SERIES = /,\s*from\s+(?!the\s+(?:collection|estate|property)|a\s+private|an?\s+important)(?:the\s+)?[A-Z'"«“]/;
+const EDITION_STRONG = /\bedition of \d+\b|\bfrom (?:an|the) edition\b|\bnumbered\b[^.;]{0,16}\d{1,3}\s*\/\s*\d{1,4}|\bartist'?s proof\b|\bprinter'?s proof\b|\btrial proof\b|\bbon [aà] tirer\b|\bhors commerce\b/i;
+const ORIGINAL_STRONG = /\b(?:oil|acrylic|tempera|alkyd|enamel|synthetic polymer)\b[^.;]{0,40}\bon\s+(?:canvas|linen|panel|board|masonite|cardboard|paper)\b|\bmixed media on (?:canvas|panel|board)\b|\bhand[- ]painted\b|\bunique\b/i;
+const OIL_CANVAS = /\b(?:oil|acrylic|tempera|synthetic polymer)\b[^.;]{0,30}\bon\s+(?:canvas|panel|board|linen|masonite)\b/i;
+const EDITION_ANY = /\bedition of \d+|\bnumbered edition\b|\blimited edition\b/i;
+
+/** bare "37/150" edition fraction — mixed-number sizes ("31 1/2") excluded */
+function bareEditionFraction(s: string): boolean {
+  const re = /(^|[^\d\s]|\s)(\d{1,3})\s*\/\s*(\d{1,4})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const before = s.slice(Math.max(0, m.index - 4), m.index + m[1].length);
+    if (/\d\s?$/.test(before)) continue;
+    const num = parseInt(m[2], 10), den = parseInt(m[3], 10);
+    if (den >= 8 && num <= den && den <= 3000) return true;
+  }
+  return false;
+}
+
+const ART_CAT_MAKERS = new Set(Object.entries(ARTIST_MARKET).filter(([, m]) => m === 'art').map(([k]) => k));
+
+export function normalizeArtCategory(lots: Lot[]): { o2p: number; p2o: number } {
+  let o2p = 0, p2o = 0;
+  for (const l of lots) {
+    if (!ART_CAT_MAKERS.has(l.artist)) continue; // scope guard: art makers ONLY
+    const s = `${l.title || ''}  ${l.medium || ''}`;
+    if (l.category === 'original') {
+      if (ORIGINAL_STRONG.test(s)) continue; // never touch explicit unique mediums
+      if (PRINT_PROCESS.test(s) || PLATE_FROM.test(s) || FROM_SERIES.test(l.title || '')
+        || EDITION_STRONG.test(s) || bareEditionFraction(s)) {
+        l.category = 'print';
+        (l as Lot & { catReclass?: string }).catReclass = 'o2p';
+        o2p++;
+      }
+    } else if (l.category === 'print') {
+      if (PRINT_PROCESS.test(s) || PLATE_FROM.test(s) || EDITION_ANY.test(s)) continue;
+      if (OIL_CANVAS.test(s)) {
+        l.category = 'original';
+        (l as Lot & { catReclass?: string }).catReclass = 'p2o';
+        p2o++;
+      }
+    }
+  }
+  return { o2p, p2o };
+}
+
+// ── ★3b · recoverPlayerSlugs — game-used identity from the title.
+const GU_TEAM_WORDS = new Set(('atlanta boston brooklyn charlotte chicago cleveland dallas denver detroit golden state houston indiana los angeles memphis miami milwaukee minnesota new orleans york oklahoma city orlando philadelphia phoenix portland sacramento san antonio toronto utah washington ' +
+  'hawks celtics nets hornets bulls cavaliers mavericks nuggets pistons warriors rockets pacers clippers lakers grizzlies heat bucks timberwolves pelicans knicks thunder magic 76ers suns blazers trail kings spurs raptors jazz wizards ' +
+  'buffalo cincinnati baltimore pittsburgh tennessee jacksonville kansas las vegas chargers broncos raiders chiefs colts texans titans jaguars browns bengals steelers ravens patriots jets bills dolphins cowboys giants eagles commanders redskins bears lions packers vikings falcons panthers saints buccaneers cardinals rams seahawks 49ers niners ' +
+  'yankees mets red sox white cubs dodgers padres athletics mariners angels astros rangers royals twins tigers guardians indians orioles rays blue jays braves marlins nationals expos phillies pirates reds brewers diamondbacks rockies ' +
+  'bruins canadiens maple leafs senators sabres wings blackhawks blues wild avalanche stars predators flames oilers canucks kraken sharks ducks knights coyotes lightning hurricanes capitals flyers penguins devils islanders ' +
+  'seattle supersonics sonics new jersey st louis tampa bay green anaheim colorado columbus carolina nashville edmonton calgary vancouver winnipeg montreal ottawa quebec florida arizona texas california oakland usa team ' +
+  'real madrid barcelona manchester united city liverpool chelsea arsenal tottenham juventus milan inter bayern munich paris saint-germain psg ajax').split(/\s+/));
+const GU_STOP_WORDS = new Set('game match team worn used issued signed autographed auto inscribed rookie debut career final finals championship world series super bowl season professional model style era circa nba nfl mlb nhl wnba mls kia emirates cup playoffs playoff conference photo practice warm warmup training jersey shorts pants sneakers shoes cleats cleat boot jacket helmet cap hat glove mitt bat ball puck ring belt trophy award medal home road away alternate icon association statement classic edition the a an and with vs at of for from includes long short sleeve sleeved left right'.split(/\s+/));
+const GU_MONTHS = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\.?$/i;
+
+/** Extract the athlete from a game-used title (measured 93.9% sold coverage,
+    97.8% prefix-agreement with existing stamps). Never run on card-brand
+    titles — parseCard owns those. */
+export function recoverPlayerSlug(title: string): string | null {
+  let s = cleanGoldinTitle(title || '');
+  s = s.replace(/\|[^]*$/, ' ');
+  s = s.replace(/[‘“][^‘’“”]*[’”]/g, ' ');
+  s = s.replace(/(^|\s)['"][^'"]*['"](?=\s|$|[,.])/g, ' ');
+  s = s.trim();
+  const segs = s.split(/\s+-\s+/);
+  let si = 0;
+  while (si < segs.length - 1) {
+    const seg = segs[si];
+    const nTok = seg.split(/\s+/).length;
+    if (nTok <= 5 && (/\d/.test(seg) || /\b(finals?|game|round|series|conference)\b/i.test(seg))) si++;
+    else break;
+  }
+  s = segs.slice(si).join(' ');
+  const toks = s.split(/\s+/).filter(Boolean);
+  let i = 0;
+  while (i < toks.length && (GU_MONTHS.test(toks[i]) || /^['’]?\d/.test(toks[i]))) i++;
+  const kept: string[] = [];
+  for (; i < toks.length; i++) {
+    const lw = toks[i].normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+      .replace(/[^a-z0-9'’.\-]/g, '').replace(/[.,]+$/, '')
+      .replace(/['’]s$/, '');
+    if (!lw || /\d/.test(lw)) break;
+    const head = lw.split('-')[0].replace(/[.'’]/g, '');
+    const whole = lw.replace(/[.'’]/g, '');
+    const isStop = GU_STOP_WORDS.has(head) || GU_STOP_WORDS.has(whole);
+    const isTeam = GU_TEAM_WORDS.has(whole) || GU_TEAM_WORDS.has(head);
+    if (isTeam) {
+      const nx = (toks[i + 1] || '').toLowerCase().replace(/[^a-z]/g, '');
+      const nxPlain = !!nx && !GU_TEAM_WORDS.has(nx) && !GU_STOP_WORDS.has(nx) && !/\d/.test(toks[i + 1] || '');
+      if (!(kept.length === 0 && nxPlain)) break;
+    } else if (isStop) break;
+    kept.push(lw);
+    if (kept.length === 3) break;
+  }
+  if (kept.length < 2) return null;
+  return playerSlugOf(kept.join(' '));
+}
+
+const CARD_BRAND_LEAD = /^\s*(upper deck|panini|topps|bowman|donruss|fleer|leaf)\b/i;
+
+export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: number; coverage: number } {
+  let stamped = 0, total = 0, covered = 0;
+  for (const l of lots) {
+    if (l.artist !== 'game-used' || l.category !== 'object') continue;
+    total++;
+    if (CARD_BRAND_LEAD.test(l.title || '')) { if ((l as Lot & { playerSlug?: string | null }).playerSlug) covered++; continue; }
+    const slug = recoverPlayerSlug(l.title || '');
+    const cur = (l as Lot & { playerSlug?: string | null }).playerSlug ?? null;
+    // overwrite policy: existing stamps are the measured garbage class
+    if (slug && slug !== cur) { (l as Lot & { playerSlug?: string | null }).playerSlug = slug; stamped++; }
+    if (slug || cur) covered++;
+  }
+  return { stamped, total, coverage: total ? covered / total : 1 };
+}
+
+// ── ★3c · stampCultureAxes — subjectKeys[] + itemClass for culture slugs.
+const CULTURE_SLUGS_NORM = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia']);
+const CULT_ITEM_RULES: [RegExp, string][] = [
+  [/\b(gem mint|psa \d|bgs \d|sgc \d|cgc \d|tag \d|graded|rookie card|trading card|hobby box|#\d+)/i, 'card'],
+  [/\bsigned (cut|index card)\b/i, 'signed-cut'],
+  [/\b(check|cheque)\b/i, 'check'],
+  [/\bsigned.{0,30}\b(photo|photograph)\b|\b(photo|photograph)\b.{0,30}\bsigned\b/i, 'signed-photo'],
+  [/\b(photograph|photo)\b/i, 'photo'],
+  [/\b(letter|correspondence|telegram|manuscript|typescript|document|deed|land grant|commission|proclamation|broadside|autograph note|handwritten lyrics|lyrics|diary|notebook|als|tls)\b/i, 'document'],
+  [/\b(script|screenplay|shooting script|storyboard)\b/i, 'script'],
+  [/\b(poster|lobby card|one[- ]sheet|handbill)\b/i, 'poster'],
+  [/\b(guitar|bass|telecaster|stratocaster|les paul|drum|drumhead|piano|saxophone|violin|microphone|amplifier)\b/i, 'instrument'],
+  [/\b(gold record|platinum record|riaa|grammy|oscar|academy award|emmy|disc award|sales award|award|medal|trophy)\b/i, 'award'],
+  [/\b(prop|props)\b/i, 'prop'],
+  [/\b(worn|costume|jacket|coat|dress|gown|shirt|boots?|robe|tunic|uniform|suit|cape|helmet|mask|shoes?|sneakers?|hat|jumpsuit|vest|jersey)\b/i, 'costume'],
+  [/\b(ticket|stub|pass|credential|program|programme)\b/i, 'ticket'],
+  [/\b(animation cel|cel\b|celluloid|drawing|sketch)\b/i, 'cel-art'],
+  [/\b(record|vinyl|album|lp|45rpm|acetate|test pressing)\b/i, 'record'],
+  [/\b(signed|autographed|autograph|signature|inscribed)\b/i, 'autograph-other'],
+];
+const CULT_STOP = new Set(['signed', 'autographed', 'original', 'type', 'photo', 'photograph', 'prop', 'stage', 'stage-played', 'stage-worn', 'screen', 'screen-worn', 'worn', 'owned', 'played', 'personal', 'personally', 'from', 'and', 'with', 'the', 'a', 'an', 'his', 'her', 'framed', 'vintage', 'rare', 'important', 'exceptional', 'collection', 'of', 'in', 'on', 'by', 'for', 'at', 'to', 'cut', 'index', 'card', 'check', 'display', 'custom', 'acoustic', 'electric', 'handwritten', 'authentic', 'dual', 'triple']);
+// house-header pseudo-subjects — sale categories, never identities
+const CULT_SUBJECT_STOPLIST = new Set(['film stars and entertainers', 'walt disney studios', 'various artists', 'entertainment', 'rock and pop', 'hollywood']);
+const cultNorm = (x: string) => x.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+function cultItemClassOf(title: string): string {
+  const t = (title || '').replace(/["“”]/g, ' ');
+  for (const [re, c] of CULT_ITEM_RULES) if (re.test(t)) return c;
+  return 'other';
+}
+function cultPersonOf(title: string): string | null {
+  let t = (title || '').trim();
+  t = t.replace(/^(c\.?\s*)?(1[6-9]\d\d|20\d\d)(-\d{2,4})?\s+/i, '');
+  t = t.replace(/^(aug|jan|feb|mar|apr|may|jun|jul|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(-\d{1,2})?,?\s+\d{4}\s*-?\s*/i, '');
+  const toks = t.split(/\s+/);
+  const name: string[] = [];
+  for (const w of toks) {
+    const bare = w.replace(/[^A-Za-z.'’-]/g, '');
+    if (!bare || !/^[A-Z]/.test(bare) || CULT_STOP.has(bare.toLowerCase()) || /\d/.test(w)) break;
+    name.push(bare);
+    if (name.length === 4) break;
+    if (/[,:–-]$/.test(w)) break;
+  }
+  if (name.length >= 2 && name.length <= 4) return cultNorm(name.join(' '));
+  const by = (title || '').match(/\bSIGNED BY ([A-Z][A-Z.'’-]+(?:\s+[A-Z][A-Z.'’-]+){1,3})/);
+  if (by) return cultNorm(by[1]);
+  const tr = (title || '').match(/([A-Z][A-Z.'’-]+(?:\s+[A-Z][A-Z.'’-]+){1,3}),\s*(?:C\.?\s*)?(?:\d{1,2}\s+)?(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)?\s*(1[6-9]\d\d|20\d\d)\]?$/);
+  if (tr && !CULT_STOP.has(tr[1].split(/\s+/)[0].toLowerCase())) return cultNorm(tr[1]);
+  return null;
+}
+function cultFranchiseOf(title: string): string | null {
+  const t = title || '';
+  const q = t.match(/["“]([^"”]{3,45})["”]/);
+  if (q) return cultNorm(q[1]);
+  const colon = t.match(/^([A-Z][A-Za-z0-9.&'’\- ]{2,40}?):\s/);
+  if (colon) return cultNorm(colon[1]);
+  const from = t.match(/\bFROM\s+([A-Z][A-Z0-9.&'’\- ]{2,40}?)(?:,?\s+(?:19|20)\d\d|\s*$)/);
+  if (from) return cultNorm(from[1]);
+  const pre = t.match(/^([A-Z][A-Z0-9.&'’!:\- ]{2,45}?),\s*(19|20)\d\d\s*[-:]/);
+  if (pre) return cultNorm(pre[1]);
+  return null;
+}
+function cultShortSubjectOf(title: string): string | null {
+  const t = (title || '').trim();
+  const words = t.split(/\s+/);
+  if (words.length >= 1 && words.length <= 4 && cultItemClassOf(t) === 'other' && !/\d{3,}/.test(t)) return cultNorm(t) || null;
+  return null;
+}
+
+export function stampCultureAxes(lots: Lot[]): number {
+  let stamped = 0;
+  for (const l of lots) {
+    if (!CULTURE_SLUGS_NORM.has(l.artist)) continue;
+    const person = cultShortSubjectOf(l.title || '') ?? cultPersonOf(l.title || '');
+    const franchise = cultFranchiseOf(l.title || '');
+    const subjects = Array.from(new Set([person, franchise].filter((x): x is string => !!x && !CULT_SUBJECT_STOPLIST.has(x))));
+    const cls = cultItemClassOf(l.title || '');
+    const t = l as Lot & { subjectKeys?: string[]; itemClass?: string };
+    t.itemClass = cls;
+    if (subjects.length) { t.subjectKeys = subjects; stamped++; }
+  }
+  return stamped;
+}
+
+// ── ★5 · restampIdentityKeys — formKey re-derivation, every lot, every build.
+//    MUST run LAST (after every category flip, with the current classifyForm).
+const SPORTS_SLUGS_NORM = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
+
+export function restampIdentityKeys(lots: Lot[]): number {
+  let restamped = 0;
+  for (const l of lots) {
+    const fresh = classifyForm({ title: l.title, medium: l.medium, category: l.category });
+    const cur = (l as Lot & { formKey?: string }).formKey;
+    if (cur !== fresh) {
+      // sports-slug shield: never stamp 'jewelry' minted by the set-of gate
+      // ("complete set of chicago bulls championship rings")
+      if (SPORTS_SLUGS_NORM.has(l.artist) && fresh === 'jewelry') {
+        (l as Lot & { formKey?: string }).formKey = undefined;
+        continue;
+      }
+      (l as Lot & { formKey?: string }).formKey = fresh;
+      if (l.category === 'object') {
+        (l as Lot & { objectClass?: string }).objectClass = objectClassOf({ title: l.title, medium: l.medium, category: l.category });
+      }
+      restamped++;
+    }
+  }
+  return restamped;
 }
