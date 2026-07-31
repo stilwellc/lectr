@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { useReducedMotion } from './hooks';
 import styles from './style.module.css';
 
@@ -121,8 +121,6 @@ function usePane(lines: HeroLine[], periods: string[], w: number, h: number, pad
 
 /* ── the component ─────────────────────────────────────────── */
 
-const W = 1000; // viewBox width — the svg scales to its container
-
 export default function HeroChart({
   anchor, layers = [], subLayers = [], subLabel, highlight,
   height = 280, subHeight = 84, compact = false, play, flip = false,
@@ -130,6 +128,21 @@ export default function HeroChart({
   const reduce = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hoverI, setHoverI] = useState<number | null>(null);
+
+  // TRUE-PIXEL viewBox: measure the container and draw 1 svg unit = 1 css px.
+  // An aspect-ratio-scaled viewBox collapsed the panes to ~60px on phones —
+  // heights here are real pixels at every width, and text never distorts.
+  const [W, setW] = useState(0);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = Math.round(entries[0]?.contentRect.width ?? 0);
+      if (w > 0) setW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // the shared quarterly axis — union of every visible line's periods, sorted
   const periods = useMemo(() => {
@@ -201,6 +214,11 @@ export default function HeroChart({
     return out;
   }, [anchor, compact]);
 
+  const reserved = height + (hasSub ? subHeight + 30 : 0);
+  if (!W) {
+    return <div ref={wrapRef} className={styles.hcWrap} style={{ minHeight: reserved }} aria-hidden />;
+  }
+
   return (
     <div
       ref={wrapRef}
@@ -211,7 +229,7 @@ export default function HeroChart({
       aria-label={`${anchor.label} chart`}
     >
       {/* ── MAIN STAGE ── */}
-      <svg viewBox={`0 0 ${W} ${height}`} className={styles.hcSvg} style={{ aspectRatio: `${W} / ${height}` }} preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${height}`} className={styles.hcSvg} style={{ height }} width={W} height={height}>
         {/* instrument grid: dotted rules + right-edge ticks */}
         {ticks.map(t => {
           const y = main.yOf(t);
@@ -255,7 +273,7 @@ export default function HeroChart({
               {highlight === line.key && pts.length > 0 && (
                 <text x={Math.min(W - 4, (main.xOf.get(pts[pts.length - 1].period) ?? 0) + 8)}
                   y={main.yOf(pts[pts.length - 1].value) + 3}
-                  textAnchor={(main.xOf.get(pts[pts.length - 1].period) ?? 0) > W - 90 ? 'end' : 'start'}
+                  textAnchor={(main.xOf.get(pts[pts.length - 1].period) ?? 0) > W - 80 ? 'end' : 'start'}
                   className={styles.hcLineLabel} fill={line.color}>
                   {line.label}
                 </text>
@@ -308,7 +326,7 @@ export default function HeroChart({
           <div className={styles.hcSubMeta}>
             <span>{subLabel}</span>
           </div>
-          <svg viewBox={`0 0 ${W} ${subHeight}`} className={styles.hcSvg} style={{ aspectRatio: `${W} / ${subHeight}` }} preserveAspectRatio="none">
+          <svg viewBox={`0 0 ${W} ${subHeight}`} className={styles.hcSvg} style={{ height: subHeight }} width={W} height={subHeight}>
             <line x1={0} x2={W} y1={subHeight - 6} y2={subHeight - 6} className={styles.hcRule} />
             {subTicks.map(t => {
               const y = sub.yOf(t);
@@ -334,7 +352,7 @@ export default function HeroChart({
                   {highlight === line.key && pts.length > 0 && (
                     <text x={Math.min(W - 4, (sub.xOf.get(pts[pts.length - 1].period) ?? 0) + 8)}
                       y={sub.yOf(pts[pts.length - 1].value) + 3}
-                      textAnchor={(sub.xOf.get(pts[pts.length - 1].period) ?? 0) > W - 90 ? 'end' : 'start'}
+                      textAnchor={(sub.xOf.get(pts[pts.length - 1].period) ?? 0) > W - 80 ? 'end' : 'start'}
                       className={styles.hcLineLabel} fill={line.color}>
                       {line.label}
                     </text>
