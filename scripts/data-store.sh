@@ -87,7 +87,20 @@ obj_get_fresh() { # key file — GET, and WAIT OUT the GET-lag against the liste
     sleep 20
   done
 }
-obj_put() { # key file — upload, then verify the returned etag against local md5
+obj_put() { # key file — upload w/ retry (a transient blip on a 130MB segment
+  # PUT must not redden a whole crawl leg — seen live on goldin Jul 31 2026),
+  # then verify the returned etag against local md5. Retry is safe: R2 PUTs
+  # are atomic (no partial objects) and same-key re-PUT is idempotent.
+  local key="$1" file="$2" attempt
+  for attempt in 1 2 3; do
+    if obj_put_once "$key" "$file"; then return 0; fi
+    [ "$attempt" -lt 3 ] && { echo "[data-store] PUT $key attempt $attempt failed — retrying in $((attempt*15))s"; sleep $((attempt*15)); }
+  done
+  echo "[data-store] PUT $key failed after 3 attempts"
+  return 1
+}
+
+obj_put_once() { # key file — single upload + etag verify
   local key="$1" file="$2" enc
   enc=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$key")
   local resp
