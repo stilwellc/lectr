@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { sportOfLot } from '../lib/submarkets';
 import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
 import { categoryLabels, sportOf } from '../utils';
@@ -108,7 +109,7 @@ export default function FeedToolbar({
   const sports = useMemo(() => {
     if (effectiveMarket !== 'sports') return [] as [string, number][];
     const c: Record<string, number> = {};
-    lots.forEach(l => { const s = sportOf(l.title) || 'Other'; c[s] = (c[s] || 0) + 1; });
+    lots.forEach(l => { const s = sportOfLot(l) || 'Other'; c[s] = (c[s] || 0) + 1; });
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
   }, [lots, effectiveMarket]);
 

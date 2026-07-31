@@ -1,0 +1,15 @@
+[
+ {
+  "id": "christies-auc-4328776",
+  "conf": "low",
+  "label": "Above Market",
+  "pct": 30,
+  "n": 24,
+  "catMatch": 1,
+  "dimsCov": 0,
+  "maxAreaRatio": null,
+  "realized": 478,
+  "med": 348.5,
+  "err": 0.37
+ }
+]

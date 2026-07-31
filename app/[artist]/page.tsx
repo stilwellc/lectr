@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import SubMarketDrills from '../components/analytics/SubMarketDrills';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -18,7 +19,6 @@ import UpcomingLots from '../components/UpcomingLots';
 import PastResults from '../components/PastResults';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import { Colophon } from '../components/Terminal';
-import meta from '../../public/data/ray/meta.json';
 
 const PriceChart = dynamic(() => import('../components/PriceChart'), { ssr: false });
 
@@ -143,7 +143,7 @@ export default function ArtistDetailPage() {
   const slug = params.artist as string;
   // useFullLots (not useRayData): the lot-level sections below gate on
   // fullLoaded, so this route must trigger the phase-2 corpus on mount.
-  const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache } = useFullLots();
+  const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
   const { toggle, savedIds, ownedIds, toggleOwned } = useSavedLots();
   const { setMarket } = useMarket();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -231,6 +231,13 @@ export default function ArtistDetailPage() {
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
                 <ArtistHero slug={slug} serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined} label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
               </div>
+              {/* watch makers: the model-family ledger — pre-aggregated drill
+                  rows scoped to this maker (Daytona vs Cellini, honest reads) */}
+              {market === 'watches' && (
+                <div className="rail ray-enter" style={{ '--enter-delay': '80ms', paddingTop: 8 } as React.CSSProperties}>
+                  <SubMarketDrills marketData={marketData} scope="watches" parentFilter={slug} title="Model families" method={`${label} sub-markets · performance by family`} />
+                </div>
+              )}
             </RayEntrance>
           )}
 
@@ -278,7 +285,7 @@ export default function ArtistDetailPage() {
           )}
 
           {/* the closing colophon — corpus counts from meta.json */}
-          <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+          <Colophon record={null} />
         </>
       )}
     </div>

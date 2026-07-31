@@ -117,6 +117,11 @@ const STRIP = new Set([
   'estLowUsd','estHighUsd','realizedUsd',
   // nightly bid snapshots (corpus-only raw material for bid momentum)
   'bidHistory',
+  // measured client-unread (serving audit Jul 31 2026, ~30MB raw): the client
+  // renders priceUsd (premiumPrice is a duplicate alias), archived/auctionId/
+  // buyerPremium/_pid/_pname/_card/photoMatched are pipeline-only. subCat/
+  // drill/sport STAY — the feed lens, cat cell, and lot certificate read them.
+  'premiumPrice', 'archived', 'auctionId', 'buyerPremium', '_pid', '_pname', '_card', 'photoMatched',
 ]);
 
 // The corpus files (lots.json.gz, sold-archive.json.gz) and segments are stored
@@ -145,6 +150,9 @@ export function slimForClient<T extends Record<string, unknown>>(lot: T): Record
     const v = lot[k];
     if (v === null || v === undefined) continue;          // omit nulls — pure weight
     if (Array.isArray(v) && v.length === 0) continue;
+    // truthy-only reads: every consumer checks `if (l.resultsPending)` — the
+    // explicit false is measured dead weight (~1.2MB) on served rows
+    if (k === 'resultsPending' && v === false) continue;
     out[k] = v;
   }
   return out;

@@ -106,7 +106,9 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
           // full-corpus count from stats.json (Σ totalLotsTracked over this
           // market's slugs), NOT soldLots.length — the loaded array is a slim
           // sample and undercounts these no-reserve/archive verticals badly.
-          value: (Object.values(statsByArtist).reduce((s, x) => s + (x.totalLotsTracked || 0), 0) || soldLots.length).toLocaleString(),
+          // totalSoldTracked is the SOLD-only count (totalLotsTracked includes
+          // live lots — labeling that 'Sold lots' overstated every market)
+          value: (Object.values(statsByArtist).reduce((s, x) => s + (x.totalSoldTracked ?? x.totalLotsTracked ?? 0), 0) || soldLots.length).toLocaleString(),
           sub: 'sold · no-reserve market, every lot concludes',
           tone: '',
         };

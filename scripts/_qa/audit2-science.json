@@ -1,0 +1,28 @@
+[
+ {
+  "id": "christies-auc-5308633",
+  "conf": "very-high",
+  "label": "Below Market",
+  "pct": 32,
+  "n": 6,
+  "catMatch": 1,
+  "dimsCov": 0,
+  "maxAreaRatio": null,
+  "realized": 16250,
+  "med": 13187.5,
+  "err": 0.23
+ },
+ {
+  "id": "christies-auc-4728679",
+  "conf": "very-high",
+  "label": "Above Market",
+  "pct": 70,
+  "n": 4,
+  "catMatch": 1,
+  "dimsCov": 0,
+  "maxAreaRatio": null,
+  "realized": 176928,
+  "med": 49107.85,
+  "err": 2.6
+ }
+]

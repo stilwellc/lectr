@@ -163,12 +163,16 @@ export function toneOf(n: number): 'up' | 'down' | 'flat' {
 /** Hammer-basis % over estimate for a SOLD lot: realized prices are
  *  premium-inclusive (~1.25x) while estimates are hammer-basis — divide out
  *  the premium before comparing, or every figure overstates by ~25pts. */
-export function overEstimatePct(l: { priceUsd?: number | null; hammerUsd?: number | null; estimateLow?: number | null; estimateHigh?: number | null }): number | null {
+export function overEstimatePct(l: { priceUsd?: number | null; hammerUsd?: number | null; hammerPrice?: number | null; estimateLow?: number | null; estimateHigh?: number | null }): number | null {
   const lo = l.estimateLow || l.estimateHigh || 0;
   const hi = l.estimateHigh || l.estimateLow || 0;
   const mid = (lo + hi) / 2;
   if (!(mid > 0) || !l.priceUsd) return null;
-  const hammer = (l.hammerUsd || 0) > 0 ? l.hammerUsd! : l.priceUsd / 1.25;
+  // hammerUsd is corpus-only (stripped from served rows) — hammerPrice is the
+  // alias that actually ships, so real published hammers reach the display
+  // instead of silently falling to the /1.25 approximation everywhere.
+  const real = (l.hammerUsd ?? l.hammerPrice ?? 0) > 0 ? (l.hammerUsd ?? l.hammerPrice)! : null;
+  const hammer = real ?? l.priceUsd / 1.25;
   return (hammer / mid - 1) * 100;
 }
 

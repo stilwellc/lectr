@@ -3,7 +3,6 @@ import ArtistNav from '../ArtistNav';
 import Flick from '../Flick';
 import { Colophon } from '../Terminal';
 import { formatPrice } from '../../utils';
-import meta from '../../../public/data/ray/meta.json';
 
 export interface TopSale { title: string; priceUsd: number; house: string; date: string; maker: string }
 export interface Mover { label: string; chgPct: number; n: number; slug?: string }
@@ -154,7 +153,7 @@ export default function QuarterInsight({
           </p>
         </article>
       </main>
-      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+      <Colophon record={null} />
     </div>
   );
 }

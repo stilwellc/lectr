@@ -1,0 +1,2119 @@
+{
+ "lots.json.gz": {
+  "profile": {
+   "label": "lots.json.gz",
+   "total": 449389,
+   "sampled": 20000,
+   "fields": {
+    "id": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "bonhams-31793-27",
+      "rrauction-610-344467906100701",
+      "rrauction-378-32466910378827"
+     ]
+    },
+    "artist": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "patek-philippe",
+      "sports-memorabilia",
+      "entertainment-memorabilia"
+     ]
+    },
+    "title": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Three Tenors Signed Photograph",
+      "keith haring | statue of liberty (littman p. 63)",
+      "Henry Wadsworth Longfellow Signature"
+     ]
+    },
+    "category": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "object",
+      "object",
+      "object"
+     ]
+    },
+    "auctionHouse": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Goldin",
+      "Christie's",
+      "RR Auction"
+     ]
+    },
+    "saleName": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Fine Autographs and Artifacts",
+      "Fine Autographs and Artifacts",
+      "Rare Manuscript, Document & Autograph"
+     ]
+    },
+    "saleDate": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2015-04-24",
+      "2017-06-07",
+      "2025-01-16"
+     ]
+    },
+    "nativeCurrency": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "EUR",
+      "USD",
+      "USD"
+     ]
+    },
+    "fxRate": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1.516",
+      "1",
+      "1"
+     ]
+    },
+    "fxAsOf": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2006-03-29",
+      "2018-04-19",
+      "2021-04-14"
+     ]
+    },
+    "currency": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "USD",
+      "USD",
+      "USD"
+     ]
+    },
+    "status": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "sold",
+      "sold",
+      "sold"
+     ]
+    },
+    "formKey": {
+     "pct": 99.98,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "book",
+      "space",
+      "unknown"
+     ]
+    },
+    "imageUrl": {
+     "pct": 99.69,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "https://cdn.rrauction.com/auction/473/preview/3356696_1.jpg",
+      "https://www.christies.com/img/lotimages/2015/HGK/2015_HGK_03469_2595_000(cartier_a_fine_an…",
+      "https://cdn.rrauction.com/auction/273/preview/3045838.jpg"
+     ]
+    },
+    "subCat": {
+     "pct": 99.23,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "photos",
+      "documents",
+      "photos"
+     ]
+    },
+    "premiumNative": {
+     "pct": 95.54,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "401",
+      "437",
+      "858"
+     ]
+    },
+    "realizedNative": {
+     "pct": 95.54,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "270",
+      "1694",
+      "4343"
+     ]
+    },
+    "premiumUsd": {
+     "pct": 95.54,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "401",
+      "989",
+      "1038"
+     ]
+    },
+    "realizedUsd": {
+     "pct": 95.54,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "164",
+      "435.09",
+      "587"
+     ]
+    },
+    "priceBasis": {
+     "pct": 95.54,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "premium",
+      "premium",
+      "realized"
+     ]
+    },
+    "premiumPrice": {
+     "pct": 95.54,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "55000",
+      "397",
+      "3125"
+     ]
+    },
+    "priceUsd": {
+     "pct": 95.54,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1046.04",
+      "451",
+      "323"
+     ]
+    },
+    "lotNumber": {
+     "pct": 81.18,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "925",
+      "635",
+      "545"
+     ]
+    },
+    "objectClass": {
+     "pct": 75.96,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "object",
+      "object",
+      "object"
+     ]
+    },
+    "estLowNative": {
+     "pct": 62.45,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2000",
+      "2500",
+      "300"
+     ]
+    },
+    "estLowUsd": {
+     "pct": 62.45,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2500",
+      "552.9",
+      "20000"
+     ]
+    },
+    "estimateLow": {
+     "pct": 62.45,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "400",
+      "200",
+      "5722.5"
+     ]
+    },
+    "archived": {
+     "pct": 56.16,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "true",
+      "true",
+      "true"
+     ]
+    },
+    "itemClass": {
+     "pct": 53.1,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "photo",
+      "signed-photo",
+      "signed-photo"
+     ]
+    },
+    "subjectKeys": {
+     "pct": 49,
+     "types": [
+      "array"
+     ],
+     "ex": [
+      "[\"declaration of independence\"]",
+      "[\"ricky henderson\"]",
+      "[\"jayne mansfield signature\"]"
+     ]
+    },
+    "drill": {
+     "pct": 46.45,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "music",
+      "royal-oak",
+      "baseball"
+     ]
+    },
+    "url": {
+     "pct": 43.6,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "https://www.christies.com/en/lot/lot-1491614?ldp_breadcrumb=back",
+      "https://www.christies.com/en/lot/lot-1461888?ldp_breadcrumb=back",
+      "https://www.sothebys.com/en/auctions/ecatalogue/2017/wyeth-art-of-timeless-design-n09654/l…"
+     ]
+    },
+    "normalizedTitle": {
+     "pct": 43.6,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "patek philippe an 18ct gold automatic calendar wristwatch on bracelet signed patek philipp…",
+      "pablo picasso oiseaux et poissons",
+      "tom hanks robin wright and sally field costumes from forrest gump paramount 1994"
+     ]
+    },
+    "entityClass": {
+     "pct": 43.6,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "maker",
+      "category",
+      "category"
+     ]
+    },
+    "yearIsCirca": {
+     "pct": 43.6,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "false",
+      "false",
+      "false"
+     ]
+    },
+    "photoMatched": {
+     "pct": 43.6,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "false",
+      "false",
+      "false"
+     ]
+    },
+    "schemaVersion": {
+     "pct": 43.6,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2",
+      "2",
+      "2"
+     ]
+    },
+    "validatedAt": {
+     "pct": 43.6,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2026-07-31T09:36:48.458Z",
+      "2026-07-31T09:53:43.691Z",
+      "2026-07-31T09:53:43.691Z"
+     ]
+    },
+    "titleTokens": {
+     "pct": 43.09,
+     "types": [
+      "array"
+     ],
+     "ex": [
+      "[\"1981\",\"bob\",\"ross\",\"framed\",\"painting\",\"12\",\"16\",\"frame\",\"18\",\"22\",\"inc\",\"coa\"]",
+      "[\"cellini\",\"ref\",\"4109\",\"purchased\",\"8th\",\"october\",\"2001\"]",
+      "[\"northwest\",\"coast\",\"mask\",\"cowboy\",\"indian\",\"serie\"]"
+     ]
+    },
+    "estHighNative": {
+     "pct": 40.33,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "300",
+      "20000",
+      "6000"
+     ]
+    },
+    "estHighUsd": {
+     "pct": 40.33,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1000",
+      "153600",
+      "460.75"
+     ]
+    },
+    "estimateHigh": {
+     "pct": 40.33,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2000",
+      "15000",
+      "1308"
+     ]
+    },
+    "objectFingerprint": {
+     "pct": 38.84,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "a:5e5f706e",
+      "a:16558f61",
+      "a:d210ff79"
+     ]
+    },
+    "saleDateTime": {
+     "pct": 34.34,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "1994-02-24T00:00Z",
+      "1998-10-29T00:00Z",
+      "2025-10-23T13:00:00.000Z"
+     ]
+    },
+    "makerSlug": {
+     "pct": 30.93,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "eddie-martinez",
+      "andy-warhol",
+      "patek-philippe"
+     ]
+    },
+    "yearNum": {
+     "pct": 29.77,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1951",
+      "1956",
+      "1925"
+     ]
+    },
+    "yearSource": {
+     "pct": 29.77,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "title",
+      "title",
+      "title"
+     ]
+    },
+    "description": {
+     "pct": 25.21,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Patek Philippe. An unusual 18K yellow gold and platinum rectangular hinged wristwatch Sign…",
+      "ANONYMOUS DUNLOP GOLF lithograph in colours, printed by J.Herbert & Cie., Paris, condition…",
+      "Custom \"Sanso\" table and set of ten low \"Conoid\" lounge chairs"
+     ]
+    },
+    "medium": {
+     "pct": 14.53,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "SIGNED PATEK PHILIPPE, GENÈVE, REF. 5038, MOVEMENT NO. 775'500, CASE NO. 4'005'054, MANUFA…",
+      "LEITZ, 20TH CENTURY",
+      "Gros Homme baissant Culotte sur la Piste d'un Cirque, from La Séries 347 (B. 1806; Ba. 182…"
+     ]
+    },
+    "resultsPending": {
+     "pct": 11.53,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "false",
+      "false",
+      "false"
+     ]
+    },
+    "source": {
+     "pct": 11.04,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "sothebys-algolia",
+      "sothebys-algolia",
+      "sothebys-algolia"
+     ]
+    },
+    "reference": {
+     "pct": 10.92,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "863238",
+      "1726",
+      "26315st"
+     ]
+    },
+    "serialNo": {
+     "pct": 8.6,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "carved",
+      "1195121",
+      "262825CD"
+     ]
+    },
+    "buyerPremiumPct": {
+     "pct": 8.13,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "28",
+      "28",
+      "27.5"
+     ]
+    },
+    "modelKey": {
+     "pct": 7.52,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "lcw1",
+      "r8",
+      "mk1"
+     ]
+    },
+    "hammerNative": {
+     "pct": 7.33,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "16000",
+      "203",
+      "4000"
+     ]
+    },
+    "hammerUsd": {
+     "pct": 7.33,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "4500",
+      "16000",
+      "1900"
+     ]
+    },
+    "hammerPrice": {
+     "pct": 7.33,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "70",
+      "27",
+      "600"
+     ]
+    },
+    "_pid": {
+     "pct": 5.3,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "a-place-in",
+      "mickey-mantle-print",
+      "wh-mason"
+     ]
+    },
+    "_pname": {
+     "pct": 5.3,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "THE CORINTHIANS V.",
+      "SEVEN SILVER DUNLOP",
+      "Muhammad Ali Pamphlet"
+     ]
+    },
+    "playerSlug": {
+     "pct": 5.18,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "mike-schmidt-baseball",
+      "brentford-v-notts",
+      "alphonse-mucha"
+     ]
+    },
+    "playerName": {
+     "pct": 5.18,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Muhammad Ali",
+      "A SCARED-HEAD TRANSITIONAL",
+      "Jacob Misiorowski"
+     ]
+    },
+    "year": {
+     "pct": 5.03,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "1960",
+      "1956",
+      "1945"
+     ]
+    },
+    "objectType": {
+     "pct": 4.34,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "jersey",
+      "jersey",
+      "jersey"
+     ]
+    },
+    "editionOf": {
+     "pct": 4.06,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1",
+      "60",
+      "75"
+     ]
+    },
+    "editionTotal": {
+     "pct": 4.06,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "8",
+      "10",
+      "4"
+     ]
+    },
+    "currentBid": {
+     "pct": 3.11,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "26",
+      "435",
+      "80"
+     ]
+    },
+    "bidCount": {
+     "pct": 3.11,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1",
+      "28",
+      "7"
+     ]
+    },
+    "buyerPremium": {
+     "pct": 2.88,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "22",
+      "22",
+      "22"
+     ]
+    },
+    "auctionId": {
+     "pct": 2.88,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "202602-1915-2702-786051d1-1886-4ed3-9d0b-612abba4fa8e",
+      "202403-1517-1702-5037431b-3580-4502-aefb-9d9b6ae79c34",
+      "202401-3121-1055-eb484237-abd9-4af2-b2fe-2084560bb530"
+     ]
+    },
+    "firstSeen": {
+     "pct": 2.84,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2026-07-16",
+      "2026-07-29",
+      "2026-07-16"
+     ]
+    },
+    "authCert": {
+     "pct": 2.43,
+     "types": [
+      "array"
+     ],
+     "ex": [
+      "[\"Beckett\"]",
+      "[\"PSA\"]",
+      "[\"Beckett\"]"
+     ]
+    },
+    "sport": {
+     "pct": 2.38,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Basketball",
+      "Baseball",
+      "Basketball"
+     ]
+    },
+    "sportYear": {
+     "pct": 2.21,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2024",
+      "2024",
+      "1916"
+     ]
+    },
+    "titleRaw": {
+     "pct": 2.15,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Ewa Rudling, \"Andy Warhol 1977\".",
+      "FSW-10",
+      "Exceptional Kornblut cabinet"
+     ]
+    },
+    "fxRecovered": {
+     "pct": 2.15,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "false",
+      "false",
+      "false"
+     ]
+    },
+    "firstSeenKnown": {
+     "pct": 2.15,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "false",
+      "false",
+      "false"
+     ]
+    },
+    "materialTokens": {
+     "pct": 1.88,
+     "types": [
+      "array"
+     ],
+     "ex": [
+      "[\"teak\",\"rattan\",\"upholstery\"]",
+      "[\"oak\"]",
+      "[\"teak\",\"rattan\",\"upholstery\"]"
+     ]
+    },
+    "mediumCanon": {
+     "pct": 1.59,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "lithograph",
+      "screenprint"
+     ]
+    },
+    "dimensions": {
+     "pct": 1.57,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "18 x 10 cm (18 1/2 x 7 1/8 x 3 7/8 in.)",
+      "30 x 20in (76.2 x 50.8cm)",
+      "41 7/8 x 49 7/8in."
+     ]
+    },
+    "sizeClass": {
+     "pct": 1.56,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "small",
+      "large",
+      "large"
+     ]
+    },
+    "dimSource": {
+     "pct": 1.56,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "metric",
+      "metric",
+      "metric"
+     ]
+    },
+    "heightCm": {
+     "pct": 1.55,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "44.5",
+      "27.3",
+      "171"
+     ]
+    },
+    "widthCm": {
+     "pct": 1.5,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "35.6",
+      "10",
+      "38.1"
+     ]
+    },
+    "editionMarker": {
+     "pct": 0.97,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "unique",
+      "unique",
+      "PP"
+     ]
+    },
+    "entity": {
+     "pct": 0.86,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "JOHN GOULD",
+      "SAMUEL PANIER."
+     ]
+    },
+    "bidHistory": {
+     "pct": 0.6,
+     "types": [
+      "array"
+     ],
+     "ex": []
+    },
+    "value": {
+     "pct": 0.4,
+     "types": [
+      "object"
+     ],
+     "ex": []
+    },
+    "flown": {
+     "pct": 0.3,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "true"
+     ]
+    },
+    "depthCm": {
+     "pct": 0.27,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "15"
+     ]
+    },
+    "eventKey": {
+     "pct": 0.23,
+     "types": [
+      "string"
+     ],
+     "ex": []
+    },
+    "_card": {
+     "pct": 0.23,
+     "types": [
+      "object"
+     ],
+     "ex": []
+    },
+    "cardComps": {
+     "pct": 0.11,
+     "types": [
+      "object"
+     ],
+     "ex": [
+      "{\"med\":7930,\"n\":6,\"lastSales\":[{\"d\":\"2025-09-28\",\"p\":10370},{\"d\":\"2025-09-07\",\"p\":8540},{\"…"
+     ]
+    },
+    "repeatSaleGroupId": {
+     "pct": 0.1,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "rs_uc-4713139"
+     ]
+    },
+    "platform": {
+     "pct": 0.07,
+     "types": [
+      "string"
+     ],
+     "ex": []
+    },
+    "catReclass": {
+     "pct": 0.04,
+     "types": [
+      "string"
+     ],
+     "ex": []
+    },
+    "gradeLabel": {
+     "pct": 0.04,
+     "types": [
+      "string"
+     ],
+     "ex": []
+    }
+   }
+  },
+  "targeted": {
+   "byHouse": {
+    "Christie's": 3802,
+    "Phillips": 474,
+    "RR Auction": 11279,
+    "Sotheby's": 2546,
+    "Bonhams": 853,
+    "Goldin": 576,
+    "Wright": 455,
+    "Rago": 15
+   },
+   "byStatus": {
+    "sold": 19108,
+    "upcoming": 210,
+    "bought_in": 670,
+    "unknown-result": 12
+   },
+   "byArtistTop": {
+    "entertainment-memorabilia": 10566,
+    "sports-memorabilia": 1318,
+    "pablo-picasso": 1231,
+    "patek-philippe": 1109,
+    "rolex": 941,
+    "space-exploration": 727,
+    "andy-warhol": 690,
+    "cartier": 391,
+    "audemars-piguet": 355,
+    "game-used": 354,
+    "scientific-instruments": 303,
+    "omega": 252,
+    "henri-matisse": 196,
+    "sports-cards": 169,
+    "george-nakashima": 167
+   },
+   "bidHistory": {
+    "n": 120,
+    "example": [
+     {
+      "d": "2026-07-22",
+      "b": 22,
+      "n": 7
+     },
+     {
+      "d": "2026-07-24",
+      "b": 26,
+      "n": 9
+     },
+     {
+      "d": "2026-07-25",
+      "b": 62,
+      "n": 17
+     },
+     {
+      "d": "2026-07-25",
+      "b": 93,
+      "n": 22
+     }
+    ],
+    "dateSpan": {
+     "first": "2026-07-20",
+     "last": "2026-07-30",
+     "distinctDays": 10
+    },
+    "lenStats": {
+     "min": 1,
+     "med": 2,
+     "max": 8,
+     "mean": 2.8
+    }
+   },
+   "rrArchiveYears": {
+    "1996": 2,
+    "1998": 1,
+    "2000": 3,
+    "2001": 1,
+    "2003": 195,
+    "2004": 391,
+    "2005": 487,
+    "2006": 507,
+    "2007": 548,
+    "2008": 499,
+    "2009": 448,
+    "2010": 489,
+    "2011": 672,
+    "2012": 684,
+    "2013": 813,
+    "2014": 544,
+    "2015": 424,
+    "2016": 384,
+    "2017": 382,
+    "2018": 513,
+    "2019": 469,
+    "2020": 472,
+    "2021": 465,
+    "2022": 412,
+    "2023": 382,
+    "2024": 416,
+    "2025": 409,
+    "2026": 267
+   },
+   "cardYears": {
+    "pre1980": 17,
+    "y1980_99": 4,
+    "y2000_09": 1,
+    "y2010plus": 7,
+    "none": 140,
+    "totalCards": 0
+   },
+   "gradeOnCards": 3,
+   "cardsN": 169,
+   "subCat": {
+    "wristwatches": 2782,
+    "prints": 2264,
+    "autographs": 1155,
+    "photos": 2041,
+    "space": 727,
+    "other": 5472,
+    "records": 320,
+    "memorabilia": 1318,
+    "originals": 212,
+    "documents": 1336,
+    "trophies": 103,
+    "tickets": 162,
+    "instruments": 405,
+    "seating": 186,
+    "objects": 216,
+    "awards": 40,
+    "cards": 169,
+    "game-used": 354,
+    "jewelry": 56,
+    "tables": 42,
+    "tech": 120,
+    "clocks": 26,
+    "worn-personal": 90,
+    "posters": 18,
+    "sculpture": 35,
+    "books": 28,
+    "photographs": 29,
+    "pocket-watches": 31,
+    "case-storage": 43,
+    "fossils": 35,
+    "meteorites": 24,
+    "lighting": 4,
+    "props": 4
+   },
+   "drill": {
+    "pasha": 21,
+    "hollywood": 1753,
+    "apollo": 362,
+    "tank": 70,
+    "royalty": 85,
+    "political": 1487,
+    "music": 1203,
+    "nautilus": 75,
+    "chronograph": 94,
+    "sports": 339,
+    "baseball": 191,
+    "submariner": 71,
+    "literary": 441,
+    "royal-oak": 104,
+    "datejust": 76,
+    "soccer": 92,
+    "day-date": 81,
+    "hockey": 19,
+    "globes": 37,
+    "space-science": 453,
+    "military": 227,
+    "perpetual-calendar": 162,
+    "shuttle-iss": 28,
+    "basketball": 395,
+    "gondolo": 18,
+    "walnut": 104,
+    "football": 20,
+    "boxing-mma": 53,
+    "daytona": 130,
+    "cellini": 17,
+    "gmt-master": 38,
+    "speedmaster": 33,
+    "oak": 6,
+    "plywood": 44,
+    "physics-figures": 60,
+    "historic": 134,
+    "de-ville": 18,
+    "ellipse": 23,
+    "constellation": 18,
+    "golf": 35,
+    "navigation": 8,
+    "steel": 38,
+    "mercury-gemini": 42,
+    "calatrava": 79,
+    "milgauss": 11,
+    "panthere": 21,
+    "microscopes": 4,
+    "tennis": 7,
+    "crash": 3,
+    "oyster-perpetual": 74,
+    "sea-dweller": 18,
+    "twenty-4": 6,
+    "olympics": 5,
+    "precision-clocks": 5,
+    "seamaster": 28,
+    "aluminum": 14,
+    "world-time": 32,
+    "explorer": 38,
+    "aquanaut": 19,
+    "jules-audemars": 16,
+    "upholstery": 2,
+    "medical": 6,
+    "computing": 48,
+    "teak": 46,
+    "ballon-bleu": 2,
+    "santos": 23,
+    "baignoire": 14,
+    "yacht-master": 13,
+    "millenary": 13,
+    "rosewood": 5,
+    "air-king": 7,
+    "racing": 5,
+    "soviet": 3,
+    "telescopes": 11,
+    "tortue": 6
+   },
+   "flownN": 61,
+   "firstSeen": {
+    "2026-07": 568
+   },
+   "bidCountSold": {
+    "n": 19108,
+    "withBC": 416
+   },
+   "estOnSold": {
+    "n": 19108,
+    "withEst": 12064
+   },
+   "repeatGroup": 21
+  },
+  "ms": 1278
+ },
+ "sold-archive.json.gz": {
+  "profile": {
+   "label": "sold-archive.json.gz",
+   "total": 311583,
+   "sampled": 20000,
+   "fields": {
+    "id": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "goldin-202305-1914-0151-dbaa1b0a-6648-4065-a177-03e720076c68",
+      "goldin-202302-0816-4727-cb87c862-d797-4628-88a6-acdeff8d957e",
+      "goldin-202409-2415-5127-ee6a0bd3-6487-42ec-80a2-962f41e4dae4"
+     ]
+    },
+    "artist": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "sports-cards",
+      "sports-cards",
+      "sports-cards"
+     ]
+    },
+    "title": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Pele Signed Brazil National Team Jersey - Beckett",
+      "87 Fleer #129 Mike Woodson - PSA GEM MT 10",
+      "Wayne Gretzky Signed Triple Exposure Photograph (#13/199) - 25 x 21.5 - UDA COA"
+     ]
+    },
+    "category": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "object",
+      "unknown",
+      "unknown"
+     ]
+    },
+    "imageUrl": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202409-1020-5003-a00a06ca-3153-4fa5-85e6…",
+      "https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202508-1220-5206-31e21d73-a3c1-41bc-9725…",
+      "https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202512-2316-3256-f6749984-5b52-4174-bf77…"
+     ]
+    },
+    "auctionHouse": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Goldin",
+      "Goldin",
+      "Goldin"
+     ]
+    },
+    "saleName": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Goldin Weekly Auction",
+      "Goldin Weekly Auction",
+      "Goldin Weekly Auction"
+     ]
+    },
+    "saleDate": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2026-07-26",
+      "2023-08-11",
+      "2024-06-09"
+     ]
+    },
+    "saleDateTime": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2024-09-06T02:15:03.005385",
+      "2023-04-07T01:15:14.822278",
+      "2024-07-19T02:15:07.765597"
+     ]
+    },
+    "lotNumber": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1825",
+      "1060",
+      "1618"
+     ]
+    },
+    "nativeCurrency": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "USD",
+      "USD",
+      "USD"
+     ]
+    },
+    "hammerNative": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "15",
+      "58",
+      "130"
+     ]
+    },
+    "premiumNative": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "57",
+      "32",
+      "623"
+     ]
+    },
+    "realizedNative": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "915",
+      "1586",
+      "7800"
+     ]
+    },
+    "buyerPremiumPct": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "20",
+      "20",
+      "22"
+     ]
+    },
+    "fxRate": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1",
+      "1",
+      "1"
+     ]
+    },
+    "fxAsOf": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2023-05-12",
+      "2025-01-24",
+      "2026-07-26"
+     ]
+    },
+    "hammerUsd": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "24",
+      "376",
+      "8043"
+     ]
+    },
+    "premiumUsd": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "16",
+      "8",
+      "23"
+     ]
+    },
+    "realizedUsd": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "3082",
+      "215",
+      "18"
+     ]
+    },
+    "priceBasis": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "final-bid-plus-bp",
+      "final-bid-plus-bp",
+      "final-bid-plus-bp"
+     ]
+    },
+    "currency": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "USD",
+      "USD",
+      "USD"
+     ]
+    },
+    "hammerPrice": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "62",
+      "13",
+      "33"
+     ]
+    },
+    "premiumPrice": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "109",
+      "976",
+      "123"
+     ]
+    },
+    "priceUsd": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "6",
+      "49",
+      "134"
+     ]
+    },
+    "status": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "sold",
+      "sold",
+      "sold"
+     ]
+    },
+    "url": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "https://goldin.co/item/1980-81-topps-assist-leader-johnson-money-bratz-psa-gem-mt-10vaycw",
+      "https://goldin.co/item/ricardo-pepi-signed-usa-national-team-jersey-beckettzq257",
+      "https://goldin.co/item/1993-upper-deck-23-michael-jordan-psa-gem-mt-10ct9a0"
+     ]
+    },
+    "currentBid": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "172",
+      "53",
+      "81"
+     ]
+    },
+    "bidCount": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "22",
+      "3",
+      "14"
+     ]
+    },
+    "buyerPremium": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "22",
+      "20",
+      "20"
+     ]
+    },
+    "auctionId": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "202606-2617-4227-33ccc930-891d-4f6c-adce-ad992b93c2a2",
+      "202303-0400-0049-31a67ea5-60f6-4ea0-b780-bd2e37112e40",
+      "202304-2420-5913-1c3ccddf-db1e-4fb2-8760-b3be44cf963f"
+     ]
+    },
+    "schemaVersion": {
+     "pct": 100,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2",
+      "2",
+      "2"
+     ]
+    },
+    "formKey": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "unknown",
+      "unknown",
+      "unknown"
+     ]
+    },
+    "normalizedTitle": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "apr 13 2016 kobe bryant final game signed full ticket scores 60 points lakers vs jazz psa …",
+      "2019 panini chronicles 254 luka doncic psa mint 9",
+      "mark messier signed photograph 8 x 10 jsa coa"
+     ]
+    },
+    "titleTokens": {
+     "pct": 100,
+     "types": [
+      "array"
+     ],
+     "ex": [
+      "[\"2020\",\"panini\",\"select\",\"46\",\"joe\",\"burrow\",\"rookie\",\"card\",\"psa\",\"gem\",\"mt\",\"10\"]",
+      "[\"1993\",\"nba\",\"playoff\",\"chicago\",\"bull\",\"seat\",\"back\",\"cover\",\"charitabull\",\"loa\"]",
+      "[\"2022\",\"panini\",\"obsidian\",\"168\",\"isiah\",\"pacheco\",\"rookie\",\"card\",\"psa\",\"mint\",\"9\"]"
+     ]
+    },
+    "entityClass": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "category",
+      "category",
+      "category"
+     ]
+    },
+    "yearIsCirca": {
+     "pct": 100,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "false",
+      "false",
+      "false"
+     ]
+    },
+    "photoMatched": {
+     "pct": 100,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "false",
+      "false",
+      "false"
+     ]
+    },
+    "validatedAt": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2026-07-30T15:00:53.464Z",
+      "2026-07-30T15:00:53.464Z",
+      "2026-07-30T15:00:53.464Z"
+     ]
+    },
+    "subCat": {
+     "pct": 100,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "cards",
+      "cards",
+      "cards"
+     ]
+    },
+    "_card": {
+     "pct": 94.13,
+     "types": [
+      "object"
+     ],
+     "ex": [
+      "{\"player\":\"Tim Duncan\",\"playerSlug\":\"tim-duncan\",\"year\":\"1998\",\"setName\":\"Topps Finest W/C…",
+      "{\"player\":\"Baron Davis\",\"playerSlug\":\"baron-davis\",\"year\":\"2004\",\"setName\":\"Upper Deck Exq…",
+      "{\"player\":\"Larry Bird\",\"playerSlug\":\"larry-bird\",\"year\":\"1989\",\"setName\":\"Fleer\",\"cardNo\":…"
+     ]
+    },
+    "objectFingerprint": {
+     "pct": 92.91,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "a:b39fb29e",
+      "a:7baf9600",
+      "a:c18631e6"
+     ]
+    },
+    "authCert": {
+     "pct": 89.01,
+     "types": [
+      "array"
+     ],
+     "ex": [
+      "[\"Beckett\"]",
+      "[\"PSA\"]",
+      "[\"PSA\"]"
+     ]
+    },
+    "_pid": {
+     "pct": 79.25,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "willy-vasquez",
+      "dak-prescott",
+      "mario-lemieux"
+     ]
+    },
+    "_pname": {
+     "pct": 79.25,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Honus Wagner",
+      "Wander Franco",
+      "Larry Bird"
+     ]
+    },
+    "drill": {
+     "pct": 73.6,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "hockey",
+      "football",
+      "basketball"
+     ]
+    },
+    "yearNum": {
+     "pct": 61.26,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "1978",
+      "2017",
+      "2008"
+     ]
+    },
+    "yearSource": {
+     "pct": 61.26,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "title",
+      "title",
+      "title"
+     ]
+    },
+    "modelKey": {
+     "pct": 58.41,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "nm7",
+      "mt10",
+      "f277"
+     ]
+    },
+    "sport": {
+     "pct": 39.76,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Soccer",
+      "Golf",
+      "Baseball"
+     ]
+    },
+    "editionOf": {
+     "pct": 27.5,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2",
+      "8",
+      "73"
+     ]
+    },
+    "editionTotal": {
+     "pct": 27.5,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "24",
+      "25",
+      "49"
+     ]
+    },
+    "objectClass": {
+     "pct": 7.21,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "object",
+      "object",
+      "object"
+     ]
+    },
+    "objectType": {
+     "pct": 7.21,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "other",
+      "cap",
+      "other"
+     ]
+    },
+    "playerSlug": {
+     "pct": 4.64,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "dick-butkus",
+      "nba-asg-slam",
+      "mark-mcgwire"
+     ]
+    },
+    "playerName": {
+     "pct": 4.64,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Kyle Shanahan",
+      "David Bell",
+      "Magic Johnson"
+     ]
+    },
+    "editionMarker": {
+     "pct": 4.49,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "unique",
+      "unique",
+      "unique"
+     ]
+    },
+    "firstSeen": {
+     "pct": 3.58,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "2026-07-14",
+      "2026-07-14",
+      "2026-07-14"
+     ]
+    },
+    "sportYear": {
+     "pct": 3.38,
+     "types": [
+      "number"
+     ],
+     "ex": [
+      "2006",
+      "2022",
+      "2023"
+     ]
+    },
+    "titleRaw": {
+     "pct": 3.1,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "World Series Game 1 Ticket Stub - Babe Ruth 3 Hits, Lou Gehrig Triple and 2 RBIs - PSA PR …",
+      "NLCS Game 3 - Shohei Ohtani Game-Used OML Manfred Jr. Baseball - Foul Ball off Reed Garret…",
+      "Ronald Acuna Jr. Game-Used, Photo-Matched, Signed, Inscribed Louisville Slugger A181 Model…"
+     ]
+    },
+    "fxRecovered": {
+     "pct": 3.1,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "true",
+      "true",
+      "true"
+     ]
+    },
+    "firstSeenKnown": {
+     "pct": 3.1,
+     "types": [
+      "boolean"
+     ],
+     "ex": [
+      "true",
+      "true",
+      "true"
+     ]
+    },
+    "gradeLabel": {
+     "pct": 2.44,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "SGC 10",
+      "PSA 9.0",
+      "PSA 9"
+     ]
+    },
+    "entity": {
+     "pct": 2.13,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "Shaquille O'Neal Signed",
+      "Gerrit Cole MLB",
+      "Berlin Olympic Games"
+     ]
+    },
+    "makerSlug": {
+     "pct": 1.33,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "sports-cards"
+     ]
+    },
+    "eventKey": {
+     "pct": 0.72,
+     "types": [
+      "string"
+     ],
+     "ex": [
+      "olympics",
+      "super-bowl",
+      "super-bowl"
+     ]
+    },
+    "bidHistory": {
+     "pct": 0.54,
+     "types": [
+      "array"
+     ],
+     "ex": []
+    },
+    "reference": {
+     "pct": 0.1,
+     "types": [
+      "string"
+     ],
+     "ex": []
+    },
+    "serialNo": {
+     "pct": 0.04,
+     "types": [
+      "string"
+     ],
+     "ex": []
+    }
+   }
+  },
+  "targeted": {
+   "byHouse": {
+    "Goldin": 20000
+   },
+   "byStatus": {
+    "sold": 20000
+   },
+   "byArtistTop": {
+    "sports-cards": 18825,
+    "game-used": 616,
+    "tickets-passes": 394,
+    "trophies-awards": 156,
+    "space-exploration": 7,
+    "scientific-instruments": 2
+   },
+   "bidHistory": {
+    "n": 108,
+    "example": [
+     {
+      "d": "2026-07-17",
+      "b": 1000,
+      "n": 1
+     },
+     {
+      "d": "2026-07-22",
+      "b": 2400,
+      "n": 15
+     }
+    ],
+    "dateSpan": {
+     "first": "2026-07-17",
+     "last": "2026-07-25",
+     "distinctDays": 8
+    },
+    "lenStats": {
+     "min": 1,
+     "med": 2,
+     "max": 7,
+     "mean": 2
+    }
+   },
+   "rrArchiveYears": {},
+   "cardYears": {
+    "pre1980": 2112,
+    "y1980_99": 3175,
+    "y2000_09": 1633,
+    "y2010plus": 9202,
+    "none": 2703,
+    "totalCards": 0
+   },
+   "gradeOnCards": 12395,
+   "cardsN": 18825,
+   "subCat": {
+    "cards": 18825,
+    "game-used": 616,
+    "tickets": 394,
+    "trophies": 156,
+    "space": 7,
+    "instruments": 2
+   },
+   "drill": {
+    "football": 2024,
+    "basketball": 4936,
+    "baseball": 4929,
+    "soccer": 1654,
+    "hockey": 296,
+    "golf": 139,
+    "boxing-mma": 313,
+    "tennis": 66,
+    "apollo": 6,
+    "racing": 328,
+    "olympics": 29
+   },
+   "flownN": 0,
+   "firstSeen": {
+    "2026-07": 716
+   },
+   "bidCountSold": {
+    "n": 20000,
+    "withBC": 20000
+   },
+   "estOnSold": {
+    "n": 20000,
+    "withEst": 0
+   },
+   "repeatGroup": 0
+  },
+  "ms": 1493
+ }
+}

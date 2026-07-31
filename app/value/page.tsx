@@ -25,7 +25,6 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
-import meta from '../../public/data/ray/meta.json';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
@@ -511,7 +510,7 @@ export default function ValuePage() {
           )}
         </RayEntrance>
       )}
-      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+      <Colophon record={null} />
     </div>
   );
 }

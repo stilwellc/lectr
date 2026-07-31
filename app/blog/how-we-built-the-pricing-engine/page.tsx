@@ -327,7 +327,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
           </p>
         </article>
       </main>
-      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+      <Colophon record={null} />
     </div>
   );
 }

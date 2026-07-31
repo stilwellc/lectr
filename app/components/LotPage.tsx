@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
+import { drillRowFor } from '../lib/submarkets';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
@@ -650,6 +651,24 @@ export default function LotPage({ lotId, initialLot }: {
                   </Link>
                 </LeaderRow>
               )}
+
+              {/* the lot's sub-market — its taxonomy split's strongest honest
+                  read from market.json drills (index/demand tones only) */}
+              {(() => {
+                const dr = drillRowFor(lot, market);
+                if (!dr) return null;
+                const pct = dr.readType === 'index' && dr.index ? dr.index.changePct
+                  : dr.readType === 'demand' ? dr.demandNow : null;
+                const sub = dr.readType === 'index' && dr.index
+                  ? `${dr.index.horizon} ${pct! >= 0 ? '+' : ''}${pct!.toFixed(0)}% verified [${dr.index.ciLoPct.toFixed(0)}, ${dr.index.ciHiPct.toFixed(0)}] · ${dr.lots.toLocaleString()} lots`
+                  : dr.readType === 'demand' && pct != null
+                    ? `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}% vs estimate, trailing year · ${dr.lots.toLocaleString()} lots`
+                    : `${dr.lots.toLocaleString()} lots tracked${dr.typicalUsd != null ? ` · ${formatPrice(dr.typicalUsd)} typical` : ''}`;
+                return (
+                  <LeaderRow k="Sub-market" v={dr.label} sub={sub}
+                    tone={pct != null ? (pct >= 0 ? 'up' : 'down') : undefined} />
+                );
+              })()}
 
               {/* live card: the exact-card record — same card, same grade */}
               {isUpcoming && lot.cardComps && lot.cardComps.n > 0 && (

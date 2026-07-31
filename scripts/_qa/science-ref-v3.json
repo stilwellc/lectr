@@ -1,0 +1,30 @@
+{
+ "meteorites": {
+  "anchors": 161,
+  "baseline": 20,
+  "ref": 68,
+  "refOnly": 48,
+  "errStats": "n=68 med|err|=55% within±50%=42.6% within±100%=80.9% >200%=7 worst=978%"
+ },
+ "fossils": {
+  "anchors": 417,
+  "baseline": 38,
+  "ref": 232,
+  "refOnly": 201,
+  "errStats": "n=232 med|err|=50% within±50%=48.7% within±100%=84.1% >200%=17 worst=713%"
+ },
+ "scientific-instruments": {
+  "anchors": 1775,
+  "baseline": 62,
+  "ref": 728,
+  "refOnly": 700,
+  "errStats": "n=728 med|err|=54% within±50%=46.6% within±100%=79.1% >200%=71 worst=1234%"
+ },
+ "space-exploration": {
+  "anchors": 1192,
+  "baseline": 59,
+  "ref": 598,
+  "refOnly": 556,
+  "errStats": "n=598 med|err|=60% within±50%=40.5% within±100%=72.7% >200%=93 worst=7726%"
+ }
+}

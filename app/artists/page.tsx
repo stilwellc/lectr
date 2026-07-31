@@ -10,13 +10,12 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import { formatDate, getUpcomingCounts } from '../utils';
-import { demandSeries, formatDemand } from '../lib/demand';
+import { formatDemand } from '../lib/demand';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
 import VerifiedMovers from '../components/analytics/VerifiedMovers';
 import SubMarketDirectory from '../components/SubMarketDirectory';
-import meta from '../../public/data/ray/meta.json';
 
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 
@@ -28,7 +27,7 @@ const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSpa
  */
 export default function ArtistsPage() {
   // useFullLots: the sparklines gate on fullLoaded, so trigger phase 2.
-  const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache, market: marketData } = useFullLots();
+  const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache, market: marketData, demand } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -43,11 +42,13 @@ export default function ArtistsPage() {
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   const summary = useMemo(() => {
-    const ds = demandSeries(marketLots);
+    // served demand (build-time, coverage/staleness-gated) — never recompute
+    // the market curve client-side from a partially-loaded corpus
+    const ds = demand?.[activeKey] || [];
     const marketNow = ds.length ? ds[ds.length - 1].value : null;
     const liveMkt = ARTISTS.filter(a => mktSet.has(a.slug)).reduce((s, a) => s + (upcomingCounts[a.slug] || 0), 0);
     return { live: liveMkt, marketNow };
-  }, [marketLots, upcomingCounts, mktSet]);
+  }, [demand, activeKey, upcomingCounts, mktSet]);
 
   // sub-market row count for the masthead (all markets when scope is 'all')
   const subMarketCount = useMemo(() => {
@@ -116,7 +117,7 @@ export default function ArtistsPage() {
           </div>
 
           {/* the closing colophon — corpus counts from meta.json */}
-          <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+          <Colophon record={null} />
         </RayEntrance>
       )}
     </div>

@@ -164,7 +164,7 @@ export default function BlogIndex() {
           </div>
         </section>
       </main>
-      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+      <Colophon record={null} />
     </div>
   );
 }

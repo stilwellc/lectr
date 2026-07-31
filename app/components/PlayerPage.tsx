@@ -8,6 +8,7 @@
  * trend, marquee object results, live lots, and recent sales.
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { sportDrillOf, SPORTS_SLUG_KIND } from '../lib/submarkets';
 import Link from 'next/link';
 import ArtistNav from './ArtistNav';
 import { LOTPAGE_CSS } from './LotPage';
@@ -79,7 +80,7 @@ function TrendLine({ yearly }: { yearly: PlayerEntry['yearly'] }) {
 }
 
 export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
-  const { allLots, lastCrawl, totalLots, sources } = useRayData();
+  const { allLots, lastCrawl, totalLots, sources, market: marketData } = useRayData();
   // house count is the meta.json source list — not a hardcoded 7 that silently
   // rots when a house is added. Fall back to the lots' own houses if meta is
   // still landing.
@@ -149,11 +150,25 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           {(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'] as const).map(cat => {
             const c = entry.cats[cat];
             if (!c) return null;
+            // the athlete's sub-market: this kind x their sport, from drills —
+            // "how the market they trade in is moving", beside their own numbers
+            const drillSlug = sportDrillOf(entry.sport);
+            const dr = drillSlug
+              ? (marketData?.drills?.sports || []).find(r => r.slug === `${SPORTS_SLUG_KIND[cat]}:${drillSlug}`)
+              : null;
+            const drNote = dr && dr.readType === 'index' && dr.index
+              ? `market ${dr.index.changePct >= 0 ? '+' : ''}${dr.index.changePct.toFixed(0)}% ${dr.index.horizon} verified`
+              : dr && dr.readType === 'demand' && dr.demandNow != null
+                ? `market ${dr.demandNow >= 0 ? '+' : ''}${dr.demandNow.toFixed(0)}% vs estimate`
+                : null;
             return (
               <div key={cat} className="lectr-lot-row">
                 <span className="lectr-lot-k">{CAT_LABEL[cat]}</span>
                 <span className="lectr-lot-fill" aria-hidden />
-                <span className="lectr-lot-sub">{c.n.toLocaleString()} sales</span>
+                <span className="lectr-lot-sub">
+                  {c.n.toLocaleString()} sales
+                  {drNote && <span style={{ marginLeft: 8, color: 'var(--color-text-muted)' }}>· {drNote}</span>}
+                </span>
                 <span className="lectr-lot-v">
                   {formatPrice(c.medUsd)}
                   {c.ttmMedUsd != null && c.ttmMedUsd !== c.medUsd && (

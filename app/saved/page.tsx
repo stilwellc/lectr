@@ -689,7 +689,7 @@ export default function SavedPage() {
           <AlertsInbox />
         </RayEntrance>
       )}
-      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+      <Colophon record={null} />
     </div>
   );
 }

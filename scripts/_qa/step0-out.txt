@@ -1,0 +1,49 @@
+RULE origToPrint touches 169 rows; printToOrig touches 16 rows (corpus 196795)
+origToPrint: {"st":{"upcoming":3,"sold":120,"bought_in":44,"unknown-result":2},"artists":{"pablo-picasso":55,"andy-warhol":34,"henri-matisse":29,"kaws":15,"keith-haring":15,"george-condo":8,"ed-ruscha":4,"raymond-pettibon":3,"kenny-scharf":2,"george-nakashima":1},"formBefore":{"original-2d":162,"work-on-paper":2,"book":4,"object-edition":1},"formAfter":{"print":164,"book":4,"object-edition":1}}
+printToOrig: {"st":{"upcoming":1,"sold":15},"artists":{"pablo-picasso":7,"kaws":4,"henri-matisse":4,"andy-warhol":1},"formBefore":{"print":16},"formAfter":{"painting":14,"original-2d":2}}
+
+printToOrig rows (all):
+  [upcoming] andy-warhol | Carsten Nielsen: Portrait of Andy Warhol. Signed C. Oil on canvas. 100 x 100 cm. Unframed.
+  [sold $110094] kaws | Untitled (Running Chum)  2001
+  [sold $252000] kaws | KAWSBOB (IT TOOK FIVE MINUTES), PACKAGE PAINTING SERIES
+  [sold $300000] kaws | KAWSBOB (OPEN MOUTH), PACKAGE PAINTING SERIES
+  [sold $65024] kaws | UNTITLED (CHUM), PACKAGE PAINTING SERIES
+  [sold $2916186] pablo-picasso | pablo picasso 1881-1973, courses de taureaux signed picasso (lower left) oil on canvas,...
+  [sold $485268] pablo-picasso | pablo picasso 1881-1973, grappe de raisin, oil and collage with sawdust on canvas, 27...
+  [sold $103986] pablo-picasso | pablo picasso 1881-1973, trois cartes a jouer, oil on board laid down on cradled...
+  [sold $187330] pablo-picasso | pablo picasso 1881-1973, compotier avec poire et pomme, signed oil on canvas, 27 by...
+  [sold $2981201] henri-matisse | henri matisse 1869-1954, le 14 juillet 1920 - etretat 1920, signed oil on canvas laid...
+  [sold $340655] henri-matisse | henri matisse 1869-1954, portrait de yvonne girbe, signed oil on canvas, 40.6 by...
+  [sold $3647255] pablo-picasso | pablo picasso 1881-1973, nu dans un fauteuil signed oil on canvas, 92 by 73cm., 36 by...
+  [sold $4126304] pablo-picasso | pablo picasso 1881-1973, femme au chapeau de paille, oil on canvas, 61 by 50cm., 24 by...
+  [sold $3175244] henri-matisse | henri matisse 1869-1954, oliviers a collioure, signed oil on canvas, 47 by...
+  [sold $1510889] pablo-picasso | pablo picasso 1881-1973, buste de femme, signed and dated 11.4.40 oil on canvas,...
+  [sold $60378] henri-matisse | henri matisse 1869-1954, öperlans, signed oil on canvas, 38 by 45.5cm., 15 by 17 7/8in.,...
+
+affected artists: henri-matisse, pablo-picasso, andy-warhol, kaws, keith-haring, ed-ruscha, george-condo, raymond-pettibon, george-nakashima, peter-saul, kenny-scharf, francesco-clemente, barry-mcgee
+  henri-matisse BEFORE: reads=2105 belowMarketFlags=828 medianAbsErr=46.5%
+  henri-matisse AFTER : reads=2104 belowMarketFlags=831 medianAbsErr=46.4%
+  pablo-picasso BEFORE: reads=17602 belowMarketFlags=9136 medianAbsErr=39.4%
+  pablo-picasso AFTER : reads=17605 belowMarketFlags=9127 medianAbsErr=39.4%
+  andy-warhol BEFORE: reads=7777 belowMarketFlags=3945 medianAbsErr=44.7%
+  andy-warhol AFTER : reads=7775 belowMarketFlags=3929 medianAbsErr=44.7%
+  kaws BEFORE: reads=507 belowMarketFlags=261 medianAbsErr=47.4%
+  kaws AFTER : reads=647 belowMarketFlags=306 medianAbsErr=50.2%
+  keith-haring BEFORE: reads=1316 belowMarketFlags=657 medianAbsErr=48.3%
+  keith-haring AFTER : reads=1326 belowMarketFlags=666 medianAbsErr=48.8%
+  ed-ruscha BEFORE: reads=1011 belowMarketFlags=482 medianAbsErr=38.5%
+  ed-ruscha AFTER : reads=1012 belowMarketFlags=481 medianAbsErr=38.5%
+  george-condo BEFORE: reads=304 belowMarketFlags=158 medianAbsErr=58.0%
+  george-condo AFTER : reads=422 belowMarketFlags=223 medianAbsErr=57.1%
+  raymond-pettibon BEFORE: reads=613 belowMarketFlags=178 medianAbsErr=38.5%
+  raymond-pettibon AFTER : reads=608 belowMarketFlags=170 medianAbsErr=38.5%
+  george-nakashima BEFORE: reads=4 belowMarketFlags=2 medianAbsErr=68.4%
+  george-nakashima AFTER : reads=5 belowMarketFlags=2 medianAbsErr=41.9%
+  peter-saul BEFORE: reads=45 belowMarketFlags=17 medianAbsErr=41.7%
+  peter-saul AFTER : reads=46 belowMarketFlags=18 medianAbsErr=42.9%
+  kenny-scharf BEFORE: reads=170 belowMarketFlags=92 medianAbsErr=53.7%
+  kenny-scharf AFTER : reads=171 belowMarketFlags=93 medianAbsErr=53.7%
+  francesco-clemente BEFORE: reads=71 belowMarketFlags=29 medianAbsErr=50.6%
+  francesco-clemente AFTER : reads=71 belowMarketFlags=29 medianAbsErr=50.6%
+  barry-mcgee BEFORE: reads=83 belowMarketFlags=39 medianAbsErr=56.3%
+  barry-mcgee AFTER : reads=83 belowMarketFlags=39 medianAbsErr=56.3%

@@ -1,0 +1,168 @@
+[
+ {
+  "id": "bonhams-31913-7",
+  "artist": "cartier",
+  "cat": "object",
+  "form": "jewelry",
+  "title": "CARTIER: A SET OF 18K GOLD AND GEM-SET 'ELLIPSE' RINGS",
+  "est": [
+   2000,
+   3000
+  ],
+  "pct": 52,
+  "conf": "high",
+  "kind": "form",
+  "n": 16,
+  "med": 3795,
+  "catMatch": 1,
+  "formMatch": 0,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0,
+  "medYearGap": null,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 1393.55,
+  "priceMax": 16125,
+  "poolSample": [
+   {
+    "id": "bonhams-28502-77",
+    "cat": "object",
+    "t": "Cartier. A lady's 18K gold manual wind wristwatch   Ell",
+    "usd": 2492.93,
+    "dims": null
+   },
+   {
+    "id": "bonhams-25957-127",
+    "cat": "object",
+    "t": "Ellipse, Circa 2010",
+    "usd": 4092.75,
+    "dims": null
+   },
+   {
+    "id": "bonhams-10775-208A",
+    "cat": "object",
+    "t": "Cartier. A gents 18ct gold oval shape wristwatch'Ellips",
+    "usd": 1489.5,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5746328",
+    "cat": "object",
+    "t": "A lady's 'Ellipse' wristwatch, by Cartier",
+    "usd": 3912.5,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5752027",
+    "cat": "object",
+    "t": "CARTIER. A LADY'S RARE 18K GOLD AND DIAMOND-SET TONNEAU",
+    "usd": 16125,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5639013",
+    "cat": "object",
+    "t": "CARTIER. AN 18K GOLD AND DIAMOND-SET TONNEAU-SHAPED WRI",
+    "usd": 6450,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5091654",
+    "cat": "object",
+    "t": "CARTIER, \"ELLIPSE\" FINE AND UNUSUAL, LADY'S 18K GOLD AN",
+    "usd": 13600,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5057823",
+    "cat": "object",
+    "t": "CARTIER. AN 18K GOLD TONNEAU WRISTWATCH SIGNED CARTIER,",
+    "usd": 3750,
+    "dims": null
+   }
+  ]
+ },
+ {
+  "id": "bonhams-31913-14",
+  "artist": "cartier",
+  "cat": "object",
+  "form": "jewelry",
+  "title": "CARTIER: AN 18K GOLD 'PANTHÈRE DE CARTIER' RING, FRANCE/SWITZERLAND",
+  "est": [
+   3000,
+   5000
+  ],
+  "pct": 257,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 14278.4,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0,
+  "medYearGap": null,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 753.66,
+  "priceMax": 53760,
+  "poolSample": [
+   {
+    "id": "bonhams-31907-147",
+    "cat": "object",
+    "t": "CARTIER: AN 18K GOLD AND EMERALD 'PANTHÈRE DE CARTIER' ",
+    "usd": 9600,
+    "dims": null
+   },
+   {
+    "id": "bonhams-31904-265",
+    "cat": "object",
+    "t": "CARTIER: AN 18K WHITE GOLD AND DIAMOND 'PANTHÈRE DE CAR",
+    "usd": 53760,
+    "dims": null
+   },
+   {
+    "id": "bonhams-29494-110",
+    "cat": "object",
+    "t": "CARTIER: AN 18K GOLD, TSAVORITE GARNET AND ENAMEL 'PANT",
+    "usd": 10240,
+    "dims": null
+   },
+   {
+    "id": "bonhams-29494-109",
+    "cat": "object",
+    "t": "A CARTIER 'PANTHÈRE DE CARTIER' 18K GOLD, DIAMOND AND G",
+    "usd": 14080,
+    "dims": null
+   },
+   {
+    "id": "bonhams-29494-112",
+    "cat": "object",
+    "t": "CARTIER: AN 18K TRI-COLOR GOLD 'PANTHÈRE DE CARTIER' RI",
+    "usd": 4096,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-6466588",
+    "cat": "object",
+    "t": "CARTIER MULTI-GEM AND GOLD 'PANTHÈRE DE CARTIER' RING",
+    "usd": 24570,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5878884",
+    "cat": "object",
+    "t": "CARTIER. A LADY'S FINE 18K WHITE GOLD ELONGATED OVAL WR",
+    "usd": 18750,
+    "dims": null
+   },
+   {
+    "id": "bonhams-32032-60",
+    "cat": "object",
+    "t": "CARTIER: GEM-SET 'PANTHÈRE DE CARTIER' RING",
+    "usd": 14476.8,
+    "dims": null
+   }
+  ]
+ }
+]

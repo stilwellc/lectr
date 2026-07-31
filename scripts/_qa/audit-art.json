@@ -1,0 +1,1491 @@
+[
+ {
+  "id": "bonhams-brk_1008730-99F544FD154A",
+  "artist": "andy-warhol",
+  "cat": "print",
+  "form": "textile",
+  "title": "Andy Warhol, after: \"Marilyn Monroe\". Machine made wool tapestry. Manu",
+  "est": [
+   4000,
+   4000
+  ],
+  "pct": 300,
+  "conf": "low",
+  "kind": "form",
+  "n": 5,
+  "med": 16009.92,
+  "catMatch": 0.8,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0.2,
+  "medYearGap": null,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 4258.37,
+  "priceMax": 28800,
+  "poolSample": [
+   {
+    "id": "bonhams-27782-41",
+    "cat": "print",
+    "t": "U.S. Dollar Sign Rug, 1981",
+    "usd": 4258.37,
+    "dims": "183 x 275cm (72 1/16 x 108 1/4",
+    "y": "1981"
+   },
+   {
+    "id": "bonhams-15831-81",
+    "cat": "print",
+    "t": "Flowers carpet, from an edition of 20, published by Edi",
+    "usd": 16009.92,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-4561189",
+    "cat": "print",
+    "t": "Andy Warhol (1928-1987) Flowers (tapestry)",
+    "usd": 28800,
+    "dims": null
+   },
+   {
+    "id": "wright-ABU5E",
+    "cat": "print",
+    "t": "Flowers Tapestry",
+    "usd": 20000,
+    "dims": null
+   },
+   {
+    "id": "wright-A7RP",
+    "cat": "design",
+    "t": "Poppies rug",
+    "usd": 8850,
+    "dims": null,
+    "y": "1960s"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-77",
+  "artist": "kaws",
+  "cat": "original",
+  "form": "object-edition",
+  "title": "No Future Companion (Hajime Sorayama version)",
+  "est": [
+   3000,
+   5000
+  ],
+  "pct": 151,
+  "conf": "very-high",
+  "kind": "edition",
+  "n": 6,
+  "med": 10025.314999999999,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0.17,
+  "medYearGap": 0,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 5080,
+  "priceMax": 13158,
+  "poolSample": [
+   {
+    "id": "bonhams-26783-81",
+    "cat": "original",
+    "t": "No Future Companion (Silver Chrome)",
+    "usd": 13158,
+    "dims": null,
+    "y": "2008"
+   },
+   {
+    "id": "bonhams-23353-118",
+    "cat": "original",
+    "t": "No Future Companion 無望同伴",
+    "usd": 12900,
+    "dims": null
+   },
+   {
+    "id": "bonhams-23343-720",
+    "cat": "original",
+    "t": "No Future Companion 無望同伴",
+    "usd": 9675,
+    "dims": null
+   },
+   {
+    "id": "bonhams-22893-60",
+    "cat": "original",
+    "t": "No Future Companion 無望同伴",
+    "usd": 8062.5,
+    "dims": null
+   },
+   {
+    "id": "phillips-UK090319-305",
+    "cat": "original",
+    "t": "NO FUTURE COMPANION (HAJIME SORAYAMA VERSION, BLACK)",
+    "usd": 10375.63,
+    "dims": null
+   },
+   {
+    "id": "wright-356955",
+    "cat": "original",
+    "t": "No Future Companion (Silver)",
+    "usd": 5080,
+    "dims": "12¼ h × 7⅝ dia in (31  × 19  c"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-95",
+  "artist": "ed-ruscha",
+  "cat": "print",
+  "form": "print",
+  "title": "Potato Print Fish Hook, Cannabis Twig Fish Hook",
+  "est": [
+   1000,
+   1500
+  ],
+  "pct": 345,
+  "conf": "medium",
+  "kind": "form",
+  "n": 24,
+  "med": 5561.495,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0,
+  "medYearGap": 36,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 750,
+  "priceMax": 4114500,
+  "poolSample": [
+   {
+    "id": "christies-auc-1342043",
+    "cat": "print",
+    "t": "ED RUSCHA Two Happy People; Two People Temporarily Sepa",
+    "usd": 2875,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-6585961",
+    "cat": "print",
+    "t": "ED RUSCHA (B. 1937) Trashy Fish",
+    "usd": 254000,
+    "dims": null
+   },
+   {
+    "id": "phillips-UK030325-288",
+    "cat": "print",
+    "t": "Turbo Tears, from Tate Modern 21 Years Print Portfolio",
+    "usd": 10062,
+    "dims": null,
+    "y": "2020"
+   },
+   {
+    "id": "phillips-NY030325-159",
+    "cat": "print",
+    "t": "Turbo Tears, from Tate Modern 21 Years Print Portfolio",
+    "usd": 12700,
+    "dims": null,
+    "y": "2020"
+   },
+   {
+    "id": "wright-217037~",
+    "cat": "print",
+    "t": "Jumping Fish",
+    "usd": 3810,
+    "dims": null,
+    "y": "1980"
+   },
+   {
+    "id": "wright-214010~",
+    "cat": "print",
+    "t": "Five works from the Tropical Fish series",
+    "usd": 9450,
+    "dims": null,
+    "y": "1974-75"
+   },
+   {
+    "id": "phillips-UK030424-310",
+    "cat": "print",
+    "t": "Two Jumping Fish (E. 114)",
+    "usd": 4872.99,
+    "dims": null,
+    "y": "1980"
+   },
+   {
+    "id": "phillips-UK030323-224",
+    "cat": "print",
+    "t": "Two Jumping Fish (E. 114)",
+    "usd": 4739.64,
+    "dims": null,
+    "y": "1980"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-96",
+  "artist": "ed-ruscha",
+  "cat": "print",
+  "form": "print",
+  "title": "A Group of 5 Artist Books",
+  "est": [
+   2000,
+   3000
+  ],
+  "pct": 131,
+  "conf": "low",
+  "kind": "form",
+  "n": 24,
+  "med": 5781.5,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0.08,
+  "medYearGap": 536,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 640,
+  "priceMax": 96100,
+  "poolSample": [
+   {
+    "id": "christies-auc-6553245",
+    "cat": "print",
+    "t": "ED RUSCHA (B. 1937) A group of nine artist's books",
+    "usd": 10160,
+    "dims": null
+   },
+   {
+    "id": "bonhams-30376-159",
+    "cat": "print",
+    "t": "A group of 8 books with lithographic illustrations by R",
+    "usd": 1408,
+    "dims": null,
+    "y": "1964"
+   },
+   {
+    "id": "phillips-NY030423-127",
+    "cat": "print",
+    "t": "Selection of 16 Artist Books (E. B1-8, B10-13, B15-17, ",
+    "usd": 7620,
+    "dims": null,
+    "y": "1963-1972"
+   },
+   {
+    "id": "wright-ALKPL",
+    "cat": "print",
+    "t": "Artist books, collection of five",
+    "usd": 1625,
+    "dims": null,
+    "y": "1967-1972"
+   },
+   {
+    "id": "wright-AGPDW",
+    "cat": "print",
+    "t": "Artist books, collection of seven",
+    "usd": 3500,
+    "dims": null,
+    "y": "1964-1976"
+   },
+   {
+    "id": "christies-auc-6220651",
+    "cat": "print",
+    "t": "Ed Ruscha A Small Library of Books by the Artist",
+    "usd": 37500,
+    "dims": null
+   },
+   {
+    "id": "bonhams-24268-211",
+    "cat": "print",
+    "t": "Group of 7 Books 7",
+    "usd": 2750,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5792759",
+    "cat": "print",
+    "t": "Ed Ruscha (b. 1937) A group of 16 artist's books",
+    "usd": 37500,
+    "dims": null
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-92",
+  "artist": "ed-ruscha",
+  "cat": "print",
+  "form": "print",
+  "title": "Egg, from Domestic Tranquility",
+  "est": [
+   1000,
+   1500
+  ],
+  "pct": 206,
+  "conf": "very-high",
+  "kind": "edition",
+  "n": 3,
+  "med": 3825,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 1,
+  "dimsCoverage": 1,
+  "medYearGap": 0,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 3328,
+  "priceMax": 4352,
+  "poolSample": [
+   {
+    "id": "bonhams-31709-218",
+    "cat": "print",
+    "t": "Egg, from Domestic Tranquility",
+    "usd": 3328,
+    "dims": "8 3/8 x 18 7/8in (21.3 x 47.9c",
+    "y": "1974"
+   },
+   {
+    "id": "bonhams-31679-77",
+    "cat": "print",
+    "t": "Egg, from Domestic Tranquility",
+    "usd": 4352,
+    "dims": "8 3/8 x 18 11/16in (21.3 x 47.",
+    "y": "1974"
+   },
+   {
+    "id": "bonhams-26523-191",
+    "cat": "print",
+    "t": "Egg, from Domestic Tranquility",
+    "usd": 3825,
+    "dims": "8 1/2 x 19in (21.6 x 48.3cm)",
+    "y": "1974"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-93",
+  "artist": "ed-ruscha",
+  "cat": "print",
+  "form": "print",
+  "title": "L.C., from The Leo Castelli 90th Birthday Portfolio",
+  "est": [
+   2000,
+   3000
+  ],
+  "pct": 133,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 5812.5,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 1.8,
+  "dimsCoverage": 0.21,
+  "medYearGap": 23,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 960,
+  "priceMax": 24510,
+  "poolSample": [
+   {
+    "id": "wright-AGWQY",
+    "cat": "print",
+    "t": "L. C. from the Leo Castelli 90th Birthday portfolio",
+    "usd": 3000,
+    "dims": null,
+    "y": "1997"
+   },
+   {
+    "id": "bonhams-25796-196",
+    "cat": "print",
+    "t": "L.C., from The Leo Castelli 90th Birthday Portfolio",
+    "usd": 1912.5,
+    "dims": "37 1/16 × 27 1/16in (94.2 × 68",
+    "y": "1997"
+   },
+   {
+    "id": "phillips-UK030120-192",
+    "cat": "print",
+    "t": "L.C., from Leo Castelli 90th Birthday",
+    "usd": 2086.5,
+    "dims": null,
+    "y": "1997"
+   },
+   {
+    "id": "phillips-NY030626-144",
+    "cat": "print",
+    "t": "Turbo Tears, from Tate Modern 21 Years Print Portfolio",
+    "usd": 6450,
+    "dims": "S. 23 1/2 x 30 in. (59.7 x 76.",
+    "y": "2020"
+   },
+   {
+    "id": "phillips-NY030626-2",
+    "cat": "print",
+    "t": "Made in U.S.A. or America, Her Best Product, from Kent ",
+    "usd": 24510,
+    "dims": "S. 31 1/4 x 23 1/2 in. (79.4 x",
+    "y": "1974-75"
+   },
+   {
+    "id": "phillips-UK030325-288",
+    "cat": "print",
+    "t": "Turbo Tears, from Tate Modern 21 Years Print Portfolio",
+    "usd": 10062,
+    "dims": null,
+    "y": "2020"
+   },
+   {
+    "id": "phillips-NY030325-159",
+    "cat": "print",
+    "t": "Turbo Tears, from Tate Modern 21 Years Print Portfolio",
+    "usd": 12700,
+    "dims": null,
+    "y": "2020"
+   },
+   {
+    "id": "phillips-NY030624-369",
+    "cat": "print",
+    "t": "Pico, Flower, Figueroa, from The MOCA Portfolio",
+    "usd": 5334,
+    "dims": null,
+    "y": "1999"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-178",
+  "artist": "henri-matisse",
+  "cat": "original",
+  "form": "original-2d",
+  "title": "La lanceur de couteaux, pl. 14, from Jazz (The Knife Thrower, from Jaz",
+  "est": [
+   2000,
+   4000
+  ],
+  "pct": 112,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 6358.125,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 2,
+  "dimsCoverage": 0.96,
+  "medYearGap": 0,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 832,
+  "priceMax": 369471,
+  "poolSample": [
+   {
+    "id": "bonhams-28737-24",
+    "cat": "original",
+    "t": "Le Lanceur de Couteaux, from Jazz",
+    "usd": 11146.24,
+    "dims": "16 1/2 x 25 5/8in",
+    "y": "1947"
+   },
+   {
+    "id": "bonhams-29523-52",
+    "cat": "original",
+    "t": "L'enterrement de Pierrot, from Jazz",
+    "usd": 7040,
+    "dims": "16 1/2 x 25 5/8in (41.9 x 65.1",
+    "y": "1947"
+   },
+   {
+    "id": "bonhams-30353-114",
+    "cat": "original",
+    "t": "Le Loup, from Jazz",
+    "usd": 2291.97,
+    "dims": "16 1/2 x 25 5/8in",
+    "y": "1947"
+   },
+   {
+    "id": "bonhams-28737-21",
+    "cat": "original",
+    "t": "Le Lagon, Plate XIX from Jazz",
+    "usd": 3980.8,
+    "dims": "16 5/8 x 25 5/8in",
+    "y": "1947"
+   },
+   {
+    "id": "bonhams-28737-23",
+    "cat": "original",
+    "t": "Le Loup, from Jazz",
+    "usd": 9235.46,
+    "dims": "16 1/2 x 25 5/8in",
+    "y": "1947"
+   },
+   {
+    "id": "bonhams-28737-22",
+    "cat": "original",
+    "t": "Le Lagon, Plate XVII from Jazz",
+    "usd": 4458.5,
+    "dims": "16 5/8 x 25 1/2in",
+    "y": "1947"
+   },
+   {
+    "id": "bonhams-28213-51",
+    "cat": "original",
+    "t": "Le cauchemar de l'Eléphant blanc, from Jazz",
+    "usd": 7650,
+    "dims": "16 9/16 x 25 1/2in (42.1 x 64.",
+    "y": "1947"
+   },
+   {
+    "id": "bonhams-27424-16",
+    "cat": "original",
+    "t": "Le Loup, from Jazz",
+    "usd": 7885.88,
+    "dims": "16 1/2 x 25 5/8in.",
+    "y": "1947"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-203",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Le Peintre au Cirque (The Painter at the Circus), from Série 156",
+  "est": [
+   3000,
+   5000
+  ],
+  "pct": 57,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 6272,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 3.1,
+  "dimsCoverage": 0.5,
+  "medYearGap": 2,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 1792,
+  "priceMax": 20320,
+  "poolSample": [
+   {
+    "id": "christies-auc-5430127",
+    "cat": "print",
+    "t": "PABLO PICASSO Le Peintre au Cirque, from La Série 156 (",
+    "usd": 6875,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-4085470",
+    "cat": "print",
+    "t": "PABLO PICASSO Écuyère de cirque, homme Rembranesque et ",
+    "usd": 16730,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-3979306",
+    "cat": "print",
+    "t": "Pablo Picasso Le Peintre au Cirque, from Series 156 (B.",
+    "usd": 3951.39,
+    "dims": null
+   },
+   {
+    "id": "bonhams-31709-158",
+    "cat": "print",
+    "t": "Le buste du peintre mort est couronné par l'Académie: L",
+    "usd": 7040,
+    "dims": "8 3/16 x 10 5/8in (20.8 x 27cm",
+    "y": "1968"
+   },
+   {
+    "id": "phillips-UK030126-61",
+    "cat": "print",
+    "t": "Peintre barbu en robe de chambre, avec deux femmes nues",
+    "usd": 5869.5,
+    "dims": "I. 17.2 x 26.3 cm (6 3/4 x 10 ",
+    "y": "1968"
+   },
+   {
+    "id": "bonhams-31103-306",
+    "cat": "print",
+    "t": "Scène de Cirque, avec Cheval ailé, vue par un Machinist",
+    "usd": 3660.8,
+    "dims": "19 7/8 x 21in",
+    "y": "1970"
+   },
+   {
+    "id": "bonhams-30810-50",
+    "cat": "print",
+    "t": "Clowne et acrobate, from from Verve Nos 29-30",
+    "usd": 5120,
+    "dims": "12 1/2 x 9 1/2in (31.8 x 24.1c",
+    "y": "1954"
+   },
+   {
+    "id": "bonhams-30810-51",
+    "cat": "print",
+    "t": "Peintre et son modèle, from Série 347",
+    "usd": 6400,
+    "dims": "10 5/8 x 14 3/4in (27 x 37.5cm",
+    "y": "1966"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-204",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "La Fête de la Patronne, ces Dames médisent de Degas, réduit à un Tiers",
+  "est": [
+   2600,
+   3600
+  ],
+  "pct": 38,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 4283.75,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 2.5,
+  "dimsCoverage": 0.17,
+  "medYearGap": 0,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 1802.24,
+  "priceMax": 9525,
+  "poolSample": [
+   {
+    "id": "phillips-UK030221-183",
+    "cat": "print",
+    "t": "La Fête de la Patronne, ces Dames médisent de Degas, ré",
+    "usd": 5548.03,
+    "dims": null,
+    "y": "1971"
+   },
+   {
+    "id": "christies-auc-4176543",
+    "cat": "print",
+    "t": "PABLO PICASSO La Fête de la Patronne. Ces Dames Médisen",
+    "usd": 5497,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-3979341",
+    "cat": "print",
+    "t": "Pablo Picasso La Fête de la Patronne, ces Dames médisen",
+    "usd": 3951.39,
+    "dims": null
+   },
+   {
+    "id": "bonhams-22475-127",
+    "cat": "print",
+    "t": "La Fête de la patronne, ces dames medisent de Degas, re",
+    "usd": 3500,
+    "dims": null
+   },
+   {
+    "id": "phillips-UK030325-183",
+    "cat": "print",
+    "t": "La fête de la patronne, avec un petit chien, Degas au d",
+    "usd": 4192.5,
+    "dims": null,
+    "y": "1971"
+   },
+   {
+    "id": "phillips-NY030324-205",
+    "cat": "print",
+    "t": "Degas chez les filles. Première apparition de Degas (De",
+    "usd": 2540,
+    "dims": null,
+    "y": "1971"
+   },
+   {
+    "id": "phillips-NY030423-42",
+    "cat": "print",
+    "t": "Maison close. Médisance. Avec profil de Degas au nez fr",
+    "usd": 9525,
+    "dims": null,
+    "y": "1971"
+   },
+   {
+    "id": "phillips-UK030322-173",
+    "cat": "print",
+    "t": "La fête de la patronne, petit chien, fleurs et potins, ",
+    "usd": 8572.41,
+    "dims": null,
+    "y": "1971"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-198",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Portrait de Vollard III, pl. 100, from La Suite Vollard (Portrait of V",
+  "est": [
+   3400,
+   4400
+  ],
+  "pct": 116,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 8413.825,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 1.7,
+  "dimsCoverage": 0.33,
+  "medYearGap": 4,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 2816,
+  "priceMax": 247122.75,
+  "poolSample": [
+   {
+    "id": "christies-auc-6192091",
+    "cat": "print",
+    "t": "PABLO PICASSO (1881-1973) Portrait de Vollard II, from:",
+    "usd": 7981.25,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-6128701",
+    "cat": "print",
+    "t": "PABLO PICASSO (1881-1973) Portrait de Vollard I & III, ",
+    "usd": 12515.63,
+    "dims": null
+   },
+   {
+    "id": "bonhams-24068-119",
+    "cat": "print",
+    "t": "Portrait de Vollard IV, pl. 100, from La Suite Vollard",
+    "usd": 5000,
+    "dims": null
+   },
+   {
+    "id": "bonhams-22804-53",
+    "cat": "print",
+    "t": "Portrait de Vollard II, from La Suite Vollard unframed",
+    "usd": 3438,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5928075",
+    "cat": "print",
+    "t": "Pablo Picasso Portrait de Vollard II, from: La Suite Vo",
+    "usd": 17190,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5876231",
+    "cat": "print",
+    "t": "Pablo Picasso Portrait de Vollard I, II, III, from: La ",
+    "usd": 16235,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5658367",
+    "cat": "print",
+    "t": "Pablo Picasso Portrait de Vollard III, from: La Suite V",
+    "usd": 6260,
+    "dims": null
+   },
+   {
+    "id": "bonhams-18560-134",
+    "cat": "print",
+    "t": "Portrait de Vollard IV, Pl. 100, from La Suite Vollard",
+    "usd": 4636,
+    "dims": null
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-205",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Têtes (Heads)",
+  "est": [
+   2000,
+   3000
+  ],
+  "pct": 66,
+  "conf": "medium",
+  "kind": "form",
+  "n": 24,
+  "med": 4160,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0.75,
+  "medYearGap": 10,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 128,
+  "priceMax": 15206.4,
+  "poolSample": [
+   {
+    "id": "wright-400768",
+    "cat": "print",
+    "t": "Nestor's Tales of the Trojan War (from the Le Metamorph",
+    "usd": 399,
+    "dims": "12 h × 8¾ w in (30  × 22  cm)"
+   },
+   {
+    "id": "wright-400769",
+    "cat": "print",
+    "t": "Le visage (from the Pour Daniel-Henry Kahnweiler portfo",
+    "usd": 128,
+    "dims": "11⅝ h × 8¾ w in (30  × 22  cm)"
+   },
+   {
+    "id": "wright-409765",
+    "cat": "print",
+    "t": "Untitled XX (from  Picasso de 1916 à 1961 portfolio)",
+    "usd": 1152,
+    "dims": "14⅝ h × 21¾ w in (37  × 55  cm"
+   },
+   {
+    "id": "wright-409766",
+    "cat": "print",
+    "t": "Untitled XXI (from  Picasso de 1916 à 1961 portfolio)",
+    "usd": 2304,
+    "dims": "14⅝ h × 21¾ w in (37  × 55  cm"
+   },
+   {
+    "id": "bonhams-32238-74",
+    "cat": "print",
+    "t": "Petite Infante accroupie et Courtisane, from Séries 347",
+    "usd": 4326.4,
+    "dims": "3 1/4 x 2 3/8in",
+    "y": "1968"
+   },
+   {
+    "id": "bonhams-32238-73",
+    "cat": "print",
+    "t": "Gentilhomme et Maja, from Séries 347",
+    "usd": 3993.6,
+    "dims": "3 1/4 x 2 3/8in",
+    "y": "1968"
+   },
+   {
+    "id": "bonhams-32238-72",
+    "cat": "print",
+    "t": "Peintre et Modèle au fauteil",
+    "usd": 4326.4,
+    "dims": "10 5/8 x 14 3/4in",
+    "y": "1966"
+   },
+   {
+    "id": "bonhams-32238-70",
+    "cat": "print",
+    "t": "Grosse Prostituée, Sorcière à la Chouette et Voyageur e",
+    "usd": 5657.6,
+    "dims": "6 x 8 3/8in",
+    "y": "1968"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-201",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Exposition 1958 Vallauris",
+  "est": [
+   2400,
+   3400
+  ],
+  "pct": 53,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 4423.37,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 2.5,
+  "dimsCoverage": 0.25,
+  "medYearGap": 3,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 1261.74,
+  "priceMax": 11009.38,
+  "poolSample": [
+   {
+    "id": "bonhams-24128-126",
+    "cat": "print",
+    "t": "Pablo Picasso (Spanish, 1881-1973) Exposition Vallauris",
+    "usd": 1289,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5978401",
+    "cat": "print",
+    "t": "Pablo Picasso Exposition 1958 Vallauris",
+    "usd": 11009.38,
+    "dims": null
+   },
+   {
+    "id": "bonhams-21014-130",
+    "cat": "print",
+    "t": "Exposition Vallauris 1958",
+    "usd": 6250,
+    "dims": null
+   },
+   {
+    "id": "bonhams-21005-4201",
+    "cat": "print",
+    "t": "Exposition 1958 Vallauris",
+    "usd": 2500,
+    "dims": null
+   },
+   {
+    "id": "bonhams-20911-96",
+    "cat": "print",
+    "t": "Exposition 1958 Vallauris",
+    "usd": 8125,
+    "dims": null
+   },
+   {
+    "id": "bonhams-20735-206",
+    "cat": "print",
+    "t": "Exposition de Ceramiques - Vallauris 1958",
+    "usd": 1369.38,
+    "dims": null
+   },
+   {
+    "id": "bonhams-20018-96",
+    "cat": "print",
+    "t": "Vallauris 1953 exposition (Czwiklitzer 68) Linocut with",
+    "usd": 3170,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5308523",
+    "cat": "print",
+    "t": "PABLO PICASSO Exposition 1958 Vallauris (B. 1284; Ba. 1",
+    "usd": 4375,
+    "dims": null
+   }
+  ]
+ },
+ {
+  "id": "bonhams-32662-202",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Raphaël et la Fornarina VI: Enfin Seuls! (Raphael and the Fornarina VI",
+  "est": [
+   3000,
+   5000
+  ],
+  "pct": 55,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 6181,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 1.4,
+  "dimsCoverage": 0.04,
+  "medYearGap": 0,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 3001.77,
+  "priceMax": 114300,
+  "poolSample": [
+   {
+    "id": "christies-auc-5589246",
+    "cat": "print",
+    "t": "PABLO PICASSO Raphaël et la Fornarina VI: enfin seuls!,",
+    "usd": 5000,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5118265",
+    "cat": "print",
+    "t": "Pablo Picasso Raphaël et la Fornarina VI: Enfin seuls!,",
+    "usd": 5559,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-4085472",
+    "cat": "print",
+    "t": "PABLO PICASSO Raphaël et la fornarina. IV: avec le pape",
+    "usd": 16730,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-4053099",
+    "cat": "print",
+    "t": "PABLO PICASSO Raphaël et la fornarina. XV: le Pape est ",
+    "usd": 9560,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-3997682",
+    "cat": "print",
+    "t": "PABLO PICASSO Raphaël et la Fornarina. VI: Enfin seuls!",
+    "usd": 8962,
+    "dims": null
+   },
+   {
+    "id": "bonhams-19088-3",
+    "cat": "print",
+    "t": "Raphaël et la Fornarina XXII, from Séries 347 (B. 1797;",
+    "usd": 6015,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-3997688",
+    "cat": "print",
+    "t": "PABLO PICASSO Raphaël et la Fornarina. XXIII: Seuls, s'",
+    "usd": 9560,
+    "dims": null
+   },
+   {
+    "id": "phillips-UK030325-179",
+    "cat": "print",
+    "t": "Raphaël et la Fornarina XXI: Michel-Ange est caché sous",
+    "usd": 9223.5,
+    "dims": null,
+    "y": "1968"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-31911-32",
+  "artist": "henri-matisse",
+  "cat": "print",
+  "form": "print",
+  "title": "Danseuse endormie (Sleeping Dancer)",
+  "est": [
+   5000,
+   7000
+  ],
+  "pct": 75,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 10512.5,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 1.7,
+  "dimsCoverage": 0.42,
+  "medYearGap": null,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 6048,
+  "priceMax": 54551.7,
+  "poolSample": [
+   {
+    "id": "phillips-NY030121-96",
+    "cat": "print",
+    "t": "Danseuse endormie au divan (Sleeping Ballerina), from D",
+    "usd": 12600,
+    "dims": null,
+    "y": "1927"
+   },
+   {
+    "id": "rago-81963",
+    "cat": "print",
+    "t": "Danseuse endormie au divan (from Dix danseuses)",
+    "usd": 10400,
+    "dims": "13 h × 19¾ w in (33  × 50  cm)"
+   },
+   {
+    "id": "rago-108626",
+    "cat": "print",
+    "t": "Danseuse endormie au Divan from Dix Danseuses",
+    "usd": 7500,
+    "dims": null
+   },
+   {
+    "id": "rago-105999",
+    "cat": "print",
+    "t": "Danseuse endormie au divan from Dix danseuses",
+    "usd": 13750,
+    "dims": null
+   },
+   {
+    "id": "bonhams-21601-45",
+    "cat": "print",
+    "t": "Danseuse endormie au divan, from Dix Danseuses  unframe",
+    "usd": 14008,
+    "dims": null
+   },
+   {
+    "id": "wright-412931",
+    "cat": "print",
+    "t": "Danseuse au tabouret (from the Dix danseuses series) ",
+    "usd": 8320,
+    "dims": "18 h × 11 w in (46  × 28  cm)"
+   },
+   {
+    "id": "bonhams-31873-32",
+    "cat": "print",
+    "t": "Danseuse debout, acoudée, from Dix Danseuses",
+    "usd": 9600,
+    "dims": "18 x 10 7/8in (45.7 x 27.6cm)"
+   },
+   {
+    "id": "bonhams-31873-33",
+    "cat": "print",
+    "t": "Danseuse étendue au divan, from Dix Danseuses",
+    "usd": 9600,
+    "dims": "11 x 18in (27.9 x 45.7cm)"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-31911-44",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Bacchanale",
+  "est": [
+   8000,
+   12000
+  ],
+  "pct": 62,
+  "conf": "low",
+  "kind": "form",
+  "n": 24,
+  "med": 16171.25,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 3.4,
+  "dimsCoverage": 0.25,
+  "medYearGap": 4,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 1791,
+  "priceMax": 88618.75,
+  "poolSample": [
+   {
+    "id": "christies-auc-6551082",
+    "cat": "print",
+    "t": "PABLO PICASSO (1881-1973) Bacchanale (Quatre personnage",
+    "usd": 74295,
+    "dims": null
+   },
+   {
+    "id": "bonhams-30925-178",
+    "cat": "print",
+    "t": "Bacchanale au hibou et au jeune homme masqué",
+    "usd": 2304,
+    "dims": "10 1/4 x 12 1/8in (25.9 x 30.7",
+    "y": "1955"
+   },
+   {
+    "id": "phillips-UK030225-104",
+    "cat": "print",
+    "t": "Bacchanale: flûtiste et danseurs aux cymbales (Bacchana",
+    "usd": 28067,
+    "dims": null,
+    "y": "1959"
+   },
+   {
+    "id": "bonhams-29523-63",
+    "cat": "print",
+    "t": "Bacchanale: Flûtiste et danseurs aux cymbales",
+    "usd": 15360,
+    "dims": "20 13/16 x 25 1/8in (52.9 x 63",
+    "y": "1959"
+   },
+   {
+    "id": "christies-auc-6502471",
+    "cat": "print",
+    "t": "PABLO PICASSO (1881-1973) Bacchanale",
+    "usd": 25200,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-6502472",
+    "cat": "print",
+    "t": "PABLO PICASSO (1881-1973) Bacchanale au hibou",
+    "usd": 23940,
+    "dims": null
+   },
+   {
+    "id": "sothebys-72b0362f-1ae7-416c-b8d8-9ef05eed545a",
+    "cat": "print",
+    "t": "Bacchanale (Bloch 927; Baer 1255)",
+    "usd": 31200,
+    "dims": null
+   },
+   {
+    "id": "phillips-NY030423-162",
+    "cat": "print",
+    "t": "La Petite bacchanale (The Little Bacchanal) (Bl. 1020, ",
+    "usd": 4445,
+    "dims": null,
+    "y": "1959-1961"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-31911-45",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Chouette visage de femme (Woman-Faced Wood-Owl)",
+  "est": [
+   10000,
+   15000
+  ],
+  "pct": 32,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 16554.065000000002,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0.38,
+  "medYearGap": 1,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 2048,
+  "priceMax": 3469000,
+  "poolSample": [
+   {
+    "id": "christies-auc-5811614",
+    "cat": "print",
+    "t": "Pablo Picasso (1881-1973) & François Hugo (1899-1981) D",
+    "usd": 834712,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5790372",
+    "cat": "print",
+    "t": "Pablo Picasso (1881-1973) Dix-neuf plats en argent: i. ",
+    "usd": 3469000,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5019909",
+    "cat": "print",
+    "t": "[PICASSO] - Spies, Werner. Les sculptures de Picasso , ",
+    "usd": 247122.75,
+    "dims": null
+   },
+   {
+    "id": "phillips-NY030115-39",
+    "cat": "print",
+    "t": "Chouette visage de femme (Woman-faced Wood-owl)",
+    "usd": 11875,
+    "dims": null,
+    "y": "1952"
+   },
+   {
+    "id": "bonhams-22741-478",
+    "cat": "print",
+    "t": "Chouette Visage De Femme (Woman-faced wood owl)",
+    "usd": 18750,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5766300",
+    "cat": "print",
+    "t": "Pablo Picasso (1881-1973) Chouette visage de femme (A.R",
+    "usd": 16480,
+    "dims": null
+   },
+   {
+    "id": "christies-auc-5697863",
+    "cat": "print",
+    "t": "Pablo Picasso (1881-1973) Chouette visage de femme",
+    "usd": 16628.13,
+    "dims": null
+   },
+   {
+    "id": "phillips-NY030013-22",
+    "cat": "print",
+    "t": "Visage de Faune tourmenté (Tormented Faun’s Face); Dorm",
+    "usd": 30000,
+    "dims": null,
+    "y": "1956"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-31911-46",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Têtes (Heads)",
+  "est": [
+   2500,
+   3500
+  ],
+  "pct": 39,
+  "conf": "medium",
+  "kind": "form",
+  "n": 24,
+  "med": 4160,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": null,
+  "dimsCoverage": 0.75,
+  "medYearGap": 10,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 128,
+  "priceMax": 15206.4,
+  "poolSample": [
+   {
+    "id": "wright-400768",
+    "cat": "print",
+    "t": "Nestor's Tales of the Trojan War (from the Le Metamorph",
+    "usd": 399,
+    "dims": "12 h × 8¾ w in (30  × 22  cm)"
+   },
+   {
+    "id": "wright-400769",
+    "cat": "print",
+    "t": "Le visage (from the Pour Daniel-Henry Kahnweiler portfo",
+    "usd": 128,
+    "dims": "11⅝ h × 8¾ w in (30  × 22  cm)"
+   },
+   {
+    "id": "wright-409765",
+    "cat": "print",
+    "t": "Untitled XX (from  Picasso de 1916 à 1961 portfolio)",
+    "usd": 1152,
+    "dims": "14⅝ h × 21¾ w in (37  × 55  cm"
+   },
+   {
+    "id": "wright-409766",
+    "cat": "print",
+    "t": "Untitled XXI (from  Picasso de 1916 à 1961 portfolio)",
+    "usd": 2304,
+    "dims": "14⅝ h × 21¾ w in (37  × 55  cm"
+   },
+   {
+    "id": "bonhams-32238-74",
+    "cat": "print",
+    "t": "Petite Infante accroupie et Courtisane, from Séries 347",
+    "usd": 4326.4,
+    "dims": "3 1/4 x 2 3/8in",
+    "y": "1968"
+   },
+   {
+    "id": "bonhams-32238-73",
+    "cat": "print",
+    "t": "Gentilhomme et Maja, from Séries 347",
+    "usd": 3993.6,
+    "dims": "3 1/4 x 2 3/8in",
+    "y": "1968"
+   },
+   {
+    "id": "bonhams-32238-72",
+    "cat": "print",
+    "t": "Peintre et Modèle au fauteil",
+    "usd": 4326.4,
+    "dims": "10 5/8 x 14 3/4in",
+    "y": "1966"
+   },
+   {
+    "id": "bonhams-32238-70",
+    "cat": "print",
+    "t": "Grosse Prostituée, Sorcière à la Chouette et Voyageur e",
+    "usd": 5657.6,
+    "dims": "6 x 8 3/8in",
+    "y": "1968"
+   }
+  ]
+ },
+ {
+  "id": "bonhams-31911-42",
+  "artist": "pablo-picasso",
+  "cat": "print",
+  "form": "print",
+  "title": "Fumeur au front ridé (The Smoker with a Wrinkled Brow)",
+  "est": [
+   8000,
+   12000
+  ],
+  "pct": 146,
+  "conf": "high",
+  "kind": "form",
+  "n": 24,
+  "med": 24575,
+  "catMatch": 1,
+  "formMatch": 1,
+  "maxAreaRatio": 1,
+  "dimsCoverage": 0.25,
+  "medYearGap": 0,
+  "playerMatch": null,
+  "objTypeMatch": null,
+  "priceMin": 1596.25,
+  "priceMax": 50062.5,
+  "poolSample": [
+   {
+    "id": "bonhams-32236-71",
+    "cat": "print",
+    "t": "Fumeur IV",
+    "usd": 8320,
+    "dims": "16 1/4 x 12 3/4in",
+    "y": "1964"
+   },
+   {
+    "id": "bonhams-32236-73",
+    "cat": "print",
+    "t": "Pablo Picasso (Spanish, 1881-1973) Fumeur Barbu Aquatin",
+    "usd": 23296,
+    "dims": "16 3/8 x 12 1/2in",
+    "y": "1964"
+   },
+   {
+    "id": "bonhams-31873-70",
+    "cat": "print",
+    "t": "Fumeur avec un homme (tête et profil)",
+    "usd": 8320,
+    "dims": "16 1/4 x 12 3/8in (41.2 x 31.4",
+    "y": "1964"
+   },
+   {
+    "id": "bonhams-31873-69",
+    "cat": "print",
+    "t": "Fumeur",
+    "usd": 32000,
+    "dims": "16 1/2 x 12 1/2in (41.9 x 31.7",
+    "y": "1964"
+   },
+   {
+    "id": "christies-auc-6553124",
+    "cat": "print",
+    "t": "PABLO PICASSO (1881-1973) Fumeur à la cigarette verte",
+    "usd": 25400,
+    "dims": null
+   },
+   {
+    "id": "phillips-UK030325-178",
+    "cat": "print",
+    "t": "Fumeur d'opium, femme en pantoufles sur son lit et peti",
+    "usd": 5366.4,
+    "dims": null,
+    "y": "1968"
+   },
+   {
+    "id": "phillips-UK030125-68",
+    "cat": "print",
+    "t": "Fumeur avec un homme (Smoker with a Man) (Bl. 1174, Ba.",
+    "usd": 9080.5,
+    "dims": null,
+    "y": "1964"
+   },
+   {
+    "id": "bonhams-28449-95",
+    "cat": "print",
+    "t": "Fumeur au maillot rayé gris et bleu (Smoker in Gray and",
+    "usd": 25600,
+    "dims": "16 1/4 x 12 1/2in (41.3 x 31.7",
+    "y": "1964"
+   }
+  ]
+ }
+]

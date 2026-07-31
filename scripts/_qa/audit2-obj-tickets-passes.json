@@ -1,0 +1,670 @@
+[
+ {
+  "id": "christies-auc-5101273",
+  "t": "The Beatles",
+  "objType": "ticket",
+  "n": 24,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 10423.13,
+  "bandLo": 840.41,
+  "bandHi": 15481.2,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 14265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3474.38
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 9265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 4632.5
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3317.4
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 9288.72
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4804699",
+  "t": "GLOUCESTERSHIRE V. AUSTRALIANS, 1902",
+  "objType": "ticket",
+  "n": 3,
+  "typeMatch": 1,
+  "yearMatch": 0,
+  "realized": 442.32,
+  "bandLo": 698.88,
+  "bandHi": 774.06,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "GLOUCESTERSHIRE V. AUSTRALIANS, 1880",
+    "type": "ticket",
+    "usd": 774.06
+   },
+   {
+    "t": "GLOUCESTERSHIRE V. AUSTRALIANS, 1878",
+    "type": "ticket",
+    "usd": 764.4
+   },
+   {
+    "t": "GLOUCESTERSHIRE V. AUSTRALIANS, 1884",
+    "type": "ticket",
+    "usd": 698.88
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4771370",
+  "t": "SHEFFIELD WEDNESDAY V. WEST BROMWICH ALBION, F.A.CUP FINAL M",
+  "objType": "ticket",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 1216.38,
+  "bandLo": 873.6,
+  "bandHi": 1528.8,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "SHEFFIELD WEDNESDAY V. WEST BROMWICH ALBION, F.A.C",
+    "type": "ticket",
+    "usd": 884.64
+   },
+   {
+    "t": "SHEFFIELD WEDNESDAY V. WEST BROMWICH ALBION F.A.CU",
+    "type": "ticket",
+    "usd": 1528.8
+   },
+   {
+    "t": "SHEFFIELD WEDNESDAY V. WEST BROMWICH ALBION F.A.CU",
+    "type": "ticket",
+    "usd": 873.6
+   },
+   {
+    "t": "SHEFFIELD WEDNESDAY V. ARSENAL, MATCH PROGRAMME 7/",
+    "type": "ticket",
+    "usd": 1061.57
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4717005",
+  "t": "John Lennon and Yoko Ono",
+  "objType": "ticket",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 2211.6,
+  "bandLo": 333.52,
+  "bandHi": 6571.31,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "John Lennon",
+    "type": "ticket",
+    "usd": 6571.31
+   },
+   {
+    "t": "John Lennon",
+    "type": "ticket",
+    "usd": 3722.82
+   },
+   {
+    "t": "John Lennon And Brian Epstein",
+    "type": "ticket",
+    "usd": 3504.7
+   },
+   {
+    "t": "JOHN LENNON AND PAUL MCCARTNEY",
+    "type": "ticket",
+    "usd": 333.52
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4493474",
+  "t": "BOLTON WANDERERS V. WEST HAM UNITED, F.A.CUP FINAL MATCH PRO",
+  "objType": "ticket",
+  "n": 12,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 1419.6,
+  "bandLo": 153.69,
+  "bandHi": 1970.48,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "BOLTON WANDERERS V. WEST HAM UNITED, F.A.CUP FINAL",
+    "type": "ticket",
+    "usd": 1050.31
+   },
+   {
+    "t": "BOLTON WANDERERS V. MANCHESTER CITY, F.A.CUP FINAL",
+    "type": "ticket",
+    "usd": 1747.2
+   },
+   {
+    "t": "BOLTON WANDERERS V. LEICESTER CITY, F.A.CUP FINAL,",
+    "type": "ticket",
+    "usd": 873.6
+   },
+   {
+    "t": "BOLTON WANDERERS V. PORTSMOUTH F.A.CUP FINAL MATCH",
+    "type": "ticket",
+    "usd": 1752.35
+   },
+   {
+    "t": "BOLTON WANDERERS V. MANCHESTER CITY F.A.CUP FINAL ",
+    "type": "ticket",
+    "usd": 1970.48
+   },
+   {
+    "t": "BOLTON WANDERERS V. PORTSMOUTH, F.A.CUP FINAL, MAT",
+    "type": "ticket",
+    "usd": 1204.28
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4493715",
+  "t": "ENGLAND V. SCOTLAND, INTERNATIONAL MATCH PROGRAMME, 4/4/1903",
+  "objType": "ticket",
+  "n": 8,
+  "typeMatch": 1,
+  "yearMatch": 0,
+  "realized": 4368,
+  "bandLo": 171.68,
+  "bandHi": 3712.8,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "ENGLAND V. SCOTLAND, INTERNATIONAL MATCH PROGRAMME",
+    "type": "ticket",
+    "usd": 3712.8
+   },
+   {
+    "t": "ENGLAND V. SCOTLAND INTERNATIONAL MATCH PROGRAMME",
+    "type": "ticket",
+    "usd": 1314.26
+   },
+   {
+    "t": "ENGLAND V. SCOTLAND INTERNATIONAL MATCH PROGRAMME,",
+    "type": "ticket",
+    "usd": 328.11
+   },
+   {
+    "t": "ENGLAND V. SCOTLAND INTERNATIONAL MATCH PROGRAMME,",
+    "type": "ticket",
+    "usd": 284.12
+   },
+   {
+    "t": "ENGLAND V. SCOTLAND INTERNATIONAL VIP MATCH PROGRA",
+    "type": "ticket",
+    "usd": 537.92
+   },
+   {
+    "t": "ENGLAND V. SCOTLAND INTERNATIONAL SOUVENIR MATCH P",
+    "type": "ticket",
+    "usd": 171.68
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4348243",
+  "t": "The Beatles",
+  "objType": "ticket",
+  "n": 24,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 984.32,
+  "bandLo": 840.41,
+  "bandHi": 15481.2,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 14265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3474.38
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 9265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 10423.13
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 4632.5
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3317.4
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4276628",
+  "t": "The Beatles",
+  "objType": "ticket",
+  "n": 24,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 3722.82,
+  "bandLo": 840.41,
+  "bandHi": 15481.2,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 14265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3474.38
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 9265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 10423.13
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 4632.5
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3317.4
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4251808",
+  "t": "BOLTON WANDERERS V. PORTSMOUTH F.A.CUP FINAL MATCH PROGRAMME",
+  "objType": "ticket",
+  "n": 12,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 832.18,
+  "bandLo": 153.69,
+  "bandHi": 1970.48,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "BOLTON WANDERERS V. PORTSMOUTH F.A.CUP FINAL MATCH",
+    "type": "ticket",
+    "usd": 1752.35
+   },
+   {
+    "t": "BOLTON WANDERERS V. PORTSMOUTH, F.A.CUP FINAL, MAT",
+    "type": "ticket",
+    "usd": 1204.28
+   },
+   {
+    "t": "BOLTON WANDERERS V. PORTSMOUTH F.A.CUP FINAL MATCH",
+    "type": "ticket",
+    "usd": 832.18
+   },
+   {
+    "t": "BOLTON WANDERERS V. PORTSMOUTH F.A. CUP FINAL MATC",
+    "type": "ticket",
+    "usd": 1152.68
+   },
+   {
+    "t": "BOLTON WANDERERS V. WEST HAM UNITED, F.A.CUP FINAL",
+    "type": "ticket",
+    "usd": 1419.6
+   },
+   {
+    "t": "BOLTON WANDERERS V. MANCHESTER CITY, F.A.CUP FINAL",
+    "type": "ticket",
+    "usd": 1747.2
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4153391",
+  "t": "Various Artists",
+  "objType": "ticket",
+  "n": 6,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 537.92,
+  "bandLo": 107.64,
+  "bandHi": 4358.75,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "Various Artists",
+    "type": "ticket",
+    "usd": 2773.75
+   },
+   {
+    "t": "Various Artists",
+    "type": "ticket",
+    "usd": 4358.75
+   },
+   {
+    "t": "Various Artists",
+    "type": "ticket",
+    "usd": 982.8
+   },
+   {
+    "t": "Various Artists",
+    "type": "ticket",
+    "usd": 984.32
+   },
+   {
+    "t": "VARIOUS ARTISTS",
+    "type": "ticket",
+    "usd": 517
+   },
+   {
+    "t": "VARIOUS ARTISTS",
+    "type": "ticket",
+    "usd": 107.64
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4152281",
+  "t": "ENGLAND V. WEST GERMANY INTERNATIONAL MATCH PROGRAMME",
+  "objType": "ticket",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 806.06,
+  "bandLo": 774.06,
+  "bandHi": 1824.66,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "ENGLAND V. WEST GERMANY, UNDER 23 INTERNATIONAL MA",
+    "type": "ticket",
+    "usd": 774.06
+   },
+   {
+    "t": "ENGLAND V. WEST GERMANY WORLD CUP FINAL MATCH PROG",
+    "type": "ticket",
+    "usd": 1204.28
+   },
+   {
+    "t": "ENGLAND V. WEST GERMANY WORLD CUP FINAL MATCH PROG",
+    "type": "ticket",
+    "usd": 922.14
+   },
+   {
+    "t": "ENGLAND V. WEST GERMANY WORLD CUP FINAL MATCH PROG",
+    "type": "ticket",
+    "usd": 1824.66
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-4152334",
+  "t": "ENGLAND V. WEST GERMANY WORLD CUP FINAL MATCH PROGRAMME, 30",
+  "objType": "ticket",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 922.14,
+  "bandLo": 774.06,
+  "bandHi": 1824.66,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "ENGLAND V. WEST GERMANY WORLD CUP FINAL MATCH PROG",
+    "type": "ticket",
+    "usd": 1204.28
+   },
+   {
+    "t": "ENGLAND V. WEST GERMANY WORLD CUP FINAL MATCH PROG",
+    "type": "ticket",
+    "usd": 1824.66
+   },
+   {
+    "t": "ENGLAND V. WEST GERMANY, UNDER 23 INTERNATIONAL MA",
+    "type": "ticket",
+    "usd": 774.06
+   },
+   {
+    "t": "ENGLAND V. WEST GERMANY INTERNATIONAL MATCH PROGRA",
+    "type": "ticket",
+    "usd": 806.06
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-3902598",
+  "t": "The Beatles",
+  "objType": "ticket",
+  "n": 24,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 3885.25,
+  "bandLo": 840.41,
+  "bandHi": 15481.2,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 14265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3474.38
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 9265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 10423.13
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 4632.5
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3317.4
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-3096838",
+  "t": "The Beatles",
+  "objType": "ticket",
+  "n": 24,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 7618.57,
+  "bandLo": 840.41,
+  "bandHi": 15481.2,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 14265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3474.38
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 9265
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 10423.13
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 4632.5
+   },
+   {
+    "t": "The Beatles",
+    "type": "ticket",
+    "usd": 3317.4
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-3047951",
+  "t": "Tottenham Hotspur v. Everton, match programme, 12/3/21, fold",
+  "objType": "ticket",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 677.27,
+  "bandLo": 203.18,
+  "bandHi": 710.41,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "Tottenham Hotspur v. Blackpool, match programme, 1",
+    "type": "ticket",
+    "usd": 710.41
+   },
+   {
+    "t": "Tottenham Hotspur v. Leicester City, F.A.Cup final",
+    "type": "ticket",
+    "usd": 671.99
+   },
+   {
+    "t": "Tottenham Hotspur v. Sheffield United, match progr",
+    "type": "ticket",
+    "usd": 523.02
+   },
+   {
+    "t": "Tottenham Hotspur v. Portsmouth, match programme, ",
+    "type": "ticket",
+    "usd": 203.18
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-1752404",
+  "t": "Red Star Belgrade v. Manchester United, match programme, 5/2",
+  "objType": "ticket",
+  "n": 3,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 3138.12,
+  "bandLo": 1708.53,
+  "bandHi": 7425.6,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "RED STAR BELGRADE V. MANCHESTER UNITED, MATCH PROG",
+    "type": "ticket",
+    "usd": 7425.6
+   },
+   {
+    "t": "Red Star Belgrade v. Manchester United, match prog",
+    "type": "ticket",
+    "usd": 2963.78
+   },
+   {
+    "t": "Red Star Belgrade v. Manchester United, match prog",
+    "type": "ticket",
+    "usd": 1708.53
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-380734",
+  "t": "F.A. Cup final, match programme, 29/4/33",
+  "objType": "ticket",
+  "n": 10,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 418.42,
+  "bandLo": 313.81,
+  "bandHi": 1359.85,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "F.A. Cup final, match programme, 26/4/30, with son",
+    "type": "ticket",
+    "usd": 732.23
+   },
+   {
+    "t": "F.A. Cup final, match programme, 21/4/28",
+    "type": "ticket",
+    "usd": 732.23
+   },
+   {
+    "t": "F.A. Cup final, match programme, 21/4/28",
+    "type": "ticket",
+    "usd": 732.23
+   },
+   {
+    "t": "F.A. Cup final, match programme, 29/4/39, (2 copie",
+    "type": "ticket",
+    "usd": 453.28
+   },
+   {
+    "t": "F.A. Cup final, match programme, 25/4/25",
+    "type": "ticket",
+    "usd": 1359.85
+   },
+   {
+    "t": "F.A. Cup final, match programme, 25/4/31",
+    "type": "ticket",
+    "usd": 697.36
+   }
+  ]
+ }
+]

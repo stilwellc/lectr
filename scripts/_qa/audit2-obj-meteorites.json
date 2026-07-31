@@ -1,0 +1,172 @@
+[
+ {
+  "id": "christies-auc-6204054",
+  "t": "COMPLETE SLICE OF A MOON ROCK — NWA 10309 Sahara Desert, Nor",
+  "objType": "other",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 8779.38,
+  "bandLo": 4742.5,
+  "bandHi": 18631.25,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "COMPLETE SLICE OF NWA 10023 — THE ONLY PLESSITIC P",
+    "type": "other",
+    "usd": 6436.25
+   },
+   {
+    "t": "COMPLETE SLICE OF WILLAMETTE METEORITE Iron – IIIA",
+    "type": "other",
+    "usd": 10162.5
+   },
+   {
+    "t": "COMPLETE SLICE OF THE SINGULAR GUJBA METEORITE Ach",
+    "type": "other",
+    "usd": 4742.5
+   },
+   {
+    "t": "COMPLETE SLICE OF THE ADMIRE PALLASITE PAL – Palla",
+    "type": "other",
+    "usd": 18631.25
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-6024322",
+  "t": "COMPLETE SLICE OF WILLAMETTE METEORITE Iron – IIIAB Clackama",
+  "objType": "other",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 10162.5,
+  "bandLo": 4742.5,
+  "bandHi": 18631.25,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "COMPLETE SLICE OF A MOON ROCK — NWA 10309 Sahara D",
+    "type": "other",
+    "usd": 8779.38
+   },
+   {
+    "t": "COMPLETE SLICE OF THE ADMIRE PALLASITE PAL – Palla",
+    "type": "other",
+    "usd": 18631.25
+   },
+   {
+    "t": "COMPLETE SLICE OF THE SINGULAR GUJBA METEORITE Ach",
+    "type": "other",
+    "usd": 4742.5
+   },
+   {
+    "t": "COMPLETE SLICE OF NWA 10023 — THE ONLY PLESSITIC P",
+    "type": "other",
+    "usd": 6436.25
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-5987734",
+  "t": "COMPLETE SLICE OF THE ADMIRE PALLASITE PAL – Pallasite Admir",
+  "objType": "other",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 18631.25,
+  "bandLo": 4742.5,
+  "bandHi": 10162.5,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "COMPLETE SLICE OF NWA 10023 — THE ONLY PLESSITIC P",
+    "type": "other",
+    "usd": 6436.25
+   },
+   {
+    "t": "COMPLETE SLICE OF WILLAMETTE METEORITE Iron – IIIA",
+    "type": "other",
+    "usd": 10162.5
+   },
+   {
+    "t": "COMPLETE SLICE OF A MOON ROCK — NWA 10309 Sahara D",
+    "type": "other",
+    "usd": 8779.38
+   },
+   {
+    "t": "COMPLETE SLICE OF THE SINGULAR GUJBA METEORITE Ach",
+    "type": "other",
+    "usd": 4742.5
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-5987737",
+  "t": "COMPLETE SLICE OF THE SINGULAR GUJBA METEORITE Achondrite – ",
+  "objType": "other",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 4742.5,
+  "bandLo": 6436.25,
+  "bandHi": 18631.25,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "COMPLETE SLICE OF A MOON ROCK — NWA 10309 Sahara D",
+    "type": "other",
+    "usd": 8779.38
+   },
+   {
+    "t": "COMPLETE SLICE OF WILLAMETTE METEORITE Iron – IIIA",
+    "type": "other",
+    "usd": 10162.5
+   },
+   {
+    "t": "COMPLETE SLICE OF THE ADMIRE PALLASITE PAL – Palla",
+    "type": "other",
+    "usd": 18631.25
+   },
+   {
+    "t": "COMPLETE SLICE OF NWA 10023 — THE ONLY PLESSITIC P",
+    "type": "other",
+    "usd": 6436.25
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-5987749",
+  "t": "COMPLETE SLICE OF NWA 10023 — THE ONLY PLESSITIC PALLASITE P",
+  "objType": "other",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 6436.25,
+  "bandLo": 4742.5,
+  "bandHi": 18631.25,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "COMPLETE SLICE OF A MOON ROCK — NWA 10309 Sahara D",
+    "type": "other",
+    "usd": 8779.38
+   },
+   {
+    "t": "COMPLETE SLICE OF THE ADMIRE PALLASITE PAL – Palla",
+    "type": "other",
+    "usd": 18631.25
+   },
+   {
+    "t": "COMPLETE SLICE OF WILLAMETTE METEORITE Iron – IIIA",
+    "type": "other",
+    "usd": 10162.5
+   },
+   {
+    "t": "COMPLETE SLICE OF THE SINGULAR GUJBA METEORITE Ach",
+    "type": "other",
+    "usd": 4742.5
+   }
+  ]
+ }
+]

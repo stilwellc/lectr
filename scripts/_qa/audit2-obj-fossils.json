@@ -1,0 +1,172 @@
+[
+ {
+  "id": "christies-auc-6154323",
+  "t": "AN ENGLISH AMMONITE LYME REGIS",
+  "objType": "other",
+  "n": 3,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 5006.25,
+  "bandLo": 1611.25,
+  "bandHi": 6385,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "AN ENGLISH AMMONITE LYME REGIS",
+    "type": "other",
+    "usd": 6385
+   },
+   {
+    "t": "AN ENGLISH AMMONITE CHARMOUTH, DORSET",
+    "type": "other",
+    "usd": 1611.25
+   },
+   {
+    "t": "An English Ammonite BURTON BRADSTOCK, DORSET",
+    "type": "other",
+    "usd": 4120
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-6069724",
+  "t": "AN ENGLISH AMMONITE CHARMOUTH, DORSET",
+  "objType": "other",
+  "n": 3,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 1611.25,
+  "bandLo": 4120,
+  "bandHi": 6385,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "An English Ammonite BURTON BRADSTOCK, DORSET",
+    "type": "other",
+    "usd": 4120
+   },
+   {
+    "t": "AN ENGLISH AMMONITE LYME REGIS",
+    "type": "other",
+    "usd": 6385
+   },
+   {
+    "t": "AN ENGLISH AMMONITE LYME REGIS",
+    "type": "other",
+    "usd": 5006.25
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-6069843",
+  "t": "AN IRIDESCENT AMMONITE CANADA",
+  "objType": "other",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 19335,
+  "bandLo": 15243.75,
+  "bandHi": 34380,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "AN IRIDESCENT AMMONITE CANADA",
+    "type": "other",
+    "usd": 16937.5
+   },
+   {
+    "t": "AN IRIDESCENT AMMONITE CANADA",
+    "type": "other",
+    "usd": 34380
+   },
+   {
+    "t": "AN IRIDESCENT AMMONITE CANADA",
+    "type": "other",
+    "usd": 21010
+   },
+   {
+    "t": "AN IRIDESCENT AMMONITE SOUTH DAKOTA, USA",
+    "type": "other",
+    "usd": 15243.75
+   }
+  ]
+ },
+ {
+  "id": "christies-auc-5105007",
+  "t": "FRANK STELLA Fossil Whale (first state)",
+  "objType": "other",
+  "n": 8,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 8750,
+  "bandLo": 4700,
+  "bandHi": 8750,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "FRANK STELLA Fossil Whale, from Moby Dick Engravin",
+    "type": "other",
+    "usd": 8750
+   },
+   {
+    "t": "FRANK STELLA Fossil Whale (first state), from Moby",
+    "type": "other",
+    "usd": 6250
+   },
+   {
+    "t": "FRANK STELLA Fossil Whale, from Moby Dick Engravin",
+    "type": "other",
+    "usd": 6875
+   },
+   {
+    "t": "FRANK STELLA Fossil Whale, from Moby Dick Engravin",
+    "type": "other",
+    "usd": 6250
+   },
+   {
+    "t": "FRANK STELLA Fossil Whale, from Moby Dick Engravin",
+    "type": "other",
+    "usd": 5400
+   },
+   {
+    "t": "FRANK STELLA Fossil Whale (First State)",
+    "type": "other",
+    "usd": 4800
+   }
+  ]
+ },
+ {
+  "id": "sothebys-5b5ef56d-17a2-4d23-8a2a-43e806da8d6a",
+  "t": "Megalodon Shark Tooth",
+  "objType": "other",
+  "n": 4,
+  "typeMatch": 1,
+  "yearMatch": null,
+  "realized": 25600,
+  "bandLo": 16640,
+  "bandHi": 48640,
+  "bandMed": null,
+  "poolSample": [
+   {
+    "t": "Megalodon Shark Tooth",
+    "type": "other",
+    "usd": 16640
+   },
+   {
+    "t": "Megalodon Shark Tooth",
+    "type": "other",
+    "usd": 17920
+   },
+   {
+    "t": "Megalodon Shark Tooth",
+    "type": "other",
+    "usd": 48640
+   },
+   {
+    "t": "Megalodon Shark Tooth",
+    "type": "other",
+    "usd": 24320
+   }
+  ]
+ }
+]

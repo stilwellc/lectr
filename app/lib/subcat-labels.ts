@@ -41,6 +41,8 @@ export const SUBCAT_LABELS: Record<string, string> = {
   'soviet': 'Soviet program', 'computing': 'Apple & computing', 'physics-figures': 'Scientists & physicists',
   'globes': 'Globes', 'telescopes': 'Telescopes', 'microscopes': 'Microscopes',
   'navigation': 'Navigation', 'medical': 'Medical', 'precision-clocks': 'Precision clocks',
+  // card eras
+  'era-vintage': 'Vintage cards (pre-1980)', 'era-classic': 'Classic cards (1980–99)', 'era-modern': 'Modern cards (2000+)',
   // art
   'prints': 'Prints & multiples', 'originals': 'Original works', 'sculpture': 'Sculpture & ceramics',
   'photographs': 'Photographs', 'books': 'Books',

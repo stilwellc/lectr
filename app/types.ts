@@ -353,6 +353,8 @@ export interface MarketAnalytics {
 export interface MarketStats {
   lastUpdated: string;
   totalLotsTracked: number;
+  /** SOLD-only count for this slug (totalLotsTracked includes live lots) */
+  totalSoldTracked?: number;
   avgPriceLast12Months: number;
   medianPriceLast12Months: number;
   recordPrice: number;

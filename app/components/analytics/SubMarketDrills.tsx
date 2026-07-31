@@ -58,11 +58,18 @@ function readCell(r: DrillRow) {
   );
 }
 
-export default function SubMarketDrills({ marketData, scope }: { marketData: MarketData | null; scope: string }) {
+export default function SubMarketDrills({ marketData, scope, parentFilter, title, method }: {
+  marketData: MarketData | null; scope: string;
+  /** show only rows whose parent matches (e.g. a watch maker's families) */
+  parentFilter?: string;
+  title?: string; method?: string;
+}) {
   const drills = marketData?.drills;
   if (!drills) return null;
   let rows: DrillRow[] = [];
-  if (scope === 'all') {
+  if (parentFilter) {
+    rows = (drills[scope] || []).filter(r => r.parent === parentFilter);
+  } else if (scope === 'all') {
     // cross-market view: each vertical's strongest few, index reads first
     const pool = Object.values(drills).flat();
     const rank = (r: DrillRow) => (r.readType === 'index' ? 0 : r.readType === 'demand' ? 1 : 2);
@@ -76,8 +83,8 @@ export default function SubMarketDrills({ marketData, scope }: { marketData: Mar
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
-        <span className="ray-vm-title">Sub-markets</span>
-        <span className="ray-vm-method">performance by sub-category</span>
+        <span className="ray-vm-title">{title ?? 'Sub-markets'}</span>
+        <span className="ray-vm-method">{method ?? 'performance by sub-category'}</span>
       </div>
       <div className="ray-dr-rows">
         {rows.map(r => (

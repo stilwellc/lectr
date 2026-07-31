@@ -547,6 +547,7 @@ export function stampCultureAxes(lots: Lot[]): number {
 // ── ★5 · restampIdentityKeys — formKey re-derivation, every lot, every build.
 //    MUST run LAST (after every category flip, with the current classifyForm).
 const SPORTS_SLUGS_NORM = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
+const SPORTS_FORMKEY_BLOCK = new Set(['jewelry', 'wristwatch', 'pocket-watch', 'clock', 'mineral', 'fossil', 'space', 'instrument', 'tech']);
 
 export function restampIdentityKeys(lots: Lot[]): number {
   let restamped = 0;
@@ -554,9 +555,11 @@ export function restampIdentityKeys(lots: Lot[]): number {
     const fresh = classifyForm({ title: l.title, medium: l.medium, category: l.category });
     const cur = (l as Lot & { formKey?: string }).formKey;
     if (cur !== fresh) {
-      // sports-slug shield: never stamp 'jewelry' minted by the set-of gate
-      // ("complete set of chicago bulls championship rings")
-      if (SPORTS_SLUGS_NORM.has(l.artist) && fresh === 'jewelry') {
+      // sports-slug shield: never stamp cross-vertical classes on sports lots —
+      // 'jewelry' from the set-of gate ("complete set of chicago bulls
+      // championship rings"), 'wristwatch'/'mineral' etc. from watch-brand or
+      // material words in memorabilia titles (measured garbage in served rows)
+      if (SPORTS_SLUGS_NORM.has(l.artist) && SPORTS_FORMKEY_BLOCK.has(fresh)) {
         (l as Lot & { formKey?: string }).formKey = undefined;
         continue;
       }

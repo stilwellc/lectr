@@ -23,7 +23,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constan
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming } from '../../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
 import { dealScore, signalMagnitude } from '../../lib/comps';
@@ -33,6 +33,8 @@ import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import CountUp from '../../components/CountUp';
 import SettlementSlip from '../../components/SettlementSlip';
+import { sportOfLot } from '../../lib/submarkets';
+import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedToolbar';
 import { weekDaysFor } from '../../components/HammerWeek';
@@ -417,7 +419,7 @@ export default function TerminalHomePage() {
       arr = arr.filter(l => vset.has(l.artist));
     }
     if (f.maker) arr = arr.filter(l => l.artist === f.maker);
-    if (f.sport) arr = arr.filter(l => (sportOf(l.title) || 'Other') === f.sport);
+    if (f.sport) arr = arr.filter(l => (sportOfLot(l) || 'Other') === f.sport);
     if (f.category) arr = arr.filter(l => l.category === f.category);
     if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
@@ -475,28 +477,13 @@ export default function TerminalHomePage() {
     [marketLots]
   );
 
-  const soldMedian12 = useMemo(() => {
-    const cutoff = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
-    const px = sold.filter(l => l.saleDate >= cutoff).map(l => l.priceUsd!).sort((a, b) => a - b);
-    if (px.length < 5) return null;
-    return px.length % 2 ? px[px.length >> 1] : (px[px.length / 2 - 1] + px[px.length / 2]) / 2;
-  }, [sold]);
-
-  const recordSale = useMemo(() => {
-    let best: { priceUsd: number; artist: string } | null = null;
-    for (const [slug, s] of Object.entries(marketStats)) {
-      if ((s.recordPrice || 0) > (best?.priceUsd || 0)) best = { priceUsd: s.recordPrice, artist: slug };
-    }
-    return best;
-  }, [marketStats]);
-
   const soldMedianPct = useMemo(() => {
+    // hammer-basis via overEstimatePct — raw priceUsd is premium-inclusive and
+    // comparing it to hammer-basis estimates overstated this figure ~25pts
     const perf: number[] = [];
     for (const l of sold) {
-      const lo = l.estimateLow || 0;
-      const hi = l.estimateHigh || 0;
-      const mid = lo && hi ? (lo + hi) / 2 : lo || hi;
-      if (mid > 0 && l.priceUsd) perf.push(((l.priceUsd - mid) / mid) * 100);
+      const pct = overEstimatePct(l);
+      if (pct != null) perf.push(pct);
     }
     if (!perf.length) return null;
     perf.sort((a, b) => a - b);
@@ -516,23 +503,6 @@ export default function TerminalHomePage() {
     for (const r of recentRows) if (r.saleDate && r.saleDate > latest) latest = r.saleDate;
     return latest;
   }, [recentRows]);
-
-  const totalRealized = useMemo(
-    () => Object.values(marketStats).reduce((s, x) => s + (x.totalAuctionRevenue || 0), 0),
-    [marketStats]
-  );
-
-  const topArtist = useMemo(() => {
-    const topEntry = Object.entries(marketStats)
-      .sort((a, b) => (b[1].totalAuctionRevenue || 0) - (a[1].totalAuctionRevenue || 0))[0];
-    return topEntry ? (ARTIST_LABEL[topEntry[0]] || topEntry[0]) : '';
-  }, [marketStats]);
-
-  const hammerWeek = useMemo(() => {
-    const days = new Set(weekDaysFor(crawlDay));
-    const weekLots = upcoming.filter(l => days.has(l.saleDate?.slice(0, 10) || ''));
-    return { count: weekLots.length, houses: new Set(weekLots.map(l => l.auctionHouse)).size };
-  }, [upcoming, crawlDay]);
 
   const nextHammer = useMemo(() => {
     // "today / tomorrow / in Nd" reads to the USER — count from the reader's
@@ -802,7 +772,7 @@ export default function TerminalHomePage() {
                                 <div className="t-title">{craftTitle(lot.title)}</div>
                               </td>
                               <td>{lot.auctionHouse}</td>
-                              <td className="t-cat">{CAT_LABEL[lot.category] || '—'}</td>
+                              <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
                               <td className="t-date">{formatDate(lot.saleDate)}</td>
                               <td className="num t-days">
                                 {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}

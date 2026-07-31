@@ -263,7 +263,7 @@ export default function AboutPage() {
         </Section>
       </main>
 
-      <Colophon lotCount={meta.totalLots} houseCount={meta.sources.length} record={null} />
+      <Colophon record={null} />
     </div>
   );
 }

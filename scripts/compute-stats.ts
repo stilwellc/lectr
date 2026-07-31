@@ -86,6 +86,7 @@ export function computeStats(lots: AuctionLot[], existingStats: MarketStats | nu
   return {
     lastUpdated: now.toISOString(),
     totalLotsTracked: lots.length,
+    totalSoldTracked: sold.length,
     avgPriceLast12Months: avg,
     medianPriceLast12Months: median,
     recordPrice: record?.priceUsd || existingStats?.recordPrice || 0,

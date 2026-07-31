@@ -323,11 +323,10 @@ export function CallPlate({
  * stands on. One gesture, then quiet.
  */
 export function Colophon({ record }: {
-  // lotCount/houseCount stay in the contract (call sites pass them) but the
-  // slim colophon no longer prints the stat trio — THE SETTLEMENT one scroll
-  // up already states it.
-  lotCount: number;
-  houseCount: number;
+  // lotCount/houseCount are legacy contract — the slim colophon never prints
+  // them; optional so call sites can drop their stale meta.json imports.
+  lotCount?: number;
+  houseCount?: number;
   /** the backtest's flagged record — rendered only when passed; pages with a
       proofstrip/settlement pass null and get the slim "See the record" line */
   record?: { n: number; medianPerfPct: number } | null;

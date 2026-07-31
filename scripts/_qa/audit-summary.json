@@ -1,0 +1,161 @@
+{
+ "summary": {
+  "flagged": 20,
+  "printCuedOriginals": 104,
+  "origCuedPrints": 67,
+  "art": {
+   "flags": 18,
+   "byConf": {
+    "low": 3,
+    "very-high": 2,
+    "medium": 3,
+    "high": 10
+   },
+   "avgCatMatch": 0.99,
+   "avgFormMatch": 1,
+   "avgDims": 0.37,
+   "worstAreaRatio": 3.4,
+   "avgPlayerMatch": null,
+   "avgObjTypeMatch": null
+  },
+  "watches": {
+   "flags": 2,
+   "byConf": {
+    "high": 2
+   },
+   "avgCatMatch": 1,
+   "avgFormMatch": 0.5,
+   "avgDims": 0,
+   "worstAreaRatio": 0,
+   "avgPlayerMatch": null,
+   "avgObjTypeMatch": null
+  }
+ },
+ "sniffSamples": [
+  {
+   "id": "bonhams-32662-178",
+   "cat": "original",
+   "t": "La lanceur de couteaux, pl. 14, from Jazz (The Knife Thrower, from Jazz)"
+  },
+  {
+   "id": "bonhams-32236-72",
+   "cat": "original",
+   "t": "Portrait de Pepe Illo, from El Carnet de 'La Tauromaquia' de Pape Illo"
+  },
+  {
+   "id": "bonhams-31708-7",
+   "cat": "original",
+   "t": "Beethoven synthetic polymer paint on HMP paper 31 1/2 x 23 3/4 in (80 x 60.3 cm)"
+  },
+  {
+   "id": "bonhams-31873-198",
+   "cat": "original",
+   "t": "Three plates, from Wild Raspberries 3"
+  },
+  {
+   "id": "bonhams-30830-140",
+   "cat": "original",
+   "t": "Purple Cows, from Stamped Indelibly"
+  },
+  {
+   "id": "bonhams-31637-121",
+   "cat": "original",
+   "t": "Profil et femme nue; Sculpture, from Six Contes Fantastiques 2"
+  },
+  {
+   "id": "bonhams-31099-107",
+   "cat": "original",
+   "t": "Demoiselle; Femme-Fleur, from Corps Perdu"
+  },
+  {
+   "id": "bonhams-30871-214",
+   "cat": "original",
+   "t": "Denmark, Ege Axminster, dated 1981, wool pile, limited edition of which this is "
+  },
+  {
+   "id": "bonhams-30481-125",
+   "cat": "original",
+   "t": "Le viol, V, from the Vollard Suite"
+  },
+  {
+   "id": "bonhams-29529-12",
+   "cat": "original",
+   "t": "La Piscine A; B, from Verve (2 works)"
+  },
+  {
+   "id": "bonhams-29523-52",
+   "cat": "original",
+   "t": "L'enterrement de Pierrot, from Jazz"
+  },
+  {
+   "id": "bonhams-29509-57",
+   "cat": "original",
+   "t": "L'avaleur de Sabres, pl. 13, from Jazz"
+  },
+  {
+   "id": "bonhams-30249-56",
+   "cat": "original",
+   "t": "Nu Au Collier, Plate II from Six Contes Fantasques"
+  },
+  {
+   "id": "bonhams-29499-314",
+   "cat": "original",
+   "t": "Purple Cows, from Stamped Indelibly"
+  },
+  {
+   "id": "bonhams-30353-114",
+   "cat": "original",
+   "t": "Le Loup, from Jazz"
+  },
+  {
+   "id": "bonhams-29487-124",
+   "cat": "original",
+   "t": "14 Coloring Book Plates, from Tony Shafrazi Catalogue 15"
+  },
+  {
+   "id": "bonhams-29487-40",
+   "cat": "original",
+   "t": "L'avaleur de Sabres, pl. 13, from Jazz"
+  },
+  {
+   "id": "bonhams-29476-236",
+   "cat": "original",
+   "t": "Purple Cows, from Stamped Indelibly"
+  },
+  {
+   "id": "bonhams-29476-207",
+   "cat": "original",
+   "t": "Dead End 2, from Rusty Signs"
+  },
+  {
+   "id": "bonhams-29476-69",
+   "cat": "original",
+   "t": "One Plate, from Amitiés de Montmartre"
+  },
+  {
+   "id": "bonhams-29353-73",
+   "cat": "original",
+   "t": "Caricature, from Pierres"
+  },
+  {
+   "id": "bonhams-29283-53",
+   "cat": "original",
+   "t": "Mammy, from the Myths Suite, 1981"
+  },
+  {
+   "id": "bonhams-29220-24",
+   "cat": "original",
+   "t": "Mao, from The New York Collection for Stockholm"
+  },
+  {
+   "id": "bonhams-30123-137",
+   "cat": "original",
+   "t": "15 Coloring Book Plates, from Tony Shafrazi Catalogue 15"
+  },
+  {
+   "id": "bonhams-30123-81",
+   "cat": "original",
+   "t": "Two plates, from Imaginary Portraits 2"
+  }
+ ]
+}
