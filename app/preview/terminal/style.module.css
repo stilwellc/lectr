@@ -3458,8 +3458,8 @@ a.recordObj:focus-visible {
 /* the seal, pressed as a red ink stamp over the totals */
 .rcptStamp {
   position: absolute;
-  right: 12px;
-  top: 88px;
+  left: 10px;
+  bottom: 58px;
   width: 92px;
   transform: rotate(-14deg);
   opacity: 0.5;
@@ -3485,7 +3485,7 @@ a.recordObj:focus-visible {
   .flagTitle { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 13.5px; }
   .flagSignal { font-size: 11px; padding: 3px 9px; }
   .engineLine { font-size: 12px; margin-inline: 24px; }
-  .rcptStamp { top: 96px; width: 76px; }
+  .rcptStamp { bottom: 64px; width: 76px; }
   .rcptStamp .seal { width: 76px; }
 }
 

@@ -101,7 +101,7 @@ export default function OG() {
         {backtest.flagged.n > 500 && (
           <div style={{ display: 'flex', fontSize: 21, color: '#A19B8D', marginTop: 'auto', gap: 7 }}>
             <span>flagged calls hammered</span>
-            <span style={{ color: '#2FBF71', fontWeight: 700 }}>{`+${(backtest.flagged as { hammerMedianPct?: number }).hammerMedianPct ?? backtest.flagged.medianPerfPct}% median`}</span>
+            <span style={{ color: '#2FBF71', fontWeight: 700 }}>{`+${backtest.flagged.medianPerfPct}% median`}</span>
             <span>{`over estimates · ${backtest.flagged.n.toLocaleString()} replayed sales`}</span>
           </div>
         )}

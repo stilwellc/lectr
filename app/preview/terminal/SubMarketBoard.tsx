@@ -363,8 +363,8 @@ function ValueReceipt({ r, play }: { r: Receipts; play: boolean }) {
         <div className={styles.rcptSub}>backtest receipt — every flag replayed against history</div>
         <div className={styles.rcptRule} />
         <div className={styles.rcptRow}><span>Replayed sales</span><span className={styles.rcptDots} /><span>{fmtInt(r.n)}</span></div>
-        <div className={styles.rcptRow}><span>Flagged · median vs est</span><span className={styles.rcptDots} /><span className={styles.rcptUp}>{fmtPct(r.flaggedPct)}</span></div>
-        <div className={styles.rcptRow}><span>Unflagged</span><span className={styles.rcptDots} /><span className={styles.rcptDown}>{fmtPct(r.unflaggedPct)}</span></div>
+        <div className={styles.rcptRow}><span>Flagged · median vs est</span><span className={styles.rcptDots} /><span className={r.flaggedPct >= 0 ? styles.rcptUp : styles.rcptDown}>{fmtPct(r.flaggedPct)}</span></div>
+        <div className={styles.rcptRow}><span>Unflagged</span><span className={styles.rcptDots} /><span className={r.unflaggedPct >= 0 ? styles.rcptUp : styles.rcptDown}>{fmtPct(r.unflaggedPct)}</span></div>
         <div className={styles.rcptRule} />
         <div className={`${styles.rcptRow} ${styles.rcptTotal}`}><span>The edge (flag − rest)</span><span className={styles.rcptDots} /><span>{spread >= 0 ? '+' : '−'}{Math.abs(spread).toFixed(1)} pts</span></div>
         <div className={styles.rcptRule} />

@@ -692,8 +692,8 @@ export default function TerminalHomePage() {
                     variant={mounted && isMobile ? 'mobile' : 'desktop'}
                     paper
                     receipts={backtest ? {
-                      flaggedPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct,
-                      unflaggedPct: backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct,
+                      flaggedPct: backtest.flagged.medianPerfPct,
+                      unflaggedPct: backtest.unflagged.medianPerfPct,
                       n: backtest.flagged.n,
                       asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
                     } : null}

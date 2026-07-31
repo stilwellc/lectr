@@ -311,15 +311,15 @@ export default function ValuePage() {
                 cells={[
                   {
                     k: 'Flagged lots hammered',
-                    v: fmtSignedPct(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct),
-                    signed: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct,
-                    sub: `median hammer vs estimate · ${backtest.flagged.n.toLocaleString()} calls${backtest.flagged.hammerMedianPct != null ? ` · +${backtest.flagged.medianPerfPct}% with premium` : ''}`,
+                    v: fmtSignedPct(backtest.flagged.medianPerfPct),
+                    signed: backtest.flagged.medianPerfPct,
+                    sub: `median realized vs estimate · ${backtest.flagged.n.toLocaleString()} calls${backtest.flagged.hammerMedianPct != null ? ` · ${fmtSignedPct(backtest.flagged.hammerMedianPct)} hammer-only` : ''}`,
                   },
                   {
                     k: 'Unflagged hammered',
-                    v: fmtSignedPct(backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct),
-                    signed: backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct,
-                    sub: <>the signal&rsquo;s edge: {(backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct) - (backtest.unflagged.hammerMedianPct ?? backtest.unflagged.medianPerfPct)} pts</>,
+                    v: fmtSignedPct(backtest.unflagged.medianPerfPct),
+                    signed: backtest.unflagged.medianPerfPct,
+                    sub: <>the signal&rsquo;s edge: {backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</>,
                   },
                   {
                     k: 'Beat their high estimate',
@@ -334,8 +334,8 @@ export default function ValuePage() {
                       }
                     : {
                         k: '“Above market” calls',
-                        v: fmtSignedPct(backtest.above.hammerMedianPct ?? backtest.above.medianPerfPct),
-                        signed: backtest.above.hammerMedianPct ?? backtest.above.medianPerfPct,
+                        v: fmtSignedPct(backtest.above.medianPerfPct),
+                        signed: backtest.above.medianPerfPct,
                         sub: 'underperformed both — the ordering holds',
                       },
                 ]}
