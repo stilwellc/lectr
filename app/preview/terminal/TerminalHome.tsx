@@ -390,7 +390,12 @@ export default function TerminalHomePage() {
     const CONF: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, low: 0 };
     const wallSet = new Set(wallItems.map(w => w.lot.id));
     const cands = upcoming
-      .filter(l => l.imageUrl && belowIds.has(l.id))
+      .filter(l => l.imageUrl && belowIds.has(l.id)
+        // the engine's showcase must be ACTIONABLE: live by the true sale day
+        // AND, when the close time is known, the clock not yet run out (a
+        // timed lot that closed earlier today slips day-level guards)
+        && isLiveUpcoming(l) && !l.resultsPending
+        && (!l.saleDateTime || Date.parse(l.saleDateTime) > Date.now()))
       .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
       .filter((x): x is { lot: AuctionLot; signal: NonNullable<ReturnType<typeof lotSignal>> } =>
         !!x.signal && x.signal.label === 'Below Market')

@@ -3723,3 +3723,11 @@ text.chartAnno.pctData { font-family: var(--font-mono-data), monospace; }
 @media (prefers-reduced-motion: reduce) {
   .chartTerminusHalo { animation: none; opacity: 0; }
 }
+
+/* the engine chapter's CTA — under the hero, centered */
+.engineCtaRow { text-align: center; margin-top: 18px; }
+.engineCtaRow .roomPill { margin-top: 0; }
+@media (max-width: 900px) {
+  .engineCtaRow { margin-top: 14px; padding: 0 24px; }
+  .engineCtaRow .roomPill { display: block; margin: 0; }
+}

@@ -485,6 +485,9 @@ export default function SubMarketBoard({
             <>
               <Chapter no="01" label="The engine" />
               <EngineHero h={hero} onOpen={onOpenLot} />
+              <div className={styles.engineCtaRow}>
+                <a href="/value" className={styles.roomPill}>See all value lots →</a>
+              </div>
             </>
           )}
 

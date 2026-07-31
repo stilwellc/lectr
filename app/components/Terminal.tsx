@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
-import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct } from '../utils';
+import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { lotFitsMarket, signalMagnitude } from '../lib/comps';
 import Flick from './Flick';
@@ -16,11 +16,13 @@ import Flick from './Flick';
  */
 
 export function daysWord(dateStr: string): string {
-  const t = new Date(dateStr).getTime();
-  if (isNaN(t)) return 'scheduled';          // never render "in NaNd" on a bad date
-  const days = Math.ceil((t - Date.now()) / 86_400_000);
-  // sign-aware: a lot that hammered 10 days ago must never read "today" —
-  // past dates say so in the past tense
+  // CALENDAR-DAY arithmetic against the reader's LOCAL day. The old
+  // `new Date(dateStr) - Date.now()` parsed the date as UTC MIDNIGHT, so a
+  // sale happening TODAY read "hammered 1d ago" for any US viewer after
+  // ~8pm — both day-strings must be compared in the same frame.
+  const day = (dateStr || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 'scheduled';
+  const days = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${localToday()}T00:00:00Z`)) / 86_400_000);
   if (days < 0) return `hammered ${-days}d ago`;
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
@@ -41,7 +43,15 @@ export function pickCall(lots: AuctionLot[], allLots: AuctionLot[], market: Mark
   // later). Results-pending lots have already hammered; they belong in the feed,
   // never headlining the call as if you could still bid.
   const deals = lots
-    .filter(l => l.status === 'upcoming' && l.saleDate && l.saleDate >= today && !l.resultsPending)
+    // isLiveUpcoming judges the TRUE sale day (saleDateTime-aware), the same
+    // predicate the feed uses — a lot whose crawl-string saleDate is today but
+    // whose true day already passed can no longer headline as the call.
+    .filter(l => isLiveUpcoming(l, today) && !l.resultsPending
+      // ACTIONABLE means the clock hasn't run out: a timed lot that closed
+      // earlier TODAY still carries saleDate == today and slips day-level
+      // guards — when we know the close time, the call requires it to be
+      // in the future.
+      && (!l.saleDateTime || Date.parse(l.saleDateTime) > Date.now()))
     .filter(l => market === 'all' || lotFitsMarket(l, market))
     .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
     .filter(d => d.signal && d.signal.label === 'Below Market' && CONF_RANK[d.signal.confidence || 'low'] >= 1)
