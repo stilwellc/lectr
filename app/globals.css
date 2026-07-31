@@ -2520,14 +2520,34 @@ body {
 
 /* the watchlist strip — the rail answers "what changed" in one card */
 .ray-watchstrip {
+  position: relative;
   display: block;
   background: var(--panel);
   border: 1px solid var(--hairline);
+  border-radius: 12px;
   padding: 12px 16px 14px;
   text-decoration: none;
   color: inherit;
+  overflow: hidden;
   transition: background 120ms var(--ease-ui);
 }
+/* the dash field — staggered falling ticks (the market's rain, stilled).
+   Two offset tile layers for irregularity; same butter-hairline tone the
+   panel already speaks, so only texture is added, never new color. */
+.ray-watchstrip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160'%3E%3Cg fill='%23e8dab6' fill-opacity='0.11'%3E%3Crect x='10' y='8' width='1.5' height='34'/%3E%3Crect x='10' y='92' width='1.5' height='18'/%3E%3Crect x='34' y='48' width='1.5' height='52'/%3E%3Crect x='34' y='132' width='1.5' height='20'/%3E%3Crect x='58' y='0' width='1.5' height='22'/%3E%3Crect x='58' y='64' width='1.5' height='40'/%3E%3Crect x='82' y='28' width='1.5' height='16'/%3E%3Crect x='82' y='108' width='1.5' height='44'/%3E%3Crect x='106' y='6' width='1.5' height='46'/%3E%3Crect x='106' y='86' width='1.5' height='26'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='190'%3E%3Cg fill='%23e8dab6' fill-opacity='0.06'%3E%3Crect x='22' y='30' width='1.5' height='40'/%3E%3Crect x='22' y='120' width='1.5' height='24'/%3E%3Crect x='72' y='0' width='1.5' height='30'/%3E%3Crect x='72' y='84' width='1.5' height='48'/%3E%3Crect x='122' y='52' width='1.5' height='20'/%3E%3Crect x='122' y='150' width='1.5' height='36'/%3E%3C/g%3E%3C/svg%3E");
+  /* the text stays sovereign: the field thins toward the left where the
+     copy sits */
+  -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,0.35), #000 55%);
+  mask-image: linear-gradient(90deg, rgba(0,0,0,0.35), #000 55%);
+}
+.ray-watchstrip > * { position: relative; }
 .ray-watchstrip:hover { background: var(--color-hover-item); }
 .ray-watchstrip-k { display: block; font-size: 11.5px; font-weight: 650; color: var(--color-text-muted); margin-bottom: 6px; }
 .ray-watchstrip-line { display: block; font-size: 13.5px; color: var(--color-text-secondary); line-height: 1.5; }
