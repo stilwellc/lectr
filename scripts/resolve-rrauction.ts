@@ -28,6 +28,9 @@
  *   --sale <id>  crawl one sale id (default: discover current sales)
  */
 
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import type { AuctionLot, LotCategory } from '../app/types';
 import { routeRRLot } from './rr-auction';
@@ -149,27 +152,33 @@ const galleryUrl = (saleId: string, p: number, cat: string) =>
 /** paginate one gallery view (a cat tab) until a page adds no new lotIds.
  *  Throws if CF walls the FIRST page of the all-lots view (sale unreadable —
  *  fail loud, never silently crawl 0); mid-run walls warn and truncate. */
-async function crawlView(browser: Browser, saleId: string, cat: string, seen: Set<string>, lots: RawLot[], maxPages: number): Promise<void> {
+async function crawlView(browser: Browser, saleId: string, cat: string, seen: Set<string>, lots: RawLot[], maxPages: number): Promise<'end' | 'ceiling' | 'wall'> {
   for (let p = 1; p <= maxPages; p++) {
     const r = await nav(browser, galleryUrl(saleId, p, cat), '.auction-item__title', extractPage);
     if (r.challenged) {
       if (cat === '0' && p === 1) throw new Error(`[rr] sale ${saleId}: CF challenge never cleared on the all-lots view — blocked, not empty`);
       console.warn(`[rr] sale ${saleId} cat=${cat} page ${p}: CF wall mid-crawl — view truncated`);
-      break;
+      return 'wall';
     }
     const rows = r.value ?? [];
-    if (!rows.length) break;            // rendered page, no cards → past the end
+    if (!rows.length) return 'end';     // rendered page, no cards → past the end
     const fresh = rows.filter((x) => !seen.has(x.lotId));
-    if (!fresh.length) break;           // clamped to last page → done
+    if (!fresh.length) return 'end';    // clamped to last page → done
     fresh.forEach((x) => seen.add(x.lotId));
     lots.push(...fresh);
   }
+  return 'ceiling'; // still yielding fresh lots at maxPages — view may be truncated
 }
 
 /** crawl a sale COMPLETELY: the all-lots view plus every category tab the
  *  sale page advertises (big RR sales partition lots across cat= views —
  *  cat=0 alone is not guaranteed to expose everything). Dedup by lotId. */
-async function crawlSale(browser: Browser, saleId: string, maxPages: number): Promise<{ lots: RawLot[]; saleName: string }> {
+/** catSweep 'always' (live nightly): crawl every category tab — belt and
+ *  braces for the handful of live sales. 'auto' (archive): the all-lots view's
+ *  own pagination covers whole sales (verified: sale 400 pages 1–50 ≈ all
+ *  ~1.2k lots), so tabs are only swept when cat=0 hit the page ceiling and
+ *  might be truncated — a 4–5× page saving across a 700-sale backfill. */
+async function crawlSale(browser: Browser, saleId: string, maxPages: number, catSweep: 'always' | 'auto' = 'always'): Promise<{ lots: RawLot[]; saleName: string; saleClosed: string | null }> {
   const seen = new Set<string>();
   const lots: RawLot[] = [];
   let saleName = `RR Auction ${saleId}`;
@@ -177,6 +186,12 @@ async function crawlSale(browser: Browser, saleId: string, maxPages: number): Pr
   // land on the sale once: sale name + the set of category tabs
   const landing = await nav(browser, galleryUrl(saleId, 1, '0'), '.auction-item__title', async (page) => ({
     title: await page.title(),
+    // closed sales carry "Auction Closed April 23, 2026" in the sale header —
+    // the ONLY sale-level date on the gallery page, and the archive's saleDate
+    closed: await page.evaluate(() => {
+      const m = document.body.innerText.match(/Auction Closed\s+([A-Za-z]+\.?\s+\d{1,2},\s*\d{4})/);
+      return m ? m[1] : null;
+    }),
     cats: await page.evaluate(() => {
       const set = new Set<string>();
       document.querySelectorAll('a[href*="cat="]').forEach((a) => {
@@ -190,13 +205,25 @@ async function crawlSale(browser: Browser, saleId: string, maxPages: number): Pr
   if (t && !/just a moment/i.test(t)) saleName = t.split('|')[0].trim() || saleName;
   const cats = landing.value?.cats ?? [];
 
-  await crawlView(browser, saleId, '0', seen, lots, maxPages);
-  for (const cat of cats) {
-    if (cat === '0') continue;
-    await crawlView(browser, saleId, cat, seen, lots, maxPages);
+  const allView = await crawlView(browser, saleId, '0', seen, lots, maxPages);
+  if (catSweep === 'always' || allView === 'ceiling') {
+    for (const cat of cats) {
+      if (cat === '0') continue;
+      await crawlView(browser, saleId, cat, seen, lots, maxPages);
+    }
   }
   console.log(`[rr] sale ${saleId}: ${lots.length} unique lots across ${1 + cats.filter((c) => c !== '0').length} views`);
-  return { lots, saleName };
+  return { lots, saleName, saleClosed: isoDate(landing.value?.closed) };
+}
+
+const MONTH_NUM: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+/** "April 23, 2026" / "Apr. 23, 2026" → "2026-04-23" (null on anything else) */
+function isoDate(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const m = s.match(/([A-Za-z]+)\.?\s+(\d{1,2}),\s*(\d{4})/);
+  if (!m) return null;
+  const mm = MONTH_NUM[m[1].toLowerCase().slice(0, 3)];
+  return mm ? `${m[3]}-${mm}-${m[2].padStart(2, '0')}` : null;
 }
 
 /** discover current sale ids from the auctions index. The index links sales as
@@ -221,15 +248,18 @@ async function discoverSaleIds(browser: Browser): Promise<string[]> {
 }
 
 /** RR-native (USD) lot → a v2-correct AuctionLot */
-function toLot(r: RawLot, slug: string, saleId: string, saleName: string): AuctionLot {
+function toLot(r: RawLot, slug: string, saleId: string, saleName: string, arch?: { saleDate: string } | null): AuctionLot {
   const market = ARTIST_MARKET[slug];
   const category: LotCategory = 'object'; // memorabilia/documents/hardware are objects
   const realizedUsd = r.realized;
   const estLowUsd = r.estLow;
   const estHighUsd = r.estHigh;
+  // archive lots: the sale-header close date is truth; a non-sold card in a
+  // CLOSED sale is a pass, not an upcoming lot
+  const status = arch ? (r.status === 'sold' ? 'sold' : 'bought_in') : r.status;
   // saleDate from the countdown MM/DD, year inferred to the nearest future
-  let saleDate = new Date().toISOString().slice(0, 10);
-  if (r.endsMMDD) {
+  let saleDate = arch ? arch.saleDate : new Date().toISOString().slice(0, 10);
+  if (!arch && r.endsMMDD) {
     const [mm, dd] = r.endsMMDD.split('/').map(Number);
     const now = new Date();
     let y = now.getUTCFullYear();
@@ -250,20 +280,119 @@ function toLot(r: RawLot, slug: string, saleId: string, saleName: string): Aucti
     lotNumber: r.lotNumber,
     // v2 money — USD native
     nativeCurrency: 'USD', fxRate: 1, fxAsOf: saleDate,
-    hammerNative: realizedUsd, premiumNative: realizedUsd, realizedNative: realizedUsd,
-    hammerUsd: realizedUsd, premiumUsd: realizedUsd, realizedUsd,
+    // RR renders "Sold For: $X (w/BP)" — realized figures are PREMIUM-inclusive
+    hammerNative: null, premiumNative: realizedUsd, realizedNative: realizedUsd,
+    hammerUsd: null, premiumUsd: realizedUsd, realizedUsd,
     estLowNative: estLowUsd, estHighNative: estHighUsd, estLowUsd, estHighUsd,
     // old aliases
     estimateLow: estLowUsd, estimateHigh: estHighUsd,
     currency: 'USD',
-    hammerPrice: realizedUsd, premiumPrice: realizedUsd, priceUsd: realizedUsd,
-    priceBasis: r.status === 'sold' ? 'hammer' : undefined,
-    currentBid: r.currentBid ?? undefined,
+    hammerPrice: null, premiumPrice: realizedUsd, priceUsd: realizedUsd,
+    priceBasis: realizedUsd != null ? 'premium' : undefined,
+    currentBid: arch ? undefined : r.currentBid ?? undefined,
     bidCount: r.bidCount ?? undefined,
-    status: r.status,
+    status,
+    ...(arch ? { archived: true } : {}),
     // vertical follows the slug, market is derived downstream
     ...(market ? {} : {}),
   } as AuctionLot;
+}
+
+// ── ARCHIVE BACKFILL ─────────────────────────────────────────────────────────
+// One-time (resumable) harvest of RR's CLOSED sales. Sale ids are sequential,
+// so we walk a range newest→oldest. Every completed sale is checkpointed; a
+// re-run skips done/dead sales and retries blocked ones. Lots are stamped
+// archived:true and land in the SEPARATE 'rrauction-archive' segment (the
+// assemble archive tier — engine-visible, never in client shards), so this can
+// never race the nightly's live rrauction leg, which owns 'rrauction'.
+//
+//   npx tsx scripts/resolve-rrauction.ts --archive [--from 746] [--to 1]
+//       [--workers 3] [--push]        crawl + finalize (+ push segment to R2)
+//   npx tsx scripts/resolve-rrauction.ts --archive --finalize [--push]
+//       skip crawling; rebuild the segment from the checkpoint ndjson
+const ARCH_DIR = process.env.RR_ARCHIVE_DIR || path.join(process.cwd(), 'data', 'rr-archive');
+const ckptPath = () => path.join(ARCH_DIR, 'checkpoint.json');
+const ndjsonPath = () => path.join(ARCH_DIR, 'lots.ndjson');
+
+interface ArchCkpt { sales: Record<string, { state: 'done' | 'dead' | 'blocked' | 'no-date'; raw?: number; kept?: number; name?: string; date?: string }> }
+function loadCkpt(): ArchCkpt { try { return JSON.parse(fs.readFileSync(ckptPath(), 'utf8')); } catch { return { sales: {} }; } }
+function saveCkpt(c: ArchCkpt) {
+  fs.mkdirSync(ARCH_DIR, { recursive: true });
+  fs.writeFileSync(ckptPath() + '.tmp', JSON.stringify(c, null, 1));
+  fs.renameSync(ckptPath() + '.tmp', ckptPath());
+}
+const argOf = (args: string[], k: string) => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
+
+async function runArchive(args: string[], maxPages: number) {
+  const from = parseInt(argOf(args, '--from') ?? '746', 10);
+  const to = parseInt(argOf(args, '--to') ?? '1', 10);
+  const workers = parseInt(argOf(args, '--workers') ?? '3', 10);
+  const ckpt = loadCkpt();
+  const ids: string[] = [];
+  for (let i = from; i >= to; i--) {
+    const st = ckpt.sales[String(i)]?.state;
+    if (st && st !== 'blocked') continue; // done/dead/no-date stay settled; blocked retries
+    ids.push(String(i));
+  }
+  fs.mkdirSync(ARCH_DIR, { recursive: true });
+  console.log(`[rr-archive] range ${from}→${to}: ${ids.length} sales to crawl (${Object.keys(ckpt.sales).length} already checkpointed) · ${workers} workers`);
+  const browser = await open();
+  let done = 0, keptTotal = 0;
+  const t0 = Date.now();
+  try {
+    const next = ids[Symbol.iterator]();
+    await Promise.all(Array.from({ length: workers }, async () => {
+      for (let n = next.next(); !n.done; n = next.next()) {
+        const saleId = n.value;
+        try {
+          const { lots: raw, saleName, saleClosed } = await crawlSale(browser, saleId, maxPages, 'auto');
+          if (!raw.length) { ckpt.sales[saleId] = { state: 'dead' }; saveCkpt(ckpt); continue; }
+          if (!saleClosed) {
+            // no "Auction Closed" header → still live, or header drift. Either
+            // way we will NOT guess a date — dates are load-bearing for comps.
+            ckpt.sales[saleId] = { state: 'no-date', raw: raw.length, name: saleName };
+            saveCkpt(ckpt);
+            console.warn(`[rr-archive] sale ${saleId} "${saleName}": ${raw.length} lots but NO closed date — skipped`);
+            continue;
+          }
+          const lines: string[] = [];
+          for (const r of raw) {
+            const slug = routeRRLot(r.title);
+            if (!slug) continue;
+            lines.push(JSON.stringify(toLot(r, slug, saleId, saleName, { saleDate: saleClosed })));
+          }
+          if (lines.length) fs.appendFileSync(ndjsonPath(), lines.join('\n') + '\n');
+          ckpt.sales[saleId] = { state: 'done', raw: raw.length, kept: lines.length, name: saleName, date: saleClosed };
+          saveCkpt(ckpt);
+          done++; keptTotal += lines.length;
+          console.log(`[rr-archive] ${saleId} "${saleName}" (${saleClosed}): ${raw.length} lots → ${lines.length} kept · ${done}/${ids.length} sales · ${keptTotal} total · ${((Date.now() - t0) / 60000).toFixed(1)}m`);
+        } catch (e) {
+          ckpt.sales[saleId] = { state: 'blocked' };
+          saveCkpt(ckpt);
+          console.warn(`[rr-archive] sale ${saleId} blocked: ${(e as Error).message.slice(0, 100)}`);
+        }
+      }
+    }));
+  } finally {
+    await browser.close();
+  }
+  finalizeArchive(args.includes('--push'));
+}
+
+/** dedup the harvest ndjson by lot id and write/push the archive segment */
+function finalizeArchive(push: boolean) {
+  if (!fs.existsSync(ndjsonPath())) { console.log('[rr-archive] no harvest ndjson — nothing to finalize'); return; }
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const line of fs.readFileSync(ndjsonPath(), 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    const l = JSON.parse(line) as Record<string, unknown>;
+    byId.set(l.id as string, l);
+  }
+  const lots = Array.from(byId.values());
+  if (!lots.length) { console.log('[rr-archive] 0 lots after dedup — refusing to write'); return; }
+  writeSegment('rrauction-archive', lots);
+  console.log(`[rr-archive] wrote rrauction-archive segment: ${lots.length} unique lots`);
+  if (push) execSync('bash scripts/data-store.sh push-segment rrauction-archive', { stdio: 'inherit' });
 }
 
 async function main() {
@@ -272,6 +401,12 @@ async function main() {
   const saleArg = args.includes('--sale') ? args[args.indexOf('--sale') + 1] : null;
   // anonymous sessions serve 24 lots/page — 80 pages ≈ 1.9k lots/view ceiling
   const maxPages = args.includes('--max-pages') ? parseInt(args[args.indexOf('--max-pages') + 1], 10) : 80;
+
+  if (args.includes('--archive')) {
+    if (args.includes('--finalize')) { finalizeArchive(args.includes('--push')); return; }
+    await runArchive(args, maxPages);
+    return;
+  }
 
   const browser = await open();
   try {

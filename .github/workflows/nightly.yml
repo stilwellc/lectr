@@ -159,7 +159,7 @@ jobs:
         run: |
           mkdir -p data/corpus/segments
           pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright rrauction other; do
+          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other; do
             if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
               echo "segment $h fresh from artifact — skipping R2"
             else

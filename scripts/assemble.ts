@@ -20,6 +20,10 @@ import { ARTISTS } from '../app/constants';
 import type { AuctionLot, MarketStats } from '../app/types';
 
 const isGoldinSold = (l: Record<string, unknown>) => l.auctionHouse === 'Goldin' && l.status === 'sold';
+// archive tier: Goldin's sold history plus any backfilled lot stamped archived:true
+// (the RR sold-archive) — engine-visible via the full corpus, kept out of the
+// client shards so served payload stays lean.
+const isArchiveTier = (l: Record<string, unknown>) => isGoldinSold(l) || l.archived === true;
 
 async function main() {
   const DATA_DIR = SERVED_DIR;
@@ -92,7 +96,7 @@ async function main() {
   }
 
   // corpus gz + served (build-market re-writes served with the card sample)
-  const io = writeCorpusAndServed(allLots as unknown as Record<string, unknown>[], isGoldinSold);
+  const io = writeCorpusAndServed(allLots as unknown as Record<string, unknown>[], isArchiveTier);
   console.log(`[assemble] wrote corpus ${io.corpusMb}+${io.archiveMb}MB gz | served ${io.servedMb}MB`);
   fs.mkdirSync(SERVED_DIR, { recursive: true });
   fs.writeFileSync(statsPath, JSON.stringify(statsByArtist, null, 2));
