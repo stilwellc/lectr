@@ -3731,3 +3731,49 @@ text.chartAnno.pctData { font-family: var(--font-mono-data), monospace; }
   .engineCtaRow { margin-top: 14px; padding: 0 24px; }
   .engineCtaRow .roomPill { display: block; margin: 0; }
 }
+
+
+/* ── HERO LAYERS: the curated sub-market lines + their legend ─────────── */
+.chartLayerLabel {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  fill: var(--tt-fg, #E8EAED);
+  transition: opacity 0.25s ease;
+}
+.layerChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.layerChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 2px dotted color-mix(in srgb, var(--tt-fg, #E8EAED) 14%, transparent);
+  border-radius: 999px;
+  background: none;
+  color: var(--tt-fg, #E8EAED);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+  opacity: 0.85;
+}
+.layerChip:hover { border-color: color-mix(in srgb, var(--tt-fg, #E8EAED) 34%, transparent); opacity: 1; }
+.layerChip[data-on='true'] { border-color: color-mix(in srgb, var(--tt-fg, #E8EAED) 55%, transparent); opacity: 1; }
+.layerChipVal { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--tt-faint, #7A8087); }
+.layerChipVal[data-dir='up'] { color: var(--tt-up, #2FBF71); }
+.layerChipVal[data-dir='down'] { color: var(--tt-down, #E5484D); }
+.subPane { margin-top: 10px; }
+.subPaneMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--tt-faint, #7A8087);
+  margin-bottom: 2px;
+}
+.subPaneChart { width: 100%; }

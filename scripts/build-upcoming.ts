@@ -270,6 +270,19 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       slug: 'tickets-passes',
       band: [100, 2000],
     }),
+    // science + culture: the RR archive made both verticals' sold records
+    // majority estimate-less (science 20% / culture 2% est coverage in the
+    // trailing 2y), so the demand gate rightly suppresses their %-curves.
+    // Like sports, they anchor on a REALIZED cohort instead — a stable
+    // high-volume slug in a fixed price band, the honest typical-price line.
+    science: realizedCohortSeries(lots as unknown as AuctionLot[], {
+      slug: 'space-exploration',
+      band: [200, 5000],
+    }),
+    culture: realizedCohortSeries(lots as unknown as AuctionLot[], {
+      slug: 'entertainment-memorabilia',
+      band: [100, 2000],
+    }),
   };
 
   // bidComp['sports'] — the honest CARDS demand read. Goldin publishes no

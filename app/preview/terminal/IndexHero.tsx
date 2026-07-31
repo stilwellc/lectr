@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import type { Market } from '../../constants';
 import RollingNumber from './RollingNumber';
-import MarketChart, { type IndexPoint } from './MarketChart';
+import MarketChart, { LayerPane, type IndexPoint, type ChartLayer } from './MarketChart';
+import { resolveHeroLayers, type HeroLayer } from '../../lib/heroLayers';
 import Sparkline from './Sparkline';
 import { fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
 import { verifiedMovers, fmtPct, type VerifiedMover } from './verified';
@@ -150,6 +151,46 @@ export default function IndexHero({
   const headline = median(windowVals.length ? windowVals : vals);
   const windowIdx = horizon.q === Infinity ? hero.idx : hero.idx.slice(startI);
   const spark = (horizon.q === Infinity ? vals : vals.slice(startI)).slice(-16);
+
+  // ── THE LAYERS — the market's curated sub-market lines (heroLayers.ts),
+  // sliced to the visible window; index kinds rebase to the window's first
+  // value (Δ%), demand plots raw measured %, volume plots counts (subpane).
+  const layerDefs = useMemo(() => resolveHeroLayers(activeKey, market), [activeKey, market]);
+  const startPeriod = windowIdx.length ? windowIdx[0].period : null;
+  const windowLayer = (l: HeroLayer): { chart: ChartLayer; kind: HeroLayer['kind']; last: number } | null => {
+    let pts = startPeriod ? l.points.filter((p) => p.period >= startPeriod) : l.points;
+    if (pts.length < 2) return null;
+    if (l.kind === 'index') {
+      const base = pts[0].value;
+      if (!(base > 0)) return null;
+      pts = pts.map((p) => ({ ...p, value: ((p.value / base) - 1) * 100 }));
+    }
+    return { chart: { key: l.key, label: l.label, points: pts }, kind: l.kind, last: pts[pts.length - 1].value };
+  };
+  const mainLayers = layerDefs.main.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
+  const subLayers = layerDefs.sub.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
+  const [litLayer, setLitLayer] = useState<string | null>(null);
+  useEffect(() => { setLitLayer(null); }, [activeKey]);
+  const chipFor = (x: { chart: ChartLayer; kind: HeroLayer['kind']; last: number }) => {
+    const on = litLayer === x.chart.key;
+    const val = x.kind === 'volume' ? `${Math.round(x.last).toLocaleString()}/qtr` : fmtPct(x.last);
+    const dir = x.kind === 'volume' ? undefined : x.last >= 0 ? 'up' : 'down';
+    return (
+      <button
+        key={x.chart.key}
+        type="button"
+        className={styles.layerChip}
+        data-on={on ? 'true' : undefined}
+        onMouseEnter={() => setLitLayer(x.chart.key)}
+        onMouseLeave={() => setLitLayer((cur) => (cur === x.chart.key ? null : cur))}
+        onClick={() => setLitLayer((cur) => (cur === x.chart.key ? null : x.chart.key))}
+        aria-pressed={on}
+      >
+        {x.chart.label}
+        <span className={`${styles.layerChipVal}${x.kind === 'volume' ? '' : ` ${styles.pctData}`}`} data-dir={dir}>{val}</span>
+      </button>
+    );
+  };
 
   // momentum — the most recent quarter-over-quarter shift in the reading
   const qMove = vals.length > 1 && vals[vals.length - 2]
@@ -360,11 +401,28 @@ export default function IndexHero({
             <span>{marketLabel.toLowerCase()}</span>
           </div>
           {hasChart ? (
-            <MarketChart data={windowIdx} play={play} height={264} format={fmtHeadline} isPct={!isMoney} />
+            <MarketChart data={windowIdx} play={play} height={264} format={fmtHeadline} isPct={!isMoney}
+              layers={mainLayers.map((x) => x.chart)} highlight={litLayer} />
           ) : (
             <div className={styles.heroSparkFallback}>
               <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={720} height={140} strokeWidth={1.8} />
               <span className={styles.chartCardTag}>series building — sampling this market</span>
+            </div>
+          )}
+          {/* the volume/era subpane — series that can't share the anchor's axis */}
+          {hasChart && subLayers.length > 0 && (
+            <div className={styles.subPane}>
+              <div className={styles.subPaneMeta}>
+                <span>{layerDefs.subLabel}</span>
+              </div>
+              <LayerPane layers={subLayers.map((x) => x.chart)} highlight={litLayer} />
+            </div>
+          )}
+          {/* the legend — every layered line, its current reading, tap to isolate */}
+          {hasChart && (mainLayers.length > 0 || subLayers.length > 0) && (
+            <div className={styles.layerChips}>
+              {mainLayers.map(chipFor)}
+              {subLayers.map(chipFor)}
             </div>
           )}
         </m.div>

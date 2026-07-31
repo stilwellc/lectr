@@ -42,6 +42,13 @@ export interface IndexPoint {
   n: number;
 }
 
+/** a curated sub-market layer, already window-sliced + rebased by the hero */
+export interface ChartLayer {
+  key: string;
+  label: string;
+  points: IndexPoint[];
+}
+
 interface Props {
   data: IndexPoint[];
   play: boolean;
@@ -52,6 +59,11 @@ interface Props {
   format?: (n: number) => string;
   /** the unit is a percent — annotations + tooltip values speak mono */
   isPct?: boolean;
+  /** curated sub-market lines behind the anchor — neutral ink, endpoint
+      labels; the legend chips drive highlight isolation */
+  layers?: ChartLayer[];
+  /** the layer key lit by the legend (others fade to ghosts) */
+  highlight?: string | null;
 }
 
 function TerminalTooltip({ active, payload, format, isPct }: {
@@ -72,15 +84,33 @@ function TerminalTooltip({ active, payload, format, isPct }: {
 export default function MarketChart({
   data, play, height = 260, compact = false,
   format = (n) => String(Math.round(n)), isPct = false,
+  layers, highlight,
 }: Props) {
   const reduce = useReducedMotion();
-  const rows = useMemo(() => data.map((d) => ({ ...d })), [data]);
+  const live = (layers || []).filter((l) => l.points.length >= 2);
 
-  const vals = rows.map((r) => r.value);
-  const min = vals.length ? Math.min(...vals) : 0;
-  const max = vals.length ? Math.max(...vals) : 100;
+  // merge anchor + layers onto one quarterly axis (union of periods, sorted)
+  const rows = useMemo(() => {
+    const byPeriod = new Map<string, Record<string, number | string | null>>();
+    const rowFor = (period: string) => {
+      let r = byPeriod.get(period);
+      if (!r) { r = { period, value: null, n: 0 }; byPeriod.set(period, r); }
+      return r;
+    };
+    for (const d of data) { const r = rowFor(d.period); r.value = d.value; r.n = d.n; }
+    for (const l of live) for (const p of l.points) rowFor(p.period)[`ly_${l.key}`] = p.value;
+    return Array.from(byPeriod.values()).sort((a, b) => String(a.period).localeCompare(String(b.period)));
+  }, [data, live]);
+
+  const vals = data.map((r) => r.value);
+  // the y domain breathes to hold every visible line, anchor + layers
+  const layerVals = live.flatMap((l) => l.points.map((p) => p.value));
+  const allVals = [...vals, ...layerVals];
+  const min = allVals.length ? Math.min(...allVals) : 0;
+  const max = allVals.length ? Math.max(...allVals) : 100;
   const pad = Math.max(2, (max - min) * 0.22);
 
+  const anchorRows = data;
   // direction from the series' own endpoints (deadband so drift reads flat)
   const dir = useMemo<'up' | 'down' | 'flat'>(() => {
     if (vals.length < 2) return 'flat';
@@ -96,10 +126,12 @@ export default function MarketChart({
 
   // the honest anchors: peak + trough of the visible window (skipped when the
   // window is short, flat, or the extreme IS the endpoint the terminus marks)
-  const peakIdx = vals.indexOf(max);
-  const troughIdx = vals.indexOf(min);
-  const annotate = rows.length >= 8 && max !== min;
-  const last = rows.length ? rows[rows.length - 1] : null;
+  const aMin = vals.length ? Math.min(...vals) : 0;
+  const aMax = vals.length ? Math.max(...vals) : 100;
+  const peakIdx = vals.indexOf(aMax);
+  const troughIdx = vals.indexOf(aMin);
+  const annotate = anchorRows.length >= 8 && aMax !== aMin;
+  const last = anchorRows.length ? anchorRows[anchorRows.length - 1] : null;
 
   const animate = play && !reduce;
 
@@ -109,7 +141,7 @@ export default function MarketChart({
       <div className={styles.chartGlow} data-dir={dir} aria-hidden />
       <div className={styles.chartMask}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={rows} margin={{ top: 24, right: 16, bottom: 4, left: 10 }}>
+          <ComposedChart data={rows} margin={{ top: 24, right: live.length ? 64 : 16, bottom: 4, left: 10 }}>
             <defs>
               <linearGradient id="tt-area" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={fillColor} stopOpacity="0.26" />
@@ -142,6 +174,49 @@ export default function MarketChart({
               content={<TerminalTooltip format={format} isPct={isPct} />}
               cursor={{ stroke: 'var(--tt-butter)', strokeOpacity: 0.45, strokeWidth: 1, strokeDasharray: '2 6' }}
             />
+            {/* THE LAYERS — curated sub-market lines, neutral ink at the
+                pen-ramp's lightest weight; the lit one rises, others ghost */}
+            {live.map((l) => {
+              const lit = highlight === l.key;
+              const ghost = highlight != null && !lit;
+              return (
+                <Line
+                  key={l.key}
+                  type="monotone"
+                  dataKey={`ly_${l.key}`}
+                  stroke="var(--tt-fg, #E8EAED)"
+                  strokeOpacity={lit ? 0.92 : ghost ? 0.10 : 0.30}
+                  strokeWidth={lit ? 1.9 : 1.4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                  isAnimationActive={animate}
+                  animationDuration={animate ? 1100 : 0}
+                  animationEasing="ease-out"
+                />
+              );
+            })}
+            {/* endpoint label — only the LIT layer names itself (converging
+                lines cluster their tags; the chips carry every name) */}
+            {!compact && live.filter((l) => highlight === l.key).map((l) => {
+              const lp = l.points[l.points.length - 1];
+              return (
+                <ReferenceDot
+                  key={`lbl-${l.key}`}
+                  x={lp.period}
+                  y={lp.value}
+                  r={0}
+                  isFront
+                  label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
+                    <text x={(viewBox?.x ?? 0) + 7} y={(viewBox?.y ?? 0) + 3} className={styles.chartLayerLabel}>
+                      {l.label}
+                    </text>
+                  )}
+                />
+              );
+            })}
             {/* raw cohort points — visible, quiet */}
             <Scatter
               dataKey="value"
@@ -159,6 +234,7 @@ export default function MarketChart({
               type="monotone"
               dataKey="value"
               stroke="var(--tt-butter)"
+              strokeOpacity={highlight != null ? 0.35 : 1}
               strokeWidth={2.25}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -169,33 +245,33 @@ export default function MarketChart({
               animationEasing="ease-out"
             />
             {/* honest anchors: peak + trough in the series' own unit */}
-            {annotate && !compact && peakIdx !== rows.length - 1 && (
+            {annotate && !compact && peakIdx !== anchorRows.length - 1 && (
               <ReferenceDot
-                x={rows[peakIdx].period}
-                y={rows[peakIdx].value}
+                x={anchorRows[peakIdx].period}
+                y={anchorRows[peakIdx].value}
                 r={0}
                 isFront
                 label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
                   <g transform={`translate(${viewBox?.x ?? 0}, ${(viewBox?.y ?? 0) - 9})`}>
                     <circle cx="0" cy="7" r="2" fill="var(--tt-butter)" fillOpacity="0.75" />
                     <text x="0" y="-2" textAnchor="middle" className={`${styles.chartAnno}${isPct ? ` ${styles.pctData}` : ''}`}>
-                      {format(rows[peakIdx].value)}
+                      {format(anchorRows[peakIdx].value)}
                     </text>
                   </g>
                 )}
               />
             )}
-            {annotate && !compact && troughIdx !== 0 && troughIdx !== rows.length - 1 && troughIdx !== peakIdx && (
+            {annotate && !compact && troughIdx !== 0 && troughIdx !== anchorRows.length - 1 && troughIdx !== peakIdx && (
               <ReferenceDot
-                x={rows[troughIdx].period}
-                y={rows[troughIdx].value}
+                x={anchorRows[troughIdx].period}
+                y={anchorRows[troughIdx].value}
                 r={0}
                 isFront
                 label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
                   <g transform={`translate(${viewBox?.x ?? 0}, ${(viewBox?.y ?? 0) + 9})`}>
                     <circle cx="0" cy="-7" r="2" fill="var(--tt-butter)" fillOpacity="0.75" />
                     <text x="0" y="13" textAnchor="middle" className={`${styles.chartAnno}${isPct ? ` ${styles.pctData}` : ''}`}>
-                      {format(rows[troughIdx].value)}
+                      {format(anchorRows[troughIdx].value)}
                     </text>
                   </g>
                 )}
@@ -219,6 +295,70 @@ export default function MarketChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+    </div>
+  );
+}
+
+
+/* ── THE SUBPANE — a short secondary band under the stage for series that
+   can't share the anchor's axis (volume counts; sports' era indexes vs its
+   $-anchor). Same neutral-ink layer grammar, no fill, no glow — a quiet
+   instrument strip in the classic price+volume composition. */
+export function LayerPane({ layers, highlight, height = 76 }: {
+  layers: ChartLayer[]; highlight?: string | null; height?: number;
+}) {
+  const live = layers.filter((l) => l.points.length >= 2);
+  const rows = useMemo(() => {
+    const byPeriod = new Map<string, Record<string, number | string | null>>();
+    for (const l of live) {
+      for (const p of l.points) {
+        let r = byPeriod.get(p.period);
+        if (!r) { r = { period: p.period }; byPeriod.set(p.period, r); }
+        r[`ly_${l.key}`] = p.value;
+      }
+    }
+    return Array.from(byPeriod.values()).sort((a, b) => String(a.period).localeCompare(String(b.period)));
+  }, [live]);
+  if (!live.length || rows.length < 4) return null;
+  return (
+    <div className={styles.subPaneChart} style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={rows} margin={{ top: 6, right: 64, bottom: 2, left: 10 }}>
+          <XAxis dataKey="period" hide />
+          <YAxis domain={['auto', 'auto']} hide />
+          {live.map((l) => {
+            const lit = highlight === l.key;
+            const ghost = highlight != null && !lit;
+            return (
+              <Line
+                key={l.key}
+                type="monotone"
+                dataKey={`ly_${l.key}`}
+                stroke="var(--tt-fg, #E8EAED)"
+                strokeOpacity={lit ? 0.92 : ghost ? 0.10 : 0.34}
+                strokeWidth={lit ? 1.8 : 1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                dot={false}
+                activeDot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            );
+          })}
+          {live.filter((l) => highlight === l.key).map((l) => {
+            const lp = l.points[l.points.length - 1];
+            return (
+              <ReferenceDot key={`lbl-${l.key}`} x={lp.period} y={lp.value} r={0} isFront
+                label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => (
+                  <text x={(viewBox?.x ?? 0) + 7} y={(viewBox?.y ?? 0) + 3} className={styles.chartLayerLabel}>
+                    {l.label}
+                  </text>
+                )} />
+            );
+          })}
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }

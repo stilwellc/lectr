@@ -102,6 +102,8 @@ export interface RealizedCohortOpts {
 
 const MIN_COHORT_QUARTER = 15;
 
+const CULTURE_COHORT_SLUGS = new Set(['entertainment-memorabilia', 'music-memorabilia', 'movie-tv']);
+
 export function realizedCohortSeries(lots: AuctionLot[], opts: RealizedCohortOpts): RealizedPoint[] {
   const now = opts.now ?? Date.now();
   const [lo, hi] = opts.band;
@@ -111,8 +113,12 @@ export function realizedCohortSeries(lots: AuctionLot[], opts: RealizedCohortOpt
   for (const l of lots) {
     if (l.status !== 'sold' || !l.priceUsd) continue;
     if (l.artist !== opts.slug) continue;
-    // gate every cohort member through the single choke point
-    if (!isSportsScienceObject(l)) continue;
+    // gate every cohort member through the single choke point — widened for
+    // the culture realized cohorts (the same category:'object' discipline;
+    // sports/science paths are unchanged because the slug filter above
+    // already scoped the pool)
+    const cultureObject = l.category === 'object' && CULTURE_COHORT_SLUGS.has(l.artist);
+    if (!isSportsScienceObject(l) && !cultureObject) continue;
     if (opts.form) {
       const f = sportsForm(l) ?? classifyForm(l);
       if (f !== opts.form) continue;

@@ -19,12 +19,18 @@ export default function Greeting() {
     try {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       if (sessionStorage.getItem('lectr-greeted')) return;
-      sessionStorage.setItem('lectr-greeted', '1');
     } catch { return; }
     setShow(true);
     const hold = setTimeout(() => setLeaving(true), 1750);
-    const gone = setTimeout(() => setShow(false), 2300);
-    return () => { clearTimeout(hold); clearTimeout(gone); };
+    // greeted = the write-on COMPLETED — stamping at completion (not on arm)
+    // keeps StrictMode's dev double-mount from stranding the floor at full
+    // opacity forever (run 1 stamped + armed, cleanup killed the timers,
+    // run 2 saw the stamp and bailed with show still true)
+    const gone = setTimeout(() => {
+      setShow(false);
+      try { sessionStorage.setItem('lectr-greeted', '1'); } catch { /* private mode */ }
+    }, 2300);
+    return () => { clearTimeout(hold); clearTimeout(gone); setShow(false); setLeaving(false); };
   }, []);
 
   if (!show) return null;

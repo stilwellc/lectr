@@ -48,6 +48,12 @@ export interface SubMarketRead {
   lots: number;
   sellThroughPct: number | null;
   estCoverage: number;
+  /** index-read rows: the BMN level series (base 100) behind the CI'd move —
+      the hero chart layers draw it rebased to the visible window */
+  indexSeries?: { period: string; value: number; n: number }[];
+  /** quarterly sold-lot counts (trailing 24 quarters) — the volume subpane's
+      series; counts are facts, never dressed as price movement */
+  volSeries?: { period: string; n: number }[];
 }
 
 // the descriptive stats each slug carries (a subset of stats.json / computeStats)
@@ -72,6 +78,25 @@ const MIN_DEMAND_QUARTERS = 6;
 // per-quarter trailing window floor (matches demand.ts's MIN_WINDOW_SALES)
 const MIN_WINDOW_SALES = 5;
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
+/** trailing quarterly sold counts — 'YYYY Qn' keys, capped at 24 quarters */
+function quarterlyVolume(sold: AuctionLot[]): { period: string; n: number }[] | undefined {
+  const c = new Map<string, number>();
+  for (const l of sold) {
+    const d = new Date(l.saleDate);
+    if (isNaN(d.getTime())) continue;
+    const key = `${d.getUTCFullYear()} Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+    c.set(key, (c.get(key) || 0) + 1);
+  }
+  // the in-progress quarter is a PARTIAL count — presenting it as "now" reads
+  // as a volume collapse; the last complete quarter is the honest terminus
+  const now = new Date();
+  const cur = `${now.getUTCFullYear()} Q${Math.floor(now.getUTCMonth() / 3) + 1}`;
+  c.delete(cur);
+  const rows = Array.from(c.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([period, n]) => ({ period, n })).slice(-24);
+  return rows.length >= 8 ? rows : undefined;
+}
 
 function median(a: number[]): number {
   const s = a.slice().sort((x, y) => x - y);
@@ -204,6 +229,7 @@ function buildRead(
   // repeat-sale index where the pool is card-structured (mix-immune, CI-gated)
   let index: SubMarketRead['index'] = null;
   let indexMethod: SubMarketRead['indexMethod'] = null;
+  let indexSeries: SubMarketRead['indexSeries'];
   const cardLots = sold.filter(l => cardKey(l) != null);
   if (cardLots.length >= 400) {
     const rs = buildRepeatSaleIndex(cardLots, cardKey);
@@ -212,6 +238,9 @@ function buildRead(
       if (hz?.publishable && hz.changePct != null && hz.ciLoPct != null && hz.ciHiPct != null) {
         index = { horizon: h, changePct: hz.changePct, ciLoPct: hz.ciLoPct, ciHiPct: hz.ciHiPct };
         indexMethod = 'repeat-sale';
+        // the level series behind the published move ('YYYY-Qn' → 'YYYY Qn'
+        // to match every other quarterly key), trailing 24 quarters
+        indexSeries = rs.series.slice(-24).map(pt => ({ period: pt.period.replace('-Q', ' Q'), value: pt.value, n: pt.nPairs }));
         break;
       }
     }
@@ -229,6 +258,8 @@ function buildRead(
     bidCompNow, typicalUsd, record,
     lots: lots.length, sellThroughPct,
     estCoverage: +estCoverage.toFixed(3),
+    ...(indexSeries?.length ? { indexSeries } : {}),
+    ...(() => { const v = quarterlyVolume(sold); return v ? { volSeries: v } : {}; })(),
   };
 }
 
@@ -409,6 +440,7 @@ export function buildSubMarkets(
       lots: lotCount,
       sellThroughPct,
       estCoverage: +estCoverage.toFixed(3),
+      ...(() => { const v = quarterlyVolume(sold); return v ? { volSeries: v } : {}; })(),
     };
     (out[market] || (out[market] = [])).push(row);
   }

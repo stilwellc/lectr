@@ -126,6 +126,10 @@ export interface SubMarketRead {
   lots: number;                     // volume tracked
   sellThroughPct: number | null;
   estCoverage: number;              // 0..1 — fraction of lots carrying estimates
+  /** index rows: the BMN level series (base 100) behind the CI'd move */
+  indexSeries?: { period: string; value: number; n: number }[];
+  /** trailing quarterly sold-lot counts — volume facts, never price movement */
+  volSeries?: { period: string; n: number }[];
 }
 export interface HedonicHorizon {
   changePct: number | null;
