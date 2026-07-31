@@ -18,6 +18,7 @@ import Masthead, { Underscore } from '../components/Masthead';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import DeskNote from '../components/analytics/DeskNote';
 import VerifiedMovers from '../components/analytics/VerifiedMovers';
+import SubMarketDrills from '../components/analytics/SubMarketDrills';
 import { Colophon } from '../components/Terminal';
 import meta from '../../public/data/ray/meta.json';
 
@@ -63,6 +64,7 @@ function AnalyticsGrid({
     // the defensible price movement the descriptive index can't claim — scoped
     // to the active market (honest empty state where none clears the CI)
     <div key="verified" className="rail"><VerifiedMovers marketData={marketData} scope={activeKey} variant="card" /></div>,
+    <div key="drills" className="rail"><SubMarketDrills marketData={marketData} scope={activeKey} /></div>,
     <PortfolioHeader key="header" statsByArtist={marketStats} allLots={marketLots} />,
     <ArtistRankingsTable key="rank" statsByArtist={marketStats} allLots={marketLots} market={activeKey} />,
     backtest ? <CalibrationCurve key="cal" backtest={backtest} /> : null,

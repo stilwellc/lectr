@@ -22,6 +22,7 @@ import { ARTISTS } from '../app/constants';
 import type { MakerIndexResult } from './hedonic-index';
 import { buildRepeatSaleIndex } from './repeat-sales';
 import { bidCompetitionSeries } from '../app/lib/demand';
+import { subCatLabel } from './lib/sub-cats';
 
 // ── the emitted row (mirrors SubMarketRead in app/hooks/useRayData.ts) ──
 export interface SubMarketRead {
@@ -155,6 +156,136 @@ function cardKey(l: AuctionLot): string | null {
   const serial = c.serialOf != null ? `/${c.serialOf}` : '';
   return `${c.playerSlug}|${c.year}|${set}|${c.cardNo}|${grade}${serial}`;
 }
+
+// ── DRILL ROWS (the sub-category taxonomy, Jul 31 2026) ─────────────────────
+// One SubMarketRead per approved A-vs-B split, emitted under market.json's NEW
+// `drills` key (the existing subMarkets key is untouched — no consumer breaks).
+// Partitions come from the corpus-normalize subCat/drill/flown stamps:
+//   sports:   subCat × sport        (cards:basketball vs cards:baseball …)
+//   watches:  maker × model family  (rolex:daytona vs patek-philippe:nautilus …)
+//   culture:  subject domain        (music vs hollywood vs political …)
+//   science:  space program + flown, tech/instrument types
+//   art:      kind                  (prints vs originals vs sculpture …)
+//   design:   kind + material       (seating vs tables; walnut vs teak …)
+// Same honesty ladder as slug rows: repeat-sale index (cards only, CI-gated) →
+// demand (est coverage ≥60%, ≥6 quarters) → descriptive. Row gate: ≥300 sold.
+const DRILL_MIN_SOLD = 300;
+
+export interface DrillRead extends SubMarketRead {
+  /** the parent grouping this drill belongs to (subCat for sports, maker for
+   *  watches, vertical for culture domains/art kinds) */
+  parent: string;
+}
+
+function buildRead(
+  slug: string, label: string, vertical: string, parent: string,
+  lots: AuctionLot[],
+): DrillRead | null {
+  const sold = lots.filter(l => l.status === 'sold' && (l.priceUsd || 0) > 0);
+  if (sold.length < DRILL_MIN_SOLD) return null;
+  const boughtIn = lots.filter(l => l.status === 'bought_in');
+
+  // descriptive layer straight from the pool (drills have no stats.json row)
+  const now = Date.now();
+  const ttm = sold.filter(l => now - new Date(l.saleDate).getTime() < YEAR_MS).map(l => l.priceUsd!);
+  const typicalUsd = ttm.length >= 10 ? Math.round(median(ttm)) : null;
+  let rec: AuctionLot | null = null;
+  for (const l of sold) if (!rec || (l.priceUsd || 0) > (rec.priceUsd || 0)) rec = l;
+  const record = rec ? { usd: rec.priceUsd!, title: rec.title || '', date: rec.saleDate || null, house: rec.auctionHouse || null } : null;
+  const denomST = sold.length + boughtIn.length;
+  const sellThroughPct = denomST >= 40 ? Math.round((100 * sold.length) / denomST) : null;
+  const soldWithEst = sold.filter(hasEstimate).length;
+  const estCoverage = sold.length ? soldWithEst / sold.length : 0;
+  const demandSeries = slugDemandSeries(sold);
+  const demandNow = demandSeries.length ? demandSeries[demandSeries.length - 1].value : null;
+  const bidCompSeries = bidCompetitionSeries(sold, { slug });
+  const bidCompNow = bidCompSeries.length ? Math.round(bidCompSeries[bidCompSeries.length - 1].value) : null;
+
+  // repeat-sale index where the pool is card-structured (mix-immune, CI-gated)
+  let index: SubMarketRead['index'] = null;
+  let indexMethod: SubMarketRead['indexMethod'] = null;
+  const cardLots = sold.filter(l => cardKey(l) != null);
+  if (cardLots.length >= 400) {
+    const rs = buildRepeatSaleIndex(cardLots, cardKey);
+    for (const h of HORIZON_PREF) {
+      const hz = rs.horizons?.[h];
+      if (hz?.publishable && hz.changePct != null && hz.ciLoPct != null && hz.ciHiPct != null) {
+        index = { horizon: h, changePct: hz.changePct, ciLoPct: hz.ciLoPct, ciHiPct: hz.ciHiPct };
+        indexMethod = 'repeat-sale';
+        break;
+      }
+    }
+  }
+
+  const readType: SubMarketRead['readType'] = index
+    ? 'index'
+    : (estCoverage >= MIN_EST_COVERAGE && demandSeries.length >= MIN_DEMAND_QUARTERS ? 'demand' : 'descriptive');
+
+  return {
+    slug, label, vertical, parent, readType,
+    index, indexMethod: readType === 'index' ? indexMethod : null,
+    demandNow: readType === 'demand' ? demandNow : null,
+    demandSeries: readType === 'demand' ? demandSeries : [],
+    bidCompNow, typicalUsd, record,
+    lots: lots.length, sellThroughPct,
+    estCoverage: +estCoverage.toFixed(3),
+  };
+}
+
+/** Build the drill rows per vertical from the stamped corpus. */
+export function buildDrillRows(all: AuctionLot[]): Record<string, DrillRead[]> {
+  const out: Record<string, DrillRead[]> = {};
+  const put = (vertical: string, row: DrillRead | null) => { if (row) (out[vertical] || (out[vertical] = [])).push(row); };
+  type L = AuctionLot & { subCat?: string; drill?: string; flown?: boolean };
+
+  // one pass: bucket by every partition we emit
+  const buckets = new Map<string, { slug: string; label: string; vertical: string; parent: string; lots: AuctionLot[] }>();
+  const add = (key: string, slug: string, label: string, vertical: string, parent: string, l: AuctionLot) => {
+    let b = buckets.get(key);
+    if (!b) { b = { slug, label, vertical, parent, lots: [] }; buckets.set(key, b); }
+    b.lots.push(l);
+  };
+  for (const raw of all) {
+    const l = raw as L;
+    const vert = ARTISTS_VERT[l.artist] || null;
+    if (!vert || !l.subCat) continue;
+    if (vert === 'sports' && l.drill) {
+      add(`sp|${l.subCat}|${l.drill}`, `${l.subCat}:${l.drill}`, `${subCatLabel(l.drill)} · ${subCatLabel(l.subCat).toLowerCase()}`, 'sports', l.subCat, l);
+    } else if (vert === 'watches' && l.drill) {
+      add(`w|${l.artist}|${l.drill}`, `${l.artist}:${l.drill}`, `${subCatLabel(l.drill)} · ${ARTISTS_LABEL[l.artist] || l.artist}`, 'watches', l.artist, l);
+    } else if (vert === 'culture') {
+      if (l.drill) add(`c|${l.drill}`, `culture:${l.drill}`, subCatLabel(l.drill), 'culture', 'culture', l);
+      if (l.subCat !== 'other') add(`ck|${l.subCat}`, `culture-kind:${l.subCat}`, subCatLabel(l.subCat), 'culture', 'kind', l);
+    } else if (vert === 'science') {
+      if (l.drill) add(`s|${l.subCat}|${l.drill}`, `${l.subCat}:${l.drill}`, subCatLabel(l.drill), 'science', l.subCat, l);
+      if (l.flown) add('s|flown', 'space:flown', 'Flown artifacts', 'science', 'space', l);
+    } else if (vert === 'art') {
+      if (l.subCat !== 'other') add(`a|${l.subCat}`, `art:${l.subCat}`, subCatLabel(l.subCat), 'art', 'art', l);
+    } else if (vert === 'design') {
+      add(`d|${l.subCat}`, `design:${l.subCat}`, subCatLabel(l.subCat), 'design', 'design', l);
+      if (l.drill) add(`dm|${l.drill}`, `design-material:${l.drill}`, subCatLabel(l.drill), 'design', 'material', l);
+    }
+  }
+  buckets.forEach(b => put(b.vertical, buildRead(b.slug, b.label, b.vertical, b.parent, b.lots)));
+
+  // same rank discipline as the slug rows
+  const rank = (r: SubMarketRead) => (r.readType === 'index' ? 0 : r.readType === 'demand' ? 1 : 2);
+  for (const v of Object.keys(out)) {
+    out[v].sort((a, b) => {
+      const ra = rank(a), rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      if (ra === 0) return Math.abs(b.index!.changePct) - Math.abs(a.index!.changePct);
+      if (ra === 1) return (b.demandNow ?? -Infinity) - (a.demandNow ?? -Infinity);
+      return b.lots - a.lots;
+    });
+  }
+  return out;
+}
+
+// slug → vertical (built once from ARTISTS — same source as buildSubMarkets)
+const ARTISTS_VERT: Record<string, string> = {};
+const ARTISTS_LABEL: Record<string, string> = {};
+for (const a of ARTISTS) { ARTISTS_VERT[a.slug] = a.market; ARTISTS_LABEL[a.slug] = a.label; }
 
 export function buildSubMarkets(
   all: AuctionLot[],

@@ -97,6 +97,11 @@ export interface MarketData {
       maker, else measured demand, else descriptive (typical/record/volume).
       Keyed by vertical market key ('science' → its sub-markets). */
   subMarkets?: Record<string, SubMarketRead[]>;
+  /** sub-category drill rows (Jul 31 2026): per vertical, the approved A-vs-B
+      splits — sports kind x sport, watch maker x model family, culture subject
+      domains + kinds, space programs + flown, art/design kinds. Same read
+      ladder + honesty gates as subMarkets; `parent` names the grouping. */
+  drills?: Record<string, (SubMarketRead & { parent: string })[]>;
 }
 export interface SubMarketRead {
   slug: string;

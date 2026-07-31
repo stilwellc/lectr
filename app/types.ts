@@ -255,6 +255,13 @@ export interface AuctionLot {
   repeatSaleGroupId?: string | null;
   /** the athlete behind a sports lot (build-stamped on upcoming; parsed from title) */
   playerSlug?: string | null;
+  /** sub-category taxonomy (stamped by corpus-normalize, additive — no engine
+   *  reads these): subCat = kind within the vertical (cards/wristwatches/
+   *  prints/space…), drill = the performance split inside it (sport/model
+   *  family/subject domain/program/material), flown = space-only flag. */
+  subCat?: string;
+  drill?: string;
+  flown?: boolean;
   playerName?: string | null;
   /** parsed trading-card identity — the composite fingerprint keying the card
       repeat-sales index (same player+year+set+cardNo+grade = the same product).

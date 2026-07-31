@@ -18,7 +18,7 @@ import { buildIdf, buildVectors, similarity, idf } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
 import { buildHedonicIndex, buildMakerIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
-import { buildSubMarkets } from './sub-markets';
+import { buildSubMarkets, buildDrillRows } from './sub-markets';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -842,12 +842,25 @@ export function runMarketBuild() {
     console.log(`[market] subMarkets: ${breakdown}`);
   } catch (e) { console.warn('[market] subMarkets build failed:', (e as Error).message); }
 
+  // sub-category DRILL rows (new `drills` key — additive; subMarkets untouched)
+  let drills: ReturnType<typeof buildDrillRows> = {};
+  try {
+    drills = buildDrillRows(all);
+    const breakdown = Object.entries(drills).map(([v, rows]) => {
+      const c = { index: 0, demand: 0, descriptive: 0 };
+      for (const r of rows) c[r.readType]++;
+      return `${v}[i${c.index} d${c.demand} x${c.descriptive}]`;
+    }).join(' ');
+    console.log(`[market] drills: ${breakdown}`);
+  } catch (e) { console.warn('[market] drills build failed:', (e as Error).message); }
+
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,
     hedonic,      // statistically-defensible hedonic price-change index (per market) + composite — see scripts/hedonic-index.ts
     makerIndex,   // per-maker hedonic index (bottom-up components of the market composites)
     subMarkets,   // per-vertical sub-market reads (strongest honest read per slug) — see scripts/sub-markets.ts
+    drills,       // sub-category drill rows (subCat x sport / maker x family / domain / program) — see buildDrillRows
     makers,
     houseCal,     // per house×market estimate honesty (hammer-led, n≥40 cells)
     seasonality,  // per market calendar-month performance (UI gates on n)

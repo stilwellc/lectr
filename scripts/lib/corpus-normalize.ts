@@ -1,4 +1,5 @@
 import type { AuctionLot } from '../../app/types';
+import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle } from '../../app/lib/comps';
@@ -248,6 +249,53 @@ export function reconcileSaleDates(lots: Lot[]): number {
 // ─────────────────────────────────────────────────────────────────────────────
 // Orchestrator — run all passes, log a one-line summary. Idempotent.
 // ─────────────────────────────────────────────────────────────────────────────
+// ── ★6 · stampSubCats — the sub-category taxonomy (subCat/drill/flown),
+//    every lot, every build. Runs AFTER restampIdentityKeys (it reads the
+//    final formKey). Two-phase: learn player→sport from Goldin's own sport
+//    stamps (majority vote, n≥3, ≥80% purity), then stamp deterministically —
+//    pure function of existing fields, so re-runs converge (idempotent).
+export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sportRecovered: number } {
+  const pidVotes = new Map<string, Map<string, number>>();
+  const playerVotes = new Map<string, Map<string, number>>();
+  const vote = (m: Map<string, Map<string, number>>, k: string, sport: string) => {
+    const inner = m.get(k) || m.set(k, new Map()).get(k)!;
+    inner.set(sport, (inner.get(sport) || 0) + 1);
+  };
+  for (const l of lots) {
+    const r = l as unknown as Record<string, unknown>;
+    const sport = sportSlugOf(r.sport);
+    if (!sport) continue;
+    if (r._pid != null) vote(pidVotes, String(r._pid), sport);
+    const card = r._card as { playerSlug?: string } | undefined;
+    const player = (r.playerSlug as string) || card?.playerSlug;
+    if (player) vote(playerVotes, player, sport);
+  }
+  const settle = (m: Map<string, Map<string, number>>): Map<string, string> => {
+    const out = new Map<string, string>();
+    m.forEach((inner, k) => {
+      let tot = 0, best = '', bestN = 0;
+      inner.forEach((n, sp) => { tot += n; if (n > bestN) { best = sp; bestN = n; } });
+      if (tot >= 3 && bestN / tot >= 0.8) out.set(k, best);
+    });
+    return out;
+  };
+  const maps = { byPid: settle(pidVotes), byPlayer: settle(playerVotes) };
+
+  let subCats = 0, drills = 0, sportRecovered = 0;
+  for (const l of lots) {
+    const r = l as unknown as Record<string, unknown>;
+    const st = subCatOf(r, maps);
+    const t = l as Lot & { subCat?: string; drill?: string; flown?: boolean };
+    if (st.subCat) { t.subCat = st.subCat; subCats++; } else if ('subCat' in t) delete t.subCat;
+    if (st.drill) {
+      if (!sportSlugOf(r.sport) && st.subCat && ['cards', 'game-used', 'memorabilia', 'tickets', 'trophies'].includes(st.subCat)) sportRecovered++;
+      t.drill = st.drill; drills++;
+    } else if ('drill' in t) delete t.drill;
+    if (st.flown === true) t.flown = true; else if ('flown' in t) delete t.flown;
+  }
+  return { subCats, drills, sportRecovered };
+}
+
 export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
   // ENGINE SPEC v2 order: category flips (2c) run BEFORE identity work;
@@ -261,6 +309,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   const cultureStamped = stampCultureAxes(ls);
   const datesFixed = reconcileSaleDates(ls);
   const restamped = restampIdentityKeys(ls);
+  const sub = stampSubCats(ls);
   if (relic.total) {
     console.log(`[normalize] relic-card reroute: ${relic.total} game-used→sports-cards. e.g. ${relic.examples.slice(0, 3).map(s => JSON.stringify(s.slice(0, 70))).join(', ')}`);
   }
@@ -273,7 +322,8 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `playerSlug stamped=${players.stamped} (coverage ${(players.coverage * 100).toFixed(1)}%) · ` +
     `culture axes stamped=${cultureStamped} · ` +
     `saleDate←saleDateTime reconciled=${datesFixed} · ` +
-    `formKey restamped=${restamped}`
+    `formKey restamped=${restamped} · ` +
+    `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered})`
   );
   // BUILD CANARY (spec §3.4): game-used identity is a maintained-list parser —
   // a Sotheby's title-format change must fail the build, not silently starve
