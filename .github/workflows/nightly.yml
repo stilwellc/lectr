@@ -35,7 +35,11 @@ name: Nightly (segmented)
 
 on:
   schedule:
-    - cron: '0 13 * * *'
+    # 06:00 UTC = 1am EST (2am EDT) — the overnight window: houses have closed
+    # their timed sessions, and the fresh corpus is live before the US morning.
+    # (GitHub cron is UTC-fixed; 06:00 keeps it in the 1–2am Eastern band
+    # year-round.)
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       skip_crawl:
