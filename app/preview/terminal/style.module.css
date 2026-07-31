@@ -3101,16 +3101,17 @@ a.recordObj:focus-visible {
    ════════════════════════════════════════════════════════════════ */
 .roomB { position: relative; padding-top: clamp(28px, 3.4vw, 52px); }
 
-/* the settlement slip now sits at the FOOT of the record room — a quiet
-   close under the records. Empty branches collapse to nothing. */
-.slipBottom {
+/* the settlement room — the slip IS the room's content, centered with
+   its own breathing. Empty branches collapse the room's inner to nothing. */
+.slipRoom {
   position: relative;
   z-index: 1;
-  margin-top: clamp(40px, 5vw, 72px);
+  padding-block: clamp(32px, 4vw, 52px);
   display: flex;
+  flex-direction: column;
   justify-content: center;
 }
-.slipBottom:empty { display: none; }
+.slipRoom:empty { display: none; }
 
 /* ── the plate: record №01 ── */
 .plateZone {
@@ -3242,7 +3243,7 @@ a.recordObj:focus-visible {
 /* ── Room B mobile ── */
 @media (max-width: 900px) {
   .roomB { padding-top: 40px; }
-  .slipBottom { margin-top: 32px; }
+  .slipRoom { padding-block: 24px 32px; }
   .plateTitle { font-size: 21px; }
   .plateFigure { font-size: clamp(52px, 15vw, 68px); }
   .strikeRule { margin-top: 16px; }

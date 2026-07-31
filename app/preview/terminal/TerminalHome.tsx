@@ -45,7 +45,6 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 import IndexHero from './IndexHero';
 import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
 import TonightsWall, { type WallItem } from './TonightsWall';
-import RecordBoard from './RecordBoard';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
 
@@ -921,15 +920,10 @@ export default function TerminalHomePage() {
                 corpus; the sentinel starts that fetch as the reader approaches */}
             <Phase2Sentinel />
 
-            {/* ══ ROOM · THE RECORD — all-time records, then the settlement slip
-                at the foot of the room. ══ */}
+            {/* ══ ROOM · THE SETTLEMENT — the slip is the room. ══ */}
             <section className={styles.roomPaper}>
             <div className={styles.roomInner}>
-            <div className={styles.recordSection}>
-              <RecordBoard market={activeKey} asOf={marketData?.generatedAt?.slice(0, 10) ?? null} />
-            </div>
-
-            <div className={styles.slipBottom}>
+            <div className={styles.slipRoom}>
             {isSportsScience ? (
               recentRows.length > 0 && (
                 <div className={styles.recordBandWrap}>
