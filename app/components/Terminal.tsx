@@ -86,10 +86,10 @@ const CALLPLATE_CSS = `
 .lectr-cp-compact .lectr-cp-head{position:relative;margin-bottom:12px;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-beige-text)}
 .lectr-cp-compact .lectr-cp-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
 .lectr-cp-compact .lectr-cp-band{margin:2px -10px 0}
-.lectr-cp-compact .lectr-cp-leaders{display:block;margin-top:14px;border-top:1px solid var(--hairline);padding-top:4px}
+.lectr-cp-compact .lectr-cp-leaders{display:block;margin-top:14px;border-top:2px dotted var(--hairline);padding-top:4px}
 .lectr-cp-compact .lectr-cp-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
 .lectr-cp-compact .lectr-cp-k{color:var(--color-text-muted)}
-.lectr-cp-compact .lectr-cp-fill{flex:1;border-bottom:1px dotted rgba(242,238,227,0.2);transform:translateY(-3px)}
+.lectr-cp-compact .lectr-cp-fill{flex:1;border-bottom:2px dotted rgba(242,238,227,0.28);transform:translateY(-3px)}
 .lectr-cp-compact .lectr-cp-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-cp-compact .lectr-cp-v.up{color:var(--color-up)}
 .lectr-cp-compact .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
@@ -107,19 +107,19 @@ const CALLPLATE_CSS = `
   .ray-board-belowrow .lectr-cp .ray-plate-mat{padding:18px;margin-bottom:0}
   .ray-board-belowrow .lectr-cp .ray-plate-img{height:320px;background:var(--color-bg-elevated)}
   .ray-board-belowrow .lectr-cp .ray-plate-img img{object-fit:contain}
-  .ray-board-belowrow .lectr-cp .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11.5px;color:var(--color-text-muted)}
+  .ray-board-belowrow .lectr-cp .ray-plate-cap{margin-top:12px;border-top:2px dotted var(--hairline);padding-top:9px;font-size:11.5px;color:var(--color-text-muted)}
   .ray-board-belowrow .lectr-cp .lectr-cp-monoglyph{font-size:64px}
   .ray-board-belowrow .lectr-cp .lectr-cp-est{display:none}
   .ray-board-belowrow .lectr-cp .ray-sigrow{display:none}
-  .ray-board-belowrow .lectr-cp .lectr-cp-leaders{display:block;margin-top:14px;border-top:1px solid var(--hairline);padding-top:4px}
+  .ray-board-belowrow .lectr-cp .lectr-cp-leaders{display:block;margin-top:14px;border-top:2px dotted var(--hairline);padding-top:4px}
   .ray-board-belowrow .lectr-cp .lectr-cp-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
   .ray-board-belowrow .lectr-cp .lectr-cp-k{color:var(--color-text-muted)}
-  .ray-board-belowrow .lectr-cp .lectr-cp-fill{flex:1;border-bottom:1px dotted rgba(242,238,227,0.2);transform:translateY(-3px)}
+  .ray-board-belowrow .lectr-cp .lectr-cp-fill{flex:1;border-bottom:2px dotted rgba(242,238,227,0.28);transform:translateY(-3px)}
   .ray-board-belowrow .lectr-cp .lectr-cp-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
   .ray-board-belowrow .lectr-cp .lectr-cp-v.up{color:var(--color-up)}
   .ray-board-belowrow .lectr-cp .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
   .ray-board-belowrow .lectr-cp .lectr-cp-dots{font-size:10px;letter-spacing:1px;color:var(--color-beige);margin-right:7px}
-  .ray-board-belowrow .lectr-cp .ray-deckcall-cta{margin-top:auto;padding-top:14px;border-top:1px solid var(--hairline)}
+  .ray-board-belowrow .lectr-cp .ray-deckcall-cta{margin-top:auto;padding-top:14px;border-top:2px dotted var(--hairline)}
   /* wide plate, image failed: reflow text-first — the monogram becomes a
      ~140px side square and the certificate column takes the width */
   .ray-board-belowrow .lectr-cp.lectr-cp-noimg .lectr-cp-body{grid-template-columns:176px minmax(0,1fr)}

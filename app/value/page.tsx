@@ -125,7 +125,7 @@ export default function ValuePage() {
           padding: 10px 16px;
           background: transparent;
           border: none;
-          border-bottom: 1px solid var(--color-border);
+          border-bottom: 2px dotted var(--color-border);
           text-align: left;
           font-family: var(--font-sans), sans-serif;
           color: var(--color-fg);
@@ -208,7 +208,7 @@ export default function ValuePage() {
             align-items: baseline;
             width: 100%;
             padding: 12px 16px 9px;
-            border-bottom: 1px solid var(--color-border);
+            border-bottom: 2px dotted var(--color-border);
           }
           .ray-value-head .kicker { font-size: 10px; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .ray-value-mob { display: none; }
