@@ -6,7 +6,8 @@ import type { MarketData, DemandPoint, RealizedByMarket } from '../../hooks/useR
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import type { Market } from '../../constants';
 import RollingNumber from './RollingNumber';
-import MarketChart, { LayerPane, type IndexPoint, type ChartLayer } from './MarketChart';
+import { type IndexPoint, type ChartLayer } from './MarketChart';
+import HeroChart, { type HeroLine } from './HeroChart';
 import { resolveHeroLayers, type HeroLayer } from '../../lib/heroLayers';
 import Sparkline from './Sparkline';
 import { fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
@@ -169,6 +170,13 @@ export default function IndexHero({
   };
   const mainLayers = layerDefs.main.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
   const subLayers = layerDefs.sub.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
+  const toHeroLine = (x: { chart: ChartLayer; kind: HeroLayer['kind'] }): HeroLine => ({
+    key: x.chart.key,
+    label: x.chart.label,
+    color: x.chart.color,
+    unit: x.kind === 'volume' ? 'count' : 'pct',
+    points: x.chart.points,
+  });
   const [litLayer, setLitLayer] = useState<string | null>(null);
   useEffect(() => { setLitLayer(null); }, [activeKey]);
   const chipFor = (x: { chart: ChartLayer; kind: HeroLayer['kind']; last: number }) => {
@@ -271,11 +279,27 @@ export default function IndexHero({
             </div>
             <div className={styles.mHeroChart}>
               {hasChart ? (
-                <MarketChart data={windowIdx} play={play} height={168} compact format={fmtHeadline} isPct={!isMoney} />
+                <HeroChart
+                  anchor={{ key: '_anchor', label: metricLabel === 'demand' ? 'The market' : 'Typical price', color: '', unit: isMoney ? 'money' : 'pct', points: windowIdx }}
+                  layers={mainLayers.map(toHeroLine)}
+                  subLayers={subLayers.map(toHeroLine)}
+                  subLabel={layerDefs.subLabel}
+                  highlight={litLayer}
+                  height={200}
+                  subHeight={64}
+                  compact
+                  play={play}
+                />
               ) : (
                 <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={360} height={90} strokeWidth={1.8} />
               )}
             </div>
+            {hasChart && (mainLayers.length > 0 || subLayers.length > 0) && (
+              <div className={styles.layerChipsScroll}>
+                {mainLayers.map(chipFor)}
+                {subLayers.map(chipFor)}
+              </div>
+            )}
             <div className={styles.mHeroTag}>{hero.explain} · {horizon.label}</div>
           </m.div>
 
@@ -402,21 +426,19 @@ export default function IndexHero({
             <span>{marketLabel.toLowerCase()}</span>
           </div>
           {hasChart ? (
-            <MarketChart data={windowIdx} play={play} height={264} format={fmtHeadline} isPct={!isMoney}
-              layers={mainLayers.map((x) => x.chart)} highlight={litLayer} />
+            <HeroChart
+              anchor={{ key: '_anchor', label: metricLabel === 'demand' ? 'The market' : 'Typical price', color: '', unit: isMoney ? 'money' : 'pct', points: windowIdx }}
+              layers={mainLayers.map(toHeroLine)}
+              subLayers={subLayers.map(toHeroLine)}
+              subLabel={layerDefs.subLabel}
+              highlight={litLayer}
+              height={272}
+              play={play}
+            />
           ) : (
             <div className={styles.heroSparkFallback}>
               <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={720} height={140} strokeWidth={1.8} />
               <span className={styles.chartCardTag}>series building — sampling this market</span>
-            </div>
-          )}
-          {/* the volume/era subpane — series that can't share the anchor's axis */}
-          {hasChart && subLayers.length > 0 && (
-            <div className={styles.subPane}>
-              <div className={styles.subPaneMeta}>
-                <span>{layerDefs.subLabel}</span>
-              </div>
-              <LayerPane layers={subLayers.map((x) => x.chart)} highlight={litLayer} />
             </div>
           )}
           {/* the legend — every layered line, its current reading, tap to isolate */}

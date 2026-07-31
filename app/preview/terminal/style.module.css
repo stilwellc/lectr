@@ -3784,3 +3784,87 @@ text.chartAnno.pctData { font-family: var(--font-mono-data), monospace; }
   margin-bottom: 2px;
 }
 .subPaneChart { width: 100%; }
+
+
+/* ── HERO INSTRUMENT (Aug 2026 rebuild): neutral ink, no glow ─────────── */
+.hcWrap {
+  position: relative;
+  width: 100%;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+.hcSvg { display: block; width: 100%; height: auto; overflow: visible; }
+.hcRule { stroke: rgba(232, 234, 237, 0.09); stroke-width: 1; stroke-dasharray: 2 7; }
+.hcRuleZero { stroke: rgba(232, 234, 237, 0.20); stroke-width: 1; stroke-dasharray: 2 5; }
+.hcTick {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  fill: #7A8087;
+}
+.hcXLabel {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  fill: #61666D;
+}
+.hcCross { stroke: rgba(232, 234, 237, 0.35); stroke-width: 1; stroke-dasharray: 2 6; }
+.hcLineLabel { font-family: var(--font-inter), sans-serif; font-size: 10.5px; font-weight: 550; letter-spacing: 0.03em; }
+.hcAnno { font-family: var(--font-inter), sans-serif; font-size: 10.5px; fill: #A6ABB3; }
+.hcTerminusRing { transform-origin: center; transform-box: fill-box; animation: hcPulse 2.6s ease-out infinite; }
+@keyframes hcPulse {
+  0% { transform: scale(0.55); opacity: 0.9; }
+  70% { transform: scale(1.25); opacity: 0; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+.hcWipe { clip-path: inset(0 100% 0 0); animation: hcWipeIn 1s cubic-bezier(0.23, 1, 0.32, 1) 0.15s forwards; }
+@keyframes hcWipeIn { to { clip-path: inset(0 0 0 0); } }
+.hcSubMeta {
+  display: flex;
+  justify-content: space-between;
+  margin: 12px 0 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: #7A8087;
+}
+.hcReadout {
+  position: absolute;
+  top: 6px;
+  transform: translateX(14px);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 11px;
+  min-width: 160px;
+  background: rgba(10, 11, 13, 0.94);
+  border: 2px dotted rgba(232, 234, 237, 0.14);
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 6;
+}
+.hcReadout[data-flip='true'] { transform: translateX(calc(-100% - 14px)); }
+.hcReadoutPeriod {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: #7A8087;
+  margin-bottom: 2px;
+}
+.hcReadoutRow { display: flex; align-items: center; gap: 7px; }
+.hcReadoutRow i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.hcReadoutName { font-size: 11px; color: #A6ABB3; flex: 1; }
+.hcReadoutVal { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-fg, #E8EAED); }
+.hcReadoutRow[data-anchor='true'] .hcReadoutName { color: var(--color-fg, #E8EAED); font-weight: 550; }
+.hcReadoutRow[data-anchor='true'] .hcReadoutVal { font-weight: 600; }
+/* mobile: chips become a snap-scroll rail */
+.layerChipsScroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-top: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.layerChipsScroll::-webkit-scrollbar { display: none; }
+.layerChipsScroll .layerChip { flex: none; }
