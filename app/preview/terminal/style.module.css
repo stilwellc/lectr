@@ -72,7 +72,7 @@
   align-items: center;
   gap: 14px;
   padding: 16px 0;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
   font-family: var(--font-inter), sans-serif;
   font-size: 11.5px;
   letter-spacing: 0.1em;
@@ -162,7 +162,7 @@
   justify-content: space-between;
   gap: 18px;
   padding: 10px 2px 9px;
-  border-top: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
 }
 .railRow:first-child { border-top: none; }
 .railBtn {
@@ -222,7 +222,7 @@
   align-items: center;
   gap: 8px;
   padding: 11px 2px 2px;
-  border-top: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
   border-left: none; border-right: none; border-bottom: none;
   background: none;
   cursor: pointer;
@@ -259,7 +259,7 @@
   display: flex;
   align-items: baseline;
   gap: clamp(20px, 3vw, 40px);
-  border-top: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
   padding-top: 16px;
   flex-wrap: wrap;
 }
@@ -291,7 +291,7 @@
   align-items: baseline;
   gap: 10px;
   padding: 2px clamp(16px, 2.2vw, 30px);
-  border-left: 1px dotted var(--tt-hair);
+  border-left: 2px dotted var(--tt-hair);
   white-space: nowrap;
 }
 .moverCell:first-child { border-left: none; padding-left: 0; }
@@ -561,7 +561,7 @@
   color: var(--tt-butter);
 }
 .chartTipN {
-  border-top: 1px dotted rgba(232, 218, 182, 0.2);
+  border-top: 2px dotted rgba(232, 218, 182, 0.2);
   padding-top: 4px;
   margin-top: 2px;
 }
@@ -577,8 +577,8 @@
   gap: 16px;
   margin: 8px 0 4px;
   padding: 14px 0;
-  border-top: 1px dotted var(--tt-hair);
-  border-bottom: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
 }
 .tapeLabel {
   flex: none;
@@ -623,7 +623,7 @@
   padding: 0 22px;
   font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
-  border-right: 1px dotted var(--tt-hair);
+  border-right: 2px dotted var(--tt-hair);
 }
 .tapeDot {
   width: 4px;
@@ -714,7 +714,7 @@
 }
 
 .moversTable {
-  border-top: 1px dotted var(--tt-hair-2);
+  border-top: 2px dotted var(--tt-hair-2);
 }
 .moversColHead,
 .moversRow {
@@ -727,7 +727,7 @@
 .moversColHead {
   padding-top: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
   font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.16em;
@@ -740,7 +740,7 @@
   height: 52px;
   width: 100%;
   border: none;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
   background: transparent;
   color: inherit;
   text-align: left;
@@ -821,7 +821,7 @@
   gap: 4px;
   margin: 6px 0 22px;
   padding-bottom: 20px;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
 }
 .edgeStatNum {
   font-family: var(--font-inter), sans-serif;
@@ -847,7 +847,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
 }
 .edgeRowLabel {
   font-family: var(--font-inter), sans-serif;
@@ -891,7 +891,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border-top: 1px dotted var(--tt-hair-2);
+  border-top: 2px dotted var(--tt-hair-2);
 }
 .recordRow {
   display: grid;
@@ -899,7 +899,7 @@
   align-items: center;
   gap: 18px;
   padding: 16px 4px;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
 }
 .recordRank {
   font-family: var(--font-inter), sans-serif;
@@ -1046,7 +1046,7 @@
   gap: 12px;
   margin-top: 72px;
   padding-top: 24px;
-  border-top: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
   font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.06em;
@@ -1105,8 +1105,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px 0;
-  border-top: 1px dotted var(--tt-hair);
-  border-bottom: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
 }
 .mobMovers { padding: 28px 0 8px; }
 .mobMoverList {
@@ -1166,7 +1166,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border-top: 1px dotted var(--tt-hair-2);
+  border-top: 2px dotted var(--tt-hair-2);
 }
 .recordListMobile .recordRow {
   grid-template-columns: 2.2ch 1fr auto;
@@ -1449,7 +1449,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    Mirrors the verified-movers table but carries a readType tag + a support
    column (CI for an index, typical/record for demand/descriptive). */
 .subTable {
-  border-top: 1px dotted var(--tt-hair-2);
+  border-top: 2px dotted var(--tt-hair-2);
 }
 .subColHead,
 .subRow {
@@ -1462,7 +1462,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .subColHead {
   padding-top: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
   font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.16em;
@@ -1473,7 +1473,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   height: 52px;
   width: 100%;
   border: none;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
   background: transparent;
   color: inherit;
   text-align: left;
@@ -1728,7 +1728,7 @@ a.recordObj:focus-visible {
 /* verified-movers strip (in the hero meta column) */
 .verifiedStrip {
   margin: 4px 0 2px;
-  border-top: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
   padding-top: 12px;
 }
 .verifiedHead {
@@ -1750,7 +1750,7 @@ a.recordObj:focus-visible {
   align-items: baseline;
   gap: 10px;
   padding: 5px 0;
-  border-bottom: 1px dotted var(--tt-hair);
+  border-bottom: 2px dotted var(--tt-hair);
   font-family: var(--font-inter), sans-serif;
 }
 .verifiedRow:last-child { border-bottom: none; }
@@ -1782,7 +1782,7 @@ a.recordObj:focus-visible {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  border-top: 1px dotted var(--tt-hair);
+  border-top: 2px dotted var(--tt-hair);
   padding-top: 12px;
   font-family: var(--font-inter), sans-serif;
   font-size: 11.5px;
@@ -2405,7 +2405,7 @@ a.recordObj:focus-visible {
 }
 .ciSvg { width: 100%; height: 24px; display: block; }
 .ciAxis { stroke: rgba(28, 23, 18, 0.22); stroke-width: 1; }
-.ciZero { stroke: rgba(28, 23, 18, 0.45); stroke-width: 1; stroke-dasharray: 2 3; }
+.ciZero { stroke: rgba(28, 23, 18, 0.45); stroke-width: 1; stroke-dasharray: 2 5; }
 .ciFill { fill: currentColor; opacity: 0.26; }
 .ciDot { fill: currentColor; }
 .sparkLine { stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
@@ -2849,7 +2849,7 @@ a.recordObj:focus-visible {
 .beamStage { position: relative; height: 24px; }
 .beamSvg { width: 100%; height: 100%; display: block; overflow: visible; }
 .beamRule { stroke: rgba(28, 23, 18, 0.8); stroke-width: 1; }
-.beamZero { stroke: rgba(28, 23, 18, 0.3); stroke-width: 1; stroke-dasharray: 2 3; }
+.beamZero { stroke: rgba(28, 23, 18, 0.3); stroke-width: 1; stroke-dasharray: 2 5; }
 .beamDiamond { position: absolute; top: 50%; }
 .beamDiamond::before {
   content: '';
@@ -2885,7 +2885,7 @@ a.recordObj:focus-visible {
 .demandLine { width: min(440px, 82vw); margin-top: 30px; }
 .demandSvg { width: 100%; height: 72px; display: block; overflow: visible; }
 .demandPath { stroke: #1C1712; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.demandBase { stroke: rgba(90, 82, 64, 0.55); stroke-width: 1; stroke-dasharray: 2 4; }
+.demandBase { stroke: rgba(90, 82, 64, 0.55); stroke-width: 1; stroke-dasharray: 2 6; }
 .demandDot { fill: #1C1712; }
 .demandEnds {
   display: flex;
@@ -2924,7 +2924,7 @@ a.recordObj:focus-visible {
   text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
   background: rgba(28, 23, 18, 0.05);
-  border-bottom: 1px dotted rgba(28, 23, 18, 0.25);
+  border-bottom: 2px dotted rgba(28, 23, 18, 0.25);
 }
 .tapeMore { grid-column: 1 / -1; }
 .tapeRow {
@@ -2937,7 +2937,7 @@ a.recordObj:focus-visible {
   min-height: 84px;
   padding: 0 18px;
   border: 0;
-  border-bottom: 1px dotted rgba(28, 23, 18, 0.22);
+  border-bottom: 2px dotted rgba(28, 23, 18, 0.22);
   border-radius: 0;
   background: #E7DFCC;
   color: var(--paper-ink, #1C1712);
@@ -3231,7 +3231,7 @@ a.recordObj:focus-visible {
   width: min(1000px, 88%);
   margin: clamp(32px, 4vw, 52px) auto 0;
   padding: 16px 24px;
-  border-block: 1px dotted rgba(28, 23, 18, 0.25);
+  border-block: 2px dotted rgba(28, 23, 18, 0.25);
   text-align: center;
   font-size: 13px;
   line-height: 1.55;
@@ -3261,7 +3261,7 @@ a.recordObj:focus-visible {
 .wallSeparator {
   margin-top: clamp(40px, 6vw, 88px);
   padding-top: clamp(40px, 6vw, 88px);
-  border-top: 1px dotted var(--tt-hair-2, rgba(232, 218, 182, 0.2));
+  border-top: 2px dotted var(--tt-hair-2, rgba(232, 218, 182, 0.2));
 }
 @media (max-width: 900px) {
   .wallSeparator { margin-top: 32px; padding-top: 32px; }
@@ -3285,7 +3285,7 @@ a.recordObj:focus-visible {
 .chapter::after {
   content: '';
   width: min(110px, 12vw);
-  border-top: 1px dotted rgba(28, 23, 18, 0.32);
+  border-top: 2px dotted rgba(28, 23, 18, 0.32);
   margin: 0 10px;
 }
 
@@ -3414,7 +3414,7 @@ a.recordObj:focus-visible {
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
-.rcptDots { flex: 1; border-bottom: 1px dotted rgba(28, 23, 18, 0.4); transform: translateY(-3px); }
+.rcptDots { flex: 1; border-bottom: 2px dotted rgba(28, 23, 18, 0.4); transform: translateY(-3px); }
 .rcptUp { color: #1e7a4d; font-weight: 700; }
 .rcptDown { color: #a03d2e; font-weight: 700; }
 .rcptTotal { font-weight: 700; font-size: 13px; }
@@ -3568,7 +3568,7 @@ a.recordObj:focus-visible {
   color: var(--paper-muted, #5A5240);
   max-width: 200px;
 }
-.ehRows { margin-top: clamp(12px, 1.6vw, 18px); border-top: 1px dotted rgba(28, 23, 18, 0.3); padding-top: 6px; }
+.ehRows { margin-top: clamp(12px, 1.6vw, 18px); border-top: 2px dotted rgba(28, 23, 18, 0.3); padding-top: 6px; }
 .ehRow {
   display: flex;
   align-items: baseline;
@@ -3579,7 +3579,7 @@ a.recordObj:focus-visible {
 }
 .ehRow > span:first-child { color: var(--paper-muted, #5A5240); }
 .ehRow > span:last-child { font-weight: 600; }
-.ehDots { flex: 1; border-bottom: 1px dotted rgba(28, 23, 18, 0.35); transform: translateY(-3px); }
+.ehDots { flex: 1; border-bottom: 2px dotted rgba(28, 23, 18, 0.35); transform: translateY(-3px); }
 .ehConfDots { letter-spacing: 2px; font-weight: 400; color: #8A7440; }
 .ehFine {
   margin-top: 10px;
@@ -3693,28 +3693,6 @@ a.recordObj:focus-visible {
 .legendFill { fill: rgba(28, 23, 18, 0.6); stroke: none; }
 
 /* ════ THE MARKET CHART, redrawn — the hero's instrument ════ */
-/* dotted horizontal rules across the plot: the soft-transition grammar */
-.chartRules {
-  position: absolute;
-  inset: 24px 16px 26px 10px;
-  pointer-events: none;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent calc(33.33% - 1px),
-    transparent calc(33.33% - 1px)
-  );
-}
-.chartRules::before,
-.chartRules::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-top: 1px dotted rgba(232, 218, 182, 0.13);
-}
-.chartRules::before { top: 33%; }
-.chartRules::after { top: 66%; }
 /* the plot breathes out of the frame edges */
 .chartMask {
   position: relative;

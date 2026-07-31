@@ -107,8 +107,6 @@ export default function MarketChart({
     <div className={styles.chartWrap} style={{ height }} data-dir={dir}>
       {/* colored directional under-glow — decorative, beneath the plot */}
       <div className={styles.chartGlow} data-dir={dir} aria-hidden />
-      {/* dotted horizontal rules — the soft-transition grammar, drawn in CSS */}
-      <div className={styles.chartRules} aria-hidden />
       <div className={styles.chartMask}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={rows} margin={{ top: 24, right: 16, bottom: 4, left: 10 }}>
@@ -142,7 +140,7 @@ export default function MarketChart({
             <YAxis domain={[Math.floor(min - pad), Math.ceil(max + pad)]} hide />
             <Tooltip
               content={<TerminalTooltip format={format} isPct={isPct} />}
-              cursor={{ stroke: 'var(--tt-butter)', strokeOpacity: 0.45, strokeWidth: 1, strokeDasharray: '2 4' }}
+              cursor={{ stroke: 'var(--tt-butter)', strokeOpacity: 0.45, strokeWidth: 1, strokeDasharray: '2 6' }}
             />
             {/* raw cohort points — visible, quiet */}
             <Scatter

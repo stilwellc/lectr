@@ -1333,7 +1333,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
   background: rgba(242, 238, 227, 0.08);
-  border-block: 1px dotted var(--hairline-soft);
+  border-block: 2px dotted var(--hairline-soft);
   margin: 16px 0 4px;
 }
 .ray-ledger > div { background: var(--color-bg-board); padding: 10px 14px 12px; min-width: 0; }
@@ -2064,7 +2064,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   letter-spacing: -0.01em;
   color: var(--color-text-faint);
   padding: 10px 14px;
-  border-bottom: 1px dotted var(--color-border);
+  border-bottom: 2px dotted var(--color-border);
   white-space: nowrap;
 }
 .ray-feedtable th.num, .ray-feedtable td.num { text-align: right; }
@@ -2072,7 +2072,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   padding: 7px 12px;
   font-size: var(--text-data);
   color: var(--color-text-secondary);
-  border-bottom: 1px dotted var(--color-border);
+  border-bottom: 2px dotted var(--color-border);
   white-space: nowrap;
   vertical-align: middle;
 }

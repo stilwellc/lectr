@@ -29,7 +29,7 @@ export default function SettlementSlip({
     <div className="ray-band" style={{ marginTop: 34, paddingBlock: '22px 16px' }}>
       <section className="rail">
         <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
-        <div style={{ borderTop: '1px dotted var(--paper-line)', marginBottom: 10 }} />
+        <div style={{ borderTop: '2px dotted var(--paper-line)', marginBottom: 10 }} />
         <div className="kicker" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', color: 'inherit', marginBottom: 6 }}>
           <span>The settlement</span>
           <span style={{ color: 'var(--paper-muted)' }}>{marketName}</span>
@@ -40,7 +40,7 @@ export default function SettlementSlip({
             {lines.map(line => (
               <div key={line.k} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 0', fontSize: 13.5 }}>
                 <span style={{ color: 'var(--paper-muted)' }}>{line.k}</span>
-                <span aria-hidden style={{ flex: 1, borderBottom: '1px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
+                <span aria-hidden style={{ flex: 1, borderBottom: '2px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
                 <span style={{
                   fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                   color: line.signed == null || toneOf(line.signed) === 'flat'
@@ -67,7 +67,7 @@ export default function SettlementSlip({
           </button>
         </div>
 
-        <div className="kicker" style={{ borderTop: '1px dotted var(--paper-line)', marginTop: 8, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--paper-muted)' }}>
+        <div className="kicker" style={{ borderTop: '2px dotted var(--paper-line)', marginTop: 8, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--paper-muted)' }}>
           <span>settled nightly, every hammer on the book</span>
           <span>no. {serial}</span>
         </div>
