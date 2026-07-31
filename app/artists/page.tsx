@@ -15,6 +15,7 @@ import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
 import VerifiedMovers from '../components/analytics/VerifiedMovers';
+import SubMarketDirectory from '../components/SubMarketDirectory';
 import meta from '../../public/data/ray/meta.json';
 
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
@@ -42,12 +43,20 @@ export default function ArtistsPage() {
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   const summary = useMemo(() => {
-    const live = Object.values(upcomingCounts).reduce((s, n) => s + n, 0);
     const ds = demandSeries(marketLots);
     const marketNow = ds.length ? ds[ds.length - 1].value : null;
     const liveMkt = ARTISTS.filter(a => mktSet.has(a.slug)).reduce((s, a) => s + (upcomingCounts[a.slug] || 0), 0);
     return { live: liveMkt, marketNow };
   }, [marketLots, upcomingCounts, mktSet]);
+
+  // sub-market row count for the masthead (all markets when scope is 'all')
+  const subMarketCount = useMemo(() => {
+    const d = marketData?.drills;
+    if (!d) return 0;
+    return activeKey === 'all'
+      ? Object.values(d).reduce((s, rows) => s + rows.length, 0)
+      : (d[activeKey] || []).length;
+  }, [marketData, activeKey]);
 
   return (
     <div style={{
@@ -76,6 +85,7 @@ export default function ArtistsPage() {
                     {summary.live} live lots
                   </b>{' '}
                   on the block
+                  {subMarketCount > 0 && <> · {subMarketCount} tracked sub-markets</>}
                   {summary.marketNow !== null && (
                     <>
                       {' '}· market demand{' '}
@@ -89,9 +99,15 @@ export default function ArtistsPage() {
             />
           </section>
 
+          {/* THE TAXONOMY — the market's sub-category tree, each split with the
+              strongest honest read it supports (the new centerpiece) */}
+          <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 8, paddingBottom: 4 } as React.CSSProperties}>
+            <SubMarketDirectory marketData={marketData} scope={activeKey} />
+          </section>
+
           {/* the defensible reads alongside the demand curves — the only price
               movement that clears a 95% CI; honest empty state per market */}
-          <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 4, paddingBottom: 4 } as React.CSSProperties}>
+          <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 4, paddingBottom: 4 } as React.CSSProperties}>
             <VerifiedMovers marketData={marketData} scope={activeKey} variant="card" />
           </section>
 
