@@ -467,6 +467,39 @@ export default function ValuePage() {
             )}
           </section>
 
+          {/* ── THE ENGINE CARD — the paper slab that closes the page: what
+              the engine is, in its own room grammar (lander paper language),
+              with the full read one click away. Figures are the live
+              backtest's own. ── */}
+          <section className="rail ray-enter" style={{ paddingBlock: '18px 8px' }}>
+            <div className="ray-engine-card">
+              <div className="ray-engine-eyebrow">
+                <img src="/brand/lectr-ink.png" alt="" aria-hidden />
+                <span>The value engine</span>
+              </div>
+              <h2 className="ray-engine-head">Every flag here <em>earned its ink</em>.</h2>
+              <p className="ray-engine-body">
+                A read is comps, not opinion: same maker, same form, size-banded —
+                medians, never means. Each vertical carries its own gate (a jersey
+                only comps that player&rsquo;s jerseys; a Daytona only same-reference,
+                same-metal Daytonas), and where the data can&rsquo;t carry a call, the
+                engine abstains rather than guesses.
+              </p>
+              {backtest && backtest.flagged.n > 500 && (
+                <div className="ray-engine-stats">
+                  <span><b>{backtest.flagged.n.toLocaleString()}</b> sales replayed</span>
+                  <span className="ray-engine-dot" aria-hidden />
+                  <span>flagged hammered <b className="up">{fmtSignedPct(backtest.flagged.medianPerfPct)}</b> vs estimate</span>
+                  <span className="ray-engine-dot" aria-hidden />
+                  <span>the edge: <b>{backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</b></span>
+                </div>
+              )}
+              <Link href="/blog/how-we-built-the-pricing-engine" className="ray-engine-cta">
+                Read how it&rsquo;s built &rarr;
+              </Link>
+            </div>
+          </section>
+
           {modalLot && (
             <ComparableModal
               lot={modalLot}

@@ -3078,3 +3078,77 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ══ THE ENGINE CARD (/value) — the paper slab that closes the page, in the
+   lander's room grammar: rounded cream cell on the dark ground, ink type,
+   Fraunces head with the brass em, dotted internal rules, one ink pill. ══ */
+.ray-engine-card {
+  background: var(--paper, #E2D9C4);
+  color: var(--paper-ink, #1C1712);
+  border-radius: 24px;
+  padding: clamp(30px, 4vw, 48px) clamp(24px, 4vw, 56px) clamp(28px, 3.6vw, 44px);
+  text-align: center;
+}
+.ray-engine-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--paper-muted, #5A5240);
+}
+.ray-engine-eyebrow img { height: 18px; width: auto; filter: none; opacity: 0.9; }
+.ray-engine-head {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(26px, 3vw, 40px);
+  line-height: 1.12;
+  letter-spacing: -0.012em;
+  margin: 14px 0 0;
+}
+.ray-engine-head em { font-style: italic; color: #8A7440; }
+.ray-engine-body {
+  font-size: clamp(14px, 1.15vw, 15.5px);
+  line-height: 1.65;
+  color: var(--paper-muted, #5A5240);
+  max-width: 640px;
+  margin: 14px auto 0;
+}
+.ray-engine-stats {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 20px auto 0;
+  padding-top: 16px;
+  border-top: 2px dotted rgba(28, 23, 18, 0.25);
+  max-width: 720px;
+  font-size: 13px;
+  color: var(--paper-muted, #5A5240);
+  font-variant-numeric: tabular-nums;
+}
+.ray-engine-stats b { color: var(--paper-ink, #1C1712); font-weight: 650; }
+.ray-engine-stats b.up { color: #1e7a4d; }
+.ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(28, 23, 18, 0.3); align-self: center; }
+.ray-engine-cta {
+  display: inline-block;
+  margin-top: 22px;
+  background: var(--paper-ink, #1C1712);
+  color: var(--paper, #E2D9C4);
+  font-size: 14px;
+  font-weight: 550;
+  padding: 12px 24px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.ray-engine-cta:hover { background: #000; }
+@media (max-width: 640px) {
+  .ray-engine-card { border-radius: 20px; }
+  .ray-engine-stats { flex-direction: column; gap: 8px; }
+  .ray-engine-dot { display: none; }
+  .ray-engine-cta { display: block; }
+}
