@@ -179,6 +179,9 @@ export default function IndexHero({
   });
   const [litLayer, setLitLayer] = useState<string | null>(null);
   useEffect(() => { setLitLayer(null); }, [activeKey]);
+  // FLIPPED views (sports/science/culture): the curated story lines take the
+  // main stage; the anchor (the numeral's line) rides the lower band
+  const flipView = mainLayers.length === 0 && subLayers.length > 0;
   const chipFor = (x: { chart: ChartLayer; kind: HeroLayer['kind']; last: number }) => {
     const on = litLayer === x.chart.key;
     const val = x.kind === 'volume' ? `${Math.round(x.last).toLocaleString()}/qtr` : fmtPct(x.last);
@@ -283,11 +286,12 @@ export default function IndexHero({
                   anchor={{ key: '_anchor', label: metricLabel === 'demand' ? 'The market' : 'Typical price', color: '', unit: isMoney ? 'money' : 'pct', points: windowIdx }}
                   layers={mainLayers.map(toHeroLine)}
                   subLayers={subLayers.map(toHeroLine)}
-                  subLabel={layerDefs.subLabel}
+                  subLabel={flipView ? `${metricLabel} — the headline's line` : layerDefs.subLabel}
                   highlight={litLayer}
-                  height={200}
-                  subHeight={64}
+                  height={flipView ? 180 : 200}
+                  subHeight={flipView ? 72 : 64}
                   compact
+                  flip={flipView}
                   play={play}
                 />
               ) : (
@@ -422,7 +426,7 @@ export default function IndexHero({
             directional fill and glow ARE the composition. */}
         <m.div className={styles.heroStage} {...rise(0.16)}>
           <div className={styles.stageMeta}>
-            <span>{metricLabel} · {horizon.label}</span>
+            <span>{flipView ? `${layerDefs.subLabel} · ${horizon.label}` : `${metricLabel} · ${horizon.label}`}</span>
             <span>{marketLabel.toLowerCase()}</span>
           </div>
           {hasChart ? (
@@ -430,9 +434,11 @@ export default function IndexHero({
               anchor={{ key: '_anchor', label: metricLabel === 'demand' ? 'The market' : 'Typical price', color: '', unit: isMoney ? 'money' : 'pct', points: windowIdx }}
               layers={mainLayers.map(toHeroLine)}
               subLayers={subLayers.map(toHeroLine)}
-              subLabel={layerDefs.subLabel}
+              subLabel={flipView ? `${metricLabel} — the headline's line` : layerDefs.subLabel}
               highlight={litLayer}
-              height={272}
+              height={flipView ? 248 : 272}
+              subHeight={flipView ? 104 : 84}
+              flip={flipView}
               play={play}
             />
           ) : (

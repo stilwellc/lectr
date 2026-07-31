@@ -46,6 +46,10 @@ interface Props {
   subHeight?: number;
   compact?: boolean;
   play: boolean;
+  /** FLIPPED composition (sports/science/culture): the curated sub-market
+      lines take the MAIN stage; the anchor (the numeral's own line) rides
+      the lower band. Same scrub, same chips, same honesty. */
+  flip?: boolean;
 }
 
 /* ── scales & paths ────────────────────────────────────────── */
@@ -121,7 +125,7 @@ const W = 1000; // viewBox width — the svg scales to its container
 
 export default function HeroChart({
   anchor, layers = [], subLayers = [], subLabel, highlight,
-  height = 280, subHeight = 84, compact = false, play,
+  height = 280, subHeight = 84, compact = false, play, flip = false,
 }: Props) {
   const reduce = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -134,13 +138,17 @@ export default function HeroChart({
     return Array.from(set).sort();
   }, [anchor, layers, subLayers]);
 
-  const mainLines = useMemo(() => [anchor, ...layers], [anchor, layers]);
+  const flipped = flip && subLayers.length > 0;
+  const mainLines = useMemo(() => (flipped ? subLayers : [anchor, ...layers]), [flipped, subLayers, anchor, layers]);
+  const subLines = useMemo(() => (flipped ? [anchor] : subLayers), [flipped, anchor, subLayers]);
   const main = usePane(mainLines, periods, W, height, 18, compact ? 22 : 26);
-  const sub = usePane(subLayers, periods, W, subHeight, 8, 6);
-  const hasSub = subLayers.length > 0;
+  const sub = usePane(subLines, periods, W, subHeight, 10, 8);
+  const hasSub = subLines.length > 0;
 
+  const mainUnit = flipped ? (mainLines[0]?.unit ?? 'pct') : anchor.unit;
   const ticks = useMemo(() => niceTicks(main.min, main.max, compact ? 2 : 3), [main.min, main.max, compact]);
-  const zeroInDomain = anchor.unit === 'pct' && main.min < 0 && main.max > 0;
+  const subTicks = useMemo(() => (flipped ? niceTicks(sub.min, sub.max, 1) : []), [flipped, sub.min, sub.max]);
+  const zeroInDomain = mainUnit === 'pct' && main.min < 0 && main.max > 0;
 
   // sparse x labels — first, ~middle(s), last
   const xLabels = useMemo(() => {
@@ -212,8 +220,8 @@ export default function HeroChart({
           return (
             <g key={`t${t}`}>
               <line x1={0} x2={W} y1={y} y2={y} className={isZero ? styles.hcRuleZero : styles.hcRule} />
-              <text x={W - 4} y={y - 5} textAnchor="end" className={`${styles.hcTick}${anchor.unit === 'pct' ? ` ${styles.pctData}` : ''}`}>
-                {fmtTick(t, anchor.unit)}{isZero ? ' · est' : ''}
+              <text x={W - 4} y={y - 5} textAnchor="end" className={`${styles.hcTick}${mainUnit === 'pct' ? ` ${styles.pctData}` : ''}`}>
+                {fmtTick(t, mainUnit)}{isZero && !flipped ? ' · est' : ''}
               </text>
             </g>
           );
@@ -236,10 +244,10 @@ export default function HeroChart({
         {hoverX != null && <line x1={hoverX} x2={hoverX} y1={10} y2={height - 20} className={styles.hcCross} />}
 
         <g className={animCls || undefined}>
-          {/* layers under the anchor */}
-          {main.paths.slice(1).map(({ line, d, pts }) => (
+          {/* layers under the anchor (flipped: every main line IS a layer) */}
+          {(flipped ? main.paths : main.paths.slice(1)).map(({ line, d, pts }) => (
             <g key={line.key} style={{ opacity: opacityOf(line.key), transition: 'opacity 0.25s ease' }}>
-              <path d={d} fill="none" stroke={line.color} strokeWidth={highlight === line.key ? 2 : 1.4}
+              <path d={d} fill="none" stroke={line.color} strokeWidth={highlight === line.key ? (flipped ? 2.3 : 2) : (flipped ? 1.7 : 1.4)}
                 strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
               {pts.length > 0 && (
                 <circle cx={main.xOf.get(pts[pts.length - 1].period)} cy={main.yOf(pts[pts.length - 1].value)} r={2.2} fill={line.color} />
@@ -255,14 +263,16 @@ export default function HeroChart({
             </g>
           ))}
 
-          {/* the anchor — near-white, full weight */}
-          <g style={{ opacity: highlight == null ? 1 : 0.35, transition: 'opacity 0.25s ease' }}>
-            <path d={main.paths[0].d} fill="none" stroke="var(--color-fg, #E8EAED)" strokeWidth={2.25}
-              strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-          </g>
+          {/* the anchor — near-white, full weight (main stage, normal mode) */}
+          {!flipped && (
+            <g style={{ opacity: highlight == null ? 1 : 0.35, transition: 'opacity 0.25s ease' }}>
+              <path d={main.paths[0].d} fill="none" stroke="var(--color-fg, #E8EAED)" strokeWidth={2.25}
+                strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            </g>
+          )}
 
           {/* anchor terminus — a quiet double ring, no glow */}
-          {anchorLast && main.xOf.has(anchorLast.period) && (
+          {!flipped && anchorLast && main.xOf.has(anchorLast.period) && (
             <g className={reduce ? undefined : styles.hcTerminus}>
               <circle cx={main.xOf.get(anchorLast.period)} cy={main.yOf(anchorLast.value)} r={3.2} fill="var(--color-fg, #E8EAED)" />
               <circle cx={main.xOf.get(anchorLast.period)} cy={main.yOf(anchorLast.value)} r={6.5}
@@ -271,7 +281,7 @@ export default function HeroChart({
           )}
 
           {/* peak / trough tags */}
-          {anno.map(({ p, side }) => (
+          {!flipped && anno.map(({ p, side }) => (
             <text key={`${p.period}${side}`}
               x={main.xOf.get(p.period)} y={main.yOf(p.value) + (side === 'above' ? -9 : 15)}
               textAnchor="middle"
@@ -284,7 +294,7 @@ export default function HeroChart({
           {hoverPeriod && main.paths.map(({ line, pts }) => {
             const pt = pts.find(p => p.period === hoverPeriod);
             if (!pt) return null;
-            const isAnchor = line.key === anchor.key;
+            const isAnchor = !flipped && line.key === anchor.key;
             if (!isAnchor && highlight != null && highlight !== line.key) return null;
             return <circle key={`h${line.key}`} cx={main.xOf.get(pt.period)} cy={main.yOf(pt.value)} r={isAnchor ? 3.4 : 2.4}
               fill={isAnchor ? 'var(--color-fg, #E8EAED)' : line.color} stroke="var(--color-bg, #08090B)" strokeWidth={1.4} />;
@@ -300,14 +310,26 @@ export default function HeroChart({
           </div>
           <svg viewBox={`0 0 ${W} ${subHeight}`} className={styles.hcSvg} style={{ aspectRatio: `${W} / ${subHeight}` }} preserveAspectRatio="none">
             <line x1={0} x2={W} y1={subHeight - 6} y2={subHeight - 6} className={styles.hcRule} />
+            {subTicks.map(t => {
+              const y = sub.yOf(t);
+              if (y < 10 || y > subHeight - 10) return null;
+              return (
+                <text key={`st${t}`} x={W - 4} y={y - 4} textAnchor="end" className={styles.hcTick}>
+                  {fmtTick(t, anchor.unit)}
+                </text>
+              );
+            })}
             {hoverX != null && <line x1={hoverX} x2={hoverX} y1={2} y2={subHeight - 6} className={styles.hcCross} />}
             <g className={animCls || undefined}>
               {sub.paths.map(({ line, d, pts }) => (
-                <g key={line.key} style={{ opacity: opacityOf(line.key), transition: 'opacity 0.25s ease' }}>
-                  <path d={d} fill="none" stroke={line.color} strokeWidth={highlight === line.key ? 1.8 : 1.2}
+                <g key={line.key} style={{ opacity: flipped && line.key === anchor.key ? (highlight == null ? 1 : 0.45) : opacityOf(line.key), transition: 'opacity 0.25s ease' }}>
+                  <path d={d} fill="none"
+                    stroke={flipped && line.key === anchor.key ? 'var(--color-fg, #E8EAED)' : line.color}
+                    strokeWidth={flipped && line.key === anchor.key ? 1.8 : highlight === line.key ? 1.8 : 1.2}
                     strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                   {pts.length > 0 && (
-                    <circle cx={sub.xOf.get(pts[pts.length - 1].period)} cy={sub.yOf(pts[pts.length - 1].value)} r={1.8} fill={line.color} />
+                    <circle cx={sub.xOf.get(pts[pts.length - 1].period)} cy={sub.yOf(pts[pts.length - 1].value)} r={flipped && line.key === anchor.key ? 2.6 : 1.8}
+                      fill={flipped && line.key === anchor.key ? 'var(--color-fg, #E8EAED)' : line.color} />
                   )}
                   {highlight === line.key && pts.length > 0 && (
                     <text x={Math.min(W - 4, (sub.xOf.get(pts[pts.length - 1].period) ?? 0) + 8)}
@@ -322,9 +344,10 @@ export default function HeroChart({
               {hoverPeriod && sub.paths.map(({ line, pts }) => {
                 const pt = pts.find(p => p.period === hoverPeriod);
                 if (!pt) return null;
-                if (highlight != null && highlight !== line.key) return null;
-                return <circle key={`hs${line.key}`} cx={sub.xOf.get(pt.period)} cy={sub.yOf(pt.value)} r={2.2}
-                  fill={line.color} stroke="var(--color-bg, #08090B)" strokeWidth={1.2} />;
+                const isAnchor = flipped && line.key === anchor.key;
+                if (!isAnchor && highlight != null && highlight !== line.key) return null;
+                return <circle key={`hs${line.key}`} cx={sub.xOf.get(pt.period)} cy={sub.yOf(pt.value)} r={isAnchor ? 2.8 : 2.2}
+                  fill={isAnchor ? 'var(--color-fg, #E8EAED)' : line.color} stroke="var(--color-bg, #08090B)" strokeWidth={1.2} />;
               })}
             </g>
           </svg>
