@@ -186,11 +186,14 @@ async function crawlSale(browser: Browser, saleId: string, maxPages: number, cat
   // land on the sale once: sale name + the set of category tabs
   const landing = await nav(browser, galleryUrl(saleId, 1, '0'), '.auction-item__title', async (page) => ({
     title: await page.title(),
-    // closed sales carry "Auction Closed April 23, 2026" in the sale header —
-    // the ONLY sale-level date on the gallery page, and the archive's saleDate
-    closed: await page.evaluate(() => {
-      const m = document.body.innerText.match(/Auction Closed\s+([A-Za-z]+\.?\s+\d{1,2},\s*\d{4})/);
-      return m ? m[1] : null;
+    // closed sales carry "Auction Closed April 23, 2026" in the sale header;
+    // live-gavel sales (Remarkable Rarities etc.) instead carry
+    // "Auction #726 - September 20, 2025" — capture both, decide below
+    hdr: await page.evaluate(() => {
+      const t = document.body.innerText;
+      const m = t.match(/Auction Closed\s+([A-Za-z]+\.?\s+\d{1,2},\s*\d{4})/);
+      const n = t.match(/Auction\s*#\s*(\d+)\s*[-\u2013\u2014]\s*([A-Za-z]+\.?\s+\d{1,2},?\s*\d{4})/);
+      return { closed: m ? m[1] : null, numId: n ? n[1] : null, numDate: n ? n[2] : null };
     }),
     cats: await page.evaluate(() => {
       const set = new Set<string>();
@@ -213,14 +216,21 @@ async function crawlSale(browser: Browser, saleId: string, maxPages: number, cat
     }
   }
   console.log(`[rr] sale ${saleId}: ${lots.length} unique lots across ${1 + cats.filter((c) => c !== '0').length} views`);
-  return { lots, saleName, saleClosed: isoDate(landing.value?.closed) };
+  let saleClosed = isoDate(landing.value?.hdr?.closed);
+  if (!saleClosed && landing.value?.hdr?.numId === saleId) {
+    // the numbered header is the sale DATE, not proof it closed — trust it
+    // only once that date is in the past (a future live sale stays no-date)
+    const d = isoDate(landing.value.hdr.numDate);
+    if (d && d < new Date().toISOString().slice(0, 10)) saleClosed = d;
+  }
+  return { lots, saleName, saleClosed };
 }
 
 const MONTH_NUM: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 /** "April 23, 2026" / "Apr. 23, 2026" → "2026-04-23" (null on anything else) */
 function isoDate(s: string | null | undefined): string | null {
   if (!s) return null;
-  const m = s.match(/([A-Za-z]+)\.?\s+(\d{1,2}),\s*(\d{4})/);
+  const m = s.match(/([A-Za-z]+)\.?\s+(\d{1,2}),?\s*(\d{4})/);
   if (!m) return null;
   const mm = MONTH_NUM[m[1].toLowerCase().slice(0, 3)];
   return mm ? `${m[3]}-${mm}-${m[2].padStart(2, '0')}` : null;
