@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
-import { drillRowFor } from '../lib/submarkets';
+import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
 import { useFullLots, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude } from '../lib/comps';
+import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
@@ -408,6 +408,18 @@ export default function LotPage({ lotId, initialLot }: {
   }, [lot, sig, called, band, fullLoaded, allLots]);
   const compsN = sig?.basis ?? (band ? band.n : called?.n) ?? null;
 
+  // ── reference comps: a low-confidence measured RANGE, never a flag ──
+  // scienceReferenceBand/cultureReferenceBand scan the whole corpus, so gate
+  // on fullLoaded. Purely descriptive $ context — the render carries no tone,
+  // no %, no mono; it labels itself low-confidence reference.
+  const refBand = useMemo(() => {
+    if (!lot || !fullLoaded) return null;
+    const mkt = ARTIST_MARKET[lot.artist];
+    if (mkt === 'science') return scienceReferenceBand(lot, allLots);
+    if (mkt === 'culture') return cultureReferenceBand(lot, allLots);
+    return null;
+  }, [lot, fullLoaded, allLots]);
+
   // ── resolution states ─────────────────────────────────────────────────
   if (!lot) {
     const mainSettled = fullLoaded || fullError;
@@ -664,11 +676,44 @@ export default function LotPage({ lotId, initialLot }: {
                   : dr.readType === 'demand' && pct != null
                     ? `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}% vs estimate, trailing year · ${dr.lots.toLocaleString()} lots`
                     : `${dr.lots.toLocaleString()} lots tracked${dr.typicalUsd != null ? ` · ${formatPrice(dr.typicalUsd)} typical` : ''}`;
+                const ref = drillSlugFor(lot);
+                const tone: 'up' | 'down' | undefined = pct != null ? (pct >= 0 ? 'up' : 'down') : undefined;
+                if (ref) {
+                  return (
+                    <LeaderRow k="Sub-market" sub={sub} tone={tone}>
+                      <Link href={`/sub?id=${encodeURIComponent(ref.slug)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                        {dr.label} <Flick size={10} style={{ marginLeft: 2 }} />
+                      </Link>
+                    </LeaderRow>
+                  );
+                }
                 return (
-                  <LeaderRow k="Sub-market" v={dr.label} sub={sub}
-                    tone={pct != null ? (pct >= 0 ? 'up' : 'down') : undefined} />
+                  <LeaderRow k="Sub-market" v={dr.label} sub={sub} tone={tone} />
                 );
               })()}
+
+              {/* reference comps — a low-confidence measured RANGE, never a
+                  flag. Descriptive $ context: no tone, no %, no mono. The
+                  label and sub say "reference · low-confidence" so it can
+                  never be read as a verified index or a point estimate. */}
+              {refBand && (
+                <LeaderRow
+                  k="Reference comps"
+                  v={`${formatPrice(refBand.q1)}–${formatPrice(refBand.q3)}`}
+                  sub={`${formatPrice(refBand.med)} median · ${refBand.n} sales · low-confidence reference`}
+                />
+              )}
+
+              {/* bid velocity — a descriptive count of recent bids on a live
+                  lot. Plain ink: no tone, no mono, never a price. Rendered
+                  only when the sibling stamped it and the lot is still open. */}
+              {isUpcoming && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
+                <LeaderRow
+                  k="Bid velocity"
+                  v={`+${lot.bidVelocity.delta} bids`}
+                  sub={`in the last ${Math.round(lot.bidVelocity.hours)}h${lot.bidVelocity.pctile != null ? ` · faster than ${lot.bidVelocity.pctile}% of live lots` : ''}`}
+                />
+              )}
 
               {/* live card: the exact-card record — same card, same grade */}
               {isUpcoming && lot.cardComps && lot.cardComps.n > 0 && (

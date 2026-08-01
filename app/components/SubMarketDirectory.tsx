@@ -9,6 +9,7 @@
  * descriptive facts; green-red ONLY on real deltas, mono ONLY on % figures).
  */
 import React from 'react';
+import Link from 'next/link';
 import { ARTISTS, MARKETS } from '../constants';
 import { SUBCAT_LABELS } from '../lib/subcat-labels';
 import type { MarketData, SubMarketRead } from '../hooks/useRayData';
@@ -47,8 +48,10 @@ const CSS = `
 .ray-smd-cardhead{display:flex;align-items:baseline;justify-content:space-between;padding-bottom:10px;border-bottom:2px dotted rgba(255,255,255,0.09)}
 .ray-smd-cardtitle{font-size:13.5px;font-weight:600;color:var(--color-fg,#E8EAED)}
 .ray-smd-cardmeta{font-size:11px;color:#7A8087;font-variant-numeric:tabular-nums}
-.ray-smd-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:baseline;padding:8px 0;border-bottom:2px dotted rgba(255,255,255,0.07)}
+.ray-smd-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:baseline;padding:8px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.07);border-radius:8px;color:inherit;text-decoration:none;cursor:pointer;transition:background 0.14s ease}
 .ray-smd-row:last-child{border-bottom:none}
+a.ray-smd-row:hover{background:rgba(255,255,255,0.05)}
+a.ray-smd-row:hover .ray-smd-name{color:#FFF}
 .ray-smd-name{font-size:13px;color:var(--color-fg,#E8EAED)}
 .ray-smd-read{font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;color:var(--color-fg,#E8EAED)}
 .ray-smd-read .num{font-family:var(--font-mono,ui-monospace),monospace}
@@ -98,13 +101,13 @@ function GroupCard({ title, rows, full }: { title: string; rows: DrillRow[]; ful
         <span className="ray-smd-cardmeta">{total.toLocaleString()} lots</span>
       </div>
       {shown.map(r => (
-        <div key={r.slug} className="ray-smd-row">
+        <Link key={r.slug} href={`/sub?id=${encodeURIComponent(r.slug)}`} className="ray-smd-row">
           {/* cross-market overview mixes kinds in one card — keep the full
               emitted label there ('Soccer · cards' vs 'Soccer · memorabilia');
               a scoped group card already names the kind/maker in its head */}
           <span className="ray-smd-name">{full ? r.label : rowLabel(r)}</span>
           {readCell(r)}
-        </div>
+        </Link>
       ))}
       {rows.length > MAX_ROWS && <div className="ray-smd-more">+ {rows.length - MAX_ROWS} more tracked</div>}
     </div>

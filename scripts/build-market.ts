@@ -19,6 +19,7 @@ import { resolveComps, estimateValue, setCalibration, type ValueResult } from '.
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
 import { buildHedonicIndex, buildMakerIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
 import { buildSubMarkets, buildDrillRows } from './sub-markets';
+import { fitGradeLadder } from './lib/grade-ladder';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -515,6 +516,9 @@ export function runMarketBuild() {
   // tickets/trophies — "how is this athlete doing in the wider market". All
   // parsed from titles (app/lib/cards.ts), aggregated at build, R2-only.
   const tPl = Date.now();
+  // hoisted so the fitted grade ladder can be stamped into market.json below
+  let gradeLadderArtifact: ReturnType<typeof fitGradeLadder>['rungs'] | null = null;
+  let gradeLadderMeta: { pairs: number; groups: number } | null = null;
   {
     const { parseCard, playerOf, cardKey, cardLadderKey } = require('../app/lib/cards');
     // parseCard is a pure function of the title; the same card title recurs
@@ -550,6 +554,21 @@ export function runMarketBuild() {
         e.lots.push(l);
       }
     }
+
+    // ── EMPIRICAL GRADE LADDER ── fit the card-grade multiplier from graded
+    // sold cards by within-card paired log-ratios (mix-immune). Every sold card
+    // now carries _card (stamped above), so this reads the freshly-parsed pool.
+    // Measured (~193K graded sold): the fit is monotone, holdout-validated
+    // (median |log err| 0.474 fitted vs 0.507 old), and steeper than the old
+    // constants at the top (PSA-10 ≈10× the PSA-8 base, not 7×). Thin rungs keep
+    // the old constant. The tier-2 grade-adjust valuer consumes ladder.mult.
+    const gradeLadderFit = fitGradeLadder(
+      (sportsSold as PLot[]).filter(l => l.artist === 'sports-cards'),
+    );
+    console.log(`[market] grade ladder fitted from ${gradeLadderFit.pairs} within-card pairs (${gradeLadderFit.groups} groups): ` +
+      gradeLadderFit.rungs.map(r => `${r.grade}=${r.mult.toFixed(2)}${r.fitted ? '' : '*'}`).join(' ') + ' (*=kept old constant)');
+    gradeLadderArtifact = gradeLadderFit.rungs;
+    gradeLadderMeta = { pairs: gradeLadderFit.pairs, groups: gradeLadderFit.groups };
 
     // players.json — players with real depth (≥25 sales)
     const playersOut: Record<string, unknown>[] = [];
@@ -618,17 +637,11 @@ export function runMarketBuild() {
     //   signal → confidence 'low'.
     // If none seat → no value (null). Never fabricated.
     const GRADE_CUT = Date.now() - 730 * 864e5; // 24 months (tier-3 recency)
-    // grade → relative value multiplier (coarse, monotone; graded market shape).
-    // Only RATIOS between rungs are used, so the absolute scale is irrelevant.
-    const gradeMult = (n: number | null | undefined): number => {
-      if (n == null) return 1;          // raw / ungradeable → base
-      if (n >= 10) return 7;
-      if (n >= 9.5) return 3;
-      if (n >= 9) return 1.6;
-      if (n >= 8.5) return 1.15;
-      if (n >= 8) return 1;
-      return 0.8;                        // 7 and below trade near/under the 8 floor
-    };
+    // grade → relative value multiplier — now the EMPIRICAL ladder fitted above
+    // (was a hardcoded constant curve). Only RATIOS between rungs are used, so
+    // the absolute scale is irrelevant. Thin/off-ladder grades fall back to the
+    // old constant inside gradeLadderFit.mult (honesty doctrine).
+    const gradeMult = gradeLadderFit.mult;
     const cardVsBid = (bid: number, value: number): { label: 'below recent comps' | 'above recent comps' | 'in line'; pct: number } => {
       // mirror value.ts's vsBid thresholds exactly (±12% band around the value)
       const pct = Math.round((bid / value - 1) * 100);
@@ -868,6 +881,10 @@ export function runMarketBuild() {
       directional: { method: 'temporal holdout, n≈2400', buckets: [['<0.6', 40], ['0.6-0.9', 55], ['0.9-1.3', 57], ['1.3-2', 65], ['>2', 69]] },
       valueError: { sports_high: 1.32, design_high: 1.45, watches_high: 1.52, art_high: 1.56 },
     },
+    // the empirical card-grade multiplier ladder (within-card paired log-ratios,
+    // base grade 8 = 1.00) that the tier-2 card valuer runs on — inspectable and
+    // reusable. null if the card pass didn't run (no sports corpus).
+    ...(gradeLadderArtifact ? { gradeLadder: { base: 8, rungs: gradeLadderArtifact, ...gradeLadderMeta } } : {}),
   };
   fs.mkdirSync(SERVED, { recursive: true });
   fs.writeFileSync(path.join(SERVED, 'market.json'), JSON.stringify(market));

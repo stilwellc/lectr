@@ -9,6 +9,7 @@
  * facts in plain ink; mono type reserved for percent-change figures.
  */
 import React from 'react';
+import Link from 'next/link';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 
 type DrillRow = SubMarketRead & { parent: string };
@@ -18,8 +19,10 @@ const fmtUsd = (n: number) =>
 
 const CSS = `
 .ray-dr-rows{display:flex;flex-direction:column;margin-top:10px}
-.ray-dr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 0;border-bottom:2px dotted rgba(255,255,255,0.09)}
+.ray-dr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;cursor:pointer;transition:background 0.14s ease}
 .ray-dr-row:last-child{border-bottom:none}
+a.ray-dr-row:hover{background:rgba(255,255,255,0.045)}
+a.ray-dr-row:hover .ray-dr-name{color:#FFF}
 .ray-dr-name{font-size:13.5px;color:var(--fg,#E8EAED)}
 .ray-dr-kind{color:#7A8087;font-size:12px;margin-left:6px}
 .ray-dr-read{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
@@ -88,14 +91,14 @@ export default function SubMarketDrills({ marketData, scope, parentFilter, title
       </div>
       <div className="ray-dr-rows">
         {rows.map(r => (
-          <div key={r.slug} className="ray-dr-row">
+          <Link key={r.slug} href={`/sub?id=${encodeURIComponent(r.slug)}`} className="ray-dr-row">
             <span className="ray-dr-name">
               {r.label}
               {scope === 'all' ? <span className="ray-dr-kind">{r.vertical}</span> : null}
             </span>
             {readCell(r)}
             <span className="ray-dr-meta">{r.lots.toLocaleString()} lots</span>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

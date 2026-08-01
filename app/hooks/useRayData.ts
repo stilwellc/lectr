@@ -329,10 +329,15 @@ function loadRayData(): Promise<RayPayload> {
               // science bands); re-attach it here too, or the feed cards — which
               // render from allLots, not upcoming.json — never see the band.
               const soldComps = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).soldComp]));
+              // bidVelocity is stamped only on the eager upcoming lots (not the
+              // corpus shards) — re-attach it or the shard version overwrites it
+              // and LotPage's bid-velocity row never appears after phase 2.
+              const bidVels = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).bidVelocity]));
               const merged = full.map(l => {
                 let x = l;
                 if (signals.has(l.id)) x = { ...x, signal: signals.get(l.id) };
                 if (soldComps.get(l.id) != null) x = { ...x, soldComp: soldComps.get(l.id) };
+                if (bidVels.get(l.id) != null) x = { ...x, bidVelocity: bidVels.get(l.id) };
                 return x;
               });
               notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });

@@ -101,6 +101,34 @@ function quarterlyVolume(sold: AuctionLot[]): { period: string; n: number }[] | 
   return rows.length >= 8 ? rows : undefined;
 }
 
+/**
+ * Long-horizon YEARLY typical-price median (calendar year), n-gated. For the
+ * culture SUBJECT-DOMAIN drills off the RR 30-year sold archive (dense from
+ * ~2003). Only years with ≥ MIN_HIST_YEAR sold lots publish (a thin year is a
+ * misleading point), trailing up to ~23 years. DESCRIPTIVE dollars — the median
+ * price a domain's lots actually cleared that year — never a %-change. Mirrors
+ * the volSeries emission discipline: sorted keys, n carried, gate on support.
+ */
+const MIN_HIST_YEAR = 20;
+const HIST_MAX_YEARS = 23;
+function yearlyHist(sold: AuctionLot[]): { period: string; value: number; n: number }[] | undefined {
+  const byYear = new Map<number, number[]>();
+  for (const l of sold) {
+    const p = l.priceUsd || 0;
+    if (!(p > 0)) continue;
+    const d = new Date(l.saleDate);
+    if (isNaN(d.getTime())) continue;
+    const y = d.getUTCFullYear();
+    (byYear.get(y) || byYear.set(y, []).get(y)!).push(p);
+  }
+  const rows = Array.from(byYear.entries())
+    .filter(([, v]) => v.length >= MIN_HIST_YEAR)
+    .sort((a, b) => a[0] - b[0])
+    .map(([y, v]) => ({ period: String(y), value: Math.round(median(v)), n: v.length }))
+    .slice(-HIST_MAX_YEARS);
+  return rows.length >= 3 ? rows : undefined;
+}
+
 function median(a: number[]): number {
   const s = a.slice().sort((x, y) => x - y);
   const n = s.length;
@@ -263,6 +291,12 @@ function buildRead(
     estCoverage: +estCoverage.toFixed(3),
     ...(indexSeries?.length ? { indexSeries } : {}),
     ...(() => { const v = quarterlyVolume(sold); return v ? { volSeries: v } : {}; })(),
+    // culture SUBJECT-DOMAIN rows (slug 'culture:music'/'culture:hollywood'/…)
+    // carry a long-horizon yearly typical-price series off the RR archive. Only
+    // the subject-domain drills (parent 'culture'), not the culture-KIND rows.
+    ...((vertical === 'culture' && parent === 'culture')
+      ? (() => { const h = yearlyHist(sold); return h ? { histSeries: h } : {}; })()
+      : {}),
   };
 }
 

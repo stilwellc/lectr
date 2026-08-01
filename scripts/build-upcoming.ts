@@ -20,7 +20,7 @@ import {
   computeDeepSignal, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
 import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app/lib/demand';
-import { ARTIST_LABEL, marketArtists, MARKETS } from '../app/constants';
+import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -74,14 +74,63 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // after its sale while results post; anything older that never resolved (e.g.
   // Christie's results gated behind login and never scraped) drops, not lingers.
   const graceCut = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const upcoming = lots
+  const upcomingLots = lots
     .filter(l => {
       if (l.status !== 'upcoming') return false;
       // A just-closed lot awaiting results is held 'upcoming' with a past sale
       // date — keep it visible only within the grace window.
       if ((l as { resultsPending?: boolean }).resultsPending) return !!l.saleDate && l.saleDate.slice(0, 10) >= graceCut;
       return !!l.saleDate && l.saleDate.slice(0, 10) >= today;
-    })
+    });
+
+  // ── BID-VELOCITY precompute (Goldin live lots; corpus-only bidHistory) ──────
+  // lot.bidHistory is Snap[] (Snap = {d:ISO, b:currentBid, n:bidCount}), up to
+  // ~59 nightly snapshots. delta = latest.n − previous.n (bids ADDED since the
+  // prior snapshot); hours = wall-clock hours between those two `d` timestamps.
+  // pctile ranks THIS lot's delta among all live lots in the SAME market with
+  // delta>0 (a bidVelocity is a DEMAND primitive — bids added — never a price
+  // or a %-change). pctile is null under 20 same-market positive-delta peers so
+  // a thin market never mints a false rank. Two passes: (1) compute delta/hours
+  // per lot, (2) rank positive deltas within each market. delta<=0 lots still
+  // carry a delta/hours read (a retracted/corrected bid is honest data) but get
+  // no pctile — the percentile pool is positive-momentum peers only.
+  type Vel = { delta: number; hours: number; pctile: number | null };
+  const velById = new Map<string, Vel>();
+  const posDeltasByMarket = new Map<string, number[]>();
+  for (const l of upcomingLots) {
+    const bh = (l as { bidHistory?: Array<{ d: string; b: number; n: number }> }).bidHistory;
+    if (!Array.isArray(bh) || bh.length < 2) continue;
+    const last = bh[bh.length - 1];
+    const prev = bh[bh.length - 2];
+    if (last?.n == null || prev?.n == null) continue;
+    const delta = last.n - prev.n;
+    const hours = (new Date(last.d).getTime() - new Date(prev.d).getTime()) / 3.6e6;
+    if (!Number.isFinite(hours)) continue;
+    velById.set(l.id, { delta, hours, pctile: null });
+    if (delta > 0) {
+      const mk = marketOf(l.artist);
+      (posDeltasByMarket.get(mk) || posDeltasByMarket.set(mk, []).get(mk)!).push(delta);
+    }
+  }
+  // sort each market's positive-delta pool once for percentile lookups
+  const MIN_PEERS = 20;
+  const sortedPos = new Map<string, number[]>();
+  for (const [mk, arr] of Array.from(posDeltasByMarket.entries())) sortedPos.set(mk, arr.slice().sort((a: number, b: number) => a - b));
+  // integer percentile: fraction of same-market positive-delta peers this lot's
+  // delta is >= (a strict "at or above" rank), scaled to 0..100. Null under the
+  // peer floor.
+  for (const l of upcomingLots) {
+    const v = velById.get(l.id);
+    if (!v || v.delta <= 0) continue;
+    const pool = sortedPos.get(marketOf(l.artist));
+    if (!pool || pool.length < MIN_PEERS) continue;
+    // count of peers with a strictly-smaller delta, +0.5 per tie → midrank
+    let lo = 0, hi = 0;
+    for (const d of pool) { if (d < v.delta) lo++; else if (d === v.delta) hi++; }
+    v.pctile = Math.round(((lo + hi / 2) / pool.length) * 100);
+  }
+
+  const upcoming = upcomingLots
     .map(l => {
       const lot = l as unknown as AuctionLot;
       // THE ENGINE OWNS THE CARD SIGNAL (measured head-to-head on 25k targets:
@@ -145,6 +194,11 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       // null must survive serialization as null, never be omitted as a "null
       // weight" the way slimForClient does for corpus fields.
       emitted.signal = signal;
+      // BID-VELOCITY stamp (Goldin live lots) — bidHistory is corpus-only and in
+      // the STRIP set, so it never reaches the client; this precomputed digest
+      // does. bidVelocity is NOT in STRIP, so slimForClient keeps it (verified).
+      const vel = velById.get(l.id);
+      if (vel) emitted.bidVelocity = vel;
       // W5 · precompute soldComp for upcoming sports/science lots, analogous to
       // signal — so a card/modal can paint the realized band before the archive
       // loads. soldCompBand returns null for every non-sports/science-object lot
@@ -302,7 +356,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
   const recentCounts = Object.keys(recentSold).map(k => `${k}:${recentSold[k].length}`).join(' ');
   const bcLast = bidComp.sports.length ? bidComp.sports[bidComp.sports.length - 1] : null;
-  console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], recentSold[${recentCounts}], realized.sports:${realized.sports.length}, bidComp.sports:${bidComp.sports.length}${bcLast ? ` (now ${bcLast.value} bids/lot)` : ''}, ${kb}KB`);
+  const velN = velById.size;
+  const velPct = Array.from(velById.values()).filter(v => v.pctile != null).length;
+  console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], recentSold[${recentCounts}], realized.sports:${realized.sports.length}, bidComp.sports:${bidComp.sports.length}${bcLast ? ` (now ${bcLast.value} bids/lot)` : ''}, bidVelocity:${velN} (${velPct} w/ pctile), ${kb}KB`);
 }
 
 // standalone entry
