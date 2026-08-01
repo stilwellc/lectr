@@ -262,6 +262,11 @@ export interface AuctionLot {
   subCat?: string;
   drill?: string;
   flown?: boolean;
+  /** live bid-velocity, precomputed in build-upcoming from lot.bidHistory
+      (Goldin live lots only): bids added over the trailing window + the
+      lot's percentile among live peers. DESCRIPTIVE demand primitive —
+      never a price, never a %-change (no green/red). */
+  bidVelocity?: { delta: number; hours: number; pctile: number | null };
   playerName?: string | null;
   /** parsed trading-card identity — the composite fingerprint keying the card
       repeat-sales index (same player+year+set+cardNo+grade = the same product).

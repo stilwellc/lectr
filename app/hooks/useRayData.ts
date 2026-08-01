@@ -130,6 +130,9 @@ export interface SubMarketRead {
   indexSeries?: { period: string; value: number; n: number }[];
   /** trailing quarterly sold-lot counts — volume facts, never price movement */
   volSeries?: { period: string; n: number }[];
+  /** long-horizon YEARLY typical-price median (n-gated), for culture subject
+      domains off the RR 23-year archive. Descriptive $ — never a %-change. */
+  histSeries?: { period: string; value: number; n: number }[];
 }
 export interface HedonicHorizon {
   changePct: number | null;

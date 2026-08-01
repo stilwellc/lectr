@@ -54,6 +54,9 @@ export interface SubMarketRead {
   /** quarterly sold-lot counts (trailing 24 quarters) — the volume subpane's
       series; counts are facts, never dressed as price movement */
   volSeries?: { period: string; n: number }[];
+  /** long-horizon YEARLY typical-price median (n-gated), for culture subject
+      domains off the RR 23-year archive. Descriptive $ — never a %-change. */
+  histSeries?: { period: string; value: number; n: number }[];
 }
 
 // the descriptive stats each slug carries (a subset of stats.json / computeStats)
