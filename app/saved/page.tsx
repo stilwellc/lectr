@@ -10,20 +10,30 @@ import { supabase } from '../lib/supabase';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate } from '../components/LotCard';
-import { appraiseLot, soldCompBand, isSportsScienceObject } from '../lib/comps';
-import PastResults from '../components/PastResults';
+import { appraiseLot, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
+import HeroChart from '../preview/terminal/HeroChart';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
-import meta from '../../public/data/ray/meta.json';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
-import { ARTIST_LABEL } from '../constants';
+import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 
-/** Whole calendar days from the reader's LOCAL day to the sale day — signed:
-    a past date counts negative (no clamp-to-today; a lot that hammered days
-    ago must never read "today" forever). */
+/* ============================================================
+   MY PROFILE — the collector's data center. Three ledgers, one
+   desk: WATCHING (live saved lots, tracked to the hammer),
+   SETTLED (what happened to the lots you watched — your track
+   record, measured), and COLLECTION (the lots you own — engine-
+   appraised, charted over time, placed in their sub-markets).
+
+   Honesty rules hold everywhere: green/red only on measured
+   deltas; reference bands render as labeled ranges and never
+   enter a total; a market read on your holdings is the MARKET's
+   move, labeled as such — never dressed as your appreciation.
+   ============================================================ */
+
 function daysUntil(dateStr: string): number {
   const day = (dateStr || '').slice(0, 10);
   const t = Date.parse(`${day}T00:00:00Z`);
@@ -31,15 +41,20 @@ function daysUntil(dateStr: string): number {
   return Math.round((t - Date.parse(`${localToday()}T00:00:00Z`)) / 86_400_000);
 }
 function hammerWord(days: number): string {
-  if (isNaN(days)) return 'scheduled';   // never render "in NaN days"
+  if (isNaN(days)) return 'scheduled';
   if (days < 0) return `hammered ${-days} ${days === -1 ? 'day' : 'days'} ago`;
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
 }
-/** What changed on a watched lot since the save — signal move and new bids.
-    Renders nothing when there's no baseline (pre-upgrade saves) or nothing
-    moved: absence of data is never dressed as a delta. */
+function median(a: number[]): number | null {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** What changed on a watched lot since the save (card view). */
 function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta; allLots: AuctionLot[] }) {
   const cur = lotSignal(lot, allLots);
   const signalMoved =
@@ -66,25 +81,19 @@ function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta;
   );
 }
 
-/** The desktop watchlist view — ledger (terminal density) or the card grid.
-    Stored per browser; ≤899px always renders cards regardless. */
 type SavedView = 'ledger' | 'cards';
 const SAVEDVIEW_KEY = 'ray-savedview';
 
-/**
- * Saved — the watchlist. Answers "what am I watching and when must I act":
- * total estimate at stake, the next hammer, which of the watched lots the
- * signal flags as cheap — then the lots in urgency order.
- */
+interface Snapshot { d: string; paid: number; appraised: number; pieces: number }
+
 export default function SavedPage() {
   // useFullLots: saved lots may have rolled off upcoming into the corpus, and
-  // the collection valuation gates on fullLoaded — trigger phase 2.
-  const { allLots, lastCrawl, loading, fullLoaded, fromCache } = useFullLots();
+  // the collection valuation gates on fullLoaded — trigger phase 2. market
+  // carries the drills (sub-market reads) for the exposure block.
+  const { allLots, lastCrawl, loading, fullLoaded, fromCache, market: marketData } = useFullLots();
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
 
-  // Desktop watchlist view — ledger by default; the stored preference lands
-  // after mount (window-guarded: the static export prerenders this page).
   const [savedView, setSavedView] = useState<SavedView>('ledger');
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -105,22 +114,14 @@ export default function SavedPage() {
     [savedIds, allLots]
   );
 
-  // Saved ids the crawl no longer carries — they render as stub rows, never
-  // as silence, and they never count toward the nav badge.
   const orphanIds = useMemo(() => {
     if (!fullLoaded) return [] as string[];
     const have = new Set(allLots.map(l => l.id));
     return savedIds.filter(id => !have.has(id));
   }, [savedIds, allLots, fullLoaded]);
 
-  // The nav badge counts renderable lots only; before the full archive lands
-  // we can't yet judge orphans, so the raw count stands in.
   const badgeCount = fullLoaded ? savedLots.length : savedIds.length;
 
-  // A hammered lot awaiting the house's results is CONCLUDED, not watched —
-  // it joins the results list priced "Pending". It carries no price, so every
-  // pricing computation (verdict, appraisals, comps, engine) already excludes
-  // it structurally; nothing pending can leak into a number.
   const isPastPending = (l: AuctionLot) =>
     l.status === 'upcoming' && !!l.resultsPending && !!l.saleDate && l.saleDate.slice(0, 10) < localToday();
 
@@ -138,9 +139,6 @@ export default function SavedPage() {
     [savedLots]
   );
 
-  // Anything you saved that is neither upcoming nor sold (bought-in, withdrawn,
-  // results-pending-that-lapsed, etc.) — it must STILL appear. A saved lot never
-  // silently vanishes from your watchlist just because its status changed.
   const other = useMemo(() =>
     savedLots
       .filter(l => l.status !== 'upcoming' && l.status !== 'sold')
@@ -148,11 +146,9 @@ export default function SavedPage() {
     [savedLots]
   );
 
-  // YOUR COLLECTION — saved past lots the user marked as owned. Each piece
-  // carries TWO figures: the BOUGHT price (what it realized on the block) and
-  // lectr's APPRAISAL — the median its comparable pool currently trades at
-  // (same pools and guards as the card signal, returned unconditionally);
-  // estimate-less sports/science pieces appraise off the realized comp band.
+  /* ── COLLECTION — engine-appraised, with reference-band context where the
+     engine abstains. A reference RANGE is context only: it NEVER enters the
+     total (un-appraisable pieces carry at their bought price). ── */
   const collection = useMemo(() => {
     const ownedSet = new Set(ownedIds);
     const rows = savedLots
@@ -162,21 +158,44 @@ export default function SavedPage() {
         const appr = appraiseLot(l, allLots);
         const band = !appr && isSportsScienceObject(l) ? soldCompBand(l, allLots) : null;
         const appraised = appr?.value ?? band?.median ?? null;
-        const basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
+        let basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
+        // reference-band context for science/culture pieces the engine won't
+        // point-value — a labeled RANGE, never a number in the total
+        let refRange: string | null = null;
+        if (appraised == null && fullLoaded) {
+          const mkt = ARTIST_MARKET[l.artist];
+          const rb = mkt === 'science' ? scienceReferenceBand(l, allLots)
+            : mkt === 'culture' ? cultureReferenceBand(l, allLots) : null;
+          if (rb) refRange = `reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`;
+        }
         const deltaPct = paid && appraised ? Math.round((appraised / paid - 1) * 100) : null;
-        return { lot: l, paid, appraised, basis, deltaPct };
+        const drill = drillRowFor(l, marketData);
+        const drillRef = drillSlugFor(l);
+        return { lot: l, paid, appraised, basis: basis ?? refRange, refOnly: !basis && !!refRange, deltaPct, drill, drillSlug: drillRef?.slug ?? null };
       })
       .sort((a, b) => (b.appraised ?? b.paid ?? 0) - (a.appraised ?? a.paid ?? 0));
     const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
-    // the collection total carries un-appraisable pieces at their bought price
     const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
     return { rows, totalPaid, totalAppraised };
-  }, [savedLots, ownedIds, allLots]);
+  }, [savedLots, ownedIds, allLots, fullLoaded, marketData]);
 
-  // COLLECTION HISTORY: one snapshot per user per day (RLS-owned), written
-  // when the profile renders with an owned collection — the raw material for
-  // the "your collection over time" chart. Idempotent upsert; localStorage
-  // guard keeps it to one write per day per browser.
+  /* ── SUB-MARKET EXPOSURE — where the collection trades. Each row is the
+     MARKET's read (index/demand), labeled as the market's move — never the
+     pieces' own appreciation. ── */
+  const exposure = useMemo(() => {
+    const by = new Map<string, { row: DrillRow; n: number; held: number }>();
+    for (const r of collection.rows) {
+      if (!r.drill) continue;
+      const cur = by.get(r.drill.slug) || { row: r.drill, n: 0, held: 0 };
+      cur.n += 1;
+      cur.held += r.appraised ?? r.paid ?? 0;
+      by.set(r.drill.slug, cur);
+    }
+    return Array.from(by.values()).sort((a, b) => b.held - a.held);
+  }, [collection]);
+
+  /* ── COLLECTION HISTORY — write one snapshot per day (existing behavior),
+     and READ the trail back for the over-time chart. ── */
   useEffect(() => {
     if (!supabase || !user || !fullLoaded || collection.rows.length === 0) return;
     const day = new Date().toISOString().slice(0, 10);
@@ -192,6 +211,37 @@ export default function SavedPage() {
     });
   }, [user, fullLoaded, collection]);
 
+  const [snaps, setSnaps] = useState<Snapshot[]>([]);
+  useEffect(() => {
+    if (!supabase || !user) { setSnaps([]); return; }
+    let dead = false;
+    supabase.from('collection_snapshots')
+      .select('snap_date,total_paid,total_appraised,pieces')
+      .eq('user_id', user.id)
+      .order('snap_date', { ascending: true })
+      .limit(180)
+      .then(({ data, error }) => {
+        if (dead || error || !data) return;
+        setSnaps(data.map(r => ({ d: r.snap_date as string, paid: r.total_paid as number, appraised: r.total_appraised as number, pieces: r.pieces as number })));
+      });
+    return () => { dead = true; };
+  }, [user]);
+  // the chart needs a real trail — 3+ days of snapshots, else nothing renders
+  const collectionChart = useMemo(() => {
+    if (snaps.length < 3) return null;
+    return {
+      anchor: {
+        key: '_appr', label: 'lectr appraisal', color: '', unit: 'money' as const,
+        points: snaps.map(s => ({ period: s.d, value: s.appraised, n: s.pieces })),
+      },
+      layers: [{
+        key: 'paid', label: 'Bought', color: '#8F9BA8', unit: 'money' as const,
+        points: snaps.map(s => ({ period: s.d, value: s.paid, n: s.pieces })),
+      }],
+    };
+  }, [snaps]);
+
+  /* ── WATCHING summary ── */
   const summary = useMemo(() => {
     const withEst = upcoming.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
     const totalEst = withEst.reduce((s, l) => {
@@ -203,59 +253,43 @@ export default function SavedPage() {
       const sig = lotSignal(l, allLots);
       return sig && sig.label === 'Below Market';
     }).length;
-    // next hammer = genuinely future only (past-dated resultsPending lots are
-    // watched, but they already hammered — they can't be "next")
     const todayIso = localToday();
     const next = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= todayIso) || null;
     return { totalEst, flagged, next };
   }, [upcoming, allLots]);
 
-  // Aggregate "what changed" for the hero sub-line: how many watched signals
-  // moved and how many new bids arrived since each lot was saved.
   const changes = useMemo(() => {
     let moved = 0;
     let newBids = 0;
     for (const lot of upcoming) {
-      const meta = savedMeta[lot.id];
-      if (!meta) continue;
+      const m = savedMeta[lot.id];
+      if (!m) continue;
       const cur = lotSignal(lot, allLots);
-      if (meta.signalPct != null && cur !== null && Math.round(cur.pct) !== Math.round(meta.signalPct)) moved++;
-      if (meta.bidCount != null && (lot.bidCount || 0) > meta.bidCount) newBids += (lot.bidCount || 0) - meta.bidCount;
+      if (m.signalPct != null && cur !== null && Math.round(cur.pct) !== Math.round(m.signalPct)) moved++;
+      if (m.bidCount != null && (lot.bidCount || 0) > m.bidCount) newBids += (lot.bidCount || 0) - m.bidCount;
     }
     return { moved, newBids };
   }, [upcoming, savedMeta, allLots]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
-  // The verdict — how your eye did once the hammer fell. Rendered as the sub
-  // line of the results table rather than a standalone section.
-  const verdict = useMemo<React.ReactNode>(() => {
-    const judged = sold.filter(l => l.priceUsd && l.estimateLow && l.estimateHigh);
-    if (!judged.length) return undefined;
-    // HAMMER BASIS — realized prices are premium-inclusive while estimates are
-    // hammer-basis; overEstimatePct divides the premium out, so "vs estimate"
-    // here means the same thing it does on every other surface (the old inline
-    // priceUsd/estMid read overstated every figure by ~25pts).
-    const pcts = judged
-      .map(l => overEstimatePct(l))
-      .filter((p): p is number => p != null)
-      .sort((a, b) => a - b);
-    if (!pcts.length) return undefined;
-    const medianPct = Math.round(pcts.length % 2 === 0
-      ? (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2
-      : pcts[Math.floor(pcts.length / 2)]);
-    const hammered = judged.reduce((s, l) => s + l.priceUsd!, 0);
-    return (
-      <>
-        How your eye did: {judged.length} watched {judged.length === 1 ? 'lot' : 'lots'} concluded ·{' '}
-        {formatPrice(hammered)} hammered · your picks went{' '}
-        <b style={{ color: medianPct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700 }}>
-          {fmtSignedPct(medianPct)}
-        </b>{' '}
-        vs estimate, median
-      </>
-    );
-  }, [sold]);
+  /* ── THE TRACK RECORD — how your eye did, measured. Hammer basis via
+     overEstimatePct (realized is premium-inclusive; estimates are hammer).
+     The flagged/unflagged split publishes only past an n-gate of 3 each. ── */
+  const record = useMemo(() => {
+    const judged = sold
+      .map(l => ({ l, pct: overEstimatePct(l) }))
+      .filter((x): x is { l: AuctionLot; pct: number } => x.pct != null);
+    if (!judged.length) return null;
+    const hammered = judged.reduce((s, x) => s + (x.l.priceUsd || 0), 0);
+    const med = median(judged.map(x => x.pct));
+    const flaggedAtSave = judged.filter(x => (savedMeta[x.l.id]?.signalPct ?? 0) <= -10);
+    const restAtSave = judged.filter(x => (savedMeta[x.l.id]?.signalPct ?? 0) > -10 && savedMeta[x.l.id]?.signalPct != null);
+    const split = flaggedAtSave.length >= 3 && restAtSave.length >= 3
+      ? { flagged: median(flaggedAtSave.map(x => x.pct)), flaggedN: flaggedAtSave.length, rest: median(restAtSave.map(x => x.pct)), restN: restAtSave.length }
+      : null;
+    return { n: judged.length, hammered, med, split };
+  }, [sold, savedMeta]);
 
   return (
     <div style={{
@@ -264,40 +298,36 @@ export default function SavedPage() {
       color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
-      {/* __html, not a text child: this CSS carries '>' child combinators,
-          which React entity-escapes in SSR text while the browser leaves
-          <style> raw text undecoded — a guaranteed hydration mismatch
-          (React #418/#423/#425) on every load. RecordBand's pattern. */}
+      {/* __html, not a text child: '>' combinators entity-escape in SSR text
+          while raw-text <style> never decodes — hydration mismatch otherwise */}
       <style dangerouslySetInnerHTML={{ __html: `
         .ray-saved-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
           gap: 30px 20px;
         }
-        /* grid children shrink below intrinsic width — one long nowrap line
-           must never inflate the page past the viewport */
         .ray-saved-grid > * { min-width: 0; }
         .ray-saved-section { padding-block: 40px 48px; }
-        .ray-saved-delta {
-          margin: 8px 2px 0;
-          font-size: 12.5px;
-          color: var(--color-text-muted);
-        }
+        .ray-saved-delta { margin: 8px 2px 0; font-size: 12.5px; color: var(--color-text-muted); }
         .ray-saved-orphan {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 14px;
-          padding: 14px 16px;
-          border-bottom: 1px solid var(--color-border);
-          font-size: 13px;
-          color: var(--color-text-muted);
+          display: flex; align-items: center; justify-content: space-between; gap: 14px;
+          padding: 14px 16px; border-bottom: 1px solid var(--color-border);
+          font-size: 13px; color: var(--color-text-muted);
         }
         .ray-saved-orphan:last-child { border-bottom: none; }
-        /* ── the watchlist LEDGER (desktop ≥900px) ─────────────────────────
-           maker · work · est · signal now · Δ since saved · hammers-in.
-           Mobile always renders the card grid; the toggle only exists where
-           the ledger can. */
+        /* ── the DESK STRIP — the profile's stat rail under the masthead ── */
+        .ray-desk-strip {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+          gap: 14px; margin-top: 22px;
+        }
+        .ray-desk-cell {
+          border: 2px dotted color-mix(in srgb, var(--color-fg) 13%, transparent);
+          border-radius: 18px; padding: 14px 16px 12px;
+        }
+        .ray-desk-cell .k { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-faint); }
+        .ray-desk-cell .v { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 3px; }
+        .ray-desk-cell .s { font-size: 11.5px; color: var(--color-text-muted); margin-top: 2px; }
+        /* ── ledgers ── */
         .ray-savedview-toggle { display: none; }
         .ray-saved-ledger { display: none; }
         @media (min-width: 900px) {
@@ -314,9 +344,7 @@ export default function SavedPage() {
           transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
         }
         .ray-savedview-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
-        .ray-savedview-btn[data-active=true] {
-          background: var(--color-fg); border-color: var(--color-fg); color: var(--color-bg);
-        }
+        .ray-savedview-btn[data-active=true] { background: var(--color-fg); border-color: var(--color-fg); color: var(--color-bg); }
         .ray-saved-cols {
           display: grid;
           grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) 110px 96px 104px 104px;
@@ -324,30 +352,50 @@ export default function SavedPage() {
         }
         .ray-saved-ledger-head { padding: 0 2px 8px; }
         .ray-savedrow {
-          padding: 11px 2px;
-          border-top: 1px solid var(--hairline);
+          padding: 11px 2px; border-top: 1px solid var(--hairline);
           text-decoration: none; color: inherit;
           transition: background var(--duration-fast) var(--ease-signature);
         }
         .ray-savedrow:hover { background: var(--color-hover-item); }
-        .ray-savedrow .maker {
-          font-size: 13px; font-weight: 600; color: var(--color-fg);
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-        }
-        .ray-savedrow .work {
-          font-size: 13px; color: var(--color-text-secondary);
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-        }
+        .ray-savedrow .maker { font-size: 13px; font-weight: 600; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+        .ray-savedrow .work { font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
         .ray-savedrow .num {
-          font-family: var(--font-mono), monospace;
-          font-size: 12px; font-variant-numeric: tabular-nums;
-          text-align: right; white-space: nowrap; color: var(--color-fg);
+          font-family: var(--font-mono), monospace; font-size: 12px;
+          font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--color-fg);
         }
-        .ray-savedrow .num .sub {
-          display: block; font-size: 10px; color: var(--color-text-faint);
-          letter-spacing: 0.02em;
-        }
+        .ray-savedrow .num .sub { display: block; font-size: 10px; color: var(--color-text-faint); letter-spacing: 0.02em; }
         .ray-saved-ledger .kicker.r { text-align: right; }
+        /* ── SETTLED ledger (own-toggle column) ── */
+        .ray-settled-cols {
+          display: grid;
+          grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 100px 88px 100px 88px 86px;
+          gap: 0 14px; align-items: baseline;
+        }
+        .ray-own-btn {
+          font-family: var(--font-sans), sans-serif; font-size: 10.5px; font-weight: 600;
+          padding: 3px 10px; border-radius: 100px; cursor: pointer;
+          border: 1px solid var(--color-border); background: transparent; color: var(--color-text-muted);
+          transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature);
+        }
+        .ray-own-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
+        .ray-own-btn[data-on=true] { background: var(--color-fg); border-color: var(--color-fg); color: var(--color-bg); }
+        .ray-settled-mobile { display: none; }
+        @media (max-width: 899px) {
+          .ray-settled-desk { display: none; }
+          .ray-settled-mobile { display: block; }
+        }
+        .ray-settled-mrow { padding: 12px 0; border-top: 1px solid var(--hairline); }
+        /* ── collection ── */
+        .ray-coll-exposure-row {
+          display: flex; align-items: baseline; gap: 12px; padding: 9px 0;
+          border-top: 1px solid var(--hairline); text-decoration: none; color: inherit;
+        }
+        .ray-coll-exposure-row:hover { background: var(--color-hover-item); }
+        .ray-coll-chip {
+          font-size: 10.5px; color: var(--color-text-muted); text-decoration: none;
+          border: 1px solid var(--color-border); border-radius: 100px; padding: 1px 8px; white-space: nowrap;
+        }
+        .ray-coll-chip:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
         @media (max-width: 768px) {
           .ray-saved-grid { grid-template-columns: 1fr; gap: 26px; }
           .ray-saved-section { padding-block: 32px 32px; }
@@ -356,10 +404,6 @@ export default function SavedPage() {
 
       <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {/* the quiet account row — sign-out lives on the profile now, not in the
-          nav. Right-aligned over the masthead; renders for signed-in users in
-          EVERY profile state (watchlist, empty, loading), so sign-out is never
-          unreachable. */}
       {authEnabled && authReady && user && (
         <div className="rail" style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 14 }}>
           <button
@@ -373,20 +417,17 @@ export default function SavedPage() {
       )}
 
       {authEnabled && authReady && !user ? (
-        /* The ONLY auth-gated surface — saved lots are scoped to a user. */
         <RayEntrance animate>
           <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
-            <p className="ray-hero2-label">Your watchlist</p>
-            <h1 className="ray-hero2-value">Track the lots you&rsquo;re watching</h1>
+            <p className="ray-hero2-label">My profile</p>
+            <h1 className="ray-hero2-value">Your desk at the auction</h1>
             <p className="ray-hero2-delta">
               <span style={{ maxWidth: 460 }}>
-                Private to you, synced across every device. lectr follows each saved lot&rsquo;s hammer,
-                its comps, and how your call played out.
+                Watch lots to the hammer, keep your track record, and hold your collection
+                against the engine&rsquo;s live appraisal. Private to you, synced everywhere.
               </span>
             </p>
           </section>
-          {/* paddingBlock, not the padding shorthand — the shorthand zeroes the
-              inline padding and kills the .rail clamp */}
           <div className="rail ray-enter" style={{ paddingBlock: '26px 72px' }}>
             <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
               Sign in with Google
@@ -397,28 +438,20 @@ export default function SavedPage() {
           </div>
         </RayEntrance>
       ) : loading || !authReady || !savedReady ? (
-        /* hold the loading state until the saved-lots load has RESOLVED — a
-           signed-in user must never flash the "0" empty state mid-fetch */
         <RayLoading />
       ) : savedLots.length === 0 && orphanIds.length === 0 ? (
         <RayEntrance animate={!fromCache}>
           <section className="ray-hero2 rail ray-enter">
-            <p className="ray-hero2-label">Your watchlist</p>
+            <p className="ray-hero2-label">My profile</p>
             <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>0</h1>
             <p className="ray-hero2-delta">
               <span className="ctx">
-                Every collector starts by watching. Bookmark a lot and lectr tracks its
-                hammer, its comps, and — once it concludes — how your eye did.
+                Every collector starts by watching. Bookmark a lot and lectr tracks its hammer,
+                its comps, your record once it concludes — and your collection when you win.
               </span>
             </p>
           </section>
-          <div
-            className="ray-enter"
-            style={{
-              textAlign: 'center',
-              padding: '48px 20px 120px',
-            }}
-          >
+          <div className="ray-enter" style={{ textAlign: 'center', padding: '48px 20px 120px' }}>
             <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
               Start with today&rsquo;s below-market lots
             </Link>
@@ -427,7 +460,6 @@ export default function SavedPage() {
       ) : (
         <RayEntrance animate={!fromCache}>
           <section className="rail ray-enter" style={{ paddingTop: 24 }}>
-            {/* the certificate masthead — the stake IS the accent figure */}
             <Masthead
               kicker="My profile"
               serial={lastCrawl || undefined}
@@ -441,9 +473,11 @@ export default function SavedPage() {
                     </Accent>{' '}
                     to the hammer.
                   </>
-                : <>
-                    Watching <Accent>{upcoming.length || savedLots.length} {(upcoming.length || savedLots.length) === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
-                  </>}
+                : collection.rows.length > 0
+                  ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {sold.length} settled.</>
+                  : <>
+                      Watching <Accent>{upcoming.length || savedLots.length} {(upcoming.length || savedLots.length) === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
+                    </>}
               sub={
                 <>
                   {summary.next && <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))} · </>}
@@ -456,7 +490,6 @@ export default function SavedPage() {
                       </b>
                     </>
                   )}
-                  {sold.length > 0 && <> · {sold.length} concluded</>}
                   {(changes.moved > 0 || changes.newBids > 0) && (
                     <>
                       {' '}· since you saved
@@ -467,13 +500,52 @@ export default function SavedPage() {
                 </>
               }
             />
+
+            {/* THE DESK STRIP — one cell per ledger, only where data exists */}
+            <div className="ray-desk-strip ray-enter">
+              <div className="ray-desk-cell">
+                <div className="k">Watching</div>
+                <div className="v">{summary.totalEst > 0 ? formatPrice(summary.totalEst) : upcoming.length}</div>
+                <div className="s">
+                  {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
+                  {summary.flagged > 0 && <> · {summary.flagged} below market</>}
+                </div>
+              </div>
+              {collection.rows.length > 0 && (
+                <div className="ray-desk-cell">
+                  <div className="k">Collection</div>
+                  <div className="v">
+                    {formatPrice(collection.totalAppraised)}
+                    {collection.totalPaid > 0 && collection.totalAppraised !== collection.totalPaid && (
+                      <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: collection.totalAppraised >= collection.totalPaid ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                        {collection.totalAppraised >= collection.totalPaid ? '+' : '−'}
+                        {Math.abs(Math.round((collection.totalAppraised / collection.totalPaid - 1) * 100))}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="s">{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · bought {formatPrice(collection.totalPaid)}</div>
+                </div>
+              )}
+              {record && (
+                <div className="ray-desk-cell">
+                  <div className="k">Your record</div>
+                  <div className="v">
+                    {record.med != null ? (
+                      <span style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>{fmtSignedPct(Math.round(record.med))}</span>
+                    ) : '—'}
+                  </div>
+                  <div className="s">{record.n} settled · vs estimate, median · {formatPrice(record.hammered)} hammered</div>
+                </div>
+              )}
+            </div>
           </section>
 
+          {/* ══ LEDGER 1 · WATCHING ══ */}
           {upcoming.length > 0 && (
             <section className="ray-saved-section rail" data-view={savedView}>
               <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 18 }}>
                 <h2 className="ray-h2" style={{ margin: 0 }}>
-                  On the block, soonest first
+                  Watching · on the block
                 </h2>
                 <div className="ray-savedview-toggle" role="group" aria-label="Watchlist view">
                   <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
@@ -481,9 +553,6 @@ export default function SavedPage() {
                 </div>
               </div>
 
-              {/* the LEDGER — desktop terminal density; every row is the lot's
-                  permalink. Δ since saved reads the same baseline SavedDelta
-                  does (absence of a baseline renders —, never a fake zero). */}
               <div className="ray-saved-ledger ray-enter">
                 <div className="ray-saved-cols ray-saved-ledger-head" aria-hidden>
                   <span className="kicker">Maker</span>
@@ -503,6 +572,9 @@ export default function SavedPage() {
                     ? (lot.bidCount || 0) - m.bidCount
                     : 0;
                   const days = daysUntil(lot.saleDate);
+                  // bid velocity (crawl-measured) supersedes the since-saved
+                  // bid count when present — a fresher read of the same fact
+                  const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
                   return (
                     <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ray-saved-cols ray-savedrow">
                       <span className="maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
@@ -513,7 +585,11 @@ export default function SavedPage() {
                       </span>
                       <span className="num" style={{ color: dPP == null || dPP === 0 ? 'var(--color-text-faint)' : dPP > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                         {dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
-                        {newBids > 0 && <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>}
+                        {vel ? (
+                          <span className="sub">+{vel.delta} bids/{Math.round(vel.hours)}h</span>
+                        ) : newBids > 0 ? (
+                          <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
+                        ) : null}
                       </span>
                       <span className="num" style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                         {hammerWord(days)}
@@ -544,8 +620,8 @@ export default function SavedPage() {
             </section>
           )}
 
+          {/* ══ LEDGER 2 · COLLECTION — the pieces you own ══ */}
           {collection.rows.length > 0 && (
-            /* the collection rides the paper banner — pure type + numerals */
             <div className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
               <section className="rail" aria-label="Your collection">
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 6 }}>
@@ -563,25 +639,72 @@ export default function SavedPage() {
                     )}
                   </span>
                 </div>
-                {/* column heads */}
-                <div className="kicker" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '8px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
+
+                {/* the collection over time — appraisal vs bought, real daily
+                    snapshots (renders only once a 3-day trail exists) */}
+                {collectionChart && (
+                  <div style={{ margin: '18px 0 8px' }}>
+                    <div className="kicker" style={{ marginBottom: 4, color: 'var(--paper-muted, var(--color-text-muted))' }}>
+                      Your collection over time · appraisal vs bought · daily snapshots
+                    </div>
+                    <HeroChart anchor={collectionChart.anchor} layers={collectionChart.layers} height={150} compact play={false} />
+                  </div>
+                )}
+
+                {/* WHERE IT TRADES — the collection's sub-market exposure.
+                    Each row is the MARKET's read, labeled as such. */}
+                {exposure.length > 0 && (
+                  <div style={{ margin: '18px 0 4px' }}>
+                    <div className="kicker" style={{ padding: '0 0 2px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
+                      Where it trades · the market&rsquo;s move, not your pieces&rsquo;
+                    </div>
+                    {exposure.map(({ row, n, held }) => {
+                      const read = row.readType === 'index' && row.index
+                        ? { txt: `${fmtSignedPct(Math.round(row.index.changePct))} ${row.index.horizon} verified`, dir: row.index.changePct >= 0 }
+                        : row.readType === 'demand' && row.demandNow != null
+                          ? { txt: `${fmtSignedPct(Math.round(row.demandNow))} vs estimate`, dir: row.demandNow >= 0 }
+                          : null;
+                      return (
+                        <Link key={row.slug} href={`/sub?id=${encodeURIComponent(row.slug)}`} className="ray-coll-exposure-row">
+                          <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {row.label} <Flick size={9} style={{ marginLeft: 2 }} />
+                          </span>
+                          <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            {n} {n === 1 ? 'piece' : 'pieces'} · {formatPrice(held)} held
+                          </span>
+                          <span style={{ width: 150, textAlign: 'right', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontFamily: read ? 'var(--font-mono), monospace' : undefined, color: read ? (read.dir ? 'var(--color-up)' : 'var(--color-down-text)') : 'var(--color-text-faint)' }}>
+                            {read ? read.txt : `${row.lots.toLocaleString()} lots tracked`}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* the pieces */}
+                <div className="kicker" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
                   <div style={{ flex: 1 }}>Piece</div>
                   <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
-                  <div style={{ width: 118, textAlign: 'right' }}>lectr appraisal</div>
+                  <div style={{ width: 128, textAlign: 'right' }}>lectr appraisal</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {collection.rows.map(({ lot, paid, appraised, basis, deltaPct }) => (
+                  {collection.rows.map(({ lot, paid, appraised, basis, refOnly, deltaPct, drill, drillSlug }) => (
                     <div key={lot.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0', borderTop: '1px solid var(--hairline)' }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
-                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                          {ARTIST_LABEL[lot.artist] || lot.artist} · {lot.auctionHouse}{lot.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}
+                        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
+                        </Link>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                          <span>{ARTIST_LABEL[lot.artist] || lot.artist} · {lot.auctionHouse}{lot.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}</span>
+                          {drill && drillSlug && (
+                            <Link href={`/sub?id=${encodeURIComponent(drillSlug)}`} className="ray-coll-chip">{drill.label}</Link>
+                          )}
                         </div>
                       </div>
                       <div style={{ width: 92, textAlign: 'right', flexShrink: 0, fontSize: 14.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {paid != null ? formatPrice(paid) : '—'}
                       </div>
-                      <div style={{ width: 118, textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ width: 128, textAlign: 'right', flexShrink: 0 }}>
                         <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                           {appraised != null ? formatPrice(appraised) : '—'}
                           {deltaPct != null && deltaPct !== 0 && (
@@ -590,22 +713,135 @@ export default function SavedPage() {
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{basis ?? 'no comps yet'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{basis ?? (fullLoaded ? 'no comps yet' : 'appraising…')}</div>
                       </div>
                     </div>
                   ))}
                 </div>
                 <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
-                  The lectr appraisal is the median its comparable sales currently trade at — our read from the data, not a formal appraisal. Pieces without a usable comp pool carry at their bought price in the total.
+                  The lectr appraisal is the median its comparable sales currently trade at — our read from the data,
+                  not a formal appraisal. Pieces without a usable comp pool carry at their bought price in the total;
+                  a reference range is context only and never enters a number.
                 </p>
               </section>
             </div>
           )}
 
+          {/* ══ LEDGER 3 · SETTLED — what happened to the lots you watched ══ */}
           {sold.length > 0 && (
-            <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
-              <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} ownedIds={ownedIds} onToggleOwned={toggleOwned} sub={verdict} />
-            </div>
+            <section className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
+                <h2 className="ray-h2" style={{ margin: 0 }}>Settled · your track record</h2>
+                {record && record.med != null && (
+                  <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                    {record.n} judged · your picks went{' '}
+                    <b style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtSignedPct(Math.round(record.med))}
+                    </b>{' '}
+                    vs estimate, median
+                  </span>
+                )}
+              </div>
+              {record?.split && (
+                <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
+                  Lots you saved while flagged below market went{' '}
+                  <b style={{ color: (record.split.flagged ?? 0) >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtSignedPct(Math.round(record.split.flagged ?? 0))}
+                  </b>{' '}
+                  ({record.split.flaggedN}) · the rest{' '}
+                  <b style={{ color: (record.split.rest ?? 0) >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtSignedPct(Math.round(record.split.rest ?? 0))}
+                  </b>{' '}
+                  ({record.split.restN}) — vs estimate, hammer basis
+                </p>
+              )}
+
+              {/* desktop settled ledger */}
+              <div className="ray-settled-desk" style={{ marginTop: 12 }}>
+                <div className="ray-settled-cols kicker" aria-hidden style={{ padding: '0 2px 8px' }}>
+                  <span>Maker</span>
+                  <span>Work</span>
+                  <span style={{ textAlign: 'right' }}>Est</span>
+                  <span style={{ textAlign: 'right' }}>Your call</span>
+                  <span style={{ textAlign: 'right' }}>Hammered</span>
+                  <span style={{ textAlign: 'right' }}>vs est</span>
+                  <span style={{ textAlign: 'right' }}>Own it</span>
+                </div>
+                {sold.map(lot => {
+                  const m = savedMeta[lot.id];
+                  const pct = overEstimatePct(lot);
+                  const pending = !lot.priceUsd;
+                  const owned = ownedIds.includes(lot.id);
+                  return (
+                    <div key={lot.id} className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
+                      <span className="maker">
+                        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          {ARTIST_LABEL[lot.artist] || lot.artist}
+                        </Link>
+                      </span>
+                      <span className="work">
+                        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          {craftTitle(lot.title)}
+                        </Link>
+                      </span>
+                      <span className="num">{formatEstimate(lot) || '—'}</span>
+                      <span className="num" style={m?.signalPct != null ? { color: m.signalPct <= -10 ? 'var(--color-up)' : 'var(--color-text-secondary)' } : { color: 'var(--color-text-faint)' }}>
+                        {m?.signalPct != null ? fmtSignedPct(Math.round(m.signalPct)) : '—'}
+                      </span>
+                      <span className="num" style={{ fontWeight: 600 }}>
+                        {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : formatPrice(lot.priceUsd!)}
+                      </span>
+                      <span className="num" style={pct != null ? { color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
+                        {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
+                      </span>
+                      <span style={{ textAlign: 'right' }}>
+                        <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => toggleOwned(lot.id)}>
+                          {owned ? 'Owned ✓' : 'I won it'}
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* mobile settled rows */}
+              <div className="ray-settled-mobile">
+                {sold.map(lot => {
+                  const m = savedMeta[lot.id];
+                  const pct = overEstimatePct(lot);
+                  const pending = !lot.priceUsd;
+                  const owned = ownedIds.includes(lot.id);
+                  return (
+                    <div key={lot.id} className="ray-settled-mrow">
+                      <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
+                      </Link>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
+                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          {ARTIST_LABEL[lot.artist] || lot.artist}
+                          {m?.signalPct != null && <> · your call {fmtSignedPct(Math.round(m.signalPct))}</>}
+                        </span>
+                        <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                          {pending ? <span style={{ color: 'var(--color-text-faint)' }}>pending</span> : (
+                            <>
+                              <b>{formatPrice(lot.priceUsd!)}</b>
+                              {pct != null && (
+                                <b style={{ marginLeft: 6, color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>{fmtSignedPct(Math.round(pct))}</b>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div style={{ marginTop: 6 }}>
+                        <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => toggleOwned(lot.id)}>
+                          {owned ? 'Owned ✓' : 'I won it'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           )}
 
           {other.length > 0 && (
@@ -642,29 +878,28 @@ export default function SavedPage() {
               </p>
               <div className="glass glass-quiet">
                 {orphanIds.map(id => {
-                  const meta = savedMeta[id];
+                  const m = savedMeta[id];
                   return (
                     <div key={id} className="ray-saved-orphan">
                       <span>
-                        {meta?.title ? (
-                          /* the save carried a snapshot — say WHAT the lot was */
+                        {m?.title ? (
                           <>
                             <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
-                              was: {meta.title}
-                              {meta.artist && <>, {ARTIST_LABEL[meta.artist] || meta.artist}</>}
+                              was: {m.title}
+                              {m.artist && <>, {ARTIST_LABEL[m.artist] || m.artist}</>}
                             </span>
                             <span style={{ color: 'var(--color-text-faint)' }}>
-                              {meta.estMid != null && <> · est. {formatPrice(meta.estMid)}</>}
-                              {' '}· saved {formatDate(meta.savedAt)}
+                              {m.estMid != null && <> · est. {formatPrice(m.estMid)}</>}
+                              {' '}· saved {formatDate(m.savedAt)}
                             </span>
                           </>
                         ) : (
                           <>
                             No longer listed — removed from the block
-                            {meta && (
+                            {m && (
                               <span style={{ color: 'var(--color-text-faint)' }}>
-                                {' '}· saved {formatDate(meta.savedAt)}
-                                {meta.estMid != null && <> · was est. {formatPrice(meta.estMid)}</>}
+                                {' '}· saved {formatDate(m.savedAt)}
+                                {m.estMid != null && <> · was est. {formatPrice(m.estMid)}</>}
                               </span>
                             )}
                           </>
@@ -684,8 +919,6 @@ export default function SavedPage() {
             </section>
           )}
 
-          {/* Saved-search alerts live at the very bottom — a secondary feed,
-              below your actual watchlist, collection and results. */}
           <AlertsInbox />
         </RayEntrance>
       )}
