@@ -48,6 +48,7 @@ export function SellThroughPanel({ marketData, scope }: { marketData: MarketData
       anchor={{ key: '_st', label: 'Sell-through', color: '', unit: 'pct', points: win.map(p => ({ period: p.period, value: p.value, n: p.n ?? 0 })) }}
       height={120}
       compact
+      hideTickLabels
       play={false}
     />,
   );
@@ -69,6 +70,7 @@ export function DepthPanel({ marketData, scope }: { marketData: MarketData | nul
       anchor={{ key: '_vol', label: 'Sales', color: '', unit: 'count', points: win.map(p => ({ period: p.period, value: p.value, n: p.n ?? 0 })) }}
       height={120}
       compact
+      hideTickLabels
       play={false}
     />,
   );

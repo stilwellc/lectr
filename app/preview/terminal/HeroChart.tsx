@@ -46,6 +46,9 @@ interface Props {
   subHeight?: number;
   compact?: boolean;
   play: boolean;
+  /** draw the dotted rules but not their value labels — for small panels
+      whose headline already states the figure (labels collide at mini size) */
+  hideTickLabels?: boolean;
   /** FLIPPED composition (sports/science/culture): the curated sub-market
       lines take the MAIN stage; the anchor (the numeral's own line) rides
       the lower band. Same scrub, same chips, same honesty. */
@@ -89,7 +92,7 @@ function niceTicks(min: number, max: number, count = 3): number[] {
 
 const fmtTick = (v: number, unit: HeroLine['unit']): string => {
   if (unit === 'pct') return `${v > 0 ? '+' : ''}${Math.round(v)}%`;
-  if (unit === 'count') return `${Math.round(v)}`;
+  if (unit === 'count') return v >= 1000 ? `${Math.round(v / 1000)}K` : `${Math.round(v)}`;
   return v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `$${Math.round(v / 1000)}K` : `$${Math.round(v)}`;
 };
 const fmtVal = (v: number, unit: HeroLine['unit']): string => {
@@ -124,6 +127,7 @@ function usePane(lines: HeroLine[], periods: string[], w: number, h: number, pad
 export default function HeroChart({
   anchor, layers = [], subLayers = [], subLabel, highlight,
   height = 280, subHeight = 84, compact = false, play, flip = false,
+  hideTickLabels = false,
 }: Props) {
   const reduce = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -238,9 +242,11 @@ export default function HeroChart({
           return (
             <g key={`t${t}`}>
               <line x1={0} x2={W} y1={y} y2={y} className={isZero ? styles.hcRuleZero : styles.hcRule} />
-              <text x={W - 4} y={y - 5} textAnchor="end" className={`${styles.hcTick}${mainUnit === 'pct' ? ` ${styles.pctData}` : ''}`}>
-                {fmtTick(t, mainUnit)}{isZero && !flipped ? ' · est' : ''}
-              </text>
+              {!hideTickLabels && (
+                <text x={W - 4} y={y - 5} textAnchor="end" className={`${styles.hcTick}${mainUnit === 'pct' ? ` ${styles.pctData}` : ''}`}>
+                  {fmtTick(t, mainUnit)}{isZero && !flipped ? ' · est' : ''}
+                </text>
+              )}
             </g>
           );
         })}

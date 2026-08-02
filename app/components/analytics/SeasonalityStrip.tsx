@@ -23,7 +23,7 @@ const fmtN = (n: number) =>
 const CSS = `
 .ray-ss.ray-vm-card{padding:var(--card-pad)}
 .ray-ss .ray-vm-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.ray-ss .ray-vm-title{font-size:13.5px;font-weight:650;color:var(--color-fg)}
+.ray-ss .ray-vm-title{font-size:13.5px;font-weight:650;color:var(--color-fg);white-space:nowrap}
 .ray-ss .ray-vm-method{font-size:10.5px;color:var(--color-text-muted);text-align:right}
 .ray-ss-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:6px}
 @media (max-width:720px){.ray-ss-grid{grid-template-columns:repeat(6,1fr)}}

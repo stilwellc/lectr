@@ -128,7 +128,7 @@ export default function AnalyticsPage() {
         .ray-desk-cell2 .k { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-faint); }
         .ray-desk-cell2 .v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 3px; }
         .ray-desk-cell2 .s { font-size: 11px; color: var(--color-text-muted); margin-top: 1px; }
-        .ray-desk-microgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .ray-desk-microgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
         @media (max-width: 900px) { .ray-desk-microgrid { grid-template-columns: 1fr; } }
       ` }} />
       <ArtistNav activeSlug="analytics" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
@@ -179,7 +179,7 @@ export default function AnalyticsPage() {
       {/* ── THE EAGER DESK — paints from phase-1, no corpus wait ── */}
       <RayEntrance animate={!fromCache}>
         {sections.map(([k, node], i) => (
-          <div key={k} className="rail ray-enter" style={{ paddingTop: i === 0 ? 18 : 14, '--enter-delay': `${Math.min(i, 3) * 90}ms` } as React.CSSProperties}>
+          <div key={k} className="rail ray-enter" style={{ paddingTop: i === 0 ? 20 : 20, '--enter-delay': `${Math.min(i, 3) * 90}ms` } as React.CSSProperties}>
             {node}
           </div>
         ))}

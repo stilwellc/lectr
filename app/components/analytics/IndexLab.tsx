@@ -79,7 +79,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
         className="v"
         data-dir={kind === 'volume' ? undefined : last >= 0 ? 'up' : 'down'}
       >
-        {kind === 'volume' ? `${Math.round(last).toLocaleString()}/qtr` : `${last >= 0 ? '+' : ''}${last.toFixed(1)}%`}
+        {kind === 'volume' ? `${Math.round(last).toLocaleString()}/qtr` : `${last >= 0 ? '+' : ''}${Math.abs(last) >= 100 ? Math.round(last) : last.toFixed(1)}%`}
       </span>
     </span>
   );
@@ -96,7 +96,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
           ))}
         </span>
       </div>
-      <div className="ray-vm-method" style={{ margin: '2px 0 10px' }}>
+      <div className="ray-vm-method" style={{ margin: '2px 0 10px', textAlign: 'left' }}>
         like-for-like cohort index, rebased Δ% over the window · layers: the market&rsquo;s tracked sub-markets · every point a real quarterly reading
       </div>
       <HeroChart
