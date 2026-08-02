@@ -290,7 +290,24 @@ export default function SavedPage() {
       const v = l.bidVelocity!;
       rows.push({
         key: `hot-${l.id}`, tag: 'Most bids', lot: l,
-        fact: <>+{v.delta} bids in {Math.round(v.hours)}h{v.pctile != null && <> · faster than {v.pctile}% of live lots</>}</>,
+        fact: <>+{v.delta} {v.delta === 1 ? 'bid' : 'bids'} in {Math.round(v.hours)}h{v.pctile != null && <> · faster than {v.pctile}% of live lots</>}</>,
+      });
+    }
+    // quietest — the sleeper read, the opposite of most bids: landing THIS
+    // WEEK with a PUBLISHED bid count near zero (bid platforms close weekly,
+    // so a 72h window would sit empty most days). Only bid-platform lots
+    // qualify — an absent bidCount is absent data, never "no interest".
+    const quiet = upcoming
+      .filter(l => typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= 3)
+      .filter(l => !hot.includes(l))
+      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 7; })
+      .sort((a, b) => (a.bidCount ?? 0) - (b.bidCount ?? 0) || daysUntil(a.saleDate) - daysUntil(b.saleDate))
+      .slice(0, 2);
+    for (const l of quiet) {
+      const d = daysUntil(l.saleDate);
+      rows.push({
+        key: `q-${l.id}`, tag: 'Quietest', lot: l,
+        fact: <>{(l.bidCount ?? 0) === 0 ? 'no bids yet' : `only ${l.bidCount} ${l.bidCount === 1 ? 'bid' : 'bids'}`} · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{(l.currentBid || 0) > 0 ? <> · at {formatPrice(l.currentBid!)}</> : null}</>,
       });
     }
     // lands soon — hammering within 48h
