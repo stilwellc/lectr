@@ -86,6 +86,10 @@ export interface MarketData {
   makers: Record<string, MarketSeriesJson>;
   /** per house×market estimate honesty (hammer-led medians, n≥40 cells) */
   houseCal?: Record<string, Record<string, { n: number; hammerMedPct: number; allInMedPct: number }>>;
+  /** the empirical card grade ladder (within-card paired log-ratios, base
+      grade 8 = 1.00) — fitted mult per rung + pair support + the old
+      constant it replaced. Holdout-validated; drives the tier-2 card valuer. */
+  gradeLadder?: { base: number; rungs: { grade: number; mult: number; fitted: boolean; pairs: number; old: number }[]; pairs?: number; groups?: number };
   /** per market calendar-month performance; cells with n<30 carry zeros and are UI-gated */
   seasonality?: Record<string, { n: number; hammerMedPct: number; allInMedPct: number; sellThroughPct: number | null }[]>;
   calibration: { directional: { method: string; buckets: [string, number][] }; valueError: Record<string, number> };
