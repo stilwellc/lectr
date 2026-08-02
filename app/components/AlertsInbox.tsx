@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAlerts, useSavedSearches } from '../lib/alerts';
 import { supabase } from '../lib/supabase';
-import { craftTitle, formatDate, formatPrice, httpsImg } from '../utils';
+import { craftTitle, formatDate, formatPrice, fmtSignedPct, httpsImg } from '../utils';
 import { ARTIST_LABEL } from '../constants';
 
 interface SlimLot {
@@ -16,13 +16,15 @@ interface SlimLot {
   estimateHigh?: number | null;
   imageUrl?: string | null;
   auctionHouse?: string;
+  /** crawl-time comp signal — rides on the synced lot row when present */
+  signal?: { label: 'Below Market' | 'Above Market'; pct: number } | null;
 }
 
 const CSS = `
 .lectr-inbox-row {
   display: flex; align-items: center; gap: 12px;
   padding: 9px 0; text-decoration: none;
-  border-bottom: 1px dotted var(--color-border);
+  border-bottom: 2px dotted color-mix(in srgb, var(--color-fg) 8%, transparent);
 }
 .lectr-inbox-row:last-child { border-bottom: none; }
 .lectr-inbox-thumb {
@@ -125,6 +127,8 @@ export default function AlertsInbox() {
             ) : (
               rows.map(a => {
                 const lot = lots[a.lot_id];
+                const est = lot?.estimateLow || lot?.estimateHigh;
+                const sig = lot?.signal;
                 return (
                   <Link key={a.id} href={`/lot?id=${encodeURIComponent(a.lot_id)}`} className="lectr-inbox-row">
                     {!a.seen && <span className="lectr-inbox-dot" aria-label="new" />}
@@ -135,8 +139,19 @@ export default function AlertsInbox() {
                     <span className="lectr-inbox-title">{lot ? craftTitle(lot.title || a.lot_id) : a.lot_id}</span>
                     <span className="lectr-inbox-meta" style={{ marginLeft: 'auto', flex: 'none' }}>
                       {lot?.artist ? `${ARTIST_LABEL[lot.artist] || lot.artist} · ` : ''}
-                      {lot?.estimateLow ? `est. ${formatPrice(lot.estimateLow)}` : 'no estimate'}
+                      {est ? `est. ${formatPrice(est)}` : 'no estimate'}
                       {lot?.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}
+                      {/* measured comp signal only — green/red never decorates anything else */}
+                      {sig && (
+                        <b style={{
+                          marginLeft: 8,
+                          fontFamily: 'var(--font-mono), monospace',
+                          fontWeight: 700,
+                          color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down-text)',
+                        }}>
+                          {fmtSignedPct(sig.pct)}
+                        </b>
+                      )}
                     </span>
                   </Link>
                 );

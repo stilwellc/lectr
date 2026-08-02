@@ -6,16 +6,15 @@
  * mono + green/red per the honesty doctrine; counts stay faint and plain.
  * The pipeline emits n<30 months as zeroed placeholders — we suppress them
  * as blank cells, and the one-line takeaway only prints when ≥8 months are
- * usable (the same suppression rule MarketIntelligence applies: an honest
- * year-shape needs most of the calendar).
+ * usable: an honest year-shape needs most of the calendar.
  */
 import React from 'react';
 import type { MarketData } from '../../hooks/useRayData';
 import { toneOf, fmtSignedPct } from '../../utils';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MIN_N = 30;          // per-month floor — matches the pipeline/MI gate
-const MIN_USABLE_MONTHS = 8; // takeaway suppression — mirrors MarketIntelligence
+const MIN_N = 30;          // per-month floor — matches the pipeline's gate
+const MIN_USABLE_MONTHS = 8; // takeaway suppression — most of the calendar must be usable
 
 const fmtN = (n: number) =>
   n >= 10_000 ? `${Math.round(n / 1000)}K` : n >= 1_000 ? `${(n / 1000).toFixed(1)}K` : `${n}`;

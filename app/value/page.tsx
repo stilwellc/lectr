@@ -25,7 +25,7 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
 const ROWS_PAGE = 12;
@@ -38,7 +38,7 @@ const ROWS_PAGE = 12;
 export default function ValuePage() {
   // useFullLots: the value engine (callPool/appraisal) reads the full corpus
   // and gates on fullLoaded, so this route must trigger phase 2.
-  const { allLots, statsByArtist, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache } = useFullLots();
+  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -72,7 +72,9 @@ export default function ValuePage() {
     const medianGap = pcts.length
       ? (pcts.length % 2 === 0 ? (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2 : pcts[Math.floor(pcts.length / 2)])
       : 0;
-    const soonest = [...deals].sort((a, b) => new Date(a.lot.saleDate).getTime() - new Date(b.lot.saleDate).getTime())[0] || null;
+    // trueSaleDay, not raw saleDate — the crawl-day artifact must never pick
+    // (or date) the "first hammer" line. YYYY-MM-DD sorts lexically.
+    const soonest = [...deals].sort((a, b) => trueSaleDay(a.lot).localeCompare(trueSaleDay(b.lot)))[0] || null;
     const artists = new Set(deals.map(d => d.lot.artist)).size;
     return { totalEst, medianGap, soonest, artists };
   }, [deals]);
@@ -252,7 +254,7 @@ export default function ValuePage() {
               into the data subline; full numbers, no second display numeral. */}
           <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
             <Masthead
-              kicker="The signal · ranked by comps gap"
+              kicker="The signal · ranked by calibrated odds"
               serial={lastCrawl || undefined}
               title={<>Priced <Accent>under</Accent> where the {activeLabel === 'collectible' ? 'market' : `${activeLabel} market`} clears.</>}
               sub={deals.length > 0
@@ -263,7 +265,7 @@ export default function ValuePage() {
                       comps run +{Math.round(summary.medianGap)}% over these estimates
                     </span>{' '}
                     · {formatPrice(summary.totalEst)} in estimates · {summary.artists} makers
-                    {summary.soonest && <> · first hammer {formatDate(summary.soonest.lot.saleDate)}</>}
+                    {summary.soonest && <> · first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</>}
                   </>
                 : 'No lots are flagged below market right now — the crawl refreshes daily.'}
             />
@@ -297,16 +299,18 @@ export default function ValuePage() {
           {backtest && backtest.flagged.n >= 100 && (
             <div className="ray-band" style={{ marginTop: 34, paddingBlock: '28px 34px' }}>
             <section className="rail ray-enter" style={{ '--enter-delay': '90ms', paddingTop: 0 } as React.CSSProperties}>
-              {/* HAMMER BASIS leads — estimates are hammer-basis while realized
-                  prices include the buyer's premium (~25%), so the hammer read
-                  is the honest "beat the estimate" test. The all-in figure stays
-                  as context. Falls back to all-in when an old cached backtest.json
-                  lacks the hammer fields. */}
+              {/* DUAL BASIS, premium-led (the decree): the headline medians are
+                  all-in (realized prices include the buyer's premium ~25%) with
+                  the hammer read as the sub-line — EXCEPT beat-the-estimate,
+                  where estimates are hammer-basis so the hammer figure is the
+                  only honest lead (labeled "at the hammer"). Every cell names
+                  its basis; falls back to all-in when an old cached
+                  backtest.json lacks the hammer fields. */}
               <RecordBand
                 title="The record"
                 context="every call replayed against history"
                 serial={(lastCrawl || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}
-                footer="hammer basis · refit nightly from the full replay"
+                footer="each figure names its basis · refit nightly from the full replay"
                 cells={[
                   {
                     k: 'Flagged lots hammered',
@@ -318,7 +322,7 @@ export default function ValuePage() {
                     k: 'Unflagged hammered',
                     v: fmtSignedPct(backtest.unflagged.medianPerfPct),
                     signed: backtest.unflagged.medianPerfPct,
-                    sub: <>the signal&rsquo;s edge: {backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</>,
+                    sub: <>{backtest.unflagged.n.toLocaleString()} lots · the signal&rsquo;s edge: {backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</>,
                   },
                   {
                     k: 'Beat their high estimate',
@@ -356,7 +360,7 @@ export default function ValuePage() {
             ) : (
               <>
                 <h2 className="ray-h2 ray-enter" style={{ marginBottom: 18 }}>
-                  Deepest value first · calibrated odds
+                  Calibrated odds first · the deepest gap breaks ties
                 </h2>
                 {/* Compact rows — thumb · maker · signal % · est on mobile;
                     ≥900px the same rows spread into the full ledger. Each row
@@ -403,7 +407,10 @@ export default function ValuePage() {
                         <span className="ray-value-row-title" style={{ display: 'block' }}>
                           {craftTitle(d.lot.title)}
                           <span className="ray-value-mobdate">
-                            {' '}· {d.lot.saleDate && d.lot.saleDate.slice(0, 10) < localToday() ? 'hammered' : 'hammers'} {formatDate(d.lot.saleDate)}
+                            {/* trueSaleDay on BOTH sides — a results-pending lot in
+                                the grace window reads "hammered", and a crawl-day
+                                saleDate can neither mislabel nor misdate a live one */}
+                            {' '}· {trueSaleDay(d.lot) && trueSaleDay(d.lot) < localToday() ? 'hammered' : 'hammers'} {formatDate(trueSaleDay(d.lot) || d.lot.saleDate)}
                           </span>
                         </span>
                       </span>
@@ -414,7 +421,7 @@ export default function ValuePage() {
                           from the estimate mid × the signal ratio (the same
                           statistic, inverted). */}
                       <span className="ray-value-cell">{d.lot.auctionHouse}</span>
-                      <span className="ray-value-cell">{formatDate(d.lot.saleDate)}</span>
+                      <span className="ray-value-cell">{formatDate(trueSaleDay(d.lot) || d.lot.saleDate)}</span>
                       <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{formatEstimate(d.lot).replace(/ est\.$/, '')}</span>
                       <span className="ray-value-cell ray-value-cell-num">
                         {(() => {
@@ -486,9 +493,11 @@ export default function ValuePage() {
               </p>
               {backtest && backtest.flagged.n > 500 && (
                 <div className="ray-engine-stats">
-                  <span><b>{backtest.flagged.n.toLocaleString()}</b> sales replayed</span>
+                  <span><b>{backtest.flagged.n.toLocaleString()}</b> calls replayed</span>
                   <span className="ray-engine-dot" aria-hidden />
-                  <span>flagged hammered <b className="up">{fmtSignedPct(backtest.flagged.medianPerfPct)}</b> vs estimate</span>
+                  {/* the all-in median, named as such — "hammered +41%" would
+                      dress the premium-inclusive figure in the hammer's word */}
+                  <span>flagged realized <b className="up">{fmtSignedPct(backtest.flagged.medianPerfPct)}</b> all-in vs estimate</span>
                   <span className="ray-engine-dot" aria-hidden />
                   <span>the edge: <b>{backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</b></span>
                 </div>

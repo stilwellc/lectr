@@ -880,6 +880,26 @@ export default function ComparableModal({
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 14, alignSelf: 'flex-start' }}>
+              {/* the in-app certificate first — no journey should HAVE to exit
+                  to the house before the lot's own dossier (wayfinding: both
+                  page audits ranked this the top gap) */}
+              <Link
+                href={`/lot?id=${encodeURIComponent(lot.id)}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 20px',
+                  borderRadius: 100,
+                  border: '1px solid var(--color-border-mid)',
+                  color: 'var(--color-fg)',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                Open the lot page <Flick size={10} />
+              </Link>
               <a
                 href={lot.url}
                 target="_blank"

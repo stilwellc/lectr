@@ -176,7 +176,13 @@ export default function SavedPage() {
       .sort((a, b) => (b.appraised ?? b.paid ?? 0) - (a.appraised ?? a.paid ?? 0));
     const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
     const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
-    return { rows, totalPaid, totalAppraised };
+    // the headline % compares like with like: only pieces WITH a bought price
+    // count toward it (appraised, or carried at bought). A piece with no
+    // recorded price still shows in the appraisal total, but it can never
+    // claim appreciation over a bought sum it isn't part of.
+    const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
+    const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
+    return { rows, totalPaid, totalAppraised, deltaPct };
   }, [savedLots, ownedIds, allLots, fullLoaded, marketData]);
 
   /* ── SUB-MARKET EXPOSURE — where the collection trades. Each row is the
@@ -209,7 +215,10 @@ export default function SavedPage() {
     }, { onConflict: 'user_id,snap_date' }).then(({ error }) => {
       if (!error) { try { localStorage.setItem(guardKey, day); } catch { /* ignore */ } }
     });
-  }, [user, fullLoaded, collection]);
+    // user?.id, not the user object: Supabase mints a fresh user object on
+    // every auth event — an object dep re-fires the write chain needlessly
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, fullLoaded, collection]);
 
   const [snaps, setSnaps] = useState<Snapshot[]>([]);
   useEffect(() => {
@@ -225,7 +234,9 @@ export default function SavedPage() {
         setSnaps(data.map(r => ({ d: r.snap_date as string, paid: r.total_paid as number, appraised: r.total_appraised as number, pieces: r.pieces as number })));
       });
     return () => { dead = true; };
-  }, [user]);
+    // user?.id, not the user object — see the snapshot write above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   // the chart needs a real trail — 3+ days of snapshots, else nothing renders
   const collectionChart = useMemo(() => {
     if (snaps.length < 3) return null;
@@ -273,7 +284,7 @@ export default function SavedPage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
-  /* ── THE BRIEF — the desk's TLDR. Four reads over the watchlist, each row
+  /* ── THE BRIEF — the desk's TLDR. Four reads over the watching ledger, each row
      rendered only when its data genuinely exists: hottest day-over-day
      bidding (crawl-measured velocity), lots landing within 48h, lots with
      DIRECT comps (same card & grade, or same edition), and the deepest
@@ -366,14 +377,15 @@ export default function SavedPage() {
       .map(l => ({ l, pct: overEstimatePct(l) }))
       .filter((x): x is { l: AuctionLot; pct: number } => x.pct != null);
     if (!judged.length) return null;
-    const hammered = judged.reduce((s, x) => s + (x.l.priceUsd || 0), 0);
+    // priceUsd is premium-inclusive — this sum is REALIZED money, never call it hammer
+    const realized = judged.reduce((s, x) => s + (x.l.priceUsd || 0), 0);
     const med = median(judged.map(x => x.pct));
     const flaggedAtSave = judged.filter(x => (savedMeta[x.l.id]?.signalPct ?? 0) <= -10);
     const restAtSave = judged.filter(x => (savedMeta[x.l.id]?.signalPct ?? 0) > -10 && savedMeta[x.l.id]?.signalPct != null);
     const split = flaggedAtSave.length >= 3 && restAtSave.length >= 3
       ? { flagged: median(flaggedAtSave.map(x => x.pct)), flaggedN: flaggedAtSave.length, rest: median(restAtSave.map(x => x.pct)), restN: restAtSave.length }
       : null;
-    return { n: judged.length, hammered, med, split };
+    return { n: judged.length, realized, med, split };
   }, [sold, savedMeta]);
 
   const emptyState = (
@@ -657,14 +669,16 @@ export default function SavedPage() {
                   <div className="k">Collection</div>
                   <div className="v">
                     {formatPrice(collection.totalAppraised)}
-                    {collection.totalPaid > 0 && collection.totalAppraised !== collection.totalPaid && (
-                      <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: collection.totalAppraised >= collection.totalPaid ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                        {collection.totalAppraised >= collection.totalPaid ? '+' : '−'}
-                        {Math.abs(Math.round((collection.totalAppraised / collection.totalPaid - 1) * 100))}%
+                    {collection.deltaPct != null && collection.deltaPct !== 0 && (
+                      <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                        {fmtSignedPct(collection.deltaPct)}
                       </span>
                     )}
                   </div>
-                  <div className="s">{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · bought {formatPrice(collection.totalPaid)}</div>
+                  <div className="s">
+                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'}
+                    {collection.totalPaid > 0 && <> · bought {formatPrice(collection.totalPaid)}</>}
+                  </div>
                 </div>
               )}
               {record && (
@@ -675,7 +689,7 @@ export default function SavedPage() {
                       <span style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>{fmtSignedPct(Math.round(record.med))}</span>
                     ) : '—'}
                   </div>
-                  <div className="s">{record.n} settled · vs estimate, median · {formatPrice(record.hammered)} hammered</div>
+                  <div className="s">{record.n} settled · vs estimate, median · {formatPrice(record.realized)} realized</div>
                 </div>
               )}
             </div>
@@ -688,7 +702,7 @@ export default function SavedPage() {
                 <h2 className="ray-h2" style={{ margin: 0 }}>
                   Watching · on the block
                 </h2>
-                <div className="ray-savedview-toggle" role="group" aria-label="Watchlist view">
+                <div className="ray-savedview-toggle" role="group" aria-label="Watching view">
                   <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
                   <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
                 </div>
@@ -768,14 +782,18 @@ export default function SavedPage() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 6 }}>
                   <h2 className="ray-h2" style={{ margin: 0 }}>Your collection</h2>
                   <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · bought{' '}
-                    <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalPaid)}</b>
+                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'}
+                    {collection.totalPaid > 0 && (
+                      <>
+                        {' '}· bought{' '}
+                        <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalPaid)}</b>
+                      </>
+                    )}
                     {' '}· lectr appraisal{' '}
                     <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAppraised)}</b>
-                    {collection.totalPaid > 0 && collection.totalAppraised !== collection.totalPaid && (
-                      <b style={{ color: collection.totalAppraised >= collection.totalPaid ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
-                        {' '}· {collection.totalAppraised >= collection.totalPaid ? '+' : '−'}
-                        {Math.abs(Math.round((collection.totalAppraised / collection.totalPaid - 1) * 100))}%
+                    {collection.deltaPct != null && collection.deltaPct !== 0 && (
+                      <b style={{ color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
+                        {' '}· {fmtSignedPct(collection.deltaPct)}
                       </b>
                     )}
                   </span>
@@ -876,7 +894,7 @@ export default function SavedPage() {
                 {record && record.med != null && (
                   <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
                     {record.n} judged · your picks went{' '}
-                    <b style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    <b style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                       {fmtSignedPct(Math.round(record.med))}
                     </b>{' '}
                     vs estimate, median
@@ -904,7 +922,7 @@ export default function SavedPage() {
                   <span>Work</span>
                   <span style={{ textAlign: 'right' }}>Est</span>
                   <span style={{ textAlign: 'right' }}>Your call</span>
-                  <span style={{ textAlign: 'right' }}>Hammered</span>
+                  <span style={{ textAlign: 'right' }}>Realized</span>
                   <span style={{ textAlign: 'right' }}>vs est</span>
                   <span style={{ textAlign: 'right' }}>Own it</span>
                 </div>

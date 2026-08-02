@@ -23,7 +23,7 @@ const SportBreakdown = dynamic(() => import('./SportBreakdown'), { ssr: false, l
 type Tab = 'category' | 'house' | 'price' | 'sport';
 
 const TAB_META: { key: Tab; label: string; sub: string }[] = [
-  { key: 'category', label: 'Category', sub: 'Bars = total sales value · dots below = share of lots' },
+  { key: 'category', label: 'Category', sub: 'Bars = total sales value · dots below = lot counts' },
   { key: 'house', label: 'House', sub: 'Ranked by total sales value' },
   { key: 'price', label: 'Price', sub: 'Sold lots by price bracket' },
   // sports market only — sold value ranked by sport (realized, no estimates)
@@ -53,8 +53,14 @@ export default function Distributions({ allLots, statsByArtist, market, series }
   const tab: Tab = tabs.some(t => t.key === rawTab) ? rawTab : 'category';
   const active = tabs.find(t => t.key === tab)!;
 
-  // the disclosure's headline stat — how many sold lots the charts count
-  const soldN = useMemo(() => allLots.filter(l => l.status === 'sold' && l.priceUsd).length, [allLots]);
+  // the disclosure's headline stat — how many sold lots the charts count.
+  // Prefer the build-time full-corpus histogram's base: on sample verticals
+  // (sports/science) the loaded array badly undercounts what the charts show.
+  const soldN = useMemo(() => {
+    const pb = an?.priceBuckets;
+    if (pb?.length) return pb.reduce((s, b) => s + b.count, 0);
+    return allLots.filter(l => l.status === 'sold' && l.priceUsd).length;
+  }, [an, allLots]);
 
   return (
     <section className="ray-distributions rail" data-open={open}>
@@ -135,7 +141,7 @@ export default function Distributions({ allLots, statsByArtist, market, series }
         onClick={() => setOpen(o => !o)}
       >
         <span className="ray-dist-disc-t">Distributions</span>
-        <span className="ray-dist-disc-stat">{soldN.toLocaleString()} lots counted</span>
+        <span className="ray-dist-disc-stat">{soldN.toLocaleString()} sold lots counted</span>
         <svg className="ray-dist-chev" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
           <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

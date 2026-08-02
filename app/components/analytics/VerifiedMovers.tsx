@@ -3,7 +3,7 @@
 /**
  * VerifiedMovers — the ONLY price-movement reads the hedonic engine will stand
  * behind: a maker publishes a horizon only when its 95% CI resolves the sign.
- * Reused by /analytics and /artists so the defensible reads read identically
+ * Reused by /analytics and /makers so the defensible reads read identically
  * everywhere. Where a market has none, we say so plainly rather than dress up a
  * number the engine won't back. Scope follows the active MarketSwitch: on
  * Art/Design/etc. this correctly shows the honest empty state.
@@ -21,7 +21,8 @@ export default function VerifiedMovers({
   marketData: MarketData | null;
   /** the active MarketSwitch key — 'all' returns every publishable maker */
   scope?: Market;
-  /** 'panel' = MarketIntelligence-band cell; 'card' = standalone glass card */
+  /** 'panel' = flat band cell (legacy — no current mount); 'card' = standalone
+      glass card, the form both /analytics and /makers use */
   variant?: 'panel' | 'card';
 }) {
   const movers = useMemo(() => verifiedMovers(marketData, scope), [marketData, scope]);

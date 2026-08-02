@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
-import { type Market } from '../../constants';
+import { ARTIST_LABEL, type Market } from '../../constants';
 import type { AuctionLot } from '../../types';
 import { formatPrice, httpsImg } from '../../utils';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
@@ -37,7 +38,15 @@ import styles from './style.module.css';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-interface Receipts { flaggedPct: number; unflaggedPct: number; n: number; asOf?: string | null }
+interface Receipts {
+  flaggedPct: number;
+  unflaggedPct: number;
+  /** hammer-only basis (backtest ships dual basis; the fine print names both) */
+  flaggedHammerPct?: number | null;
+  unflaggedHammerPct?: number | null;
+  n: number;
+  asOf?: string | null;
+}
 
 /** the chapter-01 hero: the highest-confidence, deepest-value flagged lot */
 export interface EngineHeroData {
@@ -48,10 +57,7 @@ export interface EngineHeroData {
 interface Props {
   market: MarketData | null;
   activeKey: Market;
-  onSelect: (key: Market) => void;
   variant?: 'desktop' | 'mobile';
-  condensed?: boolean;
-  maxRows?: number;
   /** printed on the paper room (home) — the Value Engine treatment */
   paper?: boolean;
   /** the backtest receipts — flagged/unflagged median % + replayed count */
@@ -96,10 +102,6 @@ function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRea
     if (a.readType === 'demand') return demandStrength(b) - demandStrength(a);
     return b.lots - a.lots;
   });
-}
-
-export function hasSubMarketRows(market: MarketData | null, activeKey: Market): boolean {
-  return resolveRows(market, activeKey).length > 0;
 }
 
 // the readType tag, caps-tracked on the tape
@@ -304,6 +306,7 @@ function Chapter({ no, label }: { no: string; label: string }) {
    and the method as fine print. The whole plate opens the comparables. ── */
 function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLot) => void }) {
   const { lot, signal } = h;
+  const makerName = ARTIST_LABEL[lot.artist] || lot.artist.replace(/-/g, ' ');
   const estLo = lot.estimateLow ?? lot.estimateHigh ?? null;
   const estHi = lot.estimateHigh ?? lot.estimateLow ?? null;
   const askText = estLo != null
@@ -323,7 +326,7 @@ function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLo
       </span>
       <span className={styles.ehRead}>
         <span className={styles.ehTopRow}>
-          <span className={styles.ehMaker}>{lot.artist.replace(/-/g, ' ')}</span>
+          <span className={styles.ehMaker}>{makerName}</span>
           <span className={styles.ehWhen}>{lot.auctionHouse} · hammers {daysWord(lot.saleDate)}</span>
         </span>
         <span className={styles.ehTitle}>{lot.title}</span>
@@ -368,10 +371,16 @@ function ValueReceipt({ r, play }: { r: Receipts; play: boolean }) {
         <div className={styles.rcptRule} />
         <div className={`${styles.rcptRow} ${styles.rcptTotal}`}><span>The edge (flag − rest)</span><span className={styles.rcptDots} /><span>{spread >= 0 ? '+' : '−'}{Math.abs(spread).toFixed(1)} pts</span></div>
         <div className={styles.rcptRule} />
-        <div className={styles.rcptMeta}>settled nightly{r.asOf ? ` · as of ${r.asOf}` : ''}</div>
+        <div className={styles.rcptMeta}>
+          all-in basis
+          {r.flaggedHammerPct != null && r.unflaggedHammerPct != null
+            ? ` · hammer-only ${fmtPct(r.flaggedHammerPct)} vs ${fmtPct(r.unflaggedHammerPct)}`
+            : ''}
+          {' '}· settled nightly{r.asOf ? ` · as of ${r.asOf}` : ''}
+        </div>
         <div className={styles.rcptBarcode} aria-hidden />
         <div className={styles.rcptNo}>no. {fmtInt(r.n)}</div>
-        <a href="/value" className={styles.rcptLink}>see the full record →</a>
+        <Link href="/value" className={styles.rcptLink}>see the full record →</Link>
         {/* the stamp — the replay seal pressed in red ink over the totals */}
         <div className={styles.rcptStamp} aria-hidden>
           <ReplaySeal n={r.n} play={play && !reduce} />
@@ -437,11 +446,11 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
 }
 
 export default function SubMarketBoard({
-  market, activeKey, onSelect, variant = 'desktop', condensed = false, maxRows, paper = false, receipts = null,
+  market, activeKey, variant = 'desktop', paper = false, receipts = null,
   hero, onOpenLot,
 }: Props) {
   const reduce = useReducedMotion();
-  const [ref, seen] = useInView<HTMLDivElement>();
+  const [ref] = useInView<HTMLDivElement>();
   const [receiptsRef, receiptsSeen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
 
@@ -491,7 +500,7 @@ export default function SubMarketBoard({
               <Chapter no="01" label="The engine" />
               <EngineHero h={hero} onOpen={onOpenLot} />
               <div className={styles.engineCtaRow}>
-                <a href="/value" className={styles.roomPill}>See all value lots →</a>
+                <Link href="/value" className={styles.roomPill}>See all value lots →</Link>
               </div>
             </>
           )}
@@ -570,6 +579,15 @@ export default function SubMarketBoard({
                     <button type="button" className={styles.readPopClose} onClick={() => setOpenRead(null)} aria-label="Close">×</button>
                   </div>
                   <Monument r={openRead} play={!reduce} />
+                  {/* every board slug is a tracked maker/category — the read's
+                      full dossier lives at /makers/<slug> */}
+                  {ARTIST_LABEL[openRead.slug] && (
+                    <div className={styles.engineCtaRow}>
+                      <Link href={`/makers/${openRead.slug}`} className={styles.roomPill}>
+                        Open the {openRead.label} dossier →
+                      </Link>
+                    </div>
+                  )}
                 </m.div>
               </m.div>
             )}
@@ -587,37 +605,6 @@ export default function SubMarketBoard({
     );
   }
 
-  /* ── legacy non-paper paths (condensed board etc.) — unchanged grammar ── */
-  if (condensed) {
-    if (!rows.length) return null;
-    const shownCond = rows.slice(0, Math.max(1, maxRows ?? 5));
-    return (
-      <div className={`${styles.movers} ${styles.condensed}`}>
-        <div className={styles.condHead}>
-          <span className={styles.sectionKicker}>Sub-markets · live board</span>
-          <span className={styles.condCount}>{rows.length} tracked</span>
-        </div>
-        <div className={styles.subTable} role="table">
-          {shownCond.map((r) => {
-            const isIndex = r.readType === 'index' && r.index;
-            const dir = isIndex ? (r.index!.changePct >= 0 ? 'up' : 'down') : undefined;
-            return (
-              <button key={`${r.vertical}:${r.slug}`} type="button" className={styles.subRow}
-                onClick={() => onSelect(r.vertical as Market)}>
-                <span className={styles.moversName}>{r.label}</span>
-                <span className={styles.moversDelta} data-dir={dir}>
-                  {isIndex ? `${fmtPct(r.index!.changePct)} ${r.index!.horizon}`
-                    : r.readType === 'demand' && r.demandNow != null ? `demand ${fmtPct(r.demandNow)}`
-                    : r.typicalUsd != null ? `typical ${fmtMoneyCompact(r.typicalUsd)}` : '—'}
-                </span>
-                <span className={styles.moversN}>{fmtInt(r.lots)}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
+  // non-paper variants retired — the board renders only as the home's paper room
   return null;
 }

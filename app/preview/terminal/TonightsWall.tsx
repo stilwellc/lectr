@@ -40,7 +40,7 @@ export interface WallItem {
 // R18 — the ONE signal grammar for home's gap text: comps sell at {X}× this
 // ask. Below Market caps at the honest 5×+ floor (extreme ratios are where
 // data faults live); Above Market reads as a sub-1× multiple, never a bare −%.
-export function gapGrammar(label: string, pct: number): string {
+function gapGrammar(label: string, pct: number): string {
   if (label === 'Below Market') {
     if (pct > 400) return 'comps sell at 5×+ this ask';
     return `comps sell at ${(pct / 100 + 1).toFixed(1)}× this ask`;

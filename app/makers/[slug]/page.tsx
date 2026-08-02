@@ -150,9 +150,10 @@ export default function ArtistDetailPage() {
 
   const label = ARTIST_LABEL[slug];
   const valid = ARTISTS.some(a => a.slug === slug);
-  // A sports/science maker's sold history lives in the phase-3 archive (split
-  // out of the eager + phase-2 payloads). Only these makers pay the 10MB —
-  // art/design/watches makers never mount useSoldArchive().
+  // A sports/science maker's Goldin sold history lives in the phase-3 archive
+  // (split out of the eager + phase-2 payloads). Only these makers pay for it —
+  // art/design/watches/culture makers never mount useSoldArchive() (Goldin
+  // culture sold rows are deliberately kept in the phase-2 shards).
   const market = marketOf(slug);
   const isArchiveMaker = valid && (market === 'sports' || market === 'science');
 
@@ -172,10 +173,12 @@ export default function ArtistDetailPage() {
   );
 
   const stats = statsByArtist[slug] || null;
-  // memoized on [allLots, slug]: the 32k filter + sort must not re-run on
-  // every pill click / save toggle — and stable identities keep the memos
-  // inside PriceChart/PastResults from re-aggregating the whole history
-  const { lots, upcoming } = useMemo(() => {
+  // memoized on [allLots, slug]: the full-corpus filter + sort must not re-run
+  // on every pill click / save toggle — and stable identities keep the memos
+  // inside PriceChart/PastResults from re-aggregating the whole history.
+  // `sold` lives here too: an inline filter in the JSX would hand PastResults
+  // a fresh array identity every render, defeating exactly that.
+  const { lots, upcoming, sold } = useMemo(() => {
     const lots = allLots.filter(l => l.artist === slug);
     const today = localToday(); // the reader's local YYYY-MM-DD
     const upcoming = lots
@@ -185,7 +188,8 @@ export default function ArtistDetailPage() {
         if (!b.saleDate) return -1;
         return new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime();
       });
-    return { lots, upcoming };
+    const sold = lots.filter(l => l.status === 'sold');
+    return { lots, upcoming, sold };
   }, [allLots, slug]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -211,7 +215,7 @@ export default function ArtistDetailPage() {
             Nothing tracked at this address
           </h2>
           <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-            The desk follows {ARTISTS.length} artists and makers across art, design, watches and science.
+            The desk follows {ARTISTS.length} artists and makers across art, design, watches, sports, science and pop culture.
           </p>
           <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
             Back to the market
@@ -220,7 +224,7 @@ export default function ArtistDetailPage() {
       ) : (
         <>
           {/* The hero is un-gated: it paints from phase-1 statsByArtist the
-              moment the stats land — the 32k archive only gates the lot-level
+              moment the stats land — the phase-2 corpus only gates the lot-level
               sections below. For archive makers it re-renders with merged
               sold rows once phase 3 arrives (ArchiveMakerBody re-renders it). */}
           {!isArchiveMaker && (
@@ -272,7 +276,7 @@ export default function ArtistDetailPage() {
               stats={stats}
               chartLots={lots}
               upcoming={upcoming}
-              sold={lots.filter(l => l.status === 'sold')}
+              sold={sold}
               allLots={allLots}
               savedIds={savedIds}
               onToggleSave={toggleWithLot}

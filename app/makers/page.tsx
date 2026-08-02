@@ -20,12 +20,13 @@ import SubMarketDirectory from '../components/SubMarketDirectory';
 const ArtistSparklines = dynamic(() => import('../components/analytics/ArtistSparklines'), { ssr: false });
 
 /**
- * Makers — the roster as a wall of demand curves. Every tracked name (artist,
+ * Makers — the roster as a wall of market curves. Every tracked name (artist,
  * designer, watch maker, science collection, or sports category), each a live
  * market read, one click to its page. The noun follows the market — they are
- * not all artists.
+ * not all artists, and not every curve is a demand read (sports/science
+ * curves are realized-$ series; only estimate markets read vs estimate).
  */
-export default function ArtistsPage() {
+export default function MakersPage() {
   // useFullLots: the sparklines gate on fullLoaded, so trigger phase 2.
   const { allLots, statsByArtist, lastCrawl, fullLoaded, fromCache, market: marketData, demand } = useFullLots();
   const { market } = useMarket();
@@ -78,7 +79,7 @@ export default function ArtistsPage() {
             <Masthead
               kicker={`The roster · ${activeLabel} market`}
               datum={<CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
-              title={<>Every maker, read as a <Accent>demand curve</Accent>.</>}
+              title={<>Every maker, read as a live <Accent>market curve</Accent>.</>}
               sub={
                 <>
                   {rosterCount} {noun} ·{' '}

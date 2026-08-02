@@ -203,7 +203,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
       }}>
         <div>
           <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
-            Sales Value
+            Sales value
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-fg)' }}>
             {formatPrice(artist.totalRevenue)}
@@ -219,7 +219,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
-            % Over Est.
+            % over est.
           </div>
           <div style={{
             fontSize: 14,
@@ -343,7 +343,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
             textDecoration: 'none',
           }}
         >
-          All {market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)).length : ARTISTS.length} {market ? rosterNoun(market) : 'names'} &#8595;
+          All {market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)).length : ARTISTS.length} {market && market !== 'all' ? rosterNoun(market) : 'names'} &#8595;
         </a>
       </div>
 

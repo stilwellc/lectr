@@ -3,7 +3,7 @@ import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 
 export const metadata: Metadata = {
   title: 'Q2 2026 watch market in review — the deepest, most liquid tape we track',
-  description: '1,811 watches, $240M, near-total sell-through — the only market where our engine will publish a return: Cartier +53% and Rolex +25% over five years, Patek −18% over three, each with its confidence interval. What a CI means and why watches is the one vertical that clears the bar. The Q2 2026 numbers.',
+  description: '1,811 watches, $240M, near-total sell-through — the only market where our engine will publish a return: Cartier +51% and Rolex +24% over five years, Patek −13% over three, each with its confidence interval. What a CI means and why watches is the one vertical that clears the bar. The Q2 2026 numbers.',
 };
 
 export default function Q2Watches() {
@@ -39,7 +39,7 @@ export default function Q2Watches() {
         { title: 'Patek Philippe — unique yellow gold single-button chronograph', priceUsd: 1_966_080, house: "Sotheby's", date: '2026-04-24', maker: 'patek-philippe' },
         { title: 'Cartier — 18K gold asymmetric wristwatch', priceUsd: 1_822_750, house: "Christie's", date: '2026-05-11', maker: 'cartier' },
       ]}
-      footnote="The moves below are our hedonic index reads, each shown with its 95% confidence interval and the horizon over which it resolves. Where a maker's shorter-horizon interval spans zero — Rolex at one year, Audemars Piguet and Cartier at one and three — we don't publish a direction; watches is the one vertical where enough clears the bar to publish any return at all."
+      footnote="The moves below are our hedonic index reads, each shown with its 95% confidence interval and the horizon over which it resolves. Where a maker's shorter-horizon interval spans zero — Rolex at one and three years, Patek at one, Audemars Piguet and Cartier at one and three — we don't publish a direction; watches is the one vertical where enough clears the bar to publish any return at all."
     >
       <H>The only tape we&rsquo;ll put a number on</H>
       <P>
@@ -67,16 +67,16 @@ export default function Q2Watches() {
       </P>
       <H>What the index actually says</H>
       <P>
-        Three makers clear the bar, and they don&rsquo;t point the same way. <B>Cartier is up 52.9%
-        over five years</B> (95% CI +19% to +96%) — the strongest resolved appreciation on the board,
-        drawn from a 5,772-lot cohort, and a striking read for a house often filed under jewelry rather
-        than horology. <B>Rolex is up 25.1% over five years</B> (+12% to +39%) and, notably, also clears
-        the bar at three years, up 14.6% (+2% to +28%) — durable, interval-backed appreciation on the
-        deepest cohort we hold. Against them, <B>Patek Philippe is down 18.2% over three years</B> (−26%
-        to −9%), and its one-year read has now resolved negative too, off 9.6% (−18% to −0.5%): a real,
-        continuing decline, not noise. The rest stay descriptive. Audemars Piguet&rsquo;s demand reads
+        Three makers clear the bar, and they don&rsquo;t point the same way. <B>Cartier is up 51.2%
+        over five years</B> (95% CI +19% to +92%) — the strongest resolved appreciation on the board,
+        drawn from a 5,771-lot cohort, and a striking read for a house often filed under jewelry rather
+        than horology. <B>Rolex is up 23.6% over five years</B> (+11% to +38%) — durable,
+        interval-backed appreciation on the deepest cohort we hold, though its one- and three-year
+        intervals still span zero. Against them, <B>Patek Philippe is down 12.9% over three years</B>
+        (−21% to −4%): a real decline, not noise, even as its one- and five-year windows stay
+        unresolved. The rest stay descriptive. Audemars Piguet&rsquo;s demand reads
         roughly flat (+2% over estimate) and its index spans zero at every horizon; Omega reads soft
-        (−12% demand); and even Rolex&rsquo;s one-year interval spans zero. We report the moves that
+        (−12% demand). We report the moves that
         resolve and hold the ones that don&rsquo;t.
       </P>
       <P>

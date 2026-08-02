@@ -11,8 +11,7 @@ import HeroChart, { type HeroLine } from './HeroChart';
 import { resolveHeroLayers, type HeroLayer } from '../../lib/heroLayers';
 import Sparkline from './Sparkline';
 import { fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
-import { verifiedMovers, fmtPct, type VerifiedMover } from './verified';
-import type { SubMarketRead } from '../../hooks/useRayData';
+import { fmtPct } from './verified';
 import styles from './style.module.css';
 
 /* ============================================================
@@ -51,10 +50,8 @@ interface Props {
       populated for sports/cards only. A DEMAND primitive from Goldin's bidCount,
       surfaced as a distinct rail read, never a % move or a price. */
   bidComp?: BidCompetitionPoint[] | undefined;
-  /** honest full-corpus totals for the thesis line */
+  /** honest full-corpus lot total for the ⌘K search pill */
   totalLots: number;
-  totalSold: number;
-  houses: number;
   /** below-market signal count in the current live book (scoped) */
   belowMkt: number;
   /** the market's below-market lens — the flagged figure opens the feed */
@@ -66,7 +63,7 @@ interface Props {
   appreciation: number | null;
   /** lots on the block right now in the scoped market */
   onBlock: number;
-  /** sell-through, when the scoped market series carries it */
+  /** gate the entrance animation — a cached back-nav renders resolved */
   play: boolean;
   /** mobile gets its OWN hero composition — not the desktop scaled down */
   isMobile?: boolean;
@@ -151,7 +148,7 @@ export default function IndexHero({
   const windowVals = horizon.q === Infinity ? vals : vals.slice(startI);
   const headline = median(windowVals.length ? windowVals : vals);
   const windowIdx = horizon.q === Infinity ? hero.idx : hero.idx.slice(startI);
-  const spark = (horizon.q === Infinity ? vals : vals.slice(startI)).slice(-16);
+  const spark = windowVals.slice(-16);
 
   // ── THE LAYERS — the market's curated sub-market lines (heroLayers.ts),
   // sliced to the visible window; index kinds rebase to the window's first
@@ -204,10 +201,11 @@ export default function IndexHero({
     );
   };
 
-  // momentum — the most recent quarter-over-quarter shift in the reading
-  const qMove = vals.length > 1 && vals[vals.length - 2]
-    ? ((level - vals[vals.length - 2]) / vals[vals.length - 2]) * 100
-    : 0;
+  // momentum — the most recent quarter-over-quarter shift in the reading.
+  // A plain level DIFFERENCE: dividing by the prior level flips the sign
+  // whenever a demand reading is negative (e.g. −2% → −1% is an improvement
+  // but printed as "down"), and dir is all this feeds.
+  const qMove = vals.length > 1 ? level - vals[vals.length - 2] : 0;
   const trendDir = qMove >= 0 ? 'up' : 'down';
 
   const fmtHeadline = (n: number) => (isMoney ? fmtMoneyCompact(n) : fmtPct(n));
@@ -222,9 +220,6 @@ export default function IndexHero({
   const roiDir: 'up' | 'down' | undefined = roi == null ? undefined : roi >= 0 ? 'up' : 'down';
   const demandHot = hero.unit === 'demand' && headline > 0;
   const roiFlag = demandHot && roi != null && roi < -1.5 ? 'beating soft estimates' : undefined;
-
-  // the verified movers scoped to this market — the only defensible price moves
-  const movers = useMemo(() => verifiedMovers(market, activeKey), [market, activeKey]);
 
   // ── BID-COMPETITION read (sports/cards). Goldin publishes no estimate, so the
   // cards vertical has no %-over-estimate demand — but every lot carries a
@@ -462,163 +457,3 @@ export default function IndexHero({
     </LazyMotion>
   );
 }
-
-/* The horizontal movers ledger under the desktop stage — same honesty rules as
-   VerifiedStrip (CI'd movers first, sub-market reads as the fallback, never a
-   fabricated %), recomposed as a single hairline band. */
-function MoversBand({ movers, activeKey, market }: { movers: VerifiedMover[]; activeKey: Market; market: MarketData | null }) {
-  if (movers.length) {
-    return (
-      <div className={styles.moversBand}>
-        <span className={styles.moversBandLabel}>Verified movers<em>95% confidence</em></span>
-        <div className={styles.moversBandRows}>
-          {movers.slice(0, 5).map((mv) => (
-            <span key={mv.slug} className={styles.moverCell}>
-              <span className={styles.moverCellName}>{mv.label}</span>
-              <span className={styles.moverCellChg} data-dir={mv.dir}>
-                {fmtPct(mv.changePct)} <em>{mv.horizon}</em>
-              </span>
-              <span className={styles.moverCellCi}>[{mv.ciLoPct.toFixed(0)}, {mv.ciHiPct.toFixed(0)}]</span>
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // no CI'd maker — this vertical's strongest sub-market reads, same band shape
-  const subs = activeKey === 'all' ? [] : (market?.subMarkets?.[activeKey] || []);
-  if (subs.length) {
-    const rank = { index: 0, demand: 1, descriptive: 2 } as const;
-    const ordered = [...subs].sort((a, b) => {
-      if (rank[a.readType] !== rank[b.readType]) return rank[a.readType] - rank[b.readType];
-      if (a.readType === 'demand') return (b.demandNow ?? -Infinity) - (a.demandNow ?? -Infinity);
-      return b.lots - a.lots;
-    }).slice(0, 4);
-    return (
-      <div className={styles.moversBand}>
-        <span className={styles.moversBandLabel}>Sub-markets<em>strongest honest read</em></span>
-        <div className={styles.moversBandRows}>
-          {ordered.map((r) => {
-            if (r.readType === 'index' && r.index) {
-              const dir = r.index.changePct >= 0 ? 'up' : 'down';
-              return (
-                <span key={r.slug} className={styles.moverCell}>
-                  <span className={styles.moverCellName}>{r.label}</span>
-                  <span className={styles.moverCellChg} data-dir={dir}>{fmtPct(r.index.changePct)} <em>{r.index.horizon}</em></span>
-                  <span className={styles.moverCellCi}>[{r.index.ciLoPct.toFixed(0)}, {r.index.ciHiPct.toFixed(0)}]</span>
-                </span>
-              );
-            }
-            if (r.readType === 'demand' && r.demandNow != null) {
-              const dir = r.demandNow >= 0 ? 'up' : 'down';
-              return (
-                <span key={r.slug} className={styles.moverCell}>
-                  <span className={styles.moverCellName}>{r.label}</span>
-                  <span className={styles.moverCellChg} data-dir={dir}>{fmtPct(r.demandNow)} <em>demand</em></span>
-                  <span className={styles.moverCellCi}>{r.typicalUsd != null ? `typ ${fmtMoneyCompact(r.typicalUsd)}` : `${fmtInt(r.lots)} lots`}</span>
-                </span>
-              );
-            }
-            return (
-              <span key={r.slug} className={styles.moverCell}>
-                <span className={styles.moverCellName}>{r.label}</span>
-                <span className={styles.moverCellChg}>{r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : '—'} <em>typical</em></span>
-                <span className={styles.moverCellCi}>{r.record ? `rec ${fmtMoneyCompact(r.record.usd)}` : `${fmtInt(r.lots)} lots`}</span>
-              </span>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={styles.verifiedEmpty}>
-      <span className={styles.verifiedEmptyDot} aria-hidden />
-      No maker in {activeKey === 'all' ? 'the market' : `${activeKey}`} clears the 95%-confidence bar yet — we only print a move the data resolves.
-    </div>
-  );
-}
-
-/* The verified movers — the only price-movement reads that clear the 95%
-   confidence bar. Where a market has NO verified index maker, we fall back to
-   that vertical's tracked sub-markets (demand / descriptive) so every hero
-   carries real depth — never a bare empty line, and never a fabricated %. */
-function VerifiedStrip({ movers, activeKey, market, compact }: { movers: VerifiedMover[]; activeKey: Market; market: MarketData | null; compact?: boolean }) {
-  if (movers.length) {
-    return (
-      <div className={styles.verifiedStrip}>
-        <div className={styles.verifiedHead}>
-          <span>Verified movers</span>
-          <span>price movement · 95% confidence</span>
-        </div>
-        <div className={styles.verifiedRows}>
-          {movers.slice(0, compact ? 3 : 5).map((mv) => (
-            <div key={mv.slug} className={styles.verifiedRow} data-dir={mv.dir}>
-              <span className={styles.verifiedName}>{mv.label}</span>
-              <span className={styles.verifiedChg} data-dir={mv.dir}>
-                {fmtPct(mv.changePct)} <em>{mv.horizon}</em>
-              </span>
-              <span className={styles.verifiedCi}>[{mv.ciLoPct.toFixed(0)}, {mv.ciHiPct.toFixed(0)}]</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // no CI'd maker — surface this vertical's sub-market reads instead of the bare line
-  const subs = activeKey === 'all' ? [] : (market?.subMarkets?.[activeKey] || []);
-  if (subs.length) return <SubMarketStrip subs={subs} compact={compact} />;
-
-  return (
-    <div className={styles.verifiedEmpty}>
-      <span className={styles.verifiedEmptyDot} aria-hidden />
-      No maker in {activeKey === 'all' ? 'the market' : `${activeKey}`} clears the 95%-confidence bar yet — we only print a move the data resolves.
-    </div>
-  );
-}
-
-/* The sub-market depth line for a hero with no verified maker — the strongest
-   honest read per sub-market (demand %-over-est or the descriptive typical/
-   record), ranked demand-first. Compact by design. */
-function SubMarketStrip({ subs, compact }: { subs: SubMarketRead[]; compact?: boolean }) {
-  const rank = { index: 0, demand: 1, descriptive: 2 } as const;
-  const ordered = [...subs].sort((a, b) => {
-    if (rank[a.readType] !== rank[b.readType]) return rank[a.readType] - rank[b.readType];
-    if (a.readType === 'demand') return (b.demandNow ?? -Infinity) - (a.demandNow ?? -Infinity);
-    return b.lots - a.lots;
-  });
-  const rows = ordered.slice(0, compact ? 3 : 3);
-  const line = (r: SubMarketRead): { main: string; dir?: 'up' | 'down'; sub: string } => {
-    if (r.readType === 'index' && r.index) {
-      return { main: fmtPct(r.index.changePct), dir: r.index.changePct >= 0 ? 'up' : 'down', sub: `[${r.index.ciLoPct.toFixed(0)}, ${r.index.ciHiPct.toFixed(0)}]` };
-    }
-    if (r.readType === 'demand' && r.demandNow != null) {
-      return { main: `demand ${fmtPct(r.demandNow)}`, dir: r.demandNow >= 0 ? 'up' : 'down', sub: r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : (r.record ? fmtMoneyCompact(r.record.usd) : `${r.lots} lots`) };
-    }
-    return { main: r.typicalUsd != null ? fmtMoneyCompact(r.typicalUsd) : '—', sub: r.record ? `rec ${fmtMoneyCompact(r.record.usd)}` : `${r.lots} lots` };
-  };
-  return (
-    <div className={styles.verifiedStrip}>
-      <div className={styles.verifiedHead}>
-        <span>Sub-markets</span>
-        <span>strongest honest read</span>
-      </div>
-      <div className={styles.verifiedRows}>
-        {rows.map((r) => {
-          const l = line(r);
-          return (
-            <div key={r.slug} className={styles.verifiedRow} data-dir={l.dir}>
-              <span className={styles.verifiedName}>{r.label}</span>
-              <span className={styles.verifiedChg} data-dir={l.dir}>{l.main}</span>
-              <span className={styles.verifiedCi}>{l.sub}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-

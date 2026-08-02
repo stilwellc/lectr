@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { AuctionLot, TopSaleRow } from '../../types';
 import { formatDate, formatPrice, houseColors, craftTitle, overEstimatePct, toneOf, fmtSignedPct } from '../../utils';
 import { ARTIST_LABEL, Market } from '../../constants';
@@ -23,6 +24,7 @@ export default function TopSales({ allLots, market, series }: Props) {
   // Prefer the build-time top-sales (ranked over the FULL corpus): the loaded
   // `allLots` is a slim/sample slice, so its #1 "record" and ladder can be
   // wrong for any vertical whose true top lots weren't shipped (esp. cards).
+  const fromCorpus = !!series?.analytics?.topSales?.length;
   const topSales = useMemo<TopSaleRow[]>(() => {
     if (series?.analytics?.topSales?.length) return series.analytics.topSales;
     return allLots
@@ -119,7 +121,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
         </h2>
         <span style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
-          % over est. on hammer basis — buyer&rsquo;s premium divided out
+          top {topSales.length} · ranked over {fromCorpus ? 'the full corpus' : 'the loaded lots'} · % over est. on hammer basis — buyer&rsquo;s premium divided out
         </span>
       </div>
 
@@ -212,10 +214,11 @@ export default function TopSales({ allLots, market, series }: Props) {
                     }}>
                       {ARTIST_LABEL[lot.artist] || lot.artist}
                     </div>
-                    <a
-                      href={lot.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    {/* canonical in-app lot permalink — /lot?id= resolves any
+                        corpus lot client-side; the house link lives on the
+                        lot page's own CTA row */}
+                    <Link
+                      href={`/lot?id=${encodeURIComponent(lot.id)}`}
                       style={{
                         fontFamily: "var(--font-serif), serif",
                         fontSize: 17,
@@ -229,7 +232,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                       onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
                     >
                       {title}
-                    </a>
+                    </Link>
                   </td>
                   <td className="ray-top-td" style={{
                     textAlign: 'right',

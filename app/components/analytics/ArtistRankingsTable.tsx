@@ -123,7 +123,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         return {
           key: a.slug,
           label: a.label,
-          href: `/${a.slug}`,
+          href: `/makers/${a.slug}`,
           pinLast: false,
           totalRevenue: st?.totalAuctionRevenue || 0,
           medianSale: st?.medianPriceLast12Months || 0,
@@ -383,11 +383,13 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
       `}</style>
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+        {/* sans section head — serif stays reserved for masthead titles and
+            "On the block" heads; matches TopSales/Distributions/Calibration */}
         <h2 style={{
-          fontFamily: 'var(--font-serif), serif',
+          fontFamily: 'var(--font-sans), sans-serif',
           fontSize: 24,
-          fontWeight: 400,
-          letterSpacing: '-0.015em',
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
         }}>
           Maker <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>rankings</span>
         </h2>
@@ -408,7 +410,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               ))}
             </div>
           )}
-          {/* rank-and-slice is this table's job; the roster itself lives on /artists */}
+          {/* rank-and-slice is this table's job; the roster itself lives on /makers */}
           <Link
             href="/makers"
             style={{

@@ -153,7 +153,7 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
         }}>
           Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>breakdown</span>
         </h2>
-        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = share of lots</p>
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = lot counts</p>
       </div>
 
       {card}

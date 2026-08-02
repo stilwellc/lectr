@@ -210,15 +210,15 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
               <tr><th style={th}>Maker</th><th style={{ ...th, textAlign: 'right' }}>horizon</th><th style={{ ...th, textAlign: 'right' }}>change</th><th style={{ ...th, textAlign: 'right' }}>95% CI</th><th style={{ ...th, textAlign: 'right' }}>lots</th></tr>
             </thead>
             <tbody>
-              <tr><td style={td}>Cartier</td><td style={tdNum}>5Y</td><td style={tdNum}>+52.9%</td><td style={tdNum}>[19, 96]</td><td style={tdNum}>9,187</td></tr>
-              <tr><td style={td}>Rolex</td><td style={tdNum}>5Y</td><td style={tdNum}>+25.1%</td><td style={tdNum}>[12, 39]</td><td style={tdNum}>21,098</td></tr>
-              <tr><td style={td}>Patek Philippe</td><td style={tdNum}>3Y</td><td style={tdNum}>−18.2%</td><td style={tdNum}>[−26, −9]</td><td style={tdNum}>24,325</td></tr>
+              <tr><td style={td}>Cartier</td><td style={tdNum}>5Y</td><td style={tdNum}>+51.2%</td><td style={tdNum}>[19, 92]</td><td style={tdNum}>5,771</td></tr>
+              <tr><td style={td}>Rolex</td><td style={tdNum}>5Y</td><td style={tdNum}>+23.6%</td><td style={tdNum}>[11, 38]</td><td style={tdNum}>15,247</td></tr>
+              <tr><td style={td}>Patek Philippe</td><td style={tdNum}>3Y</td><td style={tdNum}>−12.9%</td><td style={tdNum}>[−21, −4]</td><td style={tdNum}>15,525</td></tr>
             </tbody>
           </table>
           </div>
           <p style={p}>
-            Rolex also publishes a 3Y (<V>+14.6%</V>, CI <V>[2, 28]</V>) and Patek a 1Y
-            (<V>−9.6%</V>, CI <V>[−18, −1]</V>) — same maker, shorter windows, still resolved. Everything
+            Even these three abstain at their shorter windows — Rolex&rsquo;s 1Y and 3Y and Patek&rsquo;s
+            1Y currently span zero, so the site holds them. Everything
             else — every artist, every design name, every sports and science bucket —{' '}
             <span style={strong}>abstains</span>, and the &ldquo;verified movers&rdquo; panel simply says
             so where a market has none. Three intervals that resolve the sign, standing behind real
@@ -288,17 +288,17 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
               <tr><td style={td}>Partial-quarter endpoints</td><td style={td}>A half-reported latest quarter prints a spike or crater that reverses when the rest of the sales land</td></tr>
               <tr><td style={td}>Integer rounding / mean-pinning</td><td style={td}>Rounding and mean sensitivity manufacture motion out of a thin, heavy-tailed quarter</td></tr>
               <tr><td style={td}>Backfill composition breaks</td><td style={td}>An archive backfill floods one endpoint with one source; the &ldquo;change&rdquo; is the flood, not price</td></tr>
-              <tr><td style={td}>Card-dominated &lsquo;all&rsquo;</td><td style={td}>Sports-cards are 71–92% of the whole-corpus quarters under one slug — a shift in <em>which</em> cards sold masquerades as market movement</td></tr>
+              <tr><td style={td}>Card-dominated &lsquo;all&rsquo;</td><td style={td}>Sports-cards are 66–88% of the whole-corpus quarters under one slug — a shift in <em>which</em> cards sold masquerades as market movement</td></tr>
             </tbody>
           </table>
           </div>
           <p style={p}>
             The honest engine answers each of these by <em>abstaining</em> rather than emitting a
             confident number. That card-dominance case is live: the market-wide <V>&lsquo;all&rsquo;</V>{' '}
-            index refuses every horizon because one maker-slug (<V>sports-cards</V>) is 71–92% of the
+            index refuses every horizon because one maker-slug (<V>sports-cards</V>) is 66–88% of the
             endpoint quarters, so the hedonic control can&rsquo;t hold quality constant within it. The
-            art market shows the subtler version: its market-level index reads down (3Y <V>−14.1%</V>, 5Y{' '}
-            <V>−30.6%</V>), but its bottom-up composite still abstains, because{' '}
+            art market shows the subtler version: its market-level index reads down (3Y <V>−14.2%</V>, 5Y{' '}
+            <V>−31.1%</V>), but its bottom-up composite still abstains, because{' '}
             <span style={strong}>zero</span> art makers publish a defensible per-maker horizon. Picasso is
             the reason in miniature — his recent quarters are 88–92% prints with no reference-level
             control, so a shift in <em>which</em> prints sold would leak straight into the time effect.
@@ -309,7 +309,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
           <p style={p}>
             The cost is coverage: three verified movers across a corpus of{' '}
             <span style={strong}>{meta.totalLots.toLocaleString()} lots</span> from {meta.sources.length}{' '}
-            sources. Watches assemble a composite that resolves at 5Y (<V>+25.5%</V>, Rolex / Patek /
+            sources. Watches assemble a composite that resolves at 5Y (<V>+24.5%</V>, Rolex / Patek /
             Cartier at a capped 35/35/30); most verticals never seat enough measurable components to
             compose at all. That is a small published surface for a very large amount of data — and it is
             the point. Every appreciation figure the site shows has a 95% interval behind it that

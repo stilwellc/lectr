@@ -16,7 +16,7 @@ import { categoryLabels } from '../utils';
 export default function SaveSearch({ filters, market }: { filters: FeedFilters; market: string }) {
   const { user } = useAuth();
   const { save } = useSavedSearches();
-  const [state, setState] = useState<'idle' | 'busy' | 'saved' | 'exists'>('idle');
+  const [state, setState] = useState<'idle' | 'busy' | 'saved' | 'exists' | 'error'>('idle');
   const revert = useRef<number | null>(null);
 
   const query: SavedQuery = {
@@ -40,7 +40,7 @@ export default function SaveSearch({ filters, market }: { filters: FeedFilters; 
     if (state === 'busy') return;
     setState('busy');
     const r = await save(name, query);
-    setState(r === 'saved' ? 'saved' : r === 'exists' ? 'exists' : 'idle');
+    setState(r === 'saved' ? 'saved' : r === 'exists' ? 'exists' : 'error');
     if (revert.current) window.clearTimeout(revert.current);
     revert.current = window.setTimeout(() => setState('idle'), 4000);
   }
@@ -48,7 +48,7 @@ export default function SaveSearch({ filters, market }: { filters: FeedFilters; 
   return (
     <button
       className="ray-toolbar-reset"
-      style={{ color: state === 'saved' ? 'var(--color-up)' : 'var(--color-butter-text)' }}
+      style={{ color: state === 'saved' ? 'var(--color-up)' : state === 'error' ? 'var(--color-down-text)' : 'var(--color-butter-text)' }}
       title={`Watch for new lots matching: ${name}`}
       onClick={onSave}
       disabled={state === 'busy'}
@@ -56,6 +56,7 @@ export default function SaveSearch({ filters, market }: { filters: FeedFilters; 
       {state === 'saved' ? 'Saved — watching for new lots'
         : state === 'exists' ? 'Already watching this'
         : state === 'busy' ? 'Saving…'
+        : state === 'error' ? 'Couldn’t save — try again'
         : 'Save this search'}
     </button>
   );

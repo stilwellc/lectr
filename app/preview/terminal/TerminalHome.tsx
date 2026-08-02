@@ -19,11 +19,11 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constants';
+import { ARTIST_LABEL, MARKETS, marketArtists } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, sportOf, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
 import { dealScore, signalMagnitude } from '../../lib/comps';
@@ -31,13 +31,11 @@ import ComparableModal from '../../components/ComparableModal';
 import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
-import CountUp from '../../components/CountUp';
 import SettlementSlip from '../../components/SettlementSlip';
 import { sportOfLot } from '../../lib/submarkets';
 import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedToolbar';
-import { weekDaysFor } from '../../components/HammerWeek';
 import { Colophon, daysWord } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
@@ -45,7 +43,7 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
-import SubMarketBoard, { hasSubMarketRows } from './SubMarketBoard';
+import SubMarketBoard from './SubMarketBoard';
 import TonightsWall, { type WallItem } from './TonightsWall';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
@@ -229,14 +227,11 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
 
 export default function TerminalHomePage() {
   const ray = useRayData();
-  const { allLots, statsByArtist, demand, realized, bidComp, recentSold, backtest, market: marketData, tape, lastCrawl, loading, error, fromCache } = ray;
+  const { allLots, statsByArtist, demand, realized, bidComp, recentSold, backtest, market: marketData, lastCrawl, loading, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
   const mounted = useMounted();
   const isMobile = useMediaQuery('(max-width: 820px)', false);
-  // ≥900px — where the instrumentRow's two columns genuinely exist; gates the
-  // condensed sub-market board riding beside Today's Call.
-  const deskWide = useMediaQuery('(min-width: 900px)', false);
 
   // ONE TODAY, ONE SERIAL — the crawl day is the data's "today".
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
@@ -260,11 +255,6 @@ export default function TerminalHomePage() {
   const isSportsScience = activeKey === 'sports' || activeKey === 'science';
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
-  const marketStats = useMemo(() => {
-    const out: typeof statsByArtist = {};
-    for (const [k, v] of Object.entries(statsByArtist)) if (mktSet.has(k)) out[k] = v;
-    return out;
-  }, [statsByArtist, mktSet]);
   const savedApi = useSavedLots();
   const { toggle, isSaved, savedIds } = savedApi;
   const savedMeta = (savedApi as unknown as { savedMeta?: SavedMeta }).savedMeta ?? EMPTY_SAVED_META;
@@ -584,9 +574,6 @@ export default function TerminalHomePage() {
 
   // below-market count for the hero stat (scoped to the live book)
   const belowMktCount = belowIds.size;
-  // tape items for the active market (fall back to 'all', then any).
-
-  const onMoverSelect = (key: Market) => setMarket(key);
 
   return (
     <>
@@ -661,8 +648,6 @@ export default function TerminalHomePage() {
               realized={realized}
               bidComp={bidComp[activeKey]}
               totalLots={totalLots}
-              totalSold={meta.totalSold ?? 0}
-              houses={new Set(marketLots.map(l => l.auctionHouse)).size || (ray.sources?.length ?? 7)}
               belowMkt={belowMktCount}
               onOpenBelow={openBelowLens}
               onCommand={openCommandK}
@@ -685,12 +670,13 @@ export default function TerminalHomePage() {
                   <SubMarketBoard
                     market={marketData}
                     activeKey={activeKey}
-                    onSelect={onMoverSelect}
                     variant={mounted && isMobile ? 'mobile' : 'desktop'}
                     paper
                     receipts={backtest ? {
                       flaggedPct: backtest.flagged.medianPerfPct,
                       unflaggedPct: backtest.unflagged.medianPerfPct,
+                      flaggedHammerPct: backtest.flagged.hammerMedianPct ?? null,
+                      unflaggedHammerPct: backtest.unflagged.hammerMedianPct ?? null,
                       n: backtest.flagged.n,
                       asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
                     } : null}
@@ -935,7 +921,10 @@ export default function TerminalHomePage() {
                     archiveOpen={showArchive}
                     onToggleArchive={() => setShowArchive(s => !s)}
                     lines={[
-                      { k: 'Sold lots on the book', v: (meta.totalSold ?? recentRows.length).toLocaleString() },
+                      // meta.totalSold is the FULL corpus — under a scoped
+                      // market name the label must say so (honesty: a count
+                      // never wears a scope it doesn't have)
+                      { k: 'Sold lots on the book, all markets', v: (meta.totalSold ?? recentRows.length).toLocaleString() },
                       ...(recentMedian !== null ? [{ k: 'Recent median, realized', v: formatPrice(recentMedian) }] : []),
                       ...(recentLatest ? [{ k: 'Latest hammer', v: formatDate(recentLatest) }] : []),
                     ]}
@@ -982,8 +971,6 @@ export default function TerminalHomePage() {
 
           {/* ══ THE COLOPHON — full route map (nav/SEO) ══ */}
           <Colophon
-            lotCount={totalLots}
-            houseCount={new Set(allLots.map(l => l.auctionHouse)).size}
             record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct } : null}
           />
         </RayEntrance>

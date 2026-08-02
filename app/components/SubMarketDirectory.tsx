@@ -1,6 +1,6 @@
 'use client';
 /**
- * SubMarketDirectory — the taxonomy made visible on /artists (Makers).
+ * SubMarketDirectory — the taxonomy made visible on /makers (the roster).
  * The active market's sub-category tree as a grid of group cards: sports
  * kinds hold their sport splits, watch makers hold their model families,
  * culture splits by subject and by kind, science by collection, design by

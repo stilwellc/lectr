@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
-import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming } from '../utils';
+import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { lotFitsMarket, signalMagnitude } from '../lib/comps';
 import Flick from './Flick';
@@ -178,7 +178,7 @@ export function CallPlate({
   const imgOk = !!lot.imageUrl && failedImgId !== lot.id;
   const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
   const monogram = makerName.trim().charAt(0).toUpperCase();
-  const caption = `${lot.lotNumber ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse} · hammers ${formatDate(lot.saleDate)}`;
+  const caption = `${lot.lotNumber ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse} · hammers ${formatDate(trueSaleDay(lot) || lot.saleDate)}`;
   // the comps median in dollars: the deep signal carries the pool median;
   // crawl-time signals don't, but pct IS med/estMid − 1, so it derives exactly
   const estMid = lot.estimateLow && lot.estimateHigh
@@ -210,7 +210,7 @@ export function CallPlate({
       <div className="glass lit lectr-cp lectr-cp-compact">
         <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>Today&rsquo;s call · ranked by comps gap</span>
+          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
           {saveBtn}
         </div>
         <div className="ray-call-artist">{makerName}</div>
@@ -223,7 +223,7 @@ export function CallPlate({
           <LeaderRow k="Confidence">
             <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
           </LeaderRow>
-          <LeaderRow k="Hammers" v={`${formatDate(lot.saleDate)} · ${daysWord(lot.saleDate)}`} sub={lot.auctionHouse} />
+          <LeaderRow k="Hammers" v={`${formatDate(trueSaleDay(lot) || lot.saleDate)} · ${daysWord(trueSaleDay(lot) || lot.saleDate)}`} sub={lot.auctionHouse} />
         </div>
         <div className="ray-call-ctas" style={{ marginTop: 16 }}>
           {onSeeComps ? (
@@ -246,7 +246,7 @@ export function CallPlate({
       <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
       <div className="lectr-cp-body">
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>Today&rsquo;s call · ranked by comps gap</span>
+          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
           {saveBtn}
         </div>
 
@@ -290,7 +290,7 @@ export function CallPlate({
             <LeaderRow k="Confidence">
               <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
             </LeaderRow>
-            <LeaderRow k="Hammers" v={`${formatDate(lot.saleDate)} · ${daysWord(lot.saleDate)}`} />
+            <LeaderRow k="Hammers" v={`${formatDate(trueSaleDay(lot) || lot.saleDate)} · ${daysWord(trueSaleDay(lot) || lot.saleDate)}`} />
           </div>
 
           {/* stacked plate (mobile + rail): the current lines, untouched */}

@@ -5,6 +5,7 @@ import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice, fmtSignedPct } from '../../utils';
 import { MARKETS, marketOf } from '../../constants';
 import { useMarket } from '../../lib/market';
+import { useRayData } from '../../hooks/useRayData';
 import RecordBand from '../RecordBand';
 import meta from '../../../public/data/ray/meta.json';
 
@@ -19,6 +20,9 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
   const { market } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market);
   const contextLabel = marketMeta?.live ? marketMeta.label : 'all markets';
+  // fetched meta.json wins — the build-time import is a first-paint fallback
+  // only (build-time counts go stale between deploys; the crawl is nightly)
+  const { totalLots: liveTotalLots } = useRayData();
 
   const cards = useMemo(() => {
     const oneYearAgo = new Date();
@@ -79,7 +83,7 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
     // the "sold lots" card below); allLots.length is only a last resort.
     const marketTracked = Object.values(statsByArtist).reduce((s, x) => s + (x.totalLotsTracked || 0), 0);
     const totalLotsCard = market === 'all' || !marketMeta?.live
-      ? { label: 'Total lots', value: meta.totalLots.toLocaleString(), sub: 'on the book, full corpus', tone: '' }
+      ? { label: 'Total lots', value: (liveTotalLots ?? meta.totalLots).toLocaleString(), sub: 'on the book, full corpus', tone: '' }
       : { label: 'Total lots', value: (marketTracked || allLots.length).toLocaleString(), sub: `on the book · ${contextLabel}`, tone: '' };
 
     // Sell-through, all-time: sold ÷ (sold + bought-in) over estimate-market
@@ -119,7 +123,7 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
       sellThroughCard,
       estimateCard,
     ];
-  }, [statsByArtist, allLots, market, marketMeta, contextLabel]);
+  }, [statsByArtist, allLots, market, marketMeta, contextLabel, liveTotalLots]);
 
   return (
     <section className="ray-portfolio-header rail">

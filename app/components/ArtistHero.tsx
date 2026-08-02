@@ -224,7 +224,7 @@ export default function ArtistHero({
           </p>
           {/* the maker's hero numeral speaks the terminal numeral register —
               mono 500 tabular (scoped here: .ray-hero2-value is shared with
-              /saved and the board, which keep their own faces). The NAME is
+              /profile and the board, which keep their own faces). The NAME is
               the page's h1 now; the numeral is display, not heading. */}
           {hover ? (
             <div className="ray-hero2-value" style={heroNumStyle}>{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</div>

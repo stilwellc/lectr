@@ -55,7 +55,12 @@ const CalibrationCurve = dynamic(() => import('../components/analytics/Calibrati
 
 export default function AnalyticsPage() {
   // EAGER tier only — useRayData does NOT trigger the 12MB phase-2 pull.
-  const { allLots, statsByArtist, lastCrawl, fromCache, market: marketData, backtest } = useRayData();
+  const { allLots, statsByArtist, lastCrawl, fromCache, market: marketData, backtest, totalLots, totalSold, sources } = useRayData();
+  // fetched meta.json wins; the build-time import is a first-paint fallback
+  // only (build-time counts go stale between deploys; the crawl is nightly)
+  const bookLots = totalLots ?? meta.totalLots;
+  const bookSold = totalSold ?? meta.totalSold;
+  const bookHouses = sources.length || meta.sources.length;
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
@@ -112,7 +117,7 @@ export default function AnalyticsPage() {
       </div>
     )],
     ['horizon', <LongHorizon key="horizon" marketData={marketData} scope={activeKey} />],
-    ['book', <SubMarketDrills key="book" marketData={marketData} scope={activeKey} title="The full book" method="every tracked sub-market · strongest honest read" />],
+    ['book', <SubMarketDrills key="book" marketData={marketData} scope={activeKey} limit={Infinity} title="The full book" method="every tracked sub-market · strongest honest read" />],
   ];
 
   return (
@@ -139,7 +144,7 @@ export default function AnalyticsPage() {
           serial={lastCrawl || meta.lastCrawl}
           title={<>Every market, read as <Underscore>one book</Underscore>.</>}
           sub={<>Indexes, relative strength, microstructure and the engine&rsquo;s own science —{' '}
-            <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meta.totalLots.toLocaleString()} lots</b>,{' '}
+            <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{bookLots.toLocaleString()} lots</b>,{' '}
             <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{drillCount} tracked sub-markets</b>
             {lastCrawl ? <>, read {formatDate(lastCrawl)}</> : null}.</>}
         />
@@ -149,8 +154,8 @@ export default function AnalyticsPage() {
         <div className="ray-desk-strip2">
           <div className="ray-desk-cell2">
             <div className="k">On the book</div>
-            <div className="v">{meta.totalLots.toLocaleString()}</div>
-            <div className="s">{meta.totalSold.toLocaleString()} sold · {meta.sources.length} houses</div>
+            <div className="v">{bookLots.toLocaleString()}</div>
+            <div className="s">{bookSold.toLocaleString()} sold · {bookHouses} houses</div>
           </div>
           <div className="ray-desk-cell2">
             <div className="k">Sub-markets tracked</div>

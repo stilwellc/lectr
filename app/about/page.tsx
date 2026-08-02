@@ -118,7 +118,7 @@ export default function AboutPage() {
               <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meta.totalLots.toLocaleString()} lots</b>
               {' '}from{' '}
               <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meta.sources.length} houses</b>
-              {' '}— the architecture, the pipeline, and the price engine, end to end.
+              {' '}at the last crawl — the architecture, the pipeline, and the price engine, end to end.
             </>}
           />
           <p style={{ ...p, fontSize: 16, marginTop: 18, marginBottom: 0 }}>
@@ -136,7 +136,7 @@ export default function AboutPage() {
             build, baked into JSON, and shipped as static assets. The client is a pure reader.
           </p>
           <Flow>
-            <Node title="Auction houses" sub="Sotheby’s · Christie’s · Goldin · Bonhams · Phillips · Wright · Rago · Heritage · Bruun Rasmussen" />
+            <Node title="Auction houses" sub="Sotheby’s · Christie’s · Goldin · Bonhams · Phillips · RR Auction · Wright · Rago" />
             <Down label="ingest" />
             <Node tone="accent" title="Daily crawl — scripts/ray-crawl.ts" sub="per-house adapter → item-level routing → status lifecycle → reconcile → sanitize → coverage tripwire → write-gate" />
             <Down label="writeCorpusAndServed()" />
@@ -158,7 +158,9 @@ export default function AboutPage() {
         <Section ord="02" label="Ingestion" title="The crawl, and the status lifecycle">
           <p style={p}>
             Each house has its own adapter (Sotheby&apos;s GraphQL, Christie&apos;s <code style={code}>chrComponents</code> JSON,
-            Goldin&apos;s faceted <code style={code}>lots_v2</code> API, HTML scrapers for the rest). Routing is
+            Goldin&apos;s faceted <code style={code}>lots_v2</code> API, a headless catalogue crawler for RR
+            Auction — which also contributed its 30-year sold archive as a one-time backfill — and HTML
+            scrapers for the rest). Routing is
             strictly <em>item-level</em> — a lot is classified by its own attributes, never by the sale it
             came from — with hard doctrine gates: auctions only (never buy-now), sports means objects
             (never cards), science excludes video games.
@@ -207,14 +209,18 @@ export default function AboutPage() {
             The engine values a lot against its own maker&apos;s sold history: an IDF-weighted title-token
             cosine plus structured agreement (model / reference / entity / dims / year) selects the
             comparable pool, a weighted median prices it, and the ratio against the estimate-mid becomes
-            the directional call — below, at, or above the comparable market. It deliberately does not
-            try to out-price the house on a one-of-a-kind work; what&apos;s validated is the <strong>direction</strong>.
+            the directional call — below, at, or above the comparable market. The pool logic is
+            per-vertical: cards comp on the exact player · set · card and an empirically fitted grade
+            ladder, watches lean on the reference, and thin science/culture markets fall back to a
+            labeled low-confidence <em>reference band</em> — a range, never a point call. It deliberately
+            does not try to out-price the house on a one-of-a-kind work; what&apos;s validated is the{' '}
+            <strong>direction</strong>.
           </p>
           <p style={p}>
-            The full math — the similarity scorer, the comp-pool gate, and how both were calibrated —
-            is written up in{' '}
+            The engine&apos;s other instrument — the per-maker hedonic index that measures how much a
+            market has actually moved, and the confidence gate that makes it abstain — is written up in{' '}
             <Link href="/blog/how-we-built-the-pricing-engine" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
-              How we built the pricing engine <Flick size={11} />
+              How we built the price-movement engine <Flick size={11} />
             </Link>.
           </p>
         </Section>
@@ -238,17 +244,18 @@ export default function AboutPage() {
 
         <Section ord="06" label="Client" title="Three-phase progressive load">
           <p style={p}>
-            Because the client is a static reader with a ~19&nbsp;MB tail of history, it loads in phases
-            behind a module-level cache and listener fan-out (<code style={code}>app/hooks/useRayData.ts</code>).
-            The first paint is driven by a small precomputed payload; the heavy history streams in behind
-            it, and the 10&nbsp;MB sold archive is fetched only when a surface that needs it mounts.
+            Because the client is a static reader whose full history now runs to hundreds of megabytes of
+            JSON, it loads in phases behind a module-level cache and listener fan-out
+            (<code style={code}>app/hooks/useRayData.ts</code>). The first paint is driven by a precomputed
+            eager payload; the heavy history and the sold archive are opt-in — fetched only when a surface
+            that needs them mounts, so most sessions never pay for them.
           </p>
           <Flow>
-            <Node tone="accent" title="Phase 1 — first paint" sub="upcoming.json (+ meta / stats / demand) ~400 KB. Signals are PRECOMPUTED at build time → the feed is interactive immediately." />
-            <Down label="in the background" />
-            <Node title="Phase 2 — full history" sub="lots.json ~9 MB. Merges in and re-attaches signal / soldComp to each lot by id." />
+            <Node tone="accent" title="Phase 1 — first paint" sub="upcoming + market + stats + meta + backtest, ~8 MB of JSON at the current build (served compressed). Signals are PRECOMPUTED at build time → the feed is interactive immediately." />
             <Down label="on demand" />
-            <Node title="Phase 3 — sold archive" sub="sold-archive shards, ~22 MB. Fetched ONLY when a sports/science comps modal opens; art/watch/design never pay for it." />
+            <Node title="Phase 2 — full history" sub="lots-*.json shards, ~290 MB at the current build. Opt-in: fires only when a history surface asks; merges in and re-attaches signal / soldComp to each lot by id." />
+            <Down label="on demand" />
+            <Node title="Phase 3 — sold archive" sub="sold-archive shards, ~19 MB. Fetched ONLY when a surface that reads deep sold comps opens; most sessions never pay for it." />
           </Flow>
         </Section>
 
