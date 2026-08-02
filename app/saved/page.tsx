@@ -273,6 +273,74 @@ export default function SavedPage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
+  /* ── THE BRIEF — the desk's TLDR. Four reads over the watchlist, each row
+     rendered only when its data genuinely exists: hottest day-over-day
+     bidding (crawl-measured velocity), lots landing within 48h, lots with
+     DIRECT comps (same card & grade, or same edition), and the deepest
+     below-market signals. Facts only — nothing is ranked by opinion. ── */
+  const brief = useMemo(() => {
+    type Row = { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' };
+    const rows: Row[] = [];
+    // hottest bidding — day-over-day bids added, velocity-measured
+    const hot = upcoming
+      .filter(l => l.bidVelocity && l.bidVelocity.delta > 0)
+      .sort((a, b) => (b.bidVelocity!.delta) - (a.bidVelocity!.delta))
+      .slice(0, 2);
+    for (const l of hot) {
+      const v = l.bidVelocity!;
+      rows.push({
+        key: `hot-${l.id}`, tag: 'Most bids', lot: l,
+        fact: <>+{v.delta} bids in {Math.round(v.hours)}h{v.pctile != null && <> · faster than {v.pctile}% of live lots</>}</>,
+      });
+    }
+    // lands soon — hammering within 48h
+    const soon = upcoming
+      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 2; })
+      .slice(0, 3);
+    for (const l of soon) {
+      const d = daysUntil(l.saleDate);
+      rows.push({
+        key: `soon-${l.id}`, tag: 'Lands soon', lot: l,
+        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
+      });
+    }
+    // direct comps — exact card & grade first, then same-edition pools
+    if (fullLoaded) {
+      const direct: Row[] = [];
+      for (const l of upcoming) {
+        if (l.cardComps && l.cardComps.n > 0 && l.cardComps.med != null) {
+          direct.push({
+            key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
+            fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {formatPrice(l.cardComps.med)} median</>,
+          });
+        } else {
+          const a = appraiseLot(l, allLots);
+          if (a && a.kind === 'edition' && a.n >= 3) {
+            direct.push({
+              key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
+              fact: <>{a.n} same-edition comps · {formatPrice(a.value)} median</>,
+            });
+          }
+        }
+        if (direct.length >= 2) break;
+      }
+      rows.push(...direct);
+    }
+    // deepest below-market signals
+    const under = upcoming
+      .map(l => ({ l, sig: lotSignal(l, allLots) }))
+      .filter((x): x is { l: AuctionLot; sig: NonNullable<ReturnType<typeof lotSignal>> } => !!x.sig && x.sig.label === 'Below Market')
+      .sort((a, b) => a.sig.pct - b.sig.pct)
+      .slice(0, 2);
+    for (const { l, sig } of under) {
+      rows.push({
+        key: `bm-${l.id}`, tag: 'Below market', lot: l, tone: 'up',
+        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>{fmtSignedPct(sig.pct)}</b> vs comps{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}</>,
+      });
+    }
+    return rows;
+  }, [upcoming, allLots, fullLoaded]);
+
   /* ── THE TRACK RECORD — how your eye did, measured. Hammer basis via
      overEstimatePct (realized is premium-inclusive; estimates are hammer).
      The flagged/unflagged split publishes only past an n-gate of 3 each. ── */
@@ -315,6 +383,35 @@ export default function SavedPage() {
           font-size: 13px; color: var(--color-text-muted);
         }
         .ray-saved-orphan:last-child { border-bottom: none; }
+        /* ── THE BRIEF — the desk TLDR under the masthead ── */
+        .ray-brief {
+          border: 2px dotted color-mix(in srgb, var(--color-fg) 15%, transparent);
+          border-radius: 20px; padding: 6px 18px; margin-top: 22px;
+        }
+        .ray-brief-row {
+          display: flex; align-items: baseline; gap: 12px;
+          padding: 10px 0; text-decoration: none; color: inherit;
+          border-top: 2px dotted color-mix(in srgb, var(--color-fg) 8%, transparent);
+        }
+        .ray-brief-row:first-of-type { border-top: none; }
+        .ray-brief-row:hover .ray-brief-title { color: var(--color-fg); }
+        .ray-brief-tag {
+          flex: none; width: 96px; font-size: 10px; letter-spacing: 0.07em;
+          text-transform: uppercase; color: var(--color-text-faint); white-space: nowrap;
+        }
+        .ray-brief-title {
+          font-size: 13px; font-weight: 600; color: var(--color-text-secondary);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          max-width: 34%; min-width: 90px; flex: none;
+          transition: color var(--duration-fast) var(--ease-signature);
+        }
+        .ray-brief-fact { font-size: 12.5px; color: var(--color-text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        @media (max-width: 640px) {
+          .ray-brief { padding: 4px 14px; }
+          .ray-brief-row { flex-wrap: wrap; gap: 4px 10px; padding: 9px 0; }
+          .ray-brief-tag { width: auto; }
+          .ray-brief-title { max-width: 100%; flex: 1 1 100%; }
+        }
         /* ── the DESK STRIP — the profile's stat rail under the masthead ── */
         .ray-desk-strip {
           display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -500,6 +597,19 @@ export default function SavedPage() {
                 </>
               }
             />
+
+            {/* THE BRIEF — the desk's TLDR: act-on-today reads, facts only */}
+            {brief.length > 0 && (
+              <div className="ray-brief ray-enter" role="list" aria-label="Today's brief">
+                {brief.map(r => (
+                  <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ray-brief-row" role="listitem">
+                    <span className="ray-brief-tag">{r.tag}</span>
+                    <span className="ray-brief-title">{craftTitle(r.lot.title)}</span>
+                    <span className="ray-brief-fact">{ARTIST_LABEL[r.lot.artist] || r.lot.artist} · {r.fact}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
 
             {/* THE DESK STRIP — one cell per ledger, only where data exists */}
             <div className="ray-desk-strip ray-enter">
