@@ -29,6 +29,14 @@ export const OPEN_CK_EVENT = 'lectr:open-ck';
  */
 export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingCounts: Record<string, number>; savedCount?: number }) {
   const [open, setOpen] = useState(false);
+
+  // a browser Back/Forward while the palette is open must not strand it over
+  // the destination page (audit-navbugs defect 5)
+  useEffect(() => {
+    const close = () => setOpen(false);
+    window.addEventListener('popstate', close);
+    return () => window.removeEventListener('popstate', close);
+  }, []);
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);

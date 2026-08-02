@@ -244,9 +244,11 @@ export default function IndexHero({
   }, [bidComp]);
 
   const rise = (delay: number) => ({
-    initial: reduce ? false : { opacity: 0, y: 16, scale: 0.98 },
+    // gated on play: a cached back-nav must render RESOLVED, not re-fade the
+    // hero from nothing (audit-lifecycle #3c)
+    initial: reduce || !play ? false : { opacity: 0, y: 16, scale: 0.98 },
     animate: { opacity: 1, y: 0, scale: 1 },
-    transition: { duration: 0.6, ease: EASE, delay: reduce ? 0 : delay },
+    transition: { duration: 0.6, ease: EASE, delay: reduce || !play ? 0 : delay },
   });
 
   const hasChart = hero.idx.length >= 4;

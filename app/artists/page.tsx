@@ -77,7 +77,7 @@ export default function ArtistsPage() {
             {/* the certificate masthead — roster count rides the serial slot */}
             <Masthead
               kicker={`The roster · ${activeLabel} market`}
-              datum={<CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} />}
+              datum={<CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
               title={<>Every maker, read as a <Accent>demand curve</Accent>.</>}
               sub={
                 <>

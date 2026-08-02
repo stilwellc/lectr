@@ -17,7 +17,7 @@
    safe (all client hooks guard window/matchMedia).
    ============================================================ */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
@@ -285,7 +285,34 @@ export default function TerminalHomePage() {
   }, []);
 
   const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
-  const [tableLot, setTableLot] = useState<AuctionLot | null>(null);
+  const [tableLot, setTableLotRaw] = useState<AuctionLot | null>(null);
+  // THE MODAL JOINS HISTORY (audit-navbugs defect 1): opening a lot pushes a
+  // history entry, so the browser Back (and the mobile back-gesture) CLOSES
+  // the lot instead of throwing the reader off the page. Closing via the X
+  // pops the entry we pushed, keeping history clean. State flag 'lectrLot'
+  // marks our entry; the popstate listener closes on any pop while open.
+  const modalPushed = useRef(false);
+  const setTableLot = useCallback((lot: AuctionLot | null) => {
+    if (lot) {
+      if (!modalPushed.current) {
+        try { window.history.pushState({ ...window.history.state, lectrLot: true }, ''); modalPushed.current = true; } catch { /* ignore */ }
+      }
+      setTableLotRaw(lot);
+    } else {
+      if (modalPushed.current) {
+        modalPushed.current = false;
+        try { window.history.back(); } catch { /* ignore */ }
+      }
+      setTableLotRaw(null);
+    }
+  }, []);
+  useEffect(() => {
+    const onPop = () => {
+      if (modalPushed.current) { modalPushed.current = false; setTableLotRaw(null); }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [showArchive, setShowArchive] = useState(false);
 
   // The layout choice persists — read after mount (SSR renders the default).
@@ -834,8 +861,8 @@ export default function TerminalHomePage() {
                       narrowView ? (
                         <div
                           key={lot.id}
-                          className="ray-feed-rekey ray-feeditem-row"
-                          style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                          className={fromCache ? 'ray-feeditem-row' : 'ray-feed-rekey ray-feeditem-row'}
+                          style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
                         >
                           <FeedRow
                             lot={lot}
@@ -846,8 +873,8 @@ export default function TerminalHomePage() {
                       ) : (
                         <div
                           key={lot.id}
-                          className="ray-feed-rekey ray-feeditem-card"
-                          style={{ animationDelay: `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                          className={fromCache ? 'ray-feeditem-card' : 'ray-feed-rekey ray-feeditem-card'}
+                          style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
                         >
                           <LotCard
                             lot={lot}

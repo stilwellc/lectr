@@ -37,6 +37,7 @@ const heroNumStyle: CSSProperties = {
 import FollowButton from './FollowButton';
 
 export default function ArtistHero({
+  animate: anim = true,
   slug,
   label,
   stats,
@@ -46,6 +47,8 @@ export default function ArtistHero({
   market,
   serial,
 }: {
+  /** false on cached back-nav — numbers land resolved, no re-count */
+  animate?: boolean;
   slug?: string;
   label: string;
   stats: MarketStats | null;
@@ -228,11 +231,11 @@ export default function ArtistHero({
           ) : (
             <div className="ray-hero2-value" style={heroNumStyle}>
               {series.length && fresh
-                ? <CountUp to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
+                ? <CountUp animate={anim} to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
                 : typicalSale !== null
-                  ? <CountUp to={typicalSale} format={formatPrice} duration={1000} />
+                  ? <CountUp animate={anim} to={typicalSale} format={formatPrice} duration={1000} />
                   : stats?.recordPrice
-                    ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1000} />
+                    ? <CountUp animate={anim} to={stats.recordPrice} format={formatPrice} duration={1000} />
                     : '—'}
             </div>
           )}
@@ -376,7 +379,7 @@ export default function ArtistHero({
           cells={[
             {
               k: 'Record sale',
-              v: stats?.recordPrice ? <CountUp to={stats.recordPrice} format={formatPrice} duration={1200} /> : '—',
+              v: stats?.recordPrice ? <CountUp animate={anim} to={stats.recordPrice} format={formatPrice} duration={1200} /> : '—',
               sub: stats?.recordTitle
                 ? `${stats.recordTitle.length > 34 ? stats.recordTitle.slice(0, 32) + '…' : stats.recordTitle}${recordYear ? `, ${recordYear}` : ''}`
                 : 'no concluded sales yet',
@@ -386,24 +389,24 @@ export default function ArtistHero({
             bidMarket
               ? {
                   k: 'Sales, past 12 mo',
-                  v: <CountUp to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+                  v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
                   sub: 'sold, trailing 12 months',
                 }
               : {
                   k: 'Sell-through',
-                  v: facts.sellThrough !== null ? <CountUp to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—',
+                  v: facts.sellThrough !== null ? <CountUp animate={anim} to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—',
                   sub: 'of concluded lots found buyers',
                 },
             {
               k: 'Lots tracked',
-              v: <CountUp to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+              v: <CountUp animate={anim} to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} />,
               sub: liveCount > 0
                 ? <a href="#upcoming" style={{ color: 'inherit', textUnderlineOffset: 3 }}>{liveCount} live right now</a>
                 : `${liveCount} live right now`,
             },
             {
               k: 'Auction houses',
-              v: <CountUp to={facts.houses} format={n => `${Math.round(n)}`} duration={1200} />,
+              v: <CountUp animate={anim} to={facts.houses} format={n => `${Math.round(n)}`} duration={1200} />,
               sub: 'selling this maker',
             },
           ]}

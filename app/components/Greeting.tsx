@@ -21,15 +21,19 @@ export default function Greeting() {
       if (sessionStorage.getItem('lectr-greeted')) return;
     } catch { return; }
     setShow(true);
-    const hold = setTimeout(() => setLeaving(true), 1750);
+    // stamp at the HOLD point (write-on visually complete): stamping only at
+    // full completion let a fast navigation replay the floor on the next
+    // home mount (audit-lifecycle #7); still after-arm, so StrictMode's
+    // double-mount cannot strand the floor
+    const hold = setTimeout(() => {
+      setLeaving(true);
+      try { sessionStorage.setItem('lectr-greeted', '1'); } catch { /* private mode */ }
+    }, 1750);
     // greeted = the write-on COMPLETED — stamping at completion (not on arm)
     // keeps StrictMode's dev double-mount from stranding the floor at full
     // opacity forever (run 1 stamped + armed, cleanup killed the timers,
     // run 2 saw the stamp and bailed with show still true)
-    const gone = setTimeout(() => {
-      setShow(false);
-      try { sessionStorage.setItem('lectr-greeted', '1'); } catch { /* private mode */ }
-    }, 2300);
+    const gone = setTimeout(() => setShow(false), 2300);
     return () => { clearTimeout(hold); clearTimeout(gone); setShow(false); setLeaving(false); };
   }, []);
 

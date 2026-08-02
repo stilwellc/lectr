@@ -229,7 +229,7 @@ export default function ArtistDetailPage() {
                 <MarketSwitch compact />
               </div>
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-                <ArtistHero slug={slug} serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined} label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
+                <ArtistHero animate={!fromCache} slug={slug} serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined} label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
               </div>
               {/* watch makers: the model-family ledger — pre-aggregated drill
                   rows scoped to this maker (Daytona vs Cellini, honest reads) */}
@@ -341,7 +341,7 @@ function ArchiveMakerBody({
           <MarketSwitch compact />
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-          <ArtistHero slug={slug} serial={serial} label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
+          <ArtistHero animate={!fromCache} slug={slug} serial={serial} label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
         </div>
       </RayEntrance>
 

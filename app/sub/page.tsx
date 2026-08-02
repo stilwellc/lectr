@@ -16,7 +16,7 @@ function SubFromQuery() {
   // drill slugs are 'vertical:part' — case matters only on the part in rare
   // maker slugs, but every emitted slug is already lower-case, so normalize.
   const id = (params.get('id') || '').trim().toLowerCase();
-  return <SubPage slug={id} />;
+  return <SubPage key={id} slug={id} />;
 }
 
 export default function SubQueryPage() {

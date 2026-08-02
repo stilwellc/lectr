@@ -13,7 +13,7 @@ import RefPage from '../components/RefPage';
 function RefFromQuery() {
   const params = useSearchParams();
   const id = (params.get('id') || '').trim().toLowerCase();
-  return <RefPage refKey={id} />;
+  return <RefPage key={id} refKey={id} />;
 }
 
 export default function RefQueryPage() {

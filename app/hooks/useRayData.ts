@@ -466,7 +466,11 @@ export function retryArchiveLoad() {
 
 export function useRayData(): RayData {
   const [data, setData] = useState<RayPayload | null>(cached);
-  const [fromCache] = useState(() => cached !== null && cached.fullLoaded);
+  // "cache warm at mount" per the doc contract — phase-1 presence, NOT
+  // phase-2 completion (ANDing fullLoaded made entrance choreography replay
+  // on warm revisits and flip behavior based on which pages had pulled the
+  // full corpus; audit-lifecycle #2)
+  const [fromCache] = useState(() => cached !== null);
 
   useEffect(() => {
     let active = true;

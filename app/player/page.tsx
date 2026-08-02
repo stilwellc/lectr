@@ -11,7 +11,7 @@ import PlayerPage from '../components/PlayerPage';
 function PlayerFromQuery() {
   const params = useSearchParams();
   const id = (params.get('id') || '').trim().toLowerCase();
-  return <PlayerPage playerSlug={id} />;
+  return <PlayerPage key={id} playerSlug={id} />;
 }
 
 export default function PlayerQueryPage() {

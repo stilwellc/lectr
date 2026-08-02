@@ -93,6 +93,38 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     if (onLander) document.title = MARKET_TITLE[urlMarket];
   }, [onLander, urlMarket]);
 
+  // SCROLL LEDGER (audit-navbugs defect 2): the lander's market switch moves
+  // the URL under the mounted board via raw pushState, and the browser's own
+  // popstate restore then lands at the wrong offset (measured: old
+  // scrollHeight minus viewport — the footer). We keep our own book: stamp
+  // the CURRENT entry's scroll into history.state at scroll-end, restore it
+  // explicitly on popstate (double-rAF, after the board re-reads). Spread
+  // preserves Next's internal state; entries without a stamp are left to the
+  // browser untouched.
+  useEffect(() => {
+    let t = 0;
+    const stamp = () => {
+      try { window.history.replaceState({ ...window.history.state, __lectrScroll: window.scrollY }, ''); } catch { /* ignore */ }
+    };
+    const onScroll = () => {
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(() => { t = 0; stamp(); }, 250);
+    };
+    stamp();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    const onPop = (e: PopStateEvent) => {
+      const y = e.state && typeof e.state.__lectrScroll === 'number' ? e.state.__lectrScroll as number : null;
+      if (y == null) return;
+      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('popstate', onPop);
+      if (t) window.clearTimeout(t);
+    };
+  }, []);
+
   const setMarket = (m: Market) => {
     setStored(m);
     try { localStorage.setItem(KEY, m); } catch { /* private mode */ }
@@ -103,7 +135,7 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     // patches history.pushState to sync the app router (usePathname updates,
     // the segment tree is untouched, popstate restores the same way), so the
     // switch lands as a prop change and every instrument re-reads in place.
-    if (onLander && m !== market) window.history.pushState(null, '', MARKET_PATH[m] || '/');
+    if (onLander && m !== market) window.history.pushState({ __lectrScroll: window.scrollY }, '', MARKET_PATH[m] || '/');
   };
 
   return (

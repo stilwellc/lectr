@@ -376,6 +376,26 @@ export default function SavedPage() {
     return { n: judged.length, hammered, med, split };
   }, [sold, savedMeta]);
 
+  const emptyState = (
+    <>
+      <section className="ray-hero2 rail ray-enter">
+        <p className="ray-hero2-label">My profile</p>
+        <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>0</h1>
+        <p className="ray-hero2-delta">
+          <span className="ctx">
+            Every collector starts by watching. Bookmark a lot and lectr tracks its hammer,
+            its comps, your record once it concludes — and your collection when you win.
+          </span>
+        </p>
+      </section>
+      <div className="ray-enter" style={{ textAlign: 'center', padding: '48px 20px 120px' }}>
+        <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+          Start with today&rsquo;s below-market lots
+        </Link>
+      </div>
+    </>
+  );
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -553,24 +573,18 @@ export default function SavedPage() {
         </RayEntrance>
       ) : loading || !authReady || !savedReady ? (
         <RayLoading />
+      ) : savedLots.length === 0 && !fullLoaded ? (
+        /* saves exist but may all be CONCLUDED — pre-phase-2 the eager slice
+           can't see them; hold the loader instead of flashing the false
+           "0 — every collector starts by watching" hero (audit-lifecycle #5).
+           A genuinely empty account (no savedIds) falls through instantly. */
+        savedIds.length === 0 ? (
+          <RayEntrance animate={!fromCache}>{emptyState}</RayEntrance>
+        ) : (
+          <RayLoading />
+        )
       ) : savedLots.length === 0 && orphanIds.length === 0 ? (
-        <RayEntrance animate={!fromCache}>
-          <section className="ray-hero2 rail ray-enter">
-            <p className="ray-hero2-label">My profile</p>
-            <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>0</h1>
-            <p className="ray-hero2-delta">
-              <span className="ctx">
-                Every collector starts by watching. Bookmark a lot and lectr tracks its hammer,
-                its comps, your record once it concludes — and your collection when you win.
-              </span>
-            </p>
-          </section>
-          <div className="ray-enter" style={{ textAlign: 'center', padding: '48px 20px 120px' }}>
-            <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
-              Start with today&rsquo;s below-market lots
-            </Link>
-          </div>
-        </RayEntrance>
+        <RayEntrance animate={!fromCache}>{emptyState}</RayEntrance>
       ) : (
         <RayEntrance animate={!fromCache}>
           <section className="rail ray-enter" style={{ paddingTop: 24 }}>
@@ -582,7 +596,7 @@ export default function SavedPage() {
                     Watching{' '}
                     <Accent>
                       <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        <CountUp to={summary.totalEst} format={formatPrice} duration={1100} />
+                        <CountUp to={summary.totalEst} format={formatPrice} duration={1100} animate={!fromCache} />
                       </span>
                     </Accent>{' '}
                     to the hammer.

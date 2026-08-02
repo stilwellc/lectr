@@ -45,7 +45,13 @@ export default function RollingNumber({
   const started = useRef(false);
 
   useEffect(() => {
-    if (!play) return;
+    if (!play) {
+      // no animation for this mount — the display must still LAND on the real
+      // value (the from=0 seed stuck the hero at +0%/$0 on every cached
+      // back-nav; audit-lifecycle #1)
+      setDisplay(value);
+      return;
+    }
     if (reduce) {
       setDisplay(value);
       return;
