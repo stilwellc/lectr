@@ -260,7 +260,7 @@ export default function SubPage({ slug }: { slug: string }) {
         <p style={{ marginTop: 30 }}>
           <Link href="/analytics" style={{ color: 'var(--color-fg)', fontSize: 13.5, textDecoration: 'none' }}>← All sub-markets on Analytics</Link>
           <span style={{ color: 'var(--color-text-faint)', margin: '0 10px' }}>·</span>
-          <Link href="/artists" style={{ color: 'var(--color-text-muted)', fontSize: 13.5, textDecoration: 'none' }}>The taxonomy on Makers</Link>
+          <Link href="/makers" style={{ color: 'var(--color-text-muted)', fontSize: 13.5, textDecoration: 'none' }}>The taxonomy on Makers</Link>
         </p>
       </div>
       <Colophon record={null} />

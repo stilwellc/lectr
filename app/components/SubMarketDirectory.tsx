@@ -101,7 +101,7 @@ function GroupCard({ title, rows, full }: { title: string; rows: DrillRow[]; ful
         <span className="ray-smd-cardmeta">{total.toLocaleString()} lots</span>
       </div>
       {shown.map(r => (
-        <Link key={r.slug} href={`/sub?id=${encodeURIComponent(r.slug)}`} className="ray-smd-row">
+        <Link key={r.slug} href={`/sub/${r.slug.replace(':', '/')}`} className="ray-smd-row">
           {/* cross-market overview mixes kinds in one card — keep the full
               emitted label there ('Soccer · cards' vs 'Soccer · memorabilia');
               a scoped group card already names the kind/maker in its head */}

@@ -7,9 +7,12 @@ import { Market, MARKETS } from '../constants';
 /**
  * The active market — now URL-backed. Each market has a shareable route
  * (/, /art, /design, /watches, /science, /sports); the lander at that path
- * IS that market. On other pages (Value, Artists, a maker page) the market
- * falls back to the last choice, persisted so Ray opens where you left it.
- * The watchlist deliberately ignores it: your lots are your lots.
+ * IS that market. The analysis surfaces (/analytics, /value, /makers) carry
+ * the market as a path segment too — /analytics/watches, /value/art,
+ * /makers/m/design — while their bare routes fall back to the last choice,
+ * persisted so Ray opens where you left it. On everything else (a maker
+ * page, a lot) the stored choice governs. The watchlist deliberately
+ * ignores it: your lots are your lots.
  */
 const KEY = 'ray-market';
 
@@ -33,6 +36,35 @@ const PATH_MARKET: Record<string, Market> = {
   '/sports': 'sports',
   '/culture': 'culture',
 };
+
+// The analysis surfaces whose market rides a path segment (audit-urls §3):
+// the bare route is the stored-choice view ('all' by default), the pathed
+// sibling pins the market. /makers takes an extra /m/ level so the six market
+// keys never collide with the maker-slug namespace (/makers/<slug>). `noun`
+// keeps document.title honest across pushState switches — it must mirror the
+// `generateMetadata` title in each [market] page (template '%s — lectr').
+const SEGMENT_PAGES = [
+  { bare: '/makers', base: '/makers/m', noun: 'makers' },
+  { bare: '/analytics', base: '/analytics', noun: 'analytics' },
+  { bare: '/value', base: '/value', noun: 'buy signals' },
+] as const;
+
+/**
+ * The market a segment path names — /analytics/watches, /value/art,
+ * /makers/m/design → that market; undefined on the bare routes and
+ * everywhere else (notably /makers/<slug>, which never matches: maker
+ * slugs live one level up from /makers/m/).
+ */
+export function segmentMarket(path: string): Market | undefined {
+  for (const p of SEGMENT_PAGES) {
+    if (path.startsWith(p.base + '/')) {
+      const seg = path.slice(p.base.length + 1);
+      const hit = MARKETS.find(mk => mk.live && mk.key !== 'all' && mk.key === seg);
+      if (hit) return hit.key;
+    }
+  }
+  return undefined;
+}
 
 const MarketContext = createContext<{ market: Market; setMarket: (m: Market) => void }>({
   market: 'all',
@@ -61,8 +93,15 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   // static hosting can surface the file path (/watches.html) or a trailing
   // slash — normalize so a deep link still reads as its market
   const normPath = pathname.replace(/\.html$/, '').replace(/\/+$/, '') || '/';
-  const urlMarket = PATH_MARKET[normPath]; // defined only on a lander route
-  const onLander = urlMarket !== undefined;
+  const onLander = PATH_MARKET[normPath] !== undefined;
+  const segMarket = segmentMarket(normPath); // /analytics/<m>, /value/<m>, /makers/m/<m>
+  // the analysis-surface family this path belongs to, bare or pathed —
+  // a market switch here moves the URL to the sibling path
+  const segPage = SEGMENT_PAGES.find(
+    p => normPath === p.bare || (segMarket !== undefined && normPath.startsWith(p.base + '/'))
+  );
+  // defined wherever the URL governs the market: a lander or a market segment
+  const urlMarket = onLander ? PATH_MARKET[normPath] : segMarket;
 
   const [stored, setStored] = useState<Market>('all');
 
@@ -84,14 +123,23 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     }
   }, [urlMarket]);
 
-  const market = onLander ? urlMarket : stored;
+  // URL is truth wherever it names a market (lander path or market segment);
+  // storage governs the rest. popstate re-derives this — Next 14.1 syncs the
+  // router on back/forward, usePathname updates, and the market follows the
+  // URL the entry recorded (audit-navbugs defect 3: no more context bleed).
+  const market = urlMarket !== undefined ? urlMarket : stored;
 
   // THE TAPE PRINTS — a pushState'd market switch leaves the title behind, so
   // keep it read true (covers back/forward too; harmlessly re-asserts the
-  // metadata title on a real navigation).
+  // metadata title on a real navigation). The segment pages mirror their
+  // [market] pages' generateMetadata titles.
   useEffect(() => {
-    if (onLander) document.title = MARKET_TITLE[urlMarket];
-  }, [onLander, urlMarket]);
+    if (onLander) document.title = MARKET_TITLE[urlMarket!];
+    else if (segPage && urlMarket) {
+      const label = MARKETS.find(mk => mk.key === urlMarket)!.label;
+      document.title = `${label} ${segPage.noun} — lectr`;
+    }
+  }, [onLander, urlMarket, segPage]);
 
   // SCROLL LEDGER (audit-navbugs defect 2): the lander's market switch moves
   // the URL under the mounted board via raw pushState, and the browser's own
@@ -136,6 +184,15 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     // the segment tree is untouched, popstate restores the same way), so the
     // switch lands as a prop change and every instrument re-reads in place.
     if (onLander && m !== market) window.history.pushState({ __lectrScroll: window.scrollY }, '', MARKET_PATH[m] || '/');
+    // Same doctrine on the analysis surfaces: /analytics, /value and /makers
+    // each have pathed siblings carrying the market as a segment ('all' is
+    // the bare route). A switch — even from the bare, stored-choice route —
+    // pushStates the sibling, so the URL shares true from then on and Back
+    // walks the market history instead of exiting the page.
+    else if (segPage) {
+      const target = m === 'all' ? segPage.bare : `${segPage.base}/${m}`;
+      if (target !== normPath) window.history.pushState({ __lectrScroll: window.scrollY }, '', target);
+    }
   };
 
   return (

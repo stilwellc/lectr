@@ -275,7 +275,7 @@ function LotCard({
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           {showArtist && lot.artist && (
             <Link
-              href={`/${lot.artist}`}
+              href={`/makers/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
@@ -474,7 +474,7 @@ function LotCard({
                 card action (the house URL stays on the card's primary action
                 only, never on the name) */}
             <Link
-              href={`/${lot.artist}`}
+              href={`/makers/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{

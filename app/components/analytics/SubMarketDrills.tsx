@@ -91,7 +91,7 @@ export default function SubMarketDrills({ marketData, scope, parentFilter, title
       </div>
       <div className="ray-dr-rows">
         {rows.map(r => (
-          <Link key={r.slug} href={`/sub?id=${encodeURIComponent(r.slug)}`} className="ray-dr-row">
+          <Link key={r.slug} href={`/sub/${r.slug.replace(':', '/')}`} className="ray-dr-row">
             <span className="ray-dr-name">
               {r.label}
               {scope === 'all' ? <span className="ray-dr-kind">{r.vertical}</span> : null}

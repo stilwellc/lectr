@@ -568,7 +568,7 @@ export default function TerminalHomePage() {
   }, [savedIds, savedMeta, allLots]);
 
   const watchStripEl = watchStrip ? (
-    <Link href="/saved" className="ray-watchstrip" aria-label={`Your watchlist — ${watchStrip.count} saved`}>
+    <Link href="/profile" className="ray-watchstrip" aria-label={`Your watchlist — ${watchStrip.count} saved`}>
       <span className="ray-watchstrip-k">Your watchlist</span>
       <span className="ray-watchstrip-line">
         {watchStrip.count} saved
@@ -790,7 +790,7 @@ export default function TerminalHomePage() {
                               </td>
                               <td>
                                 <Link
-                                  href={`/${lot.artist}`}
+                                  href={`/makers/${lot.artist}`}
                                   className="t-artist"
                                   onClick={e => e.stopPropagation()}
                                 >

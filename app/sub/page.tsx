@@ -1,29 +1,43 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import SubPage from './SubPage';
 
 /**
- * The sub-market dossier permalink — /sub?id=<drill slug> (e.g.
- * /sub?id=cards:basketball, /sub?id=rolex:daytona, /sub?id=cards-era:classic).
- * Pure client page over market.json's drills, same pattern as /ref + /player:
- * no static file per sub-market, everything tracked is linkable. The drill
- * slug is read client-side; the layout supplies the metadata for the export.
+ * LEGACY query shell — /sub?id=<group>:<part> now lives at /sub/<group>/<part>
+ * (static, per-dossier metadata; audit-urls §3–4). Cloudflare `_redirects`
+ * cannot match query strings, so this client redirector IS the migration
+ * path: a well-formed ?id= is router.replace()'d to the path form; keep for
+ * at least one crawl cycle. No/malformed id keeps the old inline not-found
+ * rendering (SubPage's own empty state) — kinder than bouncing a junk id
+ * onto the site 404.
  */
 function SubFromQuery() {
+  const router = useRouter();
   const params = useSearchParams();
-  // drill slugs are 'vertical:part' — case matters only on the part in rare
-  // maker slugs, but every emitted slug is already lower-case, so normalize.
   const id = (params.get('id') || '').trim().toLowerCase();
+  // every real drill slug is [a-z0-9-]+:[a-z0-9-]+ — only that shape maps to
+  // an emitted static page, so only that shape redirects
+  const m = /^([a-z0-9-]+):([a-z0-9-]+)$/.exec(id);
+  const target = m ? `/sub/${m[1]}/${m[2]}` : null;
+
+  useEffect(() => {
+    if (target) router.replace(target);
+  }, [target, router]);
+
+  if (target) {
+    // redirect in flight — hold the rail-padded placeholder, never a flash
+    // of the dossier that is about to be replaced
+    return <div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} />;
+  }
   return <SubPage key={id} slug={id} />;
 }
 
 export default function SubQueryPage() {
   return (
-    // A minimal rail-padded placeholder (not LotPageSkeleton — its image-plate/
-    // leader grid is lot-shaped and would jank against the dossier layout) so
-    // the pre-mount instant paints structure, never a blank flash.
+    // useSearchParams under output:'export' must sit inside <Suspense>; the
+    // minimal rail-padded placeholder paints structure, never a blank flash.
     <Suspense fallback={<div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} />}>
       <SubFromQuery />
     </Suspense>

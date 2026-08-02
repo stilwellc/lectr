@@ -110,11 +110,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   const sections = [
     { label: 'Overview', path: homePath, active: activeSlug === null },
     { label: 'Value', path: '/value', active: activeSlug === 'value' },
-    { label: 'Makers', path: '/artists', active: activeSlug === 'artists' },
+    { label: 'Makers', path: '/makers', active: activeSlug === 'artists' },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
     // ONE identity entry: signed in (or auth unconfigured) → My profile;
     // signed out → the sheet's Sign in row stands alone instead.
-    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/saved', active: activeSlug === 'saved' }] : []),
+    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/profile', active: activeSlug === 'saved' }] : []),
     { label: 'Blog', path: '/blog', active: activeSlug === 'blog' },
   ];
 
@@ -496,11 +496,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         <nav className="ray-nav-links" aria-label="Sections">
           <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>Overview</button>
           <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/artists')}>Makers</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/makers')}>Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Blog</button>
           {(!authEnabled || user) ? (
-            <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/saved')} title={user?.email || undefined}>
+            <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
               My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
               {unseenAlerts > 0 && (
                 // butter marker: the nightly crawl left unread search matches
@@ -647,7 +647,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                   <button
                     role="menuitem"
                     className="ray-artist-dropdown-item"
-                    onClick={() => navigate('/artists')}
+                    onClick={() => navigate('/makers')}
                     style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, color: 'var(--color-fg)' }}
                   >
                     Browse all makers <Flick size={11} style={{ marginLeft: 0 }} />

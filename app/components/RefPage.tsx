@@ -119,7 +119,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
       <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
         <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
-          <Link href={`/${entry.maker}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
+          <Link href={`/makers/${entry.maker}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
           {' · reference dossier'}
         </p>
         <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 750, letterSpacing: '-0.02em', margin: 0 }}>

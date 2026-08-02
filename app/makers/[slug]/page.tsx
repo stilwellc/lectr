@@ -1,26 +1,26 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import SubMarketDrills from '../components/analytics/SubMarketDrills';
+import SubMarketDrills from '../../components/analytics/SubMarketDrills';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ARTISTS, ARTIST_LABEL, marketOf } from '../constants';
-import type { AuctionLot, LotCategory, MarketStats } from '../types';
-import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../hooks/useRayData';
-import { useSavedLots } from '../hooks/useSavedLots';
-import { useMarket } from '../lib/market';
-import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming } from '../utils';
+import { ARTISTS, ARTIST_LABEL, marketOf } from '../../constants';
+import type { AuctionLot, LotCategory, MarketStats } from '../../types';
+import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../../hooks/useRayData';
+import { useSavedLots } from '../../hooks/useSavedLots';
+import { useMarket } from '../../lib/market';
+import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming } from '../../utils';
 
-import ArtistNav from '../components/ArtistNav';
-import ArtistHero from '../components/ArtistHero';
-import MarketSwitch from '../components/MarketSwitch';
-import UpcomingLots from '../components/UpcomingLots';
-import PastResults from '../components/PastResults';
-import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import { Colophon } from '../components/Terminal';
+import ArtistNav from '../../components/ArtistNav';
+import ArtistHero from '../../components/ArtistHero';
+import MarketSwitch from '../../components/MarketSwitch';
+import UpcomingLots from '../../components/UpcomingLots';
+import PastResults from '../../components/PastResults';
+import RayEntrance, { RayLoading } from '../../components/RayEntrance';
+import { Colophon } from '../../components/Terminal';
 
-const PriceChart = dynamic(() => import('../components/PriceChart'), { ssr: false });
+const PriceChart = dynamic(() => import('../../components/PriceChart'), { ssr: false });
 
 type CategoryFilter = 'all' | LotCategory;
 
@@ -140,7 +140,7 @@ function MakerSections({
 
 export default function ArtistDetailPage() {
   const params = useParams();
-  const slug = params.artist as string;
+  const slug = params.slug as string;
   // useFullLots (not useRayData): the lot-level sections below gate on
   // fullLoaded, so this route must trigger the phase-2 corpus on mount.
   const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
@@ -164,7 +164,7 @@ export default function ArtistDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, valid]);
 
-  // Saves made here carry their baseline (est mid, signal, bids) so /saved
+  // Saves made here carry their baseline (est mid, signal, bids) so /profile
   // can say what changed since.
   const toggleWithLot = useCallback(
     (id: string) => toggle(id, allLots.find(l => l.id === id)),

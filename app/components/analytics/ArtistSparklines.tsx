@@ -100,7 +100,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
 
   return (
     <Link
-      href={`/${artist.slug}`}
+      href={`/makers/${artist.slug}`}
       className="ray-spark-card glass glass-quiet"
       style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
     >

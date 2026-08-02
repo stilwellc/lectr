@@ -56,9 +56,9 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     return [
       { label: 'Overview', hint: 'the market', path: homePath, kind: 'section' as const },
       { label: 'Value', hint: 'below-market lots', path: '/value', kind: 'section' as const },
-      { label: 'Makers', hint: 'the roster, as demand curves', path: '/artists', kind: 'section' as const },
+      { label: 'Makers', hint: 'the roster, as demand curves', path: '/makers', kind: 'section' as const },
       { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics', kind: 'section' as const },
-      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/saved', kind: 'section' as const },
+      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/profile', kind: 'section' as const },
       { label: 'Blog', hint: 'quarterly market notes + how we built the engine', path: '/blog', kind: 'section' as const },
       { label: 'How lectr works', hint: 'the engine, for engineers', path: '/about', kind: 'section' as const },
       {

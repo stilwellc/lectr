@@ -358,7 +358,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     {/* the maker's own book — an internal link above the
                         stretched house anchor (which keeps the title/CTA) */}
                     <Link
-                      href={`/${lot.artist}`}
+                      href={`/makers/${lot.artist}`}
                       className="ray-result-maker"
                       onClick={e => e.stopPropagation()}
                       style={{

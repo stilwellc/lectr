@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
+import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
@@ -576,7 +577,7 @@ export default function LotPage({ lotId, initialLot }: {
             <div className="lectr-lot-head">
               <span>
                 {lot.artist in ARTIST_LABEL
-                  ? <Link href={`/${lot.artist}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
+                  ? <Link href={`/makers/${lot.artist}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
                   : makerName}
                 {marketLabel ? ` · ${marketLabel}` : ''}
               </span>
@@ -649,7 +650,7 @@ export default function LotPage({ lotId, initialLot }: {
                   bidder reads before trusting the estimate */}
               {marketKey === 'watches' && lot.reference && (
                 <LeaderRow k="Reference">
-                  <Link href={`/ref?id=${encodeURIComponent(`${lot.artist}:${lot.reference}`)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                  <Link href={`/ref/${lot.artist}/${encodeRefPath(lot.reference)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                     {refLabel(lot.reference)} <Flick size={10} style={{ marginLeft: 2 }} />
                   </Link>
                 </LeaderRow>
@@ -681,7 +682,7 @@ export default function LotPage({ lotId, initialLot }: {
                 if (ref) {
                   return (
                     <LeaderRow k="Sub-market" sub={sub} tone={tone}>
-                      <Link href={`/sub?id=${encodeURIComponent(ref.slug)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                      <Link href={`/sub/${ref.slug.replace(':', '/')}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                         {dr.label} <Flick size={10} style={{ marginLeft: 2 }} />
                       </Link>
                     </LeaderRow>

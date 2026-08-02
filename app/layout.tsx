@@ -36,7 +36,8 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://lectr.bid'),
-  alternates: { canonical: './' },
+  // NO global canonical: './' collapsed every query/dossier URL onto its bare
+  // shell for crawlers (audit-urls); pages declare their own canonicals.
   title: {
     default: 'lectr — auction intelligence',
     template: '%s — lectr',

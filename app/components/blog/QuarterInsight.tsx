@@ -116,7 +116,7 @@ export default function QuarterInsight({
             <tbody>
               {topSales.map(s => (
                 <tr key={s.title + s.priceUsd}>
-                  <td style={td}><Link href={`/${s.maker}`} style={{ color: 'inherit', textDecorationColor: 'var(--hairline)', textUnderlineOffset: 3 }}>{s.title}</Link></td>
+                  <td style={td}><Link href={`/makers/${s.maker}`} style={{ color: 'inherit', textDecorationColor: 'var(--hairline)', textUnderlineOffset: 3 }}>{s.title}</Link></td>
                   <td style={td}>{s.house}</td>
                   <td style={tdNum}>{formatPrice(s.priceUsd)}</td>
                 </tr>
@@ -132,7 +132,7 @@ export default function QuarterInsight({
                 <tbody>
                   {[...(movers || []), ...(coolers || [])].map(m => (
                     <tr key={m.label}>
-                      <td style={td}>{m.slug ? <Link href={`/${m.slug}`} style={{ color: 'inherit', textDecorationColor: 'var(--hairline)', textUnderlineOffset: 3 }}>{m.label}</Link> : m.label}</td>
+                      <td style={td}>{m.slug ? <Link href={`/makers/${m.slug}`} style={{ color: 'inherit', textDecorationColor: 'var(--hairline)', textUnderlineOffset: 3 }}>{m.label}</Link> : m.label}</td>
                       <td style={{ ...tdNum, color: m.chgPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>{m.chgPct >= 0 ? '+' : '−'}{Math.abs(Math.round(m.chgPct))}%</td>
                       <td style={tdNum}>{m.n}</td>
                     </tr>

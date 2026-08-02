@@ -832,7 +832,7 @@ export default function ComparableModal({
             {/* the maker's own book — internal link; the house URL lives on
                 the "View lot" CTA only */}
             <Link
-              href={`/${lot.artist}`}
+              href={`/makers/${lot.artist}`}
               className="comp-modal-maker"
               onClick={e => e.stopPropagation()}
               style={{

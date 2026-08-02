@@ -806,7 +806,7 @@ export default function SavedPage() {
                           ? { txt: `${fmtSignedPct(Math.round(row.demandNow))} vs estimate`, dir: row.demandNow >= 0 }
                           : null;
                       return (
-                        <Link key={row.slug} href={`/sub?id=${encodeURIComponent(row.slug)}`} className="ray-coll-exposure-row">
+                        <Link key={row.slug} href={`/sub/${row.slug.replace(':', '/')}`} className="ray-coll-exposure-row">
                           <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {row.label} <Flick size={9} style={{ marginLeft: 2 }} />
                           </span>
@@ -838,7 +838,7 @@ export default function SavedPage() {
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                           <span>{ARTIST_LABEL[lot.artist] || lot.artist} · {lot.auctionHouse}{lot.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}</span>
                           {drill && drillSlug && (
-                            <Link href={`/sub?id=${encodeURIComponent(drillSlug)}`} className="ray-coll-chip">{drill.label}</Link>
+                            <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drill.label}</Link>
                           )}
                         </div>
                       </div>

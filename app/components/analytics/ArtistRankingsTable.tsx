@@ -410,7 +410,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           )}
           {/* rank-and-slice is this table's job; the roster itself lives on /artists */}
           <Link
-            href="/artists"
+            href="/makers"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -519,7 +519,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               <tr key={row.slug} className="ray-rankings-row">
                 <td className="ray-rankings-td ray-rankings-sticky" style={{ fontWeight: 500 }}>
                   <Link
-                    href={`/${row.slug}`}
+                    href={`/makers/${row.slug}`}
                     style={{
                       textDecoration: 'none',
                       color: 'var(--color-fg)',
@@ -607,7 +607,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                 );
               })
             : (expanded ? sorted : sorted.slice(0, COLLAPSED_ROWS)).map((row, i) => (
-                <Link key={row.slug} href={`/${row.slug}`} className="ray-rankings-card">
+                <Link key={row.slug} href={`/makers/${row.slug}`} className="ray-rankings-card">
                   <span className="ray-rankings-card-rank">{String(i + 1).padStart(2, '0')}</span>
                   <span className="ray-rankings-card-name">
                     <ArtistAvatar label={row.label} size={24} />

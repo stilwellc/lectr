@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "tsx scripts/build-og.tsx && next build",
+    "build": "tsx scripts/build-og.tsx && tsx scripts/gen-redirects.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "crawl": "tsx scripts/ray-crawl.ts",
