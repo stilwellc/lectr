@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useFullLots } from '../hooks/useRayData';
@@ -388,6 +388,31 @@ export default function SavedPage() {
     return { n: judged.length, realized, med, split };
   }, [sold, savedMeta]);
 
+  // #56 · SINCE YOUR LAST VISIT — capture the prior visit timestamp once (then
+  // stamp now), and diff which watched lots settled in the interim. State (not
+  // a ref) so the memo recomputes once the localStorage read lands.
+  const [prevVisit, setPrevVisit] = useState<string | null | undefined>(undefined);
+  const capturedVisit = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    // capture ONCE: read the prior stamp, then write now. A ref guards the
+    // read-then-write against StrictMode's dev double-invoke (run 2 would
+    // otherwise read the just-written 'now' and the diff would go empty).
+    if (capturedVisit.current !== undefined) return;
+    try {
+      capturedVisit.current = localStorage.getItem('lectr-lastvisit');
+      localStorage.setItem('lectr-lastvisit', new Date().toISOString());
+      setPrevVisit(capturedVisit.current);
+    } catch { capturedVisit.current = null; setPrevVisit(null); }
+  }, []);
+  const sinceLast = useMemo(() => {
+    if (!fullLoaded || !prevVisit) return null;      // first-ever visit → nothing to diff
+    const prevDay = prevVisit.slice(0, 10);
+    const fresh = sold.filter(l => (l.saleDate || '').slice(0, 10) > prevDay);
+    if (!fresh.length) return null;
+    const pcts = fresh.map(l => overEstimatePct(l)).filter((x): x is number => x != null);
+    return { n: fresh.length, med: pcts.length ? median(pcts) : null };
+  }, [fullLoaded, prevVisit, sold]);
+
   const emptyState = (
     <>
       <section className="ray-hero2 rail ray-enter">
@@ -433,6 +458,16 @@ export default function SavedPage() {
         }
         .ray-saved-orphan:last-child { border-bottom: none; }
         /* ── THE BRIEF — the desk TLDR under the masthead ── */
+        .ray-since {
+          display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+          margin-top: 20px; padding: 12px 18px;
+          border: 2px dotted color-mix(in srgb, var(--color-fg) 16%, transparent);
+          border-radius: 18px;
+        }
+        .ray-since-k { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-faint); }
+        .ray-since-v { font-size: 13.5px; color: var(--color-fg); }
+        .ray-since-go { margin-left: auto; font-size: 12px; color: var(--color-text-muted); text-decoration: none; white-space: nowrap; }
+        .ray-since-go:hover { color: var(--color-fg); }
         .ray-brief {
           border: 2px dotted color-mix(in srgb, var(--color-fg) 15%, transparent);
           border-radius: 20px; padding: 6px 18px; margin-top: 22px;
@@ -640,6 +675,25 @@ export default function SavedPage() {
                 </>
               }
             />
+
+            {/* #56 · SINCE YOUR LAST VISIT — the outcome moment, in-product */}
+            {sinceLast && (
+              <div className="ray-since ray-enter" role="status">
+                <span className="ray-since-k">Since your last visit</span>
+                <span className="ray-since-v">
+                  {sinceLast.n} watched {sinceLast.n === 1 ? 'lot' : 'lots'} settled
+                  {sinceLast.med != null && (
+                    <> · your {sinceLast.n === 1 ? 'call went' : 'calls went'}{' '}
+                      <b style={{ color: sinceLast.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtSignedPct(Math.round(sinceLast.med))}
+                      </b>{' '}
+                      vs estimate, median
+                    </>
+                  )}
+                </span>
+                <a href="#settled" className="ray-since-go">See what happened <Flick size={9} /></a>
+              </div>
+            )}
 
             {/* THE BRIEF — the desk's TLDR: act-on-today reads, facts only */}
             {brief.length > 0 && (
@@ -888,7 +942,7 @@ export default function SavedPage() {
 
           {/* ══ LEDGER 3 · SETTLED — what happened to the lots you watched ══ */}
           {sold.length > 0 && (
-            <section className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+            <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
                 <h2 className="ray-h2" style={{ margin: 0 }}>Settled · your track record</h2>
                 {record && record.med != null && (
@@ -912,6 +966,13 @@ export default function SavedPage() {
                     {fmtSignedPct(Math.round(record.split.rest ?? 0))}
                   </b>{' '}
                   ({record.split.restN}) — vs estimate, hammer basis
+                </p>
+              )}
+              {/* #57 · OWN-IT PROMPT — asks, never presumes a win; shown only
+                  while settled watched lots aren't yet in the collection */}
+              {sold.some(l => l.status === 'sold' && !ownedIds.includes(l.id)) && (
+                <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
+                  Won any of these? Mark it <b style={{ color: 'var(--color-fg)' }}>I won it</b> and the piece joins your collection, appraised against the live market.
                 </p>
               )}
 

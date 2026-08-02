@@ -7,6 +7,9 @@ import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
+import { drillRowFor, drillSlugFor } from '../lib/submarkets';
+import { subCatLabel } from '../lib/subcat-labels';
+import type { MarketData, Backtest } from '../hooks/useRayData';
 import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
@@ -25,7 +28,7 @@ function usd(n: number): string {
   if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
   return `$${Math.round(n).toLocaleString()}`;
 }
-function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[] }) {
+function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; allLots: AuctionLot[]; market: MarketData | null; backtest: Backtest | null }) {
   const v = (lot as AuctionLot & { value?: NonNullable<AuctionLot['value']> }).value;
   if (!v) return null;
   const exactLot = v.exact ? allLots.find(l => l.id === v.exact!.id) : null;
@@ -63,6 +66,48 @@ function LotValueBlock({ lot, allLots }: { lot: AuctionLot; allLots: AuctionLot[
           <span style={{ color: 'var(--color-text-muted)' }}> · {v.confidence} confidence · from {v.n} {v.basis === 'card-comp' ? 'comparable card sales' : 'comparable sales'}{v.vsBid ? ` · bid ${v.vsBid.pct >= 0 ? '+' : ''}${v.vsBid.pct}% vs comps` : ''}</span>
         </div>
       )}
+
+      {/* #13 · CALIBRATION PROOF at the decision point: the honest conformal
+          coverage for this confidence tier — how tightly calls like this have
+          landed against lectr's own value across the full replay. Never a
+          promise; a measured band. */}
+      {(() => {
+        const cal = backtest?.calibration;
+        const band = cal?.band?.[v.confidence];
+        if (!cal || !band) return null;  // any confidence-tiered value, not only directional flags
+        return (
+          <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 6 }}>
+            Calibration · {v.confidence}-confidence reads have landed within{' '}
+            <b style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{band.lo.toFixed(2)}×–{band.hi.toFixed(2)}×</b>{' '}
+            of lectr&rsquo;s value, 70% of the time{cal.n != null ? ` · n ${cal.n.toLocaleString()}` : ''}
+          </div>
+        );
+      })()}
+
+      {/* #16 · SUB-MARKET CONTEXT: where this lot trades, and how that market
+          is moving — the flagship taxonomy read, at the bid-decision moment. */}
+      {(() => {
+        const drow = drillRowFor(lot, market);
+        const dslug = drillSlugFor(lot);
+        if (!drow || !dslug) return null;
+        const pct = drow.readType === 'index' && drow.index ? drow.index.changePct
+          : drow.readType === 'demand' ? drow.demandNow : null;
+        const tone = pct == null ? undefined : pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)';
+        return (
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            <a href={`/sub/${dslug.slug.replace(':', '/')}`} style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}>
+              Sub-market · <b style={{ color: 'var(--color-text-secondary)' }}>{drow.label}</b>
+              {pct != null && drow.readType === 'index' && drow.index && (
+                <> · <span style={{ color: tone, fontFamily: 'var(--font-mono), monospace' }}>{pct >= 0 ? '+' : ''}{Math.round(pct)}%</span> {drow.index.horizon} verified</>
+              )}
+              {pct != null && drow.readType === 'demand' && (
+                <> · <span style={{ color: tone, fontFamily: 'var(--font-mono), monospace' }}>{pct >= 0 ? '+' : ''}{Math.round(pct)}%</span> vs estimate</>
+              )}
+              {' '}<Flick size={9} />
+            </a>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -360,7 +405,7 @@ export default function ComparableModal({
   // from lot.value; the comparable-sales rows fill in as the corpus lands.
   // fullLoaded/fullError gate the CLIENT-computed read below: a "0 comparable
   // sales (no call)" verdict must never print against a still-loading corpus.
-  const { fullLoaded, fullError } = useFullLots();
+  const { fullLoaded, fullError, market, backtest } = useFullLots();
 
   // Bottom-sheet drag (under 900px): the handle tracks the finger, and a
   // decisive pull down dismisses — the native sheet gesture.
@@ -872,7 +917,7 @@ export default function ComparableModal({
             <div style={{ fontSize: 16, color: 'var(--color-fg)', fontWeight: 500, marginBottom: 3 }}>
               {formatEstimate(lot)}
             </div>
-            <LotValueBlock lot={lot} allLots={allLots} />
+            <LotValueBlock lot={lot} allLots={allLots} market={market} backtest={backtest} />
             <CardCompsBlock lot={lot} />
             <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)' }}>
               {formatDate(lot.saleDate, { month: 'long', day: 'numeric', year: 'numeric' })}

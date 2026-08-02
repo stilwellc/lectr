@@ -163,6 +163,16 @@ export default function BlogIndex() {
             ))}
           </div>
         </section>
+
+        {/* the integrity shelf — a quiet standing link to the corrections register */}
+        <div style={{ maxWidth: 860, margin: '38px auto 0', padding: '0 var(--gutter)' }}>
+          <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 16 }}>
+            <Link href="/blog/corrections" style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, textDecoration: 'none', color: 'var(--color-text-muted)', fontSize: 13.5, lineHeight: 1.5 }}>
+              <span className="kicker">Corrections register</span>
+              <span>We keep the receipts — a dated log of when a published figure was reconciled to the live build. <Flick size={11} /></span>
+            </Link>
+          </div>
+        </div>
       </main>
       <Colophon record={null} />
     </div>

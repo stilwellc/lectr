@@ -591,6 +591,12 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     onClick={() => navigate(s.path)}
                   >
                     {s.label}
+                    {s.path === '/profile' && unseenAlerts > 0 && (
+                      <span aria-label={`${unseenAlerts} new matches`} style={{
+                        display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
+                        background: 'var(--color-butter)', marginLeft: 7, verticalAlign: '2px',
+                      }} />
+                    )}
                   </button>
                 ))}
                 {authEnabled && !user && (

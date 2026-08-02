@@ -44,6 +44,7 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
 import SubMarketBoard from './SubMarketBoard';
+import SubMarketMovers from './SubMarketMovers';
 import TonightsWall, { type WallItem } from './TonightsWall';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
@@ -683,6 +684,7 @@ export default function TerminalHomePage() {
                     hero={engineHero}
                     onOpenLot={setTableLot}
                   />
+                  <SubMarketMovers marketData={marketData} scope={activeKey} />
                 </div>
               </section>
             )}
