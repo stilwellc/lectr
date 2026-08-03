@@ -337,6 +337,9 @@ function LotCard({
           </div>
         )}
         <span className="ray-lot-est" style={{ display: 'block' }}>{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
+        {isUpcoming && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
+          <span className="ray-lot-bidvel" title={`${lot.bidVelocity.delta} bids added in the last ${Math.round(lot.bidVelocity.hours)}h`}>+{lot.bidVelocity.delta} bids · {Math.round(lot.bidVelocity.hours)}h</span>
+        )}
       </div>
       {onToggleSave && (
         <button
@@ -588,6 +591,9 @@ function LotCard({
             </div>
           )}
           <span className="ray-lot-est">{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
+          {isUpcoming && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
+            <span className="ray-lot-bidvel" title={`${lot.bidVelocity.delta} bids added in the last ${Math.round(lot.bidVelocity.hours)}h`}>+{lot.bidVelocity.delta} bids · {Math.round(lot.bidVelocity.hours)}h</span>
+          )}
         </div>
 
         {isUpcoming && (

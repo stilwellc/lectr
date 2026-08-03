@@ -3868,3 +3868,11 @@ text.chartAnno.pctData { font-family: var(--font-mono-data), monospace; }
 }
 .layerChipsScroll::-webkit-scrollbar { display: none; }
 .layerChipsScroll .layerChip { flex: none; }
+
+
+/* #6 · auction-night — closing-today tag on wall plates (butter attention) */
+.wallCloses {
+  display: block; margin-top: 2px;
+  font-size: 10.5px; letter-spacing: 0.02em;
+  color: var(--tt-butter, #e8dab6);
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
@@ -354,6 +354,21 @@ function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLo
 function ValueReceipt({ r, play }: { r: Receipts; play: boolean }) {
   const spread = r.flaggedPct - r.unflaggedPct;
   const reduce = useReducedMotion();
+  // #7 · "vs your last read" — the receipt reprints each visit; a ref guards
+  // the read-then-write against StrictMode's double effect (else run 2 reads
+  // the just-written value and the delta zeroes). Shown only when it moved.
+  const [lastRead, setLastRead] = useState<number | null>(null);
+  const captured = useRef(false);
+  useEffect(() => {
+    if (captured.current) return;
+    captured.current = true;
+    try {
+      const prior = localStorage.getItem('lectr-receipt-flagged');
+      localStorage.setItem('lectr-receipt-flagged', String(r.flaggedPct));
+      setLastRead(prior != null ? Number(prior) : null);
+    } catch { setLastRead(null); }
+  }, [r.flaggedPct]);
+  const move = lastRead != null && Math.abs(r.flaggedPct - lastRead) >= 0.1 ? r.flaggedPct - lastRead : null;
   return (
     <div className={styles.rcptWrap}>
       <m.div
@@ -378,6 +393,9 @@ function ValueReceipt({ r, play }: { r: Receipts; play: boolean }) {
             : ''}
           {' '}· settled nightly{r.asOf ? ` · as of ${r.asOf}` : ''}
         </div>
+        {move != null && (
+          <div className={styles.rcptMeta}>vs your last read · {move >= 0 ? '▲' : '▼'} {Math.abs(move).toFixed(1)} pts</div>
+        )}
         <div className={styles.rcptBarcode} aria-hidden />
         <div className={styles.rcptNo}>no. {fmtInt(r.n)}</div>
         <Link href="/value" className={styles.rcptLink}>see the full record →</Link>
@@ -395,18 +413,28 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
   const isIndex = r.readType === 'index' && r.index;
   const dir = isIndex ? (r.index!.changePct >= 0 ? 'up' : 'down') : undefined;
   return (
-    <button
-      type="button"
+    <div
       className={styles.tapeRow}
       data-scoped={active || undefined}
+      role="button"
+      tabIndex={0}
       aria-pressed={active}
       onClick={onPick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } }}
     >
       {active && <m.span layoutId="brassRule" className={styles.brassRule} transition={{ duration: 0.25, ease: EASE }} />}
-      <span className={styles.tapeLabelBlock}>
+      {/* #3 · the label is a direct link to its dossier — one fewer tap than
+          opening the read card first; stopPropagation so it navigates instead
+          of toggling the card */}
+      <Link
+        href={`/makers/${r.slug}`}
+        className={styles.tapeLabelBlock}
+        style={{ textDecoration: 'none', color: 'inherit' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <span className={styles.tapeLabel}>{r.label}</span>
         <span className={styles.tapeTag}>{tapeTag(r)}</span>
-      </span>
+      </Link>
       <span className={styles.tapeInstrument} aria-hidden>
         {isIndex ? (
           <CIBeam lo={r.index!.ciLoPct} hi={r.index!.ciHiPct} point={r.index!.changePct} dir={dir} mini play={false} />
@@ -441,7 +469,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
         )}
       </span>
       <span className={styles.tapeChevron} aria-hidden />
-    </button>
+    </div>
   );
 }
 

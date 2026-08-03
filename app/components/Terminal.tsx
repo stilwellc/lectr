@@ -29,6 +29,15 @@ export function daysWord(dateStr: string): string {
   return `in ${days}d`;
 }
 
+/** Whole calendar days from the reader's LOCAL today to a sale day-string
+ *  (negative = already past). Shares daysWord's same-frame arithmetic so a
+ *  lot closing tonight can never read as tomorrow for a late-evening viewer. */
+export function daysUntil(dateStr: string): number | null {
+  const day = (dateStr || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  return Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${localToday()}T00:00:00Z`)) / 86_400_000);
+}
+
 /* ── today's call, as a matted catalogue plate ──────────────────────── */
 const CONF_RANK: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, low: 0 };
 
@@ -178,7 +187,15 @@ export function CallPlate({
   const imgOk = !!lot.imageUrl && failedImgId !== lot.id;
   const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
   const monogram = makerName.trim().charAt(0).toUpperCase();
-  const caption = `${lot.lotNumber ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse} · hammers ${formatDate(trueSaleDay(lot) || lot.saleDate)}`;
+  const saleDay = trueSaleDay(lot) || lot.saleDate;
+  // CLOSING-TIME SALIENCE — a call that closes today/tonight names the urgency
+  // instead of a bare date. Same LOCAL-day arithmetic daysWord uses; the call
+  // is already gated ACTIONABLE (pickCall drops closed lots), so ≤0 means it
+  // hammers today. "tonight" when the house's own close time is this evening.
+  const closeD = daysUntil(saleDay);
+  const closesTonight = !!lot.saleDateTime && new Date(lot.saleDateTime).getHours() >= 17;
+  const closingWord = closeD != null && closeD <= 0 ? (closesTonight ? 'closes tonight' : 'closes today') : null;
+  const caption = `${lot.lotNumber ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse} · ${closingWord ? closingWord : `hammers ${formatDate(saleDay)}`}`;
   // the comps median in dollars: the deep signal carries the pool median;
   // crawl-time signals don't, but pct IS med/estMid − 1, so it derives exactly
   const estMid = lot.estimateLow && lot.estimateHigh
@@ -223,7 +240,11 @@ export function CallPlate({
           <LeaderRow k="Confidence">
             <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
           </LeaderRow>
-          <LeaderRow k="Hammers" v={`${formatDate(trueSaleDay(lot) || lot.saleDate)} · ${daysWord(trueSaleDay(lot) || lot.saleDate)}`} sub={lot.auctionHouse} />
+          <LeaderRow k={closingWord ? 'Closing' : 'Hammers'} sub={lot.auctionHouse}>
+            {closingWord
+              ? <span style={{ color: 'var(--color-up)' }}>{closingWord}</span>
+              : `${formatDate(saleDay)} · ${daysWord(saleDay)}`}
+          </LeaderRow>
         </div>
         <div className="ray-call-ctas" style={{ marginTop: 16 }}>
           {onSeeComps ? (
@@ -233,6 +254,11 @@ export function CallPlate({
           ) : (
             <Link className="ray-call-btn ray-call-btn-primary" href="/value">See how we called it</Link>
           )}
+          {/* the in-app certificate before the house exit — the app's transport
+              form (/lot self-canonicalizes to /lot/<id>), mirroring the modal */}
+          <Link className="ray-call-btn ray-call-btn-quiet" href={`/lot?id=${encodeURIComponent(lot.id)}`}>
+            Open the lot page <Flick size={10} style={{ marginLeft: 5 }} />
+          </Link>
           <a className="ray-call-btn ray-call-btn-quiet" href={lot.url} target="_blank" rel="noopener noreferrer">
             View lot <Flick size={10} style={{ marginLeft: 5 }} />
           </a>
@@ -290,7 +316,11 @@ export function CallPlate({
             <LeaderRow k="Confidence">
               <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
             </LeaderRow>
-            <LeaderRow k="Hammers" v={`${formatDate(trueSaleDay(lot) || lot.saleDate)} · ${daysWord(trueSaleDay(lot) || lot.saleDate)}`} />
+            <LeaderRow k={closingWord ? 'Closing' : 'Hammers'}>
+              {closingWord
+                ? <span style={{ color: 'var(--color-up)' }}>{closingWord}</span>
+                : `${formatDate(saleDay)} · ${daysWord(saleDay)}`}
+            </LeaderRow>
           </div>
 
           {/* stacked plate (mobile + rail): the current lines, untouched */}

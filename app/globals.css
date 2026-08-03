@@ -3152,3 +3152,20 @@ body {
   .ray-engine-dot { display: none; }
   .ray-engine-cta { display: block; }
 }
+
+
+/* #5 · bid-velocity marker on lot cards — descriptive count, butter accent */
+.ray-lot-bidvel {
+  display: block; margin-top: 3px;
+  font-size: 10.5px; letter-spacing: 0.02em;
+  color: var(--color-butter, #e8b95b);
+}
+
+
+/* #5 · bid-velocity marker on feed rows/cards — descriptive count, butter accent */
+.ray-bidvel {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 3px;
+  font-size: 10.5px; color: var(--color-text-faint, #7A8087); white-space: nowrap;
+}
+.ray-bidvel-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-butter, #e8b95b); flex: none; }
+.ray-bidvel-sub { display: block; font-size: 9.5px; color: var(--color-butter, #e8b95b); letter-spacing: 0.02em; }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { AuctionLot } from '../../types';
 import { ARTIST_LABEL } from '../../constants';
 import { formatPrice, httpsImg, craftTitle } from '../../utils';
@@ -71,10 +71,24 @@ export default function TonightsWall({
   play: boolean;
 }) {
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
-  const shown = useMemo(
-    () => items.filter((it) => it.lot.imageUrl && !failed.has(it.lot.id)).slice(0, 5),
-    [items, failed]
-  );
+  // #6 · AUCTION-NIGHT MODE — after 6pm LOCAL the wall re-ranks by soonest to
+  // close (the room tonight). Clock is read post-mount so the static prerender
+  // and hydration agree (a Date() in render would mismatch).
+  const [evening, setEvening] = useState(false);
+  useEffect(() => { setEvening(new Date().getHours() >= 18); }, []);
+  const shown = useMemo(() => {
+    const live = items.filter((it) => it.lot.imageUrl && !failed.has(it.lot.id));
+    if (evening) {
+      // soonest-closing first, but keep today's call in the lead
+      return [...live].sort((a, b) => {
+        if (a.call !== b.call) return a.call ? -1 : 1;
+        return (a.lot.saleDate || '').localeCompare(b.lot.saleDate || '');
+      }).slice(0, 5);
+    }
+    return live.slice(0, 5);
+  }, [items, failed, evening]);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const closesToday = (it: WallItem) => evening && (it.lot.saleDate || '').slice(0, 10) <= todayIso;
   const [stripRef, seen] = useInView<HTMLDivElement>();
 
   // plates rise shortly after arrival (no entrance-clock coupling)
@@ -100,7 +114,9 @@ export default function TonightsWall({
       <div className={styles.wallHead}>
         <div>
           <h2 className={styles.roomTitle}>Tonight&rsquo;s <em>wall</em></h2>
-          <p className={styles.roomSub}>Today&rsquo;s call and the strongest flagged lots on the block — priced under where their comparables sell.</p>
+          <p className={styles.roomSub}>{evening
+            ? 'The room tonight — closing soonest first, priced under where their comparables sell.'
+            : 'Today\u2019s call and the strongest flagged lots on the block — priced under where their comparables sell.'}</p>
         </div>
       </div>
       <div className={styles.wallRow}>
@@ -136,6 +152,9 @@ export default function TonightsWall({
               </span>
               {it.flagged && it.pct != null && (
                 <span className={styles.wallSignal}>{gapGrammar('Below Market', it.pct)}</span>
+              )}
+              {closesToday(it) && (
+                <span className={styles.wallCloses}>closes today{it.lot.bidVelocity && it.lot.bidVelocity.delta > 0 ? ` · +${it.lot.bidVelocity.delta} bids` : ''}</span>
               )}
             </span>
           </button>

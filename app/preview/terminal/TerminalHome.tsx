@@ -190,6 +190,23 @@ function feedTone(lot: AuctionLot, belowIds: Set<string>, hasSig: Set<string>): 
   return undefined;
 }
 
+// #5 · bid-velocity marker — the crawl-measured "moving now" read for live
+// Goldin lots (delta bids added over the trailing window). Descriptive count,
+// butter accent (attention, NOT up/down), never green/red.
+function bidVel(lot: AuctionLot): { delta: number; hours: number } | null {
+  const v = lot.bidVelocity;
+  return v && v.delta > 0 && lot.status === 'upcoming' ? { delta: v.delta, hours: Math.round(v.hours) } : null;
+}
+function BidVelChip({ lot }: { lot: AuctionLot }) {
+  const v = bidVel(lot);
+  if (!v) return null;
+  return (
+    <span className="ray-bidvel" title={`${v.delta} bids added in the last ${v.hours}h`}>
+      <span className="ray-bidvel-dot" aria-hidden />+{v.delta} bids · {v.hours}h
+    </span>
+  );
+}
+
 function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down' }) {
   const est =
     lot.estimateLow || lot.estimateHigh
@@ -221,6 +238,7 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
       <span className="ray-feedrow-right">
         <b>{est}</b>
         <span>{formatDate(lot.saleDate)}</span>
+        <BidVelChip lot={lot} />
       </span>
     </button>
   );
@@ -249,6 +267,22 @@ export default function TerminalHomePage() {
     const totalRev = stats.reduce((a, s) => a + (s.totalAuctionRevenue || 0), 0);
     if (!totalRev) return null;
     return stats.reduce((a, s) => a + (s.appreciationRate || 0) * (s.totalAuctionRevenue || 0), 0) / totalRev;
+  }, [statsByArtist, activeKey]);
+
+  // #4 · HONEST SCOPED SOLD COUNT — sum the per-slug sold totals over the
+  // active market (statsByArtist carries totalSoldTracked). Lets the
+  // settlement slip print a count that actually wears its scope, instead of
+  // the corpus-wide "all markets" fallback.
+  const scopedSold = useMemo(() => {
+    if (activeKey === 'all') return null;
+    const set = marketArtists(activeKey);
+    let n = 0, any = false;
+    for (const [slug, st] of Object.entries(statsByArtist)) {
+      if (!set.has(slug)) continue;
+      const t = (st as { totalSoldTracked?: number }).totalSoldTracked;
+      if (typeof t === 'number') { n += t; any = true; }
+    }
+    return any ? n : null;
   }, [statsByArtist, activeKey]);
 
   const meta = ray as unknown as { totalLots?: number; totalSold?: number };
@@ -792,7 +826,10 @@ export default function TerminalHomePage() {
                               <td className="num t-days">
                                 {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
                               </td>
-                              <td className="num t-bids">{typeof lot.bidCount === 'number' ? lot.bidCount.toLocaleString() : '—'}</td>
+                              <td className="num t-bids">
+                                {typeof lot.bidCount === 'number' ? lot.bidCount.toLocaleString() : '—'}
+                                {bidVel(lot) && <span className="ray-bidvel-sub">+{bidVel(lot)!.delta}/{bidVel(lot)!.hours}h</span>}
+                              </td>
                               <td className="num t-est">
                                 {lot.estimateLow && lot.estimateHigh
                                   ? (formatPrice(lot.estimateLow) === formatPrice(lot.estimateHigh)
@@ -926,7 +963,9 @@ export default function TerminalHomePage() {
                       // meta.totalSold is the FULL corpus — under a scoped
                       // market name the label must say so (honesty: a count
                       // never wears a scope it doesn't have)
-                      { k: 'Sold lots on the book, all markets', v: (meta.totalSold ?? recentRows.length).toLocaleString() },
+                      scopedSold != null
+                        ? { k: `Sold ${marketName} lots on the book`, v: scopedSold.toLocaleString() }
+                        : { k: 'Sold lots on the book, all markets', v: (meta.totalSold ?? recentRows.length).toLocaleString() },
                       ...(recentMedian !== null ? [{ k: 'Recent median, realized', v: formatPrice(recentMedian) }] : []),
                       ...(recentLatest ? [{ k: 'Latest hammer', v: formatDate(recentLatest) }] : []),
                     ]}
