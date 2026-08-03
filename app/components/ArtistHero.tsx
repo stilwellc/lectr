@@ -7,7 +7,7 @@ import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
 import CountUp from './CountUp';
 import RecordBand from './RecordBand';
-import RecordPlate from './RecordPlate';
+import RecordPlate, { type PlateSale } from './RecordPlate';
 import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
 import MethodologyNote from './MethodologyNote';
@@ -202,6 +202,37 @@ export default function ArtistHero({
     return lots.find(l => l.status === 'sold' && l.priceUsd === stats.recordPrice && l.imageUrl) || null;
   }, [lots, stats]);
 
+  // #33 — the ROTATING VITRINE deck: the top-3 realized sales the loaded lots
+  // carry, record first. Built from the loaded set (honest to what's on the
+  // page), then the authoritative record from stats.json is spliced in at the
+  // top if the loaded set doesn't already reach it (the corpus record can
+  // outrank the loaded sample on cards/culture). Each carries its own lot door.
+  const topSales = useMemo(() => {
+    const sold = lots
+      .filter(l => l.status === 'sold' && l.priceUsd && l.priceUsd > 0)
+      .sort((a, b) => (b.priceUsd! - a.priceUsd!));
+    const deck: PlateSale[] = sold.slice(0, 3).map(l => ({
+      figure: l.priceUsd!,
+      date: l.saleDate || null,
+      house: l.auctionHouse || null,
+      title: l.title || null,
+      imageUrl: l.imageUrl || null,
+      href: `/lot?id=${encodeURIComponent(l.id)}`,
+    }));
+    // ensure the stats.json record heads the deck when the sample missed it
+    if (stats?.recordPrice && (!deck.length || deck[0].figure < stats.recordPrice)) {
+      deck.unshift({
+        figure: stats.recordPrice,
+        date: stats.recordDate || null,
+        house: stats.recordHouse || null,
+        title: stats.recordTitle || null,
+        imageUrl: recordLot?.imageUrl || null,
+        href: recordLot ? `/lot?id=${encodeURIComponent(recordLot.id)}` : null,
+      });
+    }
+    return deck.slice(0, 3);
+  }, [lots, stats, recordLot]);
+
   return (
     <section className="ray-hero2 rail" data-tone={dir >= 0 ? 'up' : 'down'}>
       <div className="lectr-dossier-hero" style={{ marginBottom: 4 }}>
@@ -285,6 +316,7 @@ export default function ArtistHero({
             title={stats.recordTitle || null}
             imageUrl={recordLot?.imageUrl || null}
             href={recordLot ? `/lot?id=${encodeURIComponent(recordLot.id)}` : null}
+            sales={topSales.length >= 2 ? topSales : undefined}
           />
         ) : null}
       </div>

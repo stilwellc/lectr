@@ -58,7 +58,9 @@ a.ray-smd-row:hover .ray-smd-name{color:#FFF}
 .ray-smd-read[data-dir="up"] .num{color:var(--color-up,#2FBF71)}
 .ray-smd-read[data-dir="down"] .num{color:var(--color-down,#E5484D)}
 .ray-smd-read .tag{color:#7A8087;font-size:10.5px;margin-left:5px}
-.ray-smd-more{padding:8px 0 6px;font-size:11px;color:#7A8087}
+.ray-smd-more{display:block;padding:8px 0 6px;font-size:11px;color:#7A8087;text-decoration:none;transition:color 0.14s ease}
+a.ray-smd-more:hover{color:#B8BEC6}
+a.ray-smd-more .arw{margin-left:4px}
 `;
 
 function readCell(r: DrillRow) {
@@ -94,6 +96,10 @@ const MAX_ROWS = 7;
 function GroupCard({ title, rows, full }: { title: string; rows: DrillRow[]; full?: boolean }) {
   const shown = rows.slice(0, MAX_ROWS);
   const total = rows.reduce((s, r) => s + r.lots, 0);
+  // #24 — the honest "shows the rest" destination: the vertical's analytics
+  // desk (full sub-market book + maker rankings). Every drill row carries its
+  // parent vertical; all rows in a card share it.
+  const vertical = rows[0]?.vertical;
   return (
     <div className="ray-smd-card">
       <div className="ray-smd-cardhead">
@@ -109,7 +115,11 @@ function GroupCard({ title, rows, full }: { title: string; rows: DrillRow[]; ful
           {readCell(r)}
         </Link>
       ))}
-      {rows.length > MAX_ROWS && <div className="ray-smd-more">+ {rows.length - MAX_ROWS} more tracked</div>}
+      {rows.length > MAX_ROWS && (
+        vertical
+          ? <Link href={`/analytics/${vertical}`} className="ray-smd-more">+ {rows.length - MAX_ROWS} more tracked<span className="arw">&#8594;</span></Link>
+          : <div className="ray-smd-more">+ {rows.length - MAX_ROWS} more tracked</div>
+      )}
     </div>
   );
 }

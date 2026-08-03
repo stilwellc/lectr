@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip } from 'recharts';
 import { MarketStats, AuctionLot } from '../../types';
@@ -8,6 +8,8 @@ import { formatPrice, fmtSignedPct, toneOf } from '../../utils';
 import { ARTISTS, marketArtists, Market, rosterNoun } from '../../constants';
 import { useChartDraw } from '../../hooks/useChartDraw';
 import { demandSeries, formatDemand } from '../../lib/demand';
+import type { MarketData } from '../../hooks/useRayData';
+import { verifiedMovers } from '../../preview/terminal/verified';
 import ArtistAvatar from '../ArtistAvatar';
 import Flick from '../Flick';
 
@@ -19,6 +21,16 @@ interface Props {
 interface SparkPoint {
   date: string;
   avgPrice: number;
+}
+
+/** the strongest CI-backed read market.json will stand behind for a maker —
+ *  keyed by maker slug (makerIndex[slug]); only 3 makers publish today (rolex,
+ *  cartier, patek-philippe). This is genuinely additive to the card's header
+ *  demand chip: it is confidence-bounded, the header read is not. */
+interface VerifiedRead {
+  changePct: number;
+  horizon: string;
+  dir: 'up' | 'down';
 }
 
 function computeSparkData(lots: AuctionLot[]): SparkPoint[] {
@@ -45,7 +57,7 @@ function computeSparkData(lots: AuctionLot[]): SparkPoint[] {
     }));
 }
 
-function SparkTooltip({ active, payload, priceBasis }: { active?: boolean; payload?: Array<{ payload: SparkPoint }>; priceBasis?: boolean }) {
+function SparkTooltip({ active, payload, priceBasis, rebased }: { active?: boolean; payload?: Array<{ payload: SparkPoint }>; priceBasis?: boolean; rebased?: boolean }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -59,9 +71,16 @@ function SparkTooltip({ active, payload, priceBasis }: { active?: boolean; paylo
       <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', letterSpacing: '-0.01em', textTransform: 'none', marginBottom: 3 }}>
         {d.date}
       </div>
-      {/* bid-market fallback: avgPrice is a median $ LEVEL (no estimates to
-          divide by), so caption the price — never "% vs estimate". */}
-      {priceBasis ? (
+      {/* compare-on-one-axis: every card is rebased to Δ% from its own window
+          start, so the point is a change-from-start, never a $ level or a
+          %-over-estimate. Caption it as exactly that. */}
+      {rebased ? (
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+          {`${fmtSignedPct(Math.round(d.avgPrice))} from window start`}
+        </div>
+      ) : priceBasis ? (
+        /* bid-market fallback: avgPrice is a median $ LEVEL (no estimates to
+           divide by), so caption the price — never "% vs estimate". */
         <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg)' }}>
           {`${formatPrice(d.avgPrice)} median realized`}
         </div>
@@ -86,11 +105,28 @@ interface ArtistCardData {
   appreciation: number;
   overEstimate: number;
   totalLots: number;
+  /** live lots on the block right now (getUpcomingCounts) — 0 when none */
+  live: number;
+  /** all-time sold-lot count (stats) — a sort key, never a price movement */
+  soldCount: number;
+  /** the CI-backed verified read where market.json publishes one; else null */
+  verified: VerifiedRead | null;
 }
 
-function ArtistCard({ artist }: { artist: ArtistCardData }) {
+/** rebase a spark to Δ% from its own window start — the shared basis for
+ *  compare-on-one-axis. Both %-over-estimate levels and $-price levels rebase
+ *  to a comparable "change from window start". */
+function rebase(data: SparkPoint[]): SparkPoint[] {
+  if (data.length < 2) return data;
+  const base = data[0].avgPrice;
+  if (base === 0) return data;
+  return data.map(p => ({ date: p.date, avgPrice: ((p.avgPrice / base) - 1) * 100 }));
+}
+
+function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData; compare: boolean; sharedDomain: [number, number] | null }) {
   const drawRef = useChartDraw();
-  const hasChart = artist.sparkData.length >= 2;
+  const displayData = useMemo(() => compare ? rebase(artist.sparkData) : artist.sparkData, [compare, artist.sparkData]);
+  const hasChart = displayData.length >= 2;
   // Reserve saturated up/down for STRONG movers only — tinting all 33 lines
   // green makes "up" stop meaning up (breaks one-lit-element). Calm neutral
   // otherwise; the delta chip still carries the exact direction.
@@ -101,7 +137,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
   return (
     <Link
       href={`/makers/${artist.slug}`}
-      className="ray-spark-card glass glass-quiet"
+      className="ray-spark-card ray-cert glass glass-quiet"
       style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
     >
       <div style={{
@@ -157,18 +193,43 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
         )}
       </div>
 
+      {/* #25 + #22 — quiet chip row: the CI-backed verified read (mono,
+          coloured only on the real delta, horizon named) and the live-lot
+          chip. Only render the row when at least one chip is present. */}
+      {(artist.verified || artist.live > 0) && (
+        <div className="ray-cert-chips">
+          {artist.verified && (
+            <span className="ray-cert-verified" data-dir={artist.verified.dir}
+              title="The strongest price move market.json will stand behind for this maker — hedonic index, 95% confidence.">
+              <span className="num">{artist.verified.changePct >= 0 ? '+' : ''}{artist.verified.changePct.toFixed(0)}%</span>
+              <span className="lab">{artist.verified.horizon} verified</span>
+            </span>
+          )}
+          {artist.live > 0 && (
+            <span className="ray-cert-live" title={`${artist.live} lot${artist.live === 1 ? '' : 's'} on the block now`}>
+              {artist.live} on the block
+            </span>
+          )}
+        </div>
+      )}
+
       {hasChart ? (
         <div className="ray-chart-draw" ref={drawRef} style={{ height: 80, marginLeft: -8, marginRight: -8 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={artist.sparkData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+            <AreaChart data={displayData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id={`spark-${artist.slug}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={tint} stopOpacity={0.12} />
                   <stop offset="100%" stopColor={tint} stopOpacity={0.01} />
                 </linearGradient>
               </defs>
-              <YAxis hide domain={[(min: number) => min - Math.abs(min) * 0.18 - 1, (max: number) => max + Math.abs(max) * 0.18 + 1]} />
-              <Tooltip content={<SparkTooltip priceBasis={artist.priceBasis} />} />
+              {/* compare mode: a SHARED fixed domain across every card so the
+                  rebased curves are visually comparable; per-card auto domain
+                  otherwise. */}
+              {compare && sharedDomain
+                ? <YAxis hide domain={sharedDomain} />
+                : <YAxis hide domain={[(min: number) => min - Math.abs(min) * 0.18 - 1, (max: number) => max + Math.abs(max) * 0.18 + 1]} />}
+              <Tooltip content={<SparkTooltip priceBasis={artist.priceBasis} rebased={compare} />} />
               <Area
                 type="monotone"
                 dataKey="avgPrice"
@@ -214,7 +275,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
             Avg (12mo)
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-            {artist.avgPrice > 0 ? formatPrice(artist.avgPrice) : '\u2014'}
+            {artist.avgPrice > 0 ? formatPrice(artist.avgPrice) : '—'}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -229,7 +290,7 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
               : toneOf(artist.overEstimate) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
           }}>
             {artist.overEstimate <= -999
-              ? '\u2014'
+              ? '—'
               : fmtSignedPct(artist.overEstimate, 1)}
           </div>
         </div>
@@ -238,7 +299,29 @@ function ArtistCard({ artist }: { artist: ArtistCardData }) {
   );
 }
 
-export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, market }: Props & { limit?: number; market?: Market }) {
+type SortKey = 'revenue' | 'demand' | 'sales' | 'live';
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'revenue', label: 'Sales value' },
+  { key: 'demand', label: 'Demand now' },
+  { key: 'sales', label: 'Sold count' },
+  { key: 'live', label: 'On the block' },
+];
+
+export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, market, marketData, upcomingCounts }: Props & { limit?: number; market?: Market; marketData?: MarketData | null; upcomingCounts?: Record<string, number> }) {
+  const [sortKey, setSortKey] = useState<SortKey>('revenue');
+  const [compare, setCompare] = useState(false);
+
+  // #25 — verified reads keyed by maker slug (makerIndex → CI-backed move).
+  const verifiedBySlug = useMemo(() => {
+    const map = new Map<string, VerifiedRead>();
+    if (!marketData) return map;
+    for (const mv of verifiedMovers(marketData)) {
+      map.set(mv.slug, { changePct: mv.changePct, horizon: mv.horizon, dir: mv.dir });
+    }
+    return map;
+  }, [marketData]);
+
   const artists = useMemo<ArtistCardData[]>(() => {
     const roster = market ? ARTISTS.filter(a => marketArtists(market).has(a.slug)) : ARTISTS;
     // one O(n) pass over the 32k lots instead of a full-dataset filter per
@@ -295,11 +378,46 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
           : sparkData.length ? sparkData[sparkData.length - 1].avgPrice : 0,
         overEstimate,
         totalLots: artistLots.length,
+        live: upcomingCounts?.[a.slug] || 0,
+        soldCount: stats?.totalSoldTracked ?? stats?.totalLotsTracked ?? 0,
+        verified: verifiedBySlug.get(a.slug) || null,
       };
     })
+      // default order stays revenue (unchanged); the roster is capped to limit
+      // on that key so the wall is a stable set the other sorts reorder.
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, limit);
-  }, [statsByArtist, allLots, limit, market]);
+  }, [statsByArtist, allLots, limit, market, upcomingCounts, verifiedBySlug]);
+
+  // #21 — reorder the already-capped wall by the chosen honest key. Demand
+  // sort uses the current demand read (last spark point on estimate markets,
+  // else the appreciation estimate); descriptive/price-basis makers still sort
+  // by their appreciation figure, never dressed as a demand %.
+  const ordered = useMemo(() => {
+    const arr = [...artists];
+    switch (sortKey) {
+      case 'demand': return arr.sort((a, b) => b.appreciation - a.appreciation);
+      case 'sales': return arr.sort((a, b) => b.soldCount - a.soldCount);
+      case 'live': return arr.sort((a, b) => b.live - a.live);
+      default: return arr; // 'revenue' — already sorted
+    }
+  }, [artists, sortKey]);
+
+  // #31 — a single SHARED domain for compare mode so every rebased spark is
+  // read against one axis. Δ% from window start across all cards' rebased
+  // curves; a small pad keeps the extreme lines off the frame.
+  const sharedDomain = useMemo<[number, number] | null>(() => {
+    if (!compare) return null;
+    let lo = Infinity, hi = -Infinity;
+    for (const a of ordered) {
+      const r = rebase(a.sparkData);
+      if (r.length < 2) continue;
+      for (const p of r) { if (p.avgPrice < lo) lo = p.avgPrice; if (p.avgPrice > hi) hi = p.avgPrice; }
+    }
+    if (!isFinite(lo) || !isFinite(hi) || lo === hi) return null;
+    const pad = (hi - lo) * 0.12 + 1;
+    return [lo - pad, hi + pad];
+  }, [compare, ordered]);
 
   return (
     <section className="ray-sparklines rail">
@@ -312,6 +430,45 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
         }
         .ray-spark-card {
           padding: 20px;
+        }
+        /* per-card chips (#22 live-lot, #25 verified read) — .ray-cert is
+           kept only as their positioning context */
+        .ray-cert { position: relative; }
+        .ray-cert-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+        .ray-cert-verified {
+          display: inline-flex; align-items: baseline; gap: 5px;
+          padding: 2px 8px; border-radius: 999px;
+          border: 1px solid var(--color-border);
+          background: var(--color-bg-elevated);
+        }
+        .ray-cert-verified .num {
+          font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 600;
+        }
+        .ray-cert-verified[data-dir="up"] .num { color: var(--color-up); }
+        .ray-cert-verified[data-dir="down"] .num { color: var(--color-down); }
+        .ray-cert-verified .lab { font-size: 10px; color: var(--color-text-faint); }
+        .ray-cert-live {
+          display: inline-flex; align-items: center;
+          padding: 2px 8px; border-radius: 999px;
+          border: 1px solid var(--color-border);
+          font-size: 10.5px; font-weight: 600; color: var(--color-text-muted);
+          font-variant-numeric: tabular-nums;
+        }
+        .ray-roster-controls {
+          display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        }
+        .ray-roster-controls .ray-seg-btn { padding: 5px 11px; font-size: 11.5px; }
+        .ray-roster-compare {
+          display: inline-flex; align-items: center; gap: 7px;
+          font-size: 11.5px; font-weight: 600; color: var(--color-text-muted);
+          cursor: pointer; user-select: none;
+          padding: 5px 11px; border-radius: 8px;
+          border: 1px solid var(--color-border); background: none;
+          transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
+        }
+        .ray-roster-compare[data-active="true"] {
+          color: var(--color-fg); border-color: var(--color-border-mid);
+          background: var(--color-bg-elevated);
         }
         @media (max-width: 1024px) {
           .ray-spark-grid { grid-template-columns: repeat(2, 1fr); }
@@ -347,9 +504,41 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
         </a>
       </div>
 
+      {/* #21 + #31 — reorder + compare-on-one-axis controls above the wall.
+          Local state only, no URL; honest labels; default order = sales value. */}
+      <div className="ray-roster-controls" style={{ marginBottom: 18 }}>
+        <div className="ray-seg" role="group" aria-label="Sort the roster">
+          {SORTS.map(s => (
+            <button
+              key={s.key}
+              type="button"
+              className="ray-seg-btn"
+              data-active={sortKey === s.key}
+              onClick={() => setSortKey(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="ray-roster-compare"
+          data-active={compare}
+          onClick={() => setCompare(c => !c)}
+          title="Repaint every spark on one shared axis, each rebased to its change since its window start — for visual comparison only."
+        >
+          Compare on one axis
+        </button>
+      </div>
+
       <div className="ray-spark-grid">
-        {artists.map(artist => (
-          <ArtistCard key={artist.slug} artist={artist} />
+        {ordered.map((artist, i) => (
+          <ArtistCard
+            key={artist.slug}
+            artist={artist}
+            compare={compare}
+            sharedDomain={sharedDomain}
+          />
         ))}
       </div>
     </section>

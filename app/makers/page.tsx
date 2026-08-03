@@ -114,7 +114,7 @@ export default function MakersPage() {
           </section>
 
           <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-            <ArtistSparklines statsByArtist={statsByArtist} allLots={allLots} limit={ARTISTS.length} market={activeKey} />
+            <ArtistSparklines statsByArtist={statsByArtist} allLots={allLots} limit={ARTISTS.length} market={activeKey} marketData={marketData} upcomingCounts={upcomingCounts} />
           </div>
 
           {/* the closing colophon — corpus counts from meta.json */}

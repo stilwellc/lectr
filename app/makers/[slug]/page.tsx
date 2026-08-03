@@ -8,9 +8,12 @@ import dynamic from 'next/dynamic';
 import { ARTISTS, ARTIST_LABEL, marketOf } from '../../constants';
 import type { AuctionLot, LotCategory, MarketStats } from '../../types';
 import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../../hooks/useRayData';
+import type { MarketData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useMarket } from '../../lib/market';
 import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming } from '../../utils';
+import { useRefs, refsForMaker } from '../../hooks/useRefs';
+import { encodeRefPath } from '../../ref/ref-path';
 
 import ArtistNav from '../../components/ArtistNav';
 import ArtistHero from '../../components/ArtistHero';
@@ -21,6 +24,17 @@ import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import { Colophon } from '../../components/Terminal';
 
 const PriceChart = dynamic(() => import('../../components/PriceChart'), { ssr: false });
+// #32 — the maker's-decade band rides on the same hand-rolled SVG instrument as
+// the lander hero. ssr:false: it measures its container with a ResizeObserver.
+const HeroChart = dynamic(() => import('../../preview/terminal/HeroChart'), { ssr: false });
+type HeroLine = import('../../preview/terminal/HeroChart').HeroLine;
+
+// A thin wrapper so the decade band mounts the shared HeroChart with the
+// dossier's conservative geometry (short, no subpane, no flip, always resolved
+// — `play={false}` means the write-on animation never re-fires on re-render).
+function HeroDecadeChart({ anchor }: { anchor: HeroLine }) {
+  return <HeroChart anchor={anchor} height={150} play={false} compact hideTickLabels={false} />;
+}
 
 type CategoryFilter = 'all' | LotCategory;
 
@@ -45,6 +59,284 @@ function ArchiveErrorPanel({ onRetry }: { onRetry: () => void }) {
       <button className="ray-call-btn ray-call-btn-primary" onClick={onRetry}>
         Retry
       </button>
+    </div>
+  );
+}
+
+// ── DOSSIER FEATURE BLOCKS (wave 2c) ──────────────────────────────────────
+// One injected stylesheet for the maker-dossier leader rows / strips below —
+// mirrors the .ray-dr-row grammar from SubMarketDrills (2px-dotted rows, mono
+// only on numerals) so these read as one family with the panel above them.
+const DOSSIER_FEATURE_CSS = `
+.mkr-panel{margin-top:14px}
+.mkr-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:2px}
+.mkr-panel-title{font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--color-fg,#E8EAED)}
+.mkr-panel-method{font-size:11.5px;color:var(--color-text-faint,#7A8087)}
+.mkr-rows{display:flex;flex-direction:column;margin-top:8px}
+.mkr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;transition:background 0.14s ease}
+.mkr-row:last-child{border-bottom:none}
+a.mkr-row:hover{background:rgba(255,255,255,0.045)}
+a.mkr-row:hover .mkr-row-name{color:#FFF}
+.mkr-row-name{font-size:13.5px;color:var(--color-fg,#E8EAED)}
+.mkr-row-sub{color:var(--color-text-faint,#7A8087);font-size:12px;margin-left:7px}
+.mkr-row-val{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;color:var(--color-fg,#E8EAED)}
+.mkr-row-val .num{font-family:var(--font-mono,ui-monospace),monospace}
+.mkr-row-val .tag{color:var(--color-text-faint,#7A8087);font-size:11px;margin-left:5px}
+.mkr-row-meta{color:var(--color-text-faint,#7A8087);font-size:11.5px;font-variant-numeric:tabular-nums;text-align:right;min-width:64px}
+@media (max-width:640px){.mkr-row{grid-template-columns:1fr auto}.mkr-row-meta{display:none}}
+.mkr-note{margin-top:10px;font-size:11.5px;color:var(--color-text-faint,#7A8087)}
+.mkr-flag{display:inline-block;padding:8px 12px;border:2px dotted rgba(255,255,255,0.12);border-radius:10px;font-size:13px;color:var(--color-fg,#E8EAED)}
+.mkr-flag a{color:inherit;text-decoration-color:var(--color-border-mid);text-underline-offset:3px}
+`;
+function useDossierFeatureStyles() {
+  useEffect(() => {
+    const ID = 'mkr-dossier-feature-style';
+    if (document.getElementById(ID)) return;
+    const el = document.createElement('style');
+    el.id = ID;
+    el.textContent = DOSSIER_FEATURE_CSS;
+    document.head.appendChild(el);
+  }, []);
+}
+
+const fmtUsdCompact = (n: number) =>
+  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `$${Math.round(n / 1000)}K` : `$${Math.round(n).toLocaleString()}`;
+
+// median of a numeric array (undefined-safe caller)
+function median(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// #26 — SPORTS DOSSIERS → PLAYER STRIP. Aggregate the maker's loaded lots by
+// playerSlug, top ~6 by lot count, each a row into /player?id=<slug>. A median
+// rides along ONLY when ≥3 of that player's rows carry a realized price (else
+// the count stands alone — never a fabricated typical). Descriptive: counts and
+// a median, never a %-move.
+function PlayerStrip({ lots, label }: { lots: AuctionLot[]; label: string }) {
+  const players = useMemo(() => {
+    const by = new Map<string, { slug: string; name: string; n: number; prices: number[] }>();
+    for (const l of lots) {
+      if (!l.playerSlug) continue;
+      const cur = by.get(l.playerSlug) || { slug: l.playerSlug, name: l.playerName || l.playerSlug, n: 0, prices: [] };
+      cur.n += 1;
+      if (l.status === 'sold' && l.priceUsd && l.priceUsd > 0) cur.prices.push(l.priceUsd);
+      if (!cur.name && l.playerName) cur.name = l.playerName;
+      by.set(l.playerSlug, cur);
+    }
+    return Array.from(by.values()).sort((a, b) => b.n - a.n).slice(0, 6);
+  }, [lots]);
+
+  if (players.length < 2) return null;
+
+  return (
+    <div className="ray-vm ray-vm-card glass glass-quiet mkr-panel">
+      <div className="mkr-panel-head">
+        <span className="mkr-panel-title">Most-traded names</span>
+        <span className="mkr-panel-method">{label} lots on the desk · by athlete</span>
+      </div>
+      <div className="mkr-rows">
+        {players.map(p => {
+          const med = median(p.prices);
+          return (
+            <Link key={p.slug} href={`/player?id=${encodeURIComponent(p.slug)}`} className="mkr-row">
+              <span className="mkr-row-name">
+                {p.name}
+                <span className="mkr-row-sub">{p.n} {p.n === 1 ? 'lot' : 'lots'}</span>
+              </span>
+              <span className="mkr-row-val">
+                {med !== null && p.prices.length >= 3
+                  ? <><span className="num">{fmtUsdCompact(med)}</span><span className="tag">median · n={p.prices.length}</span></>
+                  : <span className="tag">—</span>}
+              </span>
+              <span className="mkr-row-meta">{p.n}×</span>
+            </Link>
+          );
+        })}
+      </div>
+      <p className="mkr-note">Counts are lots tracked for this name in the loaded set — a volume fact, not a price move. Median shown only where ≥3 sold with a realized price.</p>
+    </div>
+  );
+}
+
+// #27 — WATCH DOSSIERS → /ref REFERENCE LEDGER. The reference is the watch
+// unit of decision. Top ~8 refs by sample depth, each into /ref/<maker>/<enc>.
+// n · median · TTM delta (a real measured median-over-median move, so it may
+// light up/down). Gated on refs loaded — honest loading/empty/failed states.
+function RefLedger({ slug, label }: { slug: string; label: string }) {
+  const { refs, failed } = useRefs();
+  const rows = useMemo(() => refsForMaker(refs, slug).slice(0, 8), [refs, slug]);
+
+  if (failed) {
+    return (
+      <div className="ray-vm ray-vm-card glass glass-quiet mkr-panel">
+        <div className="mkr-panel-head"><span className="mkr-panel-title">References</span></div>
+        <p className="mkr-note">The reference book didn&rsquo;t load. It&rsquo;ll retry on the next visit.</p>
+      </div>
+    );
+  }
+  if (refs === null) {
+    return (
+      <div className="ray-vm ray-vm-card glass glass-quiet mkr-panel">
+        <div className="mkr-panel-head"><span className="mkr-panel-title">References</span></div>
+        <p className="mkr-note">Loading the reference book&hellip;</p>
+      </div>
+    );
+  }
+  if (rows.length < 2) return null;
+
+  return (
+    <div className="ray-vm ray-vm-card glass glass-quiet mkr-panel">
+      <div className="mkr-panel-head">
+        <span className="mkr-panel-title">References</span>
+        <span className="mkr-panel-method">{label} · the deepest reference lines · median realized, all houses</span>
+      </div>
+      <div className="mkr-rows">
+        {rows.map(r => {
+          // TTM delta vs the all-time median — a real measured move (both sides
+          // are medians of realized sales), so it may carry direction.
+          const ttmDelta = r.ttmMedianUsd != null && r.medianUsd > 0
+            ? ((r.ttmMedianUsd - r.medianUsd) / r.medianUsd) * 100
+            : null;
+          return (
+            <Link key={r.key} href={`/ref/${slug}/${encodeRefPath(r.ref)}`} className="mkr-row">
+              <span className="mkr-row-name">
+                {r.ref}
+                <span className="mkr-row-sub">{r.n.toLocaleString()} sales</span>
+              </span>
+              <span className="mkr-row-val">
+                <span className="num">{fmtUsdCompact(r.medianUsd)}</span>
+                {ttmDelta !== null && Math.abs(ttmDelta) >= 1 && (
+                  <span className="tag" style={{ color: ttmDelta >= 0 ? 'var(--color-up)' : 'var(--color-down)' }}>
+                    {ttmDelta >= 0 ? '+' : ''}{ttmDelta.toFixed(0)}% ttm
+                  </span>
+                )}
+              </span>
+              <span className="mkr-row-meta">{r.houses.length} {r.houses.length === 1 ? 'house' : 'houses'}</span>
+            </Link>
+          );
+        })}
+      </div>
+      <p className="mkr-note">Each reference&rsquo;s median is over all its realized sales; the ttm figure compares the trailing year&rsquo;s median to the all-time median (both measured). The reference page carries the full yearly series.</p>
+    </div>
+  );
+}
+
+// #28 — VALUE-ENGINE PRESENCE. Scan the maker's UPCOMING lots for a
+// below-comparable-market engine signal (lot.value.signal — the same read the
+// feed's cardTone uses). Surface a small honest summary; abstain when none.
+function ValueEnginePresence({ upcoming }: { upcoming: AuctionLot[] }) {
+  const { flagged, total } = useMemo(() => {
+    let flagged = 0;
+    let total = 0;
+    for (const l of upcoming) {
+      // only lots the engine actually appraised count toward the denominator
+      if (!l.value || l.value.signal === undefined) continue;
+      total += 1;
+      if (l.value.signal && l.value.signal.label === 'below comparable market') flagged += 1;
+    }
+    return { flagged, total };
+  }, [upcoming]);
+
+  if (total === 0 || flagged === 0) return null;
+
+  return (
+    <div className="rail" style={{ marginTop: 4 }}>
+      <span className="mkr-flag">
+        The engine flags{' '}
+        <a href="#upcoming"><strong>{flagged}</strong> of {total} appraised live {total === 1 ? 'lot' : 'lots'}</a>{' '}
+        below comparable market.{' '}
+        <Link href="/value" style={{ color: 'inherit' }}>See the value desk &rsaquo;</Link>
+      </span>
+    </div>
+  );
+}
+
+// #30 — bidVELOCITY summary for the dossier's upcoming section. The individual
+// cards already carry the .ray-lot-bidvel chip (via LotCard); this section-
+// level summary counts the live lots that are moving. Butter accent, never
+// green/red — a descriptive count of activity, mirroring wave-2a.
+function MovingNowSummary({ upcoming }: { upcoming: AuctionLot[] }) {
+  const { count, bids } = useMemo(() => {
+    let count = 0;
+    let bids = 0;
+    for (const l of upcoming) {
+      if (l.bidVelocity && l.bidVelocity.delta > 0) { count += 1; bids += l.bidVelocity.delta; }
+    }
+    return { count, bids };
+  }, [upcoming]);
+
+  if (count === 0) return null;
+
+  return (
+    <div className="rail" style={{ marginTop: 4 }}>
+      <span className="ray-bidvel" style={{ fontSize: 12 }}>
+        <span className="ray-bidvel-dot" aria-hidden />
+        <span className="ray-bidvel-sub">
+          {count} live {count === 1 ? 'lot' : 'lots'} moving now · +{bids.toLocaleString()} {bids === 1 ? 'bid' : 'bids'} recently
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// #29 — NON-WATCH SUB-MARKET LEDGER. Art/design/etc. makers have NO per-maker
+// drill rows (drills are per-KIND for the whole vertical). Show the VERTICAL's
+// kind sub-markets as CONTEXT — clearly NOT the maker's own numbers. Reuses
+// SubMarketDrills (scope=vertical, no parentFilter → the kind rows) with a
+// method line that names it as the market the maker trades in.
+function VerticalContextLedger({ marketData, vertical, label }: { marketData: MarketData | null; vertical: string; label: string }) {
+  return (
+    <div className="rail" style={{ marginTop: 10 }}>
+      <SubMarketDrills
+        marketData={marketData}
+        scope={vertical}
+        title="The market this maker trades in"
+        method={`${vertical} sub-markets across the whole corpus — not ${label}'s own figures`}
+      />
+    </div>
+  );
+}
+
+// #32 — "MAKER'S DECADE" ERA BAND. The maker's own yearly-median from the
+// loaded SOLD lots, n-gated (≥8/yr). Rendered as a compact HeroChart money
+// line. Labeled "yearly typical price" — a mix-affected median, NOT demand or
+// appreciation. Renders nothing when the maker's yearly depth is too thin
+// (fewer than 3 qualifying years).
+function MakerDecadeBand({ lots, label }: { lots: AuctionLot[]; label: string }) {
+  const points = useMemo(() => {
+    const byYear = new Map<number, number[]>();
+    for (const l of lots) {
+      if (l.status !== 'sold' || !l.priceUsd || l.priceUsd <= 0 || !l.saleDate) continue;
+      const d = new Date(l.saleDate);
+      if (isNaN(d.getTime()) || d.getTime() > Date.now()) continue;
+      const y = d.getUTCFullYear();
+      const arr = byYear.get(y) || [];
+      arr.push(l.priceUsd);
+      byYear.set(y, arr);
+    }
+    return Array.from(byYear.entries())
+      .filter(([, ps]) => ps.length >= 8) // n-gate: a year needs ≥8 sales to typify
+      .sort((a, b) => a[0] - b[0])
+      .map(([y, ps]) => ({ period: String(y), value: median(ps)!, n: ps.length }));
+  }, [lots]);
+
+  if (points.length < 3) return null;
+
+  const anchor = { key: 'typical', label: `${label} · yearly typical`, color: 'var(--color-fg, #E8EAED)', unit: 'money' as const, points };
+
+  return (
+    <div className="rail mkr-panel">
+      <div className="mkr-panel-head">
+        <span className="mkr-panel-title">The maker&rsquo;s decade</span>
+        <span className="mkr-panel-method">yearly typical price · median · n-gated ≥8/yr</span>
+      </div>
+      <div style={{ marginTop: 6 }}>
+        <HeroDecadeChart anchor={anchor} />
+      </div>
+      <p className="mkr-note">This is the typical (median) price a {label} lot fetched each year — a mix-affected level, not a demand index or an appreciation rate. Years with fewer than eight sold lots are omitted.</p>
     </div>
   );
 }
@@ -147,6 +439,7 @@ export default function ArtistDetailPage() {
   const { toggle, savedIds, ownedIds, toggleOwned } = useSavedLots();
   const { setMarket } = useMarket();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  useDossierFeatureStyles(); // one-shot injection for the dossier leader rows
 
   const label = ARTIST_LABEL[slug];
   const valid = ARTISTS.some(a => a.slug === slug);
@@ -240,8 +533,29 @@ export default function ArtistDetailPage() {
               {market === 'watches' && (
                 <div className="rail ray-enter" style={{ '--enter-delay': '80ms', paddingTop: 8 } as React.CSSProperties}>
                   <SubMarketDrills marketData={marketData} scope="watches" parentFilter={slug} title="Model families" method={`${label} sub-markets · performance by family`} />
+                  {/* #27 — the reference ledger: the watch unit of decision */}
+                  <RefLedger slug={slug} label={label} />
                 </div>
               )}
+              {/* #32 — the maker's-decade band (art/design — sports/science get
+                  it inside ArchiveMakerBody once the archive lands) */}
+              {(market === 'art' || market === 'design' || market === 'culture') && (
+                <div className="ray-enter" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+                  <MakerDecadeBand lots={lots} label={label} />
+                </div>
+              )}
+              {/* #29 — non-watch makers have no per-maker drills; show the
+                  vertical's kind sub-markets as clearly-labeled context */}
+              {(market === 'art' || market === 'design') && (
+                <div className="ray-enter" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
+                  <VerticalContextLedger marketData={marketData} vertical={market} label={label} />
+                </div>
+              )}
+              {/* #28/#30 — engine flags + live activity above the fold */}
+              <div className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
+                <ValueEnginePresence upcoming={upcoming} />
+                <MovingNowSummary upcoming={upcoming} />
+              </div>
             </RayEntrance>
           )}
 
@@ -346,6 +660,23 @@ function ArchiveMakerBody({
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
           <ArtistHero animate={!fromCache} slug={slug} serial={serial} label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
+        </div>
+        {/* #26 — sports player strip + #32 decade band ride the deep merged
+            set, so they wait for the archive; the value/activity summaries
+            read the always-present phase-2 upcoming and paint immediately. */}
+        {marketOf(slug) === 'sports' && archiveLoaded && (
+          <div className="rail ray-enter" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+            <PlayerStrip lots={makerLots} label={label} />
+          </div>
+        )}
+        {archiveLoaded && (
+          <div className="ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+            <MakerDecadeBand lots={makerLots} label={label} />
+          </div>
+        )}
+        <div className="ray-enter" style={{ '--enter-delay': '110ms' } as React.CSSProperties}>
+          <ValueEnginePresence upcoming={upcoming} />
+          <MovingNowSummary upcoming={upcoming} />
         </div>
       </RayEntrance>
 
