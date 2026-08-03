@@ -73,10 +73,13 @@ const demandStrength = (r: SubMarketRead) => r.demandNow ?? -Infinity;
 // the curated marquee — the reads that lead the cross-market board before it
 // expands to the full list. Matched by label (case-insensitive), rendered in
 // this exact order; anything not present is simply skipped.
-const FEATURED = ['sports cards', 'cartier', 'rolex', 'patek philippe', 'audemars piguet', 'pablo picasso', 'andy warhol', 'space exploration'];
+const FEATURED: string[] = []; // ranked-by-strength marquee (drills lead with the CI'd card indexes) — no manual curation
 
 function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRead[] {
-  const sm = market?.subMarkets;
+  // THE TAXONOMY (drills): cards by era & sport, watch families, art kinds,
+  // design materials — the flagship sub-market work. (Was market.subMarkets,
+  // the older per-maker reads; those now live in the Verified movers band.)
+  const sm = market?.drills as Record<string, SubMarketRead[]> | undefined;
   if (!sm) return [];
   if (activeKey === 'all') {
     const all: SubMarketRead[] = Object.values(sm).flat();
@@ -427,7 +430,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
           opening the read card first; stopPropagation so it navigates instead
           of toggling the card */}
       <Link
-        href={`/makers/${r.slug}`}
+        href={`/sub/${r.slug.replace(':', '/')}`}
         className={styles.tapeLabelBlock}
         style={{ textDecoration: 'none', color: 'inherit' }}
         onClick={(e) => e.stopPropagation()}
@@ -537,7 +540,7 @@ export default function SubMarketBoard({
               full instrument in a pop-up read card ── */}
           <Chapter no="02" label="The markets" />
           <p className={styles.chapterSub}>
-            {fmtInt(rows.length)} sub-markets, each read at the strength its data supports —{' '}
+            {fmtInt(rows.length)} sub-markets — cards by era and sport, watch model families, art and design kinds — each read at the strength its data supports:{' '}
             <svg className={styles.legendGlyph} viewBox="0 0 34 12" aria-label="confidence-range glyph">
               <line x1="3" y1="6" x2="31" y2="6" /><line x1="3" y1="2.5" x2="3" y2="9.5" /><line x1="31" y1="2.5" x2="31" y2="9.5" />
               <path d="M20 2.8 L23.2 6 L20 9.2 L16.8 6 Z" className={styles.legendFill} />
@@ -607,11 +610,11 @@ export default function SubMarketBoard({
                     <button type="button" className={styles.readPopClose} onClick={() => setOpenRead(null)} aria-label="Close">×</button>
                   </div>
                   <Monument r={openRead} play={!reduce} />
-                  {/* every board slug is a tracked maker/category — the read's
-                      full dossier lives at /makers/<slug> */}
-                  {ARTIST_LABEL[openRead.slug] && (
+                  {/* every drill row has a /sub dossier — the full instrument,
+                      record and history for that sub-market */}
+                  {openRead.slug.includes(':') && (
                     <div className={styles.engineCtaRow}>
-                      <Link href={`/makers/${openRead.slug}`} className={styles.roomPill}>
+                      <Link href={`/sub/${openRead.slug.replace(':', '/')}`} className={styles.roomPill}>
                         Open the {openRead.label} dossier →
                       </Link>
                     </div>
