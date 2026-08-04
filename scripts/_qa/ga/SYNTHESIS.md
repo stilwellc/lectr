@@ -69,6 +69,31 @@ the plate painted certificate-only then grew by the image well's 190px+12px at
 stops once `fullLoaded` proves it won't — no permanently empty frame. The
 reserved well draws no background/outline.
 
+### SHIPPED — commit 077ce88, deployed Aug 4 2026 ~19:56 UTC
+Verified ON PRODUCTION (lectr.bid), not just "deploy succeeded":
+comp links **81/85 200** with 21 ragoarts links live (the 4 failures are the
+delisted-on-both-hosts sales we deliberately left) · 0 broken images, 0 console
+errors, 0 overflow on / · /value · /makers · /analytics.
+
+**MISTAKE MADE — prod data regressed ~10h. Read this before any future
+out-of-band `data:push`.** `npm run data:push` overwrote R2's pointer with a
+payload built from a LOCAL corpus dated Jul 31, while the Aug-4 nightly had
+already written newer data. Prod went `lastCrawl 2026-08-04 / 760,988 lots /
+742,370 sold` → `2026-07-31 / 760,972 / 741,521`: 16 lots and 849 sold records
+dropped, and a user-visible crawl date four days stale on GA day.
+ROOT CAUSE: **the freshness guard lives on `pull`, not on `push`** — pull
+refuses to regress newer local data, but nothing stops a push from regressing
+newer REMOTE data. ALWAYS `npm run data:pull` before building a payload on a
+local corpus you have been sitting on. Recoverable: `versions/` keys are
+write-once, so the nightly's payload survives.
+Collin's call: let the 06:00 UTC nightly repair it — it re-crawls, assembles
+from the FIXED wright segment pushed here, and runs the FIXED crawler, so one
+run restores fresh data, keeps the Rago fix, and closes the brk_ links.
+
+**brk_ links did NOT land in this deploy** (still 10 dead on prod, 0
+bruun-rasmussen). The restamp fixed the SEGMENT; build-market derives served
+data from the CORPUS, which still carried the old URLs. Closes on the nightly.
+
 ### WRAP-UP PASS — the remaining known-open items, closed
 - **`/makers` roster 29.3s → 2.0s (Fast-4G, all 39 links).** The curves are
   sold-derived and rightly wait for phase 2, but the NAMES and LINKS are not —
