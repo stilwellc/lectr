@@ -49,8 +49,19 @@ export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
     // point ~18–25pts while the chart caption said "% over estimate". Real
     // published hammer when present (hammerUsd corpus-side, hammerPrice is
     // the served alias), else divide the premium out.
+    // NEVER double-subtract the premium. Houses differ in what their published
+    // price includes, and `priceBasis` is the field that says so: 'realized',
+    // 'premium' (RR) and 'final-bid-plus-bp' (Goldin) are ALL premium-inclusive
+    // and must have it divided out; 'hammer-only' is already the winning bid
+    // and dividing it would understate the lot by ~20%. Only 6 rows carry
+    // 'hammer-only' today, but the guard makes the mistake structurally
+    // impossible rather than merely unlikely — a future source that publishes
+    // hammer directly would otherwise be silently deflated.
     const hp = l.hammerUsd ?? (l as AuctionLot & { hammerPrice?: number | null }).hammerPrice;
-    const hammer = (hp ?? 0) > 0 ? hp! : l.priceUsd / 1.25;
+    const alreadyHammer = l.priceBasis === 'hammer-only';
+    const hammer = (hp ?? 0) > 0
+      ? hp!
+      : alreadyHammer ? l.priceUsd : l.priceUsd / 1.25;
     sales.push({ t: d.getTime(), perf: hammer / estMid - 1 });
     quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
   }

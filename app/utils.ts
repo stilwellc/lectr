@@ -281,8 +281,12 @@ export function makeAuctionIcs(lot: {
   const fmtPrice = (n: number) =>
     n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `$${(n / 1_000).toFixed(0)}K` : `$${n}`;
 
+  // NOT lot.currency: the served money aliases (estimateLow/High, priceUsd) all
+  // carry USD by contract, while `currency` still names the sale's NATIVE
+  // currency — so this printed "Est. $650–$910 GBP", a dollar figure wearing a
+  // pound label. The figures are dollars; say dollars.
   const estLine = lot.estimateLow && lot.estimateHigh
-    ? `Est. ${fmtPrice(lot.estimateLow)}–${fmtPrice(lot.estimateHigh)} ${lot.currency}\\n`
+    ? `Est. ${fmtPrice(lot.estimateLow)}–${fmtPrice(lot.estimateHigh)} USD\\n`
     : '';
 
   const desc = esc(`${estLine}${lot.url}`);

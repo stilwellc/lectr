@@ -155,6 +155,21 @@ export function slimForClient<T extends Record<string, unknown>>(lot: T): Record
     if (k === 'resultsPending' && v === false) continue;
     out[k] = v;
   }
+  // ── THE ALIAS CONTRACT: every legacy money alias on a SERVED row carries USD.
+  // estimateLow/estimateHigh/priceUsd already do. `hammerPrice` did NOT — it
+  // mirrored hammerNative, so a GBP lot shipped hammerPrice=550 next to a USD
+  // estimateLow=650. Every client consumer reads it as USD
+  // (`hammerUsd ?? hammerPrice`, with hammerUsd STRIPPED from served): utils.ts
+  // overEstimatePct, the /value settled tape, and demand.ts. Measured on the
+  // served payload: 7,306 of 22,339 sold rows carrying hammerPrice held a
+  // native value (median priceUsd/hammerPrice 1.86 where a true premium is
+  // ~1.25), understating the demand index by a median 30 POINTS and dragging
+  // every lander hero negative. This is the v2 money bug — native vs USD —
+  // re-entering through an alias. Project the USD twin onto the alias so the
+  // contract holds: the client renders dollars, so the alias must BE dollars.
+  const hUsd = lot['hammerUsd'];
+  if (typeof hUsd === 'number' && hUsd > 0) out['hammerPrice'] = hUsd;
+  else if ('hammerPrice' in out) delete out['hammerPrice']; // native-only ⇒ omit, never mislead
   return out;
 }
 
