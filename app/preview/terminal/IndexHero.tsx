@@ -100,7 +100,10 @@ function useHeroSeries(
       return {
         idx,
         kicker: activeKey === 'all' ? 'The collectibles market' : `The ${activeKey} market`,
-        explain: 'How far lots hammer above their estimates',
+        // NOT "hammer": the series is the raw published sold price vs estimate,
+        // and for most houses that price already includes their buyer's premium.
+        // Saying "sell" keeps the sentence true to the number underneath it.
+        explain: 'How far lots sell above their estimates',
         unit: 'demand' as const,
       };
     }

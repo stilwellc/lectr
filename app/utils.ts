@@ -181,20 +181,24 @@ export function toneOf(n: number): 'up' | 'down' | 'flat' {
   return Math.round(n) === 0 ? 'flat' : n > 0 ? 'up' : 'down';
 }
 
-/** Hammer-basis % over estimate for a SOLD lot: realized prices are
- *  premium-inclusive (~1.25x) while estimates are hammer-basis — divide out
- *  the premium before comparing, or every figure overstates by ~25pts. */
+/** % over estimate for a SOLD lot, on the RAW published price. For most houses
+ *  that price already includes their buyer's premium while the estimate is a
+ *  hammer-basis prediction, so this figure carries the fee inside it — it is
+ *  "what it sold for vs what they thought", not a like-for-like hammer read.
+ *  Kept deliberately identical to the demand index's basis (app/lib/demand.ts)
+ *  so the hero and the per-row figures can never contradict each other. */
 export function overEstimatePct(l: { priceUsd?: number | null; hammerUsd?: number | null; hammerPrice?: number | null; estimateLow?: number | null; estimateHigh?: number | null }): number | null {
   const lo = l.estimateLow || l.estimateHigh || 0;
   const hi = l.estimateHigh || l.estimateLow || 0;
   const mid = (lo + hi) / 2;
   if (!(mid > 0) || !l.priceUsd) return null;
-  // hammerUsd is corpus-only (stripped from served rows) — hammerPrice is the
-  // alias that actually ships, so real published hammers reach the display
-  // instead of silently falling to the /1.25 approximation everywhere.
-  const real = (l.hammerUsd ?? l.hammerPrice ?? 0) > 0 ? (l.hammerUsd ?? l.hammerPrice)! : null;
-  const hammer = real ?? l.priceUsd / 1.25;
-  return (hammer / mid - 1) * 100;
+  // RAW published sold price vs estimate — same basis as the demand index
+  // (app/lib/demand.ts), deliberately. These two must never disagree: the
+  // hero read and the per-row "vs est" answer the same question, and when one
+  // divided the premium out and the other didn't, the same lot could read
+  // +27% in one place and −5% in another. Nothing is inferred here; where the
+  // house's price includes its buyer's premium, so does this figure.
+  return (l.priceUsd / mid - 1) * 100;
 }
 
 /** ONE money-axis formatter for every chart — rolls to B, trims trailing .0,
