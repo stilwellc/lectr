@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { AuctionLot } from '../../types';
 import { ARTIST_LABEL } from '../../constants';
-import { formatPrice, httpsImg, craftTitle } from '../../utils';
+import { formatPrice, httpsImg, craftTitle, localToday } from '../../utils';
 import { useInView } from './hooks';
 import styles from './style.module.css';
 
@@ -87,8 +87,11 @@ export default function TonightsWall({
     }
     return live.slice(0, 5);
   }, [items, failed, evening]);
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const closesToday = (it: WallItem) => evening && (it.lot.saleDate || '').slice(0, 10) <= todayIso;
+  // "closes today" is a promise about the READER's day — judged on the local
+  // calendar (localToday), never toISOString's UTC day, which rolls to
+  // tomorrow every US evening and tags tomorrow's lots "today" (B3 finding 5).
+  // Evaluated inside the evening gate only, so the SSR path stays inert.
+  const closesToday = (it: WallItem) => evening && (it.lot.saleDate || '').slice(0, 10) <= localToday();
   const [stripRef, seen] = useInView<HTMLDivElement>();
 
   // plates rise shortly after arrival (no entrance-clock coupling)

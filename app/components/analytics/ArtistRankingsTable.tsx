@@ -447,7 +447,15 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                 {sortTh('totalRevenue', 'Sales value')}
                 {sortTh('medianSale', 'Median sale (12mo)')}
                 {sortTh('recordPrice', 'Record', { hideMobile: true })}
-                {sortTh('movement', '12-mo movement', { title: 'Median sale over the trailing year vs the year before — realized basis, no house estimates in this market' })}
+                {/* Named per lens — the lenses compute DIFFERENT things and the
+                    caption must match the actual source (the collection lens
+                    reads stats.appreciationRate, not a 12-mo median compare).
+                    Both are descriptive: plain ink in the cells — a shift in
+                    what sold is not appreciation (PlayerPage's rule), and
+                    green here would claim it is. */}
+                {lens === 'sport'
+                  ? sortTh('movement', '12-mo median shift', { title: 'Median sale price, trailing year vs the year before, over the loaded sample — a mix-sensitive descriptive shift, not appreciation' })
+                  : sortTh('movement', 'Value trend · est.', { title: 'Coarse annualized appreciation estimate from median realized prices — descriptive, not a verified index read' })}
                 {sortTh('soldLots', 'Sold lots')}
               </tr>
             </thead>
@@ -489,9 +497,9 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                   <td className="ray-rankings-td" style={{
                     textAlign: 'right',
                     fontWeight: 500,
-                    color: row.movement <= -9999 || toneOf(row.movement) === 'flat'
-                      ? 'var(--color-text-muted)'
-                      : toneOf(row.movement) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
+                    // plain ink — descriptive shift (see the column caption),
+                    // never the measured-delta green/red
+                    color: 'var(--color-text-muted)',
                   }}>
                     {row.movement <= -9999 ? '—' : fmtSignedPct(row.movement)}
                   </td>
@@ -593,9 +601,8 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                     <span className="ray-rankings-card-metric">
                       {row.totalRevenue > 0 ? formatPrice(row.totalRevenue) : '—'}
                       <span className="ray-rankings-card-trend" style={{
-                        color: row.movement <= -9999 || toneOf(row.movement) === 'flat'
-                          ? 'var(--color-text-muted)'
-                          : toneOf(row.movement) === 'up' ? 'var(--color-up)' : 'var(--color-down)',
+                        // plain ink — descriptive shift, see the column caption
+                        color: 'var(--color-text-muted)',
                       }}>
                         {row.movement <= -9999 ? '— 12 mo' : `${fmtSignedPct(row.movement)} 12 mo`}
                       </span>

@@ -283,11 +283,46 @@ push_segment() {
   obj_put "latest/segments/$name.ndjson.gz" "$f"
 }
 pull_segment() {
-  local name="$1"
+  # A failed GET must distinguish "not in R2 yet" (bootstrap — fine, crawl
+  # seeds it) from "in R2 but unreachable" (transient — must go RED). The old
+  # blanket `|| echo fresh` swallowed 5xx/network failures and left a
+  # zero-byte .ndjson.gz behind; readSegment throws on that, ray-crawl catches
+  # and proceeds seedless, and the 0-length floor bypasses the collapse guard —
+  # one flaky GET could overwrite a house's last-good segment with a
+  # fresh-only subset. The bucket LISTING is the authority on existence.
+  local name="$1" key="latest/segments/$1.ndjson.gz" f="data/corpus/segments/$1.ndjson.gz"
   mkdir -p data/corpus/segments
-  obj_get_fresh "latest/segments/$name.ndjson.gz" "data/corpus/segments/$name.ndjson.gz" \
-    || echo "[data-store] segment $name not in R2 yet (fresh) — crawl will seed it"
+  if obj_get_fresh "$key" "$f"; then return 0; fi
+  rm -f "$f"   # never leave a zero-byte gz — missing reads as [], empty THROWS
+  # "absent" must come from a LISTING THAT ANSWERED — listed_etag swallows
+  # errors into '', so an auth/network outage would otherwise read as "not in
+  # R2 yet" and open the seedless path (observed live: a stale local OAuth
+  # token made every segment look fresh). Demand a successful list call.
+  local listing
+  listing=$(curl -sf -H "Authorization: Bearer $TOKEN" "$API?prefix=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$key")" || true)
+  if echo "$listing" | grep -q '"success": *true'; then
+    if ! echo "$listing" | grep -q "\"key\": *\"$key\""; then
+      echo "[data-store] segment $name not in R2 yet (fresh) — crawl will seed it"
+      return 0
+    fi
+  fi
+  echo "[data-store] ERROR: segment $name pull failed and R2 does not confirm it absent — refusing a seedless crawl (would overwrite last-good)"
+  return 1
 }
+# Small-file GET (meta/backtest) that can never poison with a zero-byte file:
+# an empty meta.json is FATAL in assemble (present-but-unparseable), and an
+# empty backtest.json rides into the served artifact and BAKES INTO THE DEPLOY.
+# One retry absorbs a transient blip on a 1KB GET; after that the file is
+# removed so the first-run paths engage correctly (missing, never empty).
+obj_get_clean() { # key file first-run-message
+  local key="$1" f="$2" msg="$3"
+  obj_get "$key" "$f" && return 0
+  rm -f "$f"; sleep 3
+  obj_get "$key" "$f" && return 0
+  rm -f "$f"
+  echo "$msg"
+}
+
 # Pull every segment IN PARALLEL. Serial pulls each wait out R2 GET-lag (up to
 # ~14min via obj_get_fresh); 6 in a row blew the assemble timeout. Parallel →
 # worst case is one lag window, not six.
@@ -307,7 +342,7 @@ case "${1:-}" in
   pull-segments) pull_all_segments ;;
   # previous totals for assemble's sanity gate — a plain (non-fresh) GET is fine;
   # a slightly-stale baseline still catches a catastrophic shrink.
-  pull-meta) mkdir -p public/data/ray; obj_get "latest/meta.json" "public/data/ray/meta.json" || echo "[data-store] no prior meta.json yet (first run)" ;;
+  pull-meta) mkdir -p public/data/ray; obj_get_clean "latest/meta.json" "public/data/ray/meta.json" "[data-store] no prior meta.json yet (first run)" ;;
   # backtest.json (the published record) + its sidecar accumulator state
   # (data/corpus/backtest-state.json.gz — the raw per-observation arrays the
   # NIGHTLY incremental rehydrates to append new lots). Both carry forward so the
@@ -315,8 +350,8 @@ case "${1:-}" in
   # incremental self-falls-back to a full build, which reseeds the state).
   pull-backtest)
     mkdir -p public/data/ray data/corpus
-    obj_get "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no prior backtest.json yet (first run)"
-    obj_get "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" || echo "[data-store] no prior backtest state yet (incremental will full-build)"
+    obj_get_clean "latest/backtest.json" "public/data/ray/backtest.json" "[data-store] no prior backtest.json yet (first run)"
+    obj_get_clean "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" "[data-store] no prior backtest state yet (incremental will full-build)"
     ;;
   push-backtest)
     test -f public/data/ray/backtest.json && obj_put "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no backtest.json to push"

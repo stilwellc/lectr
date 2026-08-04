@@ -2,12 +2,25 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import ArtistNav from '../../components/ArtistNav';
 import meta from '../../../public/data/ray/meta.json';
+import marketJson from '../../../public/data/ray/market.json';
 import { Colophon } from '../../components/Terminal';
+import { verifiedMovers, fmtPct } from '../../preview/terminal/verified';
+import type { MarketData } from '../../hooks/useRayData';
+
+// BUILD-TIME figures, not literals: the movers table below reads the shipped
+// market.json through the SAME selection the live VerifiedMovers panel uses
+// (verifiedMovers: longest horizon whose 95% CI resolves the sign). The
+// engine refits nightly and this page rebuilds nightly with it, so the post
+// can never drift from the product (audit C2 pre-GA-8; the corrections
+// register logged one drift-and-fix cycle under the old hardcoded rows).
+const movers = verifiedMovers(marketJson as unknown as MarketData);
+const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const countWord = (n: number) => COUNT_WORDS[n] ?? String(n);
 
 export const metadata: Metadata = {
   title: 'How we built the price-movement engine — a hedonic index that abstains',
   description:
-    'The math behind lectr\'s appreciation numbers: a per-maker Huber-robust hedonic log-price regression that controls for the within-maker mix, and a confidence gate that publishes a return only when its 95% CI resolves the sign. The result is that almost everything abstains — and the few makers that clear the bar (Rolex, Patek, Cartier) are the whole point.',
+    'The math behind lectr\'s appreciation numbers: a per-maker Huber-robust hedonic log-price regression that controls for the within-maker mix, and a confidence gate that publishes a return only when its 95% CI resolves the sign. The result is that almost everything abstains — and the few makers that clear the bar are the whole point.',
 };
 
 const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
@@ -47,7 +60,7 @@ export default function PricingEnginePost() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="blog" />
-      <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
+      <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 10 }}>
           <p className="kicker" style={{ margin: '0 0 14px' }}>
             <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · July 24, 2026 · technical
@@ -199,30 +212,40 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
 
           <h2 style={h2}>4 · The verified movers</h2>
           <p style={p}>
-            The makers that clear the bar are the entire product. As of this writing there are{' '}
-            <span style={strong}>three</span>, all watches, each surfaced at the longest horizon whose CI
-            resolves (5Y &gt; 3Y &gt; 1Y) — the numbers below are read straight out of{' '}
-            <V>makerIndex</V> in <V>market.json</V>:
+            The makers that clear the bar are the entire product. As of tonight&rsquo;s refit there{' '}
+            {movers.length === 1 ? 'is' : 'are'}{' '}
+            <span style={strong}>{countWord(movers.length)}</span>, each surfaced at the longest horizon
+            whose CI resolves (5Y &gt; 3Y &gt; 1Y) — the numbers below are read straight out of{' '}
+            <V>makerIndex</V> in <V>market.json</V> at build time, so this table is always the current
+            engine&rsquo;s:
           </p>
-          <div style={{ overflowX: 'auto' }}>
-          <table style={table}>
-            <thead>
-              <tr><th style={th}>Maker</th><th style={{ ...th, textAlign: 'right' }}>horizon</th><th style={{ ...th, textAlign: 'right' }}>change</th><th style={{ ...th, textAlign: 'right' }}>95% CI</th><th style={{ ...th, textAlign: 'right' }}>lots</th></tr>
-            </thead>
-            <tbody>
-              <tr><td style={td}>Cartier</td><td style={tdNum}>5Y</td><td style={tdNum}>+51.2%</td><td style={tdNum}>[19, 92]</td><td style={tdNum}>5,771</td></tr>
-              <tr><td style={td}>Rolex</td><td style={tdNum}>5Y</td><td style={tdNum}>+23.6%</td><td style={tdNum}>[11, 38]</td><td style={tdNum}>15,247</td></tr>
-              <tr><td style={td}>Patek Philippe</td><td style={tdNum}>3Y</td><td style={tdNum}>−12.9%</td><td style={tdNum}>[−21, −4]</td><td style={tdNum}>15,525</td></tr>
-            </tbody>
-          </table>
-          </div>
+          {movers.length > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+            <table style={table}>
+              <thead>
+                <tr><th style={th}>Maker</th><th style={{ ...th, textAlign: 'right' }}>horizon</th><th style={{ ...th, textAlign: 'right' }}>change</th><th style={{ ...th, textAlign: 'right' }}>95% CI</th><th style={{ ...th, textAlign: 'right' }}>lots</th></tr>
+              </thead>
+              <tbody>
+                {movers.map(m => (
+                  <tr key={m.slug}>
+                    <td style={td}>{m.label}</td>
+                    <td style={tdNum}>{m.horizon}</td>
+                    <td style={tdNum}>{fmtPct(m.changePct).replace('-', '−')}</td>
+                    <td style={tdNum}>[{Math.round(m.ciLoPct)}, {Math.round(m.ciHiPct)}]</td>
+                    <td style={tdNum}>{m.n.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          )}
           <p style={p}>
-            Even these three abstain at their shorter windows — Rolex&rsquo;s 1Y and 3Y and Patek&rsquo;s
-            1Y currently span zero, so the site holds them. Everything
+            Even the makers that publish abstain at their shorter windows wherever those intervals still
+            span zero — the site holds them. Everything
             else — every artist, every design name, every sports and science bucket —{' '}
             <span style={strong}>abstains</span>, and the &ldquo;verified movers&rdquo; panel simply says
-            so where a market has none. Three intervals that resolve the sign, standing behind real
-            money, is the honest yield of a very large corpus.
+            so where a market has none. A handful of intervals that resolve the sign, standing behind
+            real money, is the honest yield of a very large corpus.
           </p>
 
           <h2 style={h2}>5 · Demand vs ROI: two reads, and the divergence flag</h2>
@@ -256,7 +279,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
               <tr><th style={th}>read</th><th style={th}>when</th><th style={th}>what it shows</th></tr>
             </thead>
             <tbody>
-              <tr><td style={td}><V>index</V></td><td style={td}>a real maker with a publishable CI&rsquo;d horizon</td><td style={td}>the verified price move + interval (Rolex, Patek, Cartier)</td></tr>
+              <tr><td style={td}><V>index</V></td><td style={td}>a real maker with a publishable CI&rsquo;d horizon</td><td style={td}>the verified price move + interval (the movers in §4)</td></tr>
               <tr><td style={td}><V>demand</V></td><td style={td}>the slug carries estimates across enough quarters</td><td style={td}>quarterly median %-over-estimate (hammer basis)</td></tr>
               <tr><td style={td}><V>descriptive</V></td><td style={td}>no estimates, or not a maker</td><td style={td}>typical price · all-time record · volume — no appreciation</td></tr>
             </tbody>
@@ -295,23 +318,21 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
           <p style={p}>
             The honest engine answers each of these by <em>abstaining</em> rather than emitting a
             confident number. That card-dominance case is live: the market-wide <V>&lsquo;all&rsquo;</V>{' '}
-            index refuses every horizon because one maker-slug (<V>sports-cards</V>) is 66–88% of the
-            endpoint quarters, so the hedonic control can&rsquo;t hold quality constant within it. The
-            art market shows the subtler version: its market-level index reads down (3Y <V>−14.2%</V>, 5Y{' '}
-            <V>−31.1%</V>), but its bottom-up composite still abstains, because{' '}
-            <span style={strong}>zero</span> art makers publish a defensible per-maker horizon. Picasso is
-            the reason in miniature — his recent quarters are 88–92% prints with no reference-level
-            control, so a shift in <em>which</em> prints sold would leak straight into the time effect.
-            The gate catches it and the maker abstains.
+            index refuses every horizon because a single maker-slug (<V>sports-cards</V>) dominates the
+            endpoint quarters outright, so the hedonic control can&rsquo;t hold quality constant within
+            it. The art market shows the subtler version: even where its market-level fit points down,
+            the bottom-up composite still abstains whenever no art maker publishes a defensible
+            per-maker horizon. Picasso is the reason in miniature — his recent quarters are
+            overwhelmingly prints with no reference-level control, so a shift in <em>which</em> prints
+            sold would leak straight into the time effect. The gate catches it and the maker abstains.
           </p>
 
           <h2 style={h2}>8 · What this costs, and what it buys</h2>
           <p style={p}>
-            The cost is coverage: three verified movers across a corpus of{' '}
+            The cost is coverage: {countWord(movers.length)} verified mover{movers.length === 1 ? '' : 's'} across a corpus of{' '}
             <span style={strong}>{meta.totalLots.toLocaleString()} lots</span> from {meta.sources.length}{' '}
-            sources. Watches assemble a composite that resolves at 5Y (<V>+24.5%</V>, Rolex / Patek /
-            Cartier at a capped 35/35/30); most verticals never seat enough measurable components to
-            compose at all. That is a small published surface for a very large amount of data — and it is
+            sources. Most verticals never seat enough measurable components to assemble a composite
+            at all. That is a small published surface for a very large amount of data — and it is
             the point. Every appreciation figure the site shows has a 95% interval behind it that
             resolves the sign, ends on a complete quarter, survives a composition-break check, and holds
             the within-maker mix constant. Where it can&rsquo;t, it says so.{' '}
@@ -326,7 +347,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             </Link>
           </p>
         </article>
-      </main>
+      </div>
       <Colophon record={null} />
     </div>
   );

@@ -176,9 +176,9 @@ export default function Distributions({ allLots, statsByArtist, market, series }
         </div>
       </div>
 
-      {tab === 'category' && <CategoryBreakdown allLots={allLots} data={an?.categoryBreakdown} embedded />}
-      {tab === 'house' && <AuctionHouseDistribution statsByArtist={statsByArtist} embedded />}
-      {tab === 'price' && <PriceDistribution allLots={allLots} buckets={an?.priceBuckets} embedded />}
+      {tab === 'category' && <CategoryBreakdown allLots={allLots} data={an?.categoryBreakdown} />}
+      {tab === 'house' && <AuctionHouseDistribution statsByArtist={statsByArtist} />}
+      {tab === 'price' && <PriceDistribution allLots={allLots} buckets={an?.priceBuckets} />}
       {tab === 'sport' && <SportBreakdown allLots={allLots} data={an?.sportBreakdown} />}
       </div>
     </section>

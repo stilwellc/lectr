@@ -6,8 +6,7 @@ import type { MarketData, DemandPoint, RealizedByMarket } from '../../hooks/useR
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import type { Market } from '../../constants';
 import RollingNumber from './RollingNumber';
-import { type IndexPoint, type ChartLayer } from './MarketChart';
-import HeroChart, { type HeroLine } from './HeroChart';
+import HeroChart, { type HeroLine, type HeroPoint } from './HeroChart';
 import { resolveHeroLayers, type HeroLayer } from '../../lib/heroLayers';
 import Sparkline from './Sparkline';
 import { fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
@@ -37,6 +36,16 @@ import styles from './style.module.css';
    ============================================================ */
 
 const EASE = [0.23, 1, 0.32, 1] as const;
+
+// local aliases for the chart's point/layer shapes (MarketChart, the old
+// recharts instrument, is gone — HeroChart owns the grammar now)
+type IndexPoint = HeroPoint;
+interface ChartLayer {
+  key: string;
+  label: string;
+  color: string;
+  points: IndexPoint[];
+}
 
 type TfKey = '1Y' | '3Y' | '5Y' | 'MAX';
 
@@ -174,12 +183,19 @@ export default function IndexHero({
     unit: x.kind === 'volume' ? 'count' : 'pct',
     points: x.chart.points,
   });
-  const [litLayer, setLitLayer] = useState<string | null>(null);
-  useEffect(() => { setLitLayer(null); }, [activeKey]);
+  // chip isolation, two states (A1-1): hover PREVIEWS a layer (transient),
+  // click PINS it — sticky isolation that survives mouseleave, reachable by
+  // keyboard/touch; aria-pressed reflects the pin; a second click clears it.
+  // The live highlight is the hover preview when present, else the pin.
+  const [pinnedLayer, setPinnedLayer] = useState<string | null>(null);
+  const [hoverLayer, setHoverLayer] = useState<string | null>(null);
+  const litLayer = hoverLayer ?? pinnedLayer;
+  useEffect(() => { setPinnedLayer(null); setHoverLayer(null); }, [activeKey]);
   // FLIPPED views (sports/science/culture): the curated story lines take the
   // main stage; the anchor (the numeral's line) rides the lower band
   const flipView = mainLayers.length === 0 && subLayers.length > 0;
   const chipFor = (x: { chart: ChartLayer; kind: HeroLayer['kind']; last: number }) => {
+    const pinned = pinnedLayer === x.chart.key;
     const on = litLayer === x.chart.key;
     const val = x.kind === 'volume' ? `${Math.round(x.last).toLocaleString()}/qtr` : fmtPct(x.last);
     const dir = x.kind === 'volume' ? undefined : x.last >= 0 ? 'up' : 'down';
@@ -189,10 +205,10 @@ export default function IndexHero({
         type="button"
         className={styles.layerChip}
         data-on={on ? 'true' : undefined}
-        onMouseEnter={() => setLitLayer(x.chart.key)}
-        onMouseLeave={() => setLitLayer((cur) => (cur === x.chart.key ? null : cur))}
-        onClick={() => setLitLayer((cur) => (cur === x.chart.key ? null : x.chart.key))}
-        aria-pressed={on}
+        onMouseEnter={() => setHoverLayer(x.chart.key)}
+        onMouseLeave={() => setHoverLayer((cur) => (cur === x.chart.key ? null : cur))}
+        onClick={() => setPinnedLayer((cur) => (cur === x.chart.key ? null : x.chart.key))}
+        aria-pressed={pinned}
       >
         <span className={styles.layerChipDot} style={{ background: x.chart.color }} aria-hidden />
         {x.chart.label}
@@ -216,8 +232,11 @@ export default function IndexHero({
   // so it's paired with the absolute value trend (annualized appreciation). When
   // lots are beating ask (demand up) but typical values are falling YoY, the
   // tile raises a flag: the heat is beating a softening bar, not real strength.
+  // Rendered NEUTRAL and labelled an estimate: appreciationRate is a coarse
+  // price-level read, not a verified repeat-comparison index — descriptive
+  // figures never wear green/red or a "verified" claim (the CI'd reads live
+  // in makerIndex/drills).
   const roi = appreciation;
-  const roiDir: 'up' | 'down' | undefined = roi == null ? undefined : roi >= 0 ? 'up' : 'down';
   const demandHot = hero.unit === 'demand' && headline > 0;
   const roiFlag = demandHot && roi != null && roi < -1.5 ? 'beating soft estimates' : undefined;
 
@@ -306,14 +325,14 @@ export default function IndexHero({
 
           <m.div className={styles.mHeroStats} {...rise(0.12)}>
             {roi != null && (
-              <span className={styles.mStat} title="Sales-weighted annualized value trend across this market's verified repeat comparisons.">
-                <span className={`${styles.mStatVal} ${styles.pctData}`} data-dir={roiDir}>{fmtPct(roi)}</span>
-                <span className={styles.mStatLabel}>Yearly ROI</span>
+              <span className={styles.mStat} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
+                <span className={`${styles.mStatVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
+                <span className={styles.mStatLabel}>Value trend · est.</span>
               </span>
             )}
             {bc ? (
               <span className={styles.mStat} title="Median bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
-                <span className={styles.mStatVal} data-dir={bc.dir}>{bc.now}</span>
+                <span className={styles.mStatVal}>{bc.now}</span>
                 <span className={styles.mStatLabel}>Bids/lot</span>
               </span>
             ) : (
@@ -387,16 +406,16 @@ export default function IndexHero({
             <span className={styles.railVal}>{fmtInt(onBlock)}</span>
           </div>
           {roi != null && (
-            <div className={styles.railRow} title="Sales-weighted annualized value trend across this market's verified repeat comparisons — the absolute check on demand.">
-              <span className={styles.railLabel}>Yearly ROI</span>
-              <span className={`${styles.railVal} ${styles.pctData}`} data-dir={roiDir}>{fmtPct(roi)}</span>
+            <div className={styles.railRow} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read. The absolute check on demand.">
+              <span className={styles.railLabel}>Value trend · est.</span>
+              <span className={`${styles.railVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
             </div>
           )}
           {roiFlag && <div className={styles.railFlagLine}>{roiFlag}</div>}
           {bc && (
             <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
               <span className={styles.railLabel}>Bid competition</span>
-              <span className={styles.railVal} data-dir={bc.dir}>{bc.now} bids/lot</span>
+              <span className={styles.railVal}>{bc.now} bids/lot</span>
             </div>
           )}
           {belowMkt ? (

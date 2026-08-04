@@ -61,10 +61,23 @@ async function rest(path: string, init: RequestInit = {}) {
   return res;
 }
 
+/** page a read past PostgREST's 1000-row default cap (order=id keeps the
+ *  offset windows stable while paging) */
+async function restAll(path: string): Promise<any[]> {
+  const PAGE = 1000;
+  const out: any[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const page = await (await rest(`${path}&order=id&limit=${PAGE}&offset=${offset}`)).json();
+    out.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return out;
+}
+
 async function main() {
   if (!url || !key) { console.log('[match-alerts] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — skipping'); return; }
 
-  const searches = await (await rest('saved_searches?select=id,user_id,query')).json();
+  const searches = await restAll('saved_searches?select=id,user_id,query');
   if (!searches.length) { console.log('[match-alerts] no saved searches'); return; }
 
   const now = Date.now();

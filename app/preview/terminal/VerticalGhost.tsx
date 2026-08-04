@@ -1,15 +1,12 @@
 'use client';
 
 import type { Market } from '../../constants';
-import styles from './style.module.css';
 
 /* ============================================================
-   VerticalGhost — a large, faint category illustration that
-   lives on the RIGHT edge only, behind the Terminal content.
-   Swaps by active vertical; bleeds off the right edge so it
-   reads as texture, not a stamped watermark. Purely decorative:
-   pointer-events:none, low z-index, ~0.04–0.08 opacity via CSS.
-   Inline SVG only — static-export safe, no deps.
+   Per-vertical ghost glyphs — faint category illustrations.
+   GhostGlyph is consumed by MarketSwitch (a cropped ghost
+   bleeding off each market pill). Purely decorative, inline
+   SVG only — static-export safe, no deps.
    ============================================================ */
 
 /* Each glyph draws in a 200×200 viewBox, tuned so the "interesting"
@@ -153,14 +150,4 @@ const GLYPH: Partial<Record<Market, () => React.ReactElement>> = {
 export function GhostGlyph({ market }: { market: Market }) {
   const Glyph = GLYPH[market];
   return Glyph ? <Glyph /> : null;
-}
-
-export default function VerticalGhost({ market }: { market: Market }) {
-  const Glyph = GLYPH[market];
-  if (!Glyph) return null;
-  return (
-    <div className={styles.ghost} data-market={market} aria-hidden>
-      <Glyph />
-    </div>
-  );
 }

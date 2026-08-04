@@ -2,12 +2,13 @@
 
 import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import Link from 'next/link';
-import { AuctionLot, MarketStats } from '../types';
+import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg } from '../utils';
+import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
+import { safeHref } from '../lib/safe-href';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -32,6 +33,11 @@ export function formatEstimate(lot: AuctionLot): string {
   if (lot.currentBid && lot.currentBid > 0) {
     return `${fmt(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} bids` : ''}`;
   }
+  // ONE-SIDED estimate (D2 P2): a published bound must never vanish into
+  // "Estimate on request" — say which side the house put on paper. Live-bid
+  // lots never reach here (the bid stays the honest lead above).
+  if (lot.estimateLow) return `from ${fmt(lot.estimateLow)} est.`;
+  if (lot.estimateHigh) return `to ${fmt(lot.estimateHigh)} est.`;
   // "No reserve" is a Goldin fact, not a fallback — traditional houses run
   // reserves and merely keep some estimates private. Don't assert an auction
   // condition we can't stand behind on anyone else's lot.
@@ -238,9 +244,9 @@ function LotCard({
         borderRadius: 18,
       }}
     />
-  ) : (
+  ) : safeHref(lot.url) ? (
     <a
-      href={lot.url}
+      href={safeHref(lot.url)}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
@@ -251,7 +257,7 @@ function LotCard({
         borderRadius: 18,
       }}
     />
-  );
+  ) : null; // faulted URL: the card still reads, it just isn't a dead link
 
   // No photograph (or the house hotlink-blocked it) → the card renders as a
   // COMPACT ROW: no image well, title/maker/est/signal in ~72px. Photographed
@@ -338,7 +344,7 @@ function LotCard({
         )}
         <span className="ray-lot-est" style={{ display: 'block' }}>{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
         {isUpcoming && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
-          <span className="ray-lot-bidvel" title={`${lot.bidVelocity.delta} bids added in the last ${Math.round(lot.bidVelocity.hours)}h`}>+{lot.bidVelocity.delta} bids · {Math.round(lot.bidVelocity.hours)}h</span>
+          <span className="ray-lot-bidvel" title={`${lot.bidVelocity.delta} ${lot.bidVelocity.delta === 1 ? 'bid' : 'bids'} added in the last ${Math.round(lot.bidVelocity.hours)}h`}>+{lot.bidVelocity.delta} {lot.bidVelocity.delta === 1 ? 'bid' : 'bids'} · {Math.round(lot.bidVelocity.hours)}h</span>
         )}
       </div>
       {onToggleSave && (
@@ -406,7 +412,11 @@ function LotCard({
         </div>
         {lot.imageUrl && (
           <img
-            src={httpsImg(lot.imageUrl)}
+            // .ray-lot-img is a full-bleed 200 px-tall well in a ~290–420 px
+            // grid column (140 px tall on mobile). object-fit: cover on a
+            // square master needs the COLUMN width, so 640 ≈ 2× the widest
+            // real column — not a thumbnail size.
+            src={sizedImg(httpsImg(lot.imageUrl), 640)}
             alt={lot.title}
             // the grid mounts 48 cards a page — lazy-load so below-fold house
             // photography doesn't race the phase-2 data stream at first paint
@@ -592,7 +602,7 @@ function LotCard({
           )}
           <span className="ray-lot-est">{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
           {isUpcoming && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
-            <span className="ray-lot-bidvel" title={`${lot.bidVelocity.delta} bids added in the last ${Math.round(lot.bidVelocity.hours)}h`}>+{lot.bidVelocity.delta} bids · {Math.round(lot.bidVelocity.hours)}h</span>
+            <span className="ray-lot-bidvel" title={`${lot.bidVelocity.delta} ${lot.bidVelocity.delta === 1 ? 'bid' : 'bids'} added in the last ${Math.round(lot.bidVelocity.hours)}h`}>+{lot.bidVelocity.delta} {lot.bidVelocity.delta === 1 ? 'bid' : 'bids'} · {Math.round(lot.bidVelocity.hours)}h</span>
           )}
         </div>
 

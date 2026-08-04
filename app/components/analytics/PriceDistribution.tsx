@@ -42,7 +42,11 @@ function DistributionTooltip({ active, payload }: { active?: boolean; payload?: 
   );
 }
 
-export default function PriceDistribution({ allLots, buckets: preBuckets, embedded = false }: Props & { buckets?: { label: string; count: number; totalValue: number }[]; embedded?: boolean }) {
+/**
+ * Rendered embedded inside the Distributions band only (its tab row supplies
+ * the section frame and header) — mirrors SportBreakdown's card-only shape.
+ */
+export default function PriceDistribution({ allLots, buckets: preBuckets }: Props & { buckets?: { label: string; count: number; totalValue: number }[] }) {
   const buckets = useMemo(() => {
     // build-time histogram over the FULL corpus when available — the loaded
     // `allLots` is a sample and distorts the shape (esp. the $500K+ tail).
@@ -61,9 +65,7 @@ export default function PriceDistribution({ allLots, buckets: preBuckets, embedd
   const hasData = buckets.some(b => b.count > 0);
   if (!hasData) return null;
 
-  // the chart card itself — reused verbatim by the embedded (Distributions
-  // tab) rendering, which supplies its own section frame and header
-  const card = (
+  return (
     <>
       <style>{`
         .ray-price-dist-chart { height: 280px; }
@@ -99,31 +101,5 @@ export default function PriceDistribution({ allLots, buckets: preBuckets, embedd
         </div>
       </div>
     </>
-  );
-
-  if (embedded) return card;
-
-  return (
-    <section className="ray-price-dist rail">
-      <style>{`
-        .ray-price-dist { padding-block: 40px 48px; }
-        @media (max-width: 768px) {
-          .ray-price-dist { padding-block: 32px 32px; }
-        }
-      `}</style>
-
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
-          fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-        }}>
-          Price <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
-        </h2>
-      </div>
-
-      {card}
-    </section>
   );
 }

@@ -35,6 +35,11 @@ env:
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    # this monolith deploys too — share the ONE production-deploy lane with
+    # deploy.yml and nightly.yml's deploy job (queue, never cancel).
+    concurrency:
+      group: deploy-collectr
+      cancel-in-progress: false
     # the crawl grew ~4x (Goldin sports cards + culture backlog → 455k corpus)
     # and now does pull→crawl→rebuild→push→sync→build→deploy in one job. It was
     # silently hitting the old 45min cap (a nightly ran 45m22s then got KILLED,

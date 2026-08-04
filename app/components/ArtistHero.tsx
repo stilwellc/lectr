@@ -10,6 +10,7 @@ import RecordBand from './RecordBand';
 import RecordPlate, { type PlateSale } from './RecordPlate';
 import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
+import { useRayData } from '../hooks/useRayData';
 import MethodologyNote from './MethodologyNote';
 import ArtistAvatar from './ArtistAvatar';
 import DeskNote from './analytics/DeskNote';
@@ -202,6 +203,16 @@ export default function ArtistHero({
     return lots.find(l => l.status === 'sold' && l.priceUsd === stats.recordPrice && l.imageUrl) || null;
   }, [lots, stats]);
 
+  // CLS: stats.recordPrice rides phase 1, but the record LOT (and so its photo)
+  // only resolves once the phase-2 corpus lands — so the plate first painted
+  // certificate-only and then grew by the image well's 190px + 12px margin when
+  // the photo arrived. Measured 0.346 on /makers/kaws (C3 baseline 0.222), the
+  // shift landing ~1.4s in. Hold the well's space while phase 2 could still
+  // deliver it, and stop holding once fullLoaded proves it never will — a record
+  // with genuinely no photo must not sit above a permanently empty frame.
+  const { fullLoaded } = useRayData();
+  const recordImagePending = !!stats?.recordPrice && !recordLot && !fullLoaded;
+
   // #33 — the ROTATING VITRINE deck: the top-3 realized sales the loaded lots
   // carry, record first. Built from the loaded set (honest to what's on the
   // page), then the authoritative record from stats.json is spliced in at the
@@ -261,12 +272,20 @@ export default function ArtistHero({
             <div className="ray-hero2-value" style={heroNumStyle}>{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</div>
           ) : (
             <div className="ray-hero2-value" style={heroNumStyle}>
+              {/* Distinct keys per QUANTITY: the three branches sit at the same
+                  tree position, so without keys React reuses one CountUp
+                  instance across a branch switch — and CountUp eases from the
+                  value on screen. When phase-2 flips the hero from the record
+                  price to the demand %, that eased $31M → +28% as a fabricated
+                  "+31,186,000%" sweep. A key change remounts, so a quantity
+                  switch sweeps honestly from 0 (reduced motion still paints
+                  the final figure directly). */}
               {series.length && fresh
-                ? <CountUp animate={anim} to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
+                ? <CountUp key={bidMarket ? 'hero-median' : 'hero-demand'} animate={anim} to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
                 : typicalSale !== null
-                  ? <CountUp animate={anim} to={typicalSale} format={formatPrice} duration={1000} />
+                  ? <CountUp key="hero-typical" animate={anim} to={typicalSale} format={formatPrice} duration={1000} />
                   : stats?.recordPrice
-                    ? <CountUp animate={anim} to={stats.recordPrice} format={formatPrice} duration={1000} />
+                    ? <CountUp key="hero-record" animate={anim} to={stats.recordPrice} format={formatPrice} duration={1000} />
                     : '—'}
             </div>
           )}
@@ -317,6 +336,7 @@ export default function ArtistHero({
             imageUrl={recordLot?.imageUrl || null}
             href={recordLot ? `/lot?id=${encodeURIComponent(recordLot.id)}` : null}
             sales={topSales.length >= 2 ? topSales : undefined}
+            imagePending={recordImagePending}
           />
         ) : null}
       </div>

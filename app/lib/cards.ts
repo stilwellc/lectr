@@ -84,7 +84,12 @@ export function parseCard(title: string): CardId {
   // set: the words between the year and the #cardNo (insert/parallel included —
   // deliberately: "Topps Finest Mystery Borderless" IS the market identity)
   if (out.year && no) {
-    const afterYear = noParens.slice(noParens.indexOf(out.year.slice(-2)) + 2);
+    // slice off the ^-anchored matched year prefix by LENGTH — indexOf on the
+    // year's last two digits landed inside the year itself whenever they
+    // repeat its start ("2020 Panini Prizm" → setName "20 Panini Prizm",
+    // "2000 Bowman" → "0 Bowman"), corrupting every 2020-set identity.
+    const yrRaw = y4 ? y4[0] : y2 ? y2[0] : '';
+    const afterYear = noParens.slice(yrRaw.length);
     const uptoNo = afterYear.slice(0, afterYear.indexOf('#'));
     const set = uptoNo.replace(/\s+/g, ' ').trim();
     if (set && set.length <= 70) out.setName = set;

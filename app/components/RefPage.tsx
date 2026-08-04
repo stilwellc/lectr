@@ -6,7 +6,7 @@
  * book): sample size, medians, the yearly monoline, and the recent sales as
  * ledger rows. The page a bidder reads before trusting an estimate.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
 import ArtistNav from './ArtistNav';
 import { LOTPAGE_CSS } from './LotPage';
@@ -14,38 +14,15 @@ import { Colophon } from './Terminal';
 import Flick from './Flick';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
+// the shared refs fetch (module-cached, one pull per session) — the same hook
+// the watch maker dossier's RefLedger mounts, so /ref and /makers/<watch>
+// never fetch refs.json twice
+import { useRefs, type RefEntry } from '../hooks/useRefs';
 import { ARTIST_LABEL } from '../constants';
-import { formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel } from '../utils';
+import { formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
+import PlateImg from './PlateImg';
 
-export interface RefEntry {
-  key: string; maker: string; ref: string; n: number;
-  medianUsd: number; ttmMedianUsd: number | null; beatHighPct: number | null;
-  houses: string[];
-  yearly: { y: number; med: number; n: number }[];
-  recent: { id: string; d: string; h: string; p: number; t: string; img: string | null }[];
-}
-
-// module cache — one fetch per session, shared across ref pages. The failure
-// flag is NOT part of the cache contract: it clears on the next mount so one
-// flaky fetch never bricks every /ref page for the whole session.
-let refsCache: RefEntry[] | null = null;
-let refsFailed = false;
-function useRefs(): { refs: RefEntry[] | null; failed: boolean } {
-  // fresh mounts start un-failed (the effect below retries the fetch) — a
-  // stale module flag must not paint the error state before the retry runs
-  const [state, setState] = useState<{ refs: RefEntry[] | null; failed: boolean }>({ refs: refsCache, failed: false });
-  useEffect(() => {
-    if (refsCache) return;
-    refsFailed = false; // retry on every fresh mount — never a permanent latch
-    let dead = false;
-    fetch('/data/ray/refs.json')
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then(j => { refsCache = j.refs || []; if (!dead) setState({ refs: refsCache, failed: false }); })
-      .catch(() => { refsFailed = true; if (!dead) setState({ refs: null, failed: true }); });
-    return () => { dead = true; };
-  }, []);
-  return state;
-}
+export type { RefEntry };
 
 /** The yearly median as a plain monoline — the numeral IS the line. */
 function RefLine({ yearly }: { yearly: RefEntry['yearly'] }) {
@@ -92,7 +69,11 @@ export default function RefPage({ refKey }: { refKey: string }) {
     return (
       <>
         {nav}
-        <div className="rail" style={{ paddingBlock: 80, textAlign: 'center' }}>
+        {/* while refs.json loads, fill the viewport so the colophon never
+            paints on screen and then gets shoved down by the dossier (CLS).
+            Only the loading branch reserves it — the "not in the book" and
+            failure copy is the final layout and needs no hold. */}
+        <div className="rail" style={{ paddingBlock: 80, textAlign: 'center', minHeight: refs === null && !failed ? '100dvh' : undefined, boxSizing: 'border-box' }}>
           {refs === null && !failed ? (
             <p style={{ color: 'var(--color-text-faint)', fontSize: 14 }}>Loading the reference book&hellip;</p>
           ) : (
@@ -175,7 +156,14 @@ export default function RefPage({ refKey }: { refKey: string }) {
               <Link key={s.id} href={`/lot?id=${encodeURIComponent(s.id)}`} className="lectr-lot-comp">
                 <span className="lectr-lot-comp-thumb" aria-hidden>
                   <span>{(s.t || '?').charAt(0)}</span>
-                  {s.img && <img src={s.img.replace(/^http:/, 'https:')} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => e.currentTarget.remove()} />}
+                  {/* .lectr-lot-comp-thumb is a 40×40 well (LotPage CSS) —
+                      ask the resizer for 160 rather than hauling the 2880 px
+                      master into an avatar (measured 672 KB → ~4 KB each) */}
+                  {/* PlateImg, not a bare <img>: an ORB-blocked host (christies)
+                      fires no error event, so the old onError-only fallback left
+                      a dead opaque box over the monogram. Same well, same fix as
+                      the LotPage/modal comp rows. */}
+                  {s.img && <PlateImg src={sizedImg(httpsImg(s.img)!, 160)} alt="" loading="lazy" referrerPolicy="no-referrer" />}
                 </span>
                 <span className="lectr-lot-comp-t">
                   <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(s.t)}</span>

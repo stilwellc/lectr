@@ -4,9 +4,9 @@
  * the 25MB shards. Runs at the end of the nightly crawl.
  *
  * The table is a QUERY LAYER, not the source of truth — the R2 corpus is.
- * Rows are upserted, never deleted: lots that roll off the tape keep their
- * row, so old permalinks outlive the crawl window (the `data` column holds
- * the full slim client lot; `updated_at` shows how stale it is).
+ * Rows are upserted each run, then a sweep deletes what wasn't refreshed so
+ * the table mirrors the current live book (the `data` column holds the full
+ * slim client lot; `updated_at` shows how stale it is).
  *
  * Needs SUPABASE_URL + SUPABASE_SERVICE_KEY (skips silently without them —
  * the site works fine off the shards alone).
@@ -70,6 +70,29 @@ async function main() {
     if (done % 5000 < CHUNK) console.log(`[sync-lots] ${done}/${rows.length}`);
   }
   console.log(`[sync-lots] upserted ${done} upcoming lots into public.lots`);
+
+  // SWEEP GUARD: a hollow run — zero upcoming, or a live book that halved
+  // overnight — is a crawler/corpus failure, not a market fact; sweeping on it
+  // would delete the entire table. Compare against the current row count (one
+  // HEAD with count=exact) and skip ONLY the sweep: the upserts above stand,
+  // and anything genuinely gone is swept by the next healthy run.
+  if (rows.length === 0) {
+    console.error('[sync-lots] SWEEP REFUSED: 0 upcoming rows this run — refusing to empty public.lots; upserts stand');
+    return;
+  }
+  const head = await fetch(`${url}/rest/v1/lots?select=id`, {
+    method: 'HEAD',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'count=exact' },
+  });
+  const tableCount = head.ok ? Number((head.headers.get('content-range') || '').split('/')[1]) : NaN;
+  if (!Number.isFinite(tableCount)) {
+    console.error(`[sync-lots] SWEEP REFUSED: could not count public.lots (${head.status}) — skipping the sweep; upserts stand`);
+    return;
+  }
+  if (rows.length < tableCount * 0.5) {
+    console.error(`[sync-lots] SWEEP REFUSED: ${rows.length} rows this run vs ${tableCount} in the table (<50%) — skipping the sweep; upserts stand`);
+    return;
+  }
 
   // SWEEP: delete every row not refreshed this run — i.e. lots that are no
   // longer upcoming (they sold / were withdrawn). This keeps `lots` == the

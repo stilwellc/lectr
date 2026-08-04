@@ -313,26 +313,60 @@ export default function TerminalHomePage() {
   // THE MODAL JOINS HISTORY (audit-navbugs defect 1): opening a lot pushes a
   // history entry, so the browser Back (and the mobile back-gesture) CLOSES
   // the lot instead of throwing the reader off the page. Closing via the X
-  // pops the entry we pushed, keeping history clean. State flag 'lectrLot'
-  // marks our entry; the popstate listener closes on any pop while open.
-  const modalPushed = useRef(false);
+  // pops the entry we pushed — but ONLY while that entry is still the live
+  // one: a market switch while the modal is open pushStates the new path ON
+  // TOP of ours, and a blind history.back() would then step into the stale
+  // modal entry and revert the URL/market under the reader (B3 finding 1).
+  // Each entry we push carries a monotonically increasing token in
+  // state.lectrLot, so we always know whose entry we're standing on.
+  const modalToken = useRef<number | null>(null); // token of the open modal's own entry
+  const tokenSeq = useRef(0);
+  const pendingClose = useRef(false);             // our history.back() is in flight
+  const reopenAfterPop = useRef(false);           // a modal reopened during that flight
   const setTableLot = useCallback((lot: AuctionLot | null) => {
     if (lot) {
-      if (!modalPushed.current) {
-        try { window.history.pushState({ ...window.history.state, lectrLot: true }, ''); modalPushed.current = true; } catch { /* ignore */ }
+      if (pendingClose.current) {
+        // rapid close → reopen: the close's back() hasn't landed yet. Don't
+        // push now — the pending pop would eat the fresh entry and self-close
+        // the new modal (B3 finding 2). onPop re-pushes once it lands.
+        reopenAfterPop.current = true;
+      } else if (modalToken.current == null) {
+        const t = ++tokenSeq.current;
+        try { window.history.pushState({ ...window.history.state, lectrLot: t }, ''); modalToken.current = t; } catch { /* ignore */ }
       }
       setTableLotRaw(lot);
     } else {
-      if (modalPushed.current) {
-        modalPushed.current = false;
-        try { window.history.back(); } catch { /* ignore */ }
-      }
+      const t = modalToken.current;
+      modalToken.current = null;
+      reopenAfterPop.current = false;
       setTableLotRaw(null);
+      // pop our entry only if it's still the top of the stack — otherwise
+      // leave history alone (closing must never navigate to a stale entry).
+      if (t != null && window.history.state?.lectrLot === t) {
+        pendingClose.current = true;
+        try { window.history.back(); } catch { pendingClose.current = false; }
+      }
     }
   }, []);
   useEffect(() => {
-    const onPop = () => {
-      if (modalPushed.current) { modalPushed.current = false; setTableLotRaw(null); }
+    const onPop = (e: PopStateEvent) => {
+      if (pendingClose.current) {
+        // our own close-pop landing — never treat it as a user Back
+        pendingClose.current = false;
+        if (reopenAfterPop.current) {
+          reopenAfterPop.current = false;
+          const t = ++tokenSeq.current;
+          try { window.history.pushState({ ...window.history.state, lectrLot: t }, ''); modalToken.current = t; } catch { /* ignore */ }
+        }
+        return;
+      }
+      // a user Back/Forward: close the modal unless the destination IS the
+      // open modal's own entry (e.g. Back from a market switch made over it)
+      const dest = (e.state as { lectrLot?: number } | null)?.lectrLot;
+      if (modalToken.current != null && dest !== modalToken.current) {
+        modalToken.current = null;
+        setTableLotRaw(null);
+      }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -781,13 +815,14 @@ export default function TerminalHomePage() {
                           const sig = lotSignal(lot, marketLots);
                           const dth = daysToHammer(lot, localToday());
                           return (
+                            // the whole row stays clickable as a POINTER
+                            // convenience; the accessible open-modal control is
+                            // the real button on the title cell (a tr with
+                            // role="button" erased the nested maker link + save
+                            // button for AT and ignored Space — B3 finding 6)
                             <tr
                               key={lot.id}
                               onClick={() => setTableLot(lot)}
-                              onKeyDown={e => { if (e.key === 'Enter') setTableLot(lot); }}
-                              tabIndex={0}
-                              role="button"
-                              aria-label={`Comps for ${craftTitle(lot.title)}`}
                               style={{ cursor: 'pointer' }}
                             >
                               <td style={{ width: 56 }}>
@@ -816,7 +851,17 @@ export default function TerminalHomePage() {
                                 >
                                   {ARTIST_LABEL[lot.artist] || lot.artist}
                                 </Link>
-                                <div className="t-title">{craftTitle(lot.title)}</div>
+                                {/* a REAL button (Enter + Space for free), row
+                                    semantics intact for AT */}
+                                <button
+                                  type="button"
+                                  className="t-title"
+                                  onClick={e => { e.stopPropagation(); setTableLot(lot); }}
+                                  aria-label={`Comps for ${craftTitle(lot.title)}`}
+                                  style={{ display: 'block', width: '100%', background: 'none', border: 0, padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+                                >
+                                  {craftTitle(lot.title)}
+                                </button>
                               </td>
                               <td>{lot.auctionHouse}</td>
                               <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
@@ -949,6 +994,20 @@ export default function TerminalHomePage() {
             <section className={styles.roomPaper}>
             <div className={styles.roomInner}>
             <div className={styles.slipRoom}>
+            {/* CLS: the settlement slip below needs the phase-2 corpus, which
+                Phase2Sentinel deliberately defers until the reader approaches
+                (it is a ~28MB fetch). So the slip mounts mid-scroll and its
+                287px pushes everything under it — measured 0.27–0.52 on home,
+                the site's worst vital, and the shift the footer was wrongly
+                blamed for. Hold the room open while that fetch is in flight so
+                the slip lands in space already reserved. `:empty` collapses
+                .slipRoom, so this placeholder is what keeps it open; it yields
+                the moment real content exists. Only while phase 2 is pending —
+                a market that resolves to no sold rows keeps its natural
+                collapse rather than a permanent gap. */}
+            {!ray.fullLoaded && sold.length === 0 && recentRows.length === 0 && (
+              <div aria-hidden className={styles.slipHold} />
+            )}
             {isSportsScience ? (
               recentRows.length > 0 && (
                 <div className={styles.recordBandWrap}>
@@ -1008,12 +1067,24 @@ export default function TerminalHomePage() {
             </section>
           </div>
 
-          {/* ══ THE COLOPHON — full route map (nav/SEO) ══ */}
-          <Colophon
-            record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct } : null}
-          />
         </RayEntrance>
       )}
+
+      {/* ══ THE COLOPHON — full route map (nav/SEO) ══
+          Rendered OUTSIDE the loading gate, deliberately. It used to live in
+          the loaded branch, with app/components/Footer.tsx standing in during
+          phase 1 so the prerendered HTML still carried internal links (C4
+          PRE-GA-5). But that made the two swap: when phase 1 resolved, the
+          stand-in unmounted (407px -> 0) as this one mounted, and a reader
+          already scrolled to the bottom ate a 0.27-0.51 layout shift — home's
+          worst vital, measured by node attribution to FOOTER.ray-close.
+          Rendering one Colophon unconditionally satisfies BOTH goals: it is in
+          the prerendered HTML (links crawlable) and it never unmounts. `record`
+          simply fills in when the backtest lands — one line of text, not a
+          whole footer. /makers already resolved it this way. */}
+      <Colophon
+        record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct } : null}
+      />
     </div>
     </>
   );

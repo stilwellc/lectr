@@ -325,7 +325,19 @@ function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLo
   return (
     <button type="button" className={styles.engineHero} onClick={() => onOpen?.(lot)}>
       <span className={styles.ehImg}>
-        {lot.imageUrl && <img src={httpsImg(lot.imageUrl)} alt="" loading="lazy" />}
+        {/* the maker's monogram holds the mat — a dead image hides itself and
+            leaves the letter (the feed thumb's exact fallback grammar) */}
+        <span className={styles.ehMonogram} aria-hidden>{(lot.title || '?').charAt(0)}</span>
+        {lot.imageUrl && (
+          <img
+            src={httpsImg(lot.imageUrl)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
       </span>
       <span className={styles.ehRead}>
         <span className={styles.ehTopRow}>
@@ -499,15 +511,48 @@ export default function SubMarketBoard({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [openRead]);
+  // Focus discipline (ComparableModal's pattern, B3 finding 7): move focus to
+  // the close button on open, trap Tab inside the card, restore the invoking
+  // element's focus on close — aria-modal otherwise strands AT focus behind
+  // the overlay.
+  const readOpen = !!openRead;
+  const readCardRef = useRef<HTMLDivElement>(null);
+  const readCloseRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!readOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    readCloseRef.current?.focus();
+    const trapTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !readCardRef.current) return;
+      const focusables = Array.from(
+        readCardRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && readCardRef.current.contains(active);
+      if (e.shiftKey) {
+        if (active === first || !inside) { e.preventDefault(); last.focus(); }
+      } else if (active === last || !inside) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', trapTab);
+    return () => { window.removeEventListener('keydown', trapTab); previouslyFocused?.focus(); };
+  }, [readOpen]);
 
   /* ════ ROOM A — Plate & Tape (the home's paper room) ════ */
   if (paper) {
     if (!rows.length) return null;
     // mobile collapses further: only the certified indices until expanded —
-    // the demand reads join on "Show more" (less scroll, same data one tap away)
+    // the demand reads join on "Show more" (less scroll, same data one tap away).
+    // Markets with NO certified index (culture, science are all descriptive)
+    // fall back to the capped list — never an empty tape over a "Show more".
     const capped = rows.slice(0, CAP);
+    const mobileRows = capped.filter((r) => r.readType === 'index');
     const shown = expanded ? rows
-      : variant === 'mobile' ? capped.filter((r) => r.readType === 'index')
+      : variant === 'mobile' && mobileRows.length > 0 ? mobileRows
       : capped;
     return (
       <LazyMotion features={domAnimation} strict>
@@ -537,10 +582,15 @@ export default function SubMarketBoard({
           )}
 
           {/* ── 02 · THE MARKETS — the tape IS the story; tap a row for the
-              full instrument in a pop-up read card ── */}
-          <Chapter no="02" label="The markets" />
+              full instrument in a pop-up read card. Chapters renumber when
+              the engine has no call to showcase (no orphaned "02" after a
+              missing "01"). ── */}
+          <Chapter no={hero ? '02' : '01'} label="The markets" />
           <p className={styles.chapterSub}>
-            {fmtInt(rows.length)} sub-markets — cards by era and sport, watch model families, art and design kinds — each read at the strength its data supports:{' '}
+            {/* the cross-market enumeration is true only at full scope — a
+                scoped lander (culture: 17 sub-markets) must not claim cards
+                and watch families it doesn't show */}
+            {fmtInt(rows.length)} sub-markets{activeKey === 'all' ? ' — cards by era and sport, watch model families, art and design kinds —' : ','} each read at the strength its data supports:{' '}
             <svg className={styles.legendGlyph} viewBox="0 0 34 12" aria-label="confidence-range glyph">
               <line x1="3" y1="6" x2="31" y2="6" /><line x1="3" y1="2.5" x2="3" y2="9.5" /><line x1="31" y1="2.5" x2="31" y2="9.5" />
               <path d="M20 2.8 L23.2 6 L20 9.2 L16.8 6 Z" className={styles.legendFill} />
@@ -598,6 +648,7 @@ export default function SubMarketBoard({
                 aria-label={`${openRead.label} — the full read`}
               >
                 <m.div
+                  ref={readCardRef}
                   className={styles.readPopCard}
                   initial={reduce ? false : { opacity: 0, y: 14, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -607,7 +658,7 @@ export default function SubMarketBoard({
                 >
                   <div className={styles.readPopHead}>
                     <span className={styles.readPopTitle}>{openRead.label}</span>
-                    <button type="button" className={styles.readPopClose} onClick={() => setOpenRead(null)} aria-label="Close">×</button>
+                    <button ref={readCloseRef} type="button" className={styles.readPopClose} onClick={() => setOpenRead(null)} aria-label="Close">×</button>
                   </div>
                   <Monument r={openRead} play={!reduce} />
                   {/* every drill row has a /sub dossier — the full instrument,
@@ -627,7 +678,7 @@ export default function SubMarketBoard({
           {/* ── 03 · THE RECEIPT — the backtest, printed ── */}
           {receipts && receipts.n > 500 && (
             <div ref={receiptsRef}>
-              <Chapter no="03" label="The receipt" />
+              <Chapter no={hero ? '03' : '02'} label="The receipt" />
               <ValueReceipt r={receipts} play={receiptsSeen && !reduce} />
             </div>
           )}

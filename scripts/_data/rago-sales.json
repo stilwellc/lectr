@@ -1,0 +1,781 @@
+{
+ "_provenance": "Generated 2026-08-04 by probe-classification of every wright20.com sale in the corpus. Each sale's lot page was fetched on BOTH hosts; a sale counts as Rago only when the lot 200s on ragoarts.com with a matching canonical link + '<lotNumber>:' meta title, and 404s on wright20.com. 103 of 129 confirmed with two distinct lots; the remaining 26 corroborated by the sale-index page (200 on ragoarts, 404 on wright20). Zero ambiguous, zero soft-404s, zero redirects across ~1460 requests.",
+ "_rootCause": "Wright's API returns a per-ITEM house field, which split single auction sessions across the Wright/Rago brands. House must be resolved per-SESSION. The crawler now does this; these rows predate the fix and are never re-crawled.",
+ "_rows": 1962,
+ "sales": [
+  {
+   "y": "2016",
+   "m": "11",
+   "slug": "post-war-contemporary-art",
+   "rows": 11
+  },
+  {
+   "y": "2017",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 39
+  },
+  {
+   "y": "2017",
+   "m": "05",
+   "slug": "post-war-contemporary-art",
+   "rows": 34
+  },
+  {
+   "y": "2017",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 43
+  },
+  {
+   "y": "2017",
+   "m": "09",
+   "slug": "the-hudson-years-the-collection-of-mark-mcdonald",
+   "rows": 13
+  },
+  {
+   "y": "2017",
+   "m": "11",
+   "slug": "post-war-contemporary-art",
+   "rows": 20
+  },
+  {
+   "y": "2017",
+   "m": "11",
+   "slug": "property-from-the-collection-of-an-important-american-corporation",
+   "rows": 3
+  },
+  {
+   "y": "2018",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 51
+  },
+  {
+   "y": "2018",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 58
+  },
+  {
+   "y": "2018",
+   "m": "05",
+   "slug": "post-war-contemporary-art",
+   "rows": 19
+  },
+  {
+   "y": "2018",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 45
+  },
+  {
+   "y": "2018",
+   "m": "11",
+   "slug": "post-war-contemporary-art",
+   "rows": 20
+  },
+  {
+   "y": "2019",
+   "m": "01",
+   "slug": "lost-city-arts-36-years-of-collecting",
+   "rows": 6
+  },
+  {
+   "y": "2019",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 45
+  },
+  {
+   "y": "2019",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 38
+  },
+  {
+   "y": "2019",
+   "m": "05",
+   "slug": "post-war-contemporary-art",
+   "rows": 15
+  },
+  {
+   "y": "2019",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 38
+  },
+  {
+   "y": "2019",
+   "m": "11",
+   "slug": "masterworks-of-american-craft",
+   "rows": 3
+  },
+  {
+   "y": "2019",
+   "m": "11",
+   "slug": "post-war-contemporary-art",
+   "rows": 13
+  },
+  {
+   "y": "2020",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 36
+  },
+  {
+   "y": "2020",
+   "m": "02",
+   "slug": "prints-multiples",
+   "rows": 12
+  },
+  {
+   "y": "2020",
+   "m": "03",
+   "slug": "20-21-art",
+   "rows": 1
+  },
+  {
+   "y": "2020",
+   "m": "03",
+   "slug": "living-contemporary",
+   "rows": 11
+  },
+  {
+   "y": "2020",
+   "m": "05",
+   "slug": "20-21-art",
+   "rows": 3
+  },
+  {
+   "y": "2020",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 28
+  },
+  {
+   "y": "2020",
+   "m": "06",
+   "slug": "post-war-contemporary-art",
+   "rows": 4
+  },
+  {
+   "y": "2020",
+   "m": "07",
+   "slug": "living-contemporary",
+   "rows": 2
+  },
+  {
+   "y": "2020",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 44
+  },
+  {
+   "y": "2020",
+   "m": "10",
+   "slug": "20-21-art",
+   "rows": 2
+  },
+  {
+   "y": "2020",
+   "m": "11",
+   "slug": "object-home-day-2",
+   "rows": 6
+  },
+  {
+   "y": "2020",
+   "m": "11",
+   "slug": "post-war-contemporary-art",
+   "rows": 2
+  },
+  {
+   "y": "2020",
+   "m": "11",
+   "slug": "prints-multiples",
+   "rows": 11
+  },
+  {
+   "y": "2020",
+   "m": "12",
+   "slug": "luxury",
+   "rows": 1
+  },
+  {
+   "y": "2021",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 44
+  },
+  {
+   "y": "2021",
+   "m": "02",
+   "slug": "prints-multiples",
+   "rows": 17
+  },
+  {
+   "y": "2021",
+   "m": "03",
+   "slug": "20-21-art",
+   "rows": 9
+  },
+  {
+   "y": "2021",
+   "m": "03",
+   "slug": "living-contemporary",
+   "rows": 5
+  },
+  {
+   "y": "2021",
+   "m": "04",
+   "slug": "object-home",
+   "rows": 1
+  },
+  {
+   "y": "2021",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 46
+  },
+  {
+   "y": "2021",
+   "m": "06",
+   "slug": "20-21-art",
+   "rows": 10
+  },
+  {
+   "y": "2021",
+   "m": "06",
+   "slug": "prints-multiples",
+   "rows": 16
+  },
+  {
+   "y": "2021",
+   "m": "07",
+   "slug": "living-contemporary",
+   "rows": 7
+  },
+  {
+   "y": "2021",
+   "m": "07",
+   "slug": "living-contemporary-day-2",
+   "rows": 1
+  },
+  {
+   "y": "2021",
+   "m": "07",
+   "slug": "luxury",
+   "rows": 1
+  },
+  {
+   "y": "2021",
+   "m": "09",
+   "slug": "20-21-art",
+   "rows": 5
+  },
+  {
+   "y": "2021",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 44
+  },
+  {
+   "y": "2021",
+   "m": "10",
+   "slug": "living-contemporary",
+   "rows": 4
+  },
+  {
+   "y": "2021",
+   "m": "10",
+   "slug": "prints-multiples",
+   "rows": 15
+  },
+  {
+   "y": "2021",
+   "m": "12",
+   "slug": "2021-art",
+   "rows": 4
+  },
+  {
+   "y": "2022",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 49
+  },
+  {
+   "y": "2022",
+   "m": "02",
+   "slug": "prints-multiples",
+   "rows": 23
+  },
+  {
+   "y": "2022",
+   "m": "03",
+   "slug": "2021-art",
+   "rows": 9
+  },
+  {
+   "y": "2022",
+   "m": "03",
+   "slug": "living-contemporary",
+   "rows": 4
+  },
+  {
+   "y": "2022",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 43
+  },
+  {
+   "y": "2022",
+   "m": "06",
+   "slug": "2021-art",
+   "rows": 2
+  },
+  {
+   "y": "2022",
+   "m": "06",
+   "slug": "prints-multiples",
+   "rows": 22
+  },
+  {
+   "y": "2022",
+   "m": "07",
+   "slug": "living-contemporary",
+   "rows": 5
+  },
+  {
+   "y": "2022",
+   "m": "08",
+   "slug": "unreserved-day-1",
+   "rows": 11
+  },
+  {
+   "y": "2022",
+   "m": "08",
+   "slug": "unreserved-day-2",
+   "rows": 8
+  },
+  {
+   "y": "2022",
+   "m": "09",
+   "slug": "2021-art",
+   "rows": 1
+  },
+  {
+   "y": "2022",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 54
+  },
+  {
+   "y": "2022",
+   "m": "10",
+   "slug": "prints-multiples",
+   "rows": 18
+  },
+  {
+   "y": "2022",
+   "m": "11",
+   "slug": "living-contemporary",
+   "rows": 5
+  },
+  {
+   "y": "2022",
+   "m": "12",
+   "slug": "2021-art",
+   "rows": 2
+  },
+  {
+   "y": "2023",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 43
+  },
+  {
+   "y": "2023",
+   "m": "02",
+   "slug": "prints-multiples",
+   "rows": 13
+  },
+  {
+   "y": "2023",
+   "m": "03",
+   "slug": "2021-art",
+   "rows": 2
+  },
+  {
+   "y": "2023",
+   "m": "03",
+   "slug": "living-contemporary",
+   "rows": 1
+  },
+  {
+   "y": "2023",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 44
+  },
+  {
+   "y": "2023",
+   "m": "06",
+   "slug": "2021-art",
+   "rows": 1
+  },
+  {
+   "y": "2023",
+   "m": "06",
+   "slug": "prints-multiples",
+   "rows": 21
+  },
+  {
+   "y": "2023",
+   "m": "07",
+   "slug": "living-contemporary",
+   "rows": 1
+  },
+  {
+   "y": "2023",
+   "m": "08",
+   "slug": "unreserved-day-1",
+   "rows": 1
+  },
+  {
+   "y": "2023",
+   "m": "08",
+   "slug": "unreserved-day-2",
+   "rows": 1
+  },
+  {
+   "y": "2023",
+   "m": "09",
+   "slug": "2021-art",
+   "rows": 6
+  },
+  {
+   "y": "2023",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 37
+  },
+  {
+   "y": "2023",
+   "m": "10",
+   "slug": "prints-multiples",
+   "rows": 25
+  },
+  {
+   "y": "2023",
+   "m": "11",
+   "slug": "living-contemporary",
+   "rows": 6
+  },
+  {
+   "y": "2023",
+   "m": "12",
+   "slug": "2021-art",
+   "rows": 2
+  },
+  {
+   "y": "2024",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 45
+  },
+  {
+   "y": "2024",
+   "m": "02",
+   "slug": "prints-multiples",
+   "rows": 20
+  },
+  {
+   "y": "2024",
+   "m": "03",
+   "slug": "2021-art",
+   "rows": 1
+  },
+  {
+   "y": "2024",
+   "m": "03",
+   "slug": "living-contemporary",
+   "rows": 18
+  },
+  {
+   "y": "2024",
+   "m": "04",
+   "slug": "prints-unlimited",
+   "rows": 3
+  },
+  {
+   "y": "2024",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 37
+  },
+  {
+   "y": "2024",
+   "m": "06",
+   "slug": "2021-art",
+   "rows": 2
+  },
+  {
+   "y": "2024",
+   "m": "06",
+   "slug": "living-contemporary",
+   "rows": 6
+  },
+  {
+   "y": "2024",
+   "m": "06",
+   "slug": "prints-multiples",
+   "rows": 20
+  },
+  {
+   "y": "2024",
+   "m": "06",
+   "slug": "prints-unlimited",
+   "rows": 6
+  },
+  {
+   "y": "2024",
+   "m": "07",
+   "slug": "prints-unlimited",
+   "rows": 3
+  },
+  {
+   "y": "2024",
+   "m": "08",
+   "slug": "unreserved",
+   "rows": 3
+  },
+  {
+   "y": "2024",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 43
+  },
+  {
+   "y": "2024",
+   "m": "10",
+   "slug": "living-contemporary",
+   "rows": 18
+  },
+  {
+   "y": "2024",
+   "m": "10",
+   "slug": "photographs",
+   "rows": 1
+  },
+  {
+   "y": "2024",
+   "m": "10",
+   "slug": "prints-multiples",
+   "rows": 12
+  },
+  {
+   "y": "2024",
+   "m": "12",
+   "slug": "2021-art",
+   "rows": 1
+  },
+  {
+   "y": "2024",
+   "m": "12",
+   "slug": "21st-century-art-unlimited",
+   "rows": 1
+  },
+  {
+   "y": "2025",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 58
+  },
+  {
+   "y": "2025",
+   "m": "02",
+   "slug": "prints-multiples",
+   "rows": 16
+  },
+  {
+   "y": "2025",
+   "m": "03",
+   "slug": "2021-art",
+   "rows": 1
+  },
+  {
+   "y": "2025",
+   "m": "03",
+   "slug": "prints-unlimited",
+   "rows": 2
+  },
+  {
+   "y": "2025",
+   "m": "03",
+   "slug": "urban-art",
+   "rows": 3
+  },
+  {
+   "y": "2025",
+   "m": "04",
+   "slug": "craft-unlimited",
+   "rows": 1
+  },
+  {
+   "y": "2025",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 39
+  },
+  {
+   "y": "2025",
+   "m": "05",
+   "slug": "prints-unlimited",
+   "rows": 1
+  },
+  {
+   "y": "2025",
+   "m": "06",
+   "slug": "2021-art",
+   "rows": 1
+  },
+  {
+   "y": "2025",
+   "m": "06",
+   "slug": "prints-multiples",
+   "rows": 17
+  },
+  {
+   "y": "2025",
+   "m": "07",
+   "slug": "urban-art",
+   "rows": 1
+  },
+  {
+   "y": "2025",
+   "m": "08",
+   "slug": "prints-unlimited",
+   "rows": 2
+  },
+  {
+   "y": "2025",
+   "m": "09",
+   "slug": "2021-art",
+   "rows": 4
+  },
+  {
+   "y": "2025",
+   "m": "09",
+   "slug": "modern-design",
+   "rows": 48
+  },
+  {
+   "y": "2025",
+   "m": "10",
+   "slug": "prints-multiples",
+   "rows": 25
+  },
+  {
+   "y": "2025",
+   "m": "10",
+   "slug": "prints-unlimited",
+   "rows": 1
+  },
+  {
+   "y": "2025",
+   "m": "12",
+   "slug": "prints-unlimited",
+   "rows": 3
+  },
+  {
+   "y": "2026",
+   "m": "01",
+   "slug": "art-unlimited",
+   "rows": 1
+  },
+  {
+   "y": "2026",
+   "m": "01",
+   "slug": "modern-design",
+   "rows": 41
+  },
+  {
+   "y": "2026",
+   "m": "01",
+   "slug": "the-thomas-d-kraemer-collection",
+   "rows": 2
+  },
+  {
+   "y": "2026",
+   "m": "02",
+   "slug": "prints-multiples",
+   "rows": 12
+  },
+  {
+   "y": "2026",
+   "m": "03",
+   "slug": "2021-art",
+   "rows": 5
+  },
+  {
+   "y": "2026",
+   "m": "03",
+   "slug": "present-tense-ultra-contemporary-street-art",
+   "rows": 1
+  },
+  {
+   "y": "2026",
+   "m": "03",
+   "slug": "prints-unlimited",
+   "rows": 3
+  },
+  {
+   "y": "2026",
+   "m": "05",
+   "slug": "art-unlimited",
+   "rows": 1
+  },
+  {
+   "y": "2026",
+   "m": "05",
+   "slug": "modern-design",
+   "rows": 30
+  },
+  {
+   "y": "2026",
+   "m": "05",
+   "slug": "photographs",
+   "rows": 1
+  },
+  {
+   "y": "2026",
+   "m": "06",
+   "slug": "2021-art",
+   "rows": 4
+  },
+  {
+   "y": "2026",
+   "m": "06",
+   "slug": "present-tense-ultra-contemporary-street-art",
+   "rows": 7
+  },
+  {
+   "y": "2026",
+   "m": "06",
+   "slug": "prints-multiples",
+   "rows": 18
+  },
+  {
+   "y": "2026",
+   "m": "06",
+   "slug": "prints-unlimited",
+   "rows": 4
+  },
+  {
+   "y": "2026",
+   "m": "07",
+   "slug": "alt-contemporary",
+   "rows": 3
+  }
+ ]
+}

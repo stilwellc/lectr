@@ -33,7 +33,7 @@ export default function CorrectionsRegister() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="blog" />
-      <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
+      <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <div style={{ ...wrap, marginBottom: 26 }}>
           <p style={{ margin: '0 0 18px' }}>
             <Link href="/blog" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>
@@ -111,7 +111,7 @@ export default function CorrectionsRegister() {
             </p>
           </div>
         </article>
-      </main>
+      </div>
       <Colophon record={null} />
     </div>
   );

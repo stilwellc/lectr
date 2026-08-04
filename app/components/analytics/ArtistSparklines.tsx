@@ -129,8 +129,10 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
   const hasChart = displayData.length >= 2;
   // Reserve saturated up/down for STRONG movers only — tinting all 33 lines
   // green makes "up" stop meaning up (breaks one-lit-element). Calm neutral
-  // otherwise; the delta chip still carries the exact direction.
-  const strongMove = Math.abs(artist.appreciation) >= 25;
+  // otherwise; the delta chip still carries the exact direction. priceBasis
+  // makers NEVER tint: their `appreciation` is the coarse appr.-est., a
+  // descriptive figure — green/red stays reserved for measured deltas.
+  const strongMove = !artist.priceBasis && Math.abs(artist.appreciation) >= 25;
   const tint = !strongMove ? 'var(--color-text-muted)'
     : artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down)';
 
@@ -185,9 +187,12 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
             <span style={{
               fontSize: 12.5,
               fontWeight: 600,
-              color: artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down-text)',
+              // appr. est. is descriptive — plain ink, no directional glyph;
+              // only the measured demand read wears the up/down grammar
+              color: artist.priceBasis ? 'var(--color-text-muted)'
+                : artist.appreciation > 0 ? 'var(--color-up)' : 'var(--color-down-text)',
             }}>
-              <Flick size={10} style={{ marginLeft: 0, transform: artist.appreciation > 0 ? undefined : 'scaleY(-1)' }} /> {formatDemand(artist.appreciation)}
+              {!artist.priceBasis && <Flick size={10} style={{ marginLeft: 0, transform: artist.appreciation > 0 ? undefined : 'scaleY(-1)' }} />} {formatDemand(artist.appreciation)}
             </span>
           </div>
         )}

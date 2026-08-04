@@ -7,6 +7,7 @@ import type { LotCategory } from '../types';
 import { ARTIST_LABEL, marketOf } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle, overEstimatePct } from '../utils';
 import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
+import { safeHref } from '../lib/safe-href';
 import SectionMark from './SectionMark';
 
 /** Known irregular plurals the naive strip-s would mangle ("wristwatches" →
@@ -344,14 +345,18 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 borderBottom: i < shown.length - 1 ? '1px solid var(--color-border)' : 'none',
               }}
             >
-              {/* Stretched primary link — save button stays a sibling, not a descendant */}
-              <a
-                href={lot.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
-                style={{ position: 'absolute', inset: 0, zIndex: 1 }}
-              />
+              {/* Stretched primary link — save button stays a sibling, not a
+                  descendant. Scheme-allowlisted (safe-href): a faulted URL
+                  drops the overlay; the row still reads. */}
+              {safeHref(lot.url) && (
+                <a
+                  href={safeHref(lot.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`View ${lot.title} at ${lot.auctionHouse}`}
+                  style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+                />
+              )}
               <div style={{ minWidth: 0 }}>
                 {showArtist && lot.artist && (
                   <div style={{ marginBottom: 2 }}>

@@ -1,3 +1,13 @@
+# ── Security headers (site-wide) ─────────────────────────────────────────────
+# frame-ancestors 'none' blocks clickjacking overlays on the OAuth login modal;
+# X-Frame-Options is the legacy fallback for the same. HSTS pins https (the
+# site is https-only behind Cloudflare). Full CSP is deferred post-GA — the
+# static export leans on inline styles/scripts and needs a nonce strategy.
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
 # Next's static export emits the OG share card as an extensionless file
 # (/opengraph-image), which Cloudflare serves as application/octet-stream —
 # so iMessage/Twitter/Slack refuse to render it and fall back to the tiny

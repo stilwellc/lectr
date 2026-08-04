@@ -71,12 +71,19 @@ function realizedUsdOf(l: AuctionLot): number | null | undefined {
   return l.realizedUsd ?? l.priceUsd;
 }
 
-/** True when a date string is a real, parseable, non-future calendar date. */
+/** True when a date string is a real, parseable, non-future calendar date.
+    "Future" is DAY-granular, string-compared like FATAL-3: saleDate parses to
+    UTC midnight, so the old instant compare against `now` read a same-day
+    Asia-Pacific sale (locally today, dated tomorrow in UTC terms) as future
+    and aborted the whole publish until 00:00 UTC. A sold sale dated within
+    one day ahead of UTC-today is a legitimate timezone artifact, not a lie. */
 function isRealNonFutureDate(saleDate: string | null | undefined, now: number): boolean {
   if (!saleDate) return false;
-  const t = new Date(saleDate).getTime();
-  if (isNaN(t)) return false;
-  return t <= now;
+  if (isNaN(new Date(saleDate).getTime())) return false;
+  const saleStr = saleDate.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(saleStr)) return false;
+  const tomorrowStr = new Date(now + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return saleStr <= tomorrowStr;
 }
 
 /** Within-±1-unit equality for a derived *Usd view against native × fxRate.

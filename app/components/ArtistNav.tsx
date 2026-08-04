@@ -112,10 +112,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     { label: 'Value', path: '/value', active: activeSlug === 'value' },
     { label: 'Makers', path: '/makers', active: activeSlug === 'artists' },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
-    // ONE identity entry: signed in (or auth unconfigured) → My profile;
-    // signed out → the sheet's Sign in row stands alone instead.
-    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/profile', active: activeSlug === 'saved' }] : []),
     { label: 'Blog', path: '/blog', active: activeSlug === 'blog' },
+    // ONE identity entry, LAST — same order as the desktop bar: signed in (or
+    // auth unconfigured) → My profile; signed out → the sheet's Sign in row
+    // stands alone instead.
+    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/profile', active: activeSlug === 'saved' }] : []),
   ];
 
   // Shared finder pieces — the filter input and the grouped maker list — reused
@@ -132,7 +133,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       onKeyDown={e => {
         if (e.key === 'Enter') {
           const first = filteredGroups[0]?.makers[0];
-          if (query.trim() && first) navigate(`/${first.slug}`);
+          if (query.trim() && first) navigate(`/makers/${first.slug}`);
         } else if (e.key === 'ArrowDown') {
           e.preventDefault();
           dropdownRef.current
@@ -164,7 +165,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
               role="menuitem"
               className="ray-artist-dropdown-item"
               data-active={activeSlug === a.slug ? 'true' : 'false'}
-              onClick={() => navigate(`/${a.slug}`)}
+              onClick={() => navigate(`/makers/${a.slug}`)}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
               <span>{a.label}</span>
@@ -623,7 +624,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                       role="menuitem"
                       className="ray-artist-dropdown-item"
                       data-active={activeSlug === a.slug ? 'true' : 'false'}
-                      onClick={() => navigate(`/${a.slug}`)}
+                      onClick={() => navigate(`/makers/${a.slug}`)}
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                     >
                       <span>{a.label}</span>

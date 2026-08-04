@@ -43,7 +43,15 @@ export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
     const key = `${d.getUTCFullYear()} Q${q + 1}`;
     const estMid = (estLow + estHigh) / 2;
     if (estMid <= 0) continue;
-    sales.push({ t: d.getTime(), perf: l.priceUsd / estMid - 1 });
+    // HAMMER basis, matching overEstimatePct (utils.ts) and houseAccuracy
+    // (indices.ts): realized prices are premium-inclusive (~1.25×) while
+    // estimates are hammer-basis — dividing priceUsd by estMid inflated every
+    // point ~18–25pts while the chart caption said "% over estimate". Real
+    // published hammer when present (hammerUsd corpus-side, hammerPrice is
+    // the served alias), else divide the premium out.
+    const hp = l.hammerUsd ?? (l as AuctionLot & { hammerPrice?: number | null }).hammerPrice;
+    const hammer = (hp ?? 0) > 0 ? hp! : l.priceUsd / 1.25;
+    sales.push({ t: d.getTime(), perf: hammer / estMid - 1 });
     quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
   }
   const quarters = Object.keys(quarterEnd).sort();

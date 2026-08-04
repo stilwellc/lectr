@@ -62,6 +62,7 @@ export function useSavedSearches() {
     const { data, error } = await supabase
       .from('saved_searches')
       .select('id,name,query,created_at')
+      .eq('user_id', user.id)   // RLS already scopes; explicit filter is defense in depth
       .order('created_at', { ascending: false });
     // on a fetch error keep the prior list — never wipe the UI to empty
     if (!error && data) setSearches(data as SavedSearch[]);
@@ -87,6 +88,12 @@ export function useSavedSearches() {
   const remove = useCallback(async (id: string) => {
     if (!supabase) return;
     setSearches(s => s.filter(x => x.id !== id));
+    // Orphan-alert guard: this search's alert rows would outlive it, keeping
+    // the nav badge glowing with rows the inbox can no longer render — and
+    // deleting the LAST search removed the only "mark all read" path. Flip
+    // them seen first; the FK cascade (supabase/retention.sql) also removes
+    // them where applied, but this works regardless.
+    await supabase.from('alerts').update({ seen: true }).eq('search_id', id);
     await supabase.from('saved_searches').delete().eq('id', id);
   }, []);
 
@@ -105,9 +112,12 @@ export function useAlerts() {
       const { data } = await supabase
         .from('alerts')
         .select('id,search_id,lot_id,created_at,seen')
+        .eq('user_id', user.id)   // defense in depth alongside RLS
         .order('created_at', { ascending: false })
         .limit(200);
-      if (!dead) { setAlerts((data as AlertRow[]) || []); setReady(true); }
+      // on a fetch error keep the prior list — never wipe the UI to empty
+      // (same doctrine as useSavedSearches above)
+      if (!dead) { if (data) setAlerts(data as AlertRow[]); setReady(true); }
     })();
     return () => { dead = true; };
     // user?.id, not the user object — see refresh above
@@ -117,7 +127,9 @@ export function useAlerts() {
   const markAllSeen = useCallback(async () => {
     if (!supabase || !user) return;
     setAlerts(a => a.map(x => ({ ...x, seen: true })));
-    await supabase.from('alerts').update({ seen: true }).eq('seen', false);
+    // explicit user filter: RLS scopes this, but an unscoped UPDATE must
+    // never be one policy-config mistake away from flipping every user's rows
+    await supabase.from('alerts').update({ seen: true }).eq('user_id', user.id).eq('seen', false);
   }, [user]);
 
   return { alerts, ready, markAllSeen, unseen: alerts.filter(a => !a.seen).length };
@@ -134,6 +146,7 @@ export function useUnseenAlertCount(): number {
       const { count } = await supabase
         .from('alerts')
         .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)   // defense in depth alongside RLS
         .eq('seen', false);
       if (!dead) setN(count || 0);
     })();

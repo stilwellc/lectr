@@ -584,7 +584,10 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
     if (sameTitle.length >= 3) {
       // Estimate-band sanity: a real edition clears near the lot's own estimate;
       // a collision pool of different objects will sit wildly outside it.
-      const estMid = lot.estimateLow && lot.estimateHigh ? (lot.estimateLow + lot.estimateHigh) / 2 : 0;
+      // Uses the OUTER USD estMid (:533) — a local recompute from raw
+      // estimateLow/High mixed native units against the USD median, and on
+      // USD-alias-only rows evaluated to 0, skipping the guard entirely
+      // (the 'walt disney studios' ×368 false-edition class).
       const m = median(sameTitle.map(l => l.priceUsd!).slice().sort((a, b) => a - b));
       if (!estMid || (m <= estMid * 5 && m >= estMid / 5)) { pool = sameTitle; kind = 'edition'; }
     }

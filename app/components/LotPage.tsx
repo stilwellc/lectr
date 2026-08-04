@@ -8,12 +8,16 @@ import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
 import { useFullLots, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { formatDate, formatPrice, craftTitle, httpsImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
+import { useRefs } from '../hooks/useRefs';
+import { safeHref } from '../lib/safe-href';
+import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
 import Flick from './Flick';
+// hotlinked photo that unmounts on failure so the monogram plate under it shows
+import PlateImg from './PlateImg';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the certificate language: the
@@ -90,7 +94,6 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-comp-meta{font-size:11.5px;color:var(--color-text-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lectr-lot-comp-p{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);flex-shrink:0}
 .lectr-lot-quiet{padding:34px 0;text-align:center;color:var(--color-text-faint);font-size:13px}
-.lectr-lot-skel{border-top:1px solid var(--hairline);height:0}
 .lectr-lot-skel-block{background:var(--color-bg-elevated);border-radius:4px}
 @media (prefers-reduced-motion: no-preference){
   .lectr-lot-skel-block{animation:lectrLotPulse 1.4s ease-in-out infinite}
@@ -204,6 +207,34 @@ function ArchiveProbe({ onState }: {
     onState({ soldArchive, archiveLoaded, archiveError });
   }, [soldArchive, archiveLoaded, archiveError, onState]);
   return null;
+}
+
+/** The reference certificate row — the /ref dossier link renders ONLY when
+    refs.json proves the page exists (dynamicParams=false: every ungated link
+    is a potential 404 — A2-3 measured 3/3 watch lots dead). Isolated as a
+    child so only watch lots with a reference pay the lazy refs.json fetch
+    (useRefs is module-cached; the maker dossier already shares it). While
+    refs are unloaded or failed, the row prints the plain label — never a
+    maybe-404 link. */
+function ReferenceRow({ maker, reference }: { maker: string; reference: string }) {
+  const { refs } = useRefs();
+  const exists = useMemo(
+    // the static page's own truth condition: a refs.json row whose encoded
+    // path equals this reference's encoded path (ref-path codec, both sides)
+    () => !!refs && refs.some(r => r.maker === maker && encodeRefPath(r.ref) === encodeRefPath(reference)),
+    [refs, maker, reference],
+  );
+  return (
+    <LeaderRow k="Reference">
+      {exists ? (
+        <Link href={`/ref/${maker}/${encodeRefPath(reference)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+          {refLabel(reference)} <Flick size={10} style={{ marginLeft: 2 }} />
+        </Link>
+      ) : (
+        refLabel(reference)
+      )}
+    </LeaderRow>
+  );
 }
 
 /** The loading state — a certificate-shaped skeleton, no spinners. Also the
@@ -357,7 +388,11 @@ export default function LotPage({ lotId, initialLot }: {
       // exact doctrine).
       if (ev.signal.label.startsWith('at')) return null;
       const byId = new Map(allLots.map(l => [l.id, l]));
-      const pool = (ev.poolIds || []).map(id => byId.get(id)).filter((x): x is AuctionLot => !!x);
+      // sold-with-price only (ComparableModal's exact guard): a pool id
+      // resolving to a relisted/faulted lot must never feed a price read
+      const pool = (ev.poolIds || [])
+        .map(id => byId.get(id))
+        .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
       if (pool.length) return { pool, n: ev.n || pool.length, med: ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
     }
     const read = signalWithPool(lot, allLots);
@@ -470,6 +505,13 @@ export default function LotPage({ lotId, initialLot }: {
     || (called?.form && (FORM_LABEL as Record<string, string>)[called.form])
     || 'sales';
   const compsPending = !band && !called && !fullLoaded && !fullError;
+  // D2 P1 — ComparableModal's isCardComp suppression, mirrored: a card-comp
+  // lot's proof surface IS the exact-card rows + grade ladder already on the
+  // certificate (its poolIds are sold-card ids outside the client corpus), so
+  // an empty generic pool must not print "No comparable sales clear the
+  // gates" under a "This card — N sales" row — a self-contradiction.
+  const isCardComp = lot.value?.basis === 'card-comp' && (lot.cardComps?.n ?? 0) > 0;
+  const hideComps = isCardComp && compRows.length === 0;
 
   return (
     <>
@@ -601,7 +643,14 @@ export default function LotPage({ lotId, initialLot }: {
                   {(lot.estimateLow || lot.estimateHigh) && <LeaderRow k="Estimate" v={formatEstimate(lot)} />}
                 </>
               ) : (
-                <LeaderRow k={lot.auctionHouse === 'Goldin' ? 'Current bid' : 'Ask'} v={formatEstimate(lot)} />
+                <LeaderRow
+                  // label by the value's shape: formatEstimate prints "$4K bid ·
+                  // 9 bids" whenever the two-sided estimate is missing and live
+                  // bids exist (RR runs bid sales too) — "Ask" over a bid
+                  // reading is a mislabel
+                  k={lot.auctionHouse === 'Goldin' || (!(lot.estimateLow && lot.estimateHigh) && (lot.currentBid || 0) > 0) ? 'Current bid' : 'Ask'}
+                  v={formatEstimate(lot)}
+                />
               )}
 
               {compsMed != null && (
@@ -647,13 +696,10 @@ export default function LotPage({ lotId, initialLot }: {
               </LeaderRow>
 
               {/* watch lots link into their reference dossier — the page a
-                  bidder reads before trusting the estimate */}
+                  bidder reads before trusting the estimate. Link gated on the
+                  dossier actually existing (ReferenceRow). */}
               {marketKey === 'watches' && lot.reference && (
-                <LeaderRow k="Reference">
-                  <Link href={`/ref/${lot.artist}/${encodeRefPath(lot.reference)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                    {refLabel(lot.reference)} <Flick size={10} style={{ marginLeft: 2 }} />
-                  </Link>
-                </LeaderRow>
+                <ReferenceRow maker={lot.artist} reference={lot.reference} />
               )}
 
               {/* sports lots link to the athlete's cross-market dossier */}
@@ -711,7 +757,7 @@ export default function LotPage({ lotId, initialLot }: {
               {isUpcoming && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
                 <LeaderRow
                   k="Bid velocity"
-                  v={`+${lot.bidVelocity.delta} bids`}
+                  v={`+${lot.bidVelocity.delta} ${lot.bidVelocity.delta === 1 ? 'bid' : 'bids'}`}
                   sub={`in the last ${Math.round(lot.bidVelocity.hours)}h${lot.bidVelocity.pctile != null ? ` · faster than ${lot.bidVelocity.pctile}% of live lots` : ''}`}
                 />
               )}
@@ -734,9 +780,13 @@ export default function LotPage({ lotId, initialLot }: {
             </div>
 
             <div className="lectr-lot-ctas">
-              <a className="ray-call-btn ray-call-btn-primary" href={lot.url} target="_blank" rel="noopener noreferrer">
-                View at {lot.auctionHouse} <Flick size={11} style={{ marginLeft: 2 }} />
-              </a>
+              {/* scheme-allowlisted (safe-href): a crawler-faulted URL means
+                  no house CTA — Save and Copy link still carry the row */}
+              {safeHref(lot.url) && (
+                <a className="ray-call-btn ray-call-btn-primary" href={safeHref(lot.url)} target="_blank" rel="noopener noreferrer">
+                  View at {lot.auctionHouse} <Flick size={11} style={{ marginLeft: 2 }} />
+                </a>
+              )}
               <button
                 type="button"
                 className="ray-call-btn ray-call-btn-quiet"
@@ -759,7 +809,10 @@ export default function LotPage({ lotId, initialLot }: {
           </div>
 
           {/* the comp pool — the evidence, as ledger rows under the
-              certificate (desktop); last in the single-column read (mobile) */}
+              certificate (desktop); last in the single-column read (mobile).
+              Suppressed for card-comp lots with no client-resolvable pool —
+              the exact-card certificate rows are their proof surface. */}
+          {!hideComps && (
           <section className="lectr-lot-comps lectr-lot-pool" aria-label="Comparable sales">
           <div className="lectr-lot-comps-head">
             <span>
@@ -795,12 +848,14 @@ export default function LotPage({ lotId, initialLot }: {
           ) : (
             <div style={{ marginTop: 6 }}>
               {compRows.map((comp, i) => (
-                <a key={comp.id} href={comp.url} target="_blank" rel="noopener noreferrer" className="lectr-lot-comp">
+                // safe-href: undefined renders a non-navigating row — the
+                // comp's facts still read, no javascript:-shaped click
+                <a key={comp.id} href={safeHref(comp.url)} target="_blank" rel="noopener noreferrer" className="lectr-lot-comp">
                   <span className="lectr-lot-comp-i">{i + 1}</span>
                   <span className="lectr-lot-comp-thumb" aria-hidden>
                     <span>{(craftTitle(comp.title) || '?').charAt(0)}</span>
                     {comp.imageUrl && (
-                      <img src={httpsImg(comp.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => e.currentTarget.remove()} />
+                      <PlateImg src={sizedImg(httpsImg(comp.imageUrl), 160)} alt="" loading="lazy" referrerPolicy="no-referrer" />
                     )}
                   </span>
                   <span className="lectr-lot-comp-t">
@@ -817,6 +872,7 @@ export default function LotPage({ lotId, initialLot }: {
             </div>
           )}
         </section>
+          )}
           </div>
         </div>
       </div>

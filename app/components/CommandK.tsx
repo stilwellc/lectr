@@ -13,7 +13,7 @@ interface Item {
   label: string;
   hint: string;
   path: string;
-  kind: 'section' | 'market' | 'maker' | 'lot';
+  kind: 'section' | 'market' | 'maker' | 'sub' | 'lot';
 }
 
 /** Any surface can open the palette by dispatching this window event —
@@ -44,7 +44,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   const router = useRouter();
   const { market } = useMarket();
   const homePath = MARKET_PATH[market] || '/';
-  const { allLots } = useRayData();
+  const { allLots, market: marketData } = useRayData();
   const upcomingLots = useMemo(() => allLots.filter(l => l.status === 'upcoming' && l.title), [allLots]);
 
   const items = useMemo<Item[]>(() => {
@@ -58,9 +58,10 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
       { label: 'Value', hint: 'below-market lots', path: '/value', kind: 'section' as const },
       { label: 'Makers', hint: 'the roster, as demand curves', path: '/makers', kind: 'section' as const },
       { label: 'Analytics', hint: 'market-level intelligence', path: '/analytics', kind: 'section' as const },
-      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/profile', kind: 'section' as const },
       { label: 'Blog', hint: 'quarterly market notes + how we built the engine', path: '/blog', kind: 'section' as const },
       { label: 'How lectr works', hint: 'the engine, for engineers', path: '/about', kind: 'section' as const },
+      // the identity entry sits last among the rooms — same order as the nav bar
+      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/profile', kind: 'section' as const },
       {
         label: onBlockCount > 0 ? `On the block · ${onBlockCount}` : 'On the block',
         hint: 'the live feed',
@@ -78,11 +79,21 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         hint: upcomingCounts[a.slug]
           ? `${a.market} · ${upcomingCounts[a.slug]} live ${upcomingCounts[a.slug] === 1 ? 'lot' : 'lots'}`
           : `${a.market} maker`,
-        path: `/${a.slug}`,
+        path: `/makers/${a.slug}`,
         kind: 'maker' as const,
       })),
+      // Sub-market dossiers — search-only (browseItems never includes 'sub',
+      // so the curated empty-query index stays as-is). This is what lets a
+      // one-word query like "daytona" land somewhere real instead of
+      // "Nothing matches": the model family IS the entry.
+      ...Object.values(marketData?.drills || {}).flat().map(d => ({
+        label: d.label,
+        hint: `sub-market · ${d.vertical} · ${d.lots.toLocaleString()} lots tracked`,
+        path: `/sub/${d.slug.replace(':', '/')}`,
+        kind: 'sub' as const,
+      })),
     ];
-  }, [upcomingCounts, savedCount, market, homePath]);
+  }, [upcomingCounts, savedCount, market, homePath, marketData]);
 
   // Empty-query BROWSE: sections first, then each live market as a microcap
   // header row followed by its makers — the grouped index the nav dropdown
@@ -93,7 +104,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     for (const m of MARKETS.filter(m => m.live && m.key !== 'all')) {
       const makers = ARTISTS
         .filter(a => a.market === m.key)
-        .map(a => items.find(i => i.kind === 'maker' && i.path === `/${a.slug}`))
+        .map(a => items.find(i => i.kind === 'maker' && i.path === `/makers/${a.slug}`))
         .filter(Boolean) as Item[];
       if (!makers.length) continue;
       const marketItem = items.find(i => i.kind === 'market' && i.path === MARKET_PATH[m.key]);
@@ -111,10 +122,16 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return browseItems;
-    const itemMatches = items.filter(i => `${i.label} ${i.hint}`.toLowerCase().includes(needle));
+    // Tokenized AND-match, not contiguous substring: collectors type
+    // "rolex daytona" / "nakashima table" — words that never sit adjacent in
+    // a label or title — and a substring match dead-ends them at "Nothing
+    // matches" while each word alone works.
+    const words = needle.split(/\s+/);
+    const hits = (hay: string) => { const h = hay.toLowerCase(); return words.every(w => h.includes(w)); };
+    const itemMatches = items.filter(i => hits(`${i.label} ${i.hint}`));
     // Search the live lots too — a collector arrives with a work in mind.
     const lotMatches: Item[] = upcomingLots
-      .filter(l => `${craftTitle(l.title)} ${ARTIST_LABEL[l.artist] || l.artist}`.toLowerCase().includes(needle))
+      .filter(l => hits(`${craftTitle(l.title)} ${ARTIST_LABEL[l.artist] || l.artist}`))
       .slice(0, 6)
       .map(l => ({
         label: craftTitle(l.title),

@@ -11,9 +11,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# cancel-in-progress OFF: this group is now shared with nightly.yml's deploy
+# job and ray-crawl.yml — a push-triggered cancel would kill a nightly data
+# deploy mid-upload (or vice versa). Queueing is strictly safer; pushes are
+# rare enough that the wait is minutes.
 concurrency:
   group: deploy-collectr
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:

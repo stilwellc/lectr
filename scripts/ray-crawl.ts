@@ -1046,7 +1046,7 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
         }
       }
       console.log(`  [Wright] Parsed ${totalItems} lots (basic page)`);
-      return lots;
+      return fixWrightRagoSessions(lots);
     }
 
     // Try advanced/custom page format (paginator)
@@ -1084,7 +1084,7 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
         }
         console.log(`  [Wright] Deep walk complete: ${lots.length} lots total`);
       }
-      return lots;
+      return fixWrightRagoSessions(lots);
     }
 
     console.log('  [Wright] No lot data found in page data');
@@ -1092,6 +1092,38 @@ async function crawlWright(artist: ArtistConfig): Promise<AuctionLot[]> {
     console.error('  [Wright] Error:', err);
   }
 
+  return fixWrightRagoSessions(lots);
+}
+
+/** Session-level Rago detection (W12b). The Wright artist-page API tags house
+ *  per ITEM and misses some: one "Prints Unlimited" session shipped 5 lots as
+ *  Rago and 2 as Wright, whose wright20.com URLs 404 — the sale lives on
+ *  ragoarts.com. The sale path inside the URL is the true session key: when
+ *  ANY lot of a session sold under Rago, the whole session did. Re-attribute
+ *  the stragglers BEFORE ids leave the crawler (invariant 6 requires the id
+ *  prefix to match the selling house, so this must happen at birth, not in a
+ *  fix-up pass over the corpus).
+ */
+function fixWrightRagoSessions(lots: AuctionLot[]): AuctionLot[] {
+  const salePathOf = (u: string | null | undefined) => {
+    const m = (u || '').match(/\/auctions\/\d{4}\/\d{2}\/[^/?#]+/);
+    return m ? m[0] : null;
+  };
+  const ragoSales = new Set<string>();
+  for (const l of lots) {
+    const p = salePathOf(l.url);
+    if (p && l.auctionHouse === 'Rago') ragoSales.add(p);
+  }
+  if (!ragoSales.size) return lots;
+  for (const l of lots) {
+    const p = salePathOf(l.url);
+    if (!p || l.auctionHouse !== 'Wright' || !ragoSales.has(p)) continue;
+    l.auctionHouse = 'Rago';
+    l.platform = 'wright';
+    l.id = l.id.replace(/^wright-/, 'rago-');
+    if (l.url) l.url = l.url.replace('://www.wright20.com', '://www.ragoarts.com');
+    console.log(`  [Wright] ${p}: re-attributed ${l.id} to Rago (session-level)`);
+  }
   return lots;
 }
 
@@ -1457,9 +1489,18 @@ async function enrichSothebysCloseTimes(lots: AuctionLot[]): Promise<void> {
   const targets = lots.filter(l => l.auctionHouse === "Sotheby's" && l.status === 'upcoming' && l.url);
   if (!targets.length) return;
   const CONC = 6, CAP = 1000;
+  // Wall-clock budget (same pattern as ENRICH_TIME_BUDGET_MS): a stalled host
+  // timing out every 20s fetch would walk this pass past the workflow's 60-min
+  // kill and lose the whole night. Unreached lots keep their sale-level dates.
+  const BUDGET_MS = 8 * 60_000;
+  const start = Date.now();
   const slice = targets.slice(0, CAP);
   let enriched = 0;
   for (let i = 0; i < slice.length; i += CONC) {
+    if (Date.now() - start > BUDGET_MS) {
+      console.log(`  [Sotheby's] close-time budget exhausted at ${i}/${slice.length} — stopping early so the crawl still writes`);
+      break;
+    }
     await Promise.all(slice.slice(i, i + CONC).map(async lot => {
       try {
         const r = await fetch(lot.url, { headers: { 'User-Agent': UA, ...sothebysAuth() }, signal: AbortSignal.timeout(20000) });
@@ -2233,6 +2274,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
         break;
       }
     }
+    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false; // windowed, not enumerated
     if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
   }
@@ -2258,6 +2300,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
         break;
       }
     }
+    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
     if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
     console.log(`  [Goldin] live Sport pass: ${Math.min(total, CAP)} lots enumerated`);
@@ -2283,6 +2326,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
         break;
       }
     }
+    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
     if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
     console.log(`  [Goldin] live Culture pass: ${Math.min(total, CAP)} lots enumerated`);
@@ -2569,7 +2613,13 @@ function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null {
   else if (auctionEnded) status = 'bought_in';
 
   const imageUrl = doc.image?.url || null;
-  const lotUrl = `https://www.bonhams.com/auction/${auctionId}/lot/${lotId}`;
+  // brk_* auctions are Bruun Rasmussen (Copenhagen — a Bonhams brand whose
+  // lots ride the shared search API but do NOT exist on bonhams.com: every
+  // /auction/brk_*/lot/* URL 404s live). Their canonical lot pages are
+  // bruun-rasmussen.dk/m/lots/<lotId> (probe-verified 200 across sales).
+  const lotUrl = String(auctionId).startsWith('brk_')
+    ? `https://bruun-rasmussen.dk/m/lots/${lotId}`
+    : `https://www.bonhams.com/auction/${auctionId}/lot/${lotId}`;
 
   // Retain the raw description (styledDescription stripped to text, else the
   // catalog desc) — non-destructive re-parse source for the identity layer.
@@ -3143,7 +3193,17 @@ async function main() {
       }
     }
     console.log(`[Ray] Loaded ${existingLots.length} existing lots (${CRAWL_HOUSE ? `segment ${CRAWL_HOUSE}` : 'full corpus incl. sold-archive'}).`);
-  } catch (e) { console.log('[Ray] Could not read corpus:', (e as Error).message); }
+  } catch (e) {
+    // Segmented run with the segment file PRESENT on disk but unreadable
+    // (zero-byte/corrupt pull): abort — proceeding seedless would merge
+    // against nothing and overwrite the last-good segment with a fresh-only
+    // subset. A genuinely MISSING file never lands here (readSegment returns
+    // [] for it — the bootstrap path stays open).
+    if (CRAWL_HOUSE && fs.existsSync(path.join('data', 'corpus', 'segments', `${CRAWL_HOUSE}.ndjson.gz`))) {
+      throw new Error(`[Ray] segment ${CRAWL_HOUSE} exists on disk but failed to read (${(e as Error).message}) — refusing a seedless crawl`);
+    }
+    console.log('[Ray] Could not read corpus:', (e as Error).message);
+  }
   if (fs.existsSync(statsPath)) {
     try {
       const raw = JSON.parse(fs.readFileSync(statsPath, 'utf-8'));
@@ -3493,9 +3553,18 @@ async function main() {
     const targets = Array.from(lotMap.values()).filter(l =>
       l.auctionHouse === "Christie's" && l.status !== 'sold' && !!l.url && /onlineonly\.christies\.com/.test(l.url));
     const CONC = 6, CAP = 1500;
+    // Wall-clock budget (same pattern as ENRICH_TIME_BUDGET_MS): a stalled
+    // onlineonly host timing out every 20s fetch would walk this rescue past
+    // the workflow's 60-min kill. Unreached lots keep their state — never drop.
+    const BUDGET_MS = 8 * 60_000;
+    const start = Date.now();
     const slice = targets.slice(0, CAP);
     let dated = 0, revived = 0;
     for (let i = 0; i < slice.length; i += CONC) {
+      if (Date.now() - start > BUDGET_MS) {
+        console.log(`  [Christie's] onlineonly budget exhausted at ${i}/${slice.length} — stopping early so the crawl still writes`);
+        break;
+      }
       await Promise.all(slice.slice(i, i + CONC).map(async lot => {
         try {
           const r = await fetch(lot.url, { headers: { 'User-Agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(20000) });
@@ -3901,6 +3970,12 @@ async function main() {
     // (>200-lot floor unchanged: tiny segments swing legitimately.)
     if (existingLots.length > 200 && segLots.length < existingLots.length * 0.7) {
       throw new Error(`[Ray] segment ${CRAWL_HOUSE} collapsed ${existingLots.length} → ${segLots.length} (>30%) — refusing to overwrite the last-good segment`);
+    }
+    // Belt-and-braces under the 200-lot floor: a zero-lot seed while the
+    // segment file exists on disk means the corpus load failed upstream and
+    // this write would be fresh-only. (Bootstrap = no file at all — passes.)
+    if (existingLots.length === 0 && fs.existsSync(path.join('data', 'corpus', 'segments', `${CRAWL_HOUSE}.ndjson.gz`))) {
+      throw new Error(`[Ray] segment ${CRAWL_HOUSE}: zero-lot seed but the segment file exists on disk — refusing a fresh-only overwrite`);
     }
     writeSegment(CRAWL_HOUSE, segLots as unknown as Record<string, unknown>[]);
     console.log(`[Ray] segment ${CRAWL_HOUSE}: wrote ${segLots.length} lots (was ${existingLots.length}) — assemble reunions + builds.`);

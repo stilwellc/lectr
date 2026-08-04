@@ -30,9 +30,12 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
     watches: cal.beatRate.watches?.[i],
   }));
 
-  // section rhythm rides the tokens so the ≤768px override applies
+  // section rhythm rides the tokens so the ≤768px override applies.
+  // NO .rail here: the only mount (analytics' engine section) already wraps
+  // this in a .rail div — a second rail double-applied the gutter and inset
+  // this panel relative to its siblings.
   return (
-    <section className="ray-calibration rail" style={{ paddingBlock: 'var(--sect-t) var(--sect-b)' }}>
+    <section className="ray-calibration" style={{ paddingBlock: 'var(--sect-t) var(--sect-b)' }}>
       <div style={{ marginBottom: 4 }}>
         <h2 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
           What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>

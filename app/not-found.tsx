@@ -1,11 +1,20 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+// Branded head for the 404 — without this the shell ships the site-default
+// title (audit C4 post-GA-2). The root template appends " — lectr".
+export const metadata: Metadata = {
+  title: 'Not on the block',
+  description: 'This address didn’t match anything the desk tracks.',
+};
 
 /** Branded 404 — replaces Next's bare default so an unknown URL is never a dead
  *  end. Renders inside the root layout (dark theme + fonts already applied). */
 export default function NotFound() {
   return (
-    <main
-      id="main"
+    // a <div>, not another <main id="main"> — the root layout already wraps
+    // every page in the landmark the skip link targets
+    <div
       style={{
         minHeight: '100vh',
         display: 'flex',
@@ -28,6 +37,6 @@ export default function NotFound() {
       <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
         Back to the market
       </Link>
-    </main>
+    </div>
   );
 }

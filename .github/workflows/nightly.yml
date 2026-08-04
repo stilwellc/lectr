@@ -80,7 +80,11 @@ jobs:
         # houses' segments.
         house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # RAISED 60→90 (Aug 4 2026): christies measured 43.9min (Aug 3) / 34.6min
+    # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
+    # pushes no segment, and the seedless/last-good guards then have to catch
+    # it; cheaper to give the slow houses room. Ceiling costs nothing.
+    timeout-minutes: 90
     env:
       SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
       RAY_HOUSE: ${{ matrix.house }}
@@ -135,8 +139,14 @@ jobs:
     runs-on: ubuntu-latest
     # Normal night: artifacts skip the pull-segments GET-lag (~12min) entirely.
     # But skip_crawl / a failed house still pulls from R2 and can eat the lag,
-    # so keep the 60 headroom (engine ~21 + upcoming on top).
-    timeout-minutes: 60
+    # so keep headroom (engine ~21 + upcoming on top).
+    # RAISED 60→120 (Aug 4 2026): measured assemble wall-clock is 37.5min
+    # (Aug 3) → 42min (Aug 4) — 70% of the old ceiling and climbing with the
+    # corpus. build-market's MARKETS is now derived from ARTISTS (science-tech
+    # restored), which adds markets to every per-market pass, so this job's
+    # cost only goes up. A timeout here kills the night mid-assemble; the
+    # ceiling is free (Actions bills minutes USED, not reserved).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -287,6 +297,15 @@ jobs:
     # run whenever assemble succeeded — even in skip_crawl mode, where the
     # skipped crawl would otherwise skip this whole downstream job.
     if: ${{ !cancelled() && needs.assemble.result == 'success' }}
+    # ONE production-deploy lane shared with deploy.yml (and ray-crawl.yml):
+    # never two wranglers racing Pages production — whichever finished last
+    # used to win, so this leg could silently revert a same-night hotfix.
+    # Queue, don't cancel: a nightly data deploy must not kill an in-flight
+    # code deploy or vice versa. (Job-level group composes with the run-level
+    # `nightly` group.)
+    concurrency:
+      group: deploy-collectr
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # 20 is plenty now: the served payload arrives as a same-run artifact, and
     # even the R2 fallback no longer waits out GET-lag on the big payloads
@@ -294,6 +313,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+      # Serialization (the concurrency group above) fixes interleaving but not
+      # staleness: a queued deploy still holds the commit checked out at RUN
+      # start, which could post-date-revert a push that deployed while this
+      # leg sat in the queue. Always deploy origin/main as of NOW.
+      - name: Fast-forward to origin/main (never deploy a stale checkout)
+        run: |
+          git fetch --depth=1 origin main
+          git checkout --force origin/main
+          echo "deploying $(git rev-parse --short HEAD)"
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
@@ -347,17 +375,27 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
-      # Same-run artifact from assemble — immediately consistent, no R2 read.
+      # Same-run artifacts from assemble — immediately consistent, no R2 read.
+      # BOTH payloads: sync-lots-db and match-alerts call readCorpus(), which
+      # refuses the stripped served files — without the corpus artifact this
+      # job was a silent no-op every normal night (masked green by the
+      # non-fatal echoes below).
       - name: Fetch served payload (same-run artifact)
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: served-payload
           path: public/data/ray
-      - name: Pull served from R2 (fallback if artifact absent)
+      - name: Fetch corpus (same-run artifact)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: corpus-payload
+          path: data/corpus
+      - name: Pull corpus + served from R2 (fallback if artifacts absent)
         run: |
-          if [ -f public/data/ray/meta.json ]; then
-            echo "served payload delivered by same-run artifact — skipping R2 pull"
+          if [ -f public/data/ray/meta.json ] && [ -f data/corpus/lots.json.gz ]; then
+            echo "payloads delivered by same-run artifacts — skipping R2 pull"
           else
             bash scripts/data-store.sh pull
           fi

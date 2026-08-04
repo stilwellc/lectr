@@ -7,6 +7,7 @@ import { ARTIST_LABEL, Market } from '../constants';
 import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { lotFitsMarket, signalMagnitude } from '../lib/comps';
+import { safeHref } from '../lib/safe-href';
 import Flick from './Flick';
 
 /**
@@ -211,7 +212,10 @@ export function CallPlate({
       className="ray-save-btn"
       onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
       aria-label={saved ? 'Remove from saved' : 'Save lot'}
-      style={{ width: 44, height: 44, margin: '-14px -12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
+      // position/zIndex: on the full-density plate the button must ride ABOVE
+      // the stretched /value link overlay (a sibling, never a descendant —
+      // button-inside-link is invalid interactive nesting)
+      style={{ position: 'relative', zIndex: 2, width: 44, height: 44, margin: '-14px -12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
     >
       <span style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: saved ? 'var(--color-fg)' : 'var(--color-bg-elevated)', borderRadius: 100 }}>
         <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
@@ -259,16 +263,30 @@ export function CallPlate({
           <Link className="ray-call-btn ray-call-btn-quiet" href={`/lot?id=${encodeURIComponent(lot.id)}`}>
             Open the lot page <Flick size={10} style={{ marginLeft: 5 }} />
           </Link>
-          <a className="ray-call-btn ray-call-btn-quiet" href={lot.url} target="_blank" rel="noopener noreferrer">
-            View lot <Flick size={10} style={{ marginLeft: 5 }} />
-          </a>
+          {/* scheme-allowlisted (safe-href) — a faulted URL drops the house
+              exit; the lot-page CTA above still carries the journey */}
+          {safeHref(lot.url) && (
+            <a className="ray-call-btn ray-call-btn-quiet" href={safeHref(lot.url)} target="_blank" rel="noopener noreferrer">
+              View lot <Flick size={10} style={{ marginLeft: 5 }} />
+            </a>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <Link href="/value" className={`ray-board-panel ray-deckcall lectr-cp${imgOk ? '' : ' lectr-cp-noimg'}`} aria-label="Today's call — see how we called it">
+    // LotCard's stretched-action pattern: the panel is a positioned <div>,
+    // the /value navigation is a stretched sibling <Link> overlay (z1), and
+    // the save <button> floats above it (z2) — interactive controls are
+    // siblings, never nested (B4-5: button-inside-link is invalid HTML and
+    // undefined for keyboard/AT).
+    <div className={`ray-board-panel ray-deckcall lectr-cp${imgOk ? '' : ' lectr-cp-noimg'}`} style={{ position: 'relative' }}>
+      <Link
+        href="/value"
+        aria-label="Today's call — see how we called it"
+        style={{ position: 'absolute', inset: 0, zIndex: 1, borderRadius: 'inherit' }}
+      />
       <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
       <div className="lectr-cp-body">
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -341,7 +359,7 @@ export function CallPlate({
           />
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

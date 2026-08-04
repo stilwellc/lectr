@@ -36,7 +36,11 @@ function HouseTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   );
 }
 
-export default function AuctionHouseDistribution({ statsByArtist, embedded = false }: Props & { embedded?: boolean }) {
+/**
+ * Rendered embedded inside the Distributions band only (its tab row supplies
+ * the section frame and header) — mirrors SportBreakdown's card-only shape.
+ */
+export default function AuctionHouseDistribution({ statsByArtist }: Props) {
   const { theme } = useTheme();
   const houseData = useMemo(() => {
     const houseMap: Record<string, { count: number; totalValue: number }> = {};
@@ -60,9 +64,7 @@ export default function AuctionHouseDistribution({ statsByArtist, embedded = fal
 
   if (houseData.length === 0) return null;
 
-  // the chart card itself — reused verbatim by the embedded (Distributions
-  // tab) rendering, which supplies its own section frame and header
-  const card = (
+  return (
     <>
       <style>{`
         .ray-house-chart { height: 300px; }
@@ -108,32 +110,5 @@ export default function AuctionHouseDistribution({ statsByArtist, embedded = fal
 
       </div>
     </>
-  );
-
-  if (embedded) return card;
-
-  return (
-    <section className="ray-house-dist rail">
-      <style>{`
-        .ray-house-dist { padding-block: var(--sect-t) var(--sect-b); }
-        @media (max-width: 768px) {
-          .ray-house-dist { padding-block: var(--sect-t) var(--sect-b); }
-        }
-      `}</style>
-
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{
-          fontFamily: 'var(--font-serif), serif',
-          fontSize: 24,
-          fontWeight: 400,
-          letterSpacing: '-0.015em',
-        }}>
-          Auction house <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>distribution</span>
-        </h2>
-        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Ranked by total sales value</p>
-      </div>
-
-      {card}
-    </section>
   );
 }

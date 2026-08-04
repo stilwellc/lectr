@@ -118,7 +118,7 @@ export default function AlertsInbox() {
           <div key={s.id}>
             <div className="lectr-inbox-search">
               <span>{s.name}</span>
-              <button className="lectr-inbox-del" title="Delete this saved search" onClick={() => remove(s.id)}>×</button>
+              <button className="lectr-inbox-del" title="Delete this saved search" aria-label={`Delete saved search: ${s.name}`} onClick={() => remove(s.id)}>×</button>
             </div>
             {rows.length === 0 ? (
               <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', padding: '7px 0' }}>
@@ -133,8 +133,12 @@ export default function AlertsInbox() {
                   <Link key={a.id} href={`/lot?id=${encodeURIComponent(a.lot_id)}`} className="lectr-inbox-row">
                     {!a.seen && <span className="lectr-inbox-dot" aria-label="new" />}
                     {lot?.imageUrl && (
+                      // no-referrer + remove-on-error: the houses hotlink-block
+                      // on referer, and a dead thumb collapses out of the row
+                      // instead of a broken-image glyph (the shared comp-thumb
+                      // pattern — LotPage/ComparableModal/RefPage)
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img className="lectr-inbox-thumb" src={httpsImg(lot.imageUrl)} alt="" loading="lazy" />
+                      <img className="lectr-inbox-thumb" src={httpsImg(lot.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => e.currentTarget.remove()} />
                     )}
                     <span className="lectr-inbox-title">{lot ? craftTitle(lot.title || a.lot_id) : a.lot_id}</span>
                     <span className="lectr-inbox-meta" style={{ marginLeft: 'auto', flex: 'none' }}>

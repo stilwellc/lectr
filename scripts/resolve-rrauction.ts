@@ -298,7 +298,7 @@ function toLot(r: RawLot, slug: string, saleId: string, saleName: string, arch?:
     estimateLow: estLowUsd, estimateHigh: estHighUsd,
     currency: 'USD',
     hammerPrice: null, premiumPrice: realizedUsd, priceUsd: realizedUsd,
-    priceBasis: realizedUsd != null ? 'premium' : undefined,
+    priceBasis: realizedUsd != null ? 'realized' : undefined,
     currentBid: arch ? undefined : r.currentBid ?? undefined,
     bidCount: r.bidCount ?? undefined,
     status,
@@ -452,15 +452,29 @@ async function main() {
     }
 
     if (write) {
-      // RR owns its whole segment (single house); replace last-good with this run.
+      // RR owns its whole segment (single house), but discovery is only this
+      // run's truth about which sales are LIVE — a closed sale that falls off
+      // /auctions/ must not take its sold rows with it, and partial discovery
+      // (markup drift showing 3 of 5 sales) must not halve the segment. Sales
+      // crawled this run are replaced whole; every other prior lot carries.
       const prior = readSegment('rrauction') as unknown as AuctionLot[];
       if (lots.length === 0) {
         // sales existed but produced nothing — extraction drift. Go red;
         // last-good survives untouched.
         throw new Error(`[rr] ${saleIds.length} sales but 0 lots extracted — refusing to write empty (last-good: ${prior.length})`);
       }
-      writeSegment('rrauction', lots as unknown as Record<string, unknown>[]);
-      console.log(`[rr] wrote rrauction segment: ${lots.length} lots (was ${prior.length})`);
+      const crawled = new Set(saleIds);
+      const saleOf = (l: AuctionLot) => (String(l.id).match(/^rrauction-(\d+)-/) || [])[1] || '';
+      const carried = prior.filter(l => !crawled.has(saleOf(l)));
+      const merged = carried.concat(lots);
+      // shrink guard mirroring ray-crawl's segment-collapse guard (>30%, with
+      // the same >200-lot floor): even post-merge, a collapse means the crawl
+      // lied somewhere — abort the write, keep last-good.
+      if (prior.length > 200 && merged.length < prior.length * 0.7) {
+        throw new Error(`[rr] segment would collapse ${prior.length} → ${merged.length} (>30%) — refusing to overwrite the last-good segment`);
+      }
+      writeSegment('rrauction', merged as unknown as Record<string, unknown>[]);
+      console.log(`[rr] wrote rrauction segment: ${merged.length} lots (${lots.length} crawled + ${carried.length} carried; was ${prior.length})`);
     } else {
       console.log('\n[rr] dry run — pass --write to persist the segment');
       console.log('[rr] sample lots:');

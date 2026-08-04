@@ -18,6 +18,14 @@ const fmtUsd = (n: number) =>
   n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `$${Math.round(n / 1000)}K` : `$${n.toLocaleString()}`;
 
 const CSS = `
+/* self-contained panel frame (HouseMatrix's pattern): this component mounts on
+   dossier pages WITHOUT VerifiedMovers, whose injected global styles the bare
+   .ray-vm-* classes otherwise lean on — without these the card lost its
+   padding and the title ran into the method line */
+.ray-dr.ray-vm-card{padding:var(--card-pad)}
+.ray-dr .ray-vm-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.ray-dr .ray-vm-title{font-size:13.5px;font-weight:650;color:var(--color-fg)}
+.ray-dr .ray-vm-method{font-size:10.5px;color:var(--color-text-muted);text-align:right}
 .ray-dr-rows{display:flex;flex-direction:column;margin-top:10px}
 .ray-dr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;cursor:pointer;transition:background 0.14s ease}
 .ray-dr-row:last-child{border-bottom:none}
@@ -86,7 +94,7 @@ export default function SubMarketDrills({ marketData, scope, parentFilter, title
   if (rows.length < 2) return null;
 
   return (
-    <div className="ray-vm ray-vm-card glass glass-quiet">
+    <div className="ray-dr ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
         <span className="ray-vm-title">{title ?? 'Sub-markets'}</span>

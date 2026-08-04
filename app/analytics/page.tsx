@@ -129,11 +129,19 @@ export default function AnalyticsPage() {
     }}>
       <style dangerouslySetInnerHTML={{ __html: `
         .ray-desk-strip2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 20px; }
-        .ray-desk-cell2 { border: 2px dotted color-mix(in srgb, var(--color-fg) 13%, transparent); border-radius: 16px; padding: 12px 15px 11px; }
+        /* min-height ≈ the settled k+v+s stack — cells paint with '—' before
+           phase-1 lands and must not grow (CLS) when the figures arrive */
+        .ray-desk-cell2 { border: 2px dotted color-mix(in srgb, var(--color-fg) 13%, transparent); border-radius: 16px; padding: 12px 15px 11px; min-height: 78px; box-sizing: border-box; }
         .ray-desk-cell2 .k { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-faint); }
         .ray-desk-cell2 .v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 3px; }
         .ray-desk-cell2 .s { font-size: 11px; color: var(--color-text-muted); margin-top: 1px; }
         .ray-desk-microgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+        /* min-width:0 — a 1fr track's minimum is otherwise the item's CONTENT
+           width, and HeroChart's ResizeObserver-sized svg then feeds back into
+           the track (svg width → track min-content → bigger measure → wider
+           svg): on a 390px viewport the panels ran away to ~600px and bled
+           off-screen. Capping the items breaks the loop. */
+        .ray-desk-microgrid > * { min-width: 0; }
         @media (max-width: 900px) { .ray-desk-microgrid { grid-template-columns: 1fr; } }
       ` }} />
       <ArtistNav activeSlug="analytics" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
@@ -162,15 +170,20 @@ export default function AnalyticsPage() {
             <div className="v">{drillCount || '—'}</div>
             <div className="s">{activeKey === 'all' ? 'across every vertical' : `in ${activeKey}`}</div>
           </div>
-          {backtest && (
-            <div className="ray-desk-cell2">
-              <div className="k">The record</div>
+          {/* always rendered: this cell arriving LATE inserted itself into the
+              auto-fit grid and shifted every sibling sideways (CLS). Until
+              backtest lands it abstains with an ink '—', never a made-up %. */}
+          <div className="ray-desk-cell2">
+            <div className="k">The record</div>
+            {backtest ? (
               <div className="v" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
                 {fmtSignedPct(backtest.flagged.medianPerfPct)}
               </div>
-              <div className="s">{backtest.flagged.n.toLocaleString()} flagged calls, replayed · median vs estimate</div>
-            </div>
-          )}
+            ) : (
+              <div className="v">&mdash;</div>
+            )}
+            <div className="s">{backtest ? `${backtest.flagged.n.toLocaleString()} flagged calls, replayed · median vs estimate` : 'flagged calls, replayed · median vs estimate'}</div>
+          </div>
           <div className="ray-desk-cell2">
             <div className="k">Makers ranked</div>
             <div className="v">{Object.keys(marketStats).length || '—'}</div>
@@ -181,14 +194,21 @@ export default function AnalyticsPage() {
 
       <div className="rail" style={{ paddingTop: 16 }}><MarketSwitch compact /></div>
 
-      {/* ── THE EAGER DESK — paints from phase-1, no corpus wait ── */}
-      <RayEntrance animate={!fromCache}>
-        {sections.map(([k, node], i) => (
-          <div key={k} className="rail ray-enter" style={{ paddingTop: i === 0 ? 20 : 20, '--enter-delay': `${Math.min(i, 3) * 90}ms` } as React.CSSProperties}>
-            {node}
-          </div>
-        ))}
-      </RayEntrance>
+      {/* ── THE EAGER DESK — paints from phase-1, no corpus wait ──
+          The wrapper reserves well over a viewport: before market.json lands
+          most panels render nothing, which used to pull the deep-pools kicker
+          and the colophon into the first viewport and then shove them ~5
+          screens down (the site's worst CLS, 0.53–0.65). The settled desk is
+          far taller than the reservation, so it never adds whitespace. */}
+      <div style={{ minHeight: '160vh' }}>
+        <RayEntrance animate={!fromCache}>
+          {sections.map(([k, node], i) => (
+            <div key={k} className="rail ray-enter" style={{ paddingTop: i === 0 ? 20 : 20, '--enter-delay': `${Math.min(i, 3) * 90}ms` } as React.CSSProperties}>
+              {node}
+            </div>
+          ))}
+        </RayEntrance>
+      </div>
 
       {/* ── DEEP POOLS — corpus-scale panels, mounted on approach ── */}
       <DeepPools activeKey={activeKey} mktSet={mktSet} marketStats={marketStats} />

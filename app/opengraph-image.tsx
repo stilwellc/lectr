@@ -24,9 +24,13 @@ export default function OG() {
   const all = Object.values(stats as Record<string, ArtistStats>);
   const total = all.reduce((s, a) => s + (a.totalAuctionRevenue || 0), 0);
   const totalLabel = total >= 1e9 ? `$${(total / 1e9).toFixed(2)}B` : `$${(total / 1e6).toFixed(0)}M`;
-  const appr = total > 0
-    ? all.reduce((s, a) => s + (a.appreciationRate || 0) * (a.totalAuctionRevenue || 0), 0) / total
-    : 0;
+  // The companion line used to print "prices up X.X% this year" green/red from
+  // the revenue-weighted appreciationRate — a descriptive estimate wearing the
+  // verified-move grammar on every link embed. Counts are facts: show the
+  // sales the headline is built from instead; the backtest line below stays
+  // the card's only colored figure (a real measured median with its n).
+  const salesCount = all.reduce((s, a) => s + (a.priceHistory || []).reduce((x, p) => x + (p.totalSales || 0), 0), 0);
+  const salesLabel = salesCount >= 1000 ? `${Math.round(salesCount / 1000)}K` : String(salesCount);
 
   // cumulative curve, downsampled to a polyline
   const q: Record<string, number> = {};
@@ -91,8 +95,8 @@ export default function OG() {
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 26 }}>
           <div style={{ fontSize: 110, fontWeight: 800, color: '#F2EEE3', letterSpacing: -4 }}>{totalLabel}</div>
-          <div style={{ fontSize: 30, fontWeight: 700, color: appr >= 0 ? '#2FBF71' : '#E5544B' }}>
-            {`prices ${appr >= 0 ? 'up' : 'down'} ${Math.abs(appr).toFixed(1)}% this year`}
+          <div style={{ fontSize: 30, fontWeight: 700, color: '#A19B8D' }}>
+            {`across ${salesLabel} tracked sales`}
           </div>
         </div>
         <svg width={W} height={H + 16} style={{ marginTop: 8 }}>

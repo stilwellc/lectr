@@ -148,7 +148,7 @@ export default function RelativeStrength({ marketData, scope }: {
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
         <span className="ray-vm-title">Relative strength</span>
-        <span className="ray-vm-method">relative strength · CI-verified indexes first, measured demand second · descriptive markets excluded</span>
+        <span className="ray-vm-method">CI-verified indexes first, measured demand second · descriptive markets excluded</span>
       </div>
       <p className="ray-rs-spread">
         spread: <span className="num">+{Math.round(spreadPp)}pp</span> between the strongest and weakest verified read

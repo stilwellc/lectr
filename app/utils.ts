@@ -145,6 +145,27 @@ export function httpsImg(u?: string | null): string | undefined {
   return u ? u.replace(/^http:\/\//i, 'https://') : undefined;
 }
 
+/** Bonhams hotlinks are 2880×2880 originals (~672 KB each) but their image
+ *  service resizes on request (verified live: `&width=160` → 3.3 KB). Ask for
+ *  the size the slot actually renders (2× the CSS box, for retina) instead of
+ *  shipping the master into a 40 px avatar.
+ *
+ *  Deliberately narrow: rewrites ONLY the Bonhams resizer endpoint, and never
+ *  when the URL already carries a width. Every other CDN — and any already
+ *  sized URL — comes back untouched.
+ *
+ *  images1/2/3 are the same resizer behind three shard hostnames (the corpus
+ *  carries all three; each was curl-verified to 200 with a smaller body for
+ *  `&width=`), so the host class covers 1–3 and nothing else. */
+export function sizedImg(u: string, width: number): string;
+export function sizedImg(u: string | null | undefined, width: number): string | undefined;
+export function sizedImg(u: string | null | undefined, width: number): string | undefined {
+  if (!u) return undefined;
+  return /^https?:\/\/images[1-3]\.bonhams\.com\/image\?/i.test(u) && !/[?&]width=\d/i.test(u)
+    ? `${u}&width=${width}`
+    : u;
+}
+
 /** ONE signed-percent formatter: '+' for gains, a TRUE MINUS (U+2212) for
  *  losses, no sign at zero — replaces ~10 inline `>= 0 ? '+' : ''` sites that
  *  printed hyphen-minus and green zeros. */

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
@@ -47,7 +47,55 @@ export default function ValuePage() {
   const { savedIds, toggle, isSaved } = useSavedLots();
   // One modal for the whole page — the call plate and every row open the
   // same comps view, and a lot can be saved without closing it.
-  const [modalLot, setModalLot] = useState<AuctionLot | null>(null);
+  const [modalLot, setModalLotRaw] = useState<AuctionLot | null>(null);
+  // THE MODAL JOINS HISTORY (A2-4, TerminalHome's pattern hardened per
+  // B3-terminal 1b/2): opening pushes a `lectrLot` entry so browser Back (and
+  // the mobile back-gesture) CLOSES the modal instead of leaving the site.
+  // Closing via ✕/ESC pops our entry — but only while it's still the live
+  // entry — and a rapid close→reopen before the async back() lands re-pushes
+  // instead of letting the pending pop swallow the fresh modal.
+  const modalPushed = useRef(false);
+  const pendingBack = useRef(false);       // our history.back() hasn't landed yet
+  const reopenedDuringBack = useRef(false); // reader reopened inside that window
+  const setModalLot = useCallback((lot: AuctionLot | null) => {
+    if (lot) {
+      if (pendingBack.current) {
+        // close→reopen race: our entry is mid-pop — mark it; onPop re-pushes
+        reopenedDuringBack.current = true;
+        modalPushed.current = true;
+      } else if (!modalPushed.current) {
+        try { window.history.pushState({ ...window.history.state, lectrLot: true }, ''); modalPushed.current = true; } catch { /* ignore */ }
+      }
+      setModalLotRaw(lot);
+    } else {
+      if (modalPushed.current) {
+        modalPushed.current = false;
+        // only pop while our entry is still live — after a pushState landed
+        // on top (e.g. a market switch), back() would eat the wrong entry
+        if (window.history.state?.lectrLot) {
+          pendingBack.current = true;
+          try { window.history.back(); } catch { pendingBack.current = false; }
+        }
+      }
+      setModalLotRaw(null);
+    }
+  }, []);
+  useEffect(() => {
+    const onPop = () => {
+      if (pendingBack.current) {
+        pendingBack.current = false;
+        if (reopenedDuringBack.current) {
+          // the reopen won the race — restore the history entry it deserves
+          reopenedDuringBack.current = false;
+          try { window.history.pushState({ ...window.history.state, lectrLot: true }, ''); } catch { /* ignore */ }
+        }
+        return; // our own close-pop settling — the modal is already closed
+      }
+      if (modalPushed.current) { modalPushed.current = false; setModalLotRaw(null); }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [shown, setShown] = useState(ROWS_PAGE);
 
   const deals = useMemo(() => {
@@ -233,7 +281,9 @@ export default function ValuePage() {
         @media (min-width: 900px) {
           .ray-value-row,
           .ray-value-head {
-            grid-template-columns: 56px minmax(0, 1fr) 92px 88px 118px 84px 52px 64px;
+            /* hammers column fits "Aug 13, 2026" in the mono size — 88px
+               ellipsized the year on every long-month date */
+            grid-template-columns: 56px minmax(0, 1fr) 92px 100px 118px 84px 52px 64px;
             gap: 16px;
           }
           .ray-value-head {
@@ -350,20 +400,31 @@ export default function ValuePage() {
 
       <ArtistNav activeSlug="value" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {fullError ? (
-        <div style={{ padding: '120px 24px', textAlign: 'center' }}>
-          <p style={{ fontSize: 15.5, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-            The sold archive didn&rsquo;t load. Check your connection and try again.
-          </p>
-          <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
-            Retry
-          </button>
-        </div>
-      ) : loading || !fullLoaded ? (
+      {/* C3 BLOCKER: paint from PHASE 1 — the engine call/signal is
+          precomputed on the eager upcoming.json lots (every eager lot carries
+          the `signal` stamp; `lotSignal` never client-recomputes past it), so
+          the masthead, Today's Call and the flagged ledger render the SAME
+          numbers at ~2s that they rendered after the 32MB corpus (measured
+          31.4s to first content on mobile Fast-4G behind the old
+          `!fullLoaded` gate). Corpus-dependent extras — the call plate's
+          PriceBand (gated on fullLoaded below), settled tape (needs realized
+          prices), modal comp rows (compsPending) — hydrate in behind without
+          ever swapping a printed figure. */}
+      {loading ? (
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
           <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}><MarketSwitch compact /></div>
+
+          {/* phase-2 failed: the ledger above still stands on the precomputed
+              stamps — say what's missing instead of blanking the page */}
+          {fullError && (
+            <div className="rail ray-enter" style={{ paddingTop: 12, textAlign: 'center' }}>
+              <button className="ray-call-btn ray-call-btn-quiet" style={{ cursor: 'pointer' }} onClick={() => retryFullLoad()}>
+                Part of the book didn&rsquo;t load — comps depth is missing · try again
+              </button>
+            </div>
+          )}
 
           {/* The certificate masthead — the flagged count and totals fold
               into the data subline; full numbers, no second display numeral. */}

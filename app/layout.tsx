@@ -66,6 +66,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable} ${plexMono.variable}`}>
       <head>
+        {/* Phase-1 data preloads: useRayData fetches these eagerly (no ?v=)
+            after hydration — preloading starts the ~1 MB br transfer at t=0.
+            crossOrigin="anonymous" matches fetch()'s default cors/same-origin
+            credentials mode so the browser reuses the preload (no double
+            fetch). upcoming.json dominates phase 1; meta.json versions the
+            phase-2 shard URLs, so it must land before phase 2 can start.
+            ALL FIVE are preloaded because useRayData awaits them in a single
+            Promise.allSettled — first paint gates on the SLOWEST of the set, so
+            preloading a subset just makes the unlisted ones (market.json at
+            ~243 KB br, stats.json ~65 KB) start late and become the gate. */}
+        <link rel="preload" href="/data/ray/upcoming.json" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/data/ray/market.json" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/data/ray/stats.json" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/data/ray/meta.json" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/data/ray/backtest.json" as="fetch" crossOrigin="anonymous" />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{document.documentElement.setAttribute('data-theme','dark')}catch(e){}})();`,

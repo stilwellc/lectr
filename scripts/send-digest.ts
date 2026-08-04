@@ -3,8 +3,11 @@
  * for every user whose saved searches matched fresh lots tonight, send ONE
  * email listing the matches, each linking to its /lot page.
  *
- * Cadence guard: only alerts CREATED inside the freshness window (26h — one
- * nightly, with slack) are emailed, so an alert emails exactly once and the
+ * Cadence guard: an alert emails exactly once — `emailed_at` marks it sent,
+ * and only unsent alerts CREATED inside the freshness window (26h — one
+ * nightly, with slack) are selected, so a rerun of the sync job never
+ * re-sends. If the column is missing in prod the guard degrades to the pure
+ * time-window (duplicate-prone on reruns) rather than sending nothing. The
  * `seen` flag stays what it is: the in-app read state, never touched here.
  *
  * Needs SUPABASE_URL + SUPABASE_SERVICE_KEY + RESEND_API_KEY (skips silently
@@ -26,6 +29,19 @@ async function sb(path: string): Promise<any> {
   });
   if (!res.ok) throw new Error(`[digest] ${path.split('?')[0]}: ${res.status} ${(await res.text()).slice(0, 200)}`);
   return res.json();
+}
+
+/** page a read past PostgREST's 1000-row default cap (order=id keeps the
+ *  offset windows stable while paging) */
+async function sbAll(path: string): Promise<any[]> {
+  const PAGE = 1000;
+  const out: any[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const page = await sb(`${path}&order=id&limit=${PAGE}&offset=${offset}`) as any[];
+    out.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return out;
 }
 
 async function userEmail(userId: string): Promise<string | null> {
@@ -72,11 +88,19 @@ async function main() {
   if (!resendKey) { console.log('[digest] RESEND_API_KEY not set — skipping (in-app inbox unaffected)'); return; }
 
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
-  const alerts = await sb(`alerts?select=user_id,search_id,lot_id,created_at&created_at=gte.${since}`) as
-    { user_id: string; search_id: string; lot_id: string }[];
+  type Alert = { id: number; user_id: string; search_id: string; lot_id: string };
+  let alerts: Alert[];
+  let canStamp = true; // false ⇒ no emailed_at column ⇒ nothing to PATCH
+  try {
+    alerts = await sbAll(`alerts?select=id,user_id,search_id,lot_id,created_at&created_at=gte.${since}&emailed_at=is.null`) as Alert[];
+  } catch {
+    console.error('[digest] emailed_at column missing — run supabase/retention.sql; falling back to time-window dedupe');
+    canStamp = false;
+    alerts = await sbAll(`alerts?select=id,user_id,search_id,lot_id,created_at&created_at=gte.${since}`) as Alert[];
+  }
   if (!alerts.length) { console.log('[digest] no fresh alerts — nothing to send'); return; }
 
-  const searches = await sb('saved_searches?select=id,name') as { id: string; name: string }[];
+  const searches = await sbAll('saved_searches?select=id,name') as { id: string; name: string }[];
   const nameOf = new Map(searches.map(s => [s.id, s.name]));
 
   // lot details from the lots mirror, one IN query (slim lot lives in `data`)
@@ -89,9 +113,11 @@ async function main() {
   const lotOf = new Map(lotRows.map(r => [r.id, r.data || {}]));
 
   const byUser = new Map<string, Row[]>();
+  const idsByUser = new Map<string, number[]>(); // alert ids behind each digest, for the emailed_at stamp
   for (const a of alerts) {
     const lot = lotOf.get(a.lot_id);
     if (!lot) continue;
+    (idsByUser.get(a.user_id) || idsByUser.set(a.user_id, []).get(a.user_id)!).push(a.id);
     const est = lot.estimateLow && lot.estimateHigh
       ? `${money(lot.estimateLow)}–${money(lot.estimateHigh)}`
       : money(lot.estimateLow || lot.estimateHigh);
@@ -123,8 +149,22 @@ async function main() {
         html: emailHtml(capped),
       }),
     });
-    if (res.ok) sent++;
-    else console.error(`[digest] send failed for ${userId}: ${res.status} ${(await res.text()).slice(0, 200)}`);
+    if (res.ok) {
+      sent++;
+      // mark the alerts behind this digest sent — the dedupe a rerun relies
+      // on. A failed stamp risks at worst one duplicate on the next rerun.
+      if (canStamp) {
+        const ids = idsByUser.get(userId) || [];
+        for (let i = 0; i < ids.length; i += 200) {
+          const patch = await fetch(`${url}/rest/v1/alerts?id=in.(${ids.slice(i, i + 200).join(',')})`, {
+            method: 'PATCH',
+            headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ emailed_at: new Date().toISOString() }),
+          });
+          if (!patch.ok) console.error(`[digest] emailed_at stamp failed for ${userId}: ${patch.status} ${(await patch.text()).slice(0, 200)}`);
+        }
+      }
+    } else console.error(`[digest] send failed for ${userId}: ${res.status} ${(await res.text()).slice(0, 200)}`);
   }
   console.log(`[digest] sent ${sent} digests (${alerts.length} fresh alerts, ${byUser.size} users, ${skipped} no-email)`);
 }

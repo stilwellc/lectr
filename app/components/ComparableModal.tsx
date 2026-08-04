@@ -5,10 +5,10 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, cleanText } from '../utils';
+import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
-import { subCatLabel } from '../lib/subcat-labels';
+import { safeHref } from '../lib/safe-href';
 import type { MarketData, Backtest } from '../hooks/useRayData';
 import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
@@ -17,6 +17,8 @@ import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayDa
 import { formatEstimate } from './LotCard';
 import { CopyLinkButton } from './LotPage';
 import Flick from './Flick';
+// hotlinked photo that unmounts on failure so the monogram plate under it shows
+import PlateImg from './PlateImg';
 
 // ── LotValueBlock — the engine's under/over-valued read + the exact-item moment.
 // Reads the build-time `value` stamped on upcoming lots (app/lib/value.ts). Only
@@ -30,25 +32,34 @@ function usd(n: number): string {
 }
 function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; allLots: AuctionLot[]; market: MarketData | null; backtest: Backtest | null }) {
   const v = (lot as AuctionLot & { value?: NonNullable<AuctionLot['value']> }).value;
-  if (!v) return null;
-  const exactLot = v.exact ? allLots.find(l => l.id === v.exact!.id) : null;
   // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
   // outside [1/5, 5] is a data fault the build killed at the source — never
   // resurrect the directional call here.
-  const evSane = v.compRatio == null || (v.compRatio <= 5 && v.compRatio >= 1 / 5);
-  const dir = evSane ? v.signal : null;
+  const evSane = !v || v.compRatio == null || (v.compRatio <= 5 && v.compRatio >= 1 / 5);
+  const dir = v && evSane ? v.signal : null;
   const under = dir && dir.label === 'below comparable market';
   const over = dir && dir.label === 'above comparable market';
+  const exactLot = v?.exact ? allLots.find(l => l.id === v.exact!.id) : null;
+  // A2-5: a Today's-Call lot can carry the crawl-stamped `signal` without the
+  // build's `value` stamp — the SAME engine statistic, measured pre-outcome.
+  // The directional line, the calibration disclosure and the sub-market link
+  // must not vanish with the stamp: fall back to `signal` where honest.
+  const sig = !v && lot.status === 'upcoming' ? lot.signal : null;
+  const confidence = v?.confidence ?? sig?.confidence ?? null;
+  const drow = drillRowFor(lot, market);
+  const dslug = drillSlugFor(lot);
+  const calBand = confidence ? backtest?.calibration?.band?.[confidence] : null;
+  if (!v && !sig && !calBand && !(drow && dslug)) return null;
   return (
     <div className="ray-lv" style={{ margin: '10px 0 2px', padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel)' }}>
-      {v.exact && exactLot && (
+      {v && v.exact && exactLot && (
         <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 600, marginBottom: dir || v.estimateUsd ? 8 : 0 }}>
           {v.exact.cls === 'physicalMatch' ? 'This exact item' : 'This model'} last sold for{' '}
           <b>{usd(v.exact.realizedUsd)}</b>{' '}
           <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>· {formatDate(v.exact.saleDate, { month: 'short', year: 'numeric' })}</span>
         </div>
       )}
-      {dir && (
+      {v && dir && (
         <div style={{ fontSize: 13.5 }}>
           <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-down-text)' : 'var(--color-text-secondary)', fontWeight: 650 }}>
             {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
@@ -56,7 +67,19 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
           <span style={{ color: 'var(--color-text-muted)' }}> · comparable sales carry a {dir.beatRatePct}% rate of beating estimates like this · {v.n} sales</span>
         </div>
       )}
-      {!dir && v.estimateUsd != null && (
+      {/* no value stamp, but the crawl-stamped card signal exists — the same
+          comps-median-vs-ask read the card and the /value ledger print */}
+      {!dir && sig && (
+        <div style={{ fontSize: 13.5 }}>
+          <span style={{ color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 650 }}>
+            Trading {sig.label === 'Below Market' ? 'below' : 'above'} comparable market
+          </span>
+          <span style={{ color: 'var(--color-text-muted)' }}>
+            {' '}· comps median vs ask {signalMagnitude(sig.label, sig.pct)}{sig.basis ? ` · ${sig.basis} sales` : ''}
+          </span>
+        </div>
+      )}
+      {v && !dir && v.estimateUsd != null && (
         <div style={{ fontSize: 13.5 }}>
           <span style={{ color: 'var(--color-fg)', fontWeight: 650 }}>
             lectr value {v.low === v.high ? usd(v.estimateUsd) : `${usd(v.low)}–${usd(v.high)}`}
@@ -71,24 +94,19 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
           coverage for this confidence tier — how tightly calls like this have
           landed against lectr's own value across the full replay. Never a
           promise; a measured band. */}
-      {(() => {
-        const cal = backtest?.calibration;
-        const band = cal?.band?.[v.confidence];
-        if (!cal || !band) return null;  // any confidence-tiered value, not only directional flags
-        return (
-          <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 6 }}>
-            Calibration · {v.confidence}-confidence reads have landed within{' '}
-            <b style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{band.lo.toFixed(2)}×–{band.hi.toFixed(2)}×</b>{' '}
-            of lectr&rsquo;s value, 70% of the time{cal.n != null ? ` · n ${cal.n.toLocaleString()}` : ''}
-          </div>
-        );
-      })()}
+      {calBand && confidence && (
+        // any confidence-tiered read, not only directional flags — and not
+        // only value-stamped lots (the signal's tier is the same tier)
+        <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 6 }}>
+          Calibration · {confidence}-confidence reads have landed within{' '}
+          <b style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{calBand.lo.toFixed(2)}×–{calBand.hi.toFixed(2)}×</b>{' '}
+          of lectr&rsquo;s value, 70% of the time{backtest?.calibration?.n != null ? ` · n ${backtest.calibration.n.toLocaleString()}` : ''}
+        </div>
+      )}
 
       {/* #16 · SUB-MARKET CONTEXT: where this lot trades, and how that market
           is moving — the flagship taxonomy read, at the bid-decision moment. */}
       {(() => {
-        const drow = drillRowFor(lot, market);
-        const dslug = drillSlugFor(lot);
         if (!drow || !dslug) return null;
         const pct = drow.readType === 'index' && drow.index ? drow.index.changePct
           : drow.readType === 'demand' ? drow.demandNow : null;
@@ -180,6 +198,9 @@ export function PriceBand({
   estHigh: number | null;
   below: boolean | null;
 }) {
+  // last line of defense for the log axis: one undefined/NaN/≤0 price in the
+  // pool would pass the lo/hi guard (NaN compares false) and emit cx="NaN%"
+  prices = prices.filter(p => Number.isFinite(p) && p > 0);
   if (prices.length < 3) return null;
   const all = [...prices, ...(estLow ? [estLow] : []), ...(estHigh ? [estHigh] : [])];
   const lo = Math.min(...all) * 0.9;
@@ -393,7 +414,10 @@ export default function ComparableModal({
   allLots: AuctionLot[];
   onClose: () => void;
   saved?: boolean;
-  onToggleSave?: (lotId: string) => void;
+  // the full lot rides along (account.tsx toggle(lotId, lot)): without it the
+  // watchlist entry saves bare AND a signed-out save dies after the OAuth
+  // round-trip (the lectr-pending-save stash only writes `if (lot)`).
+  onToggleSave?: (lotId: string, lot?: AuctionLot) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -492,7 +516,11 @@ export default function ComparableModal({
       if (ev.signal.label.startsWith('at')) return null;
       const below = ev.signal.label.startsWith('below');
       const byId = new Map(allLots.map(l => [l.id, l]));
-      const pool = (ev.poolIds || []).map(id => byId.get(id)).filter((x): x is AuctionLot => !!x);
+      // sold-with-price only: a pool id resolving to a relisted/faulted lot
+      // must never feed a `priceUsd!` read ($NaN stats, cx="NaN%" dots)
+      const pool = (ev.poolIds || [])
+        .map(id => byId.get(id))
+        .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
       return {
         signal: {
           label: (below ? 'Below Market' : 'Above Market') as 'Below Market' | 'Above Market',
@@ -782,7 +810,7 @@ export default function ComparableModal({
         {onToggleSave && (
           <button
             className="ray-save-btn"
-            onClick={() => onToggleSave(lot.id)}
+            onClick={() => onToggleSave(lot.id, lot)}
             aria-label={saved ? 'Remove from saved' : 'Save lot'}
             style={{
               position: 'sticky',
@@ -819,6 +847,7 @@ export default function ComparableModal({
           borderBottom: '1px solid var(--color-border)',
         }}>
           <div className="comp-modal-img" style={{
+            position: 'relative',
             flexShrink: 0,
             background: `linear-gradient(135deg, var(--color-bg-elevated) 0%, var(--color-bg) 100%)`,
             display: 'flex',
@@ -826,24 +855,27 @@ export default function ComparableModal({
             justifyContent: 'center',
             overflow: 'hidden',
           }}>
-            {lot.imageUrl ? (
-              <img
-                src={httpsImg(lot.imageUrl)}
+            {/* serif-initial plate always behind, photo overlays — on a
+                hotlink-block the plate shows through, never an empty well
+                (the comp-row thumbs' exact pattern) */}
+            <div style={{
+              fontFamily: "var(--font-serif), serif",
+              fontSize: 56,
+              fontWeight: 300,
+              color: 'var(--color-text-faint)',
+              opacity: 0.3,
+              fontStyle: 'normal',
+            }}>
+              {lot.title.charAt(0)}
+            </div>
+            {lot.imageUrl && (
+              <PlateImg
+                // .comp-modal-img: 200×200 desktop, full-panel-width × 180
+                // on the mobile sheet — 640 covers 2× the widest sheet
+                src={sizedImg(httpsImg(lot.imageUrl), 640)}
                 alt={lot.title}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={e => e.currentTarget.remove()}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
-            ) : (
-              <div style={{
-                fontFamily: "var(--font-serif), serif",
-                fontSize: 56,
-                fontWeight: 300,
-                color: 'var(--color-text-faint)',
-                opacity: 0.3,
-                fontStyle: 'normal',
-              }}>
-                {lot.title.charAt(0)}
-              </div>
             )}
           </div>
 
@@ -858,7 +890,9 @@ export default function ComparableModal({
               }}>
                 {lot.auctionHouse}
               </span>
-              {catLabel && lot.category !== 'unknown' && (
+              {/* 'object' is suppressed exactly as LotCard suppresses it —
+                  an "Object" chip names nothing */}
+              {catLabel && lot.category !== 'unknown' && lot.category !== 'object' && (
                 <>
                   <span style={{ color: 'var(--color-text-faint)', fontSize: 12.5 }}>&middot;</span>
                   <span style={{
@@ -945,28 +979,32 @@ export default function ComparableModal({
               >
                 Open the lot page <Flick size={10} />
               </Link>
-              <a
-                href={lot.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 20px',
-                  borderRadius: 100,
-                  background: 'var(--color-accent-wine)',
-                  color: 'var(--color-bg)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  letterSpacing: '-0.01em',
-                  textTransform: 'none',
-                  textDecoration: 'none',
-                  transition: 'opacity var(--duration-fast) var(--ease-signature)',
-                }}
-              >
-                View lot <Flick size={10} style={{ marginLeft: 0 }} />
-              </a>
+              {/* scheme-allowlisted (safe-href): a crawler-faulted URL means
+                  no house CTA at all — the in-app certificate still stands */}
+              {safeHref(lot.url) && (
+                <a
+                  href={safeHref(lot.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 20px',
+                    borderRadius: 100,
+                    background: 'var(--color-accent-wine)',
+                    color: 'var(--color-bg)',
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    letterSpacing: '-0.01em',
+                    textTransform: 'none',
+                    textDecoration: 'none',
+                    transition: 'opacity var(--duration-fast) var(--ease-signature)',
+                  }}
+                >
+                  View lot <Flick size={10} style={{ marginLeft: 0 }} />
+                </a>
+              )}
               {/* the share point — every card's modal can mint the permalink */}
               <CopyLinkButton id={lot.id} style={{ borderRadius: 100, padding: '7px 16px', fontSize: 12.5 }} />
             </div>
@@ -1060,7 +1098,7 @@ export default function ComparableModal({
                 : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}`
               : band
                 ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
-                : compsPending
+                : compsPending || comparables.length === 0
                   ? 'Context — comparable sales'
                   : `Context — ${comparables.length} comparable sales (no call on this lot)`}
           </div>
@@ -1106,11 +1144,13 @@ export default function ComparableModal({
               color: 'var(--color-text-faint)',
               fontSize: 13.5,
             }}>
-              No comparable sold lots found for this artist.
+              {/* one message, one voice (LotPage's phrasing) — the header
+                  above already dropped its own "0 comparable sales" count */}
+              No comparable sales clear the gates for this lot &mdash; lectr doesn&rsquo;t manufacture a pool.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {comparables.map(({ lot: comp, score }, i) => {
+              {comparables.map(({ lot: comp }, i) => {
                 const compHouseColor = houseColors[comp.auctionHouse] || 'var(--color-text-secondary)';
                 const estMid = lot.estimateLow && lot.estimateHigh
                   ? (lot.estimateLow + lot.estimateHigh) / 2
@@ -1122,7 +1162,9 @@ export default function ComparableModal({
                 return (
                   <a
                     key={comp.id}
-                    href={comp.url}
+                    // scheme-allowlisted; undefined renders a non-navigating
+                    // row — the comp's facts still read, no dead click
+                    href={safeHref(comp.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="comp-modal-row"
@@ -1165,7 +1207,9 @@ export default function ComparableModal({
                           {(craftTitle(comp.title) || '?').charAt(0)}
                         </span>
                         {comp.imageUrl && (
-                          <img src={httpsImg(comp.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.currentTarget.remove()} />
+                          // .comp-modal-thumb is 52×52 (44×44 on the sheet) —
+                          // 160 is 3× the largest box, still ~1/150th the master
+                          <PlateImg src={sizedImg(httpsImg(comp.imageUrl), 160)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                         )}
                       </div>
 
@@ -1216,7 +1260,7 @@ export default function ComparableModal({
                           fontWeight: 500,
                           color: 'var(--color-fg)',
                         }}>
-                          {formatPrice(comp.priceUsd!)}
+                          {comp.priceUsd ? formatPrice(comp.priceUsd) : '—'}
                         </div>
                         {ratio !== null && (
                           <div style={{

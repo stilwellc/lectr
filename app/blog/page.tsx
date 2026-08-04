@@ -118,7 +118,7 @@ export default function BlogIndex() {
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <style dangerouslySetInnerHTML={{ __html: BLOG_CSS }} />
       <ArtistNav activeSlug="blog" />
-      <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
+      <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 var(--gutter)', marginBottom: 34 }}>
           {/* the certificate masthead — dated from the crawl the notes read */}
           <Masthead
@@ -173,7 +173,7 @@ export default function BlogIndex() {
             </Link>
           </div>
         </div>
-      </main>
+      </div>
       <Colophon record={null} />
     </div>
   );

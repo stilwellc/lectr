@@ -36,7 +36,11 @@ function CategoryTooltip({ active, payload }: { active?: boolean; payload?: Arra
   );
 }
 
-export default function CategoryBreakdown({ allLots, data, embedded = false }: Props & { data?: { categoryKey: string; revenue: number; count: number; soldCount: number }[]; embedded?: boolean }) {
+/**
+ * Rendered embedded inside the Distributions band only (its tab row supplies
+ * the section frame and header) — mirrors SportBreakdown's card-only shape.
+ */
+export default function CategoryBreakdown({ allLots, data }: Props & { data?: { categoryKey: string; revenue: number; count: number; soldCount: number }[] }) {
   const { theme } = useTheme();
   const categoryData = useMemo(() => {
     // build-time per-category totals over the FULL corpus when available;
@@ -72,9 +76,7 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
 
   if (categoryData.length === 0) return null;
 
-  // the chart card itself — reused verbatim by the embedded (Distributions
-  // tab) rendering, which supplies its own section frame and header
-  const card = (
+  return (
       <div className="glass glass-quiet" style={{
         overflow: 'hidden',
         padding: '20px 8px 16px 0',
@@ -131,32 +133,5 @@ export default function CategoryBreakdown({ allLots, data, embedded = false }: P
           ))}
         </div>
       </div>
-  );
-
-  if (embedded) return card;
-
-  return (
-    <section className="ray-category rail">
-      <style>{`
-        .ray-category { padding-block: var(--sect-t) var(--sect-b); }
-        @media (max-width: 768px) {
-          .ray-category { padding-block: var(--sect-t) var(--sect-b); }
-        }
-      `}</style>
-
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{
-          fontFamily: 'var(--font-serif), serif',
-          fontSize: 24,
-          fontWeight: 400,
-          letterSpacing: '-0.015em',
-        }}>
-          Category <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>breakdown</span>
-        </h2>
-        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>Bars = total sales value · dots below = lot counts</p>
-      </div>
-
-      {card}
-    </section>
   );
 }

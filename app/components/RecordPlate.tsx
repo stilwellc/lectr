@@ -2,8 +2,12 @@
 
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
-import { formatPrice, formatDate, httpsImg } from '../utils';
+import { formatPrice, formatDate, httpsImg, sizedImg } from '../utils';
 import { useReducedMotion } from '../preview/terminal/hooks';
+
+/** The plate's framed well renders ≤ ~300 CSS px, so ask the Bonhams resizer
+ *  for 640 (2× retina). See `sizedImg` in app/utils. */
+const PLATE_IMG_W = 640;
 
 /** one sale the plate can show — the vitrine rotates through up to three */
 export interface PlateSale {
@@ -39,6 +43,7 @@ export default function RecordPlate({
   imageUrl,
   href,
   sales,
+  imagePending = false,
 }: {
   /** the certificate head — honest to the data ("Record sale", "Top recent sale"…) */
   label: string;
@@ -53,6 +58,10 @@ export default function RecordPlate({
       ≥ 2 the plate becomes a vitrine; the top-level figure/date/… props are
       ignored in favor of sales[0..N]. Ranks re-label per position. */
   sales?: PlateSale[];
+  /** the caller knows a photo is still in flight (phase-2 corpus): hold the
+      well's height so the plate can't grow under the reader. Ignored once a
+      real image is showing. */
+  imagePending?: boolean;
 }) {
   // the deck: an explicit `sales` array (vitrine) or the single-sale props
   const deck: PlateSale[] =
@@ -82,6 +91,8 @@ export default function RecordPlate({
 
   const cur = deck[Math.min(idx, deck.length - 1)];
   const showImg = !!cur.imageUrl && imgOk;
+  // holding the well's space for a photo that hasn't arrived yet
+  const holdImg = !showImg && imagePending && idx === 0;
   // the head re-numbers as the vitrine turns; single-sale keeps the given label
   const headLabel = rotates
     ? idx === 0
@@ -95,11 +106,17 @@ export default function RecordPlate({
 
   const body: ReactNode = (
     <>
+      {/* space held, frame not drawn: the reserved well is transparent and
+          outline-free, so a pending photo costs no visible empty frame — it
+          just stops the certificate below it from jumping when the photo
+          lands. Only the first card reserves; later vitrine cards turn after
+          the corpus is in, so their images are already known. */}
+      {holdImg && <span className="lectr-recplate-img lectr-recplate-img-hold" aria-hidden />}
       {showImg && (
         <span className="lectr-recplate-img" aria-hidden>
           <img
             key={cur.imageUrl}
-            src={httpsImg(cur.imageUrl!)}
+            src={sizedImg(httpsImg(cur.imageUrl!)!, PLATE_IMG_W)}
             alt=""
             loading="lazy"
             decoding="async"
@@ -111,7 +128,7 @@ export default function RecordPlate({
           />
         </span>
       )}
-      <span className="lectr-recplate-k" style={showImg ? undefined : { marginTop: 2 }}>
+      <span className="lectr-recplate-k" style={showImg || holdImg ? undefined : { marginTop: 2 }}>
         <span>{headLabel}</span>
         {cur.date && (
           <span style={{ color: 'var(--color-text-faint)', fontWeight: 600, letterSpacing: '0.08em' }}>
@@ -133,13 +150,16 @@ export default function RecordPlate({
     </>
   );
 
-  // the vitrine's prev/next — tiny dots, keyboard-reachable, no auto-focus
+  // the vitrine's pager — the VISUAL stays a tiny dot, but each button is a
+  // ≥40×40px hit box (A6: the bare 6×6px dots were untappable on a phone).
+  // Padding provides the target; negative margins keep the visual rhythm so
+  // the row doesn't read as a 40px-tall control strip.
   const dots = rotates ? (
     <span
       className="lectr-recplate-dots"
       role="tablist"
       aria-label="Top sales"
-      style={{ display: 'inline-flex', gap: 6, marginTop: 10, alignItems: 'center' }}
+      style={{ display: 'inline-flex', marginTop: 10, marginBottom: -12, marginLeft: -17, alignItems: 'center' }}
     >
       {deck.map((_, i) => (
         <button
@@ -149,16 +169,29 @@ export default function RecordPlate({
           aria-label={`Sale ${i + 1} of ${deck.length}`}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIdx(i); }}
           style={{
-            width: i === idx ? 16 : 6,
-            height: 6,
+            // the true tap target: 40×40 minimum, dot centered inside
+            minWidth: 40,
+            minHeight: 40,
             padding: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             border: 'none',
-            borderRadius: 3,
+            background: 'transparent',
             cursor: 'pointer',
-            background: i === idx ? 'var(--paper-edge, rgba(255,255,255,0.5))' : 'var(--color-border-mid, rgba(255,255,255,0.18))',
-            transition: 'width 0.2s ease, background 0.2s ease',
           }}
-        />
+        >
+          <span
+            aria-hidden
+            style={{
+              width: i === idx ? 16 : 6,
+              height: 6,
+              borderRadius: 3,
+              background: i === idx ? 'var(--paper-edge, rgba(255,255,255,0.5))' : 'var(--color-border-mid, rgba(255,255,255,0.18))',
+              transition: 'width 0.2s ease, background 0.2s ease',
+            }}
+          />
+        </button>
       ))}
     </span>
   ) : null;

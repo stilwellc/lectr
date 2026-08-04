@@ -297,10 +297,15 @@ export default function HeroChart({
 
           {/* anchor terminus — a quiet double ring, no glow */}
           {!flipped && anchorLast && main.xOf.has(anchorLast.period) && (
-            <g className={reduce ? undefined : styles.hcTerminus}>
+            <g>
               <circle cx={main.xOf.get(anchorLast.period)} cy={main.yOf(anchorLast.value)} r={3.2} fill="var(--color-fg, #E8EAED)" />
+              {/* the pulse class rides the RING itself, gated on the OS motion
+                  switch (styles.hcTerminus never existed — the old gate was a
+                  no-op and the pulse ran for reduced-motion readers, B3 #4);
+                  under reduce the ring renders as a static quiet double ring */}
               <circle cx={main.xOf.get(anchorLast.period)} cy={main.yOf(anchorLast.value)} r={6.5}
-                fill="none" stroke="var(--color-fg, #E8EAED)" strokeOpacity={0.3} strokeWidth={1} className={styles.hcTerminusRing} />
+                fill="none" stroke="var(--color-fg, #E8EAED)" strokeOpacity={0.3} strokeWidth={1}
+                className={reduce ? undefined : styles.hcTerminusRing} />
             </g>
           )}
 

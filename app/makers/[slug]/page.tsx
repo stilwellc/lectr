@@ -11,7 +11,7 @@ import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '..
 import type { MarketData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useMarket } from '../../lib/market';
-import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming } from '../../utils';
+import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming, refLabel } from '../../utils';
 import { useRefs, refsForMaker } from '../../hooks/useRefs';
 import { encodeRefPath } from '../../ref/ref-path';
 
@@ -69,6 +69,10 @@ function ArchiveErrorPanel({ onRetry }: { onRetry: () => void }) {
 // only on numerals) so these read as one family with the panel above them.
 const DOSSIER_FEATURE_CSS = `
 .mkr-panel{margin-top:14px}
+/* self-contained card padding (HouseMatrix's pattern): the dossier never
+   mounts VerifiedMovers, whose injected global is where .ray-vm-card's
+   padding otherwise comes from */
+.mkr-panel.ray-vm-card{padding:var(--card-pad)}
 .mkr-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:2px}
 .mkr-panel-title{font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--color-fg,#E8EAED)}
 .mkr-panel-method{font-size:11.5px;color:var(--color-text-faint,#7A8087)}
@@ -151,7 +155,8 @@ function PlayerStrip({ lots, label }: { lots: AuctionLot[]; label: string }) {
                   ? <><span className="num">{fmtUsdCompact(med)}</span><span className="tag">median · n={p.prices.length}</span></>
                   : <span className="tag">—</span>}
               </span>
-              <span className="mkr-row-meta">{p.n}×</span>
+              {/* no third column: the lot count already rides the name — a
+                  duplicate '138×' meta cell printed the same figure twice */}
             </Link>
           );
         })}
@@ -195,15 +200,22 @@ function RefLedger({ slug, label }: { slug: string; label: string }) {
       </div>
       <div className="mkr-rows">
         {rows.map(r => {
-          // TTM delta vs the all-time median — a real measured move (both sides
-          // are medians of realized sales), so it may carry direction.
-          const ttmDelta = r.ttmMedianUsd != null && r.medianUsd > 0
+          // TTM delta vs the all-time median — both sides are medians of
+          // realized sales, but with no window-n floor or magnitude gate the
+          // figure is a mix artifact at large sizes (prod rendered "+1155%
+          // ttm" in green on /makers/rolex). Gate hard: a deep reference line
+          // (n≥20) moving within ±100% may carry direction; anything outside
+          // abstains — wrong is worse than blank.
+          const rawTtm = r.ttmMedianUsd != null && r.medianUsd > 0
             ? ((r.ttmMedianUsd - r.medianUsd) / r.medianUsd) * 100
             : null;
+          const ttmDelta = rawTtm != null && r.n >= 20 && Math.abs(rawTtm) <= 100 ? rawTtm : null;
           return (
             <Link key={r.key} href={`/ref/${slug}/${encodeRefPath(r.ref)}`} className="mkr-row">
               <span className="mkr-row-name">
-                {r.ref}
+                {/* the same display label /ref's h1 prints — never the raw
+                    lower-case refs.json key ('oysterperpetual') */}
+                {refLabel(r.ref)}
                 <span className="mkr-row-sub">{r.n.toLocaleString()} sales</span>
               </span>
               <span className="mkr-row-val">
@@ -304,7 +316,9 @@ function VerticalContextLedger({ marketData, vertical, label }: { marketData: Ma
 // loaded SOLD lots, n-gated (≥8/yr). Rendered as a compact HeroChart money
 // line. Labeled "yearly typical price" — a mix-affected median, NOT demand or
 // appreciation. Renders nothing when the maker's yearly depth is too thin
-// (fewer than 3 qualifying years).
+// (fewer than 6 qualifying years — 3 mix-skewed years on sports-cards drew a
+// ~$200K→$400 cliff that read as a market crash; abstain beats a wrong-looking
+// picture).
 function MakerDecadeBand({ lots, label }: { lots: AuctionLot[]; label: string }) {
   const points = useMemo(() => {
     const byYear = new Map<number, number[]>();
@@ -323,7 +337,7 @@ function MakerDecadeBand({ lots, label }: { lots: AuctionLot[]; label: string })
       .map(([y, ps]) => ({ period: String(y), value: median(ps)!, n: ps.length }));
   }, [lots]);
 
-  if (points.length < 3) return null;
+  if (points.length < 6) return null;
 
   const anchor = { key: 'typical', label: `${label} · yearly typical`, color: 'var(--color-fg, #E8EAED)', unit: 'money' as const, points };
 

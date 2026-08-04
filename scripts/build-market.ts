@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
+import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors, similarity, idf } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
@@ -63,14 +64,12 @@ function marketAnalytics(lots: AuctionLot[]): MarketAnalytics {
 const CORPUS = path.join(process.cwd(), 'data', 'corpus');
 const SERVED = path.join(process.cwd(), 'public', 'data', 'ray');
 
-const MARKETS: Record<string, string[]> = {
-  art: ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf'],
-  design: ['george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'],
-  watches: ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'],
-  sports: ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'],
-  science: ['space-exploration', 'meteorites', 'fossils', 'scientific-instruments'],
-  culture: ['movie-tv', 'music-memorabilia', 'entertainment-memorabilia'],
-};
+// Derived from ARTISTS — the single source of truth for the roster. A private
+// hardcoded copy here once dropped science-tech from every market-level
+// aggregate (markets/hedonic/houseCal/seasonality) while the ARTISTS-driven
+// maps (subMarkets, drills, stats) kept it — the two surfaces disagreed.
+const MARKETS: Record<string, string[]> = {};
+for (const a of ARTISTS) (MARKETS[a.market] ||= []).push(a.slug);
 
 function readGz(f: string): AuctionLot[] {
   // buffer-safe NDJSON read — the sold-archive exceeds V8's max string length
@@ -853,7 +852,12 @@ export function runMarketBuild() {
       return `${v}[i${c.index} d${c.demand} x${c.descriptive}]`;
     }).join(' ');
     console.log(`[market] subMarkets: ${breakdown}`);
-  } catch (e) { console.warn('[market] subMarkets build failed:', (e as Error).message); }
+  } catch (e) {
+    // load-bearing for the lander hero + every dossier read: a missing/corrupt
+    // stats.json must FAIL the build (last-good market.json stays live) — a
+    // green exit must never publish market.json with empty subMarkets.
+    throw new Error(`[market] subMarkets build failed: ${(e as Error).message}`);
+  }
 
   // sub-category DRILL rows (new `drills` key — additive; subMarkets untouched)
   let drills: ReturnType<typeof buildDrillRows> = {};
@@ -908,8 +912,12 @@ export function runMarketBuild() {
   // the vertical. Keep them in the phase-2 shards (the estimate-aware path that
   // culture surfaces load via useFullLots) instead of archiving them.
   const CULTURE_KEEP = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia']);
+  // The archive predicate must MATCH assemble.ts's isArchiveTier — this
+  // re-split runs after assemble and overwrites its output. Dropping the
+  // `archived === true` clause once leaked the 252K-row RR sold archive into
+  // the phase-2 shards (~290MB on the wire for every useFullLots surface).
   writeCorpusAndServed(all as unknown as Record<string, unknown>[],
-    (l: Record<string, unknown>) => l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string),
+    (l: Record<string, unknown>) => (l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string)) || l.archived === true,
     // corpus-only: SOLD sport cards stay off the wire — except the sample above.
     // Live cards always ship (they're on the block).
     (l: Record<string, unknown>) => l.artist === 'sports-cards' && l.status === 'sold' && !cardSample.has(String(l.id)));

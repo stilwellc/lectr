@@ -100,9 +100,11 @@ export default function AboutPage() {
         .ray-about-sum:hover .ray-about-flick { color: var(--color-fg); }
         .ray-about-body { padding: 4px 0 28px; }
       `}</style>
-      <ArtistNav activeSlug="about" />
+      {/* the walk-through lives on the notes shelf (masthead kicker, "All notes"
+          back link) — light the Blog tab like every other note page does */}
+      <ArtistNav activeSlug="blog" />
 
-      <main id="main" style={{ paddingTop: 28, paddingBottom: 40 }}>
+      <div style={{ paddingTop: 28, paddingBottom: 40 }}>
         <div style={{ ...wrap, marginBottom: 26 }}>
           {/* the walk-through reads as part of the editorial layer now — back
               link up top, like every note */}
@@ -268,7 +270,7 @@ export default function AboutPage() {
             JavaScript. If either fails, the job fails loudly rather than leaving production broken.
           </p>
         </Section>
-      </main>
+      </div>
 
       <Colophon record={null} />
     </div>

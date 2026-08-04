@@ -152,7 +152,9 @@ export default function SubPage({ slug }: { slug: string }) {
     return (
       <>
         {nav}
-        <div className="rail" style={{ paddingBlock: 80, textAlign: 'center' }}>
+        {/* while market.json loads, fill the viewport so the colophon never
+            paints on screen and then gets shoved down by the dossier (CLS) */}
+        <div className="rail" style={{ paddingBlock: 80, textAlign: 'center', minHeight: market === null ? '100dvh' : undefined, boxSizing: 'border-box' }}>
           {market === null ? (
             <p style={{ color: 'var(--color-text-faint)', fontSize: 14 }}>Loading the sub-market book&hellip;</p>
           ) : (

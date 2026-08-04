@@ -192,7 +192,10 @@ let inflight: Promise<RayPayload> | null = null;
 // the largest asset must never brick fullLoaded-gated routes for the session.
 let inflightFull = false;
 let retryFull: (() => void) | null = null;
-// Phase 2 (the full history, ~10MB across shards) is now OPT-IN, mirroring
+// Phase 2 (the full history — 9 shards, ~152MB raw / ~28MB over the wire after
+// brotli; the "~10MB" this comment used to claim has been wrong since the
+// corpus passed 700K lots, and it masked the RR-archive leak that briefly put
+// it at ~290MB) is now OPT-IN, mirroring
 // phase 3: it fires only when a surface asks for it via useFullLots() /
 // triggerFullLoad(). The home lander renders its feed from the eager
 // upcoming.json alone, so it never pays this — the sold "Record" band lazy-
@@ -320,8 +323,11 @@ function loadRayData(): Promise<RayPayload> {
             if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
             try {
               // first try trusts the cache; retries bypass it in case the
-              // cached body itself was the problem (truncated download)
-              const cacheMode: RequestCache = attempt === 0 ? 'force-cache' : 'reload';
+              // cached body itself was the problem (truncated download).
+              // No version (meta.json failed → ver='') ⇒ never force-cache:
+              // the shard paths are immutable-cached, and a bare force-cache
+              // fetch would silently pin a stale corpus for a year.
+              const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
               const idx = await fetchJson(`/data/ray/lots-index.json${ver}`, { cache: cacheMode }) as { shards: number };
               const shardArrs = await Promise.all(
                 Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) =>
@@ -365,9 +371,12 @@ function loadRayData(): Promise<RayPayload> {
     // are immutable-cached (public/_headers), so an un-versioned fetch here could
     // pin a stale shard for a year.
     const fbVer = metaData.lastCrawl ? `?v=${encodeURIComponent(metaData.lastCrawl)}` : '';
+    // unversioned (meta failed) ⇒ bypass the browser cache: the shard paths
+    // are immutable-cached, and a default fetch would pin stale for a year.
+    const fbCache: RequestCache | undefined = fbVer ? undefined : 'reload';
     const lotsR = await Promise.allSettled([(async () => {
-      const idx = await fetchJson(`/data/ray/lots-index.json${fbVer}`) as { shards: number };
-      const arrs = await Promise.all(Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) => fetchJson(`/data/ray/lots-${i}.json${fbVer}`) as Promise<AuctionLot[]>));
+      const idx = await fetchJson(`/data/ray/lots-index.json${fbVer}`, { cache: fbCache }) as { shards: number };
+      const arrs = await Promise.all(Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) => fetchJson(`/data/ray/lots-${i}.json${fbVer}`, { cache: fbCache }) as Promise<AuctionLot[]>));
       return ([] as AuctionLot[]).concat(...arrs);
     })()]);
     const lotsData = (lotsR[0].status === 'fulfilled' ? lotsR[0].value : []) as AuctionLot[];
@@ -425,17 +434,25 @@ function loadSoldArchive() {
   inflightArchive = true;
   // a retry after archiveError returns gated surfaces to their loading state
   if (archiveErrorState) { archiveErrorState = false; notifyArchive(); }
-  const lastCrawl = cached?.lastCrawl || '';
-  const ver = lastCrawl ? `?v=${encodeURIComponent(lastCrawl)}` : '';
-  // the precomputed soldComp lives on the eager upcoming lots, keyed by id
-  const soldComps = new Map((cached?.allLots || []).map(l => [l.id, l.soldComp]));
   (async () => {
+    // Phase 1 FIRST: on a cold session `cached` is null here, which used to
+    // read lastCrawl as '' and fetch the archive shards UNVERSIONED — and the
+    // shard paths are immutable-cached (public/_headers), so that pinned a
+    // year-stale archive and latched the soldComp merge empty for the session.
+    // Awaiting loadRayData also seats the eager soldComps map for re-attach.
+    let core = cached;
+    if (!core) { try { core = await loadRayData(); } catch { core = cached; } }
+    const lastCrawl = core?.lastCrawl || '';
+    const ver = lastCrawl ? `?v=${encodeURIComponent(lastCrawl)}` : '';
+    // the precomputed soldComp lives on the eager upcoming lots, keyed by id
+    const soldComps = new Map((core?.allLots || []).map(l => [l.id, l.soldComp]));
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
       try {
         // first try trusts the cache; retries bypass it in case the cached
-        // body itself was the problem (truncated download)
-        const cacheMode: RequestCache = attempt === 0 ? 'force-cache' : 'reload';
+        // body itself was the problem (truncated download). No version ⇒
+        // never force-cache (immutable-cached paths would pin stale a year).
+        const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
         // SHARDED like phase 2 (the single file crossed 22MB against the CDN's
         // 25MB cap): index → shards in parallel. Single-file fallback covers
         // the transition window where a client has new code but cached old data.

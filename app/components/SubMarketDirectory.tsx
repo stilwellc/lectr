@@ -130,10 +130,13 @@ export default function SubMarketDirectory({ marketData, scope }: { marketData: 
 
   let cards: { title: string; rows: DrillRow[]; full?: boolean }[] = [];
   if (scope === 'all') {
-    // overview: one card per vertical, its strongest few reads
+    // overview: one card per vertical, its strongest few reads. Pass the FULL
+    // row set — GroupCard slices to MAX_ROWS itself and needs the real length
+    // to render the "+N more → /analytics/<vertical>" door (pre-slicing here
+    // hid 54 of the 94 tracked drills with no affordance to reach them).
     for (const m of MARKETS) {
       const rows = drills[m.key];
-      if (rows?.length) cards.push({ title: m.label, rows: rows.slice(0, MAX_ROWS), full: true });
+      if (rows?.length) cards.push({ title: m.label, rows, full: true });
     }
   } else {
     const rows = drills[scope] || [];

@@ -11,7 +11,7 @@ const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0
 const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 21, fontWeight: 400, letterSpacing: '-0.015em', margin: '42px 0 10px' };
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '4px 0 8px', fontSize: 14 };
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
+const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
 const td: React.CSSProperties = { padding: '9px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-secondary)' };
 const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', whiteSpace: 'nowrap' };
 
@@ -50,7 +50,7 @@ export default function QuarterInsight({
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="blog" />
-      <main id="main" style={{ paddingTop: 28, paddingBottom: 60 }}>
+      <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 6 }}>
           <p className="kicker" style={{ margin: '0 0 14px' }}>
             <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · Q2 2026 in review · {date}
@@ -152,7 +152,7 @@ export default function QuarterInsight({
             <Link href="/blog" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}><Flick size={11} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 2 }} /> All notes</Link>
           </p>
         </article>
-      </main>
+      </div>
       <Colophon record={null} />
     </div>
   );

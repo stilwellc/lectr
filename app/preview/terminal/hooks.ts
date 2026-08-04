@@ -91,9 +91,3 @@ export function fmtMoneyCompact(n: number): string {
 export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString('en-US');
 }
-
-/** Signed percentage with a fixed sign glyph, e.g. +12.4% / −3.1%. */
-export function fmtDelta(n: number, digits = 1): string {
-  const s = n > 0 ? '+' : n < 0 ? '−' : '';
-  return `${s}${Math.abs(n).toFixed(digits)}%`;
-}
