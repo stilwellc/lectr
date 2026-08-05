@@ -264,7 +264,7 @@ function Step({ n, title, body }: { n: string; title: string; body: React.ReactN
 export default function AboutPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .deck-slide { padding: clamp(54px, 7vw, 96px) 0 clamp(20px, 3vw, 34px); }
         .deck-room {
           position: relative;
@@ -372,6 +372,88 @@ export default function AboutPage() {
         .hero-cap b { color: var(--color-fg); font-weight: 600; }
         .hero-cap-paid { color: var(--color-up) !important; }
 
+        /* ── VALUE: who, and what changes for them ────────────────────── */
+        .value-list { margin-top: clamp(24px, 3vw, 34px); }
+        .value-row {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 6px;
+          padding: clamp(16px, 1.8vw, 22px) 0;
+          border-top: 1px solid var(--hairline);
+        }
+        .value-who { font-size: 15px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+        .value-what { font-size: 15px; line-height: 1.65; color: var(--color-text-secondary); }
+        @media (min-width: 820px) {
+          .value-row { grid-template-columns: 210px minmax(0, 1fr); gap: 28px; align-items: baseline; }
+          .value-who { font-size: 16px; }
+        }
+
+        /* ── CLOSE: one line, one action ──────────────────────────────── */
+        .deck-close {
+          padding: clamp(64px, 9vw, 132px) 0 clamp(48px, 6vw, 84px);
+          border-top: 1px solid var(--hairline);
+          margin-top: clamp(40px, 5vw, 70px);
+        }
+        .close-line {
+          font-size: clamp(26px, 4.6vw, 54px);
+          font-weight: 700;
+          letter-spacing: -0.035em;
+          line-height: 1.1;
+          color: var(--color-fg);
+          margin: 0 0 18px;
+          max-width: 20ch;
+        }
+        .close-sub {
+          font-size: clamp(15px, 1.5vw, 18px);
+          line-height: 1.6;
+          color: var(--color-text-secondary);
+          max-width: 54ch;
+          margin: 0 0 clamp(26px, 3vw, 34px);
+        }
+        .close-sub b { color: var(--color-fg); }
+        .close-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        .close-cta {
+          display: inline-flex; align-items: center; gap: 8px;
+          background: var(--color-fg); color: var(--color-bg);
+          border-radius: 100px; padding: 13px 26px;
+          font-size: 15px; font-weight: 650; text-decoration: none;
+        }
+        .close-alt {
+          display: inline-flex; align-items: center;
+          border: 1px solid var(--hairline); border-radius: 100px;
+          padding: 13px 24px; font-size: 15px; font-weight: 600;
+          color: var(--color-text-secondary); text-decoration: none;
+        }
+        .close-alt:hover { color: var(--color-fg); }
+
+        /* ── THE CHAIN: the graph, drawn ──────────────────────────────── */
+        .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; counter-reset: chain; }
+        .chain-node {
+          position: relative;
+          padding: 0 0 clamp(20px, 2.4vw, 26px) 34px;
+          border-left: 1px solid var(--hairline);
+        }
+        .chain-node:last-child { border-left-color: transparent; padding-bottom: 0; }
+        .chain-node::before {
+          counter-increment: chain;
+          content: "";
+          position: absolute; left: -5px; top: 6px;
+          width: 9px; height: 9px; border-radius: 50%;
+          background: var(--color-text-faint);
+        }
+        .chain-node:first-child::before { background: var(--color-fg); }
+        .chain-k { display: block; font-size: 15.5px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+        .chain-n {
+          display: inline-block; margin-top: 6px; margin-right: 8px;
+          font-size: clamp(26px, 3.4vw, 40px); font-weight: 750; letter-spacing: -0.03em;
+          color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1;
+        }
+        .chain-v { display: inline; font-size: 14.5px; line-height: 1.6; color: var(--color-text-secondary); }
+        @media (min-width: 820px) {
+          .chain-node { padding-left: 40px; }
+          .chain-v { font-size: 15px; }
+        }
+
         .deck-statband {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
@@ -453,7 +535,7 @@ export default function AboutPage() {
           .proof-title { font-size: 17px; }
           .proof-gap { font-size: 30px; }
         }
-      `}</style>
+` }} />
       <ArtistNav activeSlug="about" />
 
       <div style={{ paddingTop: 28, paddingBottom: 56 }}>
@@ -607,16 +689,36 @@ export default function AboutPage() {
 
         <Sec ord="06" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
           <p style={p}>
-            A price is not an answer on its own. Every lot in lectr resolves into a graph you can walk:
-            the comparable sales behind its call, the sub-market it trades in, the maker&rsquo;s index, and —
-            for watches — the reference dossier covering every recorded sale of that model line.
+            A price is not an answer on its own. Every lot resolves into a chain you can walk — and
+            every step of it is a page, not a footnote.
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px 20px', margin: '24px 0 0', paddingTop: 22, borderTop: '1px solid var(--hairline)' }}>
-            <Stat figure={fmt(drillCount)} label="Sub-market indices" note="cards by era and sport, watch families, art kinds, design materials" />
-            <Stat figure={fmt(makerTotal)} label="Maker indices" note="hedonic, quality-controlled" />
-            <Stat figure={fmt(refCount)} label="Reference dossiers" note="per model line, with its full yearly series" />
-          </div>
-          <p style={p} />
+
+          <ol className="chain">
+            <li className="chain-node">
+              <span className="chain-k">The lot</span>
+              <span className="chain-v">its estimate, its result, and the call that preceded it</span>
+            </li>
+            <li className="chain-node">
+              <span className="chain-k">Its comparables</span>
+              <span className="chain-v">the exact sales the call was argued from, each one clickable</span>
+            </li>
+            <li className="chain-node">
+              <span className="chain-k">Its sub-market</span>
+              <span className="chain-n">{fmt(drillCount)}</span>
+              <span className="chain-v">indices — cards by era and sport, watch families, art kinds, design materials</span>
+            </li>
+            <li className="chain-node">
+              <span className="chain-k">Its maker</span>
+              <span className="chain-n">{fmt(makerTotal)}</span>
+              <span className="chain-v">quality-controlled indices, published only where the interval resolves</span>
+            </li>
+            <li className="chain-node">
+              <span className="chain-k">Its reference</span>
+              <span className="chain-n">{fmt(refCount)}</span>
+              <span className="chain-v">dossiers, each with the full yearly series for that model line</span>
+            </li>
+          </ol>
+
           <p style={p}>
             Tracked lots keep permanent addresses. A lot the house purges the moment its sale ends
             stays resolvable here — with its estimate, its result, and the call that preceded it —
@@ -624,26 +726,64 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="07" label="Who it's for" title={<>Built for people who have to be right in public.</>}>
+        <Sec ord="07" label="What it changes" title={<>What it changes, for the person holding the paddle.</>}>
           <p style={p}>
-            Specialists pricing a consignment, funds underwriting collectibles as an asset, insurers
-            and lenders marking a book, and serious private buyers who would rather bid against
-            evidence than atmosphere. The same engine answers all of them, because they are all asking
-            the same question: what does this actually clear at, and how sure can you be?
+            A price is only useful if it changes what someone does. Four people ask the same question
+            — what does this actually clear at, and how sure can you be — and get four different days
+            out of the answer.
           </p>
-          <p style={p}>
-            The market read is public and free to inspect — start with{' '}
-            <Link href="/value" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>today&rsquo;s calls</Link>{' '}
-            or the{' '}
-            <Link href="/analytics" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>research desk</Link>.
-            For data access, coverage in a market we don&rsquo;t yet track, or diligence on the method,
-            the desk answers directly.
-          </p>
-          <p style={caption}>
-            Figures on this page are read from the live corpus at build time, dated{' '}
-            {String(meta.lastCrawl).slice(0, 10)}. They change when the market does.
-          </p>
+          <div className="value-list">
+            <div className="value-row">
+              <span className="value-who">The specialist</span>
+              <span className="value-what">
+                stops setting a reserve from memory and three catalogues. The comparable sales are on
+                the page, with their dates and their spread, before the consignment conversation.
+              </span>
+            </div>
+            <div className="value-row">
+              <span className="value-who">The collector</span>
+              <span className="value-what">
+                bids against evidence instead of atmosphere. The room is loud and the estimate is a
+                guess; knowing where comparable examples actually cleared is the difference between
+                conviction and nerve.
+              </span>
+            </div>
+            <div className="value-row">
+              <span className="value-who">The lender or insurer</span>
+              <span className="value-what">
+                marks a book to a number that can be defended line by line — method named, sample
+                size shown, and an honest abstention where the data will not carry a figure.
+              </span>
+            </div>
+            <div className="value-row">
+              <span className="value-who">The seller</span>
+              <span className="value-what">
+                finds out what their object is worth before someone else tells them, and can see
+                which house has historically cleared that kind of lot highest.
+              </span>
+            </div>
+          </div>
         </Sec>
+
+        <section className="deck-close">
+          <div style={wrap}>
+            <p className="close-line">
+              Stop bidding against a guess.
+            </p>
+            <p className="close-sub">
+              The whole market read is public and free to inspect. Nothing on this page is a
+              projection — it is what {fmt(meta.totalSold)} settled results already say.
+            </p>
+            <div className="close-actions">
+              <Link href="/value" className="close-cta">See today&rsquo;s calls <Flick size={12} /></Link>
+              <Link href="/analytics" className="close-alt">Open the research desk</Link>
+            </div>
+            <p style={{ ...caption, marginTop: 26 }}>
+              Figures on this page are read from the live corpus at build time, dated{' '}
+              {String(meta.lastCrawl).slice(0, 10)}. They change when the market does.
+            </p>
+          </div>
+        </section>
       </div>
 
       <Colophon record={null} />
