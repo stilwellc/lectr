@@ -197,6 +197,42 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   );
 }
 
+/** A slide that is one number. No heading, no ordinal, no chrome — the deck
+ *  needs a breath between argued sections, and the edge is the single figure
+ *  the whole record reduces to. */
+function Statement({ figure, lede, foot }: { figure: string; lede: React.ReactNode; foot?: string }) {
+  return (
+    <section className="deck-statement">
+      <div style={wrap}>
+        <div className="statement-fig">{figure}</div>
+        <p className="statement-lede">{lede}</p>
+        {foot && <p className="statement-foot">{foot}</p>}
+      </div>
+    </section>
+  );
+}
+
+/** A lot at full width. The product is about objects; the deck should stop and
+ *  look at one. Caption sits under the plate so the image is never covered. */
+function HeroLot({ c }: { c: typeof proof.cases[number] }) {
+  const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 1280) : null;
+  if (!img) return null;
+  return (
+    <section className="deck-hero">
+      <div className="hero-plate">
+        <PlateImg src={img} alt="" loading="lazy" referrerPolicy="no-referrer" />
+      </div>
+      <div style={wrap}>
+        <p className="hero-cap">
+          <b>{craftTitle(c.title)}</b> · {c.house} · {String(c.saleDate).slice(0, 10)} — lectr priced it at{' '}
+          <b>${fmt(c.ourValueUsd)}</b> from {c.comps} comparable sales. It sold for{' '}
+          <b className="hero-cap-paid">${fmt(c.realizedUsd)}</b>.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function Sec({ ord, label, title, paper, children }: {
   ord: string; label: string; title: React.ReactNode; paper?: boolean; children: React.ReactNode;
 }) {
@@ -262,6 +298,80 @@ export default function AboutPage() {
           font-variant-numeric: tabular-nums;
         }
         .deck-cover { padding: clamp(30px, 4vw, 52px) 0 clamp(30px, 4vw, 46px); }
+        /* ── COVER: a statement with air around it ─────────────────────── */
+        .deck-cover-wrap { padding: clamp(40px, 8vh, 96px) 0 clamp(30px, 4vw, 52px); }
+        .cover-h {
+          font-size: clamp(34px, 6.4vw, 82px);
+          font-weight: 700;
+          letter-spacing: -0.042em;
+          line-height: 1.03;
+          color: var(--color-fg);
+          margin: 0 0 clamp(20px, 2.4vw, 30px);
+          max-width: 18ch;
+        }
+        .cover-h-em { color: var(--color-text-muted); }
+        .cover-sub {
+          font-size: clamp(16px, 1.6vw, 20px);
+          line-height: 1.6;
+          color: var(--color-text-secondary);
+          max-width: 60ch;
+          margin: 0;
+        }
+        .cover-sub b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+        /* ── STATEMENT: the deck exhales ───────────────────────────────── */
+        .deck-statement {
+          padding: clamp(60px, 9vw, 130px) 0;
+          border-block: 1px solid var(--hairline);
+          margin-block: clamp(30px, 4vw, 56px);
+        }
+        .statement-fig {
+          font-size: clamp(56px, 12vw, 168px);
+          font-weight: 800;
+          letter-spacing: -0.05em;
+          line-height: 0.92;
+          color: var(--color-up);
+          font-variant-numeric: tabular-nums;
+          margin-bottom: clamp(16px, 2vw, 26px);
+        }
+        .statement-lede {
+          font-size: clamp(17px, 2vw, 26px);
+          line-height: 1.45;
+          color: var(--color-fg);
+          max-width: 30ch;
+          margin: 0;
+          font-weight: 500;
+        }
+        .statement-foot {
+          font-size: 13.5px;
+          line-height: 1.6;
+          color: var(--color-text-faint);
+          max-width: 52ch;
+          margin: 18px 0 0;
+        }
+
+        /* ── HERO LOT: stop and look at the object ─────────────────────── */
+        .deck-hero { margin-block: clamp(40px, 6vw, 84px); }
+        .hero-plate {
+          position: relative;
+          width: 100vw;
+          margin-inline: calc(50% - 50vw);
+          height: clamp(240px, 46vh, 520px);
+          background: var(--color-bg-elevated);
+          overflow: hidden;
+          border-block: 1px solid var(--hairline);
+        }
+        .hero-plate img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .hero-cap {
+          font-size: 13.5px;
+          line-height: 1.65;
+          color: var(--color-text-muted);
+          margin: 16px 0 0;
+          max-width: 70ch;
+        }
+        .hero-cap b { color: var(--color-fg); font-weight: 600; }
+        .hero-cap-paid { color: var(--color-up) !important; }
+
         .deck-statband {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
@@ -347,38 +457,28 @@ export default function AboutPage() {
       <ArtistNav activeSlug="about" />
 
       <div style={{ paddingTop: 28, paddingBottom: 56 }}>
-        <div style={{ ...wrap, marginBottom: 8 }}>
-          <Masthead
-            kicker="The firm"
-            serial={meta.lastCrawl}
-            title={<>What is <Accent>lectr</Accent>.</>}
-            sub={<>
-              The auction market clears{' '}
-              <b style={{ color: 'var(--color-fg)', fontWeight: 600 }}>billions a year against published guesses</b>
-              {' '}— and nobody scores the guesses. We do.
-            </>}
-          />
-          <p style={{ ...lead, marginTop: 20 }}>
-            Every lot that crosses a rostrum arrives with two numbers: an estimate the house
-            published, and a hammer the room decided. One is an opinion, one is a fact, and the
-            distance between them is the only honest measure of demand in the business. lectr has
-            read <b style={{ color: 'var(--color-fg)' }}>{fmt(meta.totalSold)}</b> settled lots
-            across <b style={{ color: 'var(--color-fg)' }}>{meta.sources.length} houses</b> and three
-            decades of results, scored each one against the sales that actually resemble it, and
-            replayed the whole thing through history to find out whether the read holds.
-          </p>
-          <p style={p}>
-            It does. On <b style={{ color: 'var(--color-fg)' }}>{fmt(F.n)}</b> point-in-time calls, lots
-            the engine flagged went on to clear their estimates by{' '}
-            <b style={{ color: 'var(--color-up)' }}>{edgeAllIn} points</b> more than the lots it
-            didn&rsquo;t — and failed to sell less often while doing it.
-          </p>
+        <div className="deck-cover-wrap">
+          <div style={wrap}>
+            <span className="kicker" style={{ display: 'block', marginBottom: 22 }}>
+              What is lectr · {String(meta.lastCrawl).slice(0, 10)}
+            </span>
+            <h1 className="cover-h">
+              Every lot arrives with a guess.<br />
+              <span className="cover-h-em">We score it against {fmt(meta.totalSold)} results.</span>
+            </h1>
+            <p className="cover-sub">
+              An auction estimate is an opinion. A hammer is a fact. lectr has read{' '}
+              <b>{fmt(meta.totalSold)}</b> settled lots across{' '}
+              <b>{meta.sources.length} houses</b> and three decades, and prices what comes next
+              against the sales that actually resemble it.
+            </p>
 
-          <div className="deck-statband">
-            <Stat figure={fmt(meta.totalLots)} label="Lots under tracking" note="live and settled, one graph" />
-            <Stat figure={fmt(meta.totalSold)} label="Settled results" note="every one with a published price" />
-            <Stat figure={String(meta.sources.length)} label="Auction houses" note={meta.sources.join(' · ')} />
-            <Stat figure={fmt(F.n)} label="Replayed calls" note="scored against what happened next" />
+            <div className="deck-statband">
+              <Stat figure={fmt(meta.totalLots)} label="Lots under tracking" note="live and settled, one graph" />
+              <Stat figure={fmt(meta.totalSold)} label="Settled results" note="every one with a published price" />
+              <Stat figure={String(meta.sources.length)} label="Auction houses" note={meta.sources.join(' · ')} />
+              <Stat figure={fmt(F.n)} label="Replayed calls" note="scored against what happened next" />
+            </div>
           </div>
         </div>
 
@@ -461,6 +561,12 @@ export default function AboutPage() {
           </p>
         </Sec>
 
+        <Statement
+          figure={`+${edgeAllIn} points`}
+          lede={<>is what separates a lot lectr flagged from one it didn&rsquo;t — measured across {fmt(F.n)} calls replayed through history, against {fmt(U.n)} controls.</>}
+          foot="Flagged lots also failed to sell less often than unflagged ones. The edge is not bought with risk."
+        />
+
         <Sec ord="04" label="The proof" title={<>We said what it was worth. The room paid less.</>}>
           <p style={p}>
             The record above is an aggregate. This is what it looks like as individual lots. In each
@@ -478,6 +584,8 @@ export default function AboutPage() {
             too — and in each of those, the room cleared below both.
           </p>
         </Sec>
+
+        <HeroLot c={proof.cases.find((x) => x.maker === 'keith-haring') ?? proof.cases[0]} />
 
         <Sec paper ord="05" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>
