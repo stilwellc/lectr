@@ -262,6 +262,15 @@ export default function AboutPage() {
           font-variant-numeric: tabular-nums;
         }
         .deck-cover { padding: clamp(30px, 4vw, 52px) 0 clamp(30px, 4vw, 46px); }
+        .deck-statband {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
+          gap: clamp(20px, 2.2vw, 28px);
+          margin-top: clamp(30px, 4vw, 48px);
+          padding-top: clamp(26px, 3vw, 36px);
+          border-top: 1px solid var(--hairline);
+        }
+
         /* ── THE PROOF CARDS ────────────────────────────────────────────
            Two DIFFERENT compositions, not one squeezed. Phone: the object
            leads as a full-width plate, the argument reads beneath it in a
