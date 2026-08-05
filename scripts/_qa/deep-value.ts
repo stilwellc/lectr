@@ -22,6 +22,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { readCorpus } from '../corpus-io';
 import { prepare, valueOne, hasEst, type L } from '../backtest-core';
+import { ARTISTS } from '../../app/constants';
 import type { AuctionLot } from '../../app/types';
 
 const SINCE = process.env.SINCE || new Date(Date.now() - 3 * 365 * 864e5).toISOString().slice(0, 10);
@@ -34,6 +35,11 @@ const MIN_CONF = process.env.ALLOW_LOW !== '1'; // drop 'low' confidence by defa
 // no-estimate markets costs hours to answer a question that needs a handful of
 // cases. ENOUGH=0 restores the exhaustive run.
 const ENOUGH = Number(process.env.ENOUGH ?? 24);
+// MARKET=culture,science scopes the scan to those verticals. Without it the
+// sweep runs in corpus order, which front-loads Goldin — so an early exit can
+// fill up on sports and never reach a thinner vertical at all.
+const MARKET_FILTER = (process.env.MARKET || '').split(',').map(x => x.trim()).filter(Boolean);
+const MARKET_OF: Record<string, string> = Object.fromEntries(ARTISTS.map(a => [a.slug, a.market]));
 
 const t0 = Date.now();
 const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
@@ -51,6 +57,7 @@ const prep = prepare(all, log, elapsed);
 // left only unique art, where we deliberately DEFER to the house.
 const NO_EST = process.env.NO_EST === '1';
 const targets = prep.sold.filter((l) =>
+  (MARKET_FILTER.length === 0 || MARKET_FILTER.includes(MARKET_OF[l.artist] || '')) &&
   l.saleDate >= SINCE && (NO_EST
     ? !hasEst(l) && (l.realizedUsd || 0) >= MIN_EST
     : hasEst(l) && ((l.estLowUsd || 0) + (l.estHighUsd || 0)) / 2 >= MIN_EST),

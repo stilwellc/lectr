@@ -657,7 +657,7 @@ export default function AboutPage() {
             hammer then came in under that number.
           </p>
           <div className="proof-grid">
-            {proof.cases.map((c) => <ProofCase key={c.id} c={c} />)}
+            {proof.cases.filter((c) => !(c as { hero?: boolean }).hero).map((c) => <ProofCase key={c.id} c={c} />)}
           </div>
           <p style={caption}>
             The two sports lots are the sharpest demonstration: Goldin and the NBA auctions publish
@@ -667,7 +667,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <HeroLot c={proof.cases.find((x) => x.maker === 'keith-haring') ?? proof.cases[0]} />
+        <HeroLot c={proof.cases.find((x) => (x as { hero?: boolean }).hero) ?? proof.cases[0]} />
 
         <Sec paper ord="05" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>

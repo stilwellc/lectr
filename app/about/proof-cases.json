@@ -86,7 +86,8 @@
    "confidence": "high",
    "houseEstLow": 8000,
    "houseEstHigh": 12000,
-   "imageUrl": "https://www.wright20.com/items/index/220/126_1_prints_multiples_may_2026_keith_haring_international_youth_year__lama_auction.jpg"
+   "imageUrl": "https://www.wright20.com/items/index/220/126_1_prints_multiples_may_2026_keith_haring_international_youth_year__lama_auction.jpg",
+   "hero": true
   },
   {
    "id": "goldin-202606-0823-4852-34bb0e5b-6218-487e-b915-e461e56bcb07",
@@ -104,6 +105,23 @@
    "houseEstLow": null,
    "houseEstHigh": null,
    "imageUrl": "https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202606-0823-4852-34bb0e5b-6218-487e-b915-e461e56bcb07/80ec92b1-e97c-40d2-812f-c61d00605963@1x"
+  },
+  {
+   "id": "sothebys-alg-63ef4459-d6cb-4401-a6af-eb825f1a9a40",
+   "title": "reference 5402st jumbo royal oak 'a-series' | a stainless steel automatic wristwatch with date and bracelet, circa 1972",
+   "maker": "audemars-piguet",
+   "market": "watches",
+   "house": "Sotheby's",
+   "saleDate": "2025-03-31",
+   "url": "https://www.sothebys.com/en/buy/auction/2025/fine-watches-5/reference-5402st-jumbo-royal-oak-a-series-a",
+   "ourValueUsd": 72000,
+   "realizedUsd": 40640,
+   "discountPct": -43.6,
+   "comps": 18,
+   "confidence": "high",
+   "houseEstLow": 30000,
+   "houseEstHigh": 60000,
+   "imageUrl": "https://sothebys-com.brightspotcdn.com/dims4/default/1e1a8cc/2147483647/strip/false/crop/2000x2000+0+0/resize/421x421!/quality/90/?url=https%3A%2F%2Fsothebys-md.brightspotcdn.com%2Fwebnative%2Fimages%2F79%2F14%2F298b76ce4a21bb8de4f2bc70b22c%2Fn11800-d7d8w-02.jpg"
   }
  ]
 }
