@@ -70,10 +70,30 @@ interface Props {
 
 const demandStrength = (r: SubMarketRead) => r.demandNow ?? -Infinity;
 
-// the curated marquee — the reads that lead the cross-market board before it
-// expands to the full list. Matched by label (case-insensitive), rendered in
-// this exact order; anything not present is simply skipped.
-const FEATURED: string[] = []; // ranked-by-strength marquee (drills lead with the CI'd card indexes) — no manual curation
+// THE MARQUEE (Collin's curation, Aug 4 2026) — the eight reads that open the
+// board on the all-markets view, in this order. Matched case-insensitively
+// against the row label, and drawn from BOTH pools: the specific ones are
+// drills (a card era, one watch reference, a game-used category), the "(all)"
+// ones are maker/collection-level reads that live in subMarkets. Any name that
+// stops resolving simply drops out — the blend behind it still fills the board.
+const FEATURED: string[] = [
+  'classic cards (1980–99)',   // sports · card era
+  'daytona · rolex',           // watches · reference
+  'pablo picasso',             // art · maker, all work
+  'george nakashima',          // design · maker, all work
+  'fossils & dinosaurs',       // science · collection, all
+  'andy warhol',               // art · maker, all work
+  'vintage cards (pre-1980)',  // sports · card era
+  'basketball · game-used',    // sports · game used
+];
+
+/** Where a board row points. Drills carry a `vertical:slug` key and own a
+ *  /sub/<a>/<b> page; maker & collection reads (subMarkets) carry a single-
+ *  segment slug and live at /makers/<slug>. Routing them all to /sub/ would
+ *  404 every maker row, since /sub/[a]/[b] needs two segments. */
+function rowHref(r: SubMarketRead): string {
+  return r.slug.includes(':') ? `/sub/${r.slug.replace(':', '/')}` : `/makers/${r.slug}`;
+}
 
 function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRead[] {
   // THE TAXONOMY (drills): cards by era & sport, watch families, art kinds,
@@ -89,7 +109,16 @@ function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRea
     const demand = all
       .filter((r) => r.readType === 'demand')
       .sort((a, b) => demandStrength(b) - demandStrength(a));
-    const ranked = [...index, ...demand];
+    // Descriptive rows (no index, no demand read — 43 of the 95 drills, e.g.
+    // "Basketball · game-used" at 9,217 lots) were dropped from the ALL view
+    // entirely, while every single-market view already ranks them last. That
+    // inconsistency also made them unreachable from the marquee. They rank
+    // last here too, ordered by depth, and carry no movement number — the
+    // honesty ladder is unchanged, they're simply no longer invisible.
+    const descriptive = all
+      .filter((r) => r.readType === 'descriptive')
+      .sort((a, b) => b.lots - a.lots);
+    const ranked = [...index, ...demand, ...descriptive];
     // ── BLEND THE CONDENSED VIEW ACROSS MARKETS ──────────────────────────
     // `ranked` puts every 'index' row above every 'demand' row, and the card
     // markets are the ones with repeat-sale INDEXES while art/design/watches
@@ -123,12 +152,21 @@ function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRea
       }
       if (!placedThisPass) break; // every queue drained — guard against a spin
     }
-    // front-load the marquee in curated order, then the rest (deduped)
+    // The marquee draws from BOTH pools. The drills above are sub-market
+    // taxonomy (a card era, one watch reference); the curated list also names
+    // maker- and collection-level reads ("Picasso, all"), which live in
+    // subMarkets — searching only `blended` would silently drop half the
+    // marquee. Maker rows are appended to the tail too, so expanding the board
+    // reveals them rather than hiding them behind the eight.
+    const makerRows: SubMarketRead[] = Object.values(
+      (market?.subMarkets as Record<string, SubMarketRead[]> | undefined) ?? {},
+    ).flat();
+    const pool = [...blended, ...makerRows];
     const featured = FEATURED
-      .map((name) => blended.find((r) => r.label.toLowerCase() === name))
+      .map((name) => pool.find((r) => r.label.toLowerCase() === name))
       .filter((r): r is SubMarketRead => !!r);
     const featuredSet = new Set(featured);
-    return [...featured, ...blended.filter((r) => !featuredSet.has(r))];
+    return [...featured, ...pool.filter((r) => !featuredSet.has(r))];
   }
   const rows = sm[activeKey] || [];
   const rank = { index: 0, demand: 1, descriptive: 2 } as const;
@@ -475,7 +513,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
           opening the read card first; stopPropagation so it navigates instead
           of toggling the card */}
       <Link
-        href={`/sub/${r.slug.replace(':', '/')}`}
+        href={rowHref(r)}
         className={styles.tapeLabelBlock}
         style={{ textDecoration: 'none', color: 'inherit' }}
         onClick={(e) => e.stopPropagation()}
@@ -698,7 +736,7 @@ export default function SubMarketBoard({
                       record and history for that sub-market */}
                   {openRead.slug.includes(':') && (
                     <div className={styles.engineCtaRow}>
-                      <Link href={`/sub/${openRead.slug.replace(':', '/')}`} className={styles.roomPill}>
+                      <Link href={rowHref(openRead)} className={styles.roomPill}>
                         Open the {openRead.label} dossier →
                       </Link>
                     </div>
