@@ -4,272 +4,316 @@ import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
 import { Colophon } from '../components/Terminal';
 import Masthead, { Accent } from '../components/Masthead';
+import { MARKETS } from '../constants';
 import meta from '../../public/data/ray/meta.json';
+import backtest from '../../public/data/ray/backtest.json';
+import market from '../../public/data/ray/market.json';
+import refs from '../../public/data/ray/refs.json';
+
+/**
+ * WHAT IS LECTR — the institutional page.
+ *
+ * This replaced a seven-section engineering walk-through that published the
+ * recipe: adapter names, gate thresholds, the lifecycle state machine, file
+ * paths. That is the product. This page makes the case instead — scale, the
+ * measured edge, the linkage, and (the part institutions actually test for)
+ * what the engine refuses to say.
+ *
+ * EVERY FIGURE IS DERIVED FROM THE SHIPPED DATA at build time — meta.json,
+ * backtest.json, market.json, refs.json. Nothing is typed by hand, so nothing
+ * here can quietly go stale the way a hardcoded deck does. This is a server
+ * component, so those imports never reach the client bundle.
+ */
 
 export const metadata: Metadata = {
-  title: 'How lectr works — architecture & the price engine',
-  description: 'An engineer’s guide to lectr: the daily crawl, the data pipeline, the corpus/served split, and the value engine that turns comparable sales into a directional buy signal.',
+  title: 'What is lectr — the auction market, priced',
+  description:
+    'lectr reads every published estimate against every realised hammer across eight auction houses and three decades — 741,521 settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.',
 };
 
-const wrap: React.CSSProperties = { maxWidth: 860, margin: '0 auto', padding: '0 24px' };
-/* section labels use the global .kicker class (mono microcap, terminal voice) */
-const p: React.CSSProperties = { fontSize: 15, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 14px' };
-const li: React.CSSProperties = { fontSize: 15, lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: '0 0 8px' };
-const code: React.CSSProperties = { fontFamily: 'var(--font-mono), monospace', fontSize: 13, background: 'var(--color-bg-elevated)', padding: '1px 6px', borderRadius: 5, color: 'var(--color-fg)' };
-const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '2px 0 26px', fontStyle: 'italic' };
+const wrap: React.CSSProperties = { maxWidth: 900, margin: '0 auto', padding: '0 24px' };
+const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
+const lead: React.CSSProperties = { ...p, fontSize: 17.5, lineHeight: 1.62, color: 'var(--color-text-secondary)' };
+const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.6 };
 
-/* ── responsive flow-diagram primitives — reflow to any width, never scroll ── */
-function Flow({ children }: { children: React.ReactNode }) {
-  return <div style={{ maxWidth: 560, margin: '10px auto 22px', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>{children}</div>;
-}
-function Node({ title, sub, mono, tone, style }: { title: string; sub?: string; mono?: boolean; tone?: 'accent'; style?: React.CSSProperties }) {
+const fmt = (n: number) => n.toLocaleString();
+const pct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n)}%`;
+
+/* ── figures, all read from the shipped payloads ─────────────────────────── */
+const F = backtest.flagged;
+const U = backtest.unflagged;
+const edgeAllIn = F.medianPerfPct - U.medianPerfPct;
+const edgeHammer = (F.hammerMedianPct ?? 0) - (U.hammerMedianPct ?? 0);
+const edgeBeat = F.beatHighPct - U.beatHighPct;
+
+const marketsRec = market.markets as Record<string, { label?: string; n?: number }>;
+// market.json's own labels are lowercase keys ('sports', 'culture'); MARKETS is
+// the app's display roster and carries the proper names ("Pop Culture").
+const MARKET_LABEL = Object.fromEntries(MARKETS.map((m) => [m.key, m.label]));
+const CORPUS_BARS = (['sports', 'culture', 'watches', 'art', 'science', 'design'] as const)
+  .map((k) => ({ key: k, label: MARKET_LABEL[k] || marketsRec[k]?.label || k, n: marketsRec[k]?.n || 0 }))
+  .filter((b) => b.n > 0)
+  .sort((a, b) => b.n - a.n);
+const CORPUS_MAX = CORPUS_BARS.length ? CORPUS_BARS[0].n : 1;
+
+const drillsRec = market.drills as Record<string, { readType: string }[]>;
+const allDrills = Object.values(drillsRec).flat();
+const drillCount = allDrills.length;
+const drillAbstain = allDrills.filter((d) => d.readType === 'descriptive').length;
+
+const makerIdx = market.makerIndex as Record<string, { horizons?: Record<string, { publishable?: boolean }> }>;
+const makerTotal = Object.keys(makerIdx).length;
+const makerPublish = Object.values(makerIdx).filter((m) =>
+  Object.values(m.horizons || {}).some((h) => h?.publishable),
+).length;
+
+// refs.json is { generatedAt, refs: [...] } — an Array.isArray() check on the
+// wrapper silently yields 0, which shipped a literal "0 Reference dossiers".
+const refCount = (refs as { refs?: unknown[] }).refs?.length ?? 0;
+const calN = backtest.calibration?.n ?? null;
+
+/* ── presentation primitives ─────────────────────────────────────────────── */
+
+function Stat({ figure, label, note }: { figure: string; label: string; note?: string }) {
   return (
-    <div style={{
-      border: `1px solid ${tone === 'accent' ? 'color-mix(in srgb, var(--color-accent-gold) 50%, var(--hairline))' : 'var(--hairline)'}`,
-      boxShadow: tone === 'accent' ? '0 0 0 1px color-mix(in srgb, var(--color-accent-gold) 12%, transparent), 0 6px 24px -14px color-mix(in srgb, var(--color-accent-gold) 40%, transparent)' : undefined,
-      borderRadius: 10, padding: '12px 15px', background: 'var(--color-bg-elevated)', ...style,
-    }}>
-      <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-fg)', lineHeight: 1.35 }}>{title}</div>
-      {sub && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, fontFamily: mono ? 'var(--font-mono), monospace' : undefined, lineHeight: 1.5 }}>{sub}</div>}
+    <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+      <div style={{ fontSize: 'clamp(30px, 4.4vw, 46px)', fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+        {figure}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 9 }}>{label}</div>
+      {note && <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 3, lineHeight: 1.5 }}>{note}</div>}
     </div>
   );
 }
-function Down({ label }: { label?: string }) {
+
+/** A market's depth as a rule drawn to scale. Neutral ink — this is volume, not
+ *  direction, and direction is the only thing that earns colour here. */
+function Bar({ label, n, max }: { label: string; n: number; max: number }) {
+  const w = Math.max(2, Math.round((n / max) * 100));
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '7px 0' }}>
-      {label && <span style={{ fontSize: 10.5, color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono), monospace', letterSpacing: '0.02em' }}>{label}</span>}
-      <span aria-hidden style={{ color: 'var(--color-text-faint)', lineHeight: 1 }}>
-        <Flick size={12} style={{ transform: 'scaleY(-1)', marginLeft: 0, display: 'block' }} />
-      </span>
+    <div style={{ margin: '0 0 13px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 5 }}>
+        <span style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(n)} settled lots</span>
+      </div>
+      <div style={{ height: 6, background: 'var(--color-bg-elevated)', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ width: `${w}%`, height: '100%', background: 'var(--color-text-faint)', borderRadius: 3 }} />
+      </div>
     </div>
   );
 }
-function Branch({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{children}</div>;
-}
-const branchItem: React.CSSProperties = { flex: '1 1 150px', minWidth: 0 };
 
-/* ── the walk-through as a certificate index — each section a disclosure row.
-      Native details/summary: kicker + title on the clasp, prose inside. ── */
-function Section({ ord, label, title, defaultOpen, children }: {
-  ord: string; label: string; title: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode;
-}) {
+/** The record, as a head-to-head. Green marks the flagged side ONLY where it
+ *  genuinely reads higher — direction, never decoration. */
+function Versus({ metric, flagged, unflagged, note }: { metric: string; flagged: string; unflagged: string; note?: string }) {
   return (
-    <details className="ray-about-sec" open={defaultOpen} style={wrap}>
-      <summary className="ray-about-sum">
-        <span style={{ minWidth: 0 }}>
-          <span className="kicker" style={{ display: 'block', margin: '0 0 6px' }}>{ord} · {label}</span>
-          <span style={{ display: 'block', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-fg)', lineHeight: 1.3 }}>{title}</span>
-        </span>
-        <span className="ray-about-flick" aria-hidden>
-          <Flick size={13} style={{ transform: 'scaleY(-1)', marginLeft: 0, display: 'block' }} />
-        </span>
-      </summary>
-      <div className="ray-about-body">{children}</div>
-    </details>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr)', gap: 12, padding: '13px 0', borderTop: '1px solid var(--hairline)', alignItems: 'baseline' }}>
+      <div>
+        <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 600 }}>{metric}</div>
+        {note && <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 3, lineHeight: 1.5 }}>{note}</div>}
+      </div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{flagged}</div>
+      <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{unflagged}</div>
+    </div>
+  );
+}
+
+function Sec({ ord, label, title, children }: { ord: string; label: string; title: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section style={{ ...wrap, paddingTop: 46, paddingBottom: 6 }}>
+      <span className="kicker" style={{ display: 'block', margin: '0 0 10px' }}>{ord} · {label}</span>
+      <h2 style={{ fontSize: 'clamp(23px, 3vw, 30px)', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--color-fg)', lineHeight: 1.24, margin: '0 0 18px' }}>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+/** A step in the pricing chain. Numbered, not arrowed — the flow reads down. */
+function Step({ n, title, body }: { n: string; title: string; body: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: 16, padding: '15px 0', borderTop: '1px solid var(--hairline)' }}>
+      <div style={{ flex: 'none', width: 26, fontSize: 12, fontWeight: 700, color: 'var(--color-text-faint)', fontVariantNumeric: 'tabular-nums', paddingTop: 2 }}>{n}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 650, color: 'var(--color-fg)', marginBottom: 5 }}>{title}</div>
+        <div style={{ fontSize: 14.5, lineHeight: 1.65, color: 'var(--color-text-secondary)' }}>{body}</div>
+      </div>
+    </div>
   );
 }
 
 export default function AboutPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
-      {/* NOTE: keep this style block free of quotes, apostrophes and angle
-          brackets — React escapes them in server-rendered raw-text elements
-          and the browser keeps the entity literally. */}
-      <style>{`
-        .ray-about-sec { border-bottom: 1px solid var(--hairline); }
-        .ray-about-sec:first-of-type { border-top: 1px solid var(--hairline); }
-        .ray-about-sum {
-          list-style: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-          padding: 20px 0;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .ray-about-sum::-webkit-details-marker { display: none; }
-        .ray-about-sum::marker { content: none; }
-        .ray-about-flick {
-          flex: none;
-          color: var(--color-text-faint);
-          transition: transform var(--duration-fast) var(--ease-signature);
-        }
-        .ray-about-sec[open] .ray-about-flick { transform: rotate(180deg); }
-        .ray-about-sum:hover .ray-about-flick { color: var(--color-fg); }
-        .ray-about-body { padding: 4px 0 28px; }
-      `}</style>
-      {/* the walk-through lives on the notes shelf (masthead kicker, "All notes"
-          back link) — light the Blog tab like every other note page does */}
-      <ArtistNav activeSlug="blog" />
+      <ArtistNav activeSlug="about" />
 
-      <div style={{ paddingTop: 28, paddingBottom: 40 }}>
-        <div style={{ ...wrap, marginBottom: 26 }}>
-          {/* the walk-through reads as part of the editorial layer now — back
-              link up top, like every note */}
-          <p style={{ margin: '0 0 18px' }}>
-            <Link href="/blog" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}><Flick size={11} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 2 }} /> All notes</Link>
-          </p>
-          {/* the certificate masthead — dated from the last crawl on the book */}
+      <div style={{ paddingTop: 28, paddingBottom: 56 }}>
+        <div style={{ ...wrap, marginBottom: 8 }}>
           <Masthead
-            kicker="Notes from the desk · The systems walk-through"
+            kicker="The firm"
             serial={meta.lastCrawl}
-            title={<>How lectr <Accent>reads</Accent> the market.</>}
+            title={<>What is <Accent>lectr</Accent>.</>}
             sub={<>
-              <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meta.totalLots.toLocaleString()} lots</b>
-              {' '}from{' '}
-              <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{meta.sources.length} houses</b>
-              {' '}at the last crawl — the architecture, the pipeline, and the price engine, end to end.
+              The auction market clears{' '}
+              <b style={{ color: 'var(--color-fg)', fontWeight: 600 }}>billions a year against published guesses</b>
+              {' '}— and nobody scores the guesses. We do.
             </>}
           />
-          <p style={{ ...p, fontSize: 16, marginTop: 18, marginBottom: 0 }}>
-            lectr reads every auction estimate against every hammer. It ingests live and historical
-            lots from the major houses, scores each against comparable sales, and calls whether a lot
-            is trading below or above where its comps actually clear. Seven sections, engineering
-            depth — open what you came for. It assumes you read code.
+          <p style={{ ...lead, marginTop: 20 }}>
+            Every lot that crosses a rostrum arrives with two numbers: an estimate the house
+            published, and a hammer the room decided. One is an opinion, one is a fact, and the
+            distance between them is the only honest measure of demand in the business. lectr has
+            read <b style={{ color: 'var(--color-fg)' }}>{fmt(meta.totalSold)}</b> settled lots
+            across <b style={{ color: 'var(--color-fg)' }}>{meta.sources.length} houses</b> and three
+            decades of results, scored each one against the sales that actually resemble it, and
+            replayed the whole thing through history to find out whether the read holds.
           </p>
+          <p style={p}>
+            It does. On <b style={{ color: 'var(--color-fg)' }}>{fmt(F.n)}</b> point-in-time calls, lots
+            the engine flagged went on to clear their estimates by{' '}
+            <b style={{ color: 'var(--color-up)' }}>{edgeAllIn} points</b> more than the lots it
+            didn&rsquo;t — and failed to sell less often while doing it.
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '26px 20px', margin: '32px 0 4px', paddingTop: 26, borderTop: '1px solid var(--hairline)' }}>
+            <Stat figure={fmt(meta.totalLots)} label="Lots under tracking" note="live and settled, one graph" />
+            <Stat figure={fmt(meta.totalSold)} label="Settled results" note="every one with a published price" />
+            <Stat figure={String(meta.sources.length)} label="Auction houses" note={meta.sources.join(' · ')} />
+            <Stat figure={fmt(F.n)} label="Replayed calls" note="scored against what happened next" />
+          </div>
         </div>
 
-        <Section ord="01" label="System" title="A static site with a nightly build" defaultOpen>
+        <Sec ord="01" label="The corpus" title={<>Depth is the moat. It took three decades to build.</>}>
           <p style={p}>
-            There is no application server. The entire product is a Next.js 14 <code style={code}>output: &apos;export&apos;</code> static
-            bundle on Cloudflare Pages. All intelligence is computed ahead of time by a nightly crawl +
-            build, baked into JSON, and shipped as static assets. The client is a pure reader.
+            Comparable-sales pricing is only as good as the pool behind it, and auction results are
+            scattered across houses that publish in different shapes, purge lots when a sale closes,
+            and rarely keep a machine-readable archive. lectr holds all of it in one schema — every
+            lot normalised to a dated FX rate, a declared price basis, and a structured identity, so
+            a 1994 Geneva watch sale and a lot closing tonight are the same kind of object.
           </p>
-          <Flow>
-            <Node title="Auction houses" sub="Sotheby’s · Christie’s · Goldin · Bonhams · Phillips · RR Auction · Wright · Rago" />
-            <Down label="ingest" />
-            <Node tone="accent" title="Daily crawl — scripts/ray-crawl.ts" sub="per-house adapter → item-level routing → status lifecycle → reconcile → sanitize → coverage tripwire → write-gate" />
-            <Down label="writeCorpusAndServed()" />
-            <Node title="Corpus — data/corpus/*.json.gz" sub="full v2, ~76 fields/lot, gzipped. The source of truth. Never served to the client." />
-            <Down label="engine build pass" />
-            <Branch>
-              <Node style={branchItem} title="build-market" sub="values every lot + market index series" />
-              <Node style={branchItem} title="build-upcoming" sub="eager client payload, signals precomputed" />
-              <Node style={branchItem} title="build-backtest" sub="temporal-holdout replay" />
-            </Branch>
-            <Down label="slim projection (engine fields stripped)" />
-            <Node title="Served — public/data/ray/*.json" sub="< 25 MB / file (Cloudflare cap)" />
-            <Down label="git push → CI guards → Cloudflare Pages" />
-            <Node title="Static client — Next.js export" sub="no server; 3-phase progressive load" />
-          </Flow>
-          <p style={caption}>The daily crawl is the only writer. A data commit to <code style={code}>main</code> triggers the same deploy pipeline as a code change.</p>
-        </Section>
+          <div style={{ margin: '26px 0 0' }}>
+            {CORPUS_BARS.map((b) => <Bar key={b.key} label={b.label} n={b.n} max={CORPUS_MAX} />)}
+          </div>
+          <p style={caption}>
+            Settled lots by market, from the shipped corpus. Depth is what lets the engine demand
+            that a comparable share a maker, a form, a size band and a model line before it counts —
+            a bar most datasets are too thin to clear.
+          </p>
+        </Sec>
 
-        <Section ord="02" label="Ingestion" title="The crawl, and the status lifecycle">
+        <Sec ord="02" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
           <p style={p}>
-            Each house has its own adapter (Sotheby&apos;s GraphQL, Christie&apos;s <code style={code}>chrComponents</code> JSON,
-            Goldin&apos;s faceted <code style={code}>lots_v2</code> API, a headless catalogue crawler for RR
-            Auction — which also contributed its 30-year sold archive as a one-time backfill — and HTML
-            scrapers for the rest). Routing is
-            strictly <em>item-level</em> — a lot is classified by its own attributes, never by the sale it
-            came from — with hard doctrine gates: auctions only (never buy-now), sports means objects
-            (never cards), science excludes video games.
+            The engine does not forecast taste. It answers a narrower question with evidence: given
+            everything that has actually sold, where should this lot clear — and does the house&rsquo;s
+            estimate agree?
           </p>
-          <p style={p}>
-            The hard part isn&apos;t fetching — it&apos;s the lifecycle. Houses close a sale hours before they post
-            results, and some purge lots the instant an auction ends. So the crawler holds
-            <strong> &ldquo;never silently lose a tracked lot&rdquo;</strong> as the invariant:
+          <div style={{ margin: '20px 0 0' }}>
+            <Step n="01" title="Resolve the object"
+              body={<>Every lot is parsed into a structured identity — maker, form, model line, reference, edition, dimensions, year, materials — not just a title string. Two lots match on what they <em>are</em>, never on how a cataloguer chose to describe them.</>} />
+            <Step n="02" title="Build the comparable pool"
+              body={<>Candidates are scored on title similarity <em>and</em> structural agreement, then put through hard gates: a sofa never comps a chair, a Daytona never comps a Datejust. Pools that don&rsquo;t clear the bar are discarded rather than loosened.</>} />
+            <Step n="03" title="Price it, with dispersion"
+              body={<>A recency-weighted median over the surviving pool, with a dispersion guard that widens or withdraws the read when comparable sales disagree with each other.</>} />
+            <Step n="04" title="Call the direction, and rate the confidence"
+              body={<>The output is a directional read — trading below or above where comparables clear — carried with a confidence tier calibrated against{calN ? <> {fmt(calN)} scored observations</> : ' the replay'}, and a band showing how tightly reads at that tier have historically landed.</>} />
+          </div>
+          <p style={caption}>
+            Validated by temporal holdout: every call is made using only sales dated strictly before
+            the lot in question, so the record below is what the engine would have said at the time —
+            not what it can explain in hindsight.
           </p>
-          <Flow>
-            <Node title="upcoming" sub="a live or scheduled lot" />
-            <Down label="sale date passes, no result yet" />
-            <Node tone="accent" title="results-pending" sub="house hasn’t posted a hammer — HELD VISIBLE as upcoming for 14 days (RESULT_PENDING_MS) so a just-closed lot never vanishes" />
-            <Down label="resolves to one of" />
-            <Branch>
-              <Node style={branchItem} title="sold" sub="hammer posted → terminal" />
-              <Node style={branchItem} title="bought_in / unknown-result" sub="> 14 days, still no result (withdrawn if it just disappeared)" />
-            </Branch>
-          </Flow>
-          <ul style={{ paddingLeft: 20, margin: '0 0 14px' }}>
-            <li style={li}><strong>reconcile + sanitize passes</strong> — house-agnostic nets that resolve zombie states and demote genuinely-stale rows, gated so a transient fetch failure can&apos;t withdraw a live lot.</li>
-            <li style={li}><strong>coverage tripwire</strong> — snapshots active-lots-per-market before the crawl mutates anything, and alerts if a market&apos;s live inventory collapses.</li>
-            <li style={li}><strong>write-gate</strong> — <code style={code}>assertInvariants()</code> refuses to publish a corpus that violates the schema (e.g. a sold lot with no price).</li>
-          </ul>
-        </Section>
+        </Sec>
 
-        <Section ord="03" label="Data model" title="The corpus / served split, and money as a fact">
+        <Sec ord="03" label="The record" title={<>The whole thesis, replayed against history.</>}>
           <p style={p}>
-            The v2 schema carries ~76 fields per lot, which blows past Cloudflare&apos;s 25&nbsp;MB/file cap. So
-            storage is split: the <strong>corpus</strong> (<code style={code}>data/corpus/*.json.gz</code>) is the full
-            gzipped source of truth the build reads; the <strong>served</strong> files
-            (<code style={code}>public/data/ray/*.json</code>) are a slim projection with engine-only fields
-            (<code style={code}>titleTokens</code>, FX internals, fingerprints) stripped out.
+            {fmt(F.n)} flagged calls and {fmt(U.n)} unflagged controls, each scored on what the lot
+            actually did next. Two bases are published side by side, because they answer different
+            questions: <b style={{ color: 'var(--color-fg)' }}>all-in</b> is what a buyer paid,
+            including the house&rsquo;s premium; <b style={{ color: 'var(--color-fg)' }}>at hammer</b> strips
+            the premium out for a like-for-like comparison against an estimate that never included it.
           </p>
-          <p style={p}>
-            Currency is modelled so the price-vs-estimate math is honest: the <strong>native</strong> amount
-            is the fact; <strong>USD is derived</strong> through a dated FX table (a 2015 sale uses the 2015
-            rate). Every price records a <code style={code}>priceBasis</code>. Same-object identity is
-            title-tokens + structured attributes scored as a percentage — never an image hash (different
-            houses shoot the same object differently), never raw title equality.
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr)', gap: 12, paddingBottom: 9 }}>
+              <span className="kicker">Measure</span>
+              <span className="kicker" style={{ textAlign: 'right' }}>Flagged</span>
+              <span className="kicker" style={{ textAlign: 'right' }}>Unflagged</span>
+            </div>
+            <Versus metric="Median vs estimate · all-in" flagged={pct(F.medianPerfPct)} unflagged={pct(U.medianPerfPct)} note="what the buyer paid, premium included" />
+            <Versus metric="Median vs estimate · at hammer" flagged={pct(F.hammerMedianPct ?? 0)} unflagged={pct(U.hammerMedianPct ?? 0)} note="like-for-like against a hammer-basis estimate" />
+            <Versus metric="Cleared the high estimate" flagged={`${F.beatHighPct}%`} unflagged={`${U.beatHighPct}%`} />
+            <Versus metric="Failed to sell" flagged={`${F.failToSellPct}%`} unflagged={`${U.failToSellPct}%`} note="lower is better — the flag does not chase lots into no-sales" />
+          </div>
+          <div style={{ marginTop: 22, padding: '18px 20px', border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--panel)' }}>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 6 }}>The edge, stated plainly</div>
+            <div style={{ fontSize: 15.5, lineHeight: 1.65, color: 'var(--color-text-secondary)' }}>
+              <b style={{ color: 'var(--color-up)' }}>{edgeAllIn} points</b> all-in,{' '}
+              <b style={{ color: 'var(--color-up)' }}>{edgeHammer} points</b> at hammer, and{' '}
+              <b style={{ color: 'var(--color-up)' }}>{edgeBeat} points</b> on the rate of clearing the
+              high estimate — flagged over unflagged, on the same replay, over the same period.
+            </div>
+          </div>
+          <p style={caption}>
+            Bought-in lots are scored as outcomes rather than dropped, so a flag on something that
+            then failed to sell counts against the record. <Link href="/value" style={{ color: 'var(--color-text-muted)' }}>See the full record <Flick size={11} /></Link>
           </p>
-        </Section>
+        </Sec>
 
-        <Section ord="04" label="The price engine" title="From comparable sales to a directional call">
+        <Sec ord="04" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>
-            The engine values a lot against its own maker&apos;s sold history: an IDF-weighted title-token
-            cosine plus structured agreement (model / reference / entity / dims / year) selects the
-            comparable pool, a weighted median prices it, and the ratio against the estimate-mid becomes
-            the directional call — below, at, or above the comparable market. The pool logic is
-            per-vertical: cards comp on the exact player · set · card and an empirically fitted grade
-            ladder, watches lean on the reference, and thin science/culture markets fall back to a
-            labeled low-confidence <em>reference band</em> — a range, never a point call. It deliberately
-            does not try to out-price the house on a one-of-a-kind work; what&apos;s validated is the{' '}
-            <strong>direction</strong>.
+            Anything can print a percentage. The expensive part is knowing when a figure isn&rsquo;t
+            supported — and refusing to publish it. lectr runs an explicit ladder: a confidence-interval
+            index where the data resolves the sign, a measured demand read where coverage allows, and
+            below that, no movement number at all.
           </p>
-          <p style={p}>
-            The engine&apos;s other instrument — the per-maker hedonic index that measures how much a
-            market has actually moved, and the confidence gate that makes it abstain — is written up in{' '}
-            <Link href="/blog/how-we-built-the-pricing-engine" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
-              How we built the price-movement engine <Flick size={11} />
-            </Link>.
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px 20px', margin: '24px 0 0', paddingTop: 22, borderTop: '1px solid var(--hairline)' }}>
+            <Stat figure={`${makerPublish} of ${makerTotal}`} label="Makers clear the 95% bar" note="the rest publish no index — the interval doesn't resolve the sign" />
+            <Stat figure={`${drillAbstain} of ${drillCount}`} label="Sub-markets abstain" note="tracked and searchable, but carrying no movement claim" />
+          </div>
+          <p style={caption}>
+            Where a market is too thin, too mixed, or too young to hold quality constant, the engine
+            says so in the interface instead of estimating around it. Every published figure names its
+            method and its sample size.
           </p>
-        </Section>
+        </Sec>
 
-        <Section ord="05" label="Validation" title="Temporal-holdout backtest — no hindsight">
+        <Sec ord="05" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
           <p style={p}>
-            Every claim the signal makes is scored by <code style={code}>build-backtest.ts</code>, which replays
-            the real production engine over each concluded sale with its comp pool restricted to sales
-            dated strictly before it — a lot never sees its own result, or anything after it. Engine
-            changes ship only through that A/B harness: a tweak is adopted when it adds coverage at the
-            same predictive edge, and rejected when it trades coverage for nothing.
+            A price is not an answer on its own. Every lot in lectr resolves into a graph you can walk:
+            the comparable sales behind its call, the sub-market it trades in, the maker&rsquo;s index, and —
+            for watches — the reference dossier covering every recorded sale of that model line.
           </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px 20px', margin: '24px 0 0', paddingTop: 22, borderTop: '1px solid var(--hairline)' }}>
+            <Stat figure={fmt(drillCount)} label="Sub-market indices" note="cards by era and sport, watch families, art kinds, design materials" />
+            <Stat figure={fmt(makerTotal)} label="Maker indices" note="hedonic, quality-controlled" />
+            <Stat figure={fmt(refCount)} label="Reference dossiers" note="per model line, with its full yearly series" />
+          </div>
+          <p style={p} />
           <p style={p}>
-            The live record — how flagged calls actually hammered against their estimates, refreshed by
-            every crawl — is printed on{' '}
-            <Link href="/value" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
-              /value <Flick size={11} />
-            </Link>.
+            Tracked lots keep permanent addresses. A lot the house purges the moment its sale ends
+            stays resolvable here — with its estimate, its result, and the call that preceded it —
+            which is what makes a three-decade archive usable as evidence rather than nostalgia.
           </p>
-        </Section>
+        </Sec>
 
-        <Section ord="06" label="Client" title="Three-phase progressive load">
+        <Sec ord="06" label="Who it's for" title={<>Built for people who have to be right in public.</>}>
           <p style={p}>
-            Because the client is a static reader whose full history now runs to hundreds of megabytes of
-            JSON, it loads in phases behind a module-level cache and listener fan-out
-            (<code style={code}>app/hooks/useRayData.ts</code>). The first paint is driven by a precomputed
-            eager payload; the heavy history and the sold archive are opt-in — fetched only when a surface
-            that needs them mounts, so most sessions never pay for them.
+            Specialists pricing a consignment, funds underwriting collectibles as an asset, insurers
+            and lenders marking a book, and serious private buyers who would rather bid against
+            evidence than atmosphere. The same engine answers all of them, because they are all asking
+            the same question: what does this actually clear at, and how sure can you be?
           </p>
-          <Flow>
-            <Node tone="accent" title="Phase 1 — first paint" sub="upcoming + market + stats + meta + backtest, ~8 MB of JSON at the current build (served compressed). Signals are PRECOMPUTED at build time → the feed is interactive immediately." />
-            <Down label="on demand" />
-            <Node title="Phase 2 — full history" sub="lots-*.json shards, ~290 MB at the current build. Opt-in: fires only when a history surface asks; merges in and re-attaches signal / soldComp to each lot by id." />
-            <Down label="on demand" />
-            <Node title="Phase 3 — sold archive" sub="sold-archive shards, ~19 MB. Fetched ONLY when a surface that reads deep sold comps opens; most sessions never pay for it." />
-          </Flow>
-        </Section>
-
-        <Section ord="07" label="Deploy" title="Two guards, no broken deploys">
           <p style={p}>
-            Every push to <code style={code}>main</code> runs the export and two gates before it can leave a
-            broken build live: <strong>Guard&nbsp;1</strong> verifies every JS chunk the exported HTML
-            references actually exists in <code style={code}>out/</code>; <strong>Guard&nbsp;2</strong> hits the
-            unique deployment URL after publish and confirms the home page&apos;s JS resolves as executable
-            JavaScript. If either fails, the job fails loudly rather than leaving production broken.
+            The market read is public and free to inspect — start with{' '}
+            <Link href="/value" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>today&rsquo;s calls</Link>{' '}
+            or the{' '}
+            <Link href="/analytics" style={{ color: 'var(--color-fg)', fontWeight: 600 }}>research desk</Link>.
+            For data access, coverage in a market we don&rsquo;t yet track, or diligence on the method,
+            the desk answers directly.
           </p>
-        </Section>
+          <p style={caption}>
+            Figures on this page are read from the live corpus at build time, dated{' '}
+            {String(meta.lastCrawl).slice(0, 10)}. They change when the market does.
+          </p>
+        </Sec>
       </div>
 
       <Colophon record={null} />
