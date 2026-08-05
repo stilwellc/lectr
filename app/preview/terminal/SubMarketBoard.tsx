@@ -90,12 +90,45 @@ function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRea
       .filter((r) => r.readType === 'demand')
       .sort((a, b) => demandStrength(b) - demandStrength(a));
     const ranked = [...index, ...demand];
+    // ── BLEND THE CONDENSED VIEW ACROSS MARKETS ──────────────────────────
+    // `ranked` puts every 'index' row above every 'demand' row, and the card
+    // markets are the ones with repeat-sale INDEXES while art/design/watches
+    // carry DEMAND reads — so a straight ranking made the visible top rows
+    // (the board caps at 8 before "show all") entirely sports cards, on the
+    // view that is supposed to survey the whole market.
+    //
+    // Round-robin by vertical instead: take each vertical's strongest
+    // remaining row in turn, so the condensed board spans art, design,
+    // watches, sports, science and culture, and only repeats a vertical once
+    // every other one has had a turn. Within a vertical the original
+    // strength order is preserved, and EXPANDING still reveals all rows —
+    // this reorders the survey, it never hides anything.
+    const byVertical = new Map<string, SubMarketRead[]>();
+    for (const r of ranked) {
+      const v = r.vertical || 'other';
+      (byVertical.get(v) || byVertical.set(v, []).get(v)!).push(r);
+    }
+    // vertical turn order follows each one's strongest row, so the single
+    // best read on the board still leads — the blend decides what FOLLOWS it,
+    // not what opens it.
+    const turns = Array.from(byVertical.keys()).sort(
+      (a, b) => ranked.indexOf(byVertical.get(a)![0]) - ranked.indexOf(byVertical.get(b)![0]),
+    );
+    const blended: SubMarketRead[] = [];
+    for (let i = 0; blended.length < ranked.length; i++) {
+      let placedThisPass = false;
+      for (const v of turns) {
+        const q = byVertical.get(v)!;
+        if (i < q.length) { blended.push(q[i]); placedThisPass = true; }
+      }
+      if (!placedThisPass) break; // every queue drained — guard against a spin
+    }
     // front-load the marquee in curated order, then the rest (deduped)
     const featured = FEATURED
-      .map((name) => ranked.find((r) => r.label.toLowerCase() === name))
+      .map((name) => blended.find((r) => r.label.toLowerCase() === name))
       .filter((r): r is SubMarketRead => !!r);
     const featuredSet = new Set(featured);
-    return [...featured, ...ranked.filter((r) => !featuredSet.has(r))];
+    return [...featured, ...blended.filter((r) => !featuredSet.has(r))];
   }
   const rows = sm[activeKey] || [];
   const rank = { index: 0, demand: 1, descriptive: 2 } as const;

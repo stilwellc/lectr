@@ -4048,6 +4048,29 @@ async function main() {
     // honest numbers without paying for the lazy sold-archive.json.
     totalLots: allLots.length,
     totalSold: allLots.filter(l => l.status === 'sold').length,
+    // ── PRICE BASIS DECLARATION — read this before writing ANY code that
+    // compares a sold price to an estimate. It is stamped into the payload (and
+    // so into R2) on every crawl precisely so it cannot be missed the way it was
+    // on Aug 4 2026, when the demand index was "corrected" to a hammer basis,
+    // shipped, and then reversed.
+    priceBasis: {
+      pricesIncludeBuyerPremium: true,
+      note:
+        'priceUsd is the price the buyer PAYS — the house\'s buyer premium is ' +
+        'INCLUDED. Christie\'s, Sotheby\'s, Phillips, Bonhams, Wright and Rago ' +
+        'all publish premium-inclusive prices (per-lot field: priceBasis). ' +
+        'Estimates are the house\'s guess at the HAMMER, which excludes premium. ' +
+        'So price-vs-estimate is "total cost vs what they guessed it would hammer ' +
+        'at" and carries ~20-28pts of fee inside it BY DESIGN. This is the ' +
+        'intended product read (what a buyer actually pays). Do NOT divide the ' +
+        'premium out to make the number look better-behaved: only Bonhams ' +
+        '(~14k lots) publishes a real per-lot hammer, so any deduction for ' +
+        'Christie\'s + Sotheby\'s + Phillips (88% of the demand pool) is an ' +
+        'INVENTED number. Consumers: app/lib/demand.ts and overEstimatePct in ' +
+        'app/utils.ts — they must always share one basis.',
+      estimatesAreHammerBasis: true,
+      housesPublishingRealHammer: ['Bonhams'],
+    },
     version: 2,
   }, null, 2));
 
