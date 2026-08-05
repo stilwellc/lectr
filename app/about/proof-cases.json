@@ -17,7 +17,8 @@
    "comps": 18,
    "confidence": "high",
    "houseEstLow": null,
-   "houseEstHigh": null
+   "houseEstHigh": null,
+   "imageUrl": "https://sothebys-com.brightspotcdn.com/dims4/default/2cb3e0f/2147483647/strip/false/crop/3543x3543+0+0/resize/421x421!/quality/90/?url=https%3A%2F%2Fsothebys-md.brightspotcdn.com%2Fc6%2F4e%2F1a6d2c7b44199b2040a0a1df65fc%2Fn12051-djm63-t3-01.jpg"
   },
   {
    "id": "sothebys-alg-43a7d5e7-1289-4635-a01e-cb0fc7dc60a7",
@@ -33,7 +34,8 @@
    "comps": 46,
    "confidence": "high",
    "houseEstLow": 8000,
-   "houseEstHigh": 12000
+   "houseEstHigh": 12000,
+   "imageUrl": "https://sothebys-com.brightspotcdn.com/dims4/default/1313ce7/2147483647/strip/false/crop/2000x2000+0+0/resize/421x421!/quality/90/?url=https%3A%2F%2Fsothebys-md.brightspotcdn.com%2Fwebnative%2Fimages%2Fac%2F5b%2F0974a0d34cc3a0ca0f83288b7991%2Fn12412-d4ngd-t2-02-v1.jpg"
   },
   {
    "id": "wright-275216~",
@@ -49,7 +51,8 @@
    "comps": 80,
    "confidence": "high",
    "houseEstLow": 25000,
-   "houseEstHigh": 35000
+   "houseEstHigh": 35000,
+   "imageUrl": "https://www.wright20.com/items/index/220/130_1_design_march_2026_george_nakashima_conoid_dining_table__lama_auction.jpg"
   },
   {
    "id": "bonhams-31867-64",
@@ -65,7 +68,8 @@
    "comps": 64,
    "confidence": "high",
    "houseEstLow": 20000,
-   "houseEstHigh": 30000
+   "houseEstHigh": 30000,
+   "imageUrl": "https://images2.bonhams.com/image?src=Images/live/2026-02/09/25785473-1-2.jpg"
   },
   {
    "id": "wright-283949~",
@@ -81,7 +85,8 @@
    "comps": 22,
    "confidence": "high",
    "houseEstLow": 8000,
-   "houseEstHigh": 12000
+   "houseEstHigh": 12000,
+   "imageUrl": "https://www.wright20.com/items/index/220/126_1_prints_multiples_may_2026_keith_haring_international_youth_year__lama_auction.jpg"
   },
   {
    "id": "goldin-202606-0823-4852-34bb0e5b-6218-487e-b915-e461e56bcb07",
@@ -97,7 +102,8 @@
    "comps": 36,
    "confidence": "medium",
    "houseEstLow": null,
-   "houseEstHigh": null
+   "houseEstHigh": null,
+   "imageUrl": "https://d2tt46f3mh26nl.cloudfront.net/public/Lots/202606-0823-4852-34bb0e5b-6218-487e-b915-e461e56bcb07/80ec92b1-e97c-40d2-812f-c61d00605963@1x"
   }
  ]
 }

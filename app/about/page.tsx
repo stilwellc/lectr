@@ -11,6 +11,8 @@ import backtest from '../../public/data/ray/backtest.json';
 import market from '../../public/data/ray/market.json';
 import refs from '../../public/data/ray/refs.json';
 import proof from './proof-cases.json';
+import PlateImg from '../components/PlateImg';
+import { httpsImg, sizedImg } from '../utils';
 
 /**
  * WHAT IS LECTR — the institutional page.
@@ -149,35 +151,47 @@ function Versus({ metric, flagged, unflagged, note, fw, uw, better }: {
 function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   const paidW = Math.max(6, Math.round((c.realizedUsd / c.ourValueUsd) * 100));
   const noEstimate = c.houseEstLow == null;
+  const title = craftTitle(c.title);
+  const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 640) : null;
   return (
     <div className="proof-card">
-      <div className="proof-meta">
-        {c.market} · {c.house} · {String(c.saleDate).slice(0, 10)}
-        {c.confidence === 'high' && <span className="proof-conf">high confidence</span>}
-      </div>
-      <div className="proof-title">{(() => { const t = craftTitle(c.title); return t.length > 84 ? t.slice(0, 82) + '…' : t; })()}</div>
-
-      <div className="proof-rows">
-        <div className="proof-row">
-          <span className="proof-k">lectr value</span>
-          <span className="proof-track"><span className="proof-fill proof-fill-ours" style={{ width: '100%' }} /></span>
-          <span className="proof-v">${fmt(c.ourValueUsd)}</span>
-        </div>
-        <div className="proof-row">
-          <span className="proof-k">sold for</span>
-          <span className="proof-track"><span className="proof-fill proof-fill-paid" style={{ width: `${paidW}%` }} /></span>
-          <span className="proof-v proof-v-paid">${fmt(c.realizedUsd)}</span>
-        </div>
+      {/* The object first. A price argument about a physical thing should show
+          the thing. PlateImg unmounts on a dead hotlink so the monogram behind
+          it shows rather than an empty well. */}
+      <div className="proof-shot" aria-hidden>
+        <span className="proof-mono">{(title || '?').charAt(0)}</span>
+        {img && <PlateImg src={img} alt="" loading="lazy" referrerPolicy="no-referrer" />}
       </div>
 
-      <div className="proof-foot">
-        <span className="proof-gap">{Math.abs(c.discountPct)}% under</span>
-        <span>
-          from {c.comps} comparable sales
-          {noEstimate
-            ? ' · the house published no estimate — ours was the only valuation'
-            : ` · house est $${fmt(c.houseEstLow as number)}–$${fmt(c.houseEstHigh as number)}`}
-        </span>
+      <div className="proof-body">
+        <div className="proof-meta">
+          <span>{c.market} · {c.house} · {String(c.saleDate).slice(0, 10)}</span>
+          {c.confidence === 'high' && <span className="proof-conf">high confidence</span>}
+        </div>
+        <div className="proof-title">{title.length > 76 ? title.slice(0, 74) + '…' : title}</div>
+
+        <div className="proof-rows">
+          <div className="proof-row">
+            <span className="proof-k">lectr value</span>
+            <span className="proof-track"><span className="proof-fill proof-fill-ours" style={{ width: '100%' }} /></span>
+            <span className="proof-v">${fmt(c.ourValueUsd)}</span>
+          </div>
+          <div className="proof-row">
+            <span className="proof-k">sold for</span>
+            <span className="proof-track"><span className="proof-fill proof-fill-paid" style={{ width: `${paidW}%` }} /></span>
+            <span className="proof-v proof-v-paid">${fmt(c.realizedUsd)}</span>
+          </div>
+        </div>
+
+        <div className="proof-foot">
+          <span className="proof-gap">{Math.abs(c.discountPct)}% under</span>
+          <span>
+            from {c.comps} comparable sales
+            {noEstimate
+              ? ' · the house published no estimate — ours was the only valuation'
+              : ` · house est $${fmt(c.houseEstLow as number)}–$${fmt(c.houseEstHigh as number)}`}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -248,48 +262,42 @@ export default function AboutPage() {
           font-variant-numeric: tabular-nums;
         }
         .deck-cover { padding: clamp(30px, 4vw, 52px) 0 clamp(30px, 4vw, 46px); }
-        .proof-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-          gap: clamp(14px, 1.8vw, 22px);
-          margin-top: clamp(26px, 3vw, 38px);
-        }
+        /* ── THE PROOF CARDS ────────────────────────────────────────────
+           Two DIFFERENT compositions, not one squeezed. Phone: the object
+           leads as a full-width plate, the argument reads beneath it in a
+           single column. Desktop: the plate stands beside the argument so a
+           card is scannable in one glance and two fit per row. */
+        .proof-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: clamp(26px, 3vw, 38px); }
         .proof-card {
           border: 1px solid var(--hairline);
-          border-radius: 14px;
-          padding: clamp(18px, 2vw, 24px);
+          border-radius: 16px;
           background: var(--panel);
+          overflow: hidden;
           min-width: 0;
           display: flex;
           flex-direction: column;
         }
+        .proof-shot {
+          position: relative;
+          aspect-ratio: 16 / 10;
+          background: var(--color-bg-elevated);
+          display: flex; align-items: center; justify-content: center;
+          overflow: hidden;
+          border-bottom: 1px solid var(--hairline);
+        }
+        .proof-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .proof-mono { font-size: 46px; font-weight: 700; color: var(--color-text-faint); opacity: 0.5; }
+        .proof-body { padding: 18px 18px 20px; display: flex; flex-direction: column; flex: 1; }
         .proof-meta {
-          font-size: 11px;
-          letter-spacing: 0.09em;
-          text-transform: uppercase;
+          font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
           color: var(--color-text-faint);
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          align-items: center;
+          display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
         }
-        .proof-conf {
-          border: 1px solid var(--hairline);
-          border-radius: 100px;
-          padding: 2px 9px;
-          letter-spacing: 0.06em;
-          color: var(--color-text-muted);
-        }
-        .proof-title {
-          font-size: 16px;
-          font-weight: 650;
-          line-height: 1.32;
-          color: var(--color-fg);
-          margin: 10px 0 16px;
-        }
-        .proof-rows { display: flex; flex-direction: column; gap: 8px; }
-        .proof-row { display: grid; grid-template-columns: 78px minmax(0,1fr) 92px; gap: 10px; align-items: center; }
-        .proof-k { font-size: 11.5px; color: var(--color-text-faint); }
+        .proof-conf { border: 1px solid var(--hairline); border-radius: 100px; padding: 2px 9px; letter-spacing: 0.06em; color: var(--color-text-muted); }
+        .proof-title { font-size: 16.5px; font-weight: 650; line-height: 1.3; color: var(--color-fg); margin: 9px 0 15px; }
+        .proof-rows { display: flex; flex-direction: column; gap: 9px; }
+        .proof-row { display: grid; grid-template-columns: 68px minmax(0,1fr) 86px; gap: 9px; align-items: center; }
+        .proof-k { font-size: 11px; color: var(--color-text-faint); }
         .proof-track { height: 12px; background: var(--color-bg-elevated); border-radius: 6px; overflow: hidden; display: block; }
         .proof-fill { display: block; height: 100%; border-radius: 6px; }
         .proof-fill-ours { background: var(--color-text-faint); }
@@ -297,24 +305,34 @@ export default function AboutPage() {
         .proof-v { font-size: 15px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
         .proof-v-paid { color: var(--color-up); }
         .proof-foot {
-          margin-top: auto;
-          padding-top: 15px;
+          margin-top: auto; padding-top: 14px;
           border-top: 1px solid var(--hairline);
-          font-size: 11.5px;
-          line-height: 1.55;
-          color: var(--color-text-faint);
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
+          font-size: 11.5px; line-height: 1.55; color: var(--color-text-faint);
+          display: flex; flex-direction: column; gap: 5px;
         }
-        .proof-gap { font-size: 21px; font-weight: 750; color: var(--color-up); letter-spacing: -0.02em; }
-        .deck-statband {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
-          gap: clamp(20px, 2.2vw, 28px);
-          margin-top: clamp(30px, 4vw, 48px);
-          padding-top: clamp(26px, 3vw, 36px);
-          border-top: 1px solid var(--hairline);
+        .proof-gap { font-size: 24px; font-weight: 750; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
+
+        @media (min-width: 760px) {
+          .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 1.8vw, 22px); }
+          .proof-card { flex-direction: row; }
+          .proof-row { grid-template-columns: 58px minmax(0,1fr) 78px; gap: 8px; }
+          .proof-track { height: 14px; border-radius: 7px; }
+          .proof-fill { border-radius: 7px; }
+          .proof-shot {
+            aspect-ratio: auto;
+            flex: 0 0 34%;
+            border-bottom: none;
+            border-right: 1px solid var(--hairline);
+            align-self: stretch;
+          }
+          .proof-body { padding: 20px 20px 22px; }
+          .proof-gap { font-size: 26px; }
+        }
+        @media (min-width: 1180px) {
+          .proof-shot { flex-basis: 36%; }
+          .proof-row { grid-template-columns: 64px minmax(0,1fr) 88px; }
+          .proof-title { font-size: 17px; }
+          .proof-gap { font-size: 30px; }
         }
       `}</style>
       <ArtistNav activeSlug="about" />
@@ -405,11 +423,6 @@ export default function AboutPage() {
             the premium out for a like-for-like comparison against an estimate that never included it.
           </p>
           <div style={{ marginTop: 24 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr)', gap: 12, paddingBottom: 9 }}>
-              <span className="kicker">Measure</span>
-              <span className="kicker" style={{ textAlign: 'right' }}>Flagged</span>
-              <span className="kicker" style={{ textAlign: 'right' }}>Unflagged</span>
-            </div>
             <Versus metric="Median vs estimate · all-in" flagged={pct(F.medianPerfPct)} unflagged={pct(U.medianPerfPct)}
               note="what the buyer paid, premium included"
               fw={1} uw={Math.max(0, U.medianPerfPct) / Math.max(1, F.medianPerfPct)} />
