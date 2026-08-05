@@ -29,6 +29,11 @@ const MIN_EST = Number(process.env.MIN_EST || 10000);
 const MIN_COMPS = Number(process.env.MIN_COMPS || 5);
 const MIN_DISCOUNT = Number(process.env.MIN_DISCOUNT || 0.45); // sold >=45% under our value
 const MIN_CONF = process.env.ALLOW_LOW !== '1'; // drop 'low' confidence by default
+// Stop as soon as we have enough examples. The replay is O(targets x priors)
+// and Goldin's roster is ~320k sold priors per call, so a full sweep of the
+// no-estimate markets costs hours to answer a question that needs a handful of
+// cases. ENOUGH=0 restores the exhaustive run.
+const ENOUGH = Number(process.env.ENOUGH ?? 24);
 
 const t0 = Date.now();
 const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
@@ -63,6 +68,7 @@ interface Hit {
 const hits: Hit[] = [];
 let scored = 0;
 for (let i = 0; i < targets.length; i++) {
+  if (ENOUGH && hits.length >= ENOUGH) { log(`[deep-value] ${ENOUGH} examples found — stopping early at ${i}/${targets.length}`); break; }
   const lot = targets[i];
   if (i % 2000 === 0 && i) log(`  …${i}/${targets.length} (${elapsed()}) — ${hits.length} hits`);
   let v;

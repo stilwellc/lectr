@@ -5,10 +5,12 @@ import Flick from '../components/Flick';
 import { Colophon } from '../components/Terminal';
 import Masthead, { Accent } from '../components/Masthead';
 import { MARKETS } from '../constants';
+import { craftTitle } from '../utils';
 import meta from '../../public/data/ray/meta.json';
 import backtest from '../../public/data/ray/backtest.json';
 import market from '../../public/data/ray/market.json';
 import refs from '../../public/data/ray/refs.json';
+import proof from './proof-cases.json';
 
 /**
  * WHAT IS LECTR — the institutional page.
@@ -140,6 +142,47 @@ function Versus({ metric, flagged, unflagged, note, fw, uw, better }: {
  *  .ray-paper (the lander's room device), so the deck alternates stock the way
  *  a real deck alternates layouts — and the ghost ordinal gives each slide a
  *  corner number without adding a second voice. */
+/** ONE CALL, SHOWN. The engine's value is the full rule; what the room actually
+ *  paid is drawn against it, so the gap is the picture. Green marks the gap
+ *  because "below comparable market" is the favourable read in this product's
+ *  language — the same green a below-market flag wears everywhere else. */
+function ProofCase({ c }: { c: typeof proof.cases[number] }) {
+  const paidW = Math.max(6, Math.round((c.realizedUsd / c.ourValueUsd) * 100));
+  const noEstimate = c.houseEstLow == null;
+  return (
+    <div className="proof-card">
+      <div className="proof-meta">
+        {c.market} · {c.house} · {String(c.saleDate).slice(0, 10)}
+        {c.confidence === 'high' && <span className="proof-conf">high confidence</span>}
+      </div>
+      <div className="proof-title">{(() => { const t = craftTitle(c.title); return t.length > 84 ? t.slice(0, 82) + '…' : t; })()}</div>
+
+      <div className="proof-rows">
+        <div className="proof-row">
+          <span className="proof-k">lectr value</span>
+          <span className="proof-track"><span className="proof-fill proof-fill-ours" style={{ width: '100%' }} /></span>
+          <span className="proof-v">${fmt(c.ourValueUsd)}</span>
+        </div>
+        <div className="proof-row">
+          <span className="proof-k">sold for</span>
+          <span className="proof-track"><span className="proof-fill proof-fill-paid" style={{ width: `${paidW}%` }} /></span>
+          <span className="proof-v proof-v-paid">${fmt(c.realizedUsd)}</span>
+        </div>
+      </div>
+
+      <div className="proof-foot">
+        <span className="proof-gap">{Math.abs(c.discountPct)}% under</span>
+        <span>
+          from {c.comps} comparable sales
+          {noEstimate
+            ? ' · the house published no estimate — ours was the only valuation'
+            : ` · house est $${fmt(c.houseEstLow as number)}–$${fmt(c.houseEstHigh as number)}`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function Sec({ ord, label, title, paper, children }: {
   ord: string; label: string; title: React.ReactNode; paper?: boolean; children: React.ReactNode;
 }) {
@@ -205,6 +248,66 @@ export default function AboutPage() {
           font-variant-numeric: tabular-nums;
         }
         .deck-cover { padding: clamp(30px, 4vw, 52px) 0 clamp(30px, 4vw, 46px); }
+        .proof-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: clamp(14px, 1.8vw, 22px);
+          margin-top: clamp(26px, 3vw, 38px);
+        }
+        .proof-card {
+          border: 1px solid var(--hairline);
+          border-radius: 14px;
+          padding: clamp(18px, 2vw, 24px);
+          background: var(--panel);
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+        }
+        .proof-meta {
+          font-size: 11px;
+          letter-spacing: 0.09em;
+          text-transform: uppercase;
+          color: var(--color-text-faint);
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: center;
+        }
+        .proof-conf {
+          border: 1px solid var(--hairline);
+          border-radius: 100px;
+          padding: 2px 9px;
+          letter-spacing: 0.06em;
+          color: var(--color-text-muted);
+        }
+        .proof-title {
+          font-size: 16px;
+          font-weight: 650;
+          line-height: 1.32;
+          color: var(--color-fg);
+          margin: 10px 0 16px;
+        }
+        .proof-rows { display: flex; flex-direction: column; gap: 8px; }
+        .proof-row { display: grid; grid-template-columns: 78px minmax(0,1fr) 92px; gap: 10px; align-items: center; }
+        .proof-k { font-size: 11.5px; color: var(--color-text-faint); }
+        .proof-track { height: 12px; background: var(--color-bg-elevated); border-radius: 6px; overflow: hidden; display: block; }
+        .proof-fill { display: block; height: 100%; border-radius: 6px; }
+        .proof-fill-ours { background: var(--color-text-faint); }
+        .proof-fill-paid { background: var(--color-up); }
+        .proof-v { font-size: 15px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
+        .proof-v-paid { color: var(--color-up); }
+        .proof-foot {
+          margin-top: auto;
+          padding-top: 15px;
+          border-top: 1px solid var(--hairline);
+          font-size: 11.5px;
+          line-height: 1.55;
+          color: var(--color-text-faint);
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .proof-gap { font-size: 21px; font-weight: 750; color: var(--color-up); letter-spacing: -0.02em; }
         .deck-statband {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
@@ -336,7 +439,25 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec paper ord="04" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
+        <Sec ord="04" label="The proof" title={<>We said what it was worth. The room paid less.</>}>
+          <p style={p}>
+            The record above is an aggregate. This is what it looks like as individual lots. In each
+            case the engine priced the object from comparable sold evidence — using only sales dated
+            strictly <em>before</em> it, so this is what lectr would have said on the day — and the
+            hammer then came in under that number.
+          </p>
+          <div className="proof-grid">
+            {proof.cases.map((c) => <ProofCase key={c.id} c={c} />)}
+          </div>
+          <p style={caption}>
+            The two sports lots are the sharpest demonstration: Goldin and the NBA auctions publish
+            <b style={{ color: 'var(--color-text-muted)' }}> no estimate at all</b>, so lectr&rsquo;s figure was the only
+            valuation in existence when the hammer fell. Elsewhere the house had published a number
+            too — and in each of those, the room cleared below both.
+          </p>
+        </Sec>
+
+        <Sec paper ord="05" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>
             Anything can print a percentage. The expensive part is knowing when a figure isn&rsquo;t
             supported — and refusing to publish it. lectr runs an explicit ladder: a confidence-interval
@@ -354,7 +475,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="05" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
+        <Sec ord="06" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
           <p style={p}>
             A price is not an answer on its own. Every lot in lectr resolves into a graph you can walk:
             the comparable sales behind its call, the sub-market it trades in, the maker&rsquo;s index, and —
@@ -373,7 +494,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="06" label="Who it's for" title={<>Built for people who have to be right in public.</>}>
+        <Sec ord="07" label="Who it's for" title={<>Built for people who have to be right in public.</>}>
           <p style={p}>
             Specialists pricing a consignment, funds underwriting collectibles as an asset, insurers
             and lenders marking a book, and serious private buyers who would rather bid against
