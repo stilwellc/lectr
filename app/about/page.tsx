@@ -76,8 +76,8 @@ const calN = backtest.calibration?.n ?? null;
 
 function Stat({ figure, label, note }: { figure: string; label: string; note?: string }) {
   return (
-    <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-      <div style={{ fontSize: 'clamp(30px, 4.4vw, 46px)', fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 'clamp(26px, 3vw, 42px)', fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
         {figure}
       </div>
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 9 }}>{label}</div>
@@ -105,27 +105,54 @@ function Bar({ label, n, max }: { label: string; n: number; max: number }) {
 
 /** The record, as a head-to-head. Green marks the flagged side ONLY where it
  *  genuinely reads higher — direction, never decoration. */
-function Versus({ metric, flagged, unflagged, note }: { metric: string; flagged: string; unflagged: string; note?: string }) {
+function Versus({ metric, flagged, unflagged, note, fw, uw, better }: {
+  metric: string; flagged: string; unflagged: string; note?: string;
+  /** bar widths 0-1, drawn to the same scale so the GAP is the visual */
+  fw: number; uw: number;
+  /** which side the metric rewards — 'lower' inverts the ink (fail-to-sell) */
+  better?: 'higher' | 'lower';
+}) {
+  const flaggedWins = better === 'lower' ? fw <= uw : fw >= uw;
+  const ink = flaggedWins ? 'var(--color-up)' : 'var(--color-text-secondary)';
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr)', gap: 12, padding: '13px 0', borderTop: '1px solid var(--hairline)', alignItems: 'baseline' }}>
-      <div>
-        <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 600 }}>{metric}</div>
-        {note && <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 3, lineHeight: 1.5 }}>{note}</div>}
+    <div style={{ padding: '16px 0', borderTop: '1px solid var(--hairline)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
+        <span style={{ fontSize: 14, color: 'var(--color-fg)', fontWeight: 650 }}>{metric}</span>
+        {note && <span style={{ fontSize: 11.5, color: 'var(--color-text-faint)', textAlign: 'right', lineHeight: 1.45 }}>{note}</span>}
       </div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{flagged}</div>
-      <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{unflagged}</div>
+      {([
+        { k: 'Flagged', v: flagged, w: fw, ink, weight: 700 },
+        { k: 'Unflagged', v: unflagged, w: uw, ink: 'var(--color-text-muted)', weight: 600 },
+      ] as const).map((row) => (
+        <div key={row.k} style={{ display: 'grid', gridTemplateColumns: '78px minmax(0,1fr) 66px', gap: 12, alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: 11.5, color: 'var(--color-text-faint)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{row.k}</span>
+          <span style={{ height: 10, background: 'var(--color-bg-elevated)', borderRadius: 5, overflow: 'hidden', display: 'block' }}>
+            <span style={{ display: 'block', width: `${Math.max(2, Math.round(row.w * 100))}%`, height: '100%', background: row.ink, borderRadius: 5 }} />
+          </span>
+          <span style={{ fontSize: 16, fontWeight: row.weight, color: row.ink, fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{row.v}</span>
+        </div>
+      ))}
     </div>
   );
 }
 
-function Sec({ ord, label, title, children }: { ord: string; label: string; title: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section style={{ ...wrap, paddingTop: 46, paddingBottom: 6 }}>
-      <span className="kicker" style={{ display: 'block', margin: '0 0 10px' }}>{ord} · {label}</span>
-      <h2 style={{ fontSize: 'clamp(23px, 3vw, 30px)', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--color-fg)', lineHeight: 1.24, margin: '0 0 18px' }}>{title}</h2>
+/** ONE SLIDE. `paper` flips the whole block onto the printed ramp via
+ *  .ray-paper (the lander's room device), so the deck alternates stock the way
+ *  a real deck alternates layouts — and the ghost ordinal gives each slide a
+ *  corner number without adding a second voice. */
+function Sec({ ord, label, title, paper, children }: {
+  ord: string; label: string; title: React.ReactNode; paper?: boolean; children: React.ReactNode;
+}) {
+  const inner = (
+    <div style={{ ...wrap, position: 'relative' }}>
+      <span className="deck-ord" aria-hidden>{ord}</span>
+      <span className="kicker" style={{ display: 'block', margin: '0 0 12px' }}>{ord} · {label}</span>
+      <h2 className="deck-h">{title}</h2>
       {children}
-    </section>
+    </div>
   );
+  if (paper) return <section className="ray-paper deck-room">{inner}</section>;
+  return <section className="deck-slide">{inner}</section>;
 }
 
 /** A step in the pricing chain. Numbered, not arrowed — the flow reads down. */
@@ -144,6 +171,49 @@ function Step({ n, title, body }: { n: string; title: string; body: React.ReactN
 export default function AboutPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      <style>{`
+        .deck-slide { padding: clamp(54px, 7vw, 96px) 0 clamp(20px, 3vw, 34px); }
+        .deck-room {
+          position: relative;
+          margin-inline: calc(50% - 50vw + clamp(10px, 1.2vw, 18px));
+          background: var(--paper, #E2D9C4);
+          border-radius: clamp(22px, 2.8vw, 36px);
+          padding: clamp(46px, 6vw, 82px) 0 clamp(40px, 5vw, 66px);
+          margin-block: clamp(40px, 5vw, 72px);
+        }
+        @media (max-width: 700px) { .deck-room { margin-inline: calc(50% - 50vw + 8px); border-radius: 20px; } }
+        .deck-h {
+          font-size: clamp(27px, 4.2vw, 44px);
+          font-weight: 700;
+          letter-spacing: -0.032em;
+          line-height: 1.12;
+          color: var(--color-fg);
+          margin: 0 0 20px;
+          max-width: 20ch;
+        }
+        .deck-ord {
+          position: absolute;
+          top: -0.42em;
+          right: 18px;
+          font-size: clamp(74px, 12vw, 150px);
+          font-weight: 800;
+          letter-spacing: -0.05em;
+          line-height: 1;
+          color: var(--color-fg);
+          opacity: 0.05;
+          pointer-events: none;
+          font-variant-numeric: tabular-nums;
+        }
+        .deck-cover { padding: clamp(30px, 4vw, 52px) 0 clamp(30px, 4vw, 46px); }
+        .deck-statband {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
+          gap: clamp(20px, 2.2vw, 28px);
+          margin-top: clamp(30px, 4vw, 48px);
+          padding-top: clamp(26px, 3vw, 36px);
+          border-top: 1px solid var(--hairline);
+        }
+      `}</style>
       <ArtistNav activeSlug="about" />
 
       <div style={{ paddingTop: 28, paddingBottom: 56 }}>
@@ -174,7 +244,7 @@ export default function AboutPage() {
             didn&rsquo;t — and failed to sell less often while doing it.
           </p>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '26px 20px', margin: '32px 0 4px', paddingTop: 26, borderTop: '1px solid var(--hairline)' }}>
+          <div className="deck-statband">
             <Stat figure={fmt(meta.totalLots)} label="Lots under tracking" note="live and settled, one graph" />
             <Stat figure={fmt(meta.totalSold)} label="Settled results" note="every one with a published price" />
             <Stat figure={String(meta.sources.length)} label="Auction houses" note={meta.sources.join(' · ')} />
@@ -200,7 +270,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="02" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
+        <Sec paper ord="02" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
           <p style={p}>
             The engine does not forecast taste. It answers a narrower question with evidence: given
             everything that has actually sold, where should this lot clear — and does the house&rsquo;s
@@ -237,10 +307,19 @@ export default function AboutPage() {
               <span className="kicker" style={{ textAlign: 'right' }}>Flagged</span>
               <span className="kicker" style={{ textAlign: 'right' }}>Unflagged</span>
             </div>
-            <Versus metric="Median vs estimate · all-in" flagged={pct(F.medianPerfPct)} unflagged={pct(U.medianPerfPct)} note="what the buyer paid, premium included" />
-            <Versus metric="Median vs estimate · at hammer" flagged={pct(F.hammerMedianPct ?? 0)} unflagged={pct(U.hammerMedianPct ?? 0)} note="like-for-like against a hammer-basis estimate" />
-            <Versus metric="Cleared the high estimate" flagged={`${F.beatHighPct}%`} unflagged={`${U.beatHighPct}%`} />
-            <Versus metric="Failed to sell" flagged={`${F.failToSellPct}%`} unflagged={`${U.failToSellPct}%`} note="lower is better — the flag does not chase lots into no-sales" />
+            <Versus metric="Median vs estimate · all-in" flagged={pct(F.medianPerfPct)} unflagged={pct(U.medianPerfPct)}
+              note="what the buyer paid, premium included"
+              fw={1} uw={Math.max(0, U.medianPerfPct) / Math.max(1, F.medianPerfPct)} />
+            <Versus metric="Median vs estimate · at hammer" flagged={pct(F.hammerMedianPct ?? 0)} unflagged={pct(U.hammerMedianPct ?? 0)}
+              note="like-for-like against a hammer-basis estimate"
+              fw={1} uw={Math.max(0, U.hammerMedianPct ?? 0) / Math.max(1, F.hammerMedianPct ?? 1)} />
+            <Versus metric="Cleared the high estimate" flagged={`${F.beatHighPct}%`} unflagged={`${U.beatHighPct}%`}
+              fw={F.beatHighPct / 100} uw={U.beatHighPct / 100} />
+            <Versus metric="Failed to sell" flagged={`${F.failToSellPct}%`} unflagged={`${U.failToSellPct}%`}
+              note="lower is better — the flag does not chase lots into no-sales"
+              better="lower"
+              fw={F.failToSellPct / Math.max(F.failToSellPct, U.failToSellPct)}
+              uw={U.failToSellPct / Math.max(F.failToSellPct, U.failToSellPct)} />
           </div>
           <div style={{ marginTop: 22, padding: '18px 20px', border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--panel)' }}>
             <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 6 }}>The edge, stated plainly</div>
@@ -257,7 +336,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="04" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
+        <Sec paper ord="04" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>
             Anything can print a percentage. The expensive part is knowing when a figure isn&rsquo;t
             supported — and refusing to publish it. lectr runs an explicit ladder: a confidence-interval
