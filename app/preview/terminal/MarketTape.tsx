@@ -9,7 +9,6 @@ import type { Market } from '../../constants';
 import { MARKETS } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { CIBeam, DemandLine } from './SubMarketBoard';
-import { GhostGlyph } from './VerticalGhost';
 import { fmtInt, fmtMoneyCompact } from './hooks';
 import { fmtPct } from './verified';
 import styles from './style.module.css';
@@ -149,9 +148,6 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
       data-dir={r.kind === 'index' ? (r.changePct >= 0 ? 'up' : 'down') : r.kind === 'demand' ? (r.now >= 0 ? 'up' : 'down') : undefined}
       onClick={() => setMarket(row.key)}
       aria-label={`${row.label} — open the ${row.label} lander`}>
-      {/* the market's illustration bleeds off the plate edge, exactly the
-          switcher-pill device at monument scale */}
-      <span className={styles.mtMonGhost} aria-hidden><GhostGlyph market={row.key} /></span>
       <span className={styles.mtMonKicker}>
         {r.kind === 'index' ? 'The certified read' : r.kind === 'demand' ? 'The strongest read' : 'The read'}
       </span>

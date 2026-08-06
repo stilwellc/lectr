@@ -1907,8 +1907,10 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    scale that shouts over the figure. The BOUNDS are context, the point
    estimate is the claim: quiet mono, one size. */
 .mtMon .beamLarge { width: 100%; }
-.mtMon .beamLarge .beamStage { height: 22px; }
-.mtMon .beamLarge .beamEnds { font-size: 13px; font-weight: 500; color: var(--tt-muted) !important; }
+.mtMon .beamLarge .beam { margin-top: 0; }
+.mtMon .beamLarge .beamLabel { display: none; }  /* the sub caption already names the read */
+.mtMon .beamLarge .beamStage { height: 16px; }
+.mtMon .beamLarge .beamEnds { margin-top: 5px; font-size: 12px; font-weight: 500; color: var(--tt-muted) !important; }
 .mtMon .beamLarge .beamRule { stroke: rgba(237, 230, 218, 0.75); }
 .mtMon .beamLarge .beamDiamond::before { background: var(--tt-butter); }
 .mtSide .heroRail { grid-area: auto; align-self: stretch; }
@@ -1929,19 +1931,19 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtMonMarket {
   font-family: var(--font-serif-display), serif;
   font-weight: 400; letter-spacing: -0.015em; line-height: 1;
-  font-size: clamp(24px, 2.2vw, 32px);
+  font-size: clamp(22px, 1.9vw, 28px);
   color: var(--tt-fg);
   transition: color 0.15s ease;
 }
 .mtMonFigure {
-  font-size: clamp(26px, 2.5vw, 36px); font-weight: 650;
+  font-size: clamp(24px, 2.2vw, 32px); font-weight: 650;
   letter-spacing: -0.02em; line-height: 1;
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
 }
 .mtMonFigure[data-dir='up'] { color: var(--color-up); }
 .mtMonFigure[data-dir='down'] { color: var(--color-down); }
-.mtMonBeam { width: 100%; max-width: 340px; margin-top: 4px; }
+.mtMonBeam { width: 100%; max-width: 300px; margin-top: 6px; }
 .mtMonSub { font-size: 12.5px; color: var(--tt-muted); font-variant-numeric: tabular-nums; }
 
 /* mobile masthead: kicker left, serial right, above the monument card */
@@ -2033,7 +2035,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
     #14110d;
   border: 1px solid rgba(232, 218, 182, 0.09);
   border-radius: 14px;
-  padding: clamp(14px, 1.4vw, 18px) clamp(14px, 1.6vw, 20px) clamp(14px, 1.5vw, 20px);
+  padding: clamp(12px, 1.2vw, 16px) clamp(14px, 1.5vw, 18px) clamp(12px, 1.2vw, 16px);
   box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05), 0 18px 44px -18px rgba(8, 6, 3, 0.55);
   transition: border-color 180ms var(--ease-signature, ease), transform 180ms var(--ease-signature, ease);
 }
@@ -2063,13 +2065,14 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .mtMonWrapM { padding: 6px 0 8px; border-bottom: none; }
   .mtMonGhost { width: 64%; right: -8%; }
   .mtMastheadM { padding: 0 2px 6px; }
-  .mtMon { padding: 12px 14px 14px; gap: 3px; }
-  .mtMonMarket { font-size: 22px; }
-  .mtMonFigure { font-size: 27px; }
-  .mtMonSub { font-size: 11px; }
-  .mtMonKicker { font-size: 10px; }
-  .mtMon .beamLarge .beamStage { height: 18px; }
-  .mtMon .beamLarge .beamEnds { margin-top: 6px; font-size: 11px; }
+  .mtMon { padding: 12px 14px; gap: 2px; }
+  .mtMonMarket { font-size: 21px; }
+  .mtMonFigure { font-size: 26px; }
+  .mtMonSub { font-size: 10.5px; margin-top: 2px; }
+  .mtMonKicker { font-size: 9.5px; }
+  .mtMonBeam { margin-top: 4px; }
+  .mtMon .beamLarge .beamStage { height: 14px; }
+  .mtMon .beamLarge .beamEnds { margin-top: 4px; font-size: 10.5px; }
   .mtStage { margin-top: 6px; }
   .mtRow { min-height: 46px; padding: 7px 2px; }
   .mtLabel { font-size: 14.5px; }
