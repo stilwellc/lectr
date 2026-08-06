@@ -237,11 +237,14 @@ function Slope({ metric, note, lo, hi, fmtV, n, better = 'higher' }: {
   );
 }
 
+interface CompRow { title: string; house: string; saleDate: string; priceUsd: number; url: string | null }
+
 function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   const paidW = Math.max(6, Math.round((c.realizedUsd / c.ourValueUsd) * 100));
   const noEstimate = c.houseEstLow == null;
   const title = craftTitle(c.title);
   const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 960) : null;
+  const comps = ((c as { compRows?: CompRow[] }).compRows ?? []);
   return (
     <div className="proof-card ray-enter-card">
       {/* The object first. A price argument about a physical thing should show
@@ -280,11 +283,57 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
 
         <div className="proof-foot">
           <span className="proof-gap">{Math.abs(c.discountPct)}% under</span>
+          {/* The claim is "from N comparable sales", so N comparable sales have
+              to be inspectable. A native <details> rather than a modal: this is
+              a server component in a static export, the disclosure needs no
+              client JS, and it stays keyboard- and screen-reader-addressable.
+
+              The comps are SHIPPED (scripts/_qa/gen-proof-comps.ts) rather than
+              linked to /lot?id=. These are settled lots, so they carry no
+              `value` stamp — build-market only stamps upcoming — and the lot
+              page would fall through to a client-side gate that prints "No
+              comparable sales clear the gates for this lot" on a card claiming
+              the opposite, after streaming ~28MB of shards to say it. */}
+          {comps.length > 0 ? (
+            <details className="comp-disc">
+              <summary>
+                <span>from {c.comps} comparable sales{comps.length < c.comps ? ` · ${comps.length} shown` : ''}</span>
+                <span className="comp-caret" aria-hidden>+</span>
+              </summary>
+              <div className="comp-wrap">
+                <table className="comp-table">
+                  <thead>
+                    <tr><th>Sold</th><th>Lot</th><th className="comp-num">Price</th></tr>
+                  </thead>
+                  <tbody>
+                    {comps.map((r, i) => (
+                      <tr key={i}>
+                        <td className="comp-date">{String(r.saleDate).slice(0, 10)}</td>
+                        <td className="comp-lot">
+                          {r.url
+                            ? <a href={r.url} target="_blank" rel="noopener noreferrer">{craftTitle(r.title)}</a>
+                            : <span>{craftTitle(r.title)}</span>}
+                          <i>{r.house}</i>
+                        </td>
+                        <td className="comp-num">${fmt(r.priceUsd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="comp-note">
+                  The pool this lot was priced against, most recent first — every one settled
+                  <b> before</b> it sold. lectr&rsquo;s value is a recency-weighted median over the
+                  full {c.comps}, not over the {comps.length} shown.
+                </p>
+              </div>
+            </details>
+          ) : (
+            <span>from {c.comps} comparable sales</span>
+          )}
           <span>
-            from {c.comps} comparable sales
             {noEstimate
-              ? ' · the house published no estimate — ours was the only valuation'
-              : ` · house est $${fmt(c.houseEstLow as number)}–$${fmt(c.houseEstHigh as number)}`}
+              ? 'The house published no estimate — ours was the only valuation.'
+              : `House est $${fmt(c.houseEstLow as number)}–$${fmt(c.houseEstHigh as number)}.`}
           </span>
         </div>
       </div>
@@ -366,6 +415,7 @@ function LiveBand({ book }: { book: LiveBook }) {
  *  look at one. Caption sits under the plate so the image is never covered. */
 function HeroLot({ c }: { c: typeof proof.cases[number] }) {
   const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 1280) : null;
+  const comps = ((c as { compRows?: CompRow[] }).compRows ?? []);
   if (!img) return null;
   return (
     <section className="deck-hero ray-enter">
@@ -378,6 +428,37 @@ function HeroLot({ c }: { c: typeof proof.cases[number] }) {
           <b>${fmt(c.ourValueUsd)}</b> from {c.comps} comparable sales. It sold for{' '}
           <b className="hero-cap-paid">${fmt(c.realizedUsd)}</b>.
         </p>
+        {comps.length > 0 && (
+          <details className="comp-disc comp-disc-hero">
+            <summary>
+              <span>The {c.comps} sales it was priced against{comps.length < c.comps ? ` · ${comps.length} shown` : ''}</span>
+              <span className="comp-caret" aria-hidden>+</span>
+            </summary>
+            <div className="comp-wrap">
+              <table className="comp-table">
+                <thead><tr><th>Sold</th><th>Lot</th><th className="comp-num">Price</th></tr></thead>
+                <tbody>
+                  {comps.map((r, i) => (
+                    <tr key={i}>
+                      <td className="comp-date">{String(r.saleDate).slice(0, 10)}</td>
+                      <td className="comp-lot">
+                        {r.url
+                          ? <a href={r.url} target="_blank" rel="noopener noreferrer">{craftTitle(r.title)}</a>
+                          : <span>{craftTitle(r.title)}</span>}
+                        <i>{r.house}</i>
+                      </td>
+                      <td className="comp-num">${fmt(r.priceUsd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="comp-note">
+                Most recent first — every one settled <b>before</b> this lot sold. The value is a
+                recency-weighted median over the full {c.comps}, not over the {comps.length} shown.
+              </p>
+            </div>
+          </details>
+        )}
       </div>
     </section>
   );
@@ -714,6 +795,62 @@ export default function AboutPage() {
         .live-k { font-size: var(--d-cap); line-height: 1.55; color: var(--color-text-secondary); max-width: 30ch; }
         @media (min-width: 760px) { .live-split { grid-template-columns: repeat(3, minmax(0,1fr)); } }
 
+        /* ── THE COMPS, INSPECTABLE ───────────────────────────────────── */
+        .comp-disc { margin: 2px 0 0; }
+        .comp-disc > summary {
+          display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+          cursor: pointer; list-style: none;
+          padding: 13px 0; margin: -13px 0;  /* 44px hit area without moving the line */
+          color: var(--color-text-secondary);
+          border-bottom: 1px solid transparent;
+        }
+        .comp-disc > summary::-webkit-details-marker { display: none; }
+        .comp-disc > summary:hover { color: var(--color-fg); }
+        .comp-disc > summary:hover .comp-caret { color: var(--color-fg); border-color: var(--color-fg); }
+        .comp-disc > summary:focus-visible { outline: 2px solid var(--color-butter); outline-offset: 3px; }
+        .comp-caret {
+          flex: none; width: 17px; height: 17px; border-radius: 50%;
+          border: 1px solid var(--hairline); color: var(--color-text-faint);
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 11px; line-height: 1; font-weight: 600;
+          transition: transform .18s ease;
+        }
+        .comp-disc[open] .comp-caret { transform: rotate(45deg); }
+        .comp-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+        .comp-table { width: 100%; border-collapse: collapse; font-size: var(--d-cap); }
+        .comp-table th {
+          text-align: left; font-weight: 600; padding: 0 0 6px;
+          color: var(--color-text-faint); font-size: var(--d-label);
+          letter-spacing: 0.08em; text-transform: uppercase;
+          border-bottom: 1px solid var(--hairline);
+        }
+        .comp-table td { padding: 7px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+        .comp-table tr:last-child td { border-bottom: none; }
+        .comp-date { color: var(--color-text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 12px !important; }
+        .comp-lot { color: var(--color-text-secondary); line-height: 1.4; }
+        /* Two lines is enough to identify the object; the full title is one
+           click away on the house's own page. Unclamped, a single card ran
+           3,600px tall. */
+        .comp-lot a, .comp-lot > span {
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .comp-lot a { color: var(--color-text-secondary); text-decoration: none; border-bottom: 1px solid var(--hairline); }
+        .comp-lot a:hover { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+        .comp-lot i { display: block; font-style: normal; color: var(--color-text-faint); font-size: var(--d-label); margin-top: 2px; }
+        .comp-num {
+          text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+          color: var(--color-fg); font-weight: 600; padding-left: 12px !important;
+        }
+        th.comp-num { color: var(--color-text-faint); font-weight: 600; }
+        .comp-note { font-size: var(--d-label); line-height: 1.5; color: var(--color-text-faint); margin: 9px 0 0; }
+        /* The hero has the full rail, so its rows do not need the 2-line clamp
+           the half-width cards do. */
+        .comp-disc-hero { margin-top: 16px; max-width: var(--measure); }
+        .comp-disc-hero .comp-table { font-size: var(--d-cap); }
+        .comp-disc-hero .comp-lot a, .comp-disc-hero .comp-lot > span { -webkit-line-clamp: 1; }
+        .comp-note b { color: var(--color-text-secondary); font-weight: 600; }
+
         /* ── ARCHIVE COVERAGE ─────────────────────────────────────────── */
         .cov { margin: clamp(26px, 3vw, 34px) 0 0; position: relative; }
         .cov-grid { position: relative; height: 16px; margin-left: 0; }
@@ -916,6 +1053,17 @@ export default function AboutPage() {
           border-bottom: 1px solid var(--hairline);
         }
         .proof-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+        @media (min-width: 760px) {
+          .proof-shot img { position: sticky; top: 88px; inset: auto; height: 260px; }
+          .proof-card:has(details[open]) .proof-shot { padding-block: 18px; }
+        }
+        /* The ghost monogram is the fallback for a dead hotlink — PlateImg
+           unmounts the <img> and the letter shows through. It was previously
+           covered by a full-bleed absolutely-positioned image; the sticky image
+           is only 260px tall, so it started peeking out beside real photos.
+           Hide it only while an image is actually mounted, which keeps the
+           unmount fallback working exactly as before. */
+        .proof-shot:has(img) .proof-mono { display: none; }
         .proof-mono { font-size: var(--d-figure-md); font-weight: 700; color: var(--color-text-faint); opacity: 0.5; }
         .proof-body { padding: 18px 18px 20px; display: flex; flex-direction: column; flex: 1; }
         .proof-meta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
@@ -953,12 +1101,18 @@ export default function AboutPage() {
         .proof-gap { font-size: var(--d-figure-sm); font-weight: 750; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
 
         @media (min-width: 760px) {
-          .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 1.8vw, 22px); }
+          /* align-items: start so opening one card's comps does not stretch its
+             row-mate into a tall blank. Cards are near-equal height closed. */
+          .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 1.8vw, 22px); align-items: start; }
           .proof-card { flex-direction: row; }
           .proof-row { grid-template-columns: 58px minmax(0,1fr) 78px; gap: 8px; }
           .proof-track { height: 14px; border-radius: 7px; }
           .proof-fill { border-radius: 7px; }
           .proof-shot {
+            /* The object stays in view while its comps are read. Opening a
+               disclosure makes this column tall; a centred image would scroll
+               out of the frame exactly when the reader is checking it against
+               the pool. */
             aspect-ratio: auto;
             flex: 0 0 34%;
             border-bottom: none;
