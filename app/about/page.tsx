@@ -379,6 +379,58 @@ function RecordYears({ series }: { series: SeriesRow[] }) {
 
 interface CompRow { title: string; house: string; saleDate: string; priceUsd: number; url: string | null }
 
+/** The comps behind one call, as a disclosure.
+ *
+ *  ProofCase and HeroLot rendered this same table separately — the same
+ *  <summary>, the same three columns, the same closing note — differing only in
+ *  the label and one article. Extracted so the two notes cannot drift.
+ *
+ *  A native <details> rather than a modal: this is a server component in a
+ *  static export, so the disclosure needs no client JS and stays keyboard- and
+ *  screen-reader-addressable.
+ *
+ *  The rows are SHIPPED (scripts/_qa/gen-proof-comps.ts), not linked to
+ *  /lot?id=. These are settled lots and carry no `value` stamp — build-market
+ *  only stamps upcoming — so the lot page would fall through to a client-side
+ *  gate that prints "No comparable sales clear the gates for this lot" on a
+ *  card claiming the opposite, after streaming ~28MB of shards to say it.
+ */
+function CompTable({ comps, pool, label }: { comps: CompRow[]; pool: number; label: string }) {
+  if (!comps.length) return null;
+  return (
+    <details className="comp-disc">
+      <summary>
+        <span>{label}{comps.length < pool ? ` · ${comps.length} shown` : ''}</span>
+        <span className="comp-caret" aria-hidden>+</span>
+      </summary>
+      <div className="comp-wrap">
+        <table className="comp-table">
+          <thead><tr><th>Sold</th><th>Lot</th><th className="comp-num">Price</th></tr></thead>
+          <tbody>
+            {comps.map((r, i) => (
+              <tr key={i}>
+                <td className="comp-date">{String(r.saleDate).slice(0, 10)}</td>
+                <td className="comp-lot">
+                  {r.url
+                    ? <a href={r.url} target="_blank" rel="noopener noreferrer">{craftTitle(r.title)}</a>
+                    : <span>{craftTitle(r.title)}</span>}
+                  <i>{r.house}</i>
+                </td>
+                <td className="comp-num">${fmt(r.priceUsd)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="comp-note">
+          The pool this lot was priced against, most recent first — every one settled <b>before</b> it
+          sold. The value is a recency-weighted median over the full {pool}, not over the{' '}
+          {comps.length} shown.
+        </p>
+      </div>
+    </details>
+  );
+}
+
 function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   const paidW = Math.max(6, Math.round((c.realizedUsd / c.ourValueUsd) * 100));
   const noEstimate = c.houseEstLow == null;
@@ -434,42 +486,7 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
               page would fall through to a client-side gate that prints "No
               comparable sales clear the gates for this lot" on a card claiming
               the opposite, after streaming ~28MB of shards to say it. */}
-          {comps.length > 0 ? (
-            <details className="comp-disc">
-              <summary>
-                <span>from {c.comps} comparable sales{comps.length < c.comps ? ` · ${comps.length} shown` : ''}</span>
-                <span className="comp-caret" aria-hidden>+</span>
-              </summary>
-              <div className="comp-wrap">
-                <table className="comp-table">
-                  <thead>
-                    <tr><th>Sold</th><th>Lot</th><th className="comp-num">Price</th></tr>
-                  </thead>
-                  <tbody>
-                    {comps.map((r, i) => (
-                      <tr key={i}>
-                        <td className="comp-date">{String(r.saleDate).slice(0, 10)}</td>
-                        <td className="comp-lot">
-                          {r.url
-                            ? <a href={r.url} target="_blank" rel="noopener noreferrer">{craftTitle(r.title)}</a>
-                            : <span>{craftTitle(r.title)}</span>}
-                          <i>{r.house}</i>
-                        </td>
-                        <td className="comp-num">${fmt(r.priceUsd)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="comp-note">
-                  The pool this lot was priced against, most recent first — every one settled
-                  <b> before</b> it sold. lectr&rsquo;s value is a recency-weighted median over the
-                  full {c.comps}, not over the {comps.length} shown.
-                </p>
-              </div>
-            </details>
-          ) : (
-            <span>from {c.comps} comparable sales</span>
-          )}
+          <CompTable comps={comps} pool={c.comps} label={`from ${c.comps} comparable sales`} />
           <span>
             {noEstimate
               ? 'The house published no estimate — ours was the only valuation.'
@@ -541,10 +558,8 @@ function LiveBand({ book }: { book: LiveBook }) {
         </div>
 
         <p style={caption}>
-          Read from the upcoming book at build time{book.generatedAt ? `, ${book.generatedAt.slice(0, 10)}` : ''}. Both
-          directions are published: a lot trading above where its comparables clear is as much of a
-          call as one trading below, and the deck would be worth less if it only showed the flattering
-          side. <Link href="/" className="deck-more">See today&rsquo;s calls <Flick size={11} /></Link>
+          Both directions are published: a lot trading above where its comparables clear is as much
+          of a call as one trading below.
         </p>
       </div>
     </section>
@@ -568,37 +583,9 @@ function HeroLot({ c }: { c: typeof proof.cases[number] }) {
           <b>${fmt(c.ourValueUsd)}</b> from {c.comps} comparable sales. It sold for{' '}
           <b className="hero-cap-paid">${fmt(c.realizedUsd)}</b>.
         </p>
-        {comps.length > 0 && (
-          <details className="comp-disc comp-disc-hero">
-            <summary>
-              <span>The {c.comps} sales it was priced against{comps.length < c.comps ? ` · ${comps.length} shown` : ''}</span>
-              <span className="comp-caret" aria-hidden>+</span>
-            </summary>
-            <div className="comp-wrap">
-              <table className="comp-table">
-                <thead><tr><th>Sold</th><th>Lot</th><th className="comp-num">Price</th></tr></thead>
-                <tbody>
-                  {comps.map((r, i) => (
-                    <tr key={i}>
-                      <td className="comp-date">{String(r.saleDate).slice(0, 10)}</td>
-                      <td className="comp-lot">
-                        {r.url
-                          ? <a href={r.url} target="_blank" rel="noopener noreferrer">{craftTitle(r.title)}</a>
-                          : <span>{craftTitle(r.title)}</span>}
-                        <i>{r.house}</i>
-                      </td>
-                      <td className="comp-num">${fmt(r.priceUsd)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="comp-note">
-                Most recent first — every one settled <b>before</b> this lot sold. The value is a
-                recency-weighted median over the full {c.comps}, not over the {comps.length} shown.
-              </p>
-            </div>
-          </details>
-        )}
+        <div className="comp-disc-hero">
+          <CompTable comps={comps} pool={c.comps} label={`The ${c.comps} sales it was priced against`} />
+        </div>
       </div>
     </section>
   );
@@ -645,14 +632,16 @@ export default function AboutPage() {
       <link rel="dns-prefetch" href="https://d2tt46f3mh26nl.cloudfront.net" />
       <link rel="dns-prefetch" href="https://www.wright20.com" />
       <style dangerouslySetInnerHTML={{ __html: `
-        .deck-slide { padding: clamp(54px, 7vw, 96px) 0 clamp(20px, 3vw, 34px); }
+        .deck-slide { padding: clamp(40px, 4.6vw, 66px) 0 clamp(16px, 2vw, 24px); }
         .deck-room {
           position: relative;
           margin-inline: calc(50% - 50vw + clamp(10px, 1.2vw, 18px));
           background: var(--paper, #E2D9C4);
           border-radius: 10px;
-          padding: clamp(46px, 6vw, 82px) 0 clamp(40px, 5vw, 66px);
-          margin-block: clamp(40px, 5vw, 72px);
+          padding: clamp(36px, 4.4vw, 60px) 0 clamp(32px, 4vw, 48px);
+          /* no margin-block: the neighbouring .deck-slide already pads, and the
+             two stacked unbroken (66 + 72 + 96 = 234px at every room seam) */
+          margin-block: clamp(18px, 2vw, 26px);
         }
         @media (max-width: 700px) { .deck-room { margin-inline: calc(50% - 50vw + 8px); border-radius: 8px; } }
         .deck-h {
@@ -665,11 +654,10 @@ export default function AboutPage() {
           letter-spacing: -0.015em;
           line-height: 1.12;
           color: var(--color-fg);
-          margin: 0 0 20px;
+          margin: 0 0 14px;
           max-width: 24ch;
           text-wrap: balance;
         }
-        .deck-cover { padding: clamp(30px, 4vw, 52px) 0 clamp(30px, 4vw, 46px); }
         /* ── THE DECK SCALE ───────────────────────────────────────────────
            Six ad-hoc sizes collapsed into a declared ramp. Three of these are
            the design system's own tokens; the two display sizes are deliberate
@@ -691,7 +679,7 @@ export default function AboutPage() {
         }
 
         /* ── COVER: a statement with air around it ─────────────────────── */
-        .deck-cover-wrap { padding: clamp(40px, 8vh, 96px) 0 clamp(30px, 4vw, 52px); }
+        .deck-cover-wrap { padding: clamp(32px, 4.5vw, 72px) 0 clamp(24px, 3vw, 40px); }
         .cover-h {
           font-size: var(--d-display);
           font-weight: 700;
@@ -713,12 +701,14 @@ export default function AboutPage() {
 
         /* ── STATEMENT: the deck exhales ───────────────────────────────── */
         .deck-statement {
-          padding: clamp(60px, 9vw, 130px) 0;
+          padding: clamp(52px, 6.5vw, 92px) 0;
           display: grid;
           align-content: center;
-          min-height: 72vh;
+          /* No min-height: it bound only on mobile, where the content is ~396px
+             and 72vh reserved ~608 — 212px of literal blank. The padding is the
+             breath. */
           border-block: 1px solid var(--hairline);
-          margin-block: clamp(30px, 4vw, 56px);
+          margin-block: clamp(20px, 2.4vw, 34px);
         }
         .statement-fig {
           font-size: var(--d-figure);
@@ -746,10 +736,10 @@ export default function AboutPage() {
         }
 
         /* ── HERO LOT: stop and look at the object ─────────────────────── */
-        .deck-hero { margin-block: clamp(40px, 6vw, 84px); }
+        .deck-hero { margin-block: clamp(28px, 3.4vw, 52px); }
         .hero-plate {
           position: relative;
-          height: clamp(260px, 48vh, 540px);
+          height: clamp(230px, 30vw, 430px);
           background: var(--panel-mat, var(--color-bg-elevated));
           overflow: hidden;
           border: 1px solid var(--hairline);
@@ -786,7 +776,7 @@ export default function AboutPage() {
           display: grid;
           grid-template-columns: 26px minmax(0, 1fr);
           gap: 5px 16px;
-          padding: clamp(15px, 1.7vw, 20px) 0;
+          padding: clamp(13px, 1.4vw, 16px) 0;
           border-top: 1px solid var(--hairline);
         }
         .method-n {
@@ -811,7 +801,7 @@ export default function AboutPage() {
           display: grid;
           grid-template-columns: 1fr;
           gap: 12px;
-          padding: clamp(20px, 2.2vw, 26px) 0;
+          padding: clamp(16px, 1.7vw, 20px) 0;
           border-top: 1px solid var(--hairline);
         }
         .value-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
@@ -846,9 +836,9 @@ export default function AboutPage() {
 
         /* ── CLOSE: one line, one action ──────────────────────────────── */
         .deck-close {
-          padding: clamp(64px, 9vw, 132px) 0 clamp(48px, 6vw, 84px);
+          padding: clamp(52px, 6vw, 88px) 0 clamp(36px, 4vw, 56px);
           border-top: 1px solid var(--hairline);
-          margin-top: clamp(40px, 5vw, 70px);
+          margin-top: clamp(28px, 3vw, 44px);
         }
         .close-line {
           font-family: var(--font-serif-display), Georgia, serif;
@@ -902,13 +892,13 @@ export default function AboutPage() {
         /* An explicit scope disclosure, in the section about restraint —
            "8 houses" reads as complete unless you say what it isn't. */
         .scope-note {
-          margin-top: clamp(26px, 3vw, 34px);
-          padding-top: clamp(20px, 2.4vw, 26px);
+          margin-top: clamp(20px, 2.2vw, 26px);
+          padding-top: clamp(16px, 1.8vw, 20px);
           border-top: 1px solid var(--hairline);
         }
 
         /* ── TONIGHT'S BOOK ───────────────────────────────────────────── */
-        .deck-live { padding: clamp(54px, 7vw, 96px) 0 clamp(20px, 3vw, 34px); }
+        .deck-live { padding: clamp(40px, 4.6vw, 66px) 0 clamp(16px, 2vw, 24px); }
         .live-ratio {
           position: relative; height: 12px; border-radius: 6px; overflow: hidden;
           background: color-mix(in srgb, var(--color-fg) 7%, transparent);
@@ -923,8 +913,8 @@ export default function AboutPage() {
         .live-legend-on b { color: var(--color-butter); }
         .live-split {
           display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2vw, 24px);
-          margin: clamp(28px, 3.4vw, 40px) 0 0;
-          padding-top: clamp(22px, 2.6vw, 30px);
+          margin: clamp(24px, 2.8vw, 32px) 0 0;
+          padding-top: clamp(16px, 1.8vw, 20px);
           border-top: 1px solid var(--hairline);
         }
         .live-cell { display: grid; gap: 6px; align-content: start; }
@@ -1007,9 +997,9 @@ export default function AboutPage() {
           display: grid;
           grid-template-columns: 1fr auto auto;
           grid-template-areas: "house from n" "track track track";
-          gap: 9px 10px;
+          gap: 7px 10px;
           align-items: baseline;
-          padding: 11px 0;
+          padding: 8px 0;
           border-top: 1px solid var(--hairline);
         }
         .cov-house { grid-area: house; }
@@ -1109,7 +1099,7 @@ export default function AboutPage() {
           display: grid;
           grid-template-columns: 96px minmax(0,1fr) auto 52px;
           gap: 14px; align-items: center;
-          padding: 13px 0; border-top: 1px solid var(--hairline);
+          padding: 10px 0; border-top: 1px solid var(--hairline);
           font-variant-numeric: tabular-nums;
         }
         .corpus-item:last-child { border-bottom: 1px solid var(--hairline); }
@@ -1140,8 +1130,8 @@ export default function AboutPage() {
         /* the plot carries its own axis gutters; labels are HTML so they stay
            legible at 390px, where SVG text in a stretched viewBox would be ~7px */
         .dist-plot { position: relative; padding: 0 0 26px 42px; }
-        .dist-svg { display: block; width: 100%; height: clamp(190px, 24vw, 280px); overflow: visible; }
-        .yrs .dist-svg { height: clamp(150px, 18vw, 210px); }
+        .dist-svg { display: block; width: 100%; height: clamp(165px, 19vw, 230px); overflow: visible; }
+        .yrs .dist-svg { height: clamp(125px, 14vw, 170px); }
         .dist-ylab { position: absolute; left: 0; top: 0; bottom: 26px; width: 38px; }
         .dist-ylab span {
           position: absolute; right: 8px; transform: translateY(-50%);
@@ -1219,199 +1209,6 @@ export default function AboutPage() {
           .rec-table tbody .rec-num, .rec-table thead th { font-size: var(--d-cap); }
         }
 
-        /* ── THE COMPS, INSPECTABLE ───────────────────────────────────── */
-        .comp-disc { margin: 2px 0 0; }
-        .comp-disc > summary {
-          display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-          cursor: pointer; list-style: none;
-          padding: 13px 0; margin: -13px 0;  /* 44px hit area without moving the line */
-          color: var(--color-text-secondary);
-          border-bottom: 1px solid transparent;
-        }
-        .comp-disc > summary::-webkit-details-marker { display: none; }
-        .comp-disc > summary:hover { color: var(--color-fg); }
-        .comp-disc > summary:hover .comp-caret { color: var(--color-fg); border-color: var(--color-fg); }
-        .comp-disc > summary:focus-visible { outline: 2px solid var(--color-butter); outline-offset: 3px; }
-        .comp-caret {
-          flex: none; width: 17px; height: 17px; border-radius: 50%;
-          border: 1px solid var(--hairline); color: var(--color-text-faint);
-          display: inline-flex; align-items: center; justify-content: center;
-          font-size: 11px; line-height: 1; font-weight: 600;
-          transition: transform .18s ease;
-        }
-        .comp-disc[open] .comp-caret { transform: rotate(45deg); }
-        .comp-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
-        .comp-table { width: 100%; border-collapse: collapse; font-size: var(--d-cap); }
-        .comp-table th {
-          text-align: left; font-weight: 600; padding: 0 0 6px;
-          color: var(--color-text-faint); font-size: var(--d-label);
-          letter-spacing: 0.08em; text-transform: uppercase;
-          border-bottom: 1px solid var(--hairline);
-        }
-        .comp-table td { padding: 7px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
-        .comp-table tr:last-child td { border-bottom: none; }
-        .comp-date { color: var(--color-text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 12px !important; }
-        .comp-lot { color: var(--color-text-secondary); line-height: 1.4; }
-        /* Two lines is enough to identify the object; the full title is one
-           click away on the house's own page. Unclamped, a single card ran
-           3,600px tall. */
-        .comp-lot a, .comp-lot > span {
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .comp-lot a { color: var(--color-text-secondary); text-decoration: none; border-bottom: 1px solid var(--hairline); }
-        .comp-lot a:hover { color: var(--color-fg); border-bottom-color: var(--color-fg); }
-        .comp-lot i { display: block; font-style: normal; color: var(--color-text-faint); font-size: var(--d-label); margin-top: 2px; }
-        .comp-num {
-          text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
-          color: var(--color-fg); font-weight: 600; padding-left: 12px !important;
-        }
-        th.comp-num { color: var(--color-text-faint); font-weight: 600; }
-        .comp-note { font-size: var(--d-label); line-height: 1.5; color: var(--color-text-faint); margin: 9px 0 0; }
-        /* The hero has the full rail, so its rows do not need the 2-line clamp
-           the half-width cards do. */
-        .comp-disc-hero { margin-top: 16px; max-width: var(--measure); }
-        .comp-disc-hero .comp-table { font-size: var(--d-cap); }
-        .comp-disc-hero .comp-lot a, .comp-disc-hero .comp-lot > span { -webkit-line-clamp: 1; }
-        .comp-note b { color: var(--color-text-secondary); font-weight: 600; }
-
-        /* ── ARCHIVE COVERAGE ─────────────────────────────────────────── */
-        .cov { margin: clamp(26px, 3vw, 34px) 0 0; position: relative; }
-        .cov-grid { position: relative; height: 16px; margin-left: 0; }
-        .cov-tick { position: absolute; top: 0; width: 1px; height: 100%; background: var(--hairline); }
-        .cov-tick i {
-          position: absolute; top: 0; left: 4px; font-style: normal;
-          font-family: var(--font-mono), monospace; font-size: var(--d-label);
-          color: var(--color-text-faint); letter-spacing: 0.04em;
-        }
-        .cov-row {
-          /* Phone: house and its two figures share one line, the bar takes the
-             next. Stacking all four put every row near 210px tall and left the
-             year and the count reading as two unlabelled numbers. */
-          display: grid;
-          grid-template-columns: 1fr auto auto;
-          grid-template-areas: "house from n" "track track track";
-          gap: 9px 10px;
-          align-items: baseline;
-          padding: 11px 0;
-          border-top: 1px solid var(--hairline);
-        }
-        .cov-house { grid-area: house; }
-        .cov-track { grid-area: track; }
-        .cov-from { grid-area: from; }
-        .cov-n { grid-area: n; }
-        .cov-from::after { content: " ·"; }
-        .cov-house { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
-        /* The track is an AXIS, not a bar. Filling it edge-to-edge made every
-           row look like it had coverage from 1989: a house whose record starts
-           in 2013 drew the same dark pill from the left as Christie's thin
-           1989-91 segment, so "thin" and "absent" were indistinguishable — which
-           is precisely the distinction this chart exists to make. Only real
-           coverage gets height now; the axis is a hairline through the middle. */
-        .cov-track { position: relative; display: block; height: 10px; }
-        .cov-track::before {
-          content: ""; position: absolute; left: 0; right: 0; top: 50%;
-          height: 1px; background: var(--hairline);
-        }
-        .cov-thin, .cov-solid { position: absolute; top: 0; height: 100%; border-radius: 5px; }
-        /* one ink for both: the difference between real and thin coverage is
-           density, not category, so it is carried by opacity rather than hue */
-        .cov-thin { background: color-mix(in srgb, var(--color-fg) 30%, transparent); }
-        .cov-solid { background: var(--color-fg); }
-        .cov-from, .cov-n {
-          font-size: var(--d-cap); color: var(--color-text-faint);
-          font-variant-numeric: tabular-nums;
-        }
-        .cov-n { color: var(--color-text-secondary); }
-        @media (min-width: 760px) {
-          .cov-grid { margin-left: 132px; margin-right: 148px; }
-          .cov-row {
-            grid-template-columns: 132px minmax(0, 1fr) 52px 86px;
-            grid-template-areas: "house track from n";
-            gap: 0 16px; align-items: center; padding: 11px 0;
-          }
-          .cov-from { text-align: right; }
-          .cov-from::after { content: none; }
-          .cov-n { text-align: right; }
-        }
-        .cov-split { margin-top: clamp(34px, 4.5vw, 54px); }
-
-        /* ── THE CHAIN: the graph, drawn ──────────────────────────────── */
-        .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; }
-        .chain-node {
-          position: relative;
-          padding: 0 0 clamp(20px, 2.4vw, 26px) 34px;
-          border-left: 1px solid var(--hairline);
-          display: grid;
-          grid-template-rows: auto auto auto;
-          align-content: start;
-        }
-        /* The rule must stop AT the final dot, not before it (an orphaned last
-           link) and not past it (a chain running off-page). Height-independent:
-           kill the border, then draw a stub down to the dot's centre. */
-        .chain-node:last-child { border-left-color: transparent; padding-bottom: 0; }
-        .chain-node:last-child::after {
-          content: ""; position: absolute; left: -1px; top: 0; width: 1px; height: 10px;
-          background: var(--hairline);
-        }
-        .chain-node::before {
-          content: "";
-          position: absolute; left: -5px; top: 6px;
-          width: 9px; height: 9px; border-radius: 50%;
-          background: var(--color-text-faint);
-        }
-        .chain-node:first-child::before { background: var(--color-fg); }
-        .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
-        .chain-n {
-          display: inline-block; margin-top: 6px; margin-right: 8px;
-          font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
-          color: var(--color-fg); line-height: 1;
-        }
-        .chain-v { display: inline; font-size: var(--d-body); line-height: 1.6; color: var(--color-text-secondary); }
-        @media (min-width: 900px) {
-          /* the chain lies down: five steps across, the rule running through
-             them, so the linkage reads as a flow rather than a list */
-          .chain { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; }
-          .chain::before { display: none; }
-          .chain-node { border-left: none; border-top: 1px solid var(--hairline); padding: 22px 18px 0 0; }
-          /* the rule stops at the last dot rather than running on to the
-             container edge, which read as "continues off-page" */
-          .chain-node:last-child { border-top: none; }
-          .chain-node:last-child::after {
-            content: ""; position: absolute; left: 0; top: -1px; width: 8px; height: 1px;
-            background: var(--hairline);
-          }
-          .chain-node::before { left: 0; top: -5px; }
-          .chain-k { font-size: var(--d-ui); }
-          .chain-v { display: block; font-size: var(--d-cap); margin-top: 4px; }
-          .chain-n { display: block; margin: 8px 0 0; }
-        }
-
-        /* ── CORPUS: ranked, one ink, common baseline ─────────────────── */
-        .corpus { margin-top: clamp(26px, 3vw, 36px); }
-        .corpus-item {
-          display: grid;
-          grid-template-columns: 96px minmax(0,1fr) auto 52px;
-          gap: 14px; align-items: center;
-          padding: 13px 0; border-top: 1px solid var(--hairline);
-          font-variant-numeric: tabular-nums;
-        }
-        .corpus-item:last-child { border-bottom: 1px solid var(--hairline); }
-        .corpus-label { font-size: var(--d-body); font-weight: 600; color: var(--color-fg); }
-        .corpus-track { display: block; height: 14px; }
-        .corpus-bar {
-          display: block; height: 100%;
-          background: var(--color-text-muted);
-          border-radius: 0 4px 4px 0;   /* square at the baseline, rounded at the data end */
-        }
-        .corpus-n { font-size: var(--d-ui); color: var(--color-text-secondary); }
-        .corpus-pct { font-size: var(--d-cap); color: var(--color-text-faint); text-align: right; }
-        @media (max-width: 620px) {
-          .corpus-item { grid-template-columns: 1fr auto; gap: 4px 10px; }
-          .corpus-track { grid-column: 1 / -1; }
-          .corpus-pct { grid-column: 2; }
-        }
-
         
         .deck-statband {
           display: grid;
@@ -1440,7 +1237,7 @@ export default function AboutPage() {
         }
         .proof-shot {
           position: relative;
-          aspect-ratio: 4 / 3;
+          aspect-ratio: 16 / 10;
           background: var(--panel-mat, var(--color-bg-elevated));
           display: flex; align-items: center; justify-content: center;
           overflow: hidden;
@@ -1537,15 +1334,13 @@ export default function AboutPage() {
               serial={meta.lastCrawl}
               title={<>Every lot arrives with a guess. We score it against{' '}
                 <Underscore>{fmt(meta.totalSold)} results</Underscore>.</>}
-              sub={<>An auction estimate is an opinion. A hammer is a fact. lectr has read every
-                settled lot across <b>{meta.sources.length} houses</b> and three decades, and prices
-                what comes next against the sales that actually resemble it.</>}
+              sub={<>lectr has read every settled lot across <b>{meta.sources.length} houses</b>,
+                and prices what comes next against the sales that resemble it.</>}
             />
 
             <div className="deck-statband">
               <Stat figure={fmt(meta.totalLots)} label="Lots under tracking" note="live and settled, one graph" />
-              <Stat figure={fmt(meta.totalSold)} label="Settled results" note="every one with a published price" />
-              <Stat figure={String(meta.sources.length)} label="Auction houses" note={meta.sources.map((h) => h.replace(/ /g, '\u00a0')).join(' · ')} />
+              <Stat figure={String(meta.sources.length)} label="Auction houses" note="named, with their coverage, below"  />
               <Stat figure={fmt(F.n)} label="Replayed calls" note="scored against what happened next" />
             </div>
           </div>
@@ -1560,20 +1355,19 @@ export default function AboutPage() {
             a 1994 Geneva watch sale and a lot closing tonight are the same kind of object.
           </p>
           <CoverageChart rows={COVERAGE} />
-          <p style={caption}>
-            Settled records per house, by sale year. The faint segment is coverage that exists but is
-            thin — Christie&rsquo;s has a single lot dated 1989 against 1,331 in 1991 — so early depth
-            is shown as early depth rather than rounded up. Nothing here is licensed: every row was
-            crawled, normalised and reconciled lot by lot.
-          </p>
-
           <div className="cov-split">
             <CorpusBars bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
           </div>
+          {/* ONE caption for both charts. They previously carried a caption each,
+              100px apart in the same faint grey, the second opening "And by
+              market." — which read as the first continuing. The gate claim went
+              with it: §02 step 02 makes the same point concretely. */}
           <p style={caption}>
-            And by market. Depth is what lets the engine demand that a comparable share a maker, a
-            form, a size band and a model line before it counts — a bar most datasets are too thin
-            to clear.
+            Settled records per house by sale year, then by market. The faint segment is coverage
+            that exists but is thin — Christie&rsquo;s has a single lot dated 1989 against 1,331 in
+            1991 — so early depth is shown as early depth, not rounded up. Nothing here is licensed:
+            every row was crawled, normalised and reconciled lot by lot.{' '}
+            <Link href="/blog/q2-2026-science" className="deck-more">What that reconciliation looks like <Flick size={11} /></Link>
           </p>
         </Sec>
 
@@ -1653,16 +1447,15 @@ export default function AboutPage() {
 
         <Statement
           figure={`+${edgeAllIn} points`}
-          lede={<>is what separates a lot lectr flagged from one it didn&rsquo;t — measured across {fmt(F.n)} calls replayed through history, against {fmt(U.n)} controls.</>}
+          lede={<>is what separates a lot lectr flagged from one it didn&rsquo;t, replayed against every sale that came after.</>}
           foot="Flagged lots also failed to sell less often than unflagged ones. The edge is not bought with risk."
         />
 
         <Sec ord="04" label="The proof" title={<>We said what it was worth. The room paid less.</>}>
           <p style={p}>
-            The record above is an aggregate. This is what it looks like as individual lots. In each
-            case the engine priced the object from comparable sold evidence — using only sales dated
-            strictly <em>before</em> it, so this is what lectr would have said on the day — and the
-            hammer then came in under that number.
+            The record above is an aggregate. This is what it looks like as individual lots: the
+            engine priced each object from comparable sold evidence, and the hammer came in under
+            that number.
           </p>
           <div className="proof-grid">
             {proof.cases.filter((c) => !(c as { hero?: boolean }).hero).map((c) => <ProofCase key={c.id} c={c} />)}
@@ -1683,8 +1476,7 @@ export default function AboutPage() {
 
         <Sec paper ord="05" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>
-            Anything can print a percentage. The expensive part is knowing when a figure isn&rsquo;t
-            supported — and refusing to publish it. lectr runs an explicit ladder: a confidence-interval
+            lectr runs an explicit ladder: a confidence-interval
             index where the data resolves the sign, a measured demand read where coverage allows, and
             below that, no movement number at all.
           </p>
@@ -1693,8 +1485,7 @@ export default function AboutPage() {
             <Stat figure={`${drillAbstain} of ${drillCount}`} label="Sub-markets abstain" note="tracked and searchable, but carrying no movement claim" />
           </div>
           <p style={caption}>
-            Where a market is too thin, too mixed, or too young to hold quality constant, the engine
-            says so in the interface instead of estimating around it. Every published figure names its
+            Every published figure names its
             method and its sample size — and when one drifts, it is restated in public rather than
             quietly patched.{' '}
             <Link href="/blog/corrections" className="deck-more">The corrections register <Flick size={11} /></Link>
@@ -1723,35 +1514,30 @@ export default function AboutPage() {
           <ol className="chain">
             <li className="chain-node">
               <span className="chain-k">The lot</span>
-              <span className="chain-n">{fmt(meta.totalLots)}</span>
-              <span className="chain-v">tracked lots, each with its estimate, its result, and the call that preceded it</span>
+              <span className="chain-v">what it was expected to make, what it made, and the call that preceded it</span>
             </li>
             <li className="chain-node">
               <span className="chain-k">Its comparables</span>
-              <span className="chain-n">{fmt(meta.totalSold)}</span>
-              <span className="chain-v">settled sales to argue from — the exact ones used are clickable</span>
+              <span className="chain-v">the exact settled sales the call was argued from, each one clickable</span>
             </li>
             <li className="chain-node">
               <span className="chain-k">Its sub-market</span>
-              <span className="chain-n">{fmt(drillCount)}</span>
-              <span className="chain-v">indices — cards by era and sport, watch families, art kinds, design materials</span>
+              <span className="chain-v">cards by era and sport, watch families, art kinds, design materials</span>
             </li>
             <li className="chain-node">
               <span className="chain-k">Its maker</span>
-              <span className="chain-n">{fmt(makerTotal)}</span>
-              <span className="chain-v">quality-controlled indices, published only where the interval resolves</span>
+              <span className="chain-v">a quality-controlled index, published only where the interval resolves</span>
             </li>
             <li className="chain-node">
               <span className="chain-k">Its reference</span>
-              <span className="chain-n">{fmt(refCount)}</span>
-              <span className="chain-v">dossiers, each with the full yearly series for that model line</span>
+              <span className="chain-v">one of {fmt(refCount)} dossiers, each with the full yearly series for that model line</span>
             </li>
           </ol>
 
           <p style={p}>
             Tracked lots keep permanent addresses. A lot the house purges the moment its sale ends
             stays resolvable here — with its estimate, its result, and the call that preceded it —
-            which is what makes a three-decade archive usable as evidence rather than nostalgia.
+            which is what makes the archive usable as evidence rather than nostalgia.
           </p>
         </Sec>
 
