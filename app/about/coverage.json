@@ -1,0 +1,63 @@
+{
+  "_what": "Per-house archive coverage for /about §01. Regenerate with: npx tsx scripts/_qa/gen-coverage.ts",
+  "_note": "`first` is the earliest settled record; `dense` is the first year with >=25 — drawn faint between them so one stray lot cannot claim a decade.",
+  "generatedAt": "2026-08-06T03:16:48.642Z",
+  "coverage": [
+    {
+      "house": "Christie's",
+      "first": 1989,
+      "dense": 1991,
+      "last": 2026,
+      "n": 85531
+    },
+    {
+      "house": "Sotheby's",
+      "first": 2000,
+      "dense": 2000,
+      "last": 2026,
+      "n": 58764
+    },
+    {
+      "house": "Wright",
+      "first": 2000,
+      "dense": 2000,
+      "last": 2026,
+      "n": 6823
+    },
+    {
+      "house": "RR Auction",
+      "first": 1996,
+      "dense": 2003,
+      "last": 2026,
+      "n": 243736
+    },
+    {
+      "house": "Bonhams",
+      "first": 2003,
+      "dense": 2003,
+      "last": 2026,
+      "n": 14245
+    },
+    {
+      "house": "Phillips",
+      "first": 2013,
+      "dense": 2013,
+      "last": 2026,
+      "n": 9650
+    },
+    {
+      "house": "Rago",
+      "first": 2016,
+      "dense": 2017,
+      "last": 2026,
+      "n": 2027
+    },
+    {
+      "house": "Goldin",
+      "first": 2022,
+      "dense": 2023,
+      "last": 2026,
+      "n": 320745
+    }
+  ]
+}

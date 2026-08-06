@@ -11,6 +11,8 @@
  *
  * Run: NODE_OPTIONS=--max-old-space-size=10240 npx tsx scripts/assemble.ts
  */
+import { PRICE_BASIS } from './price-basis';
+import { soldByYear, houseCoverage } from './coverage';
 import * as fs from 'fs';
 import * as path from 'path';
 import { readAllSegments, writeCorpusAndServed, CORPUS_DIR, SERVED_DIR } from './corpus-io';
@@ -106,6 +108,12 @@ async function main() {
     sources: Array.from(new Set(allLots.map(l => l.auctionHouse))).sort(),
     totalLots: allLots.length,
     totalSold: allLots.filter(l => l.status === 'sold').length,
+    // Both of these were missing here while ray-crawl.ts wrote them, and
+    // assemble runs LAST in the segmented nightly — so the segmented path
+    // silently shipped a meta.json without the price-basis declaration.
+    priceBasis: PRICE_BASIS,
+    soldByYear: soldByYear(allLots),
+    coverage: houseCoverage(allLots),
     version: 2,
   }, null, 2));
 

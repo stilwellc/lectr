@@ -29,6 +29,11 @@ const SINCE = process.env.SINCE || new Date(Date.now() - 3 * 365 * 864e5).toISOS
 const MIN_EST = Number(process.env.MIN_EST || 10000);
 const MIN_COMPS = Number(process.env.MIN_COMPS || 5);
 const MIN_DISCOUNT = Number(process.env.MIN_DISCOUNT || 0.45); // sold >=45% under our value
+// DIRECTION=over inverts the question: lots the engine priced with real
+// confidence that then sold materially ABOVE that value. Those are MISSES —
+// someone who used our number as a valuation was wrong — and the deck needs one
+// as much as it needs the wins. Same replay, same gates, opposite sign.
+const DIRECTION = (process.env.DIRECTION || 'under') as 'under' | 'over';
 const MIN_CONF = process.env.ALLOW_LOW !== '1'; // drop 'low' confidence by default
 // Stop as soon as we have enough examples. The replay is O(targets x priors)
 // and Goldin's roster is ~320k sold priors per call, so a full sweep of the
@@ -63,6 +68,7 @@ const targets = prep.sold.filter((l) =>
     : hasEst(l) && ((l.estLowUsd || 0) + (l.estHighUsd || 0)) / 2 >= MIN_EST),
 );
 log(`[deep-value] ${targets.length} sold targets since ${SINCE} with est >= $${MIN_EST.toLocaleString()}`);
+log(`[deep-value] direction=${DIRECTION} — keeping lots that cleared ${DIRECTION === 'under' ? 'BELOW' : 'ABOVE'} our value by >=${MIN_DISCOUNT * 100}%`);
 
 interface Hit {
   id: string; title: string; maker: string; house: string; saleDate: string; url: string | null;
@@ -87,7 +93,7 @@ for (let i = 0; i < targets.length; i++) {
   scored++;
   const realized = lot.realizedUsd!;
   const disc = realized / v.compValueUsd - 1;
-  if (disc > -MIN_DISCOUNT) continue;
+  if (DIRECTION === 'under' ? disc > -MIN_DISCOUNT : disc < MIN_DISCOUNT) continue;
   hits.push({
     id: lot.id, title: lot.title, maker: lot.artist, house: lot.auctionHouse,
     saleDate: lot.saleDate, url: (lot as AuctionLot).url ?? null,
@@ -106,15 +112,20 @@ for (let i = 0; i < targets.length; i++) {
 hits.sort((a, b) => {
   const ax = a.exact ? 1 : 0, bx = b.exact ? 1 : 0;
   if (ax !== bx) return bx - ax;
-  return a.discountPct - b.discountPct;
+  return DIRECTION === 'under' ? a.discountPct - b.discountPct : b.discountPct - a.discountPct;
 });
 
 const outDir = path.join(process.cwd(), 'scripts', '_qa', 'ga');
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, 'deep-value.json'), JSON.stringify({
+fs.writeFileSync(path.join(outDir, DIRECTION === 'over' ? 'deep-value-misses.json' : 'deep-value.json'), JSON.stringify({
   generatedAt: new Date().toISOString(),
-  params: { SINCE, MIN_EST, MIN_COMPS, MIN_DISCOUNT },
-  scored, hits: hits.length, rows: hits.slice(0, 200),
+  params: { SINCE, MIN_EST, MIN_COMPS, MIN_DISCOUNT, DIRECTION, MIN_CONF, ENOUGH },
+  // funnel, so the page can state a rate instead of showing a handful of lots
+  targets: targets.length,
+  scored,
+  hits: hits.length,
+  exhaustive: !ENOUGH || hits.length < ENOUGH,
+  rows: hits.slice(0, 200),
 }, null, 2));
 
 log(`\n[deep-value] engine priced ${scored} of ${targets.length} targets with >=${MIN_COMPS} comps`);

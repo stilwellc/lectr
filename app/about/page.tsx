@@ -11,6 +11,8 @@ import backtest from '../../public/data/ray/backtest.json';
 import market from '../../public/data/ray/market.json';
 import refs from '../../public/data/ray/refs.json';
 import proof from './proof-cases.json';
+import coverageSnapshot from './coverage.json';
+import { readLiveBook, type LiveBook } from './live';
 import PlateImg from '../components/PlateImg';
 import RayEntrance from '../components/RayEntrance';
 import { httpsImg, sizedImg } from '../utils';
@@ -60,6 +62,26 @@ const CORPUS_BARS = (['sports', 'culture', 'watches', 'art', 'science', 'design'
   .map((k) => ({ key: k, label: MARKET_LABEL[k] || marketsRec[k]?.label || k, n: marketsRec[k]?.n || 0 }))
   .filter((b) => b.n > 0)
   .sort((a, b) => b.n - a.n);
+
+// Coverage prefers meta.json's live block (written by every crawl and by
+// assemble) and falls back to the committed snapshot. Read through a cast on
+// purpose: public/data/ray/ is gitignored and pulled from R2 at build time, so
+// tsc infers meta's type from whatever JSON that pull produced. Naming
+// meta.coverage directly would break the build on any CI run that happens
+// before the first nightly carrying the field.
+interface Cov { house: string; first: number; dense: number; last: number; n: number }
+const COVERAGE: Cov[] =
+  ((meta as Record<string, unknown>).coverage as Cov[] | undefined)?.length
+    ? ((meta as Record<string, unknown>).coverage as Cov[])
+    : (coverageSnapshot.coverage as Cov[]);
+// Measured from the earliest DENSE year, not the earliest record. Christie's
+// has a single lot dated 1989; claiming 37 years off it would be exactly the
+// overstatement the dense/first split exists to prevent. 1991 -> 2026 = 35.
+const ARCHIVE_YEARS = COVERAGE.length
+  ? Math.max(...COVERAGE.map((c) => c.last)) - Math.min(...COVERAGE.map((c) => c.dense))
+  : 0;
+
+const PROV = proof.provenance.withEstimate;
 
 const drillsRec = market.drills as Record<string, { readType: string }[]>;
 const allDrills = Object.values(drillsRec).flat();
@@ -115,6 +137,52 @@ function CorpusBars({ bars, total }: { bars: { key: string; label: string; n: nu
           </span>
           <span className="corpus-n">{fmt(b.n)}</span>
           <span className="corpus-pct">{((b.n / total) * 100).toFixed(1)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** ARCHIVE COVERAGE — what each house's record actually spans.
+ *
+ *  §01 claims three decades. It previously evidenced that claim with a
+ *  lots-by-market chart, which is a statement about CATEGORY, not time — and
+ *  a lots-per-YEAR chart would have been worse: Goldin alone is 320,745 lots
+ *  across 2022-2026 (143,142 in 2023 on its own), so the shape would have been
+ *  a picture of one house's card business rather than of the archive's depth.
+ *
+ *  So depth of coverage is drawn instead, and volume is reported as a number
+ *  beside it rather than as a bar length. The faint segment is real but thin
+ *  coverage — Christie's has exactly ONE lot dated 1989 against 1,331 in 1991,
+ *  and RR Auction has seven years under 25 lots before 2003. Drawing those
+ *  solid would let a single record claim a decade.
+ */
+function CoverageChart({ rows }: { rows: { house: string; first: number; dense: number; last: number; n: number }[] }) {
+  const lo = Math.min(...rows.map((r) => r.first));
+  const hi = Math.max(...rows.map((r) => r.last));
+  const span = Math.max(1, hi - lo);
+  const pos = (y: number) => ((y - lo) / span) * 100;
+  // decade gridlines, inclusive of the first decade at or after lo
+  const decades: number[] = [];
+  for (let y = Math.ceil(lo / 10) * 10; y <= hi; y += 10) decades.push(y);
+  return (
+    <div className="cov">
+      <div className="cov-grid" aria-hidden="true">
+        {decades.map((y) => (
+          <span className="cov-tick" key={y} style={{ left: `${pos(y)}%` }}><i>{y}</i></span>
+        ))}
+      </div>
+      {rows.map((r) => (
+        <div className="cov-row" key={r.house}>
+          <span className="cov-house">{r.house.replace(/ /g, '\u00a0')}</span>
+          <span className="cov-track">
+            {r.dense > r.first && (
+              <span className="cov-thin" style={{ left: `${pos(r.first)}%`, width: `${pos(r.dense) - pos(r.first)}%` }} />
+            )}
+            <span className="cov-solid" style={{ left: `${pos(r.dense)}%`, width: `${Math.max(1.2, pos(r.last) - pos(r.dense))}%` }} />
+          </span>
+          <span className="cov-from">{r.first}</span>
+          <span className="cov-n">{fmt(r.n)}</span>
         </div>
       ))}
     </div>
@@ -239,6 +307,61 @@ function Statement({ figure, lede, foot }: { figure: string; lede: React.ReactNo
   );
 }
 
+/** TONIGHT'S BOOK — the one live moment in an otherwise retrospective deck.
+ *
+ *  Everything before this proves the engine was right about sales that already
+ *  happened. This is the same engine pointed at lots that have not sold yet,
+ *  and it is deliberately the section where the ratio is the story: on a book of
+ *  several thousand, the engine speaks about a couple of dozen. That is §05's
+ *  claim ("proudest of how often it says nothing") stated as tonight's number
+ *  rather than as a principle.
+ */
+function LiveBand({ book }: { book: LiveBook }) {
+  const pct = (book.called / book.total) * 100;
+  return (
+    <section className="deck-live ray-enter">
+      <div className="rail">
+        <span className="kicker" style={{ display: 'block', margin: '0 0 12px' }}>Tonight&rsquo;s book</span>
+        <h2 className="deck-h">
+          {fmt(book.total)} lots are on the book. lectr has something to say about {book.called}.
+        </h2>
+
+        <div className="live-ratio" aria-hidden="true">
+          {/* the called slice is a hairline against the full book on purpose —
+              at 0.5% any "readable minimum" width would be a lie about the ratio */}
+          <span className="live-called" style={{ width: `${Math.max(pct, 0.35)}%` }} />
+        </div>
+        <div className="live-legend">
+          <span><b>{fmt(book.total - book.called)}</b> no call — the comparable pool doesn&rsquo;t clear the bar</span>
+          <span className="live-legend-on"><b>{book.called}</b> called &middot; {pct.toFixed(1)}% of the book</span>
+        </div>
+
+        <div className="live-split">
+          <div className="live-cell">
+            <span className="live-n">{book.below}</span>
+            <span className="live-k">trading below where comparables clear</span>
+          </div>
+          <div className="live-cell">
+            <span className="live-n">{book.above}</span>
+            <span className="live-k">trading above it</span>
+          </div>
+          <div className="live-cell">
+            <span className="live-n">{book.high}</span>
+            <span className="live-k">at the high-confidence tier</span>
+          </div>
+        </div>
+
+        <p style={caption}>
+          Read from the upcoming book at build time{book.generatedAt ? `, ${book.generatedAt.slice(0, 10)}` : ''}. Both
+          directions are published: a lot trading above where its comparables clear is as much of a
+          call as one trading below, and the deck would be worth less if it only showed the flattering
+          side. <Link href="/" className="deck-more">See today&rsquo;s calls <Flick size={11} /></Link>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 /** A lot at full width. The product is about objects; the deck should stop and
  *  look at one. Caption sits under the plate so the image is never covered. */
 function HeroLot({ c }: { c: typeof proof.cases[number] }) {
@@ -286,6 +409,9 @@ function Step({ n, title, body }: { n: string; title: string; body: React.ReactN
 }
 
 export default function AboutPage() {
+  // Build-time read (server component, output:'export') — see app/about/live.ts
+  // for why this is fs and not a JSON import.
+  const liveBook = readLiveBook();
   return (
     <div className="deck-scope" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       {/* The proof lots hotlink four house CDNs. They sit well below the fold, so
@@ -463,15 +589,38 @@ export default function AboutPage() {
         .value-row {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 6px;
-          padding: clamp(16px, 1.8vw, 22px) 0;
+          gap: 12px;
+          padding: clamp(20px, 2.2vw, 26px) 0;
           border-top: 1px solid var(--hairline);
         }
+        .value-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
         .value-who { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
-        .value-what { font-size: var(--d-body); line-height: 1.65; color: var(--color-text-secondary); }
-        @media (min-width: 820px) {
-          .value-row { grid-template-columns: 210px minmax(0, 1fr); gap: 28px; align-items: baseline; }
-          .value-who { font-size: var(--d-body); }
+        .value-job { font-size: var(--d-cap); color: var(--color-text-faint); }
+        .value-swap { display: grid; gap: 10px; }
+        /* The swap IS the argument, so before and after are given equal room and
+           differentiated by ink rather than by size — the old version was one
+           muted paragraph per person and read as a list of blurbs. */
+        .value-before, .value-after {
+          font-size: var(--d-body); line-height: 1.6;
+          padding-left: 14px; border-left: 2px solid var(--hairline);
+          max-width: var(--measure);
+          text-wrap: pretty; /* these run 1-3 lines; single-word last lines were common */
+        }
+        .value-before { color: var(--color-text-faint); }
+        .value-after { color: var(--color-text-secondary); border-left-color: var(--color-butter); }
+        .value-before i, .value-after i {
+          display: block; font-style: normal;
+          font-family: var(--font-mono), monospace; font-size: var(--d-label);
+          letter-spacing: 0.08em; text-transform: uppercase;
+          color: var(--color-text-faint); margin-bottom: 3px;
+        }
+        .value-after i { color: var(--color-butter); }
+        .value-after b { color: var(--color-fg); font-weight: 600; }
+        @media (min-width: 900px) {
+          .value-row { grid-template-columns: 210px minmax(0, 1fr); gap: 0 28px; align-items: start; }
+          .value-head { flex-direction: column; gap: 3px; }
+          .value-swap { grid-template-columns: 1fr 1fr; gap: 0 22px; }
+          .value-before, .value-after { max-width: none; }
         }
 
         /* ── CLOSE: one line, one action ──────────────────────────────── */
@@ -503,11 +652,11 @@ export default function AboutPage() {
            below any usable tap size on a phone, and indistinguishable from the
            muted prose around it. */
         .deck-more {
-          display: inline-flex; align-items: center; gap: 6px;
-          min-height: 44px; padding: 4px 0;
+          display: inline; padding: 14px 0; margin: -14px 0;
           color: var(--color-fg); font-weight: 600; text-decoration: none;
           border-bottom: 1px solid var(--hairline);
         }
+        .deck-more svg { margin-left: 5px; vertical-align: -1px; }
         .deck-more:hover { border-bottom-color: var(--color-fg); }
 
         .close-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
@@ -528,6 +677,103 @@ export default function AboutPage() {
           color: var(--color-text-secondary); text-decoration: none;
         }
         .close-alt:hover { color: var(--color-fg); }
+
+        /* An explicit scope disclosure, in the section about restraint —
+           "8 houses" reads as complete unless you say what it isn't. */
+        .scope-note {
+          margin-top: clamp(26px, 3vw, 34px);
+          padding-top: clamp(20px, 2.4vw, 26px);
+          border-top: 1px solid var(--hairline);
+        }
+
+        /* ── TONIGHT'S BOOK ───────────────────────────────────────────── */
+        .deck-live { padding: clamp(54px, 7vw, 96px) 0 clamp(20px, 3vw, 34px); }
+        .live-ratio {
+          position: relative; height: 12px; border-radius: 6px; overflow: hidden;
+          background: color-mix(in srgb, var(--color-fg) 7%, transparent);
+          margin: clamp(24px, 3vw, 32px) 0 10px;
+        }
+        .live-called { position: absolute; inset: 0 auto 0 0; background: var(--color-butter); border-radius: 6px; }
+        .live-legend {
+          display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px;
+          font-size: var(--d-cap); color: var(--color-text-faint);
+        }
+        .live-legend b { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+        .live-legend-on b { color: var(--color-butter); }
+        .live-split {
+          display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2vw, 24px);
+          margin: clamp(28px, 3.4vw, 40px) 0 0;
+          padding-top: clamp(22px, 2.6vw, 30px);
+          border-top: 1px solid var(--hairline);
+        }
+        .live-cell { display: grid; gap: 6px; align-content: start; }
+        .live-n {
+          font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
+          color: var(--color-fg); line-height: 1; font-variant-numeric: tabular-nums;
+        }
+        .live-k { font-size: var(--d-cap); line-height: 1.55; color: var(--color-text-secondary); max-width: 30ch; }
+        @media (min-width: 760px) { .live-split { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+
+        /* ── ARCHIVE COVERAGE ─────────────────────────────────────────── */
+        .cov { margin: clamp(26px, 3vw, 34px) 0 0; position: relative; }
+        .cov-grid { position: relative; height: 16px; margin-left: 0; }
+        .cov-tick { position: absolute; top: 0; width: 1px; height: 100%; background: var(--hairline); }
+        .cov-tick i {
+          position: absolute; top: 0; left: 4px; font-style: normal;
+          font-family: var(--font-mono), monospace; font-size: var(--d-label);
+          color: var(--color-text-faint); letter-spacing: 0.04em;
+        }
+        .cov-row {
+          /* Phone: house and its two figures share one line, the bar takes the
+             next. Stacking all four put every row near 210px tall and left the
+             year and the count reading as two unlabelled numbers. */
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          grid-template-areas: "house from n" "track track track";
+          gap: 9px 10px;
+          align-items: baseline;
+          padding: 11px 0;
+          border-top: 1px solid var(--hairline);
+        }
+        .cov-house { grid-area: house; }
+        .cov-track { grid-area: track; }
+        .cov-from { grid-area: from; }
+        .cov-n { grid-area: n; }
+        .cov-from::after { content: " ·"; }
+        .cov-house { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
+        /* The track is an AXIS, not a bar. Filling it edge-to-edge made every
+           row look like it had coverage from 1989: a house whose record starts
+           in 2013 drew the same dark pill from the left as Christie's thin
+           1989-91 segment, so "thin" and "absent" were indistinguishable — which
+           is precisely the distinction this chart exists to make. Only real
+           coverage gets height now; the axis is a hairline through the middle. */
+        .cov-track { position: relative; display: block; height: 10px; }
+        .cov-track::before {
+          content: ""; position: absolute; left: 0; right: 0; top: 50%;
+          height: 1px; background: var(--hairline);
+        }
+        .cov-thin, .cov-solid { position: absolute; top: 0; height: 100%; border-radius: 5px; }
+        /* one ink for both: the difference between real and thin coverage is
+           density, not category, so it is carried by opacity rather than hue */
+        .cov-thin { background: color-mix(in srgb, var(--color-fg) 30%, transparent); }
+        .cov-solid { background: var(--color-fg); }
+        .cov-from, .cov-n {
+          font-size: var(--d-cap); color: var(--color-text-faint);
+          font-variant-numeric: tabular-nums;
+        }
+        .cov-n { color: var(--color-text-secondary); }
+        @media (min-width: 760px) {
+          .cov-grid { margin-left: 132px; margin-right: 148px; }
+          .cov-row {
+            grid-template-columns: 132px minmax(0, 1fr) 52px 86px;
+            grid-template-areas: "house track from n";
+            gap: 0 16px; align-items: center; padding: 11px 0;
+          }
+          .cov-from { text-align: right; }
+          .cov-from::after { content: none; }
+          .cov-n { text-align: right; }
+        }
+        .cov-split { margin-top: clamp(34px, 4.5vw, 54px); }
 
         /* ── THE CHAIN: the graph, drawn ──────────────────────────────── */
         .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; }
@@ -757,7 +1003,7 @@ export default function AboutPage() {
           </div>
         </div>
 
-        <Sec ord="01" label="The corpus" title={<>Depth is the moat. It took three decades to build.</>}>
+        <Sec ord="01" label="The corpus" title={<>Depth is the moat. It took {ARCHIVE_YEARS} years to build.</>}>
           <p style={p}>
             Comparable-sales pricing is only as good as the pool behind it, and auction results are
             scattered across houses that publish in different shapes, purge lots when a sale closes,
@@ -765,11 +1011,21 @@ export default function AboutPage() {
             lot normalised to a dated FX rate, a declared price basis, and a structured identity, so
             a 1994 Geneva watch sale and a lot closing tonight are the same kind of object.
           </p>
-          <CorpusBars bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
+          <CoverageChart rows={COVERAGE} />
           <p style={caption}>
-            Settled lots by market, from the shipped corpus. Depth is what lets the engine demand
-            that a comparable share a maker, a form, a size band and a model line before it counts —
-            a bar most datasets are too thin to clear.
+            Settled records per house, by sale year. The faint segment is coverage that exists but is
+            thin — Christie&rsquo;s has a single lot dated 1989 against 1,331 in 1991 — so early depth
+            is shown as early depth rather than rounded up. Nothing here is licensed: every row was
+            crawled, normalised and reconciled lot by lot.
+          </p>
+
+          <div className="cov-split">
+            <CorpusBars bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
+          </div>
+          <p style={caption}>
+            And by market. Depth is what lets the engine demand that a comparable share a maker, a
+            form, a size band and a model line before it counts — a bar most datasets are too thin
+            to clear.
           </p>
         </Sec>
 
@@ -848,10 +1104,14 @@ export default function AboutPage() {
             {proof.cases.filter((c) => !(c as { hero?: boolean }).hero).map((c) => <ProofCase key={c.id} c={c} />)}
           </div>
           <p style={caption}>
-            The two sports lots are the sharpest demonstration: Goldin and the NBA auctions publish
-            <b style={{ color: 'var(--color-text-muted)' }}> no estimate at all</b>, so lectr&rsquo;s figure was the only
-            valuation in existence when the hammer fell. Elsewhere the house had published a number
-            too — and in each of those, the room cleared below both.
+            <b style={{ color: 'var(--color-text-muted)' }}>How these were chosen.</b> Of {fmt(PROV.targets)} lots sold
+            since 2024 above a $3,000 estimate, the engine priced {fmt(PROV.priced)} from at least eight
+            comparable sold lots at non-low confidence — and {fmt(PROV.hits)} of those cleared 30% or more below
+            the number. That sweep is exhaustive, not a sample. Four of the six above are drawn from it,
+            as is the lot below; the other two come from houses that publish{' '}
+            <b style={{ color: 'var(--color-text-muted)' }}>no estimate at all</b> (Goldin, Sotheby&rsquo;s NBA
+            auctions), where lectr&rsquo;s figure was the only valuation in existence when the hammer fell.
+            That population has not been swept exhaustively, so no rate is claimed for it.
           </p>
         </Sec>
 
@@ -873,6 +1133,19 @@ export default function AboutPage() {
             says so in the interface instead of estimating around it. Every published figure names its
             method and its sample size.
           </p>
+
+          <div className="scope-note">
+            <span className="kicker" style={{ display: 'block', margin: '0 0 10px' }}>What this does not cover</span>
+            <p style={{ ...caption, margin: 0 }}>
+              lectr reads <b style={{ color: 'var(--color-text-muted)' }}>auction results only</b> — public sales with a
+              published price, at the {meta.sources.length} houses named above. Private treaty, dealer
+              inventory, fixed-price and buy-now listings are deliberately out: a price nobody bid
+              against is not a comparable, and mixing them in would quietly inflate every figure on
+              this page. Fairs, regional and online-only houses are not yet read, so a maker whose
+              market lives largely outside these rooms will show thinner coverage here than it has in
+              the world. Where that is true, the engine abstains rather than extrapolating.
+            </p>
+          </div>
         </Sec>
 
         <Sec ord="06" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
@@ -922,38 +1195,52 @@ export default function AboutPage() {
             — what does this actually clear at, and how sure can you be — and get four different days
             out of the answer.
           </p>
+          {/* Four people, each shown as the swap they actually make. The
+              before/after pair is the composition: this is the section that
+              answers what the product changes, and it was the only one on the
+              page carrying no structure at all. */}
           <div className="value-list">
-            <div className="value-row">
-              <span className="value-who">The specialist</span>
-              <span className="value-what">
-                stops setting a reserve from memory and three catalogues. The comparable sales are on
-                the page, with their dates and their spread, before the consignment conversation.
-              </span>
-            </div>
-            <div className="value-row">
-              <span className="value-who">The collector</span>
-              <span className="value-what">
-                bids against evidence instead of atmosphere. The room is loud and the estimate is a
-                guess; knowing where comparable examples actually cleared is the difference between
-                conviction and nerve.
-              </span>
-            </div>
-            <div className="value-row">
-              <span className="value-who">The lender or insurer</span>
-              <span className="value-what">
-                marks a book to a number that can be defended line by line — method named, sample
-                size shown, and an honest abstention where the data will not carry a figure.
-              </span>
-            </div>
-            <div className="value-row">
-              <span className="value-who">The seller</span>
-              <span className="value-what">
-                finds out what their object is worth before someone else tells them, and can see
-                which house has historically cleared that kind of lot highest.
-              </span>
-            </div>
+            {[
+              {
+                who: 'The specialist',
+                job: 'setting a reserve',
+                before: 'memory, three catalogues, and a feel for the room',
+                after: 'the comparable sales on the page — dated, with their spread — before the consignment conversation',
+              },
+              {
+                who: 'The collector',
+                job: 'deciding what to bid',
+                before: 'the estimate, the atmosphere, and how badly you want it',
+                after: 'where comparable examples actually cleared, which is the difference between conviction and nerve',
+              },
+              {
+                who: 'The lender or insurer',
+                job: 'marking a book',
+                before: 'a valuation letter that cannot be re-derived',
+                after: 'a number defensible line by line — method named, sample size shown, and an abstention where the data will not carry a figure',
+              },
+              {
+                who: 'The seller',
+                job: 'choosing where to consign',
+                before: 'whichever house asked first',
+                after: 'what the object is worth before someone else says, and which house has historically cleared that kind of lot highest',
+              },
+            ].map((r) => (
+              <div className="value-row" key={r.who}>
+                <div className="value-head">
+                  <span className="value-who">{r.who}</span>
+                  <span className="value-job">{r.job}</span>
+                </div>
+                <div className="value-swap">
+                  <span className="value-before"><i>today</i>{r.before}</span>
+                  <span className="value-after"><i>with lectr</i>{r.after}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </Sec>
+
+        {liveBook && <LiveBand book={liveBook} />}
 
         <section className="deck-close ray-enter">
           <div className="rail">
