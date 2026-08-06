@@ -50,11 +50,17 @@ export interface HedonicHorizon {
   publishable: boolean;
   reason: string;             // '' when publishable, else why not
 }
+export interface HedonicDiag {
+  sigma2: number; nLots: number; params: number; quarters: number;
+  endpoint: { period: string | null; n: number; makers: number; forms: number; realRefs: number } | null;
+}
 export interface HedonicResult {
   series: HedonicSeriesPoint[];
   horizons: Record<string, HedonicHorizon>;   // '1Y' | '3Y' | '5Y' | 'MAX'
   lastCompleteQuarter: string | null;
   note: string;
+  /** fit diagnostics — sigma2 + endpoint richness (Aug 6 2026) */
+  diag?: HedonicDiag;
   composite?: CompositeResult;                 // market-level composite (task 2)
 }
 /** Per-maker hedonic index (task 1). Same shape as HedonicResult plus coverage. */
@@ -64,6 +70,8 @@ export interface MakerIndexResult {
   lastCompleteQuarter: string | null;
   coverageMakerLots: number;                   // total sold lots this maker contributed
   note: string;
+  /** fit diagnostics — sigma2 + endpoint richness (Aug 6 2026) */
+  diag?: HedonicDiag;
 }
 export interface CompositeComponent { slug: string; weightPct: number; changePct: number | null; publishable: boolean; }
 /** Market composite built bottom-up from publishable component maker indices. */
@@ -283,6 +291,8 @@ interface FitResult {
   beta: number[];            // length p
   cov: number[][];           // p×p covariance (σ̂²·(X'WX+ridge)^-1)
   p: number;
+  /** Huber-weighted residual variance — the "why is the CI wide" diagnostic */
+  sigma2: number;
 }
 function solveSPD(A: Matrix, B: Matrix): Matrix {
   // Cholesky for the SPD normal equations; fall back to eigen-pseudo-inverse if
@@ -367,8 +377,9 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
 
   // covariance = σ̂²·(X'WX)^-1
   const covM = ATWAinv!.mul(sigma2);
+  // sigma2 escapes with the fit (diagnostics, Aug 6 2026)
   const cov: number[][] = covM.to2DArray();
-  return { beta, cov, p };
+  return { beta, cov, p, sigma2 };
 }
 
 // ── the index (quarter coefficients → rebased levels + CIs) ──────────────────
@@ -611,7 +622,19 @@ function runIndex(rows: FeatureRow[], design: Design, mode: 'market' | 'maker', 
     horizons[lbl] = computeHorizon(lbl, back, lastComplete, idxQuarters, design, fit, stats, varOfDiff, mode, hasRefControl);
   }
   const note = `hedonic log-price OLS (${mode}, Huber IRLS, ridge ${RIDGE}); ${rows.length} lots, ${design.p} params, ${idxQuarters.length} quarters; base ${base}.`;
-  return { result: { series, horizons, lastCompleteQuarter: lastComplete, note }, idxQuarters, base, stats, design, fit, varOfDiff };
+  // ── diagnostics (Aug 6 2026): the fit computed these and threw them away,
+  // which meant "why is this CI wide" required a full re-derivation. Small on
+  // the wire (one object), decision-grade in use: sigma2 says whether the
+  // blocker is residual variance or thin endpoints.
+  const endStat = lastComplete ? stats.get(lastComplete) : undefined;
+  const diag = {
+    sigma2: +fit.sigma2.toFixed(4),
+    nLots: rows.length,
+    params: design.p,
+    quarters: idxQuarters.length,
+    endpoint: endStat ? { period: lastComplete, n: endStat.n, makers: endStat.makers.size, forms: endStat.forms.size, realRefs: endStat.realRefs.size } : null,
+  };
+  return { result: { series, horizons, lastCompleteQuarter: lastComplete, note, diag }, idxQuarters, base, stats, design, fit, varOfDiff };
 }
 
 // ── main entry (MARKET index) ────────────────────────────────────────────────
@@ -649,7 +672,7 @@ export function buildMakerIndex(makerLots: AuctionLot[], now: Date = new Date())
   const internals = runIndex(rows, buildDesign(rows, MAKER_GROUPS), 'maker', now);
   if (!internals) return { series: [], horizons: emptyHorizons('fewer than 2 index-able quarters'), lastCompleteQuarter: null, coverageMakerLots, note: 'fewer than 2 index-able quarters' };
   const { result } = internals;
-  return { series: result.series, horizons: result.horizons, lastCompleteQuarter: result.lastCompleteQuarter, coverageMakerLots, note: result.note };
+  return { series: result.series, horizons: result.horizons, lastCompleteQuarter: result.lastCompleteQuarter, coverageMakerLots, note: result.note, diag: result.diag };
 }
 
 function emptyHorizons(reason: string): Record<string, HedonicHorizon> {
@@ -700,7 +723,30 @@ function computeHorizon(
   const end = lastComplete;
   // start quarter
   let start: string;
-  if (back === null) start = idxQuarters[0];
+  if (back === null) {
+    // MAX anchors at the first quarter that passes the FULL endpoint gate set
+    // (redefined Aug 6 2026, v2). Anchoring "all time" at the earliest
+    // index-able quarter let a single thin/degenerate quarter veto the whole
+    // horizon — art's MAX died on 1991-Q2 n=103, then (v1, density-only
+    // anchor) on 1998-Q4's 61% Picasso dominance. The anchor must satisfy the
+    // SAME conditions the gates below will assert: density, maker breadth and
+    // dominance (market mode) or density, control breadth and mix (maker
+    // mode). "All time" now means "since the record could carry an index at
+    // all" — the chosen anchor is visible via nStart, and every gate still
+    // runs against it afterwards (belt and braces, no bypass).
+    const qualifies = (q: string): boolean => {
+      const st = stats.get(q); if (!st) return false;
+      if (mode === 'market') {
+        if (st.n < DENSITY_MIN_N || st.makers.size < DENSITY_MIN_MAKERS) return false;
+        return topShare(st.makerShare, st.n).share <= MAKER_DOMINANCE;
+      }
+      if (st.n < MK_DENSITY_MIN_N || Math.max(st.forms.size, st.realRefs.size) < MK_MIN_FORMS) return false;
+      return hasRefControl
+        ? topShare(st.realRefShare, st.nWithRef).share <= MK_REFMODEL_DOMINANCE
+        : topShare(st.formShare, st.n).share <= 0.60;
+    };
+    start = idxQuarters.find(qualifies) ?? idxQuarters[0];
+  }
   else {
     start = shiftQuarter(end, back);
     if (!idxQuarters.includes(start)) {

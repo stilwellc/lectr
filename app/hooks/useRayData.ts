@@ -151,6 +151,10 @@ export interface SubMarketRead {
   /** readType 'demand': measured %-over-estimate */
   demandNow: number | null;
   demandSeries: { period: string; value: number; n: number }[];
+  /** when an index was ATTEMPTED and abstained: the closest horizon's reason —
+      the row's "distance to certify" (e.g. Daytona: "2026-Q2 thin (30 pairs
+      < 40)"). Absent when no index path applies or one published. */
+  indexAttempt?: string;
   /** bid-competition secondary read (cards): latest-quarter median bids/lot —
       a demand primitive from Goldin's bidCount, rides beside the headline read
       (never a price move / %-over-estimate). null where no bidCount is shipped. */

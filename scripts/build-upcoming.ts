@@ -271,8 +271,18 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     const set = marketArtists(m.key);
     const marketLots = lots.filter(l => set.has(l.artist));
     const sold = marketLots.filter(l => l.status === 'sold');
-    const withEst = sold.filter(l => l.estimateLow && l.estimateHigh);
-    const series = sold.length > 0 && withEst.length / sold.length >= MIN_EST_COVERAGE
+    // Single-point estimates count (fifth sighting of the both-bounds bug,
+    // Aug 6 2026): RR publishes estimateLow only. This gate sat UPSTREAM of
+    // demandSeries, so fixing demand.ts alone left culture/science at zero.
+    // Coverage is judged on the RECENT tape (trailing 2y): the RR 30-yr
+    // archive's estimate-thin early years held culture's all-time coverage at
+    // ~41% while its last-2-years tape is ~73% covered — the same trailing
+    // rule the drill gates adopted.
+    const covCutoff = Date.now() - 2 * 365.25 * 24 * 3600 * 1000;
+    const soldRecent = sold.filter(l => l.saleDate && new Date(l.saleDate).getTime() >= covCutoff);
+    const covPool = soldRecent.length >= 60 ? soldRecent : sold;
+    const withEst = covPool.filter(l => (Number(l.estLowUsd ?? l.estimateLow) || Number(l.estHighUsd ?? l.estimateHigh) || 0) > 0);
+    const series = covPool.length > 0 && withEst.length / covPool.length >= MIN_EST_COVERAGE
       ? demandSeries(marketLots as unknown as EngineLot[])
       : [];
     demand[m.key] = isStale(series) ? [] : series;

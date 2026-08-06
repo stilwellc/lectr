@@ -34,8 +34,16 @@ export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
     // Read the USD band when present, fall back to the old fields — so perf =
     // priceUsd / estMid divides USD by USD before AND after migration (a
     // non-USD sale no longer divides a USD price by a native estimate).
-    const estLow = l.estLowUsd ?? l.estimateLow;
-    const estHigh = l.estHighUsd ?? l.estimateHigh;
+    // Single-point estimates count (the fourth sighting of this bug family,
+    // Aug 6 2026): RR Auction publishes ONE figure, stored in estimateLow with
+    // estimateHigh null — requiring BOTH bounds silently zeroed the demand
+    // series for culture and science (the RR-dominated verticals) while
+    // sub-markets.ts, utils.ts and the drill gates all midpoint via the same
+    // low↔high fallback. A single-point estimate IS the mid.
+    const rawLow = l.estLowUsd ?? l.estimateLow;
+    const rawHigh = l.estHighUsd ?? l.estimateHigh;
+    const estLow = rawLow || rawHigh;
+    const estHigh = rawHigh || rawLow;
     if (l.status !== 'sold' || !l.priceUsd || !estLow || !estHigh) continue;
     const d = new Date(l.saleDate);
     if (isNaN(d.getTime())) continue;

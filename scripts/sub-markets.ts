@@ -271,6 +271,9 @@ function isEditionLot(l: AuctionLot): boolean {
  *  and publish only what the engine's own gates certify. */
 export function tryRepeatSale(sold: AuctionLot[], vertical: string): {
   index: SubMarketRead['index']; indexSeries?: SubMarketRead['indexSeries'];
+  /** when nothing publishes: the closest horizon's reason — "distance to
+      certify", emitted on the row so the ladder is self-documenting */
+  attemptReason?: string;
 } | null {
   let pool: AuctionLot[] = []; let key: (l: AuctionLot) => string | null = cardKey;
   const cardLots = sold.filter(l => cardKey(l) != null);
@@ -293,7 +296,9 @@ export function tryRepeatSale(sold: AuctionLot[], vertical: string): {
       };
     }
   }
-  return null;
+  // nothing published — surface the shortest-horizon reason as the distance
+  const firstReason = rs.horizons?.['1Y']?.reason || rs.note || 'below index floors';
+  return { index: null, attemptReason: `repeat-sale attempted: ${firstReason}` };
 }
 
 /** VERTICAL-LEVEL repeat-sale — the ladder's top rung at market altitude.
@@ -398,7 +403,9 @@ function buildRead(
   let indexMethod: SubMarketRead['indexMethod'] = null;
   let indexSeries: SubMarketRead['indexSeries'];
   const rsTry = tryRepeatSale(sold, vertical);
-  if (rsTry) { index = rsTry.index; indexMethod = 'repeat-sale'; indexSeries = rsTry.indexSeries; }
+  let indexAttempt: string | undefined;
+  if (rsTry?.index) { index = rsTry.index; indexMethod = 'repeat-sale'; indexSeries = rsTry.indexSeries; }
+  else if (rsTry?.attemptReason) indexAttempt = rsTry.attemptReason;
 
   const readType: SubMarketRead['readType'] = index
     ? 'index'
@@ -412,6 +419,7 @@ function buildRead(
     bidCompNow, typicalUsd, record,
     lots: lots.length, sellThroughPct,
     estCoverage: +estCoverage.toFixed(3),
+    ...(indexAttempt ? { indexAttempt } : {}),
     ...(indexSeries?.length ? { indexSeries } : {}),
     ...(() => { const v = quarterlyVolume(sold); return v ? { volSeries: v } : {}; })(),
     // culture SUBJECT-DOMAIN rows (slug 'culture:music'/'culture:hollywood'/…)
@@ -557,9 +565,11 @@ export function buildSubMarkets(
     // can't run, but same-card-same-grade objects sold 2+ times give a mix-immune
     // Bailey-Muth-Nourse index. Only consulted when no hedonic index exists, and
     // only publishes on a horizon whose 95% CI resolves the sign. ──
+    let indexAttempt: string | undefined;
     if (!index) {
       const rsTry = tryRepeatSale(sold, market);
-      if (rsTry) { index = rsTry.index; indexMethod = 'repeat-sale'; }
+      if (rsTry?.index) { index = rsTry.index; indexMethod = 'repeat-sale'; }
+      else if (rsTry?.attemptReason) indexAttempt = rsTry.attemptReason;
     }
 
     // ── readType decision ──
@@ -590,6 +600,7 @@ export function buildSubMarkets(
       lots: lotCount,
       sellThroughPct,
       estCoverage: +estCoverage.toFixed(3),
+      ...(indexAttempt ? { indexAttempt } : {}),
       ...(() => { const v = quarterlyVolume(sold); return v ? { volSeries: v } : {}; })(),
     };
     (out[market] || (out[market] = [])).push(row);

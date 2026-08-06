@@ -89,6 +89,12 @@ export interface RepeatSaleOpts {
                               //   pair dropped (a >e^3≈20× swing on the "same"
                               //   object is almost always a keyer false-positive)
   ridge?: number;             // λ on β for numerical stability of D'D
+  /** period granularity: 4 = quarters (default), 2 = half-years. Halves exist
+      for SEASONAL markets (design trades ~2 real quarters/year), where
+      quarterly endpoints starve the pair gates even though a year of data
+      clears them. A documented aggregation choice, not a gate change: the
+      same pair floors apply to the half-year endpoints. */
+  periodsPerYear?: 4 | 2;
 }
 const DEFAULTS: Required<Omit<RepeatSaleOpts, 'now'>> = {
   minPairs: 150,
@@ -98,31 +104,36 @@ const DEFAULTS: Required<Omit<RepeatSaleOpts, 'now'>> = {
   horizonMinObjects: 20,
   maxLogRelative: 3.0,
   ridge: 1e-6,
+  periodsPerYear: 4,
 };
 
 // ── small helpers (mirror hedonic-index.ts) ─────────────────────────────────
-function quarterOf(saleDate: string): string | null {
+function quarterOf(saleDate: string, ppy: 4 | 2 = 4): string | null {
   const m = /^(\d{4})-(\d{2})/.exec(saleDate);
   if (!m) return null;
   const mo = +m[2];
   if (mo < 1 || mo > 12) return null;
-  return `${m[1]}-Q${Math.ceil(mo / 3)}`;
+  const bucket = Math.ceil(mo / (12 / ppy));
+  return ppy === 4 ? `${m[1]}-Q${bucket}` : `${m[1]}-H${bucket}`;
 }
-/** integer index of a quarter for arithmetic (year*4 + q-1). */
+/** integer index of a period for arithmetic (year*ppy + p-1). */
 function quarterOrdinal(period: string): number {
-  const [ys, qs] = period.split('-Q');
-  return +ys * 4 + (+qs - 1);
+  const half = period.includes('-H');
+  const [ys, qs] = period.split(half ? '-H' : '-Q');
+  return half ? +ys * 2 + (+qs - 1) : +ys * 4 + (+qs - 1);
 }
-function currentQuarter(now: Date): string {
+function currentQuarter(now: Date, ppy: 4 | 2 = 4): string {
   const y = now.getUTCFullYear();
-  const q = Math.floor(now.getUTCMonth() / 3) + 1;
-  return `${y}-Q${q}`;
+  const b = Math.floor(now.getUTCMonth() / (12 / ppy)) + 1;
+  return ppy === 4 ? `${y}-Q${b}` : `${y}-H${b}`;
 }
 function shiftQuarter(period: string, k: number): string {
+  const half = period.includes('-H');
+  const per = half ? 2 : 4;
   const total = quarterOrdinal(period) - k;
-  const y = Math.floor(total / 4);
-  const q = (total % 4 + 4) % 4 + 1;
-  return `${y}-Q${q}`;
+  const y = Math.floor(total / per);
+  const q = (total % per + per) % per + 1;
+  return `${y}-${half ? 'H' : 'Q'}${q}`;
 }
 
 // ── linear algebra (mirror hedonic-index.ts) ────────────────────────────────
@@ -157,6 +168,7 @@ function extractPairs(
   lots: AuctionLot[],
   keyOf: (l: AuctionLot) => string | null,
   maxLogRelative: number,
+  ppy: 4 | 2 = 4,
 ): { pairs: Pair[]; nObjects: number; totalConsecutive: number } {
   const byKey = new Map<string, Sale[]>();
   for (const l of lots) {
@@ -165,7 +177,7 @@ function extractPairs(
     if (!(price > 0)) continue;
     const date = l.saleDate;
     if (!date || !/^\d{4}-\d{2}-\d{2}/.test(date)) continue;
-    const period = quarterOf(date);
+    const period = quarterOf(date, ppy);
     if (!period) continue;
     const key = keyOf(l);
     if (!key) continue;
@@ -314,7 +326,7 @@ export function buildRepeatSaleIndex(
   const o = { ...DEFAULTS, ...opts };
   const now = opts.now || new Date();
 
-  const { pairs, nObjects } = extractPairs(lots, keyOf, o.maxLogRelative);
+  const { pairs, nObjects } = extractPairs(lots, keyOf, o.maxLogRelative, o.periodsPerYear);
   const nPairs = pairs.length;
 
   const abstain = (reason: string): RepeatSaleResult => ({
@@ -366,12 +378,14 @@ export function buildRepeatSaleIndex(
 
   // last complete quarter = latest indexed quarter strictly before the current
   // (stub) quarter (never end on the partial current quarter).
-  const curQ = currentQuarter(now);
+  const curQ = currentQuarter(now, o.periodsPerYear);
   const past = fit.quarters.filter((q) => q < curQ);
   const lastComplete = past.length ? past[past.length - 1] : null;
 
   const horizons: Record<string, RepeatSaleHorizon> = {};
-  const HZ: [string, number][] = [['1Y', 4], ['3Y', 12], ['5Y', 20]];
+  // horizon lags in PERIODS (quarters or halves)
+  const perYr = o.periodsPerYear;
+  const HZ: [string, number][] = [['1Y', perYr], ['3Y', 3 * perYr], ['5Y', 5 * perYr]];
   for (const [lbl, back] of HZ) {
     horizons[lbl] = computeHorizon(lbl, back, lastComplete, fit, betaOf, varOfDiff, endpointStats, o);
   }
