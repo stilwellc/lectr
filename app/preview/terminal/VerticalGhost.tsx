@@ -1,141 +1,86 @@
-'use client';
-
+/**
+ * VerticalGhost — the faint market watermark inside each switcher pill.
+ *
+ * v2 (Aug 6 2026): the original hand-drawn 200x200 illustrations (brush
+ * strokes, chair silhouette, dial sketch) read as tacky at ghost opacity —
+ * cropped mid-stroke, inconsistent weights, craft-project energy. Replaced
+ * with the industry-standard Lucide icon geometry (ISC license,
+ * lucide.dev): one simple, professionally-drawn icon per market, 24x24,
+ * uniform 1.5 stroke, round caps. At watermark opacity these read as a
+ * quiet emboss, not a doodle.
+ *
+ * SVG only — static-export safe, no deps.
+ */
 import type { Market } from '../../constants';
 
-/* ============================================================
-   Per-vertical ghost glyphs — faint category illustrations.
-   GhostGlyph is consumed by MarketSwitch (a cropped ghost
-   bleeding off each market pill). Purely decorative, inline
-   SVG only — static-export safe, no deps.
-   ============================================================ */
-
-/* Each glyph draws in a 200×200 viewBox, tuned so the "interesting"
-   mass sits toward the LEFT of the box — the box's right side then
-   bleeds off-screen, cropping the illustration gracefully. */
-
-function ArtGhost() {
-  // a few expressive brush strokes
+function Icon({ children }: { children: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <path
-        d="M18 150 C60 120 92 132 128 96 C150 74 168 60 196 44"
-        stroke="currentColor"
-        strokeWidth="14"
-        strokeLinecap="round"
-      />
-      <path
-        d="M8 96 C54 84 78 100 118 70 C146 49 170 44 200 30"
-        stroke="currentColor"
-        strokeWidth="9"
-        strokeLinecap="round"
-        opacity="0.75"
-      />
-      <path
-        d="M40 182 C86 168 110 176 150 150 C176 133 190 128 210 120"
-        stroke="currentColor"
-        strokeWidth="6"
-        strokeLinecap="round"
-        opacity="0.55"
-      />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
     </svg>
   );
 }
 
-function DesignGhost() {
-  // a cropped mid-century chair silhouette
-  return (
-    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      {/* back rail */}
-      <path d="M56 26 C120 20 150 34 150 34 L150 118" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-      {/* seat */}
-      <path d="M40 116 L156 108" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-      {/* front legs */}
-      <path d="M52 118 L44 188" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
-      <path d="M142 112 L150 184" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
-      {/* back leg */}
-      <path d="M60 34 L70 116" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.7" />
-      {/* seat slats hint */}
-      <path d="M66 48 L138 42" stroke="currentColor" strokeWidth="5" strokeLinecap="round" opacity="0.5" />
-      <path d="M70 66 L140 60" stroke="currentColor" strokeWidth="5" strokeLinecap="round" opacity="0.5" />
-    </svg>
-  );
-}
+/* Lucide 'image' — art */
+const ArtGhost = () => (
+  <Icon>
+    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+  </Icon>
+);
 
-function WatchesGhost() {
-  // a cropped watch dial with hands + a couple hour ticks (scaled down a touch)
-  return (
-    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <g transform="translate(96 100) scale(0.8) translate(-96 -100)">
-        <circle cx="96" cy="100" r="82" stroke="currentColor" strokeWidth="8" />
-        <circle cx="96" cy="100" r="66" stroke="currentColor" strokeWidth="2.5" opacity="0.5" />
-        {/* hour hand */}
-        <path d="M96 100 L96 52" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-        {/* minute hand */}
-        <path d="M96 100 L146 118" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-        {/* center pin */}
-        <circle cx="96" cy="100" r="6" fill="currentColor" />
-        {/* ticks */}
-        <path d="M96 24 L96 36" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-        <path d="M172 100 L160 100" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-        <path d="M96 176 L96 164" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-        <path d="M20 100 L32 100" stroke="currentColor" strokeWidth="6" strokeLinecap="round" opacity="0.7" />
-      </g>
-    </svg>
-  );
-}
+/* Lucide 'armchair' — design */
+const DesignGhost = () => (
+  <Icon>
+    <path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3" />
+    <path d="M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0Z" />
+    <path d="M5 18v2" />
+    <path d="M19 18v2" />
+  </Icon>
+);
 
-function SportsGhost() {
-  // a baseball — a fully-visible ball (kept small so it doesn't bleed off) with
-  // a central seam and stitch rows on BOTH sides of it
-  return (
-    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <circle cx="88" cy="100" r="64" stroke="currentColor" strokeWidth="7.5" />
-      {/* central seam */}
-      <path d="M88 40 C70 70 70 130 88 160" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" />
-      {/* stitches — left row AND right row of the seam, both inside the crop */}
-      <g stroke="currentColor" strokeWidth="4.2" strokeLinecap="round">
-        <path d="M66 58 l13 6" /><path d="M62 86 l13 4" /><path d="M62 114 l13 -4" /><path d="M66 142 l13 -6" />
-        <path d="M110 58 l-13 6" /><path d="M114 86 l-13 4" /><path d="M114 114 l-13 -4" /><path d="M110 142 l-13 -6" />
-      </g>
-    </svg>
-  );
-}
+/* Lucide 'watch' — watches */
+const WatchesGhost = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="6" />
+    <polyline points="12 10 12 12 13 13" />
+    <path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05" />
+    <path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.61h2.72a2 2 0 0 0 2-1.61l.81-4.05" />
+  </Icon>
+);
 
-function ScienceGhost() {
-  // an atom — nucleus + three crossing electron orbits (the universal science
-  // mark; the dino-bone never read as a bone at pill scale)
-  return (
-    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <g stroke="currentColor" strokeWidth="6">
-        <ellipse cx="100" cy="100" rx="78" ry="30" />
-        <ellipse cx="100" cy="100" rx="78" ry="30" transform="rotate(60 100 100)" />
-        <ellipse cx="100" cy="100" rx="78" ry="30" transform="rotate(120 100 100)" />
-      </g>
-      <circle cx="100" cy="100" r="11" fill="currentColor" />
-    </svg>
-  );
-}
+/* Lucide 'trophy' — sports */
+const SportsGhost = () => (
+  <Icon>
+    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+    <path d="M4 22h16" />
+    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+  </Icon>
+);
 
-function CultureGhost() {
-  // a cropped camera — body + lens (full size, vertically centered in the box)
-  return (
-    <svg viewBox="0 0 200 200" fill="none" aria-hidden>
-      <g transform="translate(0 -6)">
-        {/* body */}
-        <rect x="20" y="66" width="168" height="102" rx="16" stroke="currentColor" strokeWidth="8" />
-        {/* pentaprism / viewfinder hump */}
-        <path d="M70 66 L82 44 L124 44 L136 66" stroke="currentColor" strokeWidth="8" strokeLinejoin="round" />
-        {/* lens */}
-        <circle cx="100" cy="120" r="34" stroke="currentColor" strokeWidth="8" />
-        <circle cx="100" cy="120" r="18" stroke="currentColor" strokeWidth="4" opacity="0.6" />
-        {/* shutter */}
-        <circle cx="46" cy="52" r="5" fill="currentColor" />
-      </g>
-    </svg>
-  );
-}
+/* Lucide 'rocket' — science */
+const ScienceGhost = () => (
+  <Icon>
+    <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+    <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+    <path d="M9 12H4s.55-3.03 2-4c1.62-1.09 5 0 5 0" />
+    <path d="M12 15v5s3.03-.55 4-2c1.09-1.62 0-5 0-5" />
+  </Icon>
+);
 
-const GLYPH: Partial<Record<Market, () => React.ReactElement>> = {
+/* Lucide 'star' — pop culture */
+const CultureGhost = () => (
+  <Icon>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </Icon>
+);
+
+const GLYPH: Partial<Record<Market, () => React.JSX.Element>> = {
   art: ArtGhost,
   design: DesignGhost,
   watches: WatchesGhost,
@@ -145,8 +90,8 @@ const GLYPH: Partial<Record<Market, () => React.ReactElement>> = {
   // 'all' → intentionally none; keep the total-market view clean.
 };
 
-/** The bare glyph, for embedding as a faint ghost inside each market pill
-    (cropped + bleeding off the pill's right edge). 'all' → null. */
+/** The bare glyph, for embedding as a faint watermark inside each market pill.
+    'all' → null. */
 export function GhostGlyph({ market }: { market: Market }) {
   const Glyph = GLYPH[market];
   return Glyph ? <Glyph /> : null;

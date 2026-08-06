@@ -600,25 +600,26 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    right edge (Terminal only; gated by the `emblems` prop). Sits behind the
    icon + label, clipped to the pill, faint. Total market carries none. ── */
 .root :global(.ray-market-tab) { position: relative; overflow: hidden; isolation: isolate; }
+/* v2 (Aug 6): a QUIET EMBOSS, not a cropped illustration. One clean icon,
+   fully inside the pill, right-aligned, vertically centered — no mid-stroke
+   bleed, no rotation, no oversize crop. Reads as a watermark on the glass. */
 .root :global(.ray-pill-ghost) {
   position: absolute;
   top: 50%;
-  right: -2%;
-  width: 52%;
-  height: 158%;
+  right: 12px;
+  width: 30px;
+  height: 30px;
   transform: translateY(-50%);
   z-index: -1;
   color: var(--tt-butter);
-  opacity: 0.06;
+  opacity: 0.12;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
 }
-.root :global(.ray-pill-ghost) svg { height: 100%; width: auto; display: block; }
-/* the active/lit pill is butter — dial the ghost down so it doesn't muddy the ink label */
+.root :global(.ray-pill-ghost) svg { width: 100%; height: 100%; display: block; }
+.root :global(.ray-market-tab:hover .ray-pill-ghost) { opacity: 0.2; }
+/* the active pill is butter — the watermark flips to ink, whisper-quiet */
 .root :global(.ray-market-tab.lit .ray-pill-ghost),
-.root :global(.ray-market-tab[data-active='true'] .ray-pill-ghost) { color: #2a2317; opacity: 0.05; }
+.root :global(.ray-market-tab[data-active='true'] .ray-pill-ghost) { color: #2a2317; opacity: 0.1; }
 
 /* ── sub-market board "show more" ── */
 
@@ -2086,6 +2087,9 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    Terminal-scoped; other routes keep the wrapped grid. */
 @media (max-width: 700px) {
   .switchStrip :global(.ray-markets) {
+    display: flex;   /* the mobile pill sheet is a GRID — without this the
+                        nowrap/overflow pair is a no-op (re-applied Aug 6;
+                        the earlier fix rode in a reverted commit) */
     flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
@@ -2096,4 +2100,68 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   }
   .switchStrip :global(.ray-markets)::-webkit-scrollbar { display: none; }
   .switchStrip :global(.ray-market-tab) { flex: none; white-space: nowrap; scroll-snap-align: start; }
+}
+
+/* ══ FROSTED LIQUID GLASS (Aug 6, the Robinhood pass) ══
+   Restraint is the treatment: three surfaces only — the market pills, the
+   monument plate, the search — each a translucent pane over the page's own
+   gold atmosphere. Nothing else changes material. */
+
+/* no local light pool: the page's fixed bgField supplies the atmosphere the
+   frost refracts. A hero-scoped gradient box painted a visible seam. */
+
+/* the pills: frosted panes. Inactive pills were near-invisible hairlines;
+   now each is a real glass chip — blur, saturation lift, a top light. */
+.switchStrip :global(.ray-market-tab) {
+  padding-right: 46px !important;   /* the watermark zone — labels never touch it */
+  background: rgba(255, 252, 245, 0.045) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid rgba(237, 230, 218, 0.13) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 4px 16px -8px rgba(8, 6, 3, 0.5) !important;
+  transition: background 160ms var(--ease-signature, ease), border-color 160ms var(--ease-signature, ease);
+}
+.switchStrip :global(.ray-market-tab:hover) {
+  background: rgba(255, 252, 245, 0.075) !important;
+  border-color: rgba(237, 230, 218, 0.22) !important;
+}
+/* the active pill stays solid butter — one crisp anchor on the glass row */
+.switchStrip :global(.ray-market-tab[data-active='true']),
+.switchStrip :global(.ray-market-tab[aria-selected='true']) {
+  padding-right: 13px !important;   /* active pill carries no watermark */
+  background: var(--color-butter, #E8DAB6) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: color-mix(in srgb, var(--color-butter, #E8DAB6) 80%, transparent) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 6px 20px -10px rgba(8, 6, 3, 0.6) !important;
+}
+
+/* the monument plate: the same pane, one register brighter */
+.mtMon {
+  background:
+    radial-gradient(120% 90% at 74% -12%, rgba(232, 218, 182, 0.07), transparent 62%),
+    rgba(255, 252, 245, 0.05);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid rgba(237, 230, 218, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 44px -18px rgba(8, 6, 3, 0.55);
+}
+.mtMon:hover { border-color: rgba(237, 230, 218, 0.26); }
+
+/* the search: a glass input, same family */
+.mtSide .railCmd {
+  background: rgba(255, 252, 245, 0.045);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid rgba(237, 230, 218, 0.13);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.mtSide .railCmd:hover { border-color: rgba(237, 230, 218, 0.24); }
+
+
+/* mobile: tighter watermark zone — the snap-strip pills are narrower */
+@media (max-width: 700px) {
+  .switchStrip :global(.ray-market-tab) { padding-right: 38px !important; }
+  .root :global(.ray-pill-ghost) { width: 24px; height: 24px; right: 9px; }
 }
