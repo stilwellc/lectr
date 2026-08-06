@@ -117,7 +117,7 @@ function resolveTape(
 }
 
 const tagFor = (kind: TapeRowData['read']['kind']): string =>
-  kind === 'index' ? 'Hedonic index · 95% CI' : kind === 'demand' ? 'Demand read' : 'Descriptive — no estimates';
+  kind === 'index' ? 'Hedonic index · 95% CI' : kind === 'demand' ? 'Demand read' : 'Descriptive';
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
@@ -209,9 +209,6 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
           onClick={() => setMarket(r.key)}
           aria-label={`${r.label} — open the ${r.label} lander`}
         >
-          {/* the pills' own etched-butter ghost, behind the label — each row
-              wears its market's illustration the way the switcher does */}
-          <span className={styles.mtRowGhost} aria-hidden><GhostGlyph market={r.key} /></span>
           <span className={styles.mtLabelBlock}>
             <span className={styles.mtLabel}>{r.label}</span>
             <span className={styles.mtTag}>{tagFor(r.read.kind)}</span>
@@ -265,6 +262,11 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
     by size); rows link to the dossier the 02 rows link to. The full board
     lives in "The markets" below — this is the front row, not a replacement. */
 const SUB_CAP = 6;
+/* Art and Design lead with their MAKERS (Picasso, Warhol / Eames, Nakashima) —
+   the names ARE those markets. The structural drills (kinds, families, eras)
+   stay for watches, sports, science, culture, where the sub-market is the
+   recognizable unit. Collin's call, Aug 6. */
+const MAKER_LED: ReadonlySet<string> = new Set(['art', 'design']);
 
 function subHref(r: SubMarketRead): string {
   return r.slug.includes(':') ? `/sub/${r.slug.replace(':', '/')}` : `/makers/${r.slug}`;
@@ -280,7 +282,11 @@ export function SubTape({ market, activeKey, play }: {
   play: boolean;
 }) {
   const rows = useMemo(() => {
-    const pool = market?.drills?.[activeKey] ?? [];
+    const makerLed = MAKER_LED.has(activeKey);
+    const pool: SubMarketRead[] = makerLed
+      ? (market?.subMarkets?.[activeKey] ?? [])
+      : (market?.drills?.[activeKey] ?? []);
+    const cap = makerLed ? 5 : SUB_CAP;
     const rank = { index: 0, demand: 1, descriptive: 2 } as const;
     // certified rows rank by the size of the certified move; everything else
     // ranks by DEPTH, not heat — sorting demand reads by demandNow front-ran
@@ -290,7 +296,7 @@ export function SubTape({ market, activeKey, play }: {
       r.readType === 'index' ? Math.abs(r.index?.changePct ?? 0) : (r.lots ?? 0);
     return [...pool]
       .sort((a, b) => rank[a.readType] - rank[b.readType] || strength(b) - strength(a))
-      .slice(0, SUB_CAP);
+      .slice(0, cap);
   }, [market, activeKey]);
   if (!rows.length) return null;
   return (

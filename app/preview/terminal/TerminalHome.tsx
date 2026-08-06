@@ -682,7 +682,7 @@ export default function TerminalHomePage() {
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {/* the 7-market switch — re-scopes the WHOLE page in place */}
-      <div className="rail" style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
+      <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
         <MarketSwitch compact lit open={!fromCache} emblems />
       </div>
 

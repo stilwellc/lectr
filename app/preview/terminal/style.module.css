@@ -1869,10 +1869,10 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    whole market. Masthead line, then two columns: the tape reading down the
    left like a departures board; the signature instrument enthroned top-right
    at display scale with the functional rail beneath it. ══ */
-.mtHero { padding: clamp(20px, 2.6vw, 34px) 0 clamp(22px, 2.6vw, 32px); }
+.mtHero { padding: clamp(8px, 1vw, 14px) 0 clamp(12px, 1.4vw, 18px); }
 .mtMasthead {
   display: flex; align-items: baseline; gap: 16px;
-  padding-bottom: clamp(14px, 1.6vw, 20px);
+  padding-bottom: clamp(8px, 1vw, 12px);
   border-bottom: 1px solid var(--tt-hair-2);
 }
 .mtMasthead .sectionKicker { margin-bottom: 0; font-size: 14px; color: var(--tt-fg); }
@@ -1889,14 +1889,14 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   /* stretch: the board fills the monument column's height, rows sharing it
      equally — a departures board fills its frame */
   align-items: stretch;
-  padding-top: clamp(10px, 1.2vw, 16px);
+  padding-top: clamp(6px, 0.8vw, 10px);
 }
 .mtBoardMain { min-width: 0; display: grid; }
 .mtBoardMain .mtTape { height: 100%; grid-auto-rows: 1fr; align-items: center; }
 /* board rows: taller, figures louder — this is the show now */
-.mtHero .mtRow { min-height: clamp(66px, 7.6vh, 80px); grid-template-columns: minmax(0, 1.1fr) 116px fit-content(46%); }
-.mtHero .mtLabel { font-size: clamp(16px, 1.35vw, 19px); }
-.mtHero .mtFigure { font-size: clamp(16px, 1.5vw, 21px); }
+.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1.1fr) 116px fit-content(46%); }
+.mtHero .mtLabel { font-size: clamp(15px, 1.2vw, 17px); }
+.mtHero .mtFigure { font-size: clamp(15px, 1.3vw, 19px); }
 .mtHero .mtInstrument { width: 112px; }
 .mtSide { display: grid; gap: clamp(18px, 2vw, 26px); min-width: 0; }
 /* the 02 board's .beam ships width:min(440px,82vw) — wider than this column —
@@ -1907,7 +1907,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    scale that shouts over the figure. The BOUNDS are context, the point
    estimate is the claim: quiet mono, one size. */
 .mtMon .beamLarge { width: 100%; }
-.mtMon .beamLarge .beamStage { height: 30px; }
+.mtMon .beamLarge .beamStage { height: 22px; }
 .mtMon .beamLarge .beamEnds { font-size: 13px; font-weight: 500; color: var(--tt-muted) !important; }
 .mtMon .beamLarge .beamRule { stroke: rgba(237, 230, 218, 0.75); }
 .mtMon .beamLarge .beamDiamond::before { background: var(--tt-butter); }
@@ -1917,7 +1917,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 /* the monument — the strongest honest read as the focal object. Unboxed,
    like everything on the desk; the beam IS the composition. */
 .mtMon {
-  display: grid; gap: 6px; justify-items: start; text-align: left;
+  display: grid; gap: 4px; justify-items: start; text-align: left;
   background: none; border: 0; padding: 0; margin: 0;
   font: inherit; color: inherit; cursor: pointer; width: 100%;
 }
@@ -1929,12 +1929,12 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtMonMarket {
   font-family: var(--font-serif-display), serif;
   font-weight: 400; letter-spacing: -0.015em; line-height: 1;
-  font-size: clamp(30px, 2.9vw, 42px);
+  font-size: clamp(24px, 2.2vw, 32px);
   color: var(--tt-fg);
   transition: color 0.15s ease;
 }
 .mtMonFigure {
-  font-size: clamp(30px, 3vw, 44px); font-weight: 650;
+  font-size: clamp(26px, 2.5vw, 36px); font-weight: 650;
   letter-spacing: -0.02em; line-height: 1;
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
@@ -2018,7 +2018,6 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   pointer-events: none;
 }
 .mtRowGhost svg { width: 100%; height: 100%; }
-.mtRow:hover .mtRowGhost { opacity: 0.11; transform: translateY(-50%) scale(1.06); }
 
 /* figures carry directional light — the hero-numeral whisper, row-sized */
 .mtFigure[data-dir='up'] { text-shadow: 0 0 22px rgba(47, 191, 113, 0.28); }
@@ -2034,7 +2033,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
     #14110d;
   border: 1px solid rgba(232, 218, 182, 0.09);
   border-radius: 14px;
-  padding: clamp(18px, 1.9vw, 26px) clamp(18px, 2vw, 26px) clamp(20px, 2.1vw, 28px);
+  padding: clamp(14px, 1.4vw, 18px) clamp(14px, 1.6vw, 20px) clamp(14px, 1.5vw, 20px);
   box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05), 0 18px 44px -18px rgba(8, 6, 3, 0.55);
   transition: border-color 180ms var(--ease-signature, ease), transform 180ms var(--ease-signature, ease);
 }
@@ -2053,11 +2052,45 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 /* the rail joins the plate ground so the side column reads as one furniture
    piece: plate above, ledger below, one seam */
 .mtSide .heroRail[data-under-monument='true'] {
-  border-top: none; padding-top: 0; margin-top: clamp(4px, 0.6vw, 8px);
+  border-top: none; padding-top: 0; margin-top: clamp(2px, 0.4vw, 6px);
+}
+.mtSide .heroRail .railRow, .mtSide .heroRail .railBtn { padding-top: 7px; padding-bottom: 7px; }
+.mtSide .heroRail .railCmd { margin-top: 7px; }
+
+/* mobile: the plate treatment carries — the monument is the scene's opener,
+   and the whole scene compresses toward one screen */
+@media (max-width: 700px) {
+  .mtMonWrapM { padding: 6px 0 8px; border-bottom: none; }
+  .mtMonGhost { width: 64%; right: -8%; }
+  .mtMastheadM { padding: 0 2px 6px; }
+  .mtMon { padding: 12px 14px 14px; gap: 3px; }
+  .mtMonMarket { font-size: 22px; }
+  .mtMonFigure { font-size: 27px; }
+  .mtMonSub { font-size: 11px; }
+  .mtMonKicker { font-size: 10px; }
+  .mtMon .beamLarge .beamStage { height: 18px; }
+  .mtMon .beamLarge .beamEnds { margin-top: 6px; font-size: 11px; }
+  .mtStage { margin-top: 6px; }
+  .mtRow { min-height: 46px; padding: 7px 2px; }
+  .mtLabel { font-size: 14.5px; }
+  .mtFigure { font-size: 15px; }
+  .mtSub { font-size: 11px; }
+  .mtTag { font-size: 9px; }
 }
 
-/* mobile: the plate treatment carries — the monument is the scene's opener */
+/* mobile: the 7 pills become ONE snap row (the wall's strip pattern) — three
+   stacked pill rows were ~230px of a screen that must hold the whole scene.
+   Terminal-scoped; other routes keep the wrapped grid. */
 @media (max-width: 700px) {
-  .mtMonWrapM { padding: 12px 0 18px; border-bottom: none; }
-  .mtMonGhost { width: 64%; right: -8%; }
+  .switchStrip :global(.ray-markets) {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding: 6px 2px;              /* room for the lit halo */
+    margin: -6px -2px;
+  }
+  .switchStrip :global(.ray-markets)::-webkit-scrollbar { display: none; }
+  .switchStrip :global(.ray-market-tab) { flex: none; white-space: nowrap; scroll-snap-align: start; }
 }
