@@ -6,8 +6,7 @@ import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import type { Market } from '../../constants';
 import type { HeroPoint } from './HeroChart';
-import { MarketTape, HorizonLadder, TapeMonument, pickLead } from './MarketTape';
-import Sparkline from './Sparkline';
+import { MarketTape, SubTape, TapeMonument, pickLead } from './MarketTape';
 import { fmtInt, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
 import styles from './style.module.css';
@@ -142,16 +141,10 @@ export default function IndexHero({
 }: Props) {
   const reduce = useReducedMotion();
   const hero = useHeroSeries(activeKey, demand, realized);
-  const lead = useMemo(() => pickLead(market, demandAll, realized), [market, demandAll, realized]);
+  const lead = useMemo(() => pickLead(market, demandAll, realized, activeKey), [market, demandAll, realized, activeKey]);
   const serialNo = serial ? `NO. ${String(serial).slice(0, 10).replace(/-/g, '')}` : null;
   const vals = hero.idx.map((p) => p.value);
   const level = vals.length ? vals[vals.length - 1] : 0;
-
-  // the last 16 quarters of the scoped series — the single-line trend the
-  // scoped view keeps (one metric, one line; never six)
-  const spark = vals.slice(-16);
-  const qMove = vals.length > 1 ? level - vals[vals.length - 2] : 0;
-  const trendDir = qMove >= 0 ? 'up' : 'down';
 
   // ── ROI × DEMAND cross-check (the left read-out). Demand is a RELATIVE beat
   // (sold over estimate) — it can run hot while houses quietly cut estimates,
@@ -203,25 +196,17 @@ export default function IndexHero({
             {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
           </m.div>
 
-          <m.div className={styles.mHeroCard} {...rise(0.07)}>
-            {activeKey === 'all' && lead ? (
+          {lead && (
+            <m.div className={styles.mHeroCard} {...rise(0.07)}>
               <TapeMonument row={lead} play={play} />
-            ) : (
-              <HorizonLadder activeKey={activeKey} market={market} play={play} />
-            )}
-          </m.div>
+            </m.div>
+          )}
 
-          {activeKey === 'all' && (
-            <m.div className={styles.mtStage} {...rise(0.12)}>
-              <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
-            </m.div>
-          )}
-          {activeKey !== 'all' && spark.length >= 2 && (
-            <m.div className={styles.mtSpark} {...rise(0.12)}>
-              <Sparkline data={spark} dir={trendDir} width={360} height={64} strokeWidth={1.6} />
-              <span className={styles.mtSparkTag}>{hero.explain.toLowerCase()} · last {spark.length} quarters</span>
-            </m.div>
-          )}
+          <m.div className={styles.mtStage} {...rise(0.12)}>
+            {activeKey === 'all'
+              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
+              : <SubTape market={market} activeKey={activeKey} play={play} />}
+          </m.div>
 
           <m.div className={styles.mHeroStats} {...rise(0.16)}>
             {roi != null && (
@@ -275,31 +260,21 @@ export default function IndexHero({
         <m.div className={styles.mtMasthead} {...rise(0.04)}>
           <span className={styles.sectionKicker}>{hero.kicker}</span>
           <span className={styles.mtMastheadNote}>
-            {activeKey === 'all' ? 'six verticals · the strongest honest read each' : 'certified horizons · abstentions shown'}
+            {activeKey === 'all' ? 'six verticals · the strongest honest read each' : 'the sub-markets · strongest honest read each'}
           </span>
           {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
         </m.div>
 
         <div className={styles.mtBoard}>
           <m.div className={styles.mtBoardMain} {...rise(0.1)}>
-            {activeKey === 'all' ? (
-              <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
-            ) : (
-              <>
-                <HorizonLadder activeKey={activeKey} market={market} play={play} />
-                {spark.length >= 2 && (
-                  <div className={styles.mtSpark}>
-                    <Sparkline data={spark} dir={trendDir} width={720} height={64} strokeWidth={1.6} />
-                    <span className={styles.mtSparkTag}>{hero.explain.toLowerCase()} · last {spark.length} quarters</span>
-                  </div>
-                )}
-              </>
-            )}
+            {activeKey === 'all'
+              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
+              : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
           <m.aside className={styles.mtSide} {...rise(0.16)}>
-            {activeKey === 'all' && lead && <TapeMonument row={lead} play={play} />}
-            <div className={styles.heroRail} data-under-monument={activeKey === 'all' && lead ? 'true' : undefined}>
+            {lead && <TapeMonument row={lead} play={play} />}
+            <div className={styles.heroRail} data-under-monument={lead ? 'true' : undefined}>
               <div className={styles.railRow}>
                 <span className={styles.railLabel}>On the block</span>
                 <span className={styles.railVal}>{fmtInt(onBlock)}</span>

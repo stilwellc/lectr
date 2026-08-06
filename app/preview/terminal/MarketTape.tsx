@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { MarketData, DemandByMarket, HedonicHorizon } from '../../hooks/useRayData';
+import Link from 'next/link';
+import type { MarketData, DemandByMarket, HedonicHorizon, SubMarketRead } from '../../hooks/useRayData';
 import type { RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint } from '../../types';
 import type { Market } from '../../constants';
@@ -38,7 +39,6 @@ import styles from './style.module.css';
    ============================================================ */
 
 const HORIZON_PREF = ['5Y', '3Y', '1Y'] as const; // the house rule: longest CI-resolved horizon (verified.ts)
-const LADDER_ORDER = ['1Y', '3Y', '5Y', 'MAX'] as const;
 
 interface TapeRowData {
   key: Market;
@@ -122,13 +122,17 @@ const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
 /** the lead read — the row the monument enthrones. Certified beats measured
     beats descriptive, so as more verticals clear the CI bar the monument
-    upgrades itself; today it is Art's certified 5Y. */
+    upgrades itself; today it is Art's certified 5Y. Scoped, it is that
+    vertical's own strongest read. */
 export function pickLead(
   market: MarketData | null,
   demandAll: DemandByMarket,
   realized: RealizedByMarket,
+  scope?: Market,
 ): TapeRowData | null {
-  return resolveTape(market, demandAll, realized)[0] ?? null;
+  const rows = resolveTape(market, demandAll, realized);
+  if (scope && scope !== 'all') return rows.find((r) => r.key === scope) ?? null;
+  return rows[0] ?? null;
 }
 
 /** THE MONUMENT — the hero's focal object. The big demand-median numeral is
@@ -243,56 +247,90 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
   );
 }
 
-/** the scoped stage: the vertical's horizon ladder, abstentions included */
-export function HorizonLadder({ activeKey, market, play }: {
-  activeKey: Market;
+/** THE SUB TAPE — the scoped stage. Pick a market and the board becomes its
+    sub-markets in the 02 grammar: watch families, card eras, art kinds — each
+    with the strongest honest read its data supports. Same rank as the 02
+    resolver (certified by |move|, then demand by strength, then descriptive
+    by size); rows link to the dossier the 02 rows link to. The full board
+    lives in "The markets" below — this is the front row, not a replacement. */
+const SUB_CAP = 6;
+
+function subHref(r: SubMarketRead): string {
+  return r.slug.includes(':') ? `/sub/${r.slug.replace(':', '/')}` : `/makers/${r.slug}`;
+}
+
+const subTag = (r: SubMarketRead): string =>
+  r.readType === 'index' ? (r.indexMethod === 'repeat-sale' ? 'Repeat-sale index' : 'Hedonic index')
+  : r.readType === 'demand' ? 'Demand read' : 'Descriptive';
+
+export function SubTape({ market, activeKey, play }: {
   market: MarketData | null;
+  activeKey: Market;
   play: boolean;
 }) {
-  const hz = market?.hedonic?.[activeKey]?.horizons;
-  const rows = LADDER_ORDER
-    .map((k) => ({ k: k as string, x: hz?.[k] }))
-    .filter((r): r is { k: string; x: HedonicHorizon } => !!r.x && (r.x.publishable || !!r.x.reason));
-  if (!rows.length) {
-    // no horizon carries even an abstention reason — say so once, plainly
-    return (
-      <div className={styles.mtLadderEmpty}>
-        No certified price index at this altitude — no horizon&rsquo;s 95% CI resolves the sign.
-        The certified reads for this market live in its sub-market rows below.
-      </div>
-    );
-  }
+  const rows = useMemo(() => {
+    const pool = market?.drills?.[activeKey] ?? [];
+    const rank = { index: 0, demand: 1, descriptive: 2 } as const;
+    // certified rows rank by the size of the certified move; everything else
+    // ranks by DEPTH, not heat — sorting demand reads by demandNow front-ran
+    // thin hot families (Panthère, Cellini) over Daytona and Nautilus, and a
+    // front row should read like the market, not like its outliers
+    const strength = (r: SubMarketRead) =>
+      r.readType === 'index' ? Math.abs(r.index?.changePct ?? 0) : (r.lots ?? 0);
+    return [...pool]
+      .sort((a, b) => rank[a.readType] - rank[b.readType] || strength(b) - strength(a))
+      .slice(0, SUB_CAP);
+  }, [market, activeKey]);
+  if (!rows.length) return null;
   return (
-    <div className={styles.mtLadder} role="list">
-      {rows.map(({ k, x }) => (
-        <div key={k} role="listitem" className={styles.mtRow} data-static="true">
-          <span className={styles.mtLabelBlock}>
-            <span className={styles.mtLabel}>{k === 'MAX' ? 'All time' : `Past ${k.replace('Y', k === '1Y' ? ' year' : ' years')}`}</span>
-            <span className={styles.mtTag}>{x.publishable ? 'Hedonic index · 95% CI' : 'Abstains'}</span>
-          </span>
-          <span className={styles.mtInstrument} aria-hidden>
-            {x.publishable && x.changePct != null
-              ? <CIBeam mini lo={x.ciLoPct ?? x.changePct} hi={x.ciHiPct ?? x.changePct} point={x.changePct}
-                  dir={x.changePct >= 0 ? 'up' : 'down'} play={play} />
-              : <span className={styles.mtAbstain}>—</span>}
-          </span>
-          <span className={styles.mtRight}>
-            {x.publishable && x.changePct != null ? (
-              <>
-                <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={x.changePct >= 0 ? 'up' : 'down'}>
-                  {fmtPct(x.changePct)}
-                </span>
-                <span className={styles.mtSub}>
-                  CI {fmtCI(x.ciLoPct ?? x.changePct)} to {fmtCI(x.ciHiPct ?? x.changePct)}{x.nEnd ? ` · n ${fmtInt(x.nEnd)}` : ''}
-                </span>
-              </>
-            ) : (
-              // the abstention IS the content — the pipeline's reason, verbatim
-              <span className={styles.mtReason}>{x.reason || 'CI spans zero — direction unresolved'}</span>
-            )}
-          </span>
-        </div>
-      ))}
+    <div className={styles.mtTape} role="list">
+      {rows.map((r) => {
+        const idx = r.readType === 'index' ? r.index : null;
+        return (
+          <Link key={r.slug} href={subHref(r)} role="listitem" className={styles.mtRow}>
+            <span className={styles.mtLabelBlock}>
+              <span className={styles.mtLabel}>{r.label}</span>
+              <span className={styles.mtTag}>{subTag(r)}</span>
+            </span>
+            <span className={styles.mtInstrument} aria-hidden>
+              {idx && idx.changePct != null && (
+                <CIBeam mini lo={idx.ciLoPct ?? idx.changePct} hi={idx.ciHiPct ?? idx.changePct}
+                  point={idx.changePct} dir={idx.changePct >= 0 ? 'up' : 'down'} play={play} />
+              )}
+              {!idx && r.readType === 'demand' && (r.demandSeries?.length ?? 0) >= 2 && (
+                <DemandLine mini series={r.demandSeries as { period: string; value: number }[]} />
+              )}
+              {!idx && r.readType !== 'demand' && <span className={styles.mtAbstain}>—</span>}
+            </span>
+            <span className={styles.mtRight}>
+              {idx && idx.changePct != null && (
+                <>
+                  <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={idx.changePct >= 0 ? 'up' : 'down'}>
+                    {fmtPct(idx.changePct)}{idx.horizon ? ` · ${idx.horizon}` : ''}
+                  </span>
+                  <span className={styles.mtSub}>
+                    CI {fmtCI(idx.ciLoPct ?? idx.changePct)} to {fmtCI(idx.ciHiPct ?? idx.changePct)}{r.lots ? ` · ${fmtInt(r.lots)} lots` : ''}
+                  </span>
+                </>
+              )}
+              {!idx && r.readType === 'demand' && (
+                <>
+                  <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'}>
+                    {fmtPct(r.demandNow ?? 0)}
+                  </span>
+                  <span className={styles.mtSub}>over estimate{r.lots ? ` · ${fmtInt(r.lots)} lots` : ''}</span>
+                </>
+              )}
+              {!idx && r.readType !== 'demand' && (
+                <>
+                  <span className={styles.mtFigure}>{r.typicalUsd ? `Typical ${fmtMoneyCompact(r.typicalUsd)}` : '—'}</span>
+                  <span className={styles.mtSub}>{r.record?.usd ? `record ${fmtMoneyCompact(r.record.usd)} · ` : ''}{fmtInt(r.lots ?? 0)} lots</span>
+                </>
+              )}
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 }
