@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
-import type { MarketData, DemandPoint, RealizedByMarket } from '../../hooks/useRayData';
+import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import type { Market } from '../../constants';
 import RollingNumber from './RollingNumber';
-import HeroChart, { type HeroLine, type HeroPoint } from './HeroChart';
-import { resolveHeroLayers, type HeroLayer } from '../../lib/heroLayers';
+import type { HeroPoint } from './HeroChart';
+import { MarketTape, HorizonLadder } from './MarketTape';
 import Sparkline from './Sparkline';
 import { fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
@@ -23,8 +23,13 @@ import styles from './style.module.css';
    makers whose price movement clears the 95% confidence bar.
      1. demand[market]  (%-over-estimate, quarterly) — the lead
      2. realized[market] ($ median) — sports, which has no estimates
-   The horizon toggle scopes the window; the chart draws the same
-   series. Market-scoped end to end.
+   The horizon toggle scopes the window the headline median reads over.
+   THE STAGE (Aug 2026): the multi-line HeroChart is gone — it drew six
+   base-100-rebased index lines and a demand median on one stage, two
+   different measures sharing axes, which read as a portfolio but wasn't.
+   The stage is now the MARKET TAPE (MarketTape.tsx): per-vertical rows
+   on the 02 board's honesty ladder, and on a scoped lander the
+   vertical's CI-gated horizon ladder with abstentions shown verbatim.
 
    BID-COMPETITION READ (sports/cards): Goldin publishes no estimate, so cards
    get no %-over-estimate demand — but every lot carries bidCount, a genuine
@@ -37,15 +42,8 @@ import styles from './style.module.css';
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
-// local aliases for the chart's point/layer shapes (MarketChart, the old
-// recharts instrument, is gone — HeroChart owns the grammar now)
+// the hero series' point shape (period/value/n)
 type IndexPoint = HeroPoint;
-interface ChartLayer {
-  key: string;
-  label: string;
-  color: string;
-  points: IndexPoint[];
-}
 
 type TfKey = '1Y' | '3Y' | '5Y' | 'MAX';
 
@@ -54,6 +52,9 @@ interface Props {
   marketLabel: string;
   market: MarketData | null;
   demand: DemandPoint[] | undefined;
+  /** the FULL per-market demand map — the tape reads every vertical, not
+      just the scoped one */
+  demandAll: DemandByMarket;
   realized: RealizedByMarket;
   /** bid-competition series (median bids/lot, quarterly) for the scoped market —
       populated for sports/cards only. A DEMAND primitive from Goldin's bidCount,
@@ -127,6 +128,7 @@ export default function IndexHero({
   marketLabel,
   market,
   demand,
+  demandAll,
   realized,
   bidComp,
   totalLots,
@@ -161,64 +163,6 @@ export default function IndexHero({
   const headline = median(windowVals.length ? windowVals : vals);
   const windowIdx = horizon.q === Infinity ? hero.idx : hero.idx.slice(startI);
   const spark = windowVals.slice(-16);
-
-  // ── THE LAYERS — the market's curated sub-market lines (heroLayers.ts),
-  // sliced to the visible window; index kinds rebase to the window's first
-  // value (Δ%), demand plots raw measured %, volume plots counts (subpane).
-  const layerDefs = useMemo(() => resolveHeroLayers(activeKey, market), [activeKey, market]);
-  const startPeriod = windowIdx.length ? windowIdx[0].period : null;
-  const windowLayer = (l: HeroLayer): { chart: ChartLayer; kind: HeroLayer['kind']; last: number } | null => {
-    let pts = startPeriod ? l.points.filter((p) => p.period >= startPeriod) : l.points;
-    if (pts.length < 2) return null;
-    if (l.kind === 'index') {
-      const base = pts[0].value;
-      if (!(base > 0)) return null;
-      pts = pts.map((p) => ({ ...p, value: ((p.value / base) - 1) * 100 }));
-    }
-    return { chart: { key: l.key, label: l.label, color: l.color, points: pts }, kind: l.kind, last: pts[pts.length - 1].value };
-  };
-  const mainLayers = layerDefs.main.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
-  const subLayers = layerDefs.sub.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
-  const toHeroLine = (x: { chart: ChartLayer; kind: HeroLayer['kind'] }): HeroLine => ({
-    key: x.chart.key,
-    label: x.chart.label,
-    color: x.chart.color,
-    unit: x.kind === 'volume' ? 'count' : 'pct',
-    points: x.chart.points,
-  });
-  // chip isolation, two states (A1-1): hover PREVIEWS a layer (transient),
-  // click PINS it — sticky isolation that survives mouseleave, reachable by
-  // keyboard/touch; aria-pressed reflects the pin; a second click clears it.
-  // The live highlight is the hover preview when present, else the pin.
-  const [pinnedLayer, setPinnedLayer] = useState<string | null>(null);
-  const [hoverLayer, setHoverLayer] = useState<string | null>(null);
-  const litLayer = hoverLayer ?? pinnedLayer;
-  useEffect(() => { setPinnedLayer(null); setHoverLayer(null); }, [activeKey]);
-  // FLIPPED views (sports/science/culture): the curated story lines take the
-  // main stage; the anchor (the numeral's line) rides the lower band
-  const flipView = mainLayers.length === 0 && subLayers.length > 0;
-  const chipFor = (x: { chart: ChartLayer; kind: HeroLayer['kind']; last: number }) => {
-    const pinned = pinnedLayer === x.chart.key;
-    const on = litLayer === x.chart.key;
-    const val = x.kind === 'volume' ? `${Math.round(x.last).toLocaleString()}/qtr` : fmtPct(x.last);
-    const dir = x.kind === 'volume' ? undefined : x.last >= 0 ? 'up' : 'down';
-    return (
-      <button
-        key={x.chart.key}
-        type="button"
-        className={styles.layerChip}
-        data-on={on ? 'true' : undefined}
-        onMouseEnter={() => setHoverLayer(x.chart.key)}
-        onMouseLeave={() => setHoverLayer((cur) => (cur === x.chart.key ? null : cur))}
-        onClick={() => setPinnedLayer((cur) => (cur === x.chart.key ? null : x.chart.key))}
-        aria-pressed={pinned}
-      >
-        <span className={styles.layerChipDot} style={{ background: x.chart.color }} aria-hidden />
-        {x.chart.label}
-        <span className={`${styles.layerChipVal}${x.kind === 'volume' ? '' : ` ${styles.pctData}`}`} data-dir={dir}>{val}</span>
-      </button>
-    );
-  };
 
   // momentum — the most recent quarter-over-quarter shift in the reading.
   // A plain level DIFFERENCE: dividing by the prior level flips the sign
@@ -299,30 +243,11 @@ export default function IndexHero({
                   onClick={() => setTf(t.key)}>{t.key === 'MAX' ? 'ALL' : t.key}</button>
               ))}
             </div>
-            <div className={styles.mHeroChart}>
-              {hasChart ? (
-                <HeroChart
-                  anchor={{ key: '_anchor', label: metricLabel === 'demand' ? 'The market' : 'Typical price', color: '', unit: isMoney ? 'money' : 'pct', points: windowIdx }}
-                  layers={mainLayers.map(toHeroLine)}
-                  subLayers={subLayers.map(toHeroLine)}
-                  subLabel={flipView ? `${metricLabel} — the headline's line` : layerDefs.subLabel}
-                  highlight={litLayer}
-                  height={flipView ? 180 : 200}
-                  subHeight={flipView ? 72 : 64}
-                  compact
-                  flip={flipView}
-                  play={play}
-                />
-              ) : (
-                <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={360} height={90} strokeWidth={1.8} />
-              )}
+            <div className={styles.mtStage}>
+              {activeKey === 'all'
+                ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} />
+                : <HorizonLadder activeKey={activeKey} market={market} play={play} />}
             </div>
-            {hasChart && (mainLayers.length > 0 || subLayers.length > 0) && (
-              <div className={styles.layerChipsScroll}>
-                {mainLayers.map(chipFor)}
-                {subLayers.map(chipFor)}
-              </div>
-            )}
             <div className={styles.mHeroTag}>{hero.explain} · {horizon.label}</div>
           </m.div>
 
@@ -441,38 +366,32 @@ export default function IndexHero({
           </button>
         </m.div>
 
-        {/* STAGE — the full-width landscape. No box, no card: the line, its
-            directional fill and glow ARE the composition. */}
+        {/* STAGE — the tape. Rows are claims: a CI'd read, a measured demand
+            read, or a descriptive $ — never six rebased lines pretending to be
+            one portfolio. Scoped, the stage is the vertical's horizon ladder
+            with its abstentions printed verbatim. */}
         <m.div className={styles.heroStage} {...rise(0.16)}>
           <div className={styles.stageMeta}>
-            <span>{flipView ? `${layerDefs.subLabel} · ${horizon.label}` : `${metricLabel} · ${horizon.label}`}</span>
-            <span>{marketLabel.toLowerCase()}</span>
+            <span>{activeKey === 'all' ? 'the verticals · strongest honest read each' : `certified horizons · ${marketLabel.toLowerCase()}`}</span>
+            <span>{activeKey === 'all' ? 'tap a row to scope' : `${metricLabel} trend below`}</span>
           </div>
-          {hasChart ? (
-            <HeroChart
-              anchor={{ key: '_anchor', label: metricLabel === 'demand' ? 'The market' : 'Typical price', color: '', unit: isMoney ? 'money' : 'pct', points: windowIdx }}
-              layers={mainLayers.map(toHeroLine)}
-              subLayers={subLayers.map(toHeroLine)}
-              subLabel={flipView ? `${metricLabel} — the headline's line` : layerDefs.subLabel}
-              highlight={litLayer}
-              height={flipView ? 248 : 272}
-              subHeight={flipView ? 104 : 84}
-              flip={flipView}
-              play={play}
-            />
-          ) : (
-            <div className={styles.heroSparkFallback}>
-              <Sparkline data={spark.length >= 2 ? spark : [level, level]} dir={trendDir} width={720} height={140} strokeWidth={1.8} />
-              <span className={styles.chartCardTag}>series building — sampling this market</span>
-            </div>
-          )}
-          {/* the legend — every layered line, its current reading, tap to isolate */}
-          {hasChart && (mainLayers.length > 0 || subLayers.length > 0) && (
-            <div className={styles.layerChips}>
-              {mainLayers.map(chipFor)}
-              {subLayers.map(chipFor)}
-            </div>
-          )}
+          <div className={styles.mtStage}>
+            {activeKey === 'all'
+              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} />
+              : (
+                <>
+                  <HorizonLadder activeKey={activeKey} market={market} play={play} />
+                  {/* ONE series, the headline's own metric — trend context
+                      without the portfolio look */}
+                  {spark.length >= 2 && (
+                    <div className={styles.mtSpark}>
+                      <Sparkline data={spark} dir={trendDir} width={720} height={72} strokeWidth={1.6} />
+                      <span className={styles.mtSparkTag}>{hero.explain.toLowerCase()} · {horizon.label}</span>
+                    </div>
+                  )}
+                </>
+              )}
+          </div>
         </m.div>
 
       </section>

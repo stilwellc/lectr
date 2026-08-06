@@ -713,6 +713,7 @@ export default function TerminalHomePage() {
               marketLabel={activeKey === 'all' ? 'Total market' : marketMeta.label}
               market={marketData}
               demand={demand[activeKey]}
+              demandAll={demand}
               realized={realized}
               bidComp={bidComp[activeKey]}
               totalLots={totalLots}

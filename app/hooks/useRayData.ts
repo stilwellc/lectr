@@ -96,6 +96,12 @@ export interface MarketData {
   /** per-maker hedonic index — the statistically-defensible price-movement read.
       A horizon publishes ONLY when its CI resolves the sign (else abstains). */
   makerIndex?: Record<string, MakerIndexResult>;
+  /** per-VERTICAL hedonic index — the same CI gate as makerIndex, one level
+      up: each horizon carries changePct + 95% bounds + `publishable`, and an
+      unpublishable horizon ships its abstention `reason` verbatim ("CI spans
+      zero (-12.4%…18.4%) — direction unresolved"). Shipped by build-market
+      since Jul 2026 but consumed nowhere until the hero tape (Aug 2026). */
+  hedonic?: Record<string, HedonicEntry>;
   /** sub-market tracking: per vertical, each tracked slug with the STRONGEST
       honest read its data supports — a verified CI'd index where it's a real
       maker, else measured demand, else descriptive (typical/record/volume).
@@ -107,6 +113,11 @@ export interface MarketData {
       ladder + honesty gates as subMarkets; `parent` names the grouping. */
   drills?: Record<string, (SubMarketRead & { parent: string })[]>;
 }
+export interface HedonicEntry {
+  series?: { period: string; value: number; ciLo?: number; ciHi?: number; n?: number }[];
+  horizons: Partial<Record<'1Y' | '3Y' | '5Y' | 'MAX', HedonicHorizon>>;
+}
+
 export interface SubMarketRead {
   slug: string;
   label: string;

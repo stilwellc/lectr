@@ -1778,3 +1778,93 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 @media (min-width: 900px) {
   .slipHold { min-height: 218px; }
 }
+
+/* ══ THE MARKET TAPE — the hero's stage in the 02 board's grammar,
+   re-inked for the dark side. Rows are claims: label + honesty tag,
+   an instrument (CI beam / demand line / abstain), figure + sub. ══ */
+.mtStage { margin-top: clamp(14px, 1.6vw, 20px); }
+.mtTape, .mtLadder { display: grid; grid-template-columns: 1fr; }
+/* Desktop: the 02 board's two-column split — six full-width rows left a dead
+   field between label and instrument. Column-major, so the certified tier
+   (sorted first) reads down the LEFT column before the eye crosses. */
+@media (min-width: 1080px) {
+  .mtTape { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, auto); grid-auto-flow: column; column-gap: clamp(32px, 3.4vw, 56px); }
+  .mtLadder { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(2, auto); grid-auto-flow: column; column-gap: clamp(32px, 3.4vw, 56px); }
+  /* with two columns the last row of EACH column loses its rule */
+  .mtTape .mtRow:nth-child(3n) { border-bottom: 0; }
+  .mtLadder .mtRow:nth-child(2n) { border-bottom: 0; }
+  .mtRow:last-child { border-bottom: 0; }
+}
+.mtRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) 104px fit-content(46%);
+  gap: 0 18px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--tt-hair);
+  background: none;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.mtRow:last-child { border-bottom: 0; }
+.mtRow:hover { background: rgba(232, 218, 182, 0.04); }
+.mtRow[data-static='true'] { cursor: default; }
+.mtRow[data-static='true']:hover { background: none; }
+.mtLabelBlock { display: grid; gap: 3px; min-width: 0; }
+.mtLabel {
+  font-size: clamp(15px, 1.25vw, 17px);
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--tt-fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mtTag {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--tt-faint);
+}
+.mtInstrument { width: 100px; }
+.mtAbstain { color: var(--tt-faint); font-size: 15px; display: block; text-align: center; }
+.mtRight { display: grid; gap: 3px; justify-items: end; text-align: right; }
+.mtFigure {
+  font-size: clamp(15px, 1.35vw, 19px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--tt-fg);
+}
+.mtFigure[data-dir='up'] { color: var(--color-up); }
+.mtFigure[data-dir='down'] { color: var(--color-down); }
+.mtSub { font-size: 12px; color: var(--tt-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mtReason { font-size: 12.5px; line-height: 1.45; color: var(--tt-muted); max-width: 34ch; text-align: right; }
+.mtLadderEmpty {
+  padding: 18px 2px;
+  font-size: 13.5px; line-height: 1.6; color: var(--tt-muted); max-width: 52ch;
+  border-bottom: 1px solid var(--tt-hair);
+}
+/* the scoped single-series spark — trend context, one line, one metric */
+.mtSpark { padding: 16px 2px 4px; display: grid; gap: 6px; }
+.mtSpark svg { width: 100%; height: auto; }
+.mtSparkTag { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-faint); }
+
+/* re-ink the reused paper instruments for the dark stage. The components are
+   the SAME ones the 02 board renders (SubMarketBoard's CIBeam/DemandLine) —
+   only the ink changes, so the grammar stays identical across surfaces. */
+.mtStage .beamRule { stroke: rgba(237, 230, 218, 0.75); }
+.mtStage .beamZero { stroke: rgba(237, 230, 218, 0.28); }
+.mtStage .beamDiamond::before { background: var(--tt-butter); }
+.mtStage .demandPath { stroke: var(--tt-secondary); }
+.mtStage .demandBase { stroke: rgba(154, 143, 125, 0.5); }
+.mtStage .demandDot { fill: var(--tt-butter); }
+
+@media (max-width: 700px) {
+  .mtRow { grid-template-columns: minmax(0, 1fr) 76px fit-content(50%); gap: 0 12px; min-height: 58px; }
+  .mtInstrument { width: 72px; }
+  .mtReason { max-width: 24ch; font-size: 11.5px; }
+}

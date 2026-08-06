@@ -190,7 +190,7 @@ const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
 /* ── THE CI BEAM — the caliper. A 1px rule, tick terminals at the
    95% bounds, a solid diamond at the point estimate. Never a slider. */
-function CIBeam({ lo, hi, point, dir, mini = false, play = true, large = false }: {
+export function CIBeam({ lo, hi, point, dir, mini = false, play = true, large = false }: {
   lo: number; hi: number; point: number; dir?: 'up' | 'down'; mini?: boolean; play?: boolean; large?: boolean;
 }) {
   // the beam IS the interval: lo→hi spans the instrument, terminals at the
@@ -237,7 +237,7 @@ function CIBeam({ lo, hi, point, dir, mini = false, play = true, large = false }
 }
 
 /* ── the demand line — the real quarterly series over its median. */
-function DemandLine({ series, mini = false }: { series: { period: string; value: number }[]; mini?: boolean }) {
+export function DemandLine({ series, mini = false }: { series: { period: string; value: number }[]; mini?: boolean }) {
   const pts = useMemo(() => {
     // decimate to ≤48 points
     const step = Math.max(1, Math.ceil(series.length / 48));
