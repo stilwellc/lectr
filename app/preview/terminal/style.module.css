@@ -1956,3 +1956,48 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .mtMonFigure { font-size: 34px; }
   .mtMonBeam { max-width: none; }
 }
+
+/* ══ hero polish pass: choreography, response, one rule language ══ */
+
+/* rows ARRIVE — a departures board flips in sequence. CSS-only stagger,
+   gated on data-play (a cached back-nav renders resolved, same contract as
+   the framer entrances), silenced for reduced motion. */
+@keyframes mtRowIn {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+.mtTape[data-play='true'] .mtRow {
+  opacity: 0;
+  animation: mtRowIn 0.5s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+.mtTape[data-play='true'] .mtRow:nth-child(1) { animation-delay: 0.16s; }
+.mtTape[data-play='true'] .mtRow:nth-child(2) { animation-delay: 0.24s; }
+.mtTape[data-play='true'] .mtRow:nth-child(3) { animation-delay: 0.32s; }
+.mtTape[data-play='true'] .mtRow:nth-child(4) { animation-delay: 0.40s; }
+.mtTape[data-play='true'] .mtRow:nth-child(5) { animation-delay: 0.48s; }
+.mtTape[data-play='true'] .mtRow:nth-child(6) { animation-delay: 0.56s; }
+
+/* the monument STAGES — kicker, name, figure, then the beam's own draw-in
+   lands last (CIBeam delays 0.3/0.8s internally, completing the sequence) */
+.mtMon[data-play='true'] > * { opacity: 0; animation: mtRowIn 0.55s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+.mtMon[data-play='true'] > *:nth-child(1) { animation-delay: 0.10s; }
+.mtMon[data-play='true'] > *:nth-child(2) { animation-delay: 0.18s; }
+.mtMon[data-play='true'] > *:nth-child(3) { animation-delay: 0.30s; }
+.mtMon[data-play='true'] > *:nth-child(4) { animation-delay: 0.42s; }
+.mtMon[data-play='true'] > *:nth-child(5) { animation-delay: 0.52s; }
+@media (prefers-reduced-motion: reduce) {
+  .mtTape[data-play='true'] .mtRow, .mtMon[data-play='true'] > * { animation: none; opacity: 1; }
+}
+
+/* rows RESPOND like the monument — the label answers in butter */
+.mtRow:hover .mtLabel { color: var(--tt-butter); }
+.mtRow[data-static='true']:hover .mtLabel { color: var(--tt-fg); }
+
+/* ONE rule language: the rail under the monument was still drawing the old
+   hero's dotted hairlines beside the board's solid ones */
+.mtSide .heroRail .railRow,
+.mtSide .heroRail .railBtn,
+.mtSide .heroRail .railCmd { border-top-style: solid; border-bottom-style: solid; border-color: var(--tt-hair); }
+
+/* mobile: the monument joins the ledger — no card chrome, one frame */
+.mtMonWrapM { padding: 12px 2px 18px; border-bottom: 1px solid var(--tt-hair-2); }

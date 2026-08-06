@@ -197,7 +197,7 @@ export default function IndexHero({
           </m.div>
 
           {lead && (
-            <m.div className={styles.mHeroCard} {...rise(0.07)}>
+            <m.div className={styles.mtMonWrapM} {...rise(0.07)}>
               <TapeMonument row={lead} play={play} />
             </m.div>
           )}

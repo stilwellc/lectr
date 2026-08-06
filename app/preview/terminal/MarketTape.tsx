@@ -144,7 +144,7 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
   const { setMarket } = useMarket();
   const r = row.read;
   return (
-    <button type="button" className={styles.mtMon} onClick={() => setMarket(row.key)}
+    <button type="button" className={styles.mtMon} data-play={play ? 'true' : undefined} onClick={() => setMarket(row.key)}
       aria-label={`${row.label} — open the ${row.label} lander`}>
       <span className={styles.mtMonKicker}>
         {r.kind === 'index' ? 'The certified read' : r.kind === 'demand' ? 'The strongest read' : 'The read'}
@@ -196,7 +196,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
     [market, demandAll, realized, omit]);
   if (!rows.length) return null;
   return (
-    <div className={styles.mtTape} role="list">
+    <div className={styles.mtTape} role="list" data-play={play ? 'true' : undefined}>
       {rows.map((r) => (
         <button
           key={r.key} type="button" role="listitem" className={styles.mtRow}
@@ -283,7 +283,7 @@ export function SubTape({ market, activeKey, play }: {
   }, [market, activeKey]);
   if (!rows.length) return null;
   return (
-    <div className={styles.mtTape} role="list">
+    <div className={styles.mtTape} role="list" data-play={play ? 'true' : undefined}>
       {rows.map((r) => {
         const idx = r.readType === 'index' ? r.index : null;
         return (
