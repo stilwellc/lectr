@@ -1952,7 +1952,6 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   padding: 2px 2px 10px;
 }
 .mtMastheadM .sectionKicker { margin-bottom: 0; font-size: 14px; color: var(--tt-fg); }
-.mtMastheadM .mtStatement { font-size: 16.5px; }
 @media (max-width: 700px) {
   .mtMon { justify-items: start; }
   .mtMonMarket { font-size: 30px; }
@@ -2087,9 +2086,6 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    Terminal-scoped; other routes keep the wrapped grid. */
 @media (max-width: 700px) {
   .switchStrip :global(.ray-markets) {
-    display: flex;              /* the mobile pill sheet is a GRID — flex-wrap
-                                   was a no-op on it, which is why the strip
-                                   "fix" measured 4px. Grid template gone. */
     flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
@@ -2100,169 +2096,4 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   }
   .switchStrip :global(.ray-markets)::-webkit-scrollbar { display: none; }
   .switchStrip :global(.ray-market-tab) { flex: none; white-space: nowrap; scroll-snap-align: start; }
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   THE VITRINE — the read ladder as MATERIAL (CD direction, Aug 6).
-   The house law "dark = the live market · paper = certified proof"
-   finally governs the opening screen: certified reads are PRINTED on
-   ivory paper strips, demand reads sit on dark plates, descriptive
-   reads are bare ink on the void. A weak read physically cannot be
-   loud — it has no paper to stand on. ══ */
-
-/* the visible value proposition (it was a 1x1px sr-only element) */
-.mtStatement {
-  font-family: var(--font-serif-display), serif;
-  font-size: clamp(17px, 1.5vw, 21px);
-  font-weight: 400; letter-spacing: -0.01em;
-  color: var(--tt-fg);
-}
-.mtStatement em { font-style: italic; color: var(--tt-butter); }
-
-/* ── the tape tiers ─────────────────────────────────────────────── */
-/* certified: PAPER. Ink typography, print-color direction, dotted
-   broadsheet separators; repeat-sale wears the solid brass spine,
-   hedonic a dotted one — brass certainty vs dotted inference. */
-.mtHero .mtRow[data-tier='rs'], .mtHero .mtRow[data-tier='hed'],
-.mtStage .mtRow[data-tier='rs'], .mtStage .mtRow[data-tier='hed'] {
-  background: #E7DFCC;
-  border-bottom: 2px dotted rgba(28, 23, 18, 0.22);
-  padding-left: 16px; padding-right: 14px;
-  min-height: 84px;
-}
-.mtRow[data-tier='rs'] { border-left: 3px solid #8A7440; }
-.mtRow[data-tier='hed'] { border-left: 3px dotted rgba(138, 116, 64, 0.55); }
-.mtRow[data-tier='rs'] .mtLabel, .mtRow[data-tier='hed'] .mtLabel { color: #1C1712; }
-.mtRow[data-tier='rs'] .mtTag, .mtRow[data-tier='hed'] .mtTag { color: #5A5240; }
-.mtRow[data-tier='rs'] .mtSub, .mtRow[data-tier='hed'] .mtSub { color: #5A5240; }
-.mtRow[data-tier='rs'] .mtFigure, .mtRow[data-tier='hed'] .mtFigure { font-size: clamp(18px, 1.6vw, 23px); }
-.mtRow[data-tier='rs'] .mtFigure[data-dir='up'], .mtRow[data-tier='hed'] .mtFigure[data-dir='up'] { color: #1e7a4d; text-shadow: none; }
-.mtRow[data-tier='rs'] .mtFigure[data-dir='down'], .mtRow[data-tier='hed'] .mtFigure[data-dir='down'] { color: #a03d2e; text-shadow: none; }
-.mtRow[data-tier='rs']:hover, .mtRow[data-tier='hed']:hover { background: #DCD2BB; }
-.mtRow[data-tier='rs']:hover .mtLabel, .mtRow[data-tier='hed']:hover .mtLabel { color: #1C1712; }
-/* paper rows re-ink the instruments back to print */
-.mtRow[data-tier='rs'] .beamRule, .mtRow[data-tier='hed'] .beamRule { stroke: rgba(28, 23, 18, 0.8) !important; }
-.mtRow[data-tier='rs'] .beamZero, .mtRow[data-tier='hed'] .beamZero { stroke: rgba(28, 23, 18, 0.3) !important; }
-.mtRow[data-tier='rs'] .beamDiamond::before, .mtRow[data-tier='hed'] .beamDiamond::before { background: #1C1712 !important; }
-.mtRow[data-tier='rs'] .demandPath, .mtRow[data-tier='hed'] .demandPath { stroke: #1C1712 !important; }
-.mtRow[data-tier='rs'] .demandDot, .mtRow[data-tier='hed'] .demandDot { fill: #1C1712 !important; }
-
-/* demand: a DARK PLATE — real, measured, one rung down */
-.mtRow[data-tier='demand'] {
-  background: #14110d;
-  border: 1px solid var(--tt-hair);
-  border-left-width: 1px;
-  padding-left: 16px; padding-right: 14px;
-  min-height: 72px;
-  margin-top: 8px;
-}
-.mtRow[data-tier='demand'] .mtFigure[data-dir='up'] { color: #2FBF71; }
-.mtRow[data-tier='demand'] .mtFigure[data-dir='down'] { color: #E5484B; }
-
-/* descriptive: BARE INK on the void — the quietest thing on the page */
-.mtRow[data-tier='desc'] {
-  background: none;
-  border-bottom: 1px solid var(--tt-hair);
-  min-height: 52px;
-  padding-left: 16px; padding-right: 14px;
-}
-.mtRow[data-tier='desc'] .mtLabel { color: #9a8f7d; font-size: clamp(14px, 1.1vw, 15.5px); }
-.mtRow[data-tier='desc'] .mtFigure { color: #c9beac; font-size: clamp(14px, 1.15vw, 16px); font-weight: 500; }
-.mtRow[data-tier='desc'] .mtInstrument { opacity: 0.5; }
-.mtRow[data-tier='desc'] .mtTag { font-size: 9px; color: #756c5d; }
-
-/* ── the monument becomes THE CERTIFICATE ───────────────────────── */
-.mtMon[data-cert='true'] {
-  background: #E7DFCC;
-  border: 1px solid rgba(28, 23, 18, 0.5);
-  outline: 1px solid rgba(28, 23, 18, 0.28);
-  outline-offset: -5px;
-  border-radius: 4px;                          /* a cut sheet, not soft UI */
-  box-shadow: 0 24px 48px -20px rgba(0, 0, 0, 0.65);
-  transform: rotate(-0.5deg);
-  transition: transform 200ms var(--ease-signature, ease), box-shadow 200ms var(--ease-signature, ease);
-}
-.mtMon[data-cert='true']:hover { transform: rotate(-0.2deg) translateY(-2px); border-color: rgba(28, 23, 18, 0.6); }
-.mtMon[data-cert='true'] .mtMonKicker { color: #5A5240; opacity: 1; }
-.mtMon[data-cert='true'] .mtMonMarket { color: #1C1712; }
-.mtMon[data-cert='true']:hover .mtMonMarket { color: #8A7440; }
-.mtMon[data-cert='true'] .mtMonFigure[data-dir='up'], .mtMon[data-cert='true'][data-dir='up'] .mtMonFigure { color: #1e7a4d; text-shadow: none; }
-.mtMon[data-cert='true'] .mtMonFigure[data-dir='down'], .mtMon[data-cert='true'][data-dir='down'] .mtMonFigure { color: #a03d2e; text-shadow: none; }
-.mtMon[data-cert='true'] .mtMonSub { color: #5A5240; }
-.mtMon[data-cert='true'] .beamRule { stroke: rgba(28, 23, 18, 0.8) !important; }
-.mtMon[data-cert='true'] .beamZero { stroke: rgba(28, 23, 18, 0.3) !important; }
-.mtMon[data-cert='true'] .beamDiamond::before { background: #1C1712 !important; }
-.mtMon[data-cert='true'] .beamEnds { color: #5A5240 !important; }
-.mtMon[data-cert='true'] .beamLabel { color: #5A5240 !important; }
-/* the brass pin */
-.mtMonPin {
-  position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
-  width: 9px; height: 9px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #DECC9E, #8A7440 70%);
-  box-shadow: 0 1px 2px rgba(28, 23, 18, 0.5);
-  display: none;
-}
-.mtMon[data-cert='true'] .mtMonPin { display: block; }
-
-/* ── the command bar — an input, not a fourth stat row ──────────── */
-.vtCmd {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; min-height: 46px;
-  margin-top: 10px; padding: 0 12px;
-  background: linear-gradient(180deg, rgba(232, 218, 182, 0.05), rgba(232, 218, 182, 0.015));
-  border: 1px solid rgba(232, 218, 182, 0.22);
-  border-radius: 9px;
-  font: inherit; color: inherit; cursor: pointer; text-align: left;
-  transition: border-color 160ms var(--ease-signature, ease);
-}
-.vtCmd:hover { border-color: rgba(232, 218, 182, 0.4); }
-.vtCmdGlass { font-size: 17px; color: var(--tt-muted); }
-.vtCmdPlaceholder { flex: 1; font-size: 13.5px; color: #c9beac; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vtCmdKeys { display: inline-flex; gap: 4px; }
-.vtKbd {
-  font-family: var(--font-ibm-plex-mono), monospace; font-size: 11px;
-  background: var(--tt-butter); color: #0F0E0A;
-  border-radius: 4px; padding: 2px 6px; font-weight: 600;
-}
-
-/* ── THE PRESS — the certificate prints, then the tape wipes in ─── */
-@keyframes vtPrint {
-  from { clip-path: inset(0 0 100% 0); }
-  to { clip-path: inset(0 0 0% 0); }
-}
-.mtMon[data-cert='true'][data-play='true'] {
-  animation: vtPrint 0.9s cubic-bezier(0.23, 1, 0.32, 1) both;
-  animation-delay: 0.15s;
-}
-/* rows keep the existing mtRowIn stagger; paper rows arrive FIRST
-   (lamplighter ordering — trust arrives before the rest) */
-.mtTape[data-play='true'] .mtRow[data-tier='rs'] { animation-delay: 0.2s; }
-.mtTape[data-play='true'] .mtRow[data-tier='hed'] { animation-delay: 0.3s; }
-@media (prefers-reduced-motion: reduce) {
-  .mtMon[data-cert='true'][data-play='true'] { animation: none; clip-path: none; }
-}
-
-/* ── the active pill goes PAPER (Terminal-scoped) — the chosen market
-   is a paper tag rhyming with the certificate ── */
-.switchStrip :global(.ray-market-tab[data-active='true']),
-.switchStrip :global(.ray-market-tab[aria-selected='true']) {
-  background: #E7DFCC !important;
-  color: #1C1712 !important;
-  border-color: rgba(28, 23, 18, 0.4) !important;
-  box-shadow: inset 0 0 0 3px #E7DFCC, inset 0 0 0 4px rgba(28, 23, 18, 0.3) !important;
-}
-.switchStrip :global(.ray-market-tab[data-active='true'] svg) { color: #1C1712; }
-
-/* mobile: the certificate leads flat (rotation zeroed), paper rows 64px */
-@media (max-width: 700px) {
-  .mtMon[data-cert='true'] { transform: none; padding: 12px 14px; }
-  .mtMon[data-cert='true'] .mtMonFigure { font-size: 30px; }
-  .mtMon[data-cert='true'] .mtMonMarket { font-size: 22px; }
-  .mtMon[data-cert='true'] .beamLarge .beamStage { height: 14px; }
-  .mtMon[data-cert='true']:hover { transform: none; }
-  .mtHero .mtRow[data-tier='rs'], .mtHero .mtRow[data-tier='hed'],
-  .mtStage .mtRow[data-tier='rs'], .mtStage .mtRow[data-tier='hed'] { min-height: 64px; }
-  .mtRow[data-tier='demand'] { min-height: 58px; }
-  .mtRow[data-tier='desc'] { min-height: 46px; }
-  .mtStatement { font-size: 17px; }
 }

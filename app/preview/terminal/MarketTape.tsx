@@ -215,11 +215,9 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
   const r = row.read;
   return (
     <button type="button" className={styles.mtMon} data-play={play ? 'true' : undefined}
-      data-cert={r.kind === 'index' ? 'true' : undefined}
       data-dir={r.kind === 'index' ? (r.changePct >= 0 ? 'up' : 'down') : r.kind === 'demand' ? (r.now >= 0 ? 'up' : 'down') : undefined}
       onClick={() => setMarket(row.key)}
       aria-label={`${row.label} — open the ${row.label} lander`}>
-      <span className={styles.mtMonPin} aria-hidden />
       <span className={styles.mtMonKicker}>
         {r.kind === 'index'
           ? (r.method === 'repeat-sale' ? 'Certified · repeat-sale' : r.method === 'composite' ? 'Certified · composite' : 'Certified · hedonic')
@@ -278,7 +276,6 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
       {rows.map((r) => (
         <button
           key={r.key} type="button" role="listitem" className={styles.mtRow}
-          data-tier={r.read.kind === 'index' ? (r.read.method === 'repeat-sale' ? 'rs' : 'hed') : r.read.kind === 'demand' ? 'demand' : 'desc'}
           onClick={() => setMarket(r.key)}
           aria-label={`${r.label} — open the ${r.label} lander`}
         >
@@ -304,7 +301,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
                   {fmtPct(r.read.changePct)} · {r.read.horizon}
                 </span>
                 <span className={styles.mtSub}>
-                  {r.read.method === 'repeat-sale' ? `${fmtInt(r.read.n)} pairs` : `${fmtInt(r.lots)} lots`} · past {r.read.horizon.replace('Y', r.read.horizon === '1Y' ? ' yr' : ' yrs')}
+                  CI {fmtCI(r.read.ciLo)} to {fmtCI(r.read.ciHi)} · {r.read.method === 'repeat-sale' ? `${fmtInt(r.read.n)} pairs` : `${fmtInt(r.lots)} lots`}
                 </span>
               </>
             )}
@@ -382,8 +379,7 @@ export function SubTape({ market, activeKey, play }: {
       {rows.map((r) => {
         const idx = r.readType === 'index' ? r.index : null;
         return (
-          <Link key={r.slug} href={subHref(r)} role="listitem" className={styles.mtRow}
-            data-tier={r.readType === 'index' ? (r.indexMethod === 'repeat-sale' ? 'rs' : 'hed') : r.readType === 'demand' ? 'demand' : 'desc'}>
+          <Link key={r.slug} href={subHref(r)} role="listitem" className={styles.mtRow}>
             <span className={styles.mtLabelBlock}>
               <span className={styles.mtLabel}>{r.label}</span>
               <span className={styles.mtTag}>{subTag(r)}</span>
