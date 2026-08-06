@@ -58,7 +58,6 @@ const CORPUS_BARS = (['sports', 'culture', 'watches', 'art', 'science', 'design'
   .map((k) => ({ key: k, label: MARKET_LABEL[k] || marketsRec[k]?.label || k, n: marketsRec[k]?.n || 0 }))
   .filter((b) => b.n > 0)
   .sort((a, b) => b.n - a.n);
-const CORPUS_MAX = CORPUS_BARS.length ? CORPUS_BARS[0].n : 1;
 
 const drillsRec = market.drills as Record<string, { readType: string }[]>;
 const allDrills = Object.values(drillsRec).flat();
@@ -90,18 +89,33 @@ function Stat({ figure, label, note }: { figure: string; label: string; note?: s
   );
 }
 
-/** A market's depth as a rule drawn to scale. Neutral ink — this is volume, not
- *  direction, and direction is the only thing that earns colour here. */
-function Bar({ label, n, max }: { label: string; n: number; max: number }) {
-  const w = Math.max(2, Math.round((n / max) * 100));
+/** THE CORPUS AS ONE OBJECT. Six separate rules made the reader compare
+ *  lengths across gaps; a single composition bar shows the whole book at once
+ *  and each market as its true share of it. Neutral ink throughout — this is
+ *  volume, and colour in this product means direction. */
+function CorpusBar({ bars, total }: { bars: { key: string; label: string; n: number }[]; total: number }) {
+  const shades = ['#F2EEE3', '#C9C3B4', '#A7A192', '#857F72', '#6A6559', '#4E4A41'];
   return (
-    <div style={{ margin: '0 0 13px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 5 }}>
-        <span style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 600 }}>{label}</span>
-        <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(n)} settled lots</span>
+    <div className="corpus">
+      <div className="corpus-track">
+        {bars.map((b, i) => (
+          <span
+            key={b.key}
+            className="corpus-seg"
+            style={{ width: `${(b.n / total) * 100}%`, background: shades[i % shades.length] }}
+            title={`${b.label} — ${fmt(b.n)}`}
+          />
+        ))}
       </div>
-      <div style={{ height: 6, background: 'var(--color-bg-elevated)', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ width: `${w}%`, height: '100%', background: 'var(--color-text-faint)', borderRadius: 3 }} />
+      <div className="corpus-legend">
+        {bars.map((b, i) => (
+          <div className="corpus-item" key={b.key}>
+            <span className="corpus-dot" style={{ background: shades[i % shades.length] }} aria-hidden />
+            <span className="corpus-label">{b.label}</span>
+            <span className="corpus-n">{fmt(b.n)}</span>
+            <span className="corpus-pct">{((b.n / total) * 100).toFixed(1)}%</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -109,45 +123,42 @@ function Bar({ label, n, max }: { label: string; n: number; max: number }) {
 
 /** The record, as a head-to-head. Green marks the flagged side ONLY where it
  *  genuinely reads higher — direction, never decoration. */
-function Versus({ metric, flagged, unflagged, note, fw, uw, better }: {
-  metric: string; flagged: string; unflagged: string; note?: string;
-  /** bar widths 0-1, drawn to the same scale so the GAP is the visual */
-  fw: number; uw: number;
-  /** which side the metric rewards — 'lower' inverts the ink (fail-to-sell) */
+/** THE RECORD AS A SLOPE. Bars asked the reader to compare two lengths; a
+ *  slope draws the MOVE itself — control on the left, flagged on the right,
+ *  the line between them is the edge. Ink follows the metric, not the side:
+ *  fail-to-sell rewards the lower number, so the win can point down. */
+function Slope({ metric, note, lo, hi, fmtV, better = 'higher' }: {
+  metric: string; note?: string;
+  /** unflagged (control) and flagged values, in the metric's own units */
+  lo: number; hi: number;
+  fmtV: (n: number) => string;
   better?: 'higher' | 'lower';
 }) {
-  const flaggedWins = better === 'lower' ? fw <= uw : fw >= uw;
-  const ink = flaggedWins ? 'var(--color-up)' : 'var(--color-text-secondary)';
+  const span = Math.max(Math.abs(lo), Math.abs(hi), 1);
+  const norm = (v: number) => 50 - (v / span) * 42;  // % from top, 0 centred
+  const flaggedWins = better === 'lower' ? hi <= lo : hi >= lo;
+  const ink = flaggedWins ? 'var(--color-up)' : 'var(--color-text-muted)';
   return (
-    <div style={{ padding: '16px 0', borderTop: '1px solid var(--hairline)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
-        <span style={{ fontSize: 14, color: 'var(--color-fg)', fontWeight: 650 }}>{metric}</span>
-        {note && <span style={{ fontSize: 11.5, color: 'var(--color-text-faint)', textAlign: 'right', lineHeight: 1.45 }}>{note}</span>}
+    <div className="slope">
+      <div className="slope-head">
+        <span className="slope-metric">{metric}</span>
+        {note && <span className="slope-note">{note}</span>}
       </div>
-      {([
-        { k: 'Flagged', v: flagged, w: fw, ink, weight: 700 },
-        { k: 'Unflagged', v: unflagged, w: uw, ink: 'var(--color-text-muted)', weight: 600 },
-      ] as const).map((row) => (
-        <div key={row.k} style={{ display: 'grid', gridTemplateColumns: '78px minmax(0,1fr) 66px', gap: 12, alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ fontSize: 11.5, color: 'var(--color-text-faint)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{row.k}</span>
-          <span style={{ height: 10, background: 'var(--color-bg-elevated)', borderRadius: 5, overflow: 'hidden', display: 'block' }}>
-            <span style={{ display: 'block', width: `${Math.max(2, Math.round(row.w * 100))}%`, height: '100%', background: row.ink, borderRadius: 5 }} />
-          </span>
-          <span style={{ fontSize: 16, fontWeight: row.weight, color: row.ink, fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{row.v}</span>
-        </div>
-      ))}
+      <div className="slope-plot" aria-hidden>
+        <span className="slope-axis" />
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="slope-svg">
+          <line x1="12" y1={norm(lo)} x2="88" y2={norm(hi)} stroke={ink} strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+        </svg>
+        <span className="slope-dot slope-dot-lo" style={{ top: `${norm(lo)}%` }} />
+        <span className="slope-dot slope-dot-hi" style={{ top: `${norm(hi)}%`, background: ink }} />
+        <span className="slope-val slope-val-lo" style={{ top: `${norm(lo)}%` }}>{fmtV(lo)}</span>
+        <span className="slope-val slope-val-hi" style={{ top: `${norm(hi)}%`, color: ink }}>{fmtV(hi)}</span>
+      </div>
+      <div className="slope-foot"><span>unflagged</span><span>flagged</span></div>
     </div>
   );
 }
 
-/** ONE SLIDE. `paper` flips the whole block onto the printed ramp via
- *  .ray-paper (the lander's room device), so the deck alternates stock the way
- *  a real deck alternates layouts — and the ghost ordinal gives each slide a
- *  corner number without adding a second voice. */
-/** ONE CALL, SHOWN. The engine's value is the full rule; what the room actually
- *  paid is drawn against it, so the gap is the picture. Green marks the gap
- *  because "below comparable market" is the favourable read in this product's
- *  language — the same green a below-market flag wears everywhere else. */
 function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   const paidW = Math.max(6, Math.round((c.realizedUsd / c.ourValueUsd) * 100));
   const noEstimate = c.houseEstLow == null;
@@ -449,9 +460,78 @@ export default function AboutPage() {
           color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1;
         }
         .chain-v { display: inline; font-size: 14.5px; line-height: 1.6; color: var(--color-text-secondary); }
+        @media (min-width: 900px) {
+          /* the chain lies down: five steps across, the rule running through
+             them, so the linkage reads as a flow rather than a list */
+          .chain { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; }
+          .chain-node {
+            border-left: none; border-top: 1px solid var(--hairline);
+            padding: 22px 18px 0 0;
+          }
+          .chain-node:last-child { border-top-color: var(--hairline); }
+          .chain-node::before { left: 0; top: -5px; }
+          .chain-k { font-size: 14px; }
+          .chain-v { display: block; font-size: 13px; margin-top: 4px; }
+          .chain-n { display: block; margin: 8px 0 0; }
+        }
+
+        /* ── CORPUS: the whole book as one object ─────────────────────── */
+        .corpus { margin-top: clamp(26px, 3vw, 36px); }
+        .corpus-track {
+          display: flex; width: 100%; height: 46px;
+          border-radius: 8px; overflow: hidden;
+          border: 1px solid var(--hairline);
+        }
+        .corpus-seg { display: block; height: 100%; }
+        .corpus-legend {
+          display: grid; grid-template-columns: 1fr; gap: 0;
+          margin-top: clamp(18px, 2vw, 26px);
+        }
+        .corpus-item {
+          display: grid;
+          grid-template-columns: 12px minmax(0,1fr) auto auto;
+          gap: 12px; align-items: baseline;
+          padding: 11px 0; border-top: 1px solid var(--hairline);
+          font-variant-numeric: tabular-nums;
+        }
+        .corpus-dot { width: 9px; height: 9px; border-radius: 2px; align-self: center; }
+        .corpus-label { font-size: 14.5px; font-weight: 600; color: var(--color-fg); }
+        .corpus-n { font-size: 14px; color: var(--color-text-secondary); }
+        .corpus-pct { font-size: 12.5px; color: var(--color-text-faint); min-width: 46px; text-align: right; }
         @media (min-width: 820px) {
-          .chain-node { padding-left: 40px; }
-          .chain-v { font-size: 15px; }
+          .corpus-legend { grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 40px; }
+        }
+
+        /* ── RECORD: control to flagged, drawn as a move ──────────────── */
+        .slope-grid { display: grid; grid-template-columns: 1fr; gap: clamp(22px, 2.6vw, 30px); margin-top: clamp(24px, 3vw, 34px); }
+        @media (min-width: 780px) { .slope-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: clamp(26px, 3vw, 40px); } }
+        .slope { border-top: 1px solid var(--hairline); padding-top: 16px; }
+        .slope-head { margin-bottom: 10px; }
+        .slope-metric { display: block; font-size: 14.5px; font-weight: 650; color: var(--color-fg); }
+        .slope-note { display: block; font-size: 11.5px; line-height: 1.5; color: var(--color-text-faint); margin-top: 3px; }
+        .slope-plot { position: relative; height: 108px; }
+        .slope-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+        .slope-axis {
+          position: absolute; left: 12%; right: 12%; top: 50%;
+          border-top: 1px dashed var(--hairline);
+        }
+        .slope-dot {
+          position: absolute; width: 9px; height: 9px; border-radius: 50%;
+          transform: translate(-50%, -50%); background: var(--color-text-muted);
+        }
+        .slope-dot-lo { left: 12%; }
+        .slope-dot-hi { left: 88%; }
+        .slope-val {
+          position: absolute; transform: translateY(-50%);
+          font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+          color: var(--color-text-muted);
+        }
+        .slope-val-lo { left: 0; }
+        .slope-val-hi { right: 0; }
+        .slope-foot {
+          display: flex; justify-content: space-between;
+          font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+          color: var(--color-text-faint); margin-top: 4px;
         }
 
         .deck-statband {
@@ -572,9 +652,7 @@ export default function AboutPage() {
             lot normalised to a dated FX rate, a declared price basis, and a structured identity, so
             a 1994 Geneva watch sale and a lot closing tonight are the same kind of object.
           </p>
-          <div style={{ margin: '26px 0 0' }}>
-            {CORPUS_BARS.map((b) => <Bar key={b.key} label={b.label} n={b.n} max={CORPUS_MAX} />)}
-          </div>
+          <CorpusBar bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
           <p style={caption}>
             Settled lots by market, from the shipped corpus. Depth is what lets the engine demand
             that a comparable share a maker, a form, a size band and a model line before it counts —
@@ -614,19 +692,16 @@ export default function AboutPage() {
             the premium out for a like-for-like comparison against an estimate that never included it.
           </p>
           <div style={{ marginTop: 24 }}>
-            <Versus metric="Median vs estimate · all-in" flagged={pct(F.medianPerfPct)} unflagged={pct(U.medianPerfPct)}
-              note="what the buyer paid, premium included"
-              fw={1} uw={Math.max(0, U.medianPerfPct) / Math.max(1, F.medianPerfPct)} />
-            <Versus metric="Median vs estimate · at hammer" flagged={pct(F.hammerMedianPct ?? 0)} unflagged={pct(U.hammerMedianPct ?? 0)}
-              note="like-for-like against a hammer-basis estimate"
-              fw={1} uw={Math.max(0, U.hammerMedianPct ?? 0) / Math.max(1, F.hammerMedianPct ?? 1)} />
-            <Versus metric="Cleared the high estimate" flagged={`${F.beatHighPct}%`} unflagged={`${U.beatHighPct}%`}
-              fw={F.beatHighPct / 100} uw={U.beatHighPct / 100} />
-            <Versus metric="Failed to sell" flagged={`${F.failToSellPct}%`} unflagged={`${U.failToSellPct}%`}
-              note="lower is better — the flag does not chase lots into no-sales"
-              better="lower"
-              fw={F.failToSellPct / Math.max(F.failToSellPct, U.failToSellPct)}
-              uw={U.failToSellPct / Math.max(F.failToSellPct, U.failToSellPct)} />
+            <div className="slope-grid">
+              <Slope metric="Median vs estimate · all-in" note="what the buyer paid, premium included"
+                lo={U.medianPerfPct} hi={F.medianPerfPct} fmtV={pct} />
+              <Slope metric="Median vs estimate · at hammer" note="like-for-like against a hammer-basis estimate"
+                lo={U.hammerMedianPct ?? 0} hi={F.hammerMedianPct ?? 0} fmtV={pct} />
+              <Slope metric="Cleared the high estimate" note="share of lots that beat the top of the range"
+                lo={U.beatHighPct} hi={F.beatHighPct} fmtV={(n) => `${n}%`} />
+              <Slope metric="Failed to sell" note="lower is better — the flag does not chase no-sales"
+                lo={U.failToSellPct} hi={F.failToSellPct} fmtV={(n) => `${n}%`} better="lower" />
+            </div>
           </div>
           <div style={{ marginTop: 22, padding: '18px 20px', border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--panel)' }}>
             <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 6 }}>The edge, stated plainly</div>
