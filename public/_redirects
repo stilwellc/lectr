@@ -49,7 +49,12 @@
 
 # universal lot permalinks: pin each flagged STATIC page to itself (200
 # self-proxy serves the asset), THEN rewrite everything else to the shell
-/lot/bonhams-brk_1008730-99F544FD154A   /lot/bonhams-brk_1008730-99F544FD154A   200
+/lot/bonhams-32000-28   /lot/bonhams-32000-28   200
+/lot/wright-305561~   /lot/wright-305561~   200
+/lot/wright-295955~   /lot/wright-295955~   200
+/lot/rago-413952   /lot/rago-413952   200
+/lot/rago-402401   /lot/rago-402401   200
+/lot/rago-413597   /lot/rago-413597   200
 /lot/wright-295567~   /lot/wright-295567~   200
 /lot/wright-303166~   /lot/wright-303166~   200
 /lot/wright-291086~   /lot/wright-291086~   200

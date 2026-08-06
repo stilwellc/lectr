@@ -46,7 +46,7 @@ interface TapeRowData {
   read:
     | { kind: 'index'; horizon: string; changePct: number; ciLo: number; ciHi: number; n: number }
     | { kind: 'demand'; now: number; series: { period: string; value: number }[]; qN: number }
-    | { kind: 'descriptive'; typicalUsd: number; qN: number };
+    | { kind: 'descriptive'; typicalUsd: number; qN: number; series: { period: string; value: number }[] };
   /** vertical corpus size, for the row sub */
   lots: number;
 }
@@ -100,7 +100,10 @@ function resolveTape(
     if (rz.length) {
       rows.push({
         key: m.key, label: m.label, lots,
-        read: { kind: 'descriptive', typicalUsd: rz[rz.length - 1].value, qN: rz[rz.length - 1].n },
+        read: {
+          kind: 'descriptive', typicalUsd: rz[rz.length - 1].value, qN: rz[rz.length - 1].n,
+          series: rz.map((p) => ({ period: p.date, value: p.value })),
+        },
       });
     }
   }
@@ -117,15 +120,76 @@ const tagFor = (kind: TapeRowData['read']['kind']): string =>
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
-/** the all-markets stage: six rows, one honest read each */
-export function MarketTape({ market, demandAll, realized, play }: {
+/** the lead read — the row the monument enthrones. Certified beats measured
+    beats descriptive, so as more verticals clear the CI bar the monument
+    upgrades itself; today it is Art's certified 5Y. */
+export function pickLead(
+  market: MarketData | null,
+  demandAll: DemandByMarket,
+  realized: RealizedByMarket,
+): TapeRowData | null {
+  return resolveTape(market, demandAll, realized)[0] ?? null;
+}
+
+/** THE MONUMENT — the hero's focal object. The big demand-median numeral is
+    gone (it was one number wearing the whole market); its place is taken by
+    the product's signature instrument at display scale: the strongest honest
+    read, drawn as the full CI beam with its bounds, or the demand line where
+    nothing certifies. Clicking it scopes to that market, like any tape row. */
+export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean }) {
+  const { setMarket } = useMarket();
+  const r = row.read;
+  return (
+    <button type="button" className={styles.mtMon} onClick={() => setMarket(row.key)}
+      aria-label={`${row.label} — open the ${row.label} lander`}>
+      <span className={styles.mtMonKicker}>
+        {r.kind === 'index' ? 'The certified read' : r.kind === 'demand' ? 'The strongest read' : 'The read'}
+      </span>
+      <span className={styles.mtMonMarket}>{row.label}</span>
+      {r.kind === 'index' && (
+        <>
+          <span className={`${styles.mtMonFigure} ${styles.pctData}`} data-dir={r.changePct >= 0 ? 'up' : 'down'}>
+            {fmtPct(r.changePct)}
+          </span>
+          <span className={styles.mtMonBeam}><CIBeam lo={r.ciLo} hi={r.ciHi} point={r.changePct}
+            dir={r.changePct >= 0 ? 'up' : 'down'} play={play} large /></span>
+          <span className={styles.mtMonSub}>
+            hedonic index · past {r.horizon.replace('Y', r.horizon === '1Y' ? ' year' : ' years')} · {fmtInt(row.lots)} lots
+          </span>
+        </>
+      )}
+      {r.kind === 'demand' && (
+        <>
+          <span className={`${styles.mtMonFigure} ${styles.pctData}`} data-dir={r.now >= 0 ? 'up' : 'down'}>
+            {fmtPct(r.now)}
+          </span>
+          <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} />}</span>
+          <span className={styles.mtMonSub}>demand · sold over estimate · {fmtInt(row.lots)} lots</span>
+        </>
+      )}
+      {r.kind === 'descriptive' && (
+        <>
+          <span className={styles.mtMonFigure}>{fmtMoneyCompact(r.typicalUsd)}</span>
+          <span className={styles.mtMonSub}>typical at hammer · {fmtInt(row.lots)} lots</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+/** the all-markets stage: one row per vertical, one honest read each */
+export function MarketTape({ market, demandAll, realized, play, omit }: {
   market: MarketData | null;
   demandAll: DemandByMarket;
   realized: RealizedByMarket;
   play: boolean;
+  /** the vertical the monument already shows — never printed twice */
+  omit?: Market;
 }) {
   const { setMarket } = useMarket();
-  const rows = useMemo(() => resolveTape(market, demandAll, realized), [market, demandAll, realized]);
+  const rows = useMemo(
+    () => resolveTape(market, demandAll, realized).filter((r) => r.key !== omit),
+    [market, demandAll, realized, omit]);
   if (!rows.length) return null;
   return (
     <div className={styles.mtTape} role="list">
@@ -145,7 +209,9 @@ export function MarketTape({ market, demandAll, realized, play }: {
                 dir={r.read.changePct >= 0 ? 'up' : 'down'} play={play} />
             )}
             {r.read.kind === 'demand' && r.read.series.length >= 2 && <DemandLine mini series={r.read.series} />}
-            {r.read.kind === 'descriptive' && <span className={styles.mtAbstain}>—</span>}
+            {r.read.kind === 'descriptive' && (r.read.series.length >= 2
+              ? <DemandLine mini series={r.read.series} />
+              : <span className={styles.mtAbstain}>—</span>)}
           </span>
           <span className={styles.mtRight}>
             {r.read.kind === 'index' && (

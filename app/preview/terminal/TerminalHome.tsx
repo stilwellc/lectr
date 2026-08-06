@@ -724,6 +724,7 @@ export default function TerminalHomePage() {
               onBlock={upcoming.length}
               play={!fromCache}
               isMobile={mounted && isMobile}
+              serial={lastCrawl}
             />
 
             {/* ══ TONIGHT'S WALL — the photographed front row (kept). A padded

@@ -1784,17 +1784,6 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    an instrument (CI beam / demand line / abstain), figure + sub. ══ */
 .mtStage { margin-top: clamp(14px, 1.6vw, 20px); }
 .mtTape, .mtLadder { display: grid; grid-template-columns: 1fr; }
-/* Desktop: the 02 board's two-column split — six full-width rows left a dead
-   field between label and instrument. Column-major, so the certified tier
-   (sorted first) reads down the LEFT column before the eye crosses. */
-@media (min-width: 1080px) {
-  .mtTape { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, auto); grid-auto-flow: column; column-gap: clamp(32px, 3.4vw, 56px); }
-  .mtLadder { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(2, auto); grid-auto-flow: column; column-gap: clamp(32px, 3.4vw, 56px); }
-  /* with two columns the last row of EACH column loses its rule */
-  .mtTape .mtRow:nth-child(3n) { border-bottom: 0; }
-  .mtLadder .mtRow:nth-child(2n) { border-bottom: 0; }
-  .mtRow:last-child { border-bottom: 0; }
-}
 .mtRow {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) 104px fit-content(46%);
@@ -1830,6 +1819,9 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   color: var(--tt-faint);
 }
 .mtInstrument { width: 100px; }
+/* the paper instruments ship fixed widths (beamMini/demandLineMini: 160px) —
+   wider than this cell, so sparks ran into the figures. The cell is the law. */
+.mtInstrument > * { width: 100% !important; }
 .mtAbstain { color: var(--tt-faint); font-size: 15px; display: block; text-align: center; }
 .mtRight { display: grid; gap: 3px; justify-items: end; text-align: right; }
 .mtFigure {
@@ -1856,15 +1848,111 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 /* re-ink the reused paper instruments for the dark stage. The components are
    the SAME ones the 02 board renders (SubMarketBoard's CIBeam/DemandLine) —
    only the ink changes, so the grammar stays identical across surfaces. */
-.mtStage .beamRule { stroke: rgba(237, 230, 218, 0.75); }
-.mtStage .beamZero { stroke: rgba(237, 230, 218, 0.28); }
-.mtStage .beamDiamond::before { background: var(--tt-butter); }
-.mtStage .demandPath { stroke: var(--tt-secondary); }
-.mtStage .demandBase { stroke: rgba(154, 143, 125, 0.5); }
-.mtStage .demandDot { fill: var(--tt-butter); }
+.mtHero .beamRule, .mHero .beamRule { stroke: rgba(237, 230, 218, 0.75); }
+.mtHero .beamZero, .mHero .beamZero { stroke: rgba(237, 230, 218, 0.28); }
+.mtHero .beamDiamond::before, .mHero .beamDiamond::before { background: var(--tt-butter); }
+.mtHero .beamLabel, .mHero .beamLabel { color: var(--tt-faint); }
+.mtHero .beamEnds, .mHero .beamEnds { color: var(--tt-muted); }
+.mtHero .demandPath, .mHero .demandPath { stroke: var(--tt-secondary); }
+.mtHero .demandBase, .mHero .demandBase { stroke: rgba(154, 143, 125, 0.5); }
+.mtHero .demandDot, .mHero .demandDot { fill: var(--tt-butter); }
+.mtHero .demandEnds, .mHero .demandEnds { color: var(--tt-faint); }
 
 @media (max-width: 700px) {
   .mtRow { grid-template-columns: minmax(0, 1fr) 76px fit-content(50%); gap: 0 12px; min-height: 58px; }
   .mtInstrument { width: 72px; }
   .mtReason { max-width: 24ch; font-size: 11.5px; }
+}
+
+
+/* ══ THE BOARD AND THE MONUMENT — the hero without a numeral wearing the
+   whole market. Masthead line, then two columns: the tape reading down the
+   left like a departures board; the signature instrument enthroned top-right
+   at display scale with the functional rail beneath it. ══ */
+.mtHero { padding: clamp(20px, 2.6vw, 34px) 0 clamp(22px, 2.6vw, 32px); }
+.mtMasthead {
+  display: flex; align-items: baseline; gap: 16px;
+  padding-bottom: clamp(14px, 1.6vw, 20px);
+  border-bottom: 1px solid var(--tt-hair-2);
+}
+.mtMasthead .sectionKicker { margin-bottom: 0; font-size: 14px; color: var(--tt-fg); }
+.mtMastheadNote { font-size: 12.5px; color: var(--tt-faint); font-weight: 500; }
+.mtSerial {
+  margin-left: auto;
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 11px; letter-spacing: 0.16em; color: var(--tt-faint);
+}
+.mtBoard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 372px);
+  gap: 0 clamp(40px, 4.5vw, 72px);
+  /* stretch: the board fills the monument column's height, rows sharing it
+     equally — a departures board fills its frame */
+  align-items: stretch;
+  padding-top: clamp(10px, 1.2vw, 16px);
+}
+.mtBoardMain { min-width: 0; display: grid; }
+.mtBoardMain .mtTape { height: 100%; grid-auto-rows: 1fr; align-items: center; }
+/* board rows: taller, figures louder — this is the show now */
+.mtHero .mtRow { min-height: clamp(66px, 7.6vh, 80px); grid-template-columns: minmax(0, 1.1fr) 116px fit-content(46%); }
+.mtHero .mtLabel { font-size: clamp(16px, 1.35vw, 19px); }
+.mtHero .mtFigure { font-size: clamp(16px, 1.5vw, 21px); }
+.mtHero .mtInstrument { width: 112px; }
+.mtSide { display: grid; gap: clamp(18px, 2vw, 26px); min-width: 0; }
+/* the 02 board's .beam ships width:min(440px,82vw) — wider than this column —
+   and .heroRail still carries grid-area:rail from the old hero grid, which
+   detonates auto-placement inside this one. Neutralise both locally. */
+.mtMon .beam { width: 100%; margin-top: 6px; }
+/* beamLarge's paper-monument bounds run 34px in market red/green — at hero
+   scale that shouts over the figure. The BOUNDS are context, the point
+   estimate is the claim: quiet mono, one size. */
+.mtMon .beamLarge { width: 100%; }
+.mtMon .beamLarge .beamStage { height: 30px; }
+.mtMon .beamLarge .beamEnds { font-size: 13px; font-weight: 500; color: var(--tt-muted) !important; }
+.mtMon .beamLarge .beamRule { stroke: rgba(237, 230, 218, 0.75); }
+.mtMon .beamLarge .beamDiamond::before { background: var(--tt-butter); }
+.mtSide .heroRail { grid-area: auto; align-self: stretch; }
+.mtSide .heroRail[data-under-monument='true'] { border-top: 1px solid var(--tt-hair-2); padding-top: clamp(14px, 1.6vw, 20px); }
+
+/* the monument — the strongest honest read as the focal object. Unboxed,
+   like everything on the desk; the beam IS the composition. */
+.mtMon {
+  display: grid; gap: 6px; justify-items: start; text-align: left;
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer; width: 100%;
+}
+.mtMon:hover .mtMonMarket { color: var(--tt-butter); }
+.mtMonKicker {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--tt-faint);
+}
+.mtMonMarket {
+  font-family: var(--font-serif-display), serif;
+  font-weight: 400; letter-spacing: -0.015em; line-height: 1;
+  font-size: clamp(30px, 2.9vw, 42px);
+  color: var(--tt-fg);
+  transition: color 0.15s ease;
+}
+.mtMonFigure {
+  font-size: clamp(30px, 3vw, 44px); font-weight: 650;
+  letter-spacing: -0.02em; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.mtMonFigure[data-dir='up'] { color: var(--color-up); }
+.mtMonFigure[data-dir='down'] { color: var(--color-down); }
+.mtMonBeam { width: 100%; max-width: 340px; margin-top: 4px; }
+.mtMonSub { font-size: 12.5px; color: var(--tt-muted); font-variant-numeric: tabular-nums; }
+
+/* mobile masthead: kicker left, serial right, above the monument card */
+.mtMastheadM {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 2px 2px 10px;
+}
+.mtMastheadM .sectionKicker { margin-bottom: 0; font-size: 14px; color: var(--tt-fg); }
+@media (max-width: 700px) {
+  .mtMon { justify-items: start; }
+  .mtMonMarket { font-size: 30px; }
+  .mtMonFigure { font-size: 34px; }
+  .mtMonBeam { max-width: none; }
 }

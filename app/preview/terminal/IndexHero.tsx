@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import type { Market } from '../../constants';
-import RollingNumber from './RollingNumber';
 import type { HeroPoint } from './HeroChart';
-import { MarketTape, HorizonLadder } from './MarketTape';
+import { MarketTape, HorizonLadder, TapeMonument, pickLead } from './MarketTape';
 import Sparkline from './Sparkline';
-import { fmtInt, fmtMoneyCompact, useReducedMotion } from './hooks';
+import { fmtInt, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
 import styles from './style.module.css';
 
@@ -45,8 +44,6 @@ const EASE = [0.23, 1, 0.32, 1] as const;
 // the hero series' point shape (period/value/n)
 type IndexPoint = HeroPoint;
 
-type TfKey = '1Y' | '3Y' | '5Y' | 'MAX';
-
 interface Props {
   activeKey: Market;
   marketLabel: string;
@@ -77,6 +74,8 @@ interface Props {
   play: boolean;
   /** mobile gets its OWN hero composition — not the desktop scaled down */
   isMobile?: boolean;
+  /** the data date, worn as the masthead serial (NO. YYYYMMDD) */
+  serial?: string | null;
 }
 
 const median = (a: number[]): number => {
@@ -139,40 +138,20 @@ export default function IndexHero({
   onCommand,
   play,
   isMobile,
+  serial,
 }: Props) {
   const reduce = useReducedMotion();
   const hero = useHeroSeries(activeKey, demand, realized);
+  const lead = useMemo(() => pickLead(market, demandAll, realized), [market, demandAll, realized]);
+  const serialNo = serial ? `NO. ${String(serial).slice(0, 10).replace(/-/g, '')}` : null;
   const vals = hero.idx.map((p) => p.value);
   const level = vals.length ? vals[vals.length - 1] : 0;
-  const isMoney = hero.unit === 'realized';
 
-  // ── the metric over a selectable horizon. Demand/realized are LEVELS, not
-  // returns — the headline is the median reading across the window, and the
-  // toggle scopes both that median and the chart. No compounding, no fake ROI.
-  const HORIZONS: { key: TfKey; label: string; q: number }[] = [
-    { key: '1Y', label: 'past year', q: 4 },
-    { key: '3Y', label: 'past 3 years', q: 12 },
-    { key: '5Y', label: 'past 5 years', q: 20 },
-    { key: 'MAX', label: 'all time', q: Infinity },
-  ];
-  const avail = HORIZONS.filter((t) => (t.q === Infinity ? vals.length >= 6 : vals.length > t.q));
-  const [tf, setTf] = useState<TfKey>('1Y');
-  const horizon = avail.find((t) => t.key === tf) || avail[avail.length - 1] || HORIZONS[0];
-  const startI = horizon.q === Infinity ? 0 : Math.max(0, vals.length - 1 - horizon.q);
-  const windowVals = horizon.q === Infinity ? vals : vals.slice(startI);
-  const headline = median(windowVals.length ? windowVals : vals);
-  const windowIdx = horizon.q === Infinity ? hero.idx : hero.idx.slice(startI);
-  const spark = windowVals.slice(-16);
-
-  // momentum — the most recent quarter-over-quarter shift in the reading.
-  // A plain level DIFFERENCE: dividing by the prior level flips the sign
-  // whenever a demand reading is negative (e.g. −2% → −1% is an improvement
-  // but printed as "down"), and dir is all this feeds.
+  // the last 16 quarters of the scoped series — the single-line trend the
+  // scoped view keeps (one metric, one line; never six)
+  const spark = vals.slice(-16);
   const qMove = vals.length > 1 ? level - vals[vals.length - 2] : 0;
   const trendDir = qMove >= 0 ? 'up' : 'down';
-
-  const fmtHeadline = (n: number) => (isMoney ? fmtMoneyCompact(n) : fmtPct(n));
-  const metricLabel = isMoney ? 'typical price' : 'demand';
 
   // ── ROI × DEMAND cross-check (the left read-out). Demand is a RELATIVE beat
   // (sold over estimate) — it can run hot while houses quietly cut estimates,
@@ -184,7 +163,7 @@ export default function IndexHero({
   // figures never wear green/red or a "verified" claim (the CI'd reads live
   // in makerIndex/drills).
   const roi = appreciation;
-  const demandHot = hero.unit === 'demand' && headline > 0;
+  const demandHot = hero.unit === 'demand' && level > 0;
   const roiFlag = demandHot && roi != null && roi < -1.5 ? 'beating soft estimates' : undefined;
 
   // ── BID-COMPETITION read (sports/cards). Goldin publishes no estimate, so the
@@ -212,7 +191,6 @@ export default function IndexHero({
     transition: { duration: 0.6, ease: EASE, delay: reduce || !play ? 0 : delay },
   });
 
-  const hasChart = hero.idx.length >= 4;
 
   // ── MOBILE: its own scene — a compact "index card" (a premium trading-app
   // asset tile), NOT the desktop slab scaled down.
@@ -220,38 +198,32 @@ export default function IndexHero({
     return (
       <LazyMotion features={domAnimation} strict>
         <section className={styles.mHero}>
-          <m.div className={styles.mHeroCard} {...rise(0.04)}>
-            <div className={styles.mHeroHead}>
-              <span className={styles.mHeroLabel}>{hero.kicker}</span>
-              </div>
-            <div className={styles.mHeroNumRow}>
-              <RollingNumber
-                className={`${styles.mHeroNum} ${styles.roiNeutral}${isMoney ? '' : ` ${styles.pctData}`}`}
-                value={headline}
-                from={reduce ? headline : 0}
-                format={fmtHeadline}
-                duration={1300}
-                delay={200}
-                play={play}
-              />
-              <span className={styles.mHeroReturnPer}>{horizon.label}</span>
-            </div>
-            <div className={styles.tfToggle} role="tablist" aria-label="Window">
-              {avail.map((t) => (
-                <button key={t.key} type="button" role="tab" aria-selected={t.key === horizon.key}
-                  className={styles.tfChip} data-on={t.key === horizon.key ? 'true' : undefined}
-                  onClick={() => setTf(t.key)}>{t.key === 'MAX' ? 'ALL' : t.key}</button>
-              ))}
-            </div>
-            <div className={styles.mtStage}>
-              {activeKey === 'all'
-                ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} />
-                : <HorizonLadder activeKey={activeKey} market={market} play={play} />}
-            </div>
-            <div className={styles.mHeroTag}>{hero.explain} · {horizon.label}</div>
+          <m.div className={styles.mtMastheadM} {...rise(0.03)}>
+            <span className={styles.sectionKicker}>{hero.kicker}</span>
+            {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
           </m.div>
 
-          <m.div className={styles.mHeroStats} {...rise(0.12)}>
+          <m.div className={styles.mHeroCard} {...rise(0.07)}>
+            {activeKey === 'all' && lead ? (
+              <TapeMonument row={lead} play={play} />
+            ) : (
+              <HorizonLadder activeKey={activeKey} market={market} play={play} />
+            )}
+          </m.div>
+
+          {activeKey === 'all' && (
+            <m.div className={styles.mtStage} {...rise(0.12)}>
+              <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
+            </m.div>
+          )}
+          {activeKey !== 'all' && spark.length >= 2 && (
+            <m.div className={styles.mtSpark} {...rise(0.12)}>
+              <Sparkline data={spark} dir={trendDir} width={360} height={64} strokeWidth={1.6} />
+              <span className={styles.mtSparkTag}>{hero.explain.toLowerCase()} · last {spark.length} quarters</span>
+            </m.div>
+          )}
+
+          <m.div className={styles.mHeroStats} {...rise(0.16)}>
             {roi != null && (
               <span className={styles.mStat} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
                 <span className={`${styles.mStatVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
@@ -282,7 +254,6 @@ export default function IndexHero({
             )}
           </m.div>
 
-
           <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
             <kbd className={styles.kbd}>⌘K</kbd>
             <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
@@ -293,107 +264,80 @@ export default function IndexHero({
     );
   }
 
-  // ── DESKTOP: "the observatory". The chart is the STAGE, not a widget — a
-  // full-width, unboxed landscape under the typography. Type top-left, the
-  // side metrics as a hairline ledger RAIL top-right, and the verified movers
-  // as a ticker BAND beneath the landscape. One composition, no cards.
+  // ── DESKTOP: "the board and the monument". No numeral wearing the whole
+  // market — the masthead is a line, the focal object is the signature
+  // instrument at display scale (the strongest honest read, certified where
+  // one certifies), and the tape reads down the left like a departures board.
+  // The functional rail sits under the monument: glance the state, act.
   return (
     <LazyMotion features={domAnimation} strict>
-      <section className={styles.hero}>
-        {/* HEAD — kicker + the honest headline reading */}
-        <m.div className={styles.heroHead} {...rise(0.05)}>
-          <div className={styles.heroTopRow}>
-            <span className={styles.sectionKicker}>{hero.kicker}</span>
-          </div>
-          <div className={styles.heroNumberRow}>
-            <RollingNumber
-              className={`${styles.heroNumber} ${styles.roiNeutral}${isMoney ? '' : ` ${styles.pctData}`}`}
-              value={headline}
-              from={reduce ? headline : 0}
-              format={fmtHeadline}
-              duration={1500}
-              delay={220}
-              play={play}
-            />
-            <span className={styles.heroReturnPer}>{horizon.label}</span>
-          </div>
-          <div className={styles.heroExplainLine}>{hero.explain}</div>
-          <div className={styles.tfToggle} role="tablist" aria-label="Window">
-            {avail.map((t) => (
-              <button key={t.key} type="button" role="tab" aria-selected={t.key === horizon.key}
-                className={styles.tfChip} data-on={t.key === horizon.key ? 'true' : undefined}
-                onClick={() => setTf(t.key)}>{t.key === 'MAX' ? 'ALL' : t.key}</button>
-            ))}
-          </div>
+      <section className={styles.mtHero}>
+        <m.div className={styles.mtMasthead} {...rise(0.04)}>
+          <span className={styles.sectionKicker}>{hero.kicker}</span>
+          <span className={styles.mtMastheadNote}>
+            {activeKey === 'all' ? 'six verticals · the strongest honest read each' : 'certified horizons · abstentions shown'}
+          </span>
+          {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
         </m.div>
 
-        {/* RAIL — the side metrics as a right-hand ledger: label · hairline · value */}
-        <m.div className={styles.heroRail} {...rise(0.12)}>
-          <div className={styles.railRow}>
-            <span className={styles.railLabel}>On the block</span>
-            <span className={styles.railVal}>{fmtInt(onBlock)}</span>
-          </div>
-          {roi != null && (
-            <div className={styles.railRow} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read. The absolute check on demand.">
-              <span className={styles.railLabel}>Value trend · est.</span>
-              <span className={`${styles.railVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
-            </div>
-          )}
-          {roiFlag && <div className={styles.railFlagLine}>{roiFlag}</div>}
-          {bc && (
-            <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
-              <span className={styles.railLabel}>Bid competition</span>
-              <span className={styles.railVal}>{bc.now} bids/lot</span>
-            </div>
-          )}
-          {belowMkt ? (
-            <button type="button" className={styles.railBtn} onClick={onOpenBelow}
-              aria-label={`${belowMkt} below-market lots — see them`}>
-              <span className={styles.railLabel}>Below market now</span>
-              <span className={styles.railVal} data-accent="true">{fmtInt(belowMkt)}<em className={styles.railGo} aria-hidden>↗</em></span>
-            </button>
-          ) : (
-            <div className={styles.railRow}>
-              <span className={styles.railLabel}>Below market now</span>
-              <span className={styles.railVal}>—</span>
-            </div>
-          )}
-          <button type="button" className={styles.railCmd} onClick={onCommand}>
-            <kbd className={styles.kbd}>⌘</kbd>
-            <kbd className={styles.kbd}>K</kbd>
-            <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
-            <span className={styles.cmdArrow} aria-hidden>↵</span>
-          </button>
-        </m.div>
+        <div className={styles.mtBoard}>
+          <m.div className={styles.mtBoardMain} {...rise(0.1)}>
+            {activeKey === 'all' ? (
+              <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
+            ) : (
+              <>
+                <HorizonLadder activeKey={activeKey} market={market} play={play} />
+                {spark.length >= 2 && (
+                  <div className={styles.mtSpark}>
+                    <Sparkline data={spark} dir={trendDir} width={720} height={64} strokeWidth={1.6} />
+                    <span className={styles.mtSparkTag}>{hero.explain.toLowerCase()} · last {spark.length} quarters</span>
+                  </div>
+                )}
+              </>
+            )}
+          </m.div>
 
-        {/* STAGE — the tape. Rows are claims: a CI'd read, a measured demand
-            read, or a descriptive $ — never six rebased lines pretending to be
-            one portfolio. Scoped, the stage is the vertical's horizon ladder
-            with its abstentions printed verbatim. */}
-        <m.div className={styles.heroStage} {...rise(0.16)}>
-          <div className={styles.stageMeta}>
-            <span>{activeKey === 'all' ? 'the verticals · strongest honest read each' : `certified horizons · ${marketLabel.toLowerCase()}`}</span>
-            <span>{activeKey === 'all' ? 'tap a row to scope' : `${metricLabel} trend below`}</span>
-          </div>
-          <div className={styles.mtStage}>
-            {activeKey === 'all'
-              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} />
-              : (
-                <>
-                  <HorizonLadder activeKey={activeKey} market={market} play={play} />
-                  {/* ONE series, the headline's own metric — trend context
-                      without the portfolio look */}
-                  {spark.length >= 2 && (
-                    <div className={styles.mtSpark}>
-                      <Sparkline data={spark} dir={trendDir} width={720} height={72} strokeWidth={1.6} />
-                      <span className={styles.mtSparkTag}>{hero.explain.toLowerCase()} · {horizon.label}</span>
-                    </div>
-                  )}
-                </>
+          <m.aside className={styles.mtSide} {...rise(0.16)}>
+            {activeKey === 'all' && lead && <TapeMonument row={lead} play={play} />}
+            <div className={styles.heroRail} data-under-monument={activeKey === 'all' && lead ? 'true' : undefined}>
+              <div className={styles.railRow}>
+                <span className={styles.railLabel}>On the block</span>
+                <span className={styles.railVal}>{fmtInt(onBlock)}</span>
+              </div>
+              {roi != null && (
+                <div className={styles.railRow} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
+                  <span className={styles.railLabel}>Value trend · est.</span>
+                  <span className={`${styles.railVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
+                </div>
               )}
-          </div>
-        </m.div>
-
+              {roiFlag && <div className={styles.railFlagLine}>{roiFlag}</div>}
+              {bc && (
+                <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
+                  <span className={styles.railLabel}>Bid competition</span>
+                  <span className={styles.railVal}>{bc.now} bids/lot</span>
+                </div>
+              )}
+              {belowMkt ? (
+                <button type="button" className={styles.railBtn} onClick={onOpenBelow}
+                  aria-label={`${belowMkt} below-market lots — see them`}>
+                  <span className={styles.railLabel}>Below market now</span>
+                  <span className={styles.railVal} data-accent="true">{fmtInt(belowMkt)}<em className={styles.railGo} aria-hidden>↗</em></span>
+                </button>
+              ) : (
+                <div className={styles.railRow}>
+                  <span className={styles.railLabel}>Below market now</span>
+                  <span className={styles.railVal}>—</span>
+                </div>
+              )}
+              <button type="button" className={styles.railCmd} onClick={onCommand}>
+                <kbd className={styles.kbd}>⌘</kbd>
+                <kbd className={styles.kbd}>K</kbd>
+                <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
+                <span className={styles.cmdArrow} aria-hidden>↵</span>
+              </button>
+            </div>
+          </m.aside>
+        </div>
       </section>
     </LazyMotion>
   );
