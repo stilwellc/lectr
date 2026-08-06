@@ -9,6 +9,7 @@ import type { Market } from '../../constants';
 import { MARKETS } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { CIBeam, DemandLine } from './SubMarketBoard';
+import { GhostGlyph } from './VerticalGhost';
 import { fmtInt, fmtMoneyCompact } from './hooks';
 import { fmtPct } from './verified';
 import styles from './style.module.css';
@@ -144,8 +145,13 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
   const { setMarket } = useMarket();
   const r = row.read;
   return (
-    <button type="button" className={styles.mtMon} data-play={play ? 'true' : undefined} onClick={() => setMarket(row.key)}
+    <button type="button" className={styles.mtMon} data-play={play ? 'true' : undefined}
+      data-dir={r.kind === 'index' ? (r.changePct >= 0 ? 'up' : 'down') : r.kind === 'demand' ? (r.now >= 0 ? 'up' : 'down') : undefined}
+      onClick={() => setMarket(row.key)}
       aria-label={`${row.label} — open the ${row.label} lander`}>
+      {/* the market's illustration bleeds off the plate edge, exactly the
+          switcher-pill device at monument scale */}
+      <span className={styles.mtMonGhost} aria-hidden><GhostGlyph market={row.key} /></span>
       <span className={styles.mtMonKicker}>
         {r.kind === 'index' ? 'The certified read' : r.kind === 'demand' ? 'The strongest read' : 'The read'}
       </span>
@@ -203,6 +209,9 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
           onClick={() => setMarket(r.key)}
           aria-label={`${r.label} — open the ${r.label} lander`}
         >
+          {/* the pills' own etched-butter ghost, behind the label — each row
+              wears its market's illustration the way the switcher does */}
+          <span className={styles.mtRowGhost} aria-hidden><GhostGlyph market={r.key} /></span>
           <span className={styles.mtLabelBlock}>
             <span className={styles.mtLabel}>{r.label}</span>
             <span className={styles.mtTag}>{tagFor(r.read.kind)}</span>
@@ -221,6 +230,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
             {r.read.kind === 'index' && (
               <>
                 <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={r.read.changePct >= 0 ? 'up' : 'down'}>
+                  <span className={styles.tri} data-dir={r.read.changePct >= 0 ? 'up' : 'down'} aria-hidden />
                   {fmtPct(r.read.changePct)} · {r.read.horizon}
                 </span>
                 <span className={styles.mtSub}>CI {fmtCI(r.read.ciLo)} to {fmtCI(r.read.ciHi)} · {fmtInt(r.lots)} lots</span>
@@ -229,6 +239,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
             {r.read.kind === 'demand' && (
               <>
                 <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={r.read.now >= 0 ? 'up' : 'down'}>
+                  <span className={styles.tri} data-dir={r.read.now >= 0 ? 'up' : 'down'} aria-hidden />
                   {fmtPct(r.read.now)}
                 </span>
                 <span className={styles.mtSub}>over estimate · {fmtInt(r.lots)} lots</span>
@@ -306,6 +317,7 @@ export function SubTape({ market, activeKey, play }: {
               {idx && idx.changePct != null && (
                 <>
                   <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={idx.changePct >= 0 ? 'up' : 'down'}>
+                    <span className={styles.tri} data-dir={idx.changePct >= 0 ? 'up' : 'down'} aria-hidden />
                     {fmtPct(idx.changePct)}{idx.horizon ? ` · ${idx.horizon}` : ''}
                   </span>
                   <span className={styles.mtSub}>
@@ -316,6 +328,7 @@ export function SubTape({ market, activeKey, play }: {
               {!idx && r.readType === 'demand' && (
                 <>
                   <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'}>
+                    <span className={styles.tri} data-dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'} aria-hidden />
                     {fmtPct(r.demandNow ?? 0)}
                   </span>
                   <span className={styles.mtSub}>over estimate{r.lots ? ` · ${fmtInt(r.lots)} lots` : ''}</span>
