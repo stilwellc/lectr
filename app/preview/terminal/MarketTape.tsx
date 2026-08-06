@@ -44,12 +44,17 @@ interface TapeRowData {
   key: Market;
   label: string;
   read:
-    | { kind: 'index'; horizon: string; changePct: number; ciLo: number; ciHi: number; n: number }
+    | { kind: 'index'; method: 'repeat-sale' | 'hedonic' | 'composite'; horizon: string;
+        changePct: number; ciLo: number; ciHi: number; n: number;
+        /** the identity/population the read covers — printed, never implied */
+        scope?: string | null }
     | { kind: 'demand'; now: number; series: { period: string; value: number }[]; qN: number }
     | { kind: 'descriptive'; typicalUsd: number; qN: number; series: { period: string; value: number }[] };
   /** vertical corpus size, for the row sub */
   lots: number;
 }
+
+const RS_HORIZON_PREF = ['5Y', '3Y', '1Y'] as const;
 
 function resolveTape(
   market: MarketData | null,
@@ -61,7 +66,43 @@ function resolveTape(
     if (m.key === 'all') continue;
     const lots = market?.markets?.[m.key]?.n ?? 0;
 
-    // 1 — certified: the vertical's own CI-gated hedonic read
+    // ── THE LADDER, best rung first (repeat-sale > hedonic > composite >
+    //    demand > typical). Each rung publishes only what its own gates
+    //    certified upstream; this file never re-decides statistics.
+
+    // 1 — repeat-sale: the same object/model priced twice. No quality-mix
+    //     assumption at all, which is why it outranks the hedonic — with ONE
+    //     refinement: at vertical altitude a SCOPED repeat-sale (art's covers
+    //     prints & multiples only) yields to an UNSCOPED certified hedonic of
+    //     the whole vertical. A prints figure must not wear the Art headline
+    //     while a whole-vertical read exists; the scoped read still leads its
+    //     own drill row (art:prints) directly below. Sports' cards-scoped read
+    //     leads because nothing unscoped certifies there — and says "cards".
+    const rs = market?.repeatSale?.[m.key];
+    const unscopedHedonicExists = HORIZON_PREF.some((h) => {
+      const x = market?.hedonic?.[m.key]?.horizons?.[h];
+      return !!(x?.publishable && x.changePct != null);
+    });
+    let placedRs = false;
+    if (rs && !(rs.scope && unscopedHedonicExists)) {
+      for (const h of RS_HORIZON_PREF) {
+        const x = rs.horizons?.[h];
+        if (x?.publishable && x.changePct != null) {
+          rows.push({
+            key: m.key, label: m.label, lots,
+            read: {
+              kind: 'index', method: 'repeat-sale', horizon: h, changePct: x.changePct,
+              ciLo: x.ciLoPct ?? x.changePct, ciHi: x.ciHiPct ?? x.changePct,
+              n: rs.nPairs, scope: rs.scope,
+            },
+          });
+          placedRs = true; break;
+        }
+      }
+    }
+    if (placedRs) continue;
+
+    // 2 — the vertical's own CI-gated hedonic read
     const hz = market?.hedonic?.[m.key]?.horizons;
     let pick: HedonicHorizon | null = null;
     let pickKey = '';
@@ -73,12 +114,35 @@ function resolveTape(
       rows.push({
         key: m.key, label: m.label, lots,
         read: {
-          kind: 'index', horizon: pickKey, changePct: pick.changePct as number,
+          kind: 'index', method: 'hedonic', horizon: pickKey, changePct: pick.changePct as number,
           ciLo: pick.ciLoPct ?? (pick.changePct as number), ciHi: pick.ciHiPct ?? (pick.changePct as number),
           n: pick.nEnd ?? 0,
         },
       });
       continue;
+    }
+
+    // 3 — the bottom-up composite (same CI discipline, assembled from the
+    //     vertical's publishable makers — watches 5Y ships this today and it
+    //     was consumed NOWHERE until Aug 2026)
+    const comp = (market?.hedonic?.[m.key] as { composite?: { horizons?: Record<string, HedonicHorizon> } } | undefined)?.composite;
+    if (comp) {
+      let placed = false;
+      for (const h of HORIZON_PREF) {
+        const x = comp.horizons?.[h];
+        if (x?.publishable && x.changePct != null) {
+          rows.push({
+            key: m.key, label: m.label, lots,
+            read: {
+              kind: 'index', method: 'composite', horizon: h, changePct: x.changePct,
+              ciLo: x.ciLoPct ?? x.changePct, ciHi: x.ciHiPct ?? x.changePct,
+              n: x.nEnd ?? 0,
+            },
+          });
+          placed = true; break;
+        }
+      }
+      if (placed) continue;
     }
 
     // 2 — measured demand (%-over-estimate), where estimates exist
@@ -115,8 +179,14 @@ function resolveTape(
     (b.read.kind === 'demand' && a.read.kind === 'demand' ? b.read.now - a.read.now : b.lots - a.lots));
 }
 
-const tagFor = (kind: TapeRowData['read']['kind']): string =>
-  kind === 'index' ? 'Hedonic index · 95% CI' : kind === 'demand' ? 'Demand read' : 'Descriptive';
+const tagFor = (read: TapeRowData['read']): string => {
+  if (read.kind === 'index') {
+    const m = read.method === 'repeat-sale' ? 'Repeat-sale index'
+      : read.method === 'composite' ? 'Hedonic composite' : 'Hedonic index';
+    return `${m} · 95% CI${read.scope ? ` · ${read.scope}` : ''}`;
+  }
+  return read.kind === 'demand' ? 'Demand read' : 'Descriptive';
+};
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
@@ -149,7 +219,9 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
       onClick={() => setMarket(row.key)}
       aria-label={`${row.label} — open the ${row.label} lander`}>
       <span className={styles.mtMonKicker}>
-        {r.kind === 'index' ? 'The certified read' : r.kind === 'demand' ? 'The strongest read' : 'The read'}
+        {r.kind === 'index'
+          ? (r.method === 'repeat-sale' ? 'Certified · repeat-sale' : r.method === 'composite' ? 'Certified · composite' : 'Certified · hedonic')
+          : r.kind === 'demand' ? 'The strongest read' : 'The read'}
       </span>
       <span className={styles.mtMonMarket}>{row.label}</span>
       {r.kind === 'index' && (
@@ -160,7 +232,9 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
           <span className={styles.mtMonBeam}><CIBeam lo={r.ciLo} hi={r.ciHi} point={r.changePct}
             dir={r.changePct >= 0 ? 'up' : 'down'} play={play} large /></span>
           <span className={styles.mtMonSub}>
-            hedonic index · past {r.horizon.replace('Y', r.horizon === '1Y' ? ' year' : ' years')} · {fmtInt(row.lots)} lots
+            {r.method === 'repeat-sale'
+              ? `same ${row.key === 'sports' ? 'card' : row.key === 'watches' ? 'reference' : 'edition'} resold · past ${r.horizon.replace('Y', r.horizon === '1Y' ? ' year' : ' years')} · ${fmtInt(r.n)} pairs${r.scope ? ` · ${r.scope}` : ''}`
+              : `${r.method === 'composite' ? 'hedonic composite' : 'hedonic index'} · past ${r.horizon.replace('Y', r.horizon === '1Y' ? ' year' : ' years')} · ${fmtInt(row.lots)} lots`}
           </span>
         </>
       )}
@@ -207,7 +281,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
         >
           <span className={styles.mtLabelBlock}>
             <span className={styles.mtLabel}>{r.label}</span>
-            <span className={styles.mtTag}>{tagFor(r.read.kind)}</span>
+            <span className={styles.mtTag}>{tagFor(r.read)}</span>
           </span>
           <span className={styles.mtInstrument} aria-hidden>
             {r.read.kind === 'index' && (
@@ -226,7 +300,9 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
                   <span className={styles.tri} data-dir={r.read.changePct >= 0 ? 'up' : 'down'} aria-hidden />
                   {fmtPct(r.read.changePct)} · {r.read.horizon}
                 </span>
-                <span className={styles.mtSub}>CI {fmtCI(r.read.ciLo)} to {fmtCI(r.read.ciHi)} · {fmtInt(r.lots)} lots</span>
+                <span className={styles.mtSub}>
+                  CI {fmtCI(r.read.ciLo)} to {fmtCI(r.read.ciHi)} · {r.read.method === 'repeat-sale' ? `${fmtInt(r.read.n)} pairs` : `${fmtInt(r.lots)} lots`}
+                </span>
               </>
             )}
             {r.read.kind === 'demand' && (
@@ -283,15 +359,18 @@ export function SubTape({ market, activeKey, play }: {
       ? (market?.subMarkets?.[activeKey] ?? [])
       : (market?.drills?.[activeKey] ?? []);
     const cap = makerLed ? 5 : SUB_CAP;
-    const rank = { index: 0, demand: 1, descriptive: 2 } as const;
-    // certified rows rank by the size of the certified move; everything else
-    // ranks by DEPTH, not heat — sorting demand reads by demandNow front-ran
-    // thin hot families (Panthère, Cellini) over Daytona and Nautilus, and a
-    // front row should read like the market, not like its outliers
+    // the ladder at drill altitude: repeat-sale > hedonic > demand >
+    // descriptive. Certified rows rank by the size of the certified move;
+    // everything else ranks by DEPTH, not heat — sorting demand reads by
+    // demandNow front-ran thin hot families (Panthère, Cellini) over Daytona
+    // and Nautilus, and a front row should read like the market.
+    const rank = (r: SubMarketRead) =>
+      r.readType === 'index' ? (r.indexMethod === 'repeat-sale' ? 0 : 1)
+      : r.readType === 'demand' ? 2 : 3;
     const strength = (r: SubMarketRead) =>
       r.readType === 'index' ? Math.abs(r.index?.changePct ?? 0) : (r.lots ?? 0);
     return [...pool]
-      .sort((a, b) => rank[a.readType] - rank[b.readType] || strength(b) - strength(a))
+      .sort((a, b) => rank(a) - rank(b) || strength(b) - strength(a))
       .slice(0, cap);
   }, [market, activeKey]);
   if (!rows.length) return null;

@@ -154,9 +154,31 @@ function overEstPct(l: AuctionLot): number | null {
   return (hammer / mid - 1) * 100;
 }
 
-// a SOLD lot with a real estimate band (the demand/coverage denominator's num)
+// a SOLD lot with a real estimate (the demand/coverage denominator's num).
+// Single-point estimates count: RR Auction publishes ONE figure, stored in
+// estimateLow with estimateHigh null — overEstPct already midpoints via the
+// same low↔high fallback, so gating on high-only silently disenfranchised the
+// entire RR tape (verified: 3,860/4,225 recent RR lots carry low-only).
 function hasEstimate(l: AuctionLot): boolean {
-  return ((l.estHighUsd ?? l.estimateHigh) || 0) > 0;
+  return (((l.estHighUsd ?? l.estimateHigh) || 0) > 0) || (((l.estLowUsd ?? l.estimateLow) || 0) > 0);
+}
+
+/** Demand-read eligibility on the RECENT tape, not the all-time pool.
+ *  All-time coverage let two failure modes through in both directions:
+ *  the RR 30-yr archive's estimate-thin early years diluted coverage below
+ *  60% for drills whose last-2-years tape is 76–98% covered (kept them
+ *  descriptive), while a handful of rows coasted to 'demand' on estimate-rich
+ *  POOLS with almost no recent sales at all (memorabilia:soccer held a demand
+ *  read on FOUR sales in 8 quarters). A demand read now requires the recent
+ *  window itself to be covered AND populated. */
+const DEMAND_WINDOW_MS = 2 * 365.25 * 24 * 3600 * 1000; // trailing ~8 quarters
+const DEMAND_MIN_RECENT = 60;                           // sold lots in-window
+function demandEligibility(sold: AuctionLot[]): { estCoverage: number; recentSold: number; ok: boolean } {
+  const cutoff = Date.now() - DEMAND_WINDOW_MS;
+  const recent = sold.filter(l => l.saleDate && new Date(l.saleDate).getTime() >= cutoff);
+  const denom = recent.length;
+  const cov = denom ? recent.filter(hasEstimate).length / denom : 0;
+  return { estCoverage: cov, recentSold: denom, ok: denom >= DEMAND_MIN_RECENT && cov >= MIN_EST_COVERAGE };
 }
 
 /**
@@ -213,6 +235,119 @@ function cardKey(l: AuctionLot): string | null {
   return `${c.playerSlug}|${c.year}|${set}|${c.cardNo}|${grade}${serial}`;
 }
 
+/** Reference-level watch identity: same maker + same reference is "the same
+ *  product" the way a card key is — model-level, not unit-level (condition and
+ *  box/papers vary within it, which the GLS gap-weighting and the 20x mis-link
+ *  guard absorb; the CI is honest about the residual noise). Aug 6 2026 study:
+ *  20,272 pairs across 3,498 references certify ALL three horizons at the
+ *  watches vertical with the production gates untouched. */
+function watchRefKey(l: AuctionLot): string | null {
+  return l.reference ? `${l.artist}|${String(l.reference).toLowerCase().replace(/\s+/g, '')}` : null;
+}
+
+/** Edition-level art identity: same maker + same normalized title on a
+ *  print/multiple pool. Strips edition numbering (22/50), AP/PP marks and
+ *  dates so siblings of one edition pair up — model-level identity, like a
+ *  watch reference. Restricted to edition-structured lots by the caller;
+ *  unique originals must never enter this key. */
+function editionKey(l: AuctionLot): string | null {
+  const t = (l.title || '').toLowerCase()
+    .replace(/\b\d+\s*\/\s*\d+\b/g, '')
+    .replace(/\b(ap|pp|hc|tp|ed\.?|edition|numbered|signed)\b/g, '')
+    .replace(/\([^)]*\d{4}[^)]*\)/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return t.length >= 8 ? `${l.artist}|${t}` : null;
+}
+
+function isEditionLot(l: AuctionLot): boolean {
+  const f = `${l.formKey || ''} ${l.medium || ''}`.toLowerCase();
+  return /print|multiple|edition|poster|lithograph|screenprint|etching/.test(f);
+}
+
+/** The one repeat-sale attempt, shared by drills and slug rows: pick the pool's
+ *  natural identity (card > watch reference > art edition), require a real pool,
+ *  and publish only what the engine's own gates certify. */
+export function tryRepeatSale(sold: AuctionLot[], vertical: string): {
+  index: SubMarketRead['index']; indexSeries?: SubMarketRead['indexSeries'];
+} | null {
+  let pool: AuctionLot[] = []; let key: (l: AuctionLot) => string | null = cardKey;
+  const cardLots = sold.filter(l => cardKey(l) != null);
+  if (cardLots.length >= 400) { pool = cardLots; key = cardKey; }
+  else if (vertical === 'watches') {
+    const refLots = sold.filter(l => watchRefKey(l) != null);
+    if (refLots.length >= 400) { pool = refLots; key = watchRefKey; }
+  } else if (vertical === 'art') {
+    const edLots = sold.filter(l => isEditionLot(l) && editionKey(l) != null);
+    if (edLots.length >= 400) { pool = edLots; key = editionKey; }
+  }
+  if (!pool.length) return null;
+  const rs = buildRepeatSaleIndex(pool, key);
+  for (const h of HORIZON_PREF) {
+    const hz = rs.horizons?.[h];
+    if (hz?.publishable && hz.changePct != null && hz.ciLoPct != null && hz.ciHiPct != null) {
+      return {
+        index: { horizon: h, changePct: hz.changePct, ciLoPct: hz.ciLoPct, ciHiPct: hz.ciHiPct },
+        indexSeries: rs.series.slice(-24).map(pt => ({ period: pt.period.replace('-Q', ' Q'), value: pt.value, n: pt.nPairs })),
+      };
+    }
+  }
+  return null;
+}
+
+/** VERTICAL-LEVEL repeat-sale — the ladder's top rung at market altitude.
+ *  Emitted into market.json as `repeatSale` so the hero tape can prefer it
+ *  over hedonic/demand wherever it certifies. The scope label is part of the
+ *  read: the sports figure is a CARDS read (cards carry the identity), and
+ *  the art figure is an EDITIONS read — the UI must say so. */
+export interface VerticalRepeatSale {
+  method: 'repeat-sale';
+  /** what the identity is — printed beside the figure, non-negotiable */
+  basis: string;
+  /** the population the read covers (e.g. 'cards', 'prints & multiples') */
+  scope: string | null;
+  nPairs: number;
+  nObjects: number;
+  horizons: Record<string, {
+    publishable: boolean; changePct: number | null;
+    ciLoPct: number | null; ciHiPct: number | null; reason?: string;
+  }>;
+  series: { period: string; value: number; n: number }[];
+}
+
+export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): VerticalRepeatSale | null {
+  let pool: AuctionLot[]; let key: (l: AuctionLot) => string | null;
+  let basis: string; let scope: string | null;
+  if (vertical === 'watches') {
+    pool = sold.filter(l => watchRefKey(l) != null); key = watchRefKey;
+    basis = 'same reference resold'; scope = null;
+  } else if (vertical === 'art') {
+    pool = sold.filter(l => isEditionLot(l) && editionKey(l) != null); key = editionKey;
+    basis = 'same edition resold'; scope = 'prints & multiples';
+  } else if (vertical === 'sports') {
+    pool = sold.filter(l => cardKey(l) != null); key = cardKey;
+    basis = 'same card, same grade, resold'; scope = 'cards';
+  } else return null; // culture/science: title-proxy identity is too weak to certify —
+                      // a "same title" pair is not a same-object pair for autographs.
+  if (pool.length < 400) return null;
+  const rs = buildRepeatSaleIndex(pool, key);
+  const horizons: VerticalRepeatSale['horizons'] = {};
+  let any = false;
+  for (const [k, hz] of Object.entries(rs.horizons || {})) {
+    if (!hz) continue;
+    horizons[k] = { publishable: !!hz.publishable, changePct: hz.changePct ?? null, ciLoPct: hz.ciLoPct ?? null, ciHiPct: hz.ciHiPct ?? null, ...(hz.reason ? { reason: hz.reason } : {}) };
+    if (hz.publishable) any = true;
+  }
+  if (!any) return null; // nothing certified — the block earns its place or stays out
+  return {
+    method: 'repeat-sale', basis, scope,
+    nPairs: rs.nPairs ?? 0, nObjects: rs.nObjects ?? 0,
+    horizons,
+    series: (rs.series || []).slice(-24).map(pt => ({ period: pt.period.replace('-Q', ' Q'), value: pt.value, n: pt.nPairs })),
+  };
+}
+
 // ── DRILL ROWS (the sub-category taxonomy, Jul 31 2026) ─────────────────────
 // One SubMarketRead per approved A-vs-B split, emitted under market.json's NEW
 // `drills` key (the existing subMarkets key is untouched — no consumer breaks).
@@ -250,36 +385,24 @@ function buildRead(
   const record = rec ? { usd: rec.priceUsd!, title: rec.title || '', date: rec.saleDate || null, house: rec.auctionHouse || null } : null;
   const denomST = sold.length + boughtIn.length;
   const sellThroughPct = denomST >= 40 ? Math.round((100 * sold.length) / denomST) : null;
-  const soldWithEst = sold.filter(hasEstimate).length;
-  const estCoverage = sold.length ? soldWithEst / sold.length : 0;
+  const demand = demandEligibility(sold);
+  const estCoverage = demand.estCoverage;
   const demandSeries = slugDemandSeries(sold);
   const demandNow = demandSeries.length ? demandSeries[demandSeries.length - 1].value : null;
   const bidCompSeries = bidCompetitionSeries(sold, { slug });
   const bidCompNow = bidCompSeries.length ? Math.round(bidCompSeries[bidCompSeries.length - 1].value) : null;
 
-  // repeat-sale index where the pool is card-structured (mix-immune, CI-gated)
+  // repeat-sale index wherever the pool carries a real object identity —
+  // cards, watch references, art editions (mix-immune, CI-gated, one engine)
   let index: SubMarketRead['index'] = null;
   let indexMethod: SubMarketRead['indexMethod'] = null;
   let indexSeries: SubMarketRead['indexSeries'];
-  const cardLots = sold.filter(l => cardKey(l) != null);
-  if (cardLots.length >= 400) {
-    const rs = buildRepeatSaleIndex(cardLots, cardKey);
-    for (const h of HORIZON_PREF) {
-      const hz = rs.horizons?.[h];
-      if (hz?.publishable && hz.changePct != null && hz.ciLoPct != null && hz.ciHiPct != null) {
-        index = { horizon: h, changePct: hz.changePct, ciLoPct: hz.ciLoPct, ciHiPct: hz.ciHiPct };
-        indexMethod = 'repeat-sale';
-        // the level series behind the published move ('YYYY-Qn' → 'YYYY Qn'
-        // to match every other quarterly key), trailing 24 quarters
-        indexSeries = rs.series.slice(-24).map(pt => ({ period: pt.period.replace('-Q', ' Q'), value: pt.value, n: pt.nPairs }));
-        break;
-      }
-    }
-  }
+  const rsTry = tryRepeatSale(sold, vertical);
+  if (rsTry) { index = rsTry.index; indexMethod = 'repeat-sale'; indexSeries = rsTry.indexSeries; }
 
   const readType: SubMarketRead['readType'] = index
     ? 'index'
-    : (estCoverage >= MIN_EST_COVERAGE && demandSeries.length >= MIN_DEMAND_QUARTERS ? 'demand' : 'descriptive');
+    : (demand.ok && demandSeries.length >= MIN_DEMAND_QUARTERS ? 'demand' : 'descriptive');
 
   return {
     slug, label, vertical, parent, readType,
@@ -402,8 +525,8 @@ export function buildSubMarkets(
     const sellThroughPct = denomST >= 40 ? Math.round((100 * sold.length) / denomST) : null;
 
     // ── estimate coverage: fraction of SOLD lots carrying an estimate ──
-    const soldWithEst = sold.filter(hasEstimate).length;
-    const estCoverage = sold.length ? soldWithEst / sold.length : 0;
+    const demand = demandEligibility(sold);
+    const estCoverage = demand.estCoverage;
 
     // ── demand series (hammer-basis %-over-estimate) ──
     const demandSeries = slugDemandSeries(sold);
@@ -435,18 +558,8 @@ export function buildSubMarkets(
     // Bailey-Muth-Nourse index. Only consulted when no hedonic index exists, and
     // only publishes on a horizon whose 95% CI resolves the sign. ──
     if (!index) {
-      const cardLots = sold.filter(l => cardKey(l) != null);
-      if (cardLots.length >= 400) {
-        const rs = buildRepeatSaleIndex(cardLots, cardKey);
-        for (const h of HORIZON_PREF) {
-          const hz = rs.horizons?.[h];
-          if (hz?.publishable && hz.changePct != null && hz.ciLoPct != null && hz.ciHiPct != null) {
-            index = { horizon: h, changePct: hz.changePct, ciLoPct: hz.ciLoPct, ciHiPct: hz.ciHiPct };
-            indexMethod = 'repeat-sale';
-            break;
-          }
-        }
-      }
+      const rsTry = tryRepeatSale(sold, market);
+      if (rsTry) { index = rsTry.index; indexMethod = 'repeat-sale'; }
     }
 
     // ── readType decision ──
@@ -454,7 +567,7 @@ export function buildSubMarkets(
     // genuinely carries estimates over enough quarters; else 'descriptive'.
     const readType: SubMarketRead['readType'] = index
       ? 'index'
-      : (estCoverage >= MIN_EST_COVERAGE && demandSeries.length >= MIN_DEMAND_QUARTERS ? 'demand' : 'descriptive');
+      : (demand.ok && demandSeries.length >= MIN_DEMAND_QUARTERS ? 'demand' : 'descriptive');
 
     const row: SubMarketRead = {
       slug,

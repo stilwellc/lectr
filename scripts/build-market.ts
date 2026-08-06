@@ -19,7 +19,7 @@ import { buildIdf, buildVectors, similarity, idf } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, type ValueResult } from '../app/lib/value';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
 import { buildHedonicIndex, buildMakerIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
-import { buildSubMarkets, buildDrillRows } from './sub-markets';
+import { buildSubMarkets, buildDrillRows, buildVerticalRepeatSale } from './sub-markets';
 import { fitGradeLadder } from './lib/grade-ladder';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
@@ -871,9 +871,23 @@ export function runMarketBuild() {
     console.log(`[market] drills: ${breakdown}`);
   } catch (e) { console.warn('[market] drills build failed:', (e as Error).message); }
 
+  // ── VERTICAL REPEAT-SALE (the read ladder's top rung, Aug 6 2026) ─────────
+  // Same engine and gates as the card drills, generalized to watch references
+  // and art editions. Only verticals where at least one horizon certifies are
+  // emitted — an all-abstain block would be dead weight.
+  const repeatSale: Record<string, ReturnType<typeof buildVerticalRepeatSale>> = {};
+  for (const v of ['watches', 'art', 'sports']) {
+    try {
+      const vLots = all.filter(l => (MARKETS[v] || []).includes(l.artist) && l.status === 'sold' && (l.priceUsd || 0) > 0);
+      const r = buildVerticalRepeatSale(vLots, v);
+      if (r) { repeatSale[v] = r; console.log(`[market] ${v} repeat-sale: pairs ${r.nPairs} objects ${r.nObjects} — ${Object.entries(r.horizons).filter(([, h]) => h.publishable).map(([k, h]) => `${k} ${h.changePct!.toFixed(1)}%`).join(' ') || 'none'}`); }
+    } catch (e) { console.warn(`[market] ${v} repeat-sale failed:`, (e as Error).message); }
+  }
+
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,
+    repeatSale,   // vertical repeat-sale — the ladder's top rung (cards / watch refs / art editions), CI-gated
     hedonic,      // statistically-defensible hedonic price-change index (per market) + composite — see scripts/hedonic-index.ts
     makerIndex,   // per-maker hedonic index (bottom-up components of the market composites)
     subMarkets,   // per-vertical sub-market reads (strongest honest read per slug) — see scripts/sub-markets.ts
