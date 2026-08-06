@@ -33,7 +33,14 @@ const HOUSE_ID_SLUGS: Record<AuctionHouse, string[]> = {
   "Sotheby's": ['sothebys', 'sotheby'],
   "Christie's": ['christies', 'christie'],
   Wright: ['wright'],
-  Rago: ['rago'],
+  // Rago lots are crawled by the Wright adapter (one operator, one platform —
+  // corpus-io maps both houses to the `wright` segment), so they are minted with
+  // `wright-` ids. restamp-rago fixed the house field but deliberately did NOT
+  // rename the id: `/lot/<id>` is a permalink, and useSavedLots and the
+  // never-deleting Supabase mirror are both keyed on it. The prefix is therefore
+  // a legitimate provenance artifact here, not the crosstalk this invariant
+  // exists to catch.
+  Rago: ['rago', 'wright'],
   Heritage: ['heritage', 'ha'],
   Bonhams: ['bonhams'],
   Hindman: ['hindman'],
