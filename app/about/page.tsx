@@ -1048,7 +1048,8 @@ export default function AboutPage() {
           <p style={caption}>
             Validated by temporal holdout: every call is made using only sales dated strictly before
             the lot in question, so the record below is what the engine would have said at the time —
-            not what it can explain in hindsight.
+            not what it can explain in hindsight.{' '}
+            <Link href="/blog/how-we-built-the-pricing-engine" className="deck-more">The method in full <Flick size={11} /></Link>
           </p>
         </Sec>
 
@@ -1131,7 +1132,9 @@ export default function AboutPage() {
           <p style={caption}>
             Where a market is too thin, too mixed, or too young to hold quality constant, the engine
             says so in the interface instead of estimating around it. Every published figure names its
-            method and its sample size.
+            method and its sample size — and when one drifts, it is restated in public rather than
+            quietly patched.{' '}
+            <Link href="/blog/corrections" className="deck-more">The corrections register <Flick size={11} /></Link>
           </p>
 
           <div className="scope-note">
@@ -1254,10 +1257,20 @@ export default function AboutPage() {
             <div className="close-actions">
               <Link href="/value" className="close-cta">See today&rsquo;s calls <Flick size={12} /></Link>
               <Link href="/analytics" className="close-alt">Open the research desk</Link>
+              <Link href="/blog" className="close-alt">Read the notes</Link>
             </div>
             <p style={{ ...caption, marginTop: 26 }}>
               Figures on this page are read from the live corpus at build time, dated{' '}
-              {String(meta.lastCrawl).slice(0, 10)}. They change when the market does.
+              {String(meta.lastCrawl).slice(0, 10)}. They change when the market does. Each quarter is
+              written up market by market —{' '}
+              {/* No Flick on these five: they are a LIST of sibling notes, not five
+                  separate calls to action, and five arrows in one sentence read as
+                  clutter. The underline carries the affordance. */}
+              <Link href="/blog/q2-2026-watches" className="deck-more">watches</Link>,{' '}
+              <Link href="/blog/q2-2026-art" className="deck-more">art</Link>,{' '}
+              <Link href="/blog/q2-2026-design" className="deck-more">design</Link>,{' '}
+              <Link href="/blog/q2-2026-sports" className="deck-more">sports</Link>{' '}and{' '}
+              <Link href="/blog/q2-2026-science" className="deck-more">science</Link>.
             </p>
           </div>
         </section>
