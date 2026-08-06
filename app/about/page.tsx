@@ -12,6 +12,7 @@ import market from '../../public/data/ray/market.json';
 import refs from '../../public/data/ray/refs.json';
 import proof from './proof-cases.json';
 import coverageSnapshot from './coverage.json';
+import distribution from './distribution.json';
 import { readLiveBook, type LiveBook } from './live';
 import PlateImg from '../components/PlateImg';
 import RayEntrance from '../components/RayEntrance';
@@ -82,6 +83,43 @@ const ARCHIVE_YEARS = COVERAGE.length
   : 0;
 
 const PROV = proof.provenance.withEstimate;
+
+interface SeriesRow { year: number; flaggedMedianPct: number; unflaggedMedianPct: number; nFlagged: number }
+
+// Prefer the live block (backtest-core now emits `distribution` on every full or
+// incremental run) and fall back to the committed snapshot. Read through a cast
+// for the same reason as coverage: public/data/ray/ is gitignored and pulled
+// from R2, so tsc types backtest.json from whatever that pull produced, and
+// naming backtest.distribution directly would break any CI build that runs
+// before the first nightly carrying it. Regenerate the snapshot with
+// `npx tsx scripts/_qa/gen-distribution.ts`.
+type Dist = typeof distribution;
+const DIST: Dist = (() => {
+  const live = (backtest as Record<string, unknown>).distribution as Dist | undefined;
+  return live?.bins?.length && live.summary ? { ...distribution, ...live } : distribution;
+})();
+const SERIES = ((backtest as Record<string, unknown>).series as SeriesRow[] | undefined) ?? [];
+
+const pts = (d: number) => `${d > 0 ? '+' : ''}${Math.round(d * 10) / 10} pts`;
+const RECORD_ROWS = [
+  {
+    k: 'Median result vs estimate · all-in', note: 'what the buyer paid, premium included',
+    lo: U.medianPerfPct, hi: F.medianPerfPct, fmt: pct, edge: pts(F.medianPerfPct - U.medianPerfPct),
+  },
+  {
+    k: 'Median result vs estimate · at hammer', note: 'like-for-like against a hammer-basis estimate',
+    lo: U.hammerMedianPct ?? 0, hi: F.hammerMedianPct ?? 0, fmt: pct,
+    edge: pts((F.hammerMedianPct ?? 0) - (U.hammerMedianPct ?? 0)),
+  },
+  {
+    k: 'Cleared the high estimate', note: 'share of lots that beat the top of the range',
+    lo: U.beatHighPct, hi: F.beatHighPct, fmt: (v: number) => `${v}%`, edge: pts(F.beatHighPct - U.beatHighPct),
+  },
+  {
+    k: 'Failed to sell', note: 'lower is better — the flag does not chase no-sales',
+    lo: U.failToSellPct, hi: F.failToSellPct, fmt: (v: number) => `${v}%`, edge: pts(U.failToSellPct - F.failToSellPct),
+  },
+];
 
 const drillsRec = market.drills as Record<string, { readType: string }[]>;
 const allDrills = Object.values(drillsRec).flat();
@@ -189,53 +227,155 @@ function CoverageChart({ rows }: { rows: { house: string; first: number; dense: 
   );
 }
 
-/** THE RECORD AS A SLOPE — ONE shared scale across all four panels.
+/** THE SHAPE OF THE OUTCOMES — the distribution, not just its median.
  *
- *  The first version normalised each panel to its OWN maximum, which encoded
- *  the RATIO lo/hi while every label, the summary and the hero figure speak in
- *  POINTS. Measured, that put a 15.9x scale spread across a 2x2 grid with
- *  identical geometry: the 20-point edge drew 69.8px while the 25-point edge —
- *  the one this whole page is built on — drew 27.6px. The chart contradicted
- *  its own headline. Geometry is now the signed improvement over control on a
- *  single fixed domain, so panel 1 IS the "+25 points" figure, measurable off
- *  the page, and fail-to-sell reads nearly flat — which is the honest picture
- *  and supports its own note better than the exaggeration did.
+ *  §03 previously argued the record with four two-point slope panels. A median
+ *  is one number, and the first question an institutional reader asks is whether
+ *  it is an artifact of a long tail. This answers it with the whole distribution:
+ *  where flagged and unflagged lots actually landed, as a share of their own arm.
+ *
+ *  Normalising is not optional — there are 38,734 flagged calls against 28,797
+ *  controls, so raw counts would draw the flagged arm larger in EVERY bin,
+ *  including the losing ones, and read as an edge where there is none.
+ *
+ *  The story it tells is stronger than the median: flagged lots are not just
+ *  further right, they are LESS often below the estimate (17.0% vs 25.6%) — the
+ *  edge is not bought by taking more risk, which is the claim the statement
+ *  slide makes next and could not previously evidence.
  */
-const SLOPE_DOMAIN = 26;  // percentage points — covers the largest edge (25)
+function OutcomeCurve({ dist }: { dist: typeof distribution }) {
+  const { bins, summary } = dist;
+  const fN = summary.flaggedN, uN = summary.unflaggedN;
+  const share = (v: number, n: number) => (v / n) * 100;
+  const peak = Math.max(...bins.map((b) => Math.max(share(b.flagged, fN), share(b.unflagged, uN))));
+  const top = Math.ceil(peak / 10) * 10;          // round gridline ceiling
 
-function Slope({ metric, note, lo, hi, fmtV, n, better = 'higher' }: {
-  metric: string; note?: string;
-  lo: number; hi: number;
-  fmtV: (n: number) => string;
-  /** sample size — an institutional reader looks for n before the number */
-  n?: string;
-  better?: 'higher' | 'lower';
-}) {
-  const delta = better === 'lower' ? lo - hi : hi - lo;   // signed improvement
-  const yLo = 86;                                          // shared baseline
-  const yHi = 86 - (delta / SLOPE_DOMAIN) * 74;
-  const wins = delta >= 0;
-  const ink = wins ? 'var(--color-up)' : 'var(--color-text-muted)';
+  const W = 900, H = 300;
+  const slot = W / bins.length;
+  const y = (pct: number) => H - (pct / top) * H;
+
+  /** stepped: a histogram is bars, so the outline must be rectilinear — a
+   *  smoothed curve would imply resolution between bins that does not exist */
+  const step = (get: (b: typeof bins[number]) => number, close: boolean) => {
+    const d: string[] = [];
+    bins.forEach((b, i) => {
+      const yy = y(get(b));
+      d.push(`${i ? 'L' : 'M'} ${i * slot} ${yy}`, `L ${(i + 1) * slot} ${yy}`);
+    });
+    return close ? `M 0 ${H} L 0 ${y(get(bins[0]))} ${d.slice(1).join(' ')} L ${W} ${H} Z` : d.join(' ');
+  };
+
+  const zeroX = 3 * slot;                          // boundary at estimate mid
+  const grid = Array.from({ length: top / 10 + 1 }, (_, i) => i * 10);
+  const BOUNDS = ['−50%', '−25%', 'mid', '+25%', '+50%', '+100%', '+200%', '+500%'];
+
   return (
-    <div className="slope">
-      <div className="slope-head">
-        <span className="slope-metric">{metric}</span>
-        {note && <span className="slope-note">{note}{n ? ` · n ${n}` : ''}</span>}
+    <figure className="dist">
+      <div className="dist-legend">
+        <span className="dist-key dist-key-u"><i />Unflagged control<b>{summary.unflaggedBelowPct.toFixed(1)}% below estimate</b></span>
+        <span className="dist-key dist-key-f"><i />Flagged by lectr<b>{summary.flaggedBelowPct.toFixed(1)}% below estimate</b></span>
       </div>
-      <div className="slope-plot">
-        <span className="sr-only">{metric}: unflagged {fmtV(lo)}, flagged {fmtV(hi)}.</span>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="slope-svg" aria-hidden>
-          <line x1="14" y1={yLo} x2="86" y2={yHi} stroke={ink} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+
+      <div className="dist-plot">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="dist-svg" role="img"
+             aria-label={`Outcome distribution. Flagged lots: ${summary.flaggedBelowPct.toFixed(1)}% sold below the estimate mid, median +${summary.flaggedMedianPct}%. Unflagged controls: ${summary.unflaggedBelowPct.toFixed(1)}% below, median +${summary.unflaggedMedianPct}%.`}>
+          <rect x="0" y="0" width={zeroX} height={H} className="dist-below" />
+          {grid.map((g) => <line key={g} x1="0" y1={y(g)} x2={W} y2={y(g)} className="dist-grid" />)}
+          {/* control is the FILLED shape — "what normally happens" — and flagged
+              is a bold outline over it. Two filled areas at similar opacity blended
+              into one khaki mass where they overlapped, which is most of the chart. */}
+          <path d={step((b) => share(b.unflagged, uN), true)} className="dist-area-u" />
+          <path d={step((b) => share(b.flagged, fN), false)} className="dist-line-f" />
+          <line x1={zeroX} y1="0" x2={zeroX} y2={H} className="dist-zero" />
         </svg>
-        <span className="slope-dot slope-dot-lo" style={{ top: `${yLo}%` }} aria-hidden />
-        <span className="slope-dot slope-dot-hi" style={{ top: `${yHi}%`, background: ink }} aria-hidden />
-        <span className="slope-val slope-val-lo" style={{ top: `${yLo}%` }}>{fmtV(lo)}</span>
-        <span className="slope-val slope-val-hi" style={{ top: `${yHi}%`, color: ink }}>{fmtV(hi)}</span>
+        {/* Axis labels live in HTML, not SVG: this viewBox is stretched to the
+            rail, so SVG text would render ~18px on desktop and ~7px on a phone. */}
+        <div className="dist-ylab" aria-hidden>
+          {grid.slice(1).reverse().map((g) => (
+            <span key={g} style={{ top: `${(y(g) / H) * 100}%` }}>{g}%</span>
+          ))}
+        </div>
+        <div className="dist-xlab" aria-hidden>
+          {BOUNDS.map((lab, i) => (
+            <span key={lab} className={lab === 'mid' ? 'dist-xlab-zero' : ''}
+                  style={{ left: `${((i + 1) / bins.length) * 100}%` }}>{lab}</span>
+          ))}
+        </div>
       </div>
-      <div className="slope-foot kicker"><span>unflagged</span><span>flagged</span></div>
-    </div>
+
+      {/* Anchored to the divider, not to the plot edges: the boundary sits at
+          a third of the width, and edge-aligned labels implied it was halfway. */}
+      <div className="dist-foot" aria-hidden>
+        <span className="dist-foot-u">under the estimate</span>
+        <span className="dist-foot-o">over it</span>
+      </div>
+      <figcaption className="dist-cap">
+        Where every replayed lot landed against its estimate, as a share of its own arm — the two
+        arms differ in size, so raw counts would draw flagged larger in every bin including the
+        losing ones. Flagged sits further right, and is below the estimate <b>less</b> often than the
+        control: the edge is not bought by taking more risk.
+      </figcaption>
+    </figure>
   );
 }
+
+/** PERSISTENCE — the edge, year by year, from the shipped 27-year replay.
+ *
+ *  The other question an institutional reader asks about a backtest is whether
+ *  the result is a regime artifact. backtest.series has carried the answer since
+ *  2000 and /about never used it: the gap holds in every year of the record,
+ *  through two crashes and a boom.
+ */
+function RecordYears({ series }: { series: SeriesRow[] }) {
+  const rows = series.filter((r) => Number.isFinite(r.flaggedMedianPct) && Number.isFinite(r.unflaggedMedianPct));
+  if (rows.length < 4) return null;
+  const W = 900, H = 230;
+  const hiRaw = Math.max(...rows.map((r) => Math.max(r.flaggedMedianPct, r.unflaggedMedianPct)));
+  const loRaw = Math.min(0, ...rows.map((r) => Math.min(r.flaggedMedianPct, r.unflaggedMedianPct)));
+  const hi = Math.ceil(hiRaw / 20) * 20, lo = Math.floor(loRaw / 20) * 20;
+  const x = (i: number) => (i / (rows.length - 1)) * W;
+  const y = (v: number) => H - ((v - lo) / (hi - lo)) * H;
+  const line = (get: (r: typeof rows[number]) => number) =>
+    rows.map((r, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(get(r)).toFixed(1)}`).join(' ');
+  // the GAP is the subject, not the two lines — shade between them
+  const band = `${line((r) => r.flaggedMedianPct)} ` +
+    rows.slice().reverse().map((r, j) => `L ${x(rows.length - 1 - j).toFixed(1)} ${y(r.unflaggedMedianPct).toFixed(1)}`).join(' ') + ' Z';
+  const ticks: number[] = [];
+  for (let v = lo; v <= hi; v += 20) ticks.push(v);
+  const years = rows.map((r) => r.year).filter((yr) => yr % 5 === 0);
+
+  return (
+    <figure className="yrs">
+      <div className="dist-plot">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="dist-svg" role="img"
+             aria-label={`Median result versus estimate by sale year, ${rows[0].year} to ${rows[rows.length - 1].year}. The flagged line sits above the unflagged control in every year.`}>
+          {ticks.map((t) => (
+            <line key={t} x1="0" y1={y(t)} x2={W} y2={y(t)} className={t === 0 ? 'dist-zero-h' : 'dist-grid'} />
+          ))}
+          <path d={band} className="yrs-band" />
+          <path d={line((r) => r.unflaggedMedianPct)} className="yrs-line yrs-line-u" />
+          <path d={line((r) => r.flaggedMedianPct)} className="yrs-line yrs-line-f" />
+        </svg>
+        <div className="dist-ylab" aria-hidden>
+          {ticks.slice().reverse().map((t) => (
+            <span key={t} style={{ top: `${(y(t) / H) * 100}%` }}>{t > 0 ? `+${t}` : t}%</span>
+          ))}
+        </div>
+        <div className="dist-xlab" aria-hidden>
+          {years.map((yr) => (
+            <span key={yr} style={{ left: `${(rows.findIndex((r) => r.year === yr) / (rows.length - 1)) * 100}%` }}>{yr}</span>
+          ))}
+        </div>
+      </div>
+      <figcaption className="dist-cap">
+        Median result against estimate by sale year, {rows[0].year}&ndash;{rows[rows.length - 1].year}. The flagged
+        line clears the control in <b>every one of the {rows.length} years</b> on record, through two
+        crashes and a boom — the edge is not an artifact of one regime.
+      </figcaption>
+    </figure>
+  );
+}
+
 
 interface CompRow { title: string; house: string; saleDate: string; priceUsd: number; url: string | null }
 
@@ -988,37 +1128,291 @@ export default function AboutPage() {
           .corpus-pct { grid-column: 2; }
         }
 
-        /* ── RECORD: control to flagged, drawn as a move ──────────────── */
-        .slope-grid { display: grid; grid-template-columns: 1fr; gap: clamp(22px, 2.6vw, 30px); margin-top: clamp(24px, 3vw, 34px); }
-        @media (min-width: 780px) { .slope-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: clamp(26px, 3vw, 40px); } }
-        .slope { border-top: 1px solid var(--hairline); padding-top: 16px; }
-        .slope-head { margin-bottom: 10px; }
-        .slope-metric { display: block; font-size: var(--d-body); font-weight: 650; color: var(--color-fg); }
-        .slope-note { display: block; font-size: var(--d-cap); line-height: 1.5; color: var(--color-text-faint); margin-top: 3px; }
-        /* the shared-delta rewrite lifted the data off the ceiling, so the plot
-           no longer needs 108px of which 66-84% was empty */
-        .slope-plot { position: relative; height: 84px; }
-        .slope-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-        .slope-dot {
-          position: absolute; width: 8px; height: 8px; border-radius: 50%;
-          transform: translate(-50%, -50%); background: var(--color-text-muted);
-          /* a surface ring keeps the dot legible where the line passes under it */
-          box-shadow: 0 0 0 2px var(--color-bg);
-        }
-        .slope-dot-lo { left: 14%; }
-        .slope-dot-hi { left: 86%; }
-        /* Labels HANG OFF their dots rather than pinning to the panel edges.
-           Edge-pinning put the dot on top of the glyph at 390px — measured 7.1px
-           of overlap, which destroyed the +/- sign. */
-        .slope-val {
-          position: absolute;
-          font-size: var(--d-body); font-weight: 700; font-variant-numeric: tabular-nums;
-          color: var(--color-text-muted); white-space: nowrap;
-        }
-        .slope-val-lo { left: 14%; transform: translate(calc(-100% - 12px), -50%); }
-        .slope-val-hi { left: 86%; transform: translate(12px, -50%); }
-        .slope-foot { display: flex; justify-content: space-between; margin-top: 4px; }
+        /* ── RECORD: the distribution, the years, the table ───────────── */
+        .dist, .yrs { margin: clamp(26px, 3.2vw, 38px) 0 0; padding: 0; }
+        .dist-legend { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-bottom: 14px; }
+        .dist-key { display: inline-flex; align-items: center; gap: 8px; font-size: var(--d-cap); color: var(--color-text-secondary); }
+        .dist-key i { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+        .dist-key b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .dist-key-u i { background: color-mix(in srgb, var(--color-fg) 20%, transparent); border: 1px solid color-mix(in srgb, var(--color-fg) 40%, transparent); }
+        .dist-key-f i { background: transparent; border: 2px solid var(--color-butter); }
 
+        /* the plot carries its own axis gutters; labels are HTML so they stay
+           legible at 390px, where SVG text in a stretched viewBox would be ~7px */
+        .dist-plot { position: relative; padding: 0 0 26px 42px; }
+        .dist-svg { display: block; width: 100%; height: clamp(190px, 24vw, 280px); overflow: visible; }
+        .yrs .dist-svg { height: clamp(150px, 18vw, 210px); }
+        .dist-ylab { position: absolute; left: 0; top: 0; bottom: 26px; width: 38px; }
+        .dist-ylab span {
+          position: absolute; right: 8px; transform: translateY(-50%);
+          font-family: var(--font-mono), monospace; font-size: var(--d-label);
+          color: var(--color-text-faint); white-space: nowrap;
+        }
+        .dist-xlab { position: absolute; left: 42px; right: 0; bottom: 4px; height: 16px; }
+        .dist-xlab span {
+          position: absolute; transform: translateX(-50%);
+          font-family: var(--font-mono), monospace; font-size: var(--d-label);
+          color: var(--color-text-faint); white-space: nowrap;
+        }
+        .dist-xlab-zero { color: var(--color-fg) !important; }
+        @media (max-width: 620px) {
+          /* eight boundary labels collide at 390px — keep the anchors that carry
+             the reading: the estimate mid, and the two ends */
+          .dist-xlab span { display: none; }
+          .dist-xlab span:nth-child(1), .dist-xlab span:nth-child(3),
+          .dist-xlab span:nth-child(6), .dist-xlab span:nth-child(8) { display: block; }
+        }
+
+        .dist-below { fill: color-mix(in srgb, var(--color-fg) 3%, transparent); }
+        .dist-grid { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
+        .dist-zero { stroke: var(--color-fg); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.45; vector-effect: non-scaling-stroke; }
+        .dist-zero-h { stroke: color-mix(in srgb, var(--color-fg) 45%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+        /* control = filled mass, flagged = bold outline over it. Two filled areas
+           at similar opacity blended into one khaki shape across most of the
+           chart, so neither distribution was readable. */
+        .dist-area-u { fill: color-mix(in srgb, var(--color-fg) 15%, transparent); stroke: color-mix(in srgb, var(--color-fg) 38%, transparent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+        /* butter, not green: green already means "% under" on the proof cards */
+        .dist-line-f { fill: none; stroke: var(--color-butter); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+        .dist-foot {
+          display: flex; margin: 2px 0 0; padding-left: 42px;
+          font-size: var(--d-label); letter-spacing: 0.1em; text-transform: uppercase;
+          color: var(--color-text-faint); font-family: var(--font-mono), monospace;
+        }
+        /* 3 of 9 bins sit below the estimate, so the boundary is at 33.33% */
+        .dist-foot-u { width: 33.333%; text-align: right; padding-right: 10px; white-space: nowrap; }
+        .dist-foot-o { flex: 1; text-align: left; padding-left: 10px; }
+        @media (max-width: 620px) { .dist-foot { font-size: 9px; letter-spacing: 0.06em; } }
+        .dist-cap { font-size: var(--d-cap); line-height: 1.6; color: var(--color-text-faint); margin: 12px 0 0; max-width: var(--measure); }
+        .dist-cap b { color: var(--color-text-secondary); font-weight: 600; }
+
+        .yrs-band { fill: color-mix(in srgb, var(--color-butter) 20%, transparent); }
+        .yrs-line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+        .yrs-line-u { stroke: color-mix(in srgb, var(--color-fg) 45%, transparent); }
+        .yrs-line-f { stroke: var(--color-butter); }
+
+        .rec-table {
+          width: 100%; border-collapse: collapse; margin-top: clamp(30px, 3.6vw, 44px);
+        }
+        .rec-table th, .rec-table td { text-align: left; vertical-align: baseline; }
+        .rec-table thead th {
+          font-size: var(--d-label); letter-spacing: 0.08em; text-transform: uppercase;
+          color: var(--color-text-faint); font-weight: 600;
+          padding: 0 0 9px; border-bottom: 1px solid var(--hairline);
+        }
+        .rec-table tbody th {
+          font-size: var(--d-body); font-weight: 650; color: var(--color-fg);
+          padding: 14px 16px 14px 0; border-bottom: 1px solid var(--hairline);
+        }
+        .rec-table tbody th i {
+          display: block; font-style: normal; font-weight: 400;
+          font-size: var(--d-cap); color: var(--color-text-faint); margin-top: 3px;
+          max-width: 46ch;
+        }
+        .rec-table td { padding: 14px 0; border-bottom: 1px solid var(--hairline); }
+        .rec-num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .rec-table tbody .rec-num { font-size: var(--d-body); font-weight: 700; padding-left: 14px; }
+        .rec-ctrl { color: var(--color-text-faint); }
+        .rec-flag { color: var(--color-fg); }
+        .rec-edge { color: var(--color-butter); }
+        @media (max-width: 560px) {
+          .rec-table tbody th i { display: none; }  /* the notes double the row height on a phone */
+          .rec-table tbody .rec-num, .rec-table thead th { font-size: var(--d-cap); }
+        }
+
+        /* ── THE COMPS, INSPECTABLE ───────────────────────────────────── */
+        .comp-disc { margin: 2px 0 0; }
+        .comp-disc > summary {
+          display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+          cursor: pointer; list-style: none;
+          padding: 13px 0; margin: -13px 0;  /* 44px hit area without moving the line */
+          color: var(--color-text-secondary);
+          border-bottom: 1px solid transparent;
+        }
+        .comp-disc > summary::-webkit-details-marker { display: none; }
+        .comp-disc > summary:hover { color: var(--color-fg); }
+        .comp-disc > summary:hover .comp-caret { color: var(--color-fg); border-color: var(--color-fg); }
+        .comp-disc > summary:focus-visible { outline: 2px solid var(--color-butter); outline-offset: 3px; }
+        .comp-caret {
+          flex: none; width: 17px; height: 17px; border-radius: 50%;
+          border: 1px solid var(--hairline); color: var(--color-text-faint);
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 11px; line-height: 1; font-weight: 600;
+          transition: transform .18s ease;
+        }
+        .comp-disc[open] .comp-caret { transform: rotate(45deg); }
+        .comp-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+        .comp-table { width: 100%; border-collapse: collapse; font-size: var(--d-cap); }
+        .comp-table th {
+          text-align: left; font-weight: 600; padding: 0 0 6px;
+          color: var(--color-text-faint); font-size: var(--d-label);
+          letter-spacing: 0.08em; text-transform: uppercase;
+          border-bottom: 1px solid var(--hairline);
+        }
+        .comp-table td { padding: 7px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+        .comp-table tr:last-child td { border-bottom: none; }
+        .comp-date { color: var(--color-text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 12px !important; }
+        .comp-lot { color: var(--color-text-secondary); line-height: 1.4; }
+        /* Two lines is enough to identify the object; the full title is one
+           click away on the house's own page. Unclamped, a single card ran
+           3,600px tall. */
+        .comp-lot a, .comp-lot > span {
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .comp-lot a { color: var(--color-text-secondary); text-decoration: none; border-bottom: 1px solid var(--hairline); }
+        .comp-lot a:hover { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+        .comp-lot i { display: block; font-style: normal; color: var(--color-text-faint); font-size: var(--d-label); margin-top: 2px; }
+        .comp-num {
+          text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+          color: var(--color-fg); font-weight: 600; padding-left: 12px !important;
+        }
+        th.comp-num { color: var(--color-text-faint); font-weight: 600; }
+        .comp-note { font-size: var(--d-label); line-height: 1.5; color: var(--color-text-faint); margin: 9px 0 0; }
+        /* The hero has the full rail, so its rows do not need the 2-line clamp
+           the half-width cards do. */
+        .comp-disc-hero { margin-top: 16px; max-width: var(--measure); }
+        .comp-disc-hero .comp-table { font-size: var(--d-cap); }
+        .comp-disc-hero .comp-lot a, .comp-disc-hero .comp-lot > span { -webkit-line-clamp: 1; }
+        .comp-note b { color: var(--color-text-secondary); font-weight: 600; }
+
+        /* ── ARCHIVE COVERAGE ─────────────────────────────────────────── */
+        .cov { margin: clamp(26px, 3vw, 34px) 0 0; position: relative; }
+        .cov-grid { position: relative; height: 16px; margin-left: 0; }
+        .cov-tick { position: absolute; top: 0; width: 1px; height: 100%; background: var(--hairline); }
+        .cov-tick i {
+          position: absolute; top: 0; left: 4px; font-style: normal;
+          font-family: var(--font-mono), monospace; font-size: var(--d-label);
+          color: var(--color-text-faint); letter-spacing: 0.04em;
+        }
+        .cov-row {
+          /* Phone: house and its two figures share one line, the bar takes the
+             next. Stacking all four put every row near 210px tall and left the
+             year and the count reading as two unlabelled numbers. */
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          grid-template-areas: "house from n" "track track track";
+          gap: 9px 10px;
+          align-items: baseline;
+          padding: 11px 0;
+          border-top: 1px solid var(--hairline);
+        }
+        .cov-house { grid-area: house; }
+        .cov-track { grid-area: track; }
+        .cov-from { grid-area: from; }
+        .cov-n { grid-area: n; }
+        .cov-from::after { content: " ·"; }
+        .cov-house { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
+        /* The track is an AXIS, not a bar. Filling it edge-to-edge made every
+           row look like it had coverage from 1989: a house whose record starts
+           in 2013 drew the same dark pill from the left as Christie's thin
+           1989-91 segment, so "thin" and "absent" were indistinguishable — which
+           is precisely the distinction this chart exists to make. Only real
+           coverage gets height now; the axis is a hairline through the middle. */
+        .cov-track { position: relative; display: block; height: 10px; }
+        .cov-track::before {
+          content: ""; position: absolute; left: 0; right: 0; top: 50%;
+          height: 1px; background: var(--hairline);
+        }
+        .cov-thin, .cov-solid { position: absolute; top: 0; height: 100%; border-radius: 5px; }
+        /* one ink for both: the difference between real and thin coverage is
+           density, not category, so it is carried by opacity rather than hue */
+        .cov-thin { background: color-mix(in srgb, var(--color-fg) 30%, transparent); }
+        .cov-solid { background: var(--color-fg); }
+        .cov-from, .cov-n {
+          font-size: var(--d-cap); color: var(--color-text-faint);
+          font-variant-numeric: tabular-nums;
+        }
+        .cov-n { color: var(--color-text-secondary); }
+        @media (min-width: 760px) {
+          .cov-grid { margin-left: 132px; margin-right: 148px; }
+          .cov-row {
+            grid-template-columns: 132px minmax(0, 1fr) 52px 86px;
+            grid-template-areas: "house track from n";
+            gap: 0 16px; align-items: center; padding: 11px 0;
+          }
+          .cov-from { text-align: right; }
+          .cov-from::after { content: none; }
+          .cov-n { text-align: right; }
+        }
+        .cov-split { margin-top: clamp(34px, 4.5vw, 54px); }
+
+        /* ── THE CHAIN: the graph, drawn ──────────────────────────────── */
+        .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; }
+        .chain-node {
+          position: relative;
+          padding: 0 0 clamp(20px, 2.4vw, 26px) 34px;
+          border-left: 1px solid var(--hairline);
+          display: grid;
+          grid-template-rows: auto auto auto;
+          align-content: start;
+        }
+        /* The rule must stop AT the final dot, not before it (an orphaned last
+           link) and not past it (a chain running off-page). Height-independent:
+           kill the border, then draw a stub down to the dot's centre. */
+        .chain-node:last-child { border-left-color: transparent; padding-bottom: 0; }
+        .chain-node:last-child::after {
+          content: ""; position: absolute; left: -1px; top: 0; width: 1px; height: 10px;
+          background: var(--hairline);
+        }
+        .chain-node::before {
+          content: "";
+          position: absolute; left: -5px; top: 6px;
+          width: 9px; height: 9px; border-radius: 50%;
+          background: var(--color-text-faint);
+        }
+        .chain-node:first-child::before { background: var(--color-fg); }
+        .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+        .chain-n {
+          display: inline-block; margin-top: 6px; margin-right: 8px;
+          font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
+          color: var(--color-fg); line-height: 1;
+        }
+        .chain-v { display: inline; font-size: var(--d-body); line-height: 1.6; color: var(--color-text-secondary); }
+        @media (min-width: 900px) {
+          /* the chain lies down: five steps across, the rule running through
+             them, so the linkage reads as a flow rather than a list */
+          .chain { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; }
+          .chain::before { display: none; }
+          .chain-node { border-left: none; border-top: 1px solid var(--hairline); padding: 22px 18px 0 0; }
+          /* the rule stops at the last dot rather than running on to the
+             container edge, which read as "continues off-page" */
+          .chain-node:last-child { border-top: none; }
+          .chain-node:last-child::after {
+            content: ""; position: absolute; left: 0; top: -1px; width: 8px; height: 1px;
+            background: var(--hairline);
+          }
+          .chain-node::before { left: 0; top: -5px; }
+          .chain-k { font-size: var(--d-ui); }
+          .chain-v { display: block; font-size: var(--d-cap); margin-top: 4px; }
+          .chain-n { display: block; margin: 8px 0 0; }
+        }
+
+        /* ── CORPUS: ranked, one ink, common baseline ─────────────────── */
+        .corpus { margin-top: clamp(26px, 3vw, 36px); }
+        .corpus-item {
+          display: grid;
+          grid-template-columns: 96px minmax(0,1fr) auto 52px;
+          gap: 14px; align-items: center;
+          padding: 13px 0; border-top: 1px solid var(--hairline);
+          font-variant-numeric: tabular-nums;
+        }
+        .corpus-item:last-child { border-bottom: 1px solid var(--hairline); }
+        .corpus-label { font-size: var(--d-body); font-weight: 600; color: var(--color-fg); }
+        .corpus-track { display: block; height: 14px; }
+        .corpus-bar {
+          display: block; height: 100%;
+          background: var(--color-text-muted);
+          border-radius: 0 4px 4px 0;   /* square at the baseline, rounded at the data end */
+        }
+        .corpus-n { font-size: var(--d-ui); color: var(--color-text-secondary); }
+        .corpus-pct { font-size: var(--d-cap); color: var(--color-text-faint); text-align: right; }
+        @media (max-width: 620px) {
+          .corpus-item { grid-template-columns: 1fr auto; gap: 4px 10px; }
+          .corpus-track { grid-column: 1 / -1; }
+          .corpus-pct { grid-column: 2; }
+        }
+
+        
         .deck-statband {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -1215,27 +1609,42 @@ export default function AboutPage() {
             including the house&rsquo;s premium; <b style={{ color: 'var(--color-fg)' }}>at hammer</b> strips
             the premium out for a like-for-like comparison against an estimate that never included it.
           </p>
-          <div style={{ marginTop: 24 }}>
-            <div className="slope-grid">
-              <Slope metric="Median vs estimate · all-in" note="what the buyer paid, premium included"
-                lo={U.medianPerfPct} hi={F.medianPerfPct} fmtV={pct} n={fmt(F.n)} />
-              <Slope metric="Median vs estimate · at hammer" note="like-for-like against a hammer-basis estimate"
-                lo={U.hammerMedianPct ?? 0} hi={F.hammerMedianPct ?? 0} fmtV={pct} n={fmt(F.n)} />
-              <Slope metric="Cleared the high estimate" note="share of lots that beat the top of the range"
-                lo={U.beatHighPct} hi={F.beatHighPct} fmtV={(v) => `${v}%`} n={fmt(F.n)} />
-              <Slope metric="Failed to sell" note="lower is better — the flag does not chase no-sales"
-                lo={U.failToSellPct} hi={F.failToSellPct} fmtV={(v) => `${v}%`} n={fmt(F.nBoughtIn ?? 0)} better="lower" />
-            </div>
-          </div>
-          <div style={{ marginTop: 22, padding: '18px 20px', border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--panel)' }}>
-            <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 6 }}>The edge, stated plainly</div>
-            <div style={{ fontSize: 15.5, lineHeight: 1.65, color: 'var(--color-text-secondary)' }}>
-              <b style={{ color: 'var(--color-up)' }}>{edgeAllIn} points</b> all-in,{' '}
-              <b style={{ color: 'var(--color-up)' }}>{edgeHammer} points</b> at hammer, and{' '}
-              <b style={{ color: 'var(--color-up)' }}>{edgeBeat} points</b> on the rate of clearing the
-              high estimate — flagged over unflagged, on the same replay, over the same period.
-            </div>
-          </div>
+          <OutcomeCurve dist={DIST} />
+
+          {SERIES.length >= 4 && <RecordYears series={SERIES} />}
+
+          {/* The four metrics as a table, not as four two-point slope panels.
+              Each panel was an 84px well containing one thin diagonal line —
+              roughly 85% empty — and the fourth ("failed to sell") is correctly
+              almost flat, so it read as a broken chart rather than as the honest
+              near-parity it is. A table states four comparisons in the space one
+              panel used, which is also how an institutional reader wants them:
+              control, treatment, difference, n. */}
+          <table className="rec-table">
+            <caption className="sr-only">The record: unflagged control versus lectr-flagged, same replay, same period.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Measure</th>
+                <th scope="col" className="rec-num">Control</th>
+                <th scope="col" className="rec-num">Flagged</th>
+                <th scope="col" className="rec-num">Edge</th>
+              </tr>
+            </thead>
+            <tbody>
+              {RECORD_ROWS.map((r) => (
+                <tr key={r.k}>
+                  <th scope="row">
+                    {r.k}
+                    <i>{r.note}</i>
+                  </th>
+                  <td className="rec-num rec-ctrl">{r.fmt(r.lo)}</td>
+                  <td className="rec-num rec-flag">{r.fmt(r.hi)}</td>
+                  <td className="rec-num rec-edge">{r.edge}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
           <p style={caption}>
             Bought-in lots are scored as outcomes rather than dropped, so a flag on something that
             then failed to sell counts against the record. <Link href="/value" className="deck-more">See the full record <Flick size={11} /></Link>

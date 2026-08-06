@@ -1,0 +1,77 @@
+{
+  "_what": "Per-lot outcome distribution (realized vs. estimate mid, all-in basis) for flagged vs. unflagged lots — counts per bin, from the backtest accumulator state.",
+  "generatedAt": "2026-08-06T04:29:20.663Z",
+  "bins": [
+    {
+      "lo": -100,
+      "hi": -50,
+      "label": "worse than −50%",
+      "flagged": 477,
+      "unflagged": 329
+    },
+    {
+      "lo": -50,
+      "hi": -25,
+      "label": "−50% to −25%",
+      "flagged": 1151,
+      "unflagged": 1087
+    },
+    {
+      "lo": -25,
+      "hi": 0,
+      "label": "−25% to est. mid",
+      "flagged": 5772,
+      "unflagged": 6877
+    },
+    {
+      "lo": 0,
+      "hi": 25,
+      "label": "est. mid to +25%",
+      "flagged": 7921,
+      "unflagged": 8810
+    },
+    {
+      "lo": 25,
+      "hi": 50,
+      "label": "+25% to +50%",
+      "flagged": 6339,
+      "unflagged": 4766
+    },
+    {
+      "lo": 50,
+      "hi": 100,
+      "label": "+50% to +100%",
+      "flagged": 8621,
+      "unflagged": 4312
+    },
+    {
+      "lo": 100,
+      "hi": 200,
+      "label": "+100% to +200%",
+      "flagged": 5730,
+      "unflagged": 1955
+    },
+    {
+      "lo": 200,
+      "hi": 500,
+      "label": "+200% to +500%",
+      "flagged": 2309,
+      "unflagged": 575
+    },
+    {
+      "lo": 500,
+      "hi": 1000000000,
+      "label": "better than +500%",
+      "flagged": 414,
+      "unflagged": 86
+    }
+  ],
+  "summary": {
+    "flaggedN": 38734,
+    "unflaggedN": 28797,
+    "flaggedBelowPct": 17,
+    "unflaggedBelowPct": 25.6,
+    "flaggedMedianPct": 41,
+    "unflaggedMedianPct": 16
+  }
+}

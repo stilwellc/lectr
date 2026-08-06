@@ -195,6 +195,62 @@ function summarize(b: Bucket) {
   };
 }
 
+// ── OUTCOME DISTRIBUTION ──
+// A median is one number; it hides the tails. The about page has to show that the
+// flagged edge is a whole SHIFTED DISTRIBUTION (and that plenty of flagged lots
+// still sell under the estimate mid) rather than a single headline stat, so the
+// summariser ships a binned histogram of the raw per-lot perfs alongside the
+// medians. COUNTS ONLY — the raw perfs arrays live in the sidecar state file and
+// must never reach a client (they are ~90k floats and they are the engine's
+// working memory, not a published number).
+//
+// Bins are left-open / right-closed in PERCENT: (-inf,-50], (-50,-25], (-25,0],
+// (0,25], (25,50], (50,100], (100,200], (200,500], (500,inf) — nine, in order,
+// partitioning the whole line so the counts always sum to n.
+const DIST_EDGES: { lo: number; hi: number; label: string }[] = [
+  { lo: -Infinity, hi: -50, label: 'worse than −50%' },
+  { lo: -50, hi: -25, label: '−50% to −25%' },
+  { lo: -25, hi: 0, label: '−25% to est. mid' },
+  { lo: 0, hi: 25, label: 'est. mid to +25%' },
+  { lo: 25, hi: 50, label: '+25% to +50%' },
+  { lo: 50, hi: 100, label: '+50% to +100%' },
+  { lo: 100, hi: 200, label: '+100% to +200%' },
+  { lo: 200, hi: 500, label: '+200% to +500%' },
+  { lo: 500, hi: Infinity, label: 'better than +500%' },
+];
+
+const binOf = (pct: number) => { let b = 0; while (b < DIST_EDGES.length - 1 && pct > DIST_EDGES[b].hi) b++; return b; };
+const belowPctOf = (perfs: number[]) => (perfs.length ? Math.round((perfs.filter(p => p < 0).length / perfs.length) * 1000) / 10 : 0);
+
+/** Binned all-in (premium-inclusive) outcome histogram for the flagged vs.
+ *  unflagged arms — `bins` are lot COUNTS, `summary` the headline shares. Uses
+ *  `perfs` (all-in), NOT `hammerPerfs`, so it reads on the same basis as
+ *  medianPerfPct. `lo`/`hi` are finite-clamped to -100/1e9 so the block is plain
+ *  JSON (JSON.stringify turns ±Infinity into null). */
+export function distributionOf(flagged: Bucket, unflagged: Bucket) {
+  const f = new Array(DIST_EDGES.length).fill(0) as number[];
+  const u = new Array(DIST_EDGES.length).fill(0) as number[];
+  for (const p of flagged.perfs) f[binOf(p * 100)]++;
+  for (const p of unflagged.perfs) u[binOf(p * 100)]++;
+  return {
+    bins: DIST_EDGES.map((e, i) => ({
+      lo: e.lo === -Infinity ? -100 : e.lo,
+      hi: e.hi === Infinity ? 1e9 : e.hi,
+      label: e.label,
+      flagged: f[i],
+      unflagged: u[i],
+    })),
+    summary: {
+      flaggedN: flagged.perfs.length,
+      unflaggedN: unflagged.perfs.length,
+      flaggedBelowPct: belowPctOf(flagged.perfs),
+      unflaggedBelowPct: belowPctOf(unflagged.perfs),
+      flaggedMedianPct: flagged.perfs.length ? Math.round(median([...flagged.perfs].sort((a, b) => a - b)) * 100) : 0,
+      unflaggedMedianPct: unflagged.perfs.length ? Math.round(median([...unflagged.perfs].sort((a, b) => a - b)) * 100) : 0,
+    },
+  };
+}
+
 /** Assemble the published backtest.json object from accumulator state. This is
  *  the ENTIRE derivation: auto-calibration (beat-rate step levels + conformal
  *  band) + the annual series, byte-for-byte the original. `generatedAt` is
@@ -264,6 +320,7 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
     flaggedTiers: { main: summarize(st.flaggedMain), fallback: summarize(st.flaggedFallback) },
     calibration,
     series,
+    distribution: distributionOf(st.flagged, st.unflagged),
   };
 }
 
