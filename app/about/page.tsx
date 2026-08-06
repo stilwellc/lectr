@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
+import Masthead, { Underscore } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
-import Masthead, { Accent } from '../components/Masthead';
 import { MARKETS } from '../constants';
 import { craftTitle } from '../utils';
 import meta from '../../public/data/ray/meta.json';
@@ -12,6 +12,7 @@ import market from '../../public/data/ray/market.json';
 import refs from '../../public/data/ray/refs.json';
 import proof from './proof-cases.json';
 import PlateImg from '../components/PlateImg';
+import RayEntrance from '../components/RayEntrance';
 import { httpsImg, sizedImg } from '../utils';
 
 /**
@@ -35,7 +36,8 @@ export const metadata: Metadata = {
     'lectr reads every published estimate against every realised hammer across eight auction houses and three decades — 741,521 settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.',
 };
 
-const wrap: React.CSSProperties = { maxWidth: 900, margin: '0 auto', padding: '0 24px' };
+// the product's own content column — matches ArtistNav and the Colophon
+const wrap: React.CSSProperties = {};
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const lead: React.CSSProperties = { ...p, fontSize: 17.5, lineHeight: 1.62, color: 'var(--color-text-secondary)' };
 const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.6 };
@@ -80,7 +82,7 @@ const calN = backtest.calibration?.n ?? null;
 function Stat({ figure, label, note }: { figure: string; label: string; note?: string }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 'clamp(26px, 3vw, 42px)', fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+      <div style={{ fontSize: 'clamp(26px, 3vw, 42px)', fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--color-fg)', lineHeight: 1 }}>
         {figure}
       </div>
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 9 }}>{label}</div>
@@ -89,72 +91,80 @@ function Stat({ figure, label, note }: { figure: string; label: string; note?: s
   );
 }
 
-/** THE CORPUS AS ONE OBJECT. Six separate rules made the reader compare
- *  lengths across gaps; a single composition bar shows the whole book at once
- *  and each market as its true share of it. Neutral ink throughout — this is
- *  volume, and colour in this product means direction. */
-function CorpusBar({ bars, total }: { bars: { key: string; label: string; n: number }[]; total: number }) {
-  const shades = ['#F2EEE3', '#C9C3B4', '#A7A192', '#857F72', '#6A6559', '#4E4A41'];
+/** THE CORPUS, RANKED. Was a stacked composition bar in a six-step neutral
+ *  ramp. Two problems, both measured: the ramp FAILED the categorical palette
+ *  floor (worst adjacent pair dE 9.0 against a required 15, and the darkest
+ *  step at 2.19:1 on this ground) — and no six-step neutral ramp can pass on a
+ *  near-black surface, four is the ceiling. Worse, stacking asks the reader to
+ *  compare segment lengths with no common baseline, and at 390px four of six
+ *  markets rendered between 4.3 and 30px.
+ *
+ *  Ranked bars from a common baseline are the most accurate encoding available
+ *  and need exactly ONE ink, so the categorical-palette question disappears.
+ *  Sorted descending, direct-labelled, square at the baseline with the radius
+ *  on the data end only. */
+function CorpusBars({ bars, total }: { bars: { key: string; label: string; n: number }[]; total: number }) {
+  const max = bars[0]?.n || 1;
   return (
     <div className="corpus">
-      <div className="corpus-track">
-        {bars.map((b, i) => (
-          <span
-            key={b.key}
-            className="corpus-seg"
-            style={{ width: `${(b.n / total) * 100}%`, background: shades[i % shades.length] }}
-            title={`${b.label} — ${fmt(b.n)}`}
-          />
-        ))}
-      </div>
-      <div className="corpus-legend">
-        {bars.map((b, i) => (
-          <div className="corpus-item" key={b.key}>
-            <span className="corpus-dot" style={{ background: shades[i % shades.length] }} aria-hidden />
-            <span className="corpus-label">{b.label}</span>
-            <span className="corpus-n">{fmt(b.n)}</span>
-            <span className="corpus-pct">{((b.n / total) * 100).toFixed(1)}%</span>
-          </div>
-        ))}
-      </div>
+      {bars.map((b) => (
+        <div className="corpus-item" key={b.key}>
+          <span className="corpus-label">{b.label}</span>
+          <span className="corpus-track">
+            <span className="corpus-bar" style={{ width: `${(b.n / max) * 100}%` }} />
+          </span>
+          <span className="corpus-n">{fmt(b.n)}</span>
+          <span className="corpus-pct">{((b.n / total) * 100).toFixed(1)}%</span>
+        </div>
+      ))}
     </div>
   );
 }
 
-/** The record, as a head-to-head. Green marks the flagged side ONLY where it
- *  genuinely reads higher — direction, never decoration. */
-/** THE RECORD AS A SLOPE. Bars asked the reader to compare two lengths; a
- *  slope draws the MOVE itself — control on the left, flagged on the right,
- *  the line between them is the edge. Ink follows the metric, not the side:
- *  fail-to-sell rewards the lower number, so the win can point down. */
-function Slope({ metric, note, lo, hi, fmtV, better = 'higher' }: {
+/** THE RECORD AS A SLOPE — ONE shared scale across all four panels.
+ *
+ *  The first version normalised each panel to its OWN maximum, which encoded
+ *  the RATIO lo/hi while every label, the summary and the hero figure speak in
+ *  POINTS. Measured, that put a 15.9x scale spread across a 2x2 grid with
+ *  identical geometry: the 20-point edge drew 69.8px while the 25-point edge —
+ *  the one this whole page is built on — drew 27.6px. The chart contradicted
+ *  its own headline. Geometry is now the signed improvement over control on a
+ *  single fixed domain, so panel 1 IS the "+25 points" figure, measurable off
+ *  the page, and fail-to-sell reads nearly flat — which is the honest picture
+ *  and supports its own note better than the exaggeration did.
+ */
+const SLOPE_DOMAIN = 26;  // percentage points — covers the largest edge (25)
+
+function Slope({ metric, note, lo, hi, fmtV, n, better = 'higher' }: {
   metric: string; note?: string;
-  /** unflagged (control) and flagged values, in the metric's own units */
   lo: number; hi: number;
   fmtV: (n: number) => string;
+  /** sample size — an institutional reader looks for n before the number */
+  n?: string;
   better?: 'higher' | 'lower';
 }) {
-  const span = Math.max(Math.abs(lo), Math.abs(hi), 1);
-  const norm = (v: number) => 50 - (v / span) * 42;  // % from top, 0 centred
-  const flaggedWins = better === 'lower' ? hi <= lo : hi >= lo;
-  const ink = flaggedWins ? 'var(--color-up)' : 'var(--color-text-muted)';
+  const delta = better === 'lower' ? lo - hi : hi - lo;   // signed improvement
+  const yLo = 86;                                          // shared baseline
+  const yHi = 86 - (delta / SLOPE_DOMAIN) * 74;
+  const wins = delta >= 0;
+  const ink = wins ? 'var(--color-up)' : 'var(--color-text-muted)';
   return (
     <div className="slope">
       <div className="slope-head">
         <span className="slope-metric">{metric}</span>
-        {note && <span className="slope-note">{note}</span>}
+        {note && <span className="slope-note">{note}{n ? ` · n ${n}` : ''}</span>}
       </div>
-      <div className="slope-plot" aria-hidden>
-        <span className="slope-axis" />
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="slope-svg">
-          <line x1="12" y1={norm(lo)} x2="88" y2={norm(hi)} stroke={ink} strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+      <div className="slope-plot">
+        <span className="sr-only">{metric}: unflagged {fmtV(lo)}, flagged {fmtV(hi)}.</span>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="slope-svg" aria-hidden>
+          <line x1="14" y1={yLo} x2="86" y2={yHi} stroke={ink} strokeWidth="2" vectorEffect="non-scaling-stroke" />
         </svg>
-        <span className="slope-dot slope-dot-lo" style={{ top: `${norm(lo)}%` }} />
-        <span className="slope-dot slope-dot-hi" style={{ top: `${norm(hi)}%`, background: ink }} />
-        <span className="slope-val slope-val-lo" style={{ top: `${norm(lo)}%` }}>{fmtV(lo)}</span>
-        <span className="slope-val slope-val-hi" style={{ top: `${norm(hi)}%`, color: ink }}>{fmtV(hi)}</span>
+        <span className="slope-dot slope-dot-lo" style={{ top: `${yLo}%` }} aria-hidden />
+        <span className="slope-dot slope-dot-hi" style={{ top: `${yHi}%`, background: ink }} aria-hidden />
+        <span className="slope-val slope-val-lo" style={{ top: `${yLo}%` }}>{fmtV(lo)}</span>
+        <span className="slope-val slope-val-hi" style={{ top: `${yHi}%`, color: ink }}>{fmtV(hi)}</span>
       </div>
-      <div className="slope-foot"><span>unflagged</span><span>flagged</span></div>
+      <div className="slope-foot kicker"><span>unflagged</span><span>flagged</span></div>
     </div>
   );
 }
@@ -163,9 +173,9 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   const paidW = Math.max(6, Math.round((c.realizedUsd / c.ourValueUsd) * 100));
   const noEstimate = c.houseEstLow == null;
   const title = craftTitle(c.title);
-  const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 640) : null;
+  const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 960) : null;
   return (
-    <div className="proof-card">
+    <div className="proof-card ray-enter-card">
       {/* The object first. A price argument about a physical thing should show
           the thing. PlateImg unmounts on a dead hotlink so the monogram behind
           it shows rather than an empty well. */}
@@ -175,23 +185,29 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
       </div>
 
       <div className="proof-body">
-        <div className="proof-meta">
+        <div className="proof-meta kicker">
           <span>{c.market} · {c.house} · {String(c.saleDate).slice(0, 10)}</span>
-          {c.confidence === 'high' && <span className="proof-conf">high confidence</span>}
+          {/* Always render the tier, never only the flattering one. Showing the
+              badge on 5 of 6 cards made its absence on the medium case read as a
+              rendering glitch rather than as the engine's own hedge — and the
+              hedge is the point this deck is making in §05. */}
+          <span className={`proof-conf${c.confidence === 'high' ? '' : ' proof-conf-mid'}`}>{c.confidence} confidence</span>
         </div>
         <div className="proof-title">{title.length > 76 ? title.slice(0, 74) + '…' : title}</div>
 
-        <div className="proof-rows">
-          <div className="proof-row">
-            <span className="proof-k">lectr value</span>
-            <span className="proof-track"><span className="proof-fill proof-fill-ours" style={{ width: '100%' }} /></span>
-            <span className="proof-v">${fmt(c.ourValueUsd)}</span>
-          </div>
-          <div className="proof-row">
-            <span className="proof-k">sold for</span>
-            <span className="proof-track"><span className="proof-fill proof-fill-paid" style={{ width: `${paidW}%` }} /></span>
-            <span className="proof-v proof-v-paid">${fmt(c.realizedUsd)}</span>
-          </div>
+        <div className="proof-figs">
+          <span className="proof-fig">
+            <span className="proof-fig-k kicker">sold for</span>
+            <span className="proof-fig-v">${fmt(c.realizedUsd)}</span>
+          </span>
+          <span className="proof-fig proof-fig-ref">
+            <span className="proof-fig-k kicker">lectr value</span>
+            <span className="proof-fig-v">${fmt(c.ourValueUsd)}</span>
+          </span>
+        </div>
+        <div className="proof-bullet" aria-hidden>
+          <span className="proof-bullet-paid" style={{ width: `${paidW}%` }} />
+          <span className="proof-bullet-ref" />
         </div>
 
         <div className="proof-foot">
@@ -213,8 +229,8 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
  *  the whole record reduces to. */
 function Statement({ figure, lede, foot }: { figure: string; lede: React.ReactNode; foot?: string }) {
   return (
-    <section className="deck-statement">
-      <div style={wrap}>
+    <section className="deck-statement ray-enter">
+      <div className="rail">
         <div className="statement-fig">{figure}</div>
         <p className="statement-lede">{lede}</p>
         {foot && <p className="statement-foot">{foot}</p>}
@@ -229,11 +245,11 @@ function HeroLot({ c }: { c: typeof proof.cases[number] }) {
   const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 1280) : null;
   if (!img) return null;
   return (
-    <section className="deck-hero">
+    <section className="deck-hero ray-enter">
+      <div className="rail">
       <div className="hero-plate">
         <PlateImg src={img} alt="" loading="lazy" referrerPolicy="no-referrer" />
       </div>
-      <div style={wrap}>
         <p className="hero-cap">
           <b>{craftTitle(c.title)}</b> · {c.house} · {String(c.saleDate).slice(0, 10)} — lectr priced it at{' '}
           <b>${fmt(c.ourValueUsd)}</b> from {c.comps} comparable sales. It sold for{' '}
@@ -248,71 +264,89 @@ function Sec({ ord, label, title, paper, children }: {
   ord: string; label: string; title: React.ReactNode; paper?: boolean; children: React.ReactNode;
 }) {
   const inner = (
-    <div style={{ ...wrap, position: 'relative' }}>
-      <span className="deck-ord" aria-hidden>{ord}</span>
+    <div className="rail" style={{ position: 'relative' }}>
       <span className="kicker" style={{ display: 'block', margin: '0 0 12px' }}>{ord} · {label}</span>
       <h2 className="deck-h">{title}</h2>
       {children}
     </div>
   );
-  if (paper) return <section className="ray-paper deck-room">{inner}</section>;
-  return <section className="deck-slide">{inner}</section>;
+  if (paper) return <section className="ray-paper deck-room ray-enter">{inner}</section>;
+  return <section className="deck-slide ray-enter">{inner}</section>;
 }
 
 /** A step in the pricing chain. Numbered, not arrowed — the flow reads down. */
 function Step({ n, title, body }: { n: string; title: string; body: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: 16, padding: '15px 0', borderTop: '1px solid var(--hairline)' }}>
-      <div style={{ flex: 'none', width: 26, fontSize: 12, fontWeight: 700, color: 'var(--color-text-faint)', fontVariantNumeric: 'tabular-nums', paddingTop: 2 }}>{n}</div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 650, color: 'var(--color-fg)', marginBottom: 5 }}>{title}</div>
-        <div style={{ fontSize: 14.5, lineHeight: 1.65, color: 'var(--color-text-secondary)' }}>{body}</div>
-      </div>
+    <div className="method-step">
+      <div className="method-n">{n}</div>
+      <div className="method-t">{title}</div>
+      <div className="method-b">{body}</div>
     </div>
   );
 }
 
 export default function AboutPage() {
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div className="deck-scope" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      {/* The proof lots hotlink four house CDNs. They sit well below the fold, so
+          they stay lazy — the LCP element here is the cover headline, and eager
+          images would compete with it. dns-prefetch takes the DNS round-trip off
+          the scroll instead; Sotheby's carries three of the seven, so it earns a
+          full preconnect. */}
+      <link rel="preconnect" href="https://sothebys-com.brightspotcdn.com" crossOrigin="" />
+      <link rel="dns-prefetch" href="https://images2.bonhams.com" />
+      <link rel="dns-prefetch" href="https://d2tt46f3mh26nl.cloudfront.net" />
+      <link rel="dns-prefetch" href="https://www.wright20.com" />
       <style dangerouslySetInnerHTML={{ __html: `
         .deck-slide { padding: clamp(54px, 7vw, 96px) 0 clamp(20px, 3vw, 34px); }
         .deck-room {
           position: relative;
           margin-inline: calc(50% - 50vw + clamp(10px, 1.2vw, 18px));
           background: var(--paper, #E2D9C4);
-          border-radius: clamp(22px, 2.8vw, 36px);
+          border-radius: 10px;
           padding: clamp(46px, 6vw, 82px) 0 clamp(40px, 5vw, 66px);
           margin-block: clamp(40px, 5vw, 72px);
         }
-        @media (max-width: 700px) { .deck-room { margin-inline: calc(50% - 50vw + 8px); border-radius: 20px; } }
+        @media (max-width: 700px) { .deck-room { margin-inline: calc(50% - 50vw + 8px); border-radius: 8px; } }
         .deck-h {
-          font-size: clamp(27px, 4.2vw, 44px);
-          font-weight: 700;
-          letter-spacing: -0.032em;
+          /* Fraunces is this product's display voice — Masthead sets its h1 in
+             it and the lander uses it for every room title. Eight Inter-700
+             heads was the house style of a generic dark SaaS page, not lectr. */
+          font-family: var(--font-serif-display), Georgia, serif;
+          font-size: var(--d-h);
+          font-weight: 400;
+          letter-spacing: -0.015em;
           line-height: 1.12;
           color: var(--color-fg);
           margin: 0 0 20px;
-          max-width: 20ch;
-        }
-        .deck-ord {
-          position: absolute;
-          top: -0.42em;
-          right: 18px;
-          font-size: clamp(74px, 12vw, 150px);
-          font-weight: 800;
-          letter-spacing: -0.05em;
-          line-height: 1;
-          color: var(--color-fg);
-          opacity: 0.05;
-          pointer-events: none;
-          font-variant-numeric: tabular-nums;
+          max-width: 24ch;
+          text-wrap: balance;
         }
         .deck-cover { padding: clamp(30px, 4vw, 52px) 0 clamp(30px, 4vw, 46px); }
+        /* ── THE DECK SCALE ───────────────────────────────────────────────
+           Six ad-hoc sizes collapsed into a declared ramp. Three of these are
+           the design system's own tokens; the two display sizes are deliberate
+           deck-register extensions above --text-hero-num, declared here rather
+           than sprinkled as loose clamp() values. */
+        .deck-scope {
+          --d-figure: clamp(64px, 15vw, 132px);   /* the one-number slide */
+          --d-display: clamp(38px, 10vw, 76px);  /* cover statement */
+          --d-close: clamp(30px, 7vw, 50px);    /* closing line */
+          --d-figure-md: clamp(28px, 3.6vw, 46px);/* card-level figures: chain nodes, plate marks */
+          --d-figure-sm: clamp(24px, 2.4vw, 30px);/* the gap callout on a proof card */
+          --d-h: var(--text-title-1);             /* every slide heading */
+          --d-lead: clamp(16px, 1.5vw, 19px);     /* slide opening paragraph */
+          --d-lead-lg: clamp(17px, 1.9vw, 24px);  /* the statement slide's larger lede */
+          --d-body: var(--text-body);             /* running copy: 15.5 */
+          --d-ui: var(--text-ui);                 /* labels in components: 13.5 */
+          --d-cap: var(--text-caption);           /* captions: 12.5 */
+          --d-label: var(--text-label);           /* mono kickers: 10.5 */
+        }
+
         /* ── COVER: a statement with air around it ─────────────────────── */
         .deck-cover-wrap { padding: clamp(40px, 8vh, 96px) 0 clamp(30px, 4vw, 52px); }
         .cover-h {
-          font-size: clamp(34px, 6.4vw, 82px);
+          font-size: var(--d-display);
           font-weight: 700;
           letter-spacing: -0.042em;
           line-height: 1.03;
@@ -320,12 +354,12 @@ export default function AboutPage() {
           margin: 0 0 clamp(20px, 2.4vw, 30px);
           max-width: 18ch;
         }
-        .cover-h-em { color: var(--color-text-muted); }
+        .cover-h-em { color: var(--color-fg); }
         .cover-sub {
-          font-size: clamp(16px, 1.6vw, 20px);
-          line-height: 1.6;
+          font-size: var(--d-lead);
+          line-height: 1.62;
           color: var(--color-text-secondary);
-          max-width: 60ch;
+          max-width: 58ch;
           margin: 0;
         }
         .cover-sub b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -333,28 +367,31 @@ export default function AboutPage() {
         /* ── STATEMENT: the deck exhales ───────────────────────────────── */
         .deck-statement {
           padding: clamp(60px, 9vw, 130px) 0;
+          display: grid;
+          align-content: center;
+          min-height: 72vh;
           border-block: 1px solid var(--hairline);
           margin-block: clamp(30px, 4vw, 56px);
         }
         .statement-fig {
-          font-size: clamp(56px, 12vw, 168px);
+          font-size: var(--d-figure);
           font-weight: 800;
           letter-spacing: -0.05em;
           line-height: 0.92;
-          color: var(--color-up);
-          font-variant-numeric: tabular-nums;
+          color: var(--color-fg);
           margin-bottom: clamp(16px, 2vw, 26px);
         }
         .statement-lede {
-          font-size: clamp(17px, 2vw, 26px);
+          font-size: var(--d-lead-lg);
           line-height: 1.45;
           color: var(--color-fg);
           max-width: 30ch;
           margin: 0;
           font-weight: 500;
+          text-wrap: balance;
         }
         .statement-foot {
-          font-size: 13.5px;
+          font-size: var(--d-cap);
           line-height: 1.6;
           color: var(--color-text-faint);
           max-width: 52ch;
@@ -365,23 +402,61 @@ export default function AboutPage() {
         .deck-hero { margin-block: clamp(40px, 6vw, 84px); }
         .hero-plate {
           position: relative;
-          width: 100vw;
-          margin-inline: calc(50% - 50vw);
-          height: clamp(240px, 46vh, 520px);
-          background: var(--color-bg-elevated);
+          height: clamp(260px, 48vh, 540px);
+          background: var(--panel-mat, var(--color-bg-elevated));
           overflow: hidden;
-          border-block: 1px solid var(--hairline);
+          border: 1px solid var(--hairline);
+          border-radius: 8px;
         }
-        .hero-plate img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .hero-plate img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: clamp(14px, 2vw, 26px); }
         .hero-cap {
-          font-size: 13.5px;
-          line-height: 1.65;
-          color: var(--color-text-muted);
-          margin: 16px 0 0;
-          max-width: 70ch;
+          font-size: var(--d-lead);
+          line-height: 1.55;
+          color: var(--color-text-secondary);
+          margin: 20px 0 0;
+          max-width: 62ch;
         }
         .hero-cap b { color: var(--color-fg); font-weight: 600; }
-        .hero-cap-paid { color: var(--color-up) !important; }
+        .hero-cap-paid { color: var(--color-fg); }
+
+        /* ── MEASURE ──────────────────────────────────────────────────
+           Prose ran the full 1088px column — ~140 characters per line, about
+           double the readable maximum. It was the loudest "unfinished" signal
+           on the page. Grids keep the full column; only running text is capped.
+
+           One token, because two different caps read as a mistake. 60ch of the
+           "0" glyph measures ~75 actual characters in this face (lowercase runs
+           narrower than a figure) — verified by counting rendered lines, not by
+           trusting the unit. */
+        .deck-scope { --measure: 60ch; }
+        .deck-scope p,
+        .deck-scope .hero-cap,
+        .deck-scope .method-b,
+        .deck-scope .value-what { max-width: var(--measure); }
+
+        /* ── METHOD: the four steps ───────────────────────────────────── */
+        .method-step {
+          display: grid;
+          grid-template-columns: 26px minmax(0, 1fr);
+          gap: 5px 16px;
+          padding: clamp(15px, 1.7vw, 20px) 0;
+          border-top: 1px solid var(--hairline);
+        }
+        .method-n {
+          grid-row: 1; font-size: var(--d-cap); font-weight: 700;
+          color: var(--color-text-faint); font-variant-numeric: tabular-nums; padding-top: 3px;
+        }
+        .method-t { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
+        .method-b {
+          grid-column: 2; font-size: var(--d-body); line-height: 1.65;
+          color: var(--color-text-secondary);
+        }
+        @media (min-width: 900px) {
+          /* Title to its own column: the four steps then read as a table of
+             method, and the body inherits a natural measure instead of a cap. */
+          .method-step { grid-template-columns: 26px 232px minmax(0, 1fr); gap: 0 28px; align-items: baseline; }
+          .method-b { grid-column: 3; }
+        }
 
         /* ── VALUE: who, and what changes for them ────────────────────── */
         .value-list { margin-top: clamp(24px, 3vw, 34px); }
@@ -392,11 +467,11 @@ export default function AboutPage() {
           padding: clamp(16px, 1.8vw, 22px) 0;
           border-top: 1px solid var(--hairline);
         }
-        .value-who { font-size: 15px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
-        .value-what { font-size: 15px; line-height: 1.65; color: var(--color-text-secondary); }
+        .value-who { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+        .value-what { font-size: var(--d-body); line-height: 1.65; color: var(--color-text-secondary); }
         @media (min-width: 820px) {
           .value-row { grid-template-columns: 210px minmax(0, 1fr); gap: 28px; align-items: baseline; }
-          .value-who { font-size: 16px; }
+          .value-who { font-size: var(--d-body); }
         }
 
         /* ── CLOSE: one line, one action ──────────────────────────────── */
@@ -406,100 +481,128 @@ export default function AboutPage() {
           margin-top: clamp(40px, 5vw, 70px);
         }
         .close-line {
-          font-size: clamp(26px, 4.6vw, 54px);
-          font-weight: 700;
-          letter-spacing: -0.035em;
+          font-family: var(--font-serif-display), Georgia, serif;
+          font-size: var(--d-close);
+          font-weight: 400;
+          letter-spacing: -0.015em;
           line-height: 1.1;
           color: var(--color-fg);
           margin: 0 0 18px;
-          max-width: 20ch;
+          max-width: 22ch;
+          text-wrap: balance;
         }
         .close-sub {
-          font-size: clamp(15px, 1.5vw, 18px);
+          font-size: var(--d-lead);
           line-height: 1.6;
           color: var(--color-text-secondary);
           max-width: 54ch;
           margin: 0 0 clamp(26px, 3vw, 34px);
         }
         .close-sub b { color: var(--color-fg); }
+        /* Inline "read on" link. It was a 123x15 target inside a caption —
+           below any usable tap size on a phone, and indistinguishable from the
+           muted prose around it. */
+        .deck-more {
+          display: inline-flex; align-items: center; gap: 6px;
+          min-height: 44px; padding: 4px 0;
+          color: var(--color-fg); font-weight: 600; text-decoration: none;
+          border-bottom: 1px solid var(--hairline);
+        }
+        .deck-more:hover { border-bottom-color: var(--color-fg); }
+
         .close-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        @media (max-width: 700px) {
+          .close-actions { flex-direction: column; align-items: stretch; }
+          .close-cta, .close-alt { justify-content: center; }
+        }
         .close-cta {
           display: inline-flex; align-items: center; gap: 8px;
           background: var(--color-fg); color: var(--color-bg);
-          border-radius: 100px; padding: 13px 26px;
-          font-size: 15px; font-weight: 650; text-decoration: none;
+          border: 1px solid transparent; border-radius: 8px; padding: 15px 26px;
+          font-size: var(--d-body); font-weight: 650; text-decoration: none;
         }
         .close-alt {
           display: inline-flex; align-items: center;
-          border: 1px solid var(--hairline); border-radius: 100px;
-          padding: 13px 24px; font-size: 15px; font-weight: 600;
+          border: 1px solid var(--hairline); border-radius: 8px;
+          padding: 15px 24px; font-size: var(--d-body); font-weight: 600;
           color: var(--color-text-secondary); text-decoration: none;
         }
         .close-alt:hover { color: var(--color-fg); }
 
         /* ── THE CHAIN: the graph, drawn ──────────────────────────────── */
-        .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; counter-reset: chain; }
+        .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; }
         .chain-node {
           position: relative;
           padding: 0 0 clamp(20px, 2.4vw, 26px) 34px;
           border-left: 1px solid var(--hairline);
+          display: grid;
+          grid-template-rows: auto auto auto;
+          align-content: start;
         }
+        /* The rule must stop AT the final dot, not before it (an orphaned last
+           link) and not past it (a chain running off-page). Height-independent:
+           kill the border, then draw a stub down to the dot's centre. */
         .chain-node:last-child { border-left-color: transparent; padding-bottom: 0; }
+        .chain-node:last-child::after {
+          content: ""; position: absolute; left: -1px; top: 0; width: 1px; height: 10px;
+          background: var(--hairline);
+        }
         .chain-node::before {
-          counter-increment: chain;
           content: "";
           position: absolute; left: -5px; top: 6px;
           width: 9px; height: 9px; border-radius: 50%;
           background: var(--color-text-faint);
         }
         .chain-node:first-child::before { background: var(--color-fg); }
-        .chain-k { display: block; font-size: 15.5px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+        .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
         .chain-n {
           display: inline-block; margin-top: 6px; margin-right: 8px;
-          font-size: clamp(26px, 3.4vw, 40px); font-weight: 750; letter-spacing: -0.03em;
-          color: var(--color-fg); font-variant-numeric: tabular-nums; line-height: 1;
+          font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
+          color: var(--color-fg); line-height: 1;
         }
-        .chain-v { display: inline; font-size: 14.5px; line-height: 1.6; color: var(--color-text-secondary); }
+        .chain-v { display: inline; font-size: var(--d-body); line-height: 1.6; color: var(--color-text-secondary); }
         @media (min-width: 900px) {
           /* the chain lies down: five steps across, the rule running through
              them, so the linkage reads as a flow rather than a list */
           .chain { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; }
-          .chain-node {
-            border-left: none; border-top: 1px solid var(--hairline);
-            padding: 22px 18px 0 0;
+          .chain::before { display: none; }
+          .chain-node { border-left: none; border-top: 1px solid var(--hairline); padding: 22px 18px 0 0; }
+          /* the rule stops at the last dot rather than running on to the
+             container edge, which read as "continues off-page" */
+          .chain-node:last-child { border-top: none; }
+          .chain-node:last-child::after {
+            content: ""; position: absolute; left: 0; top: -1px; width: 8px; height: 1px;
+            background: var(--hairline);
           }
-          .chain-node:last-child { border-top-color: var(--hairline); }
           .chain-node::before { left: 0; top: -5px; }
-          .chain-k { font-size: 14px; }
-          .chain-v { display: block; font-size: 13px; margin-top: 4px; }
+          .chain-k { font-size: var(--d-ui); }
+          .chain-v { display: block; font-size: var(--d-cap); margin-top: 4px; }
           .chain-n { display: block; margin: 8px 0 0; }
         }
 
-        /* ── CORPUS: the whole book as one object ─────────────────────── */
+        /* ── CORPUS: ranked, one ink, common baseline ─────────────────── */
         .corpus { margin-top: clamp(26px, 3vw, 36px); }
-        .corpus-track {
-          display: flex; width: 100%; height: 46px;
-          border-radius: 8px; overflow: hidden;
-          border: 1px solid var(--hairline);
-        }
-        .corpus-seg { display: block; height: 100%; }
-        .corpus-legend {
-          display: grid; grid-template-columns: 1fr; gap: 0;
-          margin-top: clamp(18px, 2vw, 26px);
-        }
         .corpus-item {
           display: grid;
-          grid-template-columns: 12px minmax(0,1fr) auto auto;
-          gap: 12px; align-items: baseline;
-          padding: 11px 0; border-top: 1px solid var(--hairline);
+          grid-template-columns: 96px minmax(0,1fr) auto 52px;
+          gap: 14px; align-items: center;
+          padding: 13px 0; border-top: 1px solid var(--hairline);
           font-variant-numeric: tabular-nums;
         }
-        .corpus-dot { width: 9px; height: 9px; border-radius: 2px; align-self: center; }
-        .corpus-label { font-size: 14.5px; font-weight: 600; color: var(--color-fg); }
-        .corpus-n { font-size: 14px; color: var(--color-text-secondary); }
-        .corpus-pct { font-size: 12.5px; color: var(--color-text-faint); min-width: 46px; text-align: right; }
-        @media (min-width: 820px) {
-          .corpus-legend { grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 40px; }
+        .corpus-item:last-child { border-bottom: 1px solid var(--hairline); }
+        .corpus-label { font-size: var(--d-body); font-weight: 600; color: var(--color-fg); }
+        .corpus-track { display: block; height: 14px; }
+        .corpus-bar {
+          display: block; height: 100%;
+          background: var(--color-text-muted);
+          border-radius: 0 4px 4px 0;   /* square at the baseline, rounded at the data end */
+        }
+        .corpus-n { font-size: var(--d-ui); color: var(--color-text-secondary); }
+        .corpus-pct { font-size: var(--d-cap); color: var(--color-text-faint); text-align: right; }
+        @media (max-width: 620px) {
+          .corpus-item { grid-template-columns: 1fr auto; gap: 4px 10px; }
+          .corpus-track { grid-column: 1 / -1; }
+          .corpus-pct { grid-column: 2; }
         }
 
         /* ── RECORD: control to flagged, drawn as a move ──────────────── */
@@ -507,40 +610,40 @@ export default function AboutPage() {
         @media (min-width: 780px) { .slope-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: clamp(26px, 3vw, 40px); } }
         .slope { border-top: 1px solid var(--hairline); padding-top: 16px; }
         .slope-head { margin-bottom: 10px; }
-        .slope-metric { display: block; font-size: 14.5px; font-weight: 650; color: var(--color-fg); }
-        .slope-note { display: block; font-size: 11.5px; line-height: 1.5; color: var(--color-text-faint); margin-top: 3px; }
-        .slope-plot { position: relative; height: 108px; }
+        .slope-metric { display: block; font-size: var(--d-body); font-weight: 650; color: var(--color-fg); }
+        .slope-note { display: block; font-size: var(--d-cap); line-height: 1.5; color: var(--color-text-faint); margin-top: 3px; }
+        /* the shared-delta rewrite lifted the data off the ceiling, so the plot
+           no longer needs 108px of which 66-84% was empty */
+        .slope-plot { position: relative; height: 84px; }
         .slope-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-        .slope-axis {
-          position: absolute; left: 12%; right: 12%; top: 50%;
-          border-top: 1px dashed var(--hairline);
-        }
         .slope-dot {
-          position: absolute; width: 9px; height: 9px; border-radius: 50%;
+          position: absolute; width: 8px; height: 8px; border-radius: 50%;
           transform: translate(-50%, -50%); background: var(--color-text-muted);
+          /* a surface ring keeps the dot legible where the line passes under it */
+          box-shadow: 0 0 0 2px var(--color-bg);
         }
-        .slope-dot-lo { left: 12%; }
-        .slope-dot-hi { left: 88%; }
+        .slope-dot-lo { left: 14%; }
+        .slope-dot-hi { left: 86%; }
+        /* Labels HANG OFF their dots rather than pinning to the panel edges.
+           Edge-pinning put the dot on top of the glyph at 390px — measured 7.1px
+           of overlap, which destroyed the +/- sign. */
         .slope-val {
-          position: absolute; transform: translateY(-50%);
-          font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
-          color: var(--color-text-muted);
+          position: absolute;
+          font-size: var(--d-body); font-weight: 700; font-variant-numeric: tabular-nums;
+          color: var(--color-text-muted); white-space: nowrap;
         }
-        .slope-val-lo { left: 0; }
-        .slope-val-hi { right: 0; }
-        .slope-foot {
-          display: flex; justify-content: space-between;
-          font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
-          color: var(--color-text-faint); margin-top: 4px;
-        }
+        .slope-val-lo { left: 14%; transform: translate(calc(-100% - 12px), -50%); }
+        .slope-val-hi { left: 86%; transform: translate(12px, -50%); }
+        .slope-foot { display: flex; justify-content: space-between; margin-top: 4px; }
 
         .deck-statband {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
           gap: clamp(20px, 2.2vw, 28px);
-          margin-top: clamp(30px, 4vw, 48px);
-          padding-top: clamp(26px, 3vw, 36px);
-          border-top: 1px solid var(--hairline);
+          /* No rule of its own: Masthead already closes the opening frame with
+             one, and a second hairline 49px below it read as an accident. The
+             stats hang off that shared seam instead. */
+          margin-top: clamp(44px, 5.5vw, 76px);
         }
 
         /* ── THE PROOF CARDS ────────────────────────────────────────────
@@ -560,38 +663,48 @@ export default function AboutPage() {
         }
         .proof-shot {
           position: relative;
-          aspect-ratio: 16 / 10;
-          background: var(--color-bg-elevated);
+          aspect-ratio: 4 / 3;
+          background: var(--panel-mat, var(--color-bg-elevated));
           display: flex; align-items: center; justify-content: center;
           overflow: hidden;
           border-bottom: 1px solid var(--hairline);
         }
-        .proof-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-        .proof-mono { font-size: 46px; font-weight: 700; color: var(--color-text-faint); opacity: 0.5; }
+        .proof-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+        .proof-mono { font-size: var(--d-figure-md); font-weight: 700; color: var(--color-text-faint); opacity: 0.5; }
         .proof-body { padding: 18px 18px 20px; display: flex; flex-direction: column; flex: 1; }
-        .proof-meta {
-          font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
-          color: var(--color-text-faint);
-          display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+        .proof-meta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+        .proof-conf { border: 1px solid var(--hairline); border-radius: 999px; padding: 2px 9px; color: var(--color-text-muted); }
+        .proof-conf-mid { border-style: dashed; }
+        .proof-title { font-size: var(--d-body); font-weight: 650; line-height: 1.3; color: var(--color-fg); margin: 9px 0 15px; }
+        .proof-figs { display: flex; gap: 26px; align-items: baseline; margin-bottom: 10px; }
+        .proof-fig { display: flex; flex-direction: column; gap: 3px; }
+        .proof-fig-k { color: var(--color-text-faint); }
+        .proof-fig-v { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+        .proof-fig-ref .proof-fig-v { color: var(--color-text-muted); font-weight: 600; }
+        /* ONE mark: what the room paid, measured against lectr's value as the
+           reference tick at 100%. The gap between bar end and tick IS the
+           discount, so the number and the picture are the same statement. */
+        .proof-bullet {
+          position: relative; height: 14px; width: 100%;
+          background: var(--color-bg-elevated);
+          border-radius: 0 4px 4px 0;
         }
-        .proof-conf { border: 1px solid var(--hairline); border-radius: 100px; padding: 2px 9px; letter-spacing: 0.06em; color: var(--color-text-muted); }
-        .proof-title { font-size: 16.5px; font-weight: 650; line-height: 1.3; color: var(--color-fg); margin: 9px 0 15px; }
-        .proof-rows { display: flex; flex-direction: column; gap: 9px; }
-        .proof-row { display: grid; grid-template-columns: 68px minmax(0,1fr) 86px; gap: 9px; align-items: center; }
-        .proof-k { font-size: 11px; color: var(--color-text-faint); }
-        .proof-track { height: 12px; background: var(--color-bg-elevated); border-radius: 6px; overflow: hidden; display: block; }
-        .proof-fill { display: block; height: 100%; border-radius: 6px; }
-        .proof-fill-ours { background: var(--color-text-faint); }
-        .proof-fill-paid { background: var(--color-up); }
-        .proof-v { font-size: 15px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
-        .proof-v-paid { color: var(--color-up); }
+        .proof-bullet-paid {
+          display: block; height: 100%;
+          background: var(--color-text-muted);
+          border-radius: 0 4px 4px 0;   /* square at the baseline */
+        }
+        .proof-bullet-ref {
+          position: absolute; top: -4px; bottom: -4px; left: calc(100% - 2px);
+          width: 2px; background: var(--color-fg);
+        }
         .proof-foot {
           margin-top: auto; padding-top: 14px;
           border-top: 1px solid var(--hairline);
-          font-size: 11.5px; line-height: 1.55; color: var(--color-text-faint);
+          font-size: var(--d-label); line-height: 1.55; color: var(--color-text-faint);
           display: flex; flex-direction: column; gap: 5px;
         }
-        .proof-gap { font-size: 24px; font-weight: 750; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
+        .proof-gap { font-size: var(--d-figure-sm); font-weight: 750; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
 
         @media (min-width: 760px) {
           .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 1.8vw, 22px); }
@@ -607,38 +720,38 @@ export default function AboutPage() {
             align-self: stretch;
           }
           .proof-body { padding: 20px 20px 22px; }
-          .proof-gap { font-size: 26px; }
+
         }
         @media (min-width: 1180px) {
           .proof-shot { flex-basis: 36%; }
           .proof-row { grid-template-columns: 64px minmax(0,1fr) 88px; }
-          .proof-title { font-size: 17px; }
-          .proof-gap { font-size: 30px; }
+
         }
 ` }} />
       <ArtistNav activeSlug="about" />
 
+      <RayEntrance animate>
       <div style={{ paddingTop: 28, paddingBottom: 56 }}>
-        <div className="deck-cover-wrap">
-          <div style={wrap}>
-            <span className="kicker" style={{ display: 'block', marginBottom: 22 }}>
-              What is lectr · {String(meta.lastCrawl).slice(0, 10)}
-            </span>
-            <h1 className="cover-h">
-              Every lot arrives with a guess.<br />
-              <span className="cover-h-em">We score it against {fmt(meta.totalSold)} results.</span>
-            </h1>
-            <p className="cover-sub">
-              An auction estimate is an opinion. A hammer is a fact. lectr has read{' '}
-              <b>{fmt(meta.totalSold)}</b> settled lots across{' '}
-              <b>{meta.sources.length} houses</b> and three decades, and prices what comes next
-              against the sales that actually resemble it.
-            </p>
+        <div className="deck-cover-wrap ray-enter">
+          <div className="rail">
+            {/* The same opening frame six other pages use — mono kicker, dated
+                serial, the enclosing hairlines, the Fraunces h1 and ONE butter
+                accent. This page had a bespoke Inter slab instead, which is why
+                it read as a deck ABOUT lectr rather than a lectr page. */}
+            <Masthead
+              kicker="What is lectr"
+              serial={meta.lastCrawl}
+              title={<>Every lot arrives with a guess. We score it against{' '}
+                <Underscore>{fmt(meta.totalSold)} results</Underscore>.</>}
+              sub={<>An auction estimate is an opinion. A hammer is a fact. lectr has read every
+                settled lot across <b>{meta.sources.length} houses</b> and three decades, and prices
+                what comes next against the sales that actually resemble it.</>}
+            />
 
             <div className="deck-statband">
               <Stat figure={fmt(meta.totalLots)} label="Lots under tracking" note="live and settled, one graph" />
               <Stat figure={fmt(meta.totalSold)} label="Settled results" note="every one with a published price" />
-              <Stat figure={String(meta.sources.length)} label="Auction houses" note={meta.sources.join(' · ')} />
+              <Stat figure={String(meta.sources.length)} label="Auction houses" note={meta.sources.map((h) => h.replace(/ /g, '\u00a0')).join(' · ')} />
               <Stat figure={fmt(F.n)} label="Replayed calls" note="scored against what happened next" />
             </div>
           </div>
@@ -652,7 +765,7 @@ export default function AboutPage() {
             lot normalised to a dated FX rate, a declared price basis, and a structured identity, so
             a 1994 Geneva watch sale and a lot closing tonight are the same kind of object.
           </p>
-          <CorpusBar bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
+          <CorpusBars bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
           <p style={caption}>
             Settled lots by market, from the shipped corpus. Depth is what lets the engine demand
             that a comparable share a maker, a form, a size band and a model line before it counts —
@@ -694,13 +807,13 @@ export default function AboutPage() {
           <div style={{ marginTop: 24 }}>
             <div className="slope-grid">
               <Slope metric="Median vs estimate · all-in" note="what the buyer paid, premium included"
-                lo={U.medianPerfPct} hi={F.medianPerfPct} fmtV={pct} />
+                lo={U.medianPerfPct} hi={F.medianPerfPct} fmtV={pct} n={fmt(F.n)} />
               <Slope metric="Median vs estimate · at hammer" note="like-for-like against a hammer-basis estimate"
-                lo={U.hammerMedianPct ?? 0} hi={F.hammerMedianPct ?? 0} fmtV={pct} />
+                lo={U.hammerMedianPct ?? 0} hi={F.hammerMedianPct ?? 0} fmtV={pct} n={fmt(F.n)} />
               <Slope metric="Cleared the high estimate" note="share of lots that beat the top of the range"
-                lo={U.beatHighPct} hi={F.beatHighPct} fmtV={(n) => `${n}%`} />
+                lo={U.beatHighPct} hi={F.beatHighPct} fmtV={(v) => `${v}%`} n={fmt(F.n)} />
               <Slope metric="Failed to sell" note="lower is better — the flag does not chase no-sales"
-                lo={U.failToSellPct} hi={F.failToSellPct} fmtV={(n) => `${n}%`} better="lower" />
+                lo={U.failToSellPct} hi={F.failToSellPct} fmtV={(v) => `${v}%`} n={fmt(F.nBoughtIn ?? 0)} better="lower" />
             </div>
           </div>
           <div style={{ marginTop: 22, padding: '18px 20px', border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--panel)' }}>
@@ -714,7 +827,7 @@ export default function AboutPage() {
           </div>
           <p style={caption}>
             Bought-in lots are scored as outcomes rather than dropped, so a flag on something that
-            then failed to sell counts against the record. <Link href="/value" style={{ color: 'var(--color-text-muted)' }}>See the full record <Flick size={11} /></Link>
+            then failed to sell counts against the record. <Link href="/value" className="deck-more">See the full record <Flick size={11} /></Link>
           </p>
         </Sec>
 
@@ -771,11 +884,13 @@ export default function AboutPage() {
           <ol className="chain">
             <li className="chain-node">
               <span className="chain-k">The lot</span>
-              <span className="chain-v">its estimate, its result, and the call that preceded it</span>
+              <span className="chain-n">{fmt(meta.totalLots)}</span>
+              <span className="chain-v">tracked lots, each with its estimate, its result, and the call that preceded it</span>
             </li>
             <li className="chain-node">
               <span className="chain-k">Its comparables</span>
-              <span className="chain-v">the exact sales the call was argued from, each one clickable</span>
+              <span className="chain-n">{fmt(meta.totalSold)}</span>
+              <span className="chain-v">settled sales to argue from — the exact ones used are clickable</span>
             </li>
             <li className="chain-node">
               <span className="chain-k">Its sub-market</span>
@@ -840,8 +955,8 @@ export default function AboutPage() {
           </div>
         </Sec>
 
-        <section className="deck-close">
-          <div style={wrap}>
+        <section className="deck-close ray-enter">
+          <div className="rail">
             <p className="close-line">
               Stop bidding against a guess.
             </p>
@@ -860,6 +975,7 @@ export default function AboutPage() {
           </div>
         </section>
       </div>
+      </RayEntrance>
 
       <Colophon record={null} />
     </div>

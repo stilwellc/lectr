@@ -161,9 +161,29 @@ export function sizedImg(u: string, width: number): string;
 export function sizedImg(u: string | null | undefined, width: number): string | undefined;
 export function sizedImg(u: string | null | undefined, width: number): string | undefined {
   if (!u) return undefined;
-  return /^https?:\/\/images[1-3]\.bonhams\.com\/image\?/i.test(u) && !/[?&]width=\d/i.test(u)
-    ? `${u}&width=${width}`
-    : u;
+  // Bonhams: a query-string resizer behind three shard hosts.
+  if (/^https?:\/\/images[1-3]\.bonhams\.com\/image\?/i.test(u) && !/[?&]width=\d/i.test(u)) {
+    return `${u}&width=${width}`;
+  }
+  // Wright / LAMA: the pixel width is a PATH segment (/items/index/<w>/...).
+  // The corpus stores the 220px thumbnail, so every Wright lot was being
+  // upscaled — measured 4.6x on a card and 5.3x on the full-bleed hero, which
+  // is a 220px image stretched across a phone. /1200/ curl-verified 200 at
+  // 70,848 bytes vs 20,192. Snap to the nearest offered rung, never up.
+  const wright = u.match(/^(https?:\/\/(?:www\.)?wright20\.com\/items\/index\/)(\d+)(\/.+)$/i);
+  if (wright) {
+    const rung = width >= 900 ? 1200 : width >= 480 ? 640 : 220;
+    return Number(wright[2]) >= rung ? u : `${wright[1]}${rung}${wright[3]}`;
+  }
+  // Goldin's CDN serves density variants (@1x/@2x/@3x, curl-verified 200 at
+  // 145KB/269KB/510KB). @1x is 640px, which a 3x phone upscales 1.6x.
+  if (/cloudfront\.net\/public\/Lots\//i.test(u) && /@1x(?:$|[?#])/i.test(u)) {
+    return width >= 900 ? u.replace(/@1x/i, '@2x') : u;
+  }
+  // Sotheby's brightspot URLs carry a SIGNED transform chain (/dims4/default/
+  // <hash>/): rewriting the resize segment invalidates the signature and the
+  // CDN 500s (verified). They ship at 421px and must be left alone.
+  return u;
 }
 
 /** ONE signed-percent formatter: '+' for gains, a TRUE MINUS (U+2212) for
