@@ -192,7 +192,7 @@ export default function IndexHero({
       <LazyMotion features={domAnimation} strict>
         <section className={styles.mHero}>
           <m.div className={styles.mtMastheadM} {...rise(0.03)}>
-            <span className={styles.sectionKicker}>{hero.kicker}</span>
+            <span className={styles.mtStatement}>We find what the room <em>misprices</em>.</span>
             {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
           </m.div>
 
@@ -207,6 +207,12 @@ export default function IndexHero({
               ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
+
+          {/* touch device: the input look, no keyboard glyphs */}
+          <button type="button" className={styles.vtCmd} onClick={onCommand} aria-label={`Search ${fmtInt(totalLots)} lots`}>
+            <span className={styles.vtCmdGlass} aria-hidden>⌕</span>
+            <span className={styles.vtCmdPlaceholder}>Search {fmtInt(totalLots)} lots, makers, references…</span>
+          </button>
 
           <m.div className={styles.mHeroStats} {...rise(0.16)}>
             {roi != null && (
@@ -238,12 +244,6 @@ export default function IndexHero({
               </span>
             )}
           </m.div>
-
-          <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
-            <kbd className={styles.kbd}>⌘K</kbd>
-            <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
-            <span className={styles.cmdArrow} aria-hidden>↵</span>
-          </button>
         </section>
       </LazyMotion>
     );
@@ -258,9 +258,12 @@ export default function IndexHero({
     <LazyMotion features={domAnimation} strict>
       <section className={styles.mtHero}>
         <m.div className={styles.mtMasthead} {...rise(0.04)}>
-          <span className={styles.sectionKicker}>{hero.kicker}</span>
+          {/* the value proposition, VISIBLE. It lived in a 1x1px sr-only h1
+              while humans got a 14px label — the pitch the paper room makes
+              two screens down now opens the page. */}
+          <span className={styles.mtStatement}>We find what the room <em>misprices</em>.</span>
           <span className={styles.mtMastheadNote}>
-            {activeKey === 'all' ? 'six verticals · the strongest honest read each' : 'the sub-markets · strongest honest read each'}
+            {activeKey === 'all' ? `${hero.kicker.toLowerCase()} · the strongest honest read of each vertical` : `${hero.kicker.toLowerCase()} · its strongest honest reads`}
           </span>
           {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
         </m.div>
@@ -304,11 +307,14 @@ export default function IndexHero({
                   <span className={styles.railVal}>—</span>
                 </div>
               )}
-              <button type="button" className={styles.railCmd} onClick={onCommand}>
-                <kbd className={styles.kbd}>⌘</kbd>
-                <kbd className={styles.kbd}>K</kbd>
-                <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
-                <span className={styles.cmdArrow} aria-hidden>↵</span>
+              {/* the single most powerful action on the page, dressed as an
+                  INPUT rather than a fourth stat row */}
+              <button type="button" className={styles.vtCmd} onClick={onCommand} aria-label={`Search ${fmtInt(totalLots)} lots`}>
+                <span className={styles.vtCmdGlass} aria-hidden>⌕</span>
+                <span className={styles.vtCmdPlaceholder}>Search {fmtInt(totalLots)} lots, makers, references…</span>
+                <span className={styles.vtCmdKeys} aria-hidden>
+                  <kbd className={styles.vtKbd}>⌘</kbd><kbd className={styles.vtKbd}>K</kbd>
+                </span>
               </button>
             </div>
           </m.aside>
