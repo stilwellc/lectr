@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
-import Masthead, { Underscore } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
 import { MARKETS } from '../constants';
 import { craftTitle } from '../utils';
@@ -15,49 +14,46 @@ import coverageSnapshot from './coverage.json';
 import distribution from './distribution.json';
 import { readLiveBook, type LiveBook } from './live';
 import PlateImg from '../components/PlateImg';
-import RayEntrance from '../components/RayEntrance';
+import DeckFx from './DeckFx';
 import { httpsImg, sizedImg } from '../utils';
 
 /**
- * WHAT IS LECTR — the institutional page.
+ * WHAT IS LECTR — the pitch deck.
  *
- * This replaced a seven-section engineering walk-through that published the
- * recipe: adapter names, gate thresholds, the lifecycle state machine, file
- * paths. That is the product. This page makes the case instead — scale, the
- * measured edge, the linkage, and (the part institutions actually test for)
- * what the engine refuses to say.
+ * The argument (corpus → engine → record → proof → restraint → graph → stakes)
+ * is unchanged from the institutional page it replaces. What changed is the
+ * staging: this is the one page on the site allowed to be cinema — a scrolled
+ * deck on the deep ground, chapters kept by a fixed rail, numerals that count
+ * up to the truth, charts that draw themselves, and the hand-drawn mark given
+ * the opening slide. The motion never invents a figure: every animation lands
+ * on a value the server rendered from the shipped data.
  *
  * EVERY FIGURE IS DERIVED FROM THE SHIPPED DATA at build time — meta.json,
  * backtest.json, market.json, refs.json. Nothing is typed by hand, so nothing
  * here can quietly go stale the way a hardcoded deck does. This is a server
- * component, so those imports never reach the client bundle.
+ * component; those imports never reach the client bundle. The only client JS
+ * is DeckFx, which choreographs — it holds no data.
  */
 
 export const metadata: Metadata = {
   title: 'What is lectr — the auction market, priced',
-  description:
-    'lectr reads every published estimate against every realised hammer across eight auction houses and three decades — 741,521 settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.',
+  // Derived, not typed: a previous revision hardcoded the corpus count here
+  // and it drifted 772 lots stale within two nightlies.
+  description: `lectr reads every published estimate against every realised hammer across ${meta.sources.length} auction houses and three decades — ${Number(meta.totalSold).toLocaleString('en-US')} settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.`,
 };
 
-// the product's own content column — matches ArtistNav and the Colophon
-const wrap: React.CSSProperties = {};
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
-const lead: React.CSSProperties = { ...p, fontSize: 17.5, lineHeight: 1.62, color: 'var(--color-text-secondary)' };
 const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.6 };
 
-const fmt = (n: number) => n.toLocaleString();
+const fmt = (n: number) => n.toLocaleString('en-US');
 const pct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n)}%`;
 
 /* ── figures, all read from the shipped payloads ─────────────────────────── */
 const F = backtest.flagged;
 const U = backtest.unflagged;
 const edgeAllIn = F.medianPerfPct - U.medianPerfPct;
-const edgeHammer = (F.hammerMedianPct ?? 0) - (U.hammerMedianPct ?? 0);
-const edgeBeat = F.beatHighPct - U.beatHighPct;
 
 const marketsRec = market.markets as Record<string, { label?: string; n?: number }>;
-// market.json's own labels are lowercase keys ('sports', 'culture'); MARKETS is
-// the app's display roster and carries the proper names ("Pop Culture").
 const MARKET_LABEL = Object.fromEntries(MARKETS.map((m) => [m.key, m.label]));
 const CORPUS_BARS = (['sports', 'culture', 'watches', 'art', 'science', 'design'] as const)
   .map((k) => ({ key: k, label: MARKET_LABEL[k] || marketsRec[k]?.label || k, n: marketsRec[k]?.n || 0 }))
@@ -86,12 +82,8 @@ const PROV = proof.provenance.withEstimate;
 
 interface SeriesRow { year: number; flaggedMedianPct: number; unflaggedMedianPct: number; nFlagged: number }
 
-// Prefer the live block (backtest-core now emits `distribution` on every full or
-// incremental run) and fall back to the committed snapshot. Read through a cast
-// for the same reason as coverage: public/data/ray/ is gitignored and pulled
-// from R2, so tsc types backtest.json from whatever that pull produced, and
-// naming backtest.distribution directly would break any CI build that runs
-// before the first nightly carrying it. Regenerate the snapshot with
+// Prefer the live block and fall back to the committed snapshot — same
+// gitignored-payload reasoning as coverage above. Regenerate the snapshot with
 // `npx tsx scripts/_qa/gen-distribution.ts`.
 type Dist = typeof distribution;
 const DIST: Dist = (() => {
@@ -137,36 +129,78 @@ const makerPublish = Object.values(makerIdx).filter((m) =>
 const refCount = (refs as { refs?: unknown[] }).refs?.length ?? 0;
 const calN = backtest.calibration?.n ?? null;
 
+/* ── THE CURVE: the corpus accumulating, 1989 → today ────────────────────
+   Drawn from meta.soldByYear, the same accumulation the OG card plots. The
+   hero numeral IS this curve's final value — numeral = line, the product's
+   oldest chart law — so the cover's count-up and the stroke drawing itself
+   are one statement made twice. */
+const CURVE = (() => {
+  const sby = ((meta as Record<string, unknown>).soldByYear ?? {}) as Record<string, number>;
+  const years = Object.keys(sby).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  if (years.length < 3) return null;
+  const y0 = years[0], y1 = years[years.length - 1];
+  const W = 1000, H = 220, PAD = 6;
+  let acc = 0;
+  const total = years.reduce((t, y) => t + sby[y], 0);
+  const ptsArr = years.map((y) => {
+    acc += sby[y];
+    return { x: ((y - y0) / (y1 - y0)) * W, y: H - PAD - (acc / total) * (H - PAD * 2) };
+  });
+  const d = ptsArr.map((pt, i) => `${i ? 'L' : 'M'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+  const last = ptsArr[ptsArr.length - 1];
+  const ticks = [1990, 2000, 2010, 2020].filter((y) => y > y0 && y < y1)
+    .map((y) => ({ y, x: ((y - y0) / (y1 - y0)) * 100 }));
+  return { d, W, H, dotY: (last.y / H) * 100, ticks, y0, y1 };
+})();
+
+/* ── THE TAPE: real settled results as connective tissue ─────────────────
+   Every chip is a comp row already shipped on this page (proof-cases), so the
+   marquee repeats evidence, not decoration — the same lots the calls below
+   were argued from. aria-hidden: it duplicates content that appears, fully
+   readable, in the comp disclosures. */
+const TAPE = (() => {
+  // round-robin across the cases so the tape alternates markets — read
+  // case-by-case it ran three of the same jersey in a row
+  const perCase = proof.cases.map((c) =>
+    ((c as { compRows?: { title: string; house: string; priceUsd: number }[] }).compRows ?? [])
+      .filter((r) => r.priceUsd > 0)
+      .map((r) => ({ t: craftTitle(r.title), h: r.house, p: r.priceUsd })),
+  );
+  const rows: { t: string; h: string; p: number }[] = [];
+  const depth = Math.max(0, ...perCase.map((a) => a.length));
+  for (let i = 0; i < depth; i++) for (const a of perCase) { if (a[i]) rows.push(a[i]); }
+  const seen = new Set<string>();
+  return rows
+    .filter((r) => { const k = `${r.t}|${r.p}`; if (seen.has(k)) return false; seen.add(k); return true; })
+    .map((r) => ({ ...r, t: r.t.length > 44 ? `${r.t.slice(0, 42)}…` : r.t }))
+    .slice(0, 32);
+})();
+
+const CHAPTERS = [
+  ['01', 'Corpus'], ['02', 'Engine'], ['03', 'Record'], ['04', 'Proof'],
+  ['05', 'Restraint'], ['06', 'Graph'], ['07', 'Stakes'],
+] as const;
+
 /* ── presentation primitives ─────────────────────────────────────────────── */
 
-function Stat({ figure, label, note }: { figure: string; label: string; note?: string }) {
+function Stat({ figure, label, note }: { figure: React.ReactNode; label: string; note?: string }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 'clamp(26px, 3vw, 42px)', fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--color-fg)', lineHeight: 1 }}>
-        {figure}
-      </div>
+      <div className="dk-stat-fig">{figure}</div>
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 9 }}>{label}</div>
       {note && <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 3, lineHeight: 1.5 }}>{note}</div>}
     </div>
   );
 }
 
-/** THE CORPUS, RANKED. Was a stacked composition bar in a six-step neutral
- *  ramp. Two problems, both measured: the ramp FAILED the categorical palette
- *  floor (worst adjacent pair dE 9.0 against a required 15, and the darkest
- *  step at 2.19:1 on this ground) — and no six-step neutral ramp can pass on a
- *  near-black surface, four is the ceiling. Worse, stacking asks the reader to
- *  compare segment lengths with no common baseline, and at 390px four of six
- *  markets rendered between 4.3 and 30px.
- *
- *  Ranked bars from a common baseline are the most accurate encoding available
- *  and need exactly ONE ink, so the categorical-palette question disappears.
- *  Sorted descending, direct-labelled, square at the baseline with the radius
- *  on the data end only. */
+/** Ranked bars from a common baseline — the most accurate encoding available,
+ *  one ink, sorted descending, square at the baseline with the radius on the
+ *  data end only. (The stacked six-step ramp this replaced failed the
+ *  categorical palette floor and had no common baseline.) */
 function CorpusBars({ bars, total }: { bars: { key: string; label: string; n: number }[]; total: number }) {
   const max = bars[0]?.n || 1;
   return (
-    <div className="corpus">
+    <div className="corpus dk-s">
       {bars.map((b) => (
         <div className="corpus-item" key={b.key}>
           <span className="corpus-label">{b.label}</span>
@@ -181,30 +215,20 @@ function CorpusBars({ bars, total }: { bars: { key: string; label: string; n: nu
   );
 }
 
-/** ARCHIVE COVERAGE — what each house's record actually spans.
- *
- *  §01 claims three decades. It previously evidenced that claim with a
- *  lots-by-market chart, which is a statement about CATEGORY, not time — and
- *  a lots-per-YEAR chart would have been worse: Goldin alone is 320,745 lots
- *  across 2022-2026 (143,142 in 2023 on its own), so the shape would have been
- *  a picture of one house's card business rather than of the archive's depth.
- *
- *  So depth of coverage is drawn instead, and volume is reported as a number
- *  beside it rather than as a bar length. The faint segment is real but thin
- *  coverage — Christie's has exactly ONE lot dated 1989 against 1,331 in 1991,
- *  and RR Auction has seven years under 25 lots before 2003. Drawing those
- *  solid would let a single record claim a decade.
- */
-function CoverageChart({ rows }: { rows: { house: string; first: number; dense: number; last: number; n: number }[] }) {
+/** ARCHIVE COVERAGE — what each house's record actually spans. The faint
+ *  segment is real but thin coverage: Christie's has exactly ONE lot dated
+ *  1989 against 1,331 in 1991, and drawing that solid would let a single
+ *  record claim a decade. The track is an AXIS, not a bar — only real
+ *  coverage gets height. */
+function CoverageChart({ rows }: { rows: Cov[] }) {
   const lo = Math.min(...rows.map((r) => r.first));
   const hi = Math.max(...rows.map((r) => r.last));
   const span = Math.max(1, hi - lo);
   const pos = (y: number) => ((y - lo) / span) * 100;
-  // decade gridlines, inclusive of the first decade at or after lo
   const decades: number[] = [];
   for (let y = Math.ceil(lo / 10) * 10; y <= hi; y += 10) decades.push(y);
   return (
-    <div className="cov">
+    <div className="cov dk-s">
       <div className="cov-grid" aria-hidden="true">
         {decades.map((y) => (
           <span className="cov-tick" key={y} style={{ left: `${pos(y)}%` }}><i>{y}</i></span>
@@ -212,7 +236,7 @@ function CoverageChart({ rows }: { rows: { house: string; first: number; dense: 
       </div>
       {rows.map((r) => (
         <div className="cov-row" key={r.house}>
-          <span className="cov-house">{r.house.replace(/ /g, '\u00a0')}</span>
+          <span className="cov-house">{r.house.replace(/ /g, ' ')}</span>
           <span className="cov-track">
             {r.dense > r.first && (
               <span className="cov-thin" style={{ left: `${pos(r.first)}%`, width: `${pos(r.dense) - pos(r.first)}%` }} />
@@ -227,35 +251,24 @@ function CoverageChart({ rows }: { rows: { house: string; first: number; dense: 
   );
 }
 
-/** THE SHAPE OF THE OUTCOMES — the distribution, not just its median.
- *
- *  §03 previously argued the record with four two-point slope panels. A median
- *  is one number, and the first question an institutional reader asks is whether
- *  it is an artifact of a long tail. This answers it with the whole distribution:
- *  where flagged and unflagged lots actually landed, as a share of their own arm.
- *
- *  Normalising is not optional — there are 38,734 flagged calls against 28,797
- *  controls, so raw counts would draw the flagged arm larger in EVERY bin,
- *  including the losing ones, and read as an edge where there is none.
- *
- *  The story it tells is stronger than the median: flagged lots are not just
- *  further right, they are LESS often below the estimate (17.0% vs 25.6%) — the
- *  edge is not bought by taking more risk, which is the claim the statement
- *  slide makes next and could not previously evidence.
- */
+/** THE SHAPE OF THE OUTCOMES — the whole distribution, not just its median,
+ *  each arm normalised to its own size (38,734 flagged vs 28,797 controls:
+ *  raw counts would draw flagged larger in every bin, including the losing
+ *  ones). Control = filled mass, flagged = the butter line — which draws
+ *  itself on entry, because the line IS the claim. */
 function OutcomeCurve({ dist }: { dist: typeof distribution }) {
   const { bins, summary } = dist;
   const fN = summary.flaggedN, uN = summary.unflaggedN;
   const share = (v: number, n: number) => (v / n) * 100;
   const peak = Math.max(...bins.map((b) => Math.max(share(b.flagged, fN), share(b.unflagged, uN))));
-  const top = Math.ceil(peak / 10) * 10;          // round gridline ceiling
+  const top = Math.ceil(peak / 10) * 10;
 
   const W = 900, H = 300;
   const slot = W / bins.length;
-  const y = (pct: number) => H - (pct / top) * H;
+  const y = (v: number) => H - (v / top) * H;
 
-  /** stepped: a histogram is bars, so the outline must be rectilinear — a
-   *  smoothed curve would imply resolution between bins that does not exist */
+  /* stepped: a histogram is bars, so the outline must be rectilinear — a
+     smoothed curve would imply resolution between bins that does not exist */
   const step = (get: (b: typeof bins[number]) => number, close: boolean) => {
     const d: string[] = [];
     bins.forEach((b, i) => {
@@ -265,7 +278,7 @@ function OutcomeCurve({ dist }: { dist: typeof distribution }) {
     return close ? `M 0 ${H} L 0 ${y(get(bins[0]))} ${d.slice(1).join(' ')} L ${W} ${H} Z` : d.join(' ');
   };
 
-  const zeroX = 3 * slot;                          // boundary at estimate mid
+  const zeroX = 3 * slot;
   const grid = Array.from({ length: top / 10 + 1 }, (_, i) => i * 10);
   const BOUNDS = ['−50%', '−25%', 'mid', '+25%', '+50%', '+100%', '+200%', '+500%'];
 
@@ -281,11 +294,8 @@ function OutcomeCurve({ dist }: { dist: typeof distribution }) {
              aria-label={`Outcome distribution. Flagged lots: ${summary.flaggedBelowPct.toFixed(1)}% sold below the estimate mid, median +${summary.flaggedMedianPct}%. Unflagged controls: ${summary.unflaggedBelowPct.toFixed(1)}% below, median +${summary.unflaggedMedianPct}%.`}>
           <rect x="0" y="0" width={zeroX} height={H} className="dist-below" />
           {grid.map((g) => <line key={g} x1="0" y1={y(g)} x2={W} y2={y(g)} className="dist-grid" />)}
-          {/* control is the FILLED shape — "what normally happens" — and flagged
-              is a bold outline over it. Two filled areas at similar opacity blended
-              into one khaki mass where they overlapped, which is most of the chart. */}
           <path d={step((b) => share(b.unflagged, uN), true)} className="dist-area-u" />
-          <path d={step((b) => share(b.flagged, fN), false)} className="dist-line-f" />
+          <path d={step((b) => share(b.flagged, fN), false)} className="dist-line-f dk-draw" data-draw-dur="1900" />
           <line x1={zeroX} y1="0" x2={zeroX} y2={H} className="dist-zero" />
         </svg>
         {/* Axis labels live in HTML, not SVG: this viewBox is stretched to the
@@ -303,8 +313,6 @@ function OutcomeCurve({ dist }: { dist: typeof distribution }) {
         </div>
       </div>
 
-      {/* Anchored to the divider, not to the plot edges: the boundary sits at
-          a third of the width, and edge-aligned labels implied it was halfway. */}
       <div className="dist-foot" aria-hidden>
         <span className="dist-foot-u">under the estimate</span>
         <span className="dist-foot-o">over it</span>
@@ -320,12 +328,8 @@ function OutcomeCurve({ dist }: { dist: typeof distribution }) {
 }
 
 /** PERSISTENCE — the edge, year by year, from the shipped 27-year replay.
- *
- *  The other question an institutional reader asks about a backtest is whether
- *  the result is a regime artifact. backtest.series has carried the answer since
- *  2000 and /about never used it: the gap holds in every year of the record,
- *  through two crashes and a boom.
- */
+ *  The gap is the subject, so the band between the lines is shaded; both
+ *  lines draw on entry, control first, flagged over it. */
 function RecordYears({ series }: { series: SeriesRow[] }) {
   const rows = series.filter((r) => Number.isFinite(r.flaggedMedianPct) && Number.isFinite(r.unflaggedMedianPct));
   if (rows.length < 4) return null;
@@ -337,7 +341,6 @@ function RecordYears({ series }: { series: SeriesRow[] }) {
   const y = (v: number) => H - ((v - lo) / (hi - lo)) * H;
   const line = (get: (r: typeof rows[number]) => number) =>
     rows.map((r, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(get(r)).toFixed(1)}`).join(' ');
-  // the GAP is the subject, not the two lines — shade between them
   const band = `${line((r) => r.flaggedMedianPct)} ` +
     rows.slice().reverse().map((r, j) => `L ${x(rows.length - 1 - j).toFixed(1)} ${y(r.unflaggedMedianPct).toFixed(1)}`).join(' ') + ' Z';
   const ticks: number[] = [];
@@ -353,8 +356,8 @@ function RecordYears({ series }: { series: SeriesRow[] }) {
             <line key={t} x1="0" y1={y(t)} x2={W} y2={y(t)} className={t === 0 ? 'dist-zero-h' : 'dist-grid'} />
           ))}
           <path d={band} className="yrs-band" />
-          <path d={line((r) => r.unflaggedMedianPct)} className="yrs-line yrs-line-u" />
-          <path d={line((r) => r.flaggedMedianPct)} className="yrs-line yrs-line-f" />
+          <path d={line((r) => r.unflaggedMedianPct)} className="yrs-line yrs-line-u dk-draw" data-draw-dur="1400" />
+          <path d={line((r) => r.flaggedMedianPct)} className="yrs-line yrs-line-f dk-draw" data-draw-dur="1700" data-draw-delay="250" />
         </svg>
         <div className="dist-ylab" aria-hidden>
           {ticks.slice().reverse().map((t) => (
@@ -376,25 +379,14 @@ function RecordYears({ series }: { series: SeriesRow[] }) {
   );
 }
 
-
 interface CompRow { title: string; house: string; saleDate: string; priceUsd: number; url: string | null }
 
-/** The comps behind one call, as a disclosure.
- *
- *  ProofCase and HeroLot rendered this same table separately — the same
- *  <summary>, the same three columns, the same closing note — differing only in
- *  the label and one article. Extracted so the two notes cannot drift.
- *
- *  A native <details> rather than a modal: this is a server component in a
- *  static export, so the disclosure needs no client JS and stays keyboard- and
- *  screen-reader-addressable.
- *
- *  The rows are SHIPPED (scripts/_qa/gen-proof-comps.ts), not linked to
- *  /lot?id=. These are settled lots and carry no `value` stamp — build-market
- *  only stamps upcoming — so the lot page would fall through to a client-side
- *  gate that prints "No comparable sales clear the gates for this lot" on a
- *  card claiming the opposite, after streaming ~28MB of shards to say it.
- */
+/** The comps behind one call, as a disclosure. A native <details> rather than
+ *  a modal: server component, static export, no client JS needed, and it
+ *  stays keyboard- and screen-reader-addressable. The rows are SHIPPED
+ *  (scripts/_qa/gen-proof-comps.ts), not linked to /lot?id= — settled lots
+ *  carry no `value` stamp, so the lot page would gate to "no comparables"
+ *  under a card claiming the opposite. */
 function CompTable({ comps, pool, label }: { comps: CompRow[]; pool: number; label: string }) {
   if (!comps.length) return null;
   return (
@@ -438,7 +430,7 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 960) : null;
   const comps = ((c as { compRows?: CompRow[] }).compRows ?? []);
   return (
-    <div className="proof-card ray-enter-card">
+    <div className="proof-card">
       {/* The object first. A price argument about a physical thing should show
           the thing. PlateImg unmounts on a dead hotlink so the monogram behind
           it shows rather than an empty well. */}
@@ -450,10 +442,8 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
       <div className="proof-body">
         <div className="proof-meta kicker">
           <span>{c.market} · {c.house} · {String(c.saleDate).slice(0, 10)}</span>
-          {/* Always render the tier, never only the flattering one. Showing the
-              badge on 5 of 6 cards made its absence on the medium case read as a
-              rendering glitch rather than as the engine's own hedge — and the
-              hedge is the point this deck is making in §05. */}
+          {/* Always render the tier, never only the flattering one — the hedge
+              is the point §05 makes. */}
           <span className={`proof-conf${c.confidence === 'high' ? '' : ' proof-conf-mid'}`}>{c.confidence} confidence</span>
         </div>
         <div className="proof-title">{title.length > 76 ? title.slice(0, 74) + '…' : title}</div>
@@ -475,17 +465,6 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
 
         <div className="proof-foot">
           <span className="proof-gap">{Math.abs(c.discountPct)}% under</span>
-          {/* The claim is "from N comparable sales", so N comparable sales have
-              to be inspectable. A native <details> rather than a modal: this is
-              a server component in a static export, the disclosure needs no
-              client JS, and it stays keyboard- and screen-reader-addressable.
-
-              The comps are SHIPPED (scripts/_qa/gen-proof-comps.ts) rather than
-              linked to /lot?id=. These are settled lots, so they carry no
-              `value` stamp — build-market only stamps upcoming — and the lot
-              page would fall through to a client-side gate that prints "No
-              comparable sales clear the gates for this lot" on a card claiming
-              the opposite, after streaming ~28MB of shards to say it. */}
           <CompTable comps={comps} pool={c.comps} label={`from ${c.comps} comparable sales`} />
           <span>
             {noEstimate
@@ -498,61 +477,41 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
   );
 }
 
-/** A slide that is one number. No heading, no ordinal, no chrome — the deck
- *  needs a breath between argued sections, and the edge is the single figure
- *  the whole record reduces to. */
-function Statement({ figure, lede, foot }: { figure: string; lede: React.ReactNode; foot?: string }) {
-  return (
-    <section className="deck-statement ray-enter">
-      <div className="rail">
-        <div className="statement-fig">{figure}</div>
-        <p className="statement-lede">{lede}</p>
-        {foot && <p className="statement-foot">{foot}</p>}
-      </div>
-    </section>
-  );
-}
-
-/** TONIGHT'S BOOK — the one live moment in an otherwise retrospective deck.
- *
- *  Everything before this proves the engine was right about sales that already
- *  happened. This is the same engine pointed at lots that have not sold yet,
- *  and it is deliberately the section where the ratio is the story: on a book of
- *  several thousand, the engine speaks about a couple of dozen. That is §05's
- *  claim ("proudest of how often it says nothing") stated as tonight's number
- *  rather than as a principle.
- */
+/** TONIGHT'S BOOK — the one live moment in an otherwise retrospective deck:
+ *  the same engine pointed at lots that have not sold yet, where the ratio is
+ *  the story — §05's restraint stated as tonight's number. */
 function LiveBand({ book }: { book: LiveBook }) {
-  const pct = (book.called / book.total) * 100;
+  const share = (book.called / book.total) * 100;
   return (
-    <section className="deck-live ray-enter">
-      <div className="rail">
-        <span className="kicker" style={{ display: 'block', margin: '0 0 12px' }}>Tonight&rsquo;s book</span>
+    <section className="deck-live">
+      <div className="rail dk-s">
+        <span className="kicker dk-kick">Tonight&rsquo;s book</span>
         <h2 className="deck-h">
-          {fmt(book.total)} lots are on the book. lectr has something to say about {book.called}.
+          <b data-count>{fmt(book.total)}</b> lots are on the book. lectr has something to say
+          about <b data-count>{String(book.called)}</b>.
         </h2>
 
         <div className="live-ratio" aria-hidden="true">
           {/* the called slice is a hairline against the full book on purpose —
               at 0.5% any "readable minimum" width would be a lie about the ratio */}
-          <span className="live-called" style={{ width: `${Math.max(pct, 0.35)}%` }} />
+          <span className="live-called" style={{ width: `${Math.max(share, 0.35)}%` }} />
         </div>
         <div className="live-legend">
           <span><b>{fmt(book.total - book.called)}</b> no call — the comparable pool doesn&rsquo;t clear the bar</span>
-          <span className="live-legend-on"><b>{book.called}</b> called &middot; {pct.toFixed(1)}% of the book</span>
+          <span className="live-legend-on"><b>{book.called}</b> called &middot; {share.toFixed(1)}% of the book</span>
         </div>
 
         <div className="live-split">
           <div className="live-cell">
-            <span className="live-n">{book.below}</span>
+            <span className="live-n" data-count>{String(book.below)}</span>
             <span className="live-k">trading below where comparables clear</span>
           </div>
           <div className="live-cell">
-            <span className="live-n">{book.above}</span>
+            <span className="live-n" data-count>{String(book.above)}</span>
             <span className="live-k">trading above it</span>
           </div>
           <div className="live-cell">
-            <span className="live-n">{book.high}</span>
+            <span className="live-n" data-count>{String(book.high)}</span>
             <span className="live-k">at the high-confidence tier</span>
           </div>
         </div>
@@ -567,17 +526,17 @@ function LiveBand({ book }: { book: LiveBook }) {
 }
 
 /** A lot at full width. The product is about objects; the deck should stop and
- *  look at one. Caption sits under the plate so the image is never covered. */
+ *  look at one. */
 function HeroLot({ c }: { c: typeof proof.cases[number] }) {
   const img = c.imageUrl ? sizedImg(httpsImg(c.imageUrl), 1280) : null;
   const comps = ((c as { compRows?: CompRow[] }).compRows ?? []);
   if (!img) return null;
   return (
-    <section className="deck-hero ray-enter">
-      <div className="rail">
-      <div className="hero-plate">
-        <PlateImg src={img} alt="" loading="lazy" referrerPolicy="no-referrer" />
-      </div>
+    <section className="deck-hero">
+      <div className="rail dk-s">
+        <div className="hero-plate">
+          <PlateImg src={img} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        </div>
         <p className="hero-cap">
           <b>{craftTitle(c.title)}</b> · {c.house} · {String(c.saleDate).slice(0, 10)} — lectr priced it at{' '}
           <b>${fmt(c.ourValueUsd)}</b> from {c.comps} comparable sales. It sold for{' '}
@@ -591,21 +550,23 @@ function HeroLot({ c }: { c: typeof proof.cases[number] }) {
   );
 }
 
-function Sec({ ord, label, title, paper, children }: {
-  ord: string; label: string; title: React.ReactNode; paper?: boolean; children: React.ReactNode;
+function Sec({ ord, label, title, children }: {
+  ord: string; label: string; title: React.ReactNode; children: React.ReactNode;
 }) {
-  const inner = (
-    <div className="rail" style={{ position: 'relative' }}>
-      <span className="kicker" style={{ display: 'block', margin: '0 0 12px' }}>{ord} · {label}</span>
-      <h2 className="deck-h">{title}</h2>
-      {children}
-    </div>
+  return (
+    <section className="deck-slide" id={`ch-${ord}`} data-ch={ord}>
+      <div className="rail dk-s" style={{ position: 'relative' }}>
+        <span className="dk-ord" aria-hidden>{ord}</span>
+        <span className="kicker dk-kick">{ord} · {label}</span>
+        <h2 className="deck-h">{title}</h2>
+        {children}
+      </div>
+    </section>
   );
-  if (paper) return <section className="ray-paper deck-room ray-enter">{inner}</section>;
-  return <section className="deck-slide ray-enter">{inner}</section>;
 }
 
-/** A step in the pricing chain. Numbered, not arrowed — the flow reads down. */
+/** A step in the pricing chain. Numbered, not arrowed — the flow reads down.
+ *  The seam above each step draws itself as the block reveals. */
 function Step({ n, title, body }: { n: string; title: string; body: React.ReactNode }) {
   return (
     <div className="method-step">
@@ -620,731 +581,94 @@ export default function AboutPage() {
   // Build-time read (server component, output:'export') — see app/about/live.ts
   // for why this is fs and not a JSON import.
   const liveBook = readLiveBook();
+  const serial = String(meta.lastCrawl).slice(0, 10).replace(/-/g, '');
   return (
-    <div className="deck-scope" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
-      {/* The proof lots hotlink four house CDNs. They sit well below the fold, so
-          they stay lazy — the LCP element here is the cover headline, and eager
-          images would compete with it. dns-prefetch takes the DNS round-trip off
-          the scroll instead; Sotheby's carries three of the seven, so it earns a
-          full preconnect. */}
+    <div className="deck-scope" style={{ minHeight: '100vh', background: 'var(--color-bg-deep, var(--color-bg))', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      {/* The proof lots hotlink four house CDNs; they stay lazy (the LCP is the
+          cover headline) but DNS resolves off the scroll path. */}
       <link rel="preconnect" href="https://sothebys-com.brightspotcdn.com" crossOrigin="" />
       <link rel="dns-prefetch" href="https://images2.bonhams.com" />
       <link rel="dns-prefetch" href="https://d2tt46f3mh26nl.cloudfront.net" />
       <link rel="dns-prefetch" href="https://www.wright20.com" />
-      <style dangerouslySetInnerHTML={{ __html: `
-        .deck-slide { padding: clamp(40px, 4.6vw, 66px) 0 clamp(16px, 2vw, 24px); }
-        .deck-room {
-          position: relative;
-          margin-inline: calc(50% - 50vw + clamp(10px, 1.2vw, 18px));
-          background: var(--paper, #E2D9C4);
-          border-radius: 10px;
-          padding: clamp(36px, 4.4vw, 60px) 0 clamp(32px, 4vw, 48px);
-          /* no margin-block: the neighbouring .deck-slide already pads, and the
-             two stacked unbroken (66 + 72 + 96 = 234px at every room seam) */
-          margin-block: clamp(18px, 2vw, 26px);
-        }
-        @media (max-width: 700px) { .deck-room { margin-inline: calc(50% - 50vw + 8px); border-radius: 8px; } }
-        .deck-h {
-          /* Fraunces is this product's display voice — Masthead sets its h1 in
-             it and the lander uses it for every room title. Eight Inter-700
-             heads was the house style of a generic dark SaaS page, not lectr. */
-          font-family: var(--font-serif-display), Georgia, serif;
-          font-size: var(--d-h);
-          font-weight: 400;
-          letter-spacing: -0.015em;
-          line-height: 1.12;
-          color: var(--color-fg);
-          margin: 0 0 14px;
-          max-width: 24ch;
-          text-wrap: balance;
-        }
-        /* ── THE DECK SCALE ───────────────────────────────────────────────
-           Six ad-hoc sizes collapsed into a declared ramp. Three of these are
-           the design system's own tokens; the two display sizes are deliberate
-           deck-register extensions above --text-hero-num, declared here rather
-           than sprinkled as loose clamp() values. */
-        .deck-scope {
-          --d-figure: clamp(64px, 15vw, 132px);   /* the one-number slide */
-          --d-display: clamp(38px, 10vw, 76px);  /* cover statement */
-          --d-close: clamp(30px, 7vw, 50px);    /* closing line */
-          --d-figure-md: clamp(28px, 3.6vw, 46px);/* card-level figures: chain nodes, plate marks */
-          --d-figure-sm: clamp(24px, 2.4vw, 30px);/* the gap callout on a proof card */
-          --d-h: var(--text-title-1);             /* every slide heading */
-          --d-lead: clamp(16px, 1.5vw, 19px);     /* slide opening paragraph */
-          --d-lead-lg: clamp(17px, 1.9vw, 24px);  /* the statement slide's larger lede */
-          --d-body: var(--text-body);             /* running copy: 15.5 */
-          --d-ui: var(--text-ui);                 /* labels in components: 13.5 */
-          --d-cap: var(--text-caption);           /* captions: 12.5 */
-          --d-label: var(--text-label);           /* mono kickers: 10.5 */
-        }
-
-        /* ── COVER: a statement with air around it ─────────────────────── */
-        .deck-cover-wrap { padding: clamp(32px, 4.5vw, 72px) 0 clamp(24px, 3vw, 40px); }
-        .cover-h {
-          font-size: var(--d-display);
-          font-weight: 700;
-          letter-spacing: -0.042em;
-          line-height: 1.03;
-          color: var(--color-fg);
-          margin: 0 0 clamp(20px, 2.4vw, 30px);
-          max-width: 18ch;
-        }
-        .cover-h-em { color: var(--color-fg); }
-        .cover-sub {
-          font-size: var(--d-lead);
-          line-height: 1.62;
-          color: var(--color-text-secondary);
-          max-width: 58ch;
-          margin: 0;
-        }
-        .cover-sub b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
-
-        /* ── STATEMENT: the deck exhales ───────────────────────────────── */
-        .deck-statement {
-          padding: clamp(52px, 6.5vw, 92px) 0;
-          display: grid;
-          align-content: center;
-          /* No min-height: it bound only on mobile, where the content is ~396px
-             and 72vh reserved ~608 — 212px of literal blank. The padding is the
-             breath. */
-          border-block: 1px solid var(--hairline);
-          margin-block: clamp(20px, 2.4vw, 34px);
-        }
-        .statement-fig {
-          font-size: var(--d-figure);
-          font-weight: 800;
-          letter-spacing: -0.05em;
-          line-height: 0.92;
-          color: var(--color-fg);
-          margin-bottom: clamp(16px, 2vw, 26px);
-        }
-        .statement-lede {
-          font-size: var(--d-lead-lg);
-          line-height: 1.45;
-          color: var(--color-fg);
-          max-width: 30ch;
-          margin: 0;
-          font-weight: 500;
-          text-wrap: balance;
-        }
-        .statement-foot {
-          font-size: var(--d-cap);
-          line-height: 1.6;
-          color: var(--color-text-faint);
-          max-width: 52ch;
-          margin: 18px 0 0;
-        }
-
-        /* ── HERO LOT: stop and look at the object ─────────────────────── */
-        .deck-hero { margin-block: clamp(28px, 3.4vw, 52px); }
-        .hero-plate {
-          position: relative;
-          height: clamp(230px, 30vw, 430px);
-          background: var(--panel-mat, var(--color-bg-elevated));
-          overflow: hidden;
-          border: 1px solid var(--hairline);
-          border-radius: 8px;
-        }
-        .hero-plate img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: clamp(14px, 2vw, 26px); }
-        .hero-cap {
-          font-size: var(--d-lead);
-          line-height: 1.55;
-          color: var(--color-text-secondary);
-          margin: 20px 0 0;
-          max-width: 62ch;
-        }
-        .hero-cap b { color: var(--color-fg); font-weight: 600; }
-        .hero-cap-paid { color: var(--color-fg); }
-
-        /* ── MEASURE ──────────────────────────────────────────────────
-           Prose ran the full 1088px column — ~140 characters per line, about
-           double the readable maximum. It was the loudest "unfinished" signal
-           on the page. Grids keep the full column; only running text is capped.
-
-           One token, because two different caps read as a mistake. 60ch of the
-           "0" glyph measures ~75 actual characters in this face (lowercase runs
-           narrower than a figure) — verified by counting rendered lines, not by
-           trusting the unit. */
-        .deck-scope { --measure: 60ch; }
-        .deck-scope p,
-        .deck-scope .hero-cap,
-        .deck-scope .method-b,
-        .deck-scope .value-what { max-width: var(--measure); }
-
-        /* ── METHOD: the four steps ───────────────────────────────────── */
-        .method-step {
-          display: grid;
-          grid-template-columns: 26px minmax(0, 1fr);
-          gap: 5px 16px;
-          padding: clamp(13px, 1.4vw, 16px) 0;
-          border-top: 1px solid var(--hairline);
-        }
-        .method-n {
-          grid-row: 1; font-size: var(--d-cap); font-weight: 700;
-          color: var(--color-text-faint); font-variant-numeric: tabular-nums; padding-top: 3px;
-        }
-        .method-t { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
-        .method-b {
-          grid-column: 2; font-size: var(--d-body); line-height: 1.65;
-          color: var(--color-text-secondary);
-        }
-        @media (min-width: 900px) {
-          /* Title to its own column: the four steps then read as a table of
-             method, and the body inherits a natural measure instead of a cap. */
-          .method-step { grid-template-columns: 26px 232px minmax(0, 1fr); gap: 0 28px; align-items: baseline; }
-          .method-b { grid-column: 3; }
-        }
-
-        /* ── VALUE: who, and what changes for them ────────────────────── */
-        .value-list { margin-top: clamp(24px, 3vw, 34px); }
-        .value-row {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 12px;
-          padding: clamp(16px, 1.7vw, 20px) 0;
-          border-top: 1px solid var(--hairline);
-        }
-        .value-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-        .value-who { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
-        .value-job { font-size: var(--d-cap); color: var(--color-text-faint); }
-        .value-swap { display: grid; gap: 10px; }
-        /* The swap IS the argument, so before and after are given equal room and
-           differentiated by ink rather than by size — the old version was one
-           muted paragraph per person and read as a list of blurbs. */
-        .value-before, .value-after {
-          font-size: var(--d-body); line-height: 1.6;
-          padding-left: 14px; border-left: 2px solid var(--hairline);
-          max-width: var(--measure);
-          text-wrap: pretty; /* these run 1-3 lines; single-word last lines were common */
-        }
-        .value-before { color: var(--color-text-faint); }
-        .value-after { color: var(--color-text-secondary); border-left-color: var(--color-butter); }
-        .value-before i, .value-after i {
-          display: block; font-style: normal;
-          font-family: var(--font-mono), monospace; font-size: var(--d-label);
-          letter-spacing: 0.08em; text-transform: uppercase;
-          color: var(--color-text-faint); margin-bottom: 3px;
-        }
-        .value-after i { color: var(--color-butter); }
-        .value-after b { color: var(--color-fg); font-weight: 600; }
-        @media (min-width: 900px) {
-          .value-row { grid-template-columns: 210px minmax(0, 1fr); gap: 0 28px; align-items: start; }
-          .value-head { flex-direction: column; gap: 3px; }
-          .value-swap { grid-template-columns: 1fr 1fr; gap: 0 22px; }
-          .value-before, .value-after { max-width: none; }
-        }
-
-        /* ── CLOSE: one line, one action ──────────────────────────────── */
-        .deck-close {
-          padding: clamp(52px, 6vw, 88px) 0 clamp(36px, 4vw, 56px);
-          border-top: 1px solid var(--hairline);
-          margin-top: clamp(28px, 3vw, 44px);
-        }
-        .close-line {
-          font-family: var(--font-serif-display), Georgia, serif;
-          font-size: var(--d-close);
-          font-weight: 400;
-          letter-spacing: -0.015em;
-          line-height: 1.1;
-          color: var(--color-fg);
-          margin: 0 0 18px;
-          max-width: 22ch;
-          text-wrap: balance;
-        }
-        .close-sub {
-          font-size: var(--d-lead);
-          line-height: 1.6;
-          color: var(--color-text-secondary);
-          max-width: 54ch;
-          margin: 0 0 clamp(26px, 3vw, 34px);
-        }
-        .close-sub b { color: var(--color-fg); }
-        /* Inline "read on" link. It was a 123x15 target inside a caption —
-           below any usable tap size on a phone, and indistinguishable from the
-           muted prose around it. */
-        .deck-more {
-          display: inline; padding: 14px 0; margin: -14px 0;
-          color: var(--color-fg); font-weight: 600; text-decoration: none;
-          border-bottom: 1px solid var(--hairline);
-        }
-        .deck-more svg { margin-left: 5px; vertical-align: -1px; }
-        .deck-more:hover { border-bottom-color: var(--color-fg); }
-
-        .close-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-        @media (max-width: 700px) {
-          .close-actions { flex-direction: column; align-items: stretch; }
-          .close-cta, .close-alt { justify-content: center; }
-        }
-        .close-cta {
-          display: inline-flex; align-items: center; gap: 8px;
-          background: var(--color-fg); color: var(--color-bg);
-          border: 1px solid transparent; border-radius: 8px; padding: 15px 26px;
-          font-size: var(--d-body); font-weight: 650; text-decoration: none;
-        }
-        .close-alt {
-          display: inline-flex; align-items: center;
-          border: 1px solid var(--hairline); border-radius: 8px;
-          padding: 15px 24px; font-size: var(--d-body); font-weight: 600;
-          color: var(--color-text-secondary); text-decoration: none;
-        }
-        .close-alt:hover { color: var(--color-fg); }
-
-        /* An explicit scope disclosure, in the section about restraint —
-           "8 houses" reads as complete unless you say what it isn't. */
-        .scope-note {
-          margin-top: clamp(20px, 2.2vw, 26px);
-          padding-top: clamp(16px, 1.8vw, 20px);
-          border-top: 1px solid var(--hairline);
-        }
-
-        /* ── TONIGHT'S BOOK ───────────────────────────────────────────── */
-        .deck-live { padding: clamp(40px, 4.6vw, 66px) 0 clamp(16px, 2vw, 24px); }
-        .live-ratio {
-          position: relative; height: 12px; border-radius: 6px; overflow: hidden;
-          background: color-mix(in srgb, var(--color-fg) 7%, transparent);
-          margin: clamp(24px, 3vw, 32px) 0 10px;
-        }
-        .live-called { position: absolute; inset: 0 auto 0 0; background: var(--color-butter); border-radius: 6px; }
-        .live-legend {
-          display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px;
-          font-size: var(--d-cap); color: var(--color-text-faint);
-        }
-        .live-legend b { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-        .live-legend-on b { color: var(--color-butter); }
-        .live-split {
-          display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2vw, 24px);
-          margin: clamp(24px, 2.8vw, 32px) 0 0;
-          padding-top: clamp(16px, 1.8vw, 20px);
-          border-top: 1px solid var(--hairline);
-        }
-        .live-cell { display: grid; gap: 6px; align-content: start; }
-        .live-n {
-          font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
-          color: var(--color-fg); line-height: 1; font-variant-numeric: tabular-nums;
-        }
-        .live-k { font-size: var(--d-cap); line-height: 1.55; color: var(--color-text-secondary); max-width: 30ch; }
-        @media (min-width: 760px) { .live-split { grid-template-columns: repeat(3, minmax(0,1fr)); } }
-
-        /* ── THE COMPS, INSPECTABLE ───────────────────────────────────── */
-        .comp-disc { margin: 2px 0 0; }
-        .comp-disc > summary {
-          display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-          cursor: pointer; list-style: none;
-          padding: 13px 0; margin: -13px 0;  /* 44px hit area without moving the line */
-          color: var(--color-text-secondary);
-          border-bottom: 1px solid transparent;
-        }
-        .comp-disc > summary::-webkit-details-marker { display: none; }
-        .comp-disc > summary:hover { color: var(--color-fg); }
-        .comp-disc > summary:hover .comp-caret { color: var(--color-fg); border-color: var(--color-fg); }
-        .comp-disc > summary:focus-visible { outline: 2px solid var(--color-butter); outline-offset: 3px; }
-        .comp-caret {
-          flex: none; width: 17px; height: 17px; border-radius: 50%;
-          border: 1px solid var(--hairline); color: var(--color-text-faint);
-          display: inline-flex; align-items: center; justify-content: center;
-          font-size: 11px; line-height: 1; font-weight: 600;
-          transition: transform .18s ease;
-        }
-        .comp-disc[open] .comp-caret { transform: rotate(45deg); }
-        .comp-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
-        .comp-table { width: 100%; border-collapse: collapse; font-size: var(--d-cap); }
-        .comp-table th {
-          text-align: left; font-weight: 600; padding: 0 0 6px;
-          color: var(--color-text-faint); font-size: var(--d-label);
-          letter-spacing: 0.08em; text-transform: uppercase;
-          border-bottom: 1px solid var(--hairline);
-        }
-        .comp-table td { padding: 7px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
-        .comp-table tr:last-child td { border-bottom: none; }
-        .comp-date { color: var(--color-text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 12px !important; }
-        .comp-lot { color: var(--color-text-secondary); line-height: 1.4; }
-        /* Two lines is enough to identify the object; the full title is one
-           click away on the house's own page. Unclamped, a single card ran
-           3,600px tall. */
-        .comp-lot a, .comp-lot > span {
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .comp-lot a { color: var(--color-text-secondary); text-decoration: none; border-bottom: 1px solid var(--hairline); }
-        .comp-lot a:hover { color: var(--color-fg); border-bottom-color: var(--color-fg); }
-        .comp-lot i { display: block; font-style: normal; color: var(--color-text-faint); font-size: var(--d-label); margin-top: 2px; }
-        .comp-num {
-          text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
-          color: var(--color-fg); font-weight: 600; padding-left: 12px !important;
-        }
-        th.comp-num { color: var(--color-text-faint); font-weight: 600; }
-        .comp-note { font-size: var(--d-label); line-height: 1.5; color: var(--color-text-faint); margin: 9px 0 0; }
-        /* The hero has the full rail, so its rows do not need the 2-line clamp
-           the half-width cards do. */
-        .comp-disc-hero { margin-top: 16px; max-width: var(--measure); }
-        .comp-disc-hero .comp-table { font-size: var(--d-cap); }
-        .comp-disc-hero .comp-lot a, .comp-disc-hero .comp-lot > span { -webkit-line-clamp: 1; }
-        .comp-note b { color: var(--color-text-secondary); font-weight: 600; }
-
-        /* ── ARCHIVE COVERAGE ─────────────────────────────────────────── */
-        .cov { margin: clamp(26px, 3vw, 34px) 0 0; position: relative; }
-        .cov-grid { position: relative; height: 16px; margin-left: 0; }
-        .cov-tick { position: absolute; top: 0; width: 1px; height: 100%; background: var(--hairline); }
-        .cov-tick i {
-          position: absolute; top: 0; left: 4px; font-style: normal;
-          font-family: var(--font-mono), monospace; font-size: var(--d-label);
-          color: var(--color-text-faint); letter-spacing: 0.04em;
-        }
-        .cov-row {
-          /* Phone: house and its two figures share one line, the bar takes the
-             next. Stacking all four put every row near 210px tall and left the
-             year and the count reading as two unlabelled numbers. */
-          display: grid;
-          grid-template-columns: 1fr auto auto;
-          grid-template-areas: "house from n" "track track track";
-          gap: 7px 10px;
-          align-items: baseline;
-          padding: 8px 0;
-          border-top: 1px solid var(--hairline);
-        }
-        .cov-house { grid-area: house; }
-        .cov-track { grid-area: track; }
-        .cov-from { grid-area: from; }
-        .cov-n { grid-area: n; }
-        .cov-from::after { content: " ·"; }
-        .cov-house { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
-        /* The track is an AXIS, not a bar. Filling it edge-to-edge made every
-           row look like it had coverage from 1989: a house whose record starts
-           in 2013 drew the same dark pill from the left as Christie's thin
-           1989-91 segment, so "thin" and "absent" were indistinguishable — which
-           is precisely the distinction this chart exists to make. Only real
-           coverage gets height now; the axis is a hairline through the middle. */
-        .cov-track { position: relative; display: block; height: 10px; }
-        .cov-track::before {
-          content: ""; position: absolute; left: 0; right: 0; top: 50%;
-          height: 1px; background: var(--hairline);
-        }
-        .cov-thin, .cov-solid { position: absolute; top: 0; height: 100%; border-radius: 5px; }
-        /* one ink for both: the difference between real and thin coverage is
-           density, not category, so it is carried by opacity rather than hue */
-        .cov-thin { background: color-mix(in srgb, var(--color-fg) 30%, transparent); }
-        .cov-solid { background: var(--color-fg); }
-        .cov-from, .cov-n {
-          font-size: var(--d-cap); color: var(--color-text-faint);
-          font-variant-numeric: tabular-nums;
-        }
-        .cov-n { color: var(--color-text-secondary); }
-        @media (min-width: 760px) {
-          .cov-grid { margin-left: 132px; margin-right: 148px; }
-          .cov-row {
-            grid-template-columns: 132px minmax(0, 1fr) 52px 86px;
-            grid-template-areas: "house track from n";
-            gap: 0 16px; align-items: center; padding: 11px 0;
-          }
-          .cov-from { text-align: right; }
-          .cov-from::after { content: none; }
-          .cov-n { text-align: right; }
-        }
-        .cov-split { margin-top: clamp(34px, 4.5vw, 54px); }
-
-        /* ── THE CHAIN: the graph, drawn ──────────────────────────────── */
-        .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; }
-        .chain-node {
-          position: relative;
-          padding: 0 0 clamp(20px, 2.4vw, 26px) 34px;
-          border-left: 1px solid var(--hairline);
-          display: grid;
-          grid-template-rows: auto auto auto;
-          align-content: start;
-        }
-        /* The rule must stop AT the final dot, not before it (an orphaned last
-           link) and not past it (a chain running off-page). Height-independent:
-           kill the border, then draw a stub down to the dot's centre. */
-        .chain-node:last-child { border-left-color: transparent; padding-bottom: 0; }
-        .chain-node:last-child::after {
-          content: ""; position: absolute; left: -1px; top: 0; width: 1px; height: 10px;
-          background: var(--hairline);
-        }
-        .chain-node::before {
-          content: "";
-          position: absolute; left: -5px; top: 6px;
-          width: 9px; height: 9px; border-radius: 50%;
-          background: var(--color-text-faint);
-        }
-        .chain-node:first-child::before { background: var(--color-fg); }
-        .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
-        .chain-n {
-          display: inline-block; margin-top: 6px; margin-right: 8px;
-          font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
-          color: var(--color-fg); line-height: 1;
-        }
-        .chain-v { display: inline; font-size: var(--d-body); line-height: 1.6; color: var(--color-text-secondary); }
-        @media (min-width: 900px) {
-          /* the chain lies down: five steps across, the rule running through
-             them, so the linkage reads as a flow rather than a list */
-          .chain { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; }
-          .chain::before { display: none; }
-          .chain-node { border-left: none; border-top: 1px solid var(--hairline); padding: 22px 18px 0 0; }
-          /* the rule stops at the last dot rather than running on to the
-             container edge, which read as "continues off-page" */
-          .chain-node:last-child { border-top: none; }
-          .chain-node:last-child::after {
-            content: ""; position: absolute; left: 0; top: -1px; width: 8px; height: 1px;
-            background: var(--hairline);
-          }
-          .chain-node::before { left: 0; top: -5px; }
-          .chain-k { font-size: var(--d-ui); }
-          .chain-v { display: block; font-size: var(--d-cap); margin-top: 4px; }
-          .chain-n { display: block; margin: 8px 0 0; }
-        }
-
-        /* ── CORPUS: ranked, one ink, common baseline ─────────────────── */
-        .corpus { margin-top: clamp(26px, 3vw, 36px); }
-        .corpus-item {
-          display: grid;
-          grid-template-columns: 96px minmax(0,1fr) auto 52px;
-          gap: 14px; align-items: center;
-          padding: 10px 0; border-top: 1px solid var(--hairline);
-          font-variant-numeric: tabular-nums;
-        }
-        .corpus-item:last-child { border-bottom: 1px solid var(--hairline); }
-        .corpus-label { font-size: var(--d-body); font-weight: 600; color: var(--color-fg); }
-        .corpus-track { display: block; height: 14px; }
-        .corpus-bar {
-          display: block; height: 100%;
-          background: var(--color-text-muted);
-          border-radius: 0 4px 4px 0;   /* square at the baseline, rounded at the data end */
-        }
-        .corpus-n { font-size: var(--d-ui); color: var(--color-text-secondary); }
-        .corpus-pct { font-size: var(--d-cap); color: var(--color-text-faint); text-align: right; }
-        @media (max-width: 620px) {
-          .corpus-item { grid-template-columns: 1fr auto; gap: 4px 10px; }
-          .corpus-track { grid-column: 1 / -1; }
-          .corpus-pct { grid-column: 2; }
-        }
-
-        /* ── RECORD: the distribution, the years, the table ───────────── */
-        .dist, .yrs { margin: clamp(26px, 3.2vw, 38px) 0 0; padding: 0; }
-        .dist-legend { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-bottom: 14px; }
-        .dist-key { display: inline-flex; align-items: center; gap: 8px; font-size: var(--d-cap); color: var(--color-text-secondary); }
-        .dist-key i { width: 11px; height: 11px; border-radius: 2px; flex: none; }
-        .dist-key b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
-        .dist-key-u i { background: color-mix(in srgb, var(--color-fg) 20%, transparent); border: 1px solid color-mix(in srgb, var(--color-fg) 40%, transparent); }
-        .dist-key-f i { background: transparent; border: 2px solid var(--color-butter); }
-
-        /* the plot carries its own axis gutters; labels are HTML so they stay
-           legible at 390px, where SVG text in a stretched viewBox would be ~7px */
-        .dist-plot { position: relative; padding: 0 0 26px 42px; }
-        .dist-svg { display: block; width: 100%; height: clamp(165px, 19vw, 230px); overflow: visible; }
-        .yrs .dist-svg { height: clamp(125px, 14vw, 170px); }
-        .dist-ylab { position: absolute; left: 0; top: 0; bottom: 26px; width: 38px; }
-        .dist-ylab span {
-          position: absolute; right: 8px; transform: translateY(-50%);
-          font-family: var(--font-mono), monospace; font-size: var(--d-label);
-          color: var(--color-text-faint); white-space: nowrap;
-        }
-        .dist-xlab { position: absolute; left: 42px; right: 0; bottom: 4px; height: 16px; }
-        .dist-xlab span {
-          position: absolute; transform: translateX(-50%);
-          font-family: var(--font-mono), monospace; font-size: var(--d-label);
-          color: var(--color-text-faint); white-space: nowrap;
-        }
-        .dist-xlab-zero { color: var(--color-fg) !important; }
-        @media (max-width: 620px) {
-          /* eight boundary labels collide at 390px — keep the anchors that carry
-             the reading: the estimate mid, and the two ends */
-          .dist-xlab span { display: none; }
-          .dist-xlab span:nth-child(1), .dist-xlab span:nth-child(3),
-          .dist-xlab span:nth-child(6), .dist-xlab span:nth-child(8) { display: block; }
-        }
-
-        .dist-below { fill: color-mix(in srgb, var(--color-fg) 3%, transparent); }
-        .dist-grid { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
-        .dist-zero { stroke: var(--color-fg); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.45; vector-effect: non-scaling-stroke; }
-        .dist-zero-h { stroke: color-mix(in srgb, var(--color-fg) 45%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
-        /* control = filled mass, flagged = bold outline over it. Two filled areas
-           at similar opacity blended into one khaki shape across most of the
-           chart, so neither distribution was readable. */
-        .dist-area-u { fill: color-mix(in srgb, var(--color-fg) 15%, transparent); stroke: color-mix(in srgb, var(--color-fg) 38%, transparent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-        /* butter, not green: green already means "% under" on the proof cards */
-        .dist-line-f { fill: none; stroke: var(--color-butter); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
-        .dist-foot {
-          display: flex; margin: 2px 0 0; padding-left: 42px;
-          font-size: var(--d-label); letter-spacing: 0.1em; text-transform: uppercase;
-          color: var(--color-text-faint); font-family: var(--font-mono), monospace;
-        }
-        /* 3 of 9 bins sit below the estimate, so the boundary is at 33.33% */
-        .dist-foot-u { width: 33.333%; text-align: right; padding-right: 10px; white-space: nowrap; }
-        .dist-foot-o { flex: 1; text-align: left; padding-left: 10px; }
-        @media (max-width: 620px) { .dist-foot { font-size: 9px; letter-spacing: 0.06em; } }
-        .dist-cap { font-size: var(--d-cap); line-height: 1.6; color: var(--color-text-faint); margin: 12px 0 0; max-width: var(--measure); }
-        .dist-cap b { color: var(--color-text-secondary); font-weight: 600; }
-
-        .yrs-band { fill: color-mix(in srgb, var(--color-butter) 20%, transparent); }
-        .yrs-line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
-        .yrs-line-u { stroke: color-mix(in srgb, var(--color-fg) 45%, transparent); }
-        .yrs-line-f { stroke: var(--color-butter); }
-
-        .rec-table {
-          width: 100%; border-collapse: collapse; margin-top: clamp(30px, 3.6vw, 44px);
-        }
-        .rec-table th, .rec-table td { text-align: left; vertical-align: baseline; }
-        .rec-table thead th {
-          font-size: var(--d-label); letter-spacing: 0.08em; text-transform: uppercase;
-          color: var(--color-text-faint); font-weight: 600;
-          padding: 0 0 9px; border-bottom: 1px solid var(--hairline);
-        }
-        .rec-table tbody th {
-          font-size: var(--d-body); font-weight: 650; color: var(--color-fg);
-          padding: 14px 16px 14px 0; border-bottom: 1px solid var(--hairline);
-        }
-        .rec-table tbody th i {
-          display: block; font-style: normal; font-weight: 400;
-          font-size: var(--d-cap); color: var(--color-text-faint); margin-top: 3px;
-          max-width: 46ch;
-        }
-        .rec-table td { padding: 14px 0; border-bottom: 1px solid var(--hairline); }
-        .rec-num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .rec-table tbody .rec-num { font-size: var(--d-body); font-weight: 700; padding-left: 14px; }
-        .rec-ctrl { color: var(--color-text-faint); }
-        .rec-flag { color: var(--color-fg); }
-        .rec-edge { color: var(--color-butter); }
-        @media (max-width: 560px) {
-          .rec-table tbody th i { display: none; }  /* the notes double the row height on a phone */
-          .rec-table tbody .rec-num, .rec-table thead th { font-size: var(--d-cap); }
-        }
-
-        
-        .deck-statband {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-          gap: clamp(20px, 2.2vw, 28px);
-          /* No rule of its own: Masthead already closes the opening frame with
-             one, and a second hairline 49px below it read as an accident. The
-             stats hang off that shared seam instead. */
-          margin-top: clamp(44px, 5.5vw, 76px);
-        }
-
-        /* ── THE PROOF CARDS ────────────────────────────────────────────
-           Two DIFFERENT compositions, not one squeezed. Phone: the object
-           leads as a full-width plate, the argument reads beneath it in a
-           single column. Desktop: the plate stands beside the argument so a
-           card is scannable in one glance and two fit per row. */
-        .proof-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: clamp(26px, 3vw, 38px); }
-        .proof-card {
-          border: 1px solid var(--hairline);
-          border-radius: 16px;
-          background: var(--panel);
-          overflow: hidden;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-        }
-        .proof-shot {
-          position: relative;
-          aspect-ratio: 16 / 10;
-          background: var(--panel-mat, var(--color-bg-elevated));
-          display: flex; align-items: center; justify-content: center;
-          overflow: hidden;
-          border-bottom: 1px solid var(--hairline);
-        }
-        .proof-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; }
-        @media (min-width: 760px) {
-          .proof-shot img { position: sticky; top: 88px; inset: auto; height: 260px; }
-          .proof-card:has(details[open]) .proof-shot { padding-block: 18px; }
-        }
-        /* The ghost monogram is the fallback for a dead hotlink — PlateImg
-           unmounts the <img> and the letter shows through. It was previously
-           covered by a full-bleed absolutely-positioned image; the sticky image
-           is only 260px tall, so it started peeking out beside real photos.
-           Hide it only while an image is actually mounted, which keeps the
-           unmount fallback working exactly as before. */
-        .proof-shot:has(img) .proof-mono { display: none; }
-        .proof-mono { font-size: var(--d-figure-md); font-weight: 700; color: var(--color-text-faint); opacity: 0.5; }
-        .proof-body { padding: 18px 18px 20px; display: flex; flex-direction: column; flex: 1; }
-        .proof-meta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
-        .proof-conf { border: 1px solid var(--hairline); border-radius: 999px; padding: 2px 9px; color: var(--color-text-muted); }
-        .proof-conf-mid { border-style: dashed; }
-        .proof-title { font-size: var(--d-body); font-weight: 650; line-height: 1.3; color: var(--color-fg); margin: 9px 0 15px; }
-        .proof-figs { display: flex; gap: 26px; align-items: baseline; margin-bottom: 10px; }
-        .proof-fig { display: flex; flex-direction: column; gap: 3px; }
-        .proof-fig-k { color: var(--color-text-faint); }
-        .proof-fig-v { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); font-variant-numeric: tabular-nums; }
-        .proof-fig-ref .proof-fig-v { color: var(--color-text-muted); font-weight: 600; }
-        /* ONE mark: what the room paid, measured against lectr's value as the
-           reference tick at 100%. The gap between bar end and tick IS the
-           discount, so the number and the picture are the same statement. */
-        .proof-bullet {
-          position: relative; height: 14px; width: 100%;
-          background: var(--color-bg-elevated);
-          border-radius: 0 4px 4px 0;
-        }
-        .proof-bullet-paid {
-          display: block; height: 100%;
-          background: var(--color-text-muted);
-          border-radius: 0 4px 4px 0;   /* square at the baseline */
-        }
-        .proof-bullet-ref {
-          position: absolute; top: -4px; bottom: -4px; left: calc(100% - 2px);
-          width: 2px; background: var(--color-fg);
-        }
-        .proof-foot {
-          margin-top: auto; padding-top: 14px;
-          border-top: 1px solid var(--hairline);
-          font-size: var(--d-label); line-height: 1.55; color: var(--color-text-faint);
-          display: flex; flex-direction: column; gap: 5px;
-        }
-        .proof-gap { font-size: var(--d-figure-sm); font-weight: 750; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
-
-        @media (min-width: 760px) {
-          /* align-items: start so opening one card's comps does not stretch its
-             row-mate into a tall blank. Cards are near-equal height closed. */
-          .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 1.8vw, 22px); align-items: start; }
-          .proof-card { flex-direction: row; }
-          .proof-row { grid-template-columns: 58px minmax(0,1fr) 78px; gap: 8px; }
-          .proof-track { height: 14px; border-radius: 7px; }
-          .proof-fill { border-radius: 7px; }
-          .proof-shot {
-            /* The object stays in view while its comps are read. Opening a
-               disclosure makes this column tall; a centred image would scroll
-               out of the frame exactly when the reader is checking it against
-               the pool. */
-            aspect-ratio: auto;
-            flex: 0 0 34%;
-            border-bottom: none;
-            border-right: 1px solid var(--hairline);
-            align-self: stretch;
-          }
-          .proof-body { padding: 20px 20px 22px; }
-
-        }
-        @media (min-width: 1180px) {
-          .proof-shot { flex-basis: 36%; }
-          .proof-row { grid-template-columns: 64px minmax(0,1fr) 88px; }
-
-        }
-` }} />
+      <style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />
       <ArtistNav activeSlug="about" />
+      <DeckFx />
 
-      <RayEntrance animate>
-      <div style={{ paddingTop: 28, paddingBottom: 56 }}>
-        <div className="deck-cover-wrap ray-enter">
-          <div className="rail">
-            {/* The same opening frame six other pages use — mono kicker, dated
-                serial, the enclosing hairlines, the Fraunces h1 and ONE butter
-                accent. This page had a bespoke Inter slab instead, which is why
-                it read as a deck ABOUT lectr rather than a lectr page. */}
-            <Masthead
-              kicker="What is lectr"
-              serial={meta.lastCrawl}
-              title={<>Every lot arrives with a guess. We score it against{' '}
-                <Underscore>{fmt(meta.totalSold)} results</Underscore>.</>}
-              sub={<>lectr has read every settled lot across <b>{meta.sources.length} houses</b>,
-                and prices what comes next against the sales that resemble it.</>}
-            />
+      {/* reading progress — the deck's one fixed instrument besides the rail */}
+      <span className="dk-prog" aria-hidden />
 
-            <div className="deck-statband">
-              <Stat figure={fmt(meta.totalLots)} label="Lots under tracking" note="live and settled, one graph" />
-              <Stat figure={String(meta.sources.length)} label="Auction houses" note="named, with their coverage, below"  />
-              <Stat figure={fmt(F.n)} label="Replayed calls" note="scored against what happened next" />
+      {/* chapter rail: which slide owns the viewport */}
+      <nav className="dk-rail" aria-label="Chapters">
+        {CHAPTERS.map(([ord, lb]) => (
+          <a key={ord} href={`#ch-${ord}`} data-for={ord}>
+            <i /><span className="dk-rail-ord">{ord}</span><span className="dk-rail-lb">{lb}</span>
+          </a>
+        ))}
+      </nav>
+
+      <div style={{ paddingBottom: 56 }}>
+        {/* ── COVER — the brand gets the opening slide ─────────────────── */}
+        <header className="dk-cover" data-ch="00">
+          <div className="rail dk-cover-rail">
+            <div className="dk-kickrow">
+              <span className="kicker">What is lectr</span>
+              <span className="kicker dk-serial">No. {serial}</span>
+            </div>
+            {/* the hand-drawn mark, writing itself on — the loader's wipe, once */}
+            <img className="dk-mark" src="/brand/lectr.png" alt="lectr" />
+            <h1 className="dk-h1">
+              Every lot arrives with a guess.{' '}
+              <span className="dk-h1-line2">We score it against{' '}
+                <span className="dk-u"><b data-count>{fmt(meta.totalSold)}</b> results</span>.
+              </span>
+            </h1>
+            <p className="dk-sub">
+              lectr has read every settled lot across <b>{meta.sources.length} houses</b>, and prices
+              what comes next against the sales that resemble it.
+            </p>
+            <div className="dk-statband dk-s">
+              <Stat figure={<span data-count>{fmt(meta.totalLots)}</span>} label="Lots under tracking" note="live and settled, one graph" />
+              <Stat figure={<span data-count>{String(meta.sources.length)}</span>} label="Auction houses" note="named, with their coverage, below" />
+              <Stat figure={<span data-count>{fmt(F.n)}</span>} label="Replayed calls" note="scored against what happened next" />
             </div>
           </div>
-        </div>
+
+          {/* the corpus accumulating, 1989 → today. The headline numeral is
+              this curve's final value — numeral = line, made once as a count
+              and once as a stroke. */}
+          {CURVE && (
+            <div className="dk-curve" aria-hidden>
+              <div className="dk-curve-plot">
+                <svg viewBox={`0 0 ${CURVE.W} ${CURVE.H}`} preserveAspectRatio="none">
+                  <path d={CURVE.d} className="dk-curve-line dk-draw" data-draw-dur="2800" data-draw-delay="500" />
+                </svg>
+                <span className="dk-curve-dot" style={{ top: `${CURVE.dotY}%` }} />
+              </div>
+              <div className="dk-curve-ticks">
+                {CURVE.ticks.map((t) => (
+                  <span key={t.y} style={{ left: `${t.x}%` }}>{t.y}</span>
+                ))}
+              </div>
+              <span className="dk-curve-cap">settled results, accumulated {CURVE.y0} → {CURVE.y1}</span>
+            </div>
+          )}
+        </header>
+
+        {/* ── THE TAPE — evidence as connective tissue ─────────────────── */}
+        {TAPE.length > 8 && (
+          <div className="dk-tape" aria-hidden>
+            <div className="dk-tape-track">
+              {[0, 1].map((dup) => TAPE.map((r, i) => (
+                <span className="dk-chip" key={`${dup}-${i}`}>
+                  <i>{r.t}</i>
+                  <em>{r.h}</em>
+                  <b>${fmt(r.p)}</b>
+                  <Flick size={9} style={{ opacity: 0.35, marginLeft: 18, marginRight: 18 }} />
+                </span>
+              )))}
+            </div>
+          </div>
+        )}
 
         <Sec ord="01" label="The corpus" title={<>Depth is the moat. It took {ARCHIVE_YEARS} years to build.</>}>
           <p style={p}>
@@ -1358,10 +682,6 @@ export default function AboutPage() {
           <div className="cov-split">
             <CorpusBars bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
           </div>
-          {/* ONE caption for both charts. They previously carried a caption each,
-              100px apart in the same faint grey, the second opening "And by
-              market." — which read as the first continuing. The gate claim went
-              with it: §02 step 02 makes the same point concretely. */}
           <p style={caption}>
             Settled records per house by sale year, then by market. The faint segment is coverage
             that exists but is thin — Christie&rsquo;s has a single lot dated 1989 against 1,331 in
@@ -1371,13 +691,13 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec paper ord="02" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
+        <Sec ord="02" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
           <p style={p}>
             The engine does not forecast taste. It answers a narrower question with evidence: given
             everything that has actually sold, where should this lot clear — and does the house&rsquo;s
             estimate agree?
           </p>
-          <div style={{ margin: '20px 0 0' }}>
+          <div className="dk-s" style={{ margin: '20px 0 0' }}>
             <Step n="01" title="Resolve the object"
               body={<>Every lot is parsed into a structured identity — maker, form, model line, reference, edition, dimensions, year, materials — not just a title string. Two lots match on what they <em>are</em>, never on how a cataloguer chose to describe them.</>} />
             <Step n="02" title="Build the comparable pool"
@@ -1407,13 +727,6 @@ export default function AboutPage() {
 
           {SERIES.length >= 4 && <RecordYears series={SERIES} />}
 
-          {/* The four metrics as a table, not as four two-point slope panels.
-              Each panel was an 84px well containing one thin diagonal line —
-              roughly 85% empty — and the fourth ("failed to sell") is correctly
-              almost flat, so it read as a broken chart rather than as the honest
-              near-parity it is. A table states four comparisons in the space one
-              panel used, which is also how an institutional reader wants them:
-              control, treatment, difference, n. */}
           <table className="rec-table">
             <caption className="sr-only">The record: unflagged control versus lectr-flagged, same replay, same period.</caption>
             <thead>
@@ -1424,7 +737,7 @@ export default function AboutPage() {
                 <th scope="col" className="rec-num">Edge</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="dk-s">
               {RECORD_ROWS.map((r) => (
                 <tr key={r.k}>
                   <th scope="row">
@@ -1445,11 +758,20 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Statement
-          figure={`+${edgeAllIn} points`}
-          lede={<>is what separates a lot lectr flagged from one it didn&rsquo;t, replayed against every sale that came after.</>}
-          foot="Flagged lots also failed to sell less often than unflagged ones. The edge is not bought with risk."
-        />
+        {/* ── STATEMENT — the deck inhales: one number, full frame ──────── */}
+        <section className="deck-statement">
+          <div className="rail dk-s">
+            <div className="statement-fig">+<span data-count>{String(edgeAllIn)}</span><span className="statement-unit">points</span></div>
+            <p className="statement-lede">
+              is what separates a lot lectr flagged from one it didn&rsquo;t, replayed against every
+              sale that came after.
+            </p>
+            <p className="statement-foot">
+              Flagged lots also failed to sell less often than unflagged ones. The edge is not bought
+              with risk.
+            </p>
+          </div>
+        </section>
 
         <Sec ord="04" label="The proof" title={<>We said what it was worth. The room paid less.</>}>
           <p style={p}>
@@ -1457,7 +779,7 @@ export default function AboutPage() {
             engine priced each object from comparable sold evidence, and the hammer came in under
             that number.
           </p>
-          <div className="proof-grid">
+          <div className="proof-grid dk-s">
             {proof.cases.filter((c) => !(c as { hero?: boolean }).hero).map((c) => <ProofCase key={c.id} c={c} />)}
           </div>
           <p style={caption}>
@@ -1474,15 +796,17 @@ export default function AboutPage() {
 
         <HeroLot c={proof.cases.find((x) => (x as { hero?: boolean }).hero) ?? proof.cases[0]} />
 
-        <Sec paper ord="05" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
+        <Sec ord="05" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>
             lectr runs an explicit ladder: a confidence-interval
             index where the data resolves the sign, a measured demand read where coverage allows, and
             below that, no movement number at all.
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px 20px', margin: '24px 0 0', paddingTop: 22, borderTop: '1px solid var(--hairline)' }}>
-            <Stat figure={`${makerPublish} of ${makerTotal}`} label="Makers clear the 95% bar" note="the rest publish no index — the interval doesn't resolve the sign" />
-            <Stat figure={`${drillAbstain} of ${drillCount}`} label="Sub-markets abstain" note="tracked and searchable, but carrying no movement claim" />
+          <div className="dk-s" style={{ display: 'flex', flexWrap: 'wrap', gap: '24px 20px', margin: '24px 0 0', paddingTop: 22, borderTop: '1px solid var(--hairline)' }}>
+            <Stat figure={<><span data-count>{String(makerPublish)}</span> of <span data-count>{String(makerTotal)}</span></>}
+              label="Makers clear the 95% bar" note="the rest publish no index — the interval doesn't resolve the sign" />
+            <Stat figure={<><span data-count>{String(drillAbstain)}</span> of <span data-count>{String(drillCount)}</span></>}
+              label="Sub-markets abstain" note="tracked and searchable, but carrying no movement claim" />
           </div>
           <p style={caption}>
             Every published figure names its
@@ -1511,7 +835,7 @@ export default function AboutPage() {
             every step of it is a page, not a footnote.
           </p>
 
-          <ol className="chain">
+          <ol className="chain dk-s">
             <li className="chain-node">
               <span className="chain-k">The lot</span>
               <span className="chain-v">what it was expected to make, what it made, and the call that preceded it</span>
@@ -1547,11 +871,7 @@ export default function AboutPage() {
             — what does this actually clear at, and how sure can you be — and get four different days
             out of the answer.
           </p>
-          {/* Four people, each shown as the swap they actually make. The
-              before/after pair is the composition: this is the section that
-              answers what the product changes, and it was the only one on the
-              page carrying no structure at all. */}
-          <div className="value-list">
+          <div className="value-list dk-s">
             {[
               {
                 who: 'The specialist',
@@ -1594,8 +914,8 @@ export default function AboutPage() {
 
         {liveBook && <LiveBand book={liveBook} />}
 
-        <section className="deck-close ray-enter">
-          <div className="rail">
+        <section className="deck-close">
+          <div className="rail dk-s">
             <p className="close-line">
               Stop bidding against a guess.
             </p>
@@ -1612,9 +932,6 @@ export default function AboutPage() {
               Figures on this page are read from the live corpus at build time, dated{' '}
               {String(meta.lastCrawl).slice(0, 10)}. They change when the market does. Each quarter is
               written up market by market —{' '}
-              {/* No Flick on these five: they are a LIST of sibling notes, not five
-                  separate calls to action, and five arrows in one sentence read as
-                  clutter. The underline carries the affordance. */}
               <Link href="/blog/q2-2026-watches" className="deck-more">watches</Link>,{' '}
               <Link href="/blog/q2-2026-art" className="deck-more">art</Link>,{' '}
               <Link href="/blog/q2-2026-design" className="deck-more">design</Link>,{' '}
@@ -1624,9 +941,762 @@ export default function AboutPage() {
           </div>
         </section>
       </div>
-      </RayEntrance>
 
-      <Colophon record={null} />
+      <Colophon record={F.n > 500 ? { n: F.n, medianPerfPct: F.medianPerfPct } : null} />
     </div>
   );
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE DECK'S CSS. One block, dangerouslySetInnerHTML (raw-text style children
+   break hydration in this repo). Motion grammar throughout is the brand's
+   own: clip-path write-on, pen-draw scaleX seams, measured-stroke draws,
+   --ease-signature reveals. Everything that moves is gated three ways —
+   prefers-reduced-motion, the .dk-anim class DeckFx arms (no JS → no hiding),
+   and server-rendered final values.
+   ══════════════════════════════════════════════════════════════════════════ */
+const DECK_CSS = `
+  /* ── deck scale ─────────────────────────────────────────────────── */
+  .deck-scope {
+    --d-cover: clamp(38px, 6.6vw, 88px);      /* the opening statement */
+    --d-figure: clamp(88px, 15vw, 188px);     /* the one-number slide */
+    --d-close: clamp(32px, 5.6vw, 64px);      /* closing line */
+    --d-h: clamp(29px, 4vw, 54px);            /* chapter headings */
+    --d-figure-md: clamp(28px, 3.6vw, 46px);
+    --d-figure-sm: clamp(24px, 2.4vw, 30px);
+    --d-lead: clamp(16px, 1.5vw, 19px);
+    --d-lead-lg: clamp(17px, 1.9vw, 24px);
+    --d-body: var(--text-body);
+    --d-ui: var(--text-ui);
+    --d-cap: var(--text-caption);
+    --d-label: var(--text-label);
+    --measure: 60ch;
+  }
+  .deck-scope p, .deck-scope .hero-cap, .deck-scope .method-b,
+  .deck-scope .value-what { max-width: var(--measure); }
+
+  /* ── the reveal grammar: hidden ONLY once DeckFx arms .dk-anim ─────
+     (no JS, no hiding — the whole deck reads as plain document) */
+  @media (prefers-reduced-motion: no-preference) {
+    .dk-anim .dk-s > * {
+      opacity: 0; transform: translateY(18px);
+      transition: opacity .75s var(--ease-signature), transform .75s var(--ease-signature);
+    }
+    .dk-anim .dk-s.on > * { opacity: 1; transform: none; }
+
+    /* bars grow along the seam, never fade */
+    .dk-anim .dk-s .cov-solid, .dk-anim .dk-s .cov-thin,
+    .dk-anim .dk-s .corpus-bar, .dk-anim .dk-s .live-called,
+    .dk-anim .dk-s .proof-bullet-paid {
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 1.15s var(--ease-draw) .25s;
+    }
+    .dk-anim .dk-s.on .cov-solid, .dk-anim .dk-s.on .cov-thin,
+    .dk-anim .dk-s.on .corpus-bar, .dk-anim .dk-s.on .live-called,
+    .dk-anim .dk-s.on .proof-bullet-paid { transform: none; }
+
+    /* the method seams pen-draw in */
+    .dk-anim .dk-s .method-step::before {
+      transform: scaleX(0); transform-origin: left;
+      transition: transform .9s var(--ease-draw) .15s;
+    }
+    .dk-anim .dk-s.on .method-step::before { transform: none; }
+  }
+
+  /* ── fixed instruments ──────────────────────────────────────────── */
+  .dk-prog {
+    position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 80;
+    background: var(--color-butter);
+    transform: scaleX(0); transform-origin: left;
+    pointer-events: none;
+  }
+  .dk-rail { display: none; }
+  @media (min-width: 1400px) and (min-height: 560px) {
+    .dk-rail {
+      position: fixed; left: clamp(14px, 1.6vw, 26px); top: 50%;
+      transform: translateY(-50%); z-index: 40;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .dk-rail a {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--font-mono), monospace; font-size: 10.5px;
+      letter-spacing: .08em; text-decoration: none;
+      color: var(--color-text-faint);
+      transition: color .35s var(--ease-ui);
+      /* full-bleed content (the tape) passes under the fixed rail — the pill
+         keeps the label legible while anything crosses it */
+      padding: 3px 8px 3px 0; border-radius: 6px;
+      background: color-mix(in srgb, var(--color-bg-deep, #0B0A07) 72%, transparent);
+      backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+    }
+    .dk-rail a i { display: block; width: 12px; height: 1px; background: currentColor; transition: width .35s var(--ease-ui); }
+    .dk-rail a.act { color: var(--color-butter); }
+    .dk-rail a.act i { width: 22px; }
+    .dk-rail-lb {
+      opacity: 0; transform: translateX(-4px);
+      transition: opacity .35s var(--ease-ui), transform .35s var(--ease-ui);
+    }
+    .dk-rail a:hover .dk-rail-lb, .dk-rail a.act .dk-rail-lb { opacity: 1; transform: none; }
+  }
+
+  /* ── cover ──────────────────────────────────────────────────────── */
+  .dk-cover {
+    position: relative;
+    min-height: calc(100svh - 64px);
+    display: flex; flex-direction: column; justify-content: center;
+    padding: clamp(28px, 4vw, 56px) 0 0;
+    overflow: hidden;
+  }
+  /* one warm pool of light behind the mark — the OG card's radial, in situ */
+  .dk-cover::before {
+    content: ""; position: absolute; inset: -20% -10% auto;
+    height: 90%;
+    background: radial-gradient(ellipse 60% 50% at 32% 30%, rgba(232,218,182,.06), transparent 70%);
+    pointer-events: none;
+  }
+  .dk-cover-rail { position: relative; }
+  .dk-kickrow {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 12px; margin-bottom: clamp(22px, 3vw, 40px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .dk-serial { color: var(--color-text-faint); }
+  .dk-mark {
+    display: block; width: clamp(150px, 20vw, 240px); height: auto;
+    margin: 0 0 clamp(18px, 2.4vw, 30px);
+    filter: drop-shadow(0 0 18px rgba(232,218,182,.12));
+  }
+  .dk-h1 {
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: var(--d-cover); font-weight: 400;
+    letter-spacing: -0.02em; line-height: 1.04;
+    color: var(--color-fg);
+    margin: 0 0 clamp(18px, 2.2vw, 28px);
+    max-width: 15ch; text-wrap: balance;
+  }
+  .dk-h1-line2 { display: block; }
+  .dk-h1 b { font-weight: 400; font-variant-numeric: tabular-nums; }
+  .dk-u { position: relative; white-space: nowrap; }
+  .dk-u::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0.02em; height: 3px;
+    background: var(--color-butter-deep);
+  }
+  .dk-sub {
+    font-size: var(--d-lead); line-height: 1.62;
+    color: var(--color-text-secondary); max-width: 58ch; margin: 0;
+  }
+  .dk-sub b { color: var(--color-fg); font-weight: 600; }
+  .dk-statband {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: clamp(20px, 2.2vw, 30px);
+    margin-top: clamp(30px, 4vw, 52px);
+    padding-top: clamp(18px, 2.2vw, 26px);
+    border-top: 1px solid var(--hairline);
+  }
+  .dk-stat-fig {
+    font-size: clamp(26px, 3vw, 44px); font-weight: 700;
+    letter-spacing: -0.035em; color: var(--color-fg); line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* cover choreography — pure CSS, runs with or without hydration */
+  @media (prefers-reduced-motion: no-preference) {
+    .dk-mark { clip-path: inset(0 100% 0 0); animation: dkWrite 1.5s var(--ease-draw) .25s forwards; }
+    @keyframes dkWrite { to { clip-path: inset(0 0 0 0); } }
+    .dk-u::after { transform: scaleX(0); transform-origin: left; animation: dkUnder .9s var(--ease-draw) 1.7s forwards; }
+    @keyframes dkUnder { to { transform: scaleX(1); } }
+    .dk-kickrow, .dk-h1, .dk-sub { animation: dkRise .8s var(--ease-signature) both; }
+    .dk-h1 { animation-delay: .12s; }
+    .dk-sub { animation-delay: .24s; }
+    @keyframes dkRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  }
+
+  /* the accumulation curve, pinned under the cover copy */
+  .dk-curve { position: relative; margin-top: clamp(26px, 4vh, 56px); }
+  .dk-curve-plot { position: relative; }
+  .dk-curve svg { display: block; width: 100%; height: clamp(110px, 17vh, 200px); overflow: visible; }
+  .dk-curve-line {
+    fill: none; stroke: var(--color-butter); stroke-width: 2.5;
+    vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round;
+    opacity: .92;
+  }
+  .dk-curve-dot {
+    position: absolute; right: -3px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--color-butter); transform: translateY(-50%);
+    box-shadow: var(--glow-lit);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .dk-curve-dot { opacity: 0; animation: dkDot .5s ease 3.1s forwards; }
+    @keyframes dkDot { to { opacity: 1; } }
+  }
+  .dk-curve-ticks { position: relative; height: 16px; margin-top: 4px; }
+  .dk-curve-ticks span {
+    position: absolute; transform: translateX(-50%);
+    font-family: var(--font-mono), monospace; font-size: var(--d-label);
+    color: var(--color-text-faint); letter-spacing: .04em;
+  }
+  .dk-curve-cap {
+    position: absolute; right: 0; top: -18px;
+    font-family: var(--font-mono), monospace; font-size: var(--d-label);
+    letter-spacing: .08em; text-transform: uppercase;
+    color: var(--color-text-faint);
+  }
+  .dk-curve, .dk-curve-ticks { margin-inline: calc(50% - 50vw); padding-inline: 0; }
+  .dk-curve-cap { right: var(--gutter, 24px); }
+
+  /* ── the tape ───────────────────────────────────────────────────── */
+  .dk-tape {
+    overflow: hidden; padding: 13px 0;
+    border-block: 1px solid var(--hairline);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  }
+  .dk-tape-track { display: flex; align-items: center; width: max-content; }
+  @media (prefers-reduced-motion: no-preference) {
+    .dk-tape-track { animation: dkTape 90s linear infinite; }
+    .dk-tape:hover .dk-tape-track { animation-play-state: paused; }
+    @keyframes dkTape { to { transform: translateX(-50%); } }
+  }
+  .dk-chip { display: inline-flex; align-items: baseline; white-space: nowrap; font-size: var(--d-cap); }
+  .dk-chip i { font-style: normal; color: var(--color-text-faint); }
+  .dk-chip em { font-style: normal; color: var(--color-text-faint); opacity: .7; margin-left: 8px; }
+  .dk-chip b { color: var(--color-fg); font-weight: 600; margin-left: 8px; font-variant-numeric: tabular-nums; }
+
+  /* ── slides ─────────────────────────────────────────────────────── */
+  .deck-slide { padding: clamp(64px, 8vw, 120px) 0 clamp(20px, 2.6vw, 36px); scroll-margin-top: 76px; }
+  .dk-kick { display: block; margin: 0 0 14px; color: var(--color-butter-text); }
+  .dk-ord {
+    position: absolute; right: var(--gutter, 24px); top: clamp(-30px, -3vw, -14px);
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: clamp(110px, 15vw, 230px); line-height: 1; font-weight: 400;
+    color: color-mix(in srgb, var(--color-fg) 4.5%, transparent);
+    pointer-events: none; user-select: none; z-index: 0;
+  }
+  .deck-h {
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: var(--d-h); font-weight: 400;
+    letter-spacing: -0.015em; line-height: 1.1;
+    color: var(--color-fg);
+    margin: 0 0 16px; max-width: 22ch; text-wrap: balance;
+    position: relative; z-index: 1;
+  }
+  .deck-h b { font-weight: 400; font-variant-numeric: tabular-nums; }
+
+  /* ── statement: the deck inhales ────────────────────────────────── */
+  .deck-statement {
+    min-height: min(78svh, 760px);
+    display: grid; align-content: center;
+    padding: clamp(52px, 7vw, 100px) 0;
+    border-block: 1px solid var(--hairline);
+    margin-block: clamp(24px, 3vw, 44px);
+    background:
+      radial-gradient(ellipse 50% 60% at 50% 45%, rgba(232,218,182,.045), transparent 70%);
+  }
+  .statement-fig {
+    font-size: var(--d-figure); font-weight: 800;
+    letter-spacing: -0.05em; line-height: 0.92;
+    color: var(--color-butter);
+    text-shadow: 0 0 34px rgba(232,218,182,.16);
+    margin-bottom: clamp(18px, 2.2vw, 30px);
+    font-variant-numeric: tabular-nums;
+  }
+  .statement-unit {
+    font-size: clamp(22px, 3vw, 40px); font-weight: 650;
+    letter-spacing: -0.02em; margin-left: 0.28em;
+    color: var(--color-butter-text);
+    vertical-align: baseline;
+  }
+  .statement-lede {
+    font-size: var(--d-lead-lg); line-height: 1.45;
+    color: var(--color-fg); max-width: 30ch; margin: 0;
+    font-weight: 500; text-wrap: balance;
+  }
+  .statement-foot {
+    font-size: var(--d-cap); line-height: 1.6;
+    color: var(--color-text-faint); max-width: 52ch; margin: 18px 0 0;
+  }
+
+  /* ── hero lot ───────────────────────────────────────────────────── */
+  .deck-hero { margin-block: clamp(28px, 3.4vw, 52px); }
+  .hero-plate {
+    position: relative;
+    height: clamp(230px, 30vw, 430px);
+    background: var(--panel-mat, var(--color-bg-elevated));
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+  }
+  .hero-plate img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: clamp(14px, 2vw, 26px); }
+  .hero-cap {
+    font-size: var(--d-lead); line-height: 1.55;
+    color: var(--color-text-secondary); margin: 20px 0 0; max-width: 62ch;
+  }
+  .hero-cap b { color: var(--color-fg); font-weight: 600; }
+  .hero-cap-paid { color: var(--color-fg); }
+
+  /* ── method steps ───────────────────────────────────────────────── */
+  .method-step {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 5px 16px;
+    padding: clamp(13px, 1.4vw, 16px) 0;
+    position: relative;
+  }
+  .method-step::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: var(--hairline);
+  }
+  .method-n {
+    grid-row: 1; font-size: var(--d-cap); font-weight: 700;
+    color: var(--color-butter-deep); font-variant-numeric: tabular-nums; padding-top: 3px;
+    font-family: var(--font-mono), monospace;
+  }
+  .method-t { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
+  .method-b {
+    grid-column: 2; font-size: var(--d-body); line-height: 1.65;
+    color: var(--color-text-secondary);
+  }
+  @media (min-width: 900px) {
+    .method-step { grid-template-columns: 26px 232px minmax(0, 1fr); gap: 0 28px; align-items: baseline; }
+    .method-b { grid-column: 3; }
+  }
+
+  /* ── value rows ─────────────────────────────────────────────────── */
+  .value-list { margin-top: clamp(24px, 3vw, 34px); }
+  .value-row {
+    display: grid; grid-template-columns: 1fr; gap: 12px;
+    padding: clamp(16px, 1.7vw, 20px) 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .value-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .value-who { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+  .value-job { font-size: var(--d-cap); color: var(--color-text-faint); }
+  .value-swap { display: grid; gap: 10px; }
+  .value-before, .value-after {
+    font-size: var(--d-body); line-height: 1.6;
+    padding-left: 14px; border-left: 2px solid var(--hairline);
+    max-width: var(--measure);
+    text-wrap: pretty;
+  }
+  .value-before { color: var(--color-text-faint); }
+  .value-after { color: var(--color-text-secondary); border-left-color: var(--color-butter); }
+  .value-before i, .value-after i {
+    display: block; font-style: normal;
+    font-family: var(--font-mono), monospace; font-size: var(--d-label);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--color-text-faint); margin-bottom: 3px;
+  }
+  .value-after i { color: var(--color-butter-text); }
+  @media (min-width: 900px) {
+    .value-row { grid-template-columns: 210px minmax(0, 1fr); gap: 0 28px; align-items: start; }
+    .value-head { flex-direction: column; gap: 3px; }
+    .value-swap { grid-template-columns: 1fr 1fr; gap: 0 22px; }
+    .value-before, .value-after { max-width: none; }
+  }
+
+  /* ── close ──────────────────────────────────────────────────────── */
+  .deck-close {
+    padding: clamp(64px, 8vw, 110px) 0 clamp(36px, 4vw, 56px);
+    border-top: 1px solid var(--hairline);
+    margin-top: clamp(28px, 3vw, 44px);
+  }
+  .close-line {
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: var(--d-close); font-weight: 400;
+    letter-spacing: -0.015em; line-height: 1.08;
+    color: var(--color-fg);
+    margin: 0 0 18px; max-width: 20ch; text-wrap: balance;
+  }
+  .close-sub {
+    font-size: var(--d-lead); line-height: 1.6;
+    color: var(--color-text-secondary); max-width: 54ch;
+    margin: 0 0 clamp(26px, 3vw, 34px);
+  }
+  .close-sub b { color: var(--color-fg); }
+  .deck-more {
+    display: inline; padding: 14px 0; margin: -14px 0;
+    color: var(--color-fg); font-weight: 600; text-decoration: none;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .deck-more svg { margin-left: 5px; vertical-align: -1px; }
+  .deck-more:hover { border-bottom-color: var(--color-fg); }
+  .close-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  @media (max-width: 700px) {
+    .close-actions { flex-direction: column; align-items: stretch; }
+    .close-cta, .close-alt { justify-content: center; }
+  }
+  .close-cta {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--color-butter); color: var(--color-butter-ink, #0F0E0A);
+    border: 1px solid transparent; border-radius: 10px; padding: 16px 28px;
+    font-size: var(--d-body); font-weight: 700; text-decoration: none;
+    transition: transform .25s var(--ease-ui), filter .25s var(--ease-ui);
+  }
+  .close-cta:hover { transform: translateY(-1px); filter: brightness(1.05); }
+  .close-cta svg { transition: transform .25s var(--ease-ui); }
+  .close-cta:hover svg { transform: translateX(2px); }
+  .close-alt {
+    display: inline-flex; align-items: center;
+    border: 1px solid var(--hairline); border-radius: 10px;
+    padding: 16px 24px; font-size: var(--d-body); font-weight: 600;
+    color: var(--color-text-secondary); text-decoration: none;
+    transition: color .25s var(--ease-ui), border-color .25s var(--ease-ui);
+  }
+  .close-alt:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
+
+  .scope-note {
+    margin-top: clamp(20px, 2.2vw, 26px);
+    padding-top: clamp(16px, 1.8vw, 20px);
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* ── tonight's book ─────────────────────────────────────────────── */
+  .deck-live { padding: clamp(48px, 5.5vw, 80px) 0 clamp(16px, 2vw, 24px); }
+  .deck-live .dk-kick { margin-bottom: 12px; }
+  .live-ratio {
+    position: relative; height: 12px; border-radius: 6px; overflow: hidden;
+    background: color-mix(in srgb, var(--color-fg) 7%, transparent);
+    margin: clamp(24px, 3vw, 32px) 0 10px;
+  }
+  .live-called { position: absolute; inset: 0 auto 0 0; background: var(--color-butter); border-radius: 6px; }
+  .live-legend {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px;
+    font-size: var(--d-cap); color: var(--color-text-faint);
+  }
+  .live-legend b { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+  .live-legend-on b { color: var(--color-butter); }
+  .live-split {
+    display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2vw, 24px);
+    margin: clamp(24px, 2.8vw, 32px) 0 0;
+    padding-top: clamp(16px, 1.8vw, 20px);
+    border-top: 1px solid var(--hairline);
+  }
+  .live-cell { display: grid; gap: 6px; align-content: start; }
+  .live-n {
+    font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
+    color: var(--color-fg); line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .live-k { font-size: var(--d-cap); line-height: 1.55; color: var(--color-text-secondary); max-width: 30ch; }
+  @media (min-width: 760px) { .live-split { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+
+  /* ── comps, inspectable ─────────────────────────────────────────── */
+  .comp-disc { margin: 2px 0 0; }
+  .comp-disc > summary {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    cursor: pointer; list-style: none;
+    padding: 13px 0; margin: -13px 0;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid transparent;
+  }
+  .comp-disc > summary::-webkit-details-marker { display: none; }
+  .comp-disc > summary:hover { color: var(--color-fg); }
+  .comp-disc > summary:hover .comp-caret { color: var(--color-fg); border-color: var(--color-fg); }
+  .comp-disc > summary:focus-visible { outline: 2px solid var(--color-butter); outline-offset: 3px; }
+  .comp-caret {
+    flex: none; width: 17px; height: 17px; border-radius: 50%;
+    border: 1px solid var(--hairline); color: var(--color-text-faint);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; line-height: 1; font-weight: 600;
+    transition: transform .18s ease;
+  }
+  .comp-disc[open] .comp-caret { transform: rotate(45deg); }
+  .comp-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+  .comp-table { width: 100%; border-collapse: collapse; font-size: var(--d-cap); }
+  .comp-table th {
+    text-align: left; font-weight: 600; padding: 0 0 6px;
+    color: var(--color-text-faint); font-size: var(--d-label);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .comp-table td { padding: 7px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  .comp-table tr:last-child td { border-bottom: none; }
+  .comp-date { color: var(--color-text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 12px !important; }
+  .comp-lot { color: var(--color-text-secondary); line-height: 1.4; }
+  .comp-lot a, .comp-lot > span {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .comp-lot a { color: var(--color-text-secondary); text-decoration: none; border-bottom: 1px solid var(--hairline); }
+  .comp-lot a:hover { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+  .comp-lot i { display: block; font-style: normal; color: var(--color-text-faint); font-size: var(--d-label); margin-top: 2px; }
+  .comp-num {
+    text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+    color: var(--color-fg); font-weight: 600; padding-left: 12px !important;
+  }
+  th.comp-num { color: var(--color-text-faint); font-weight: 600; }
+  .comp-note { font-size: var(--d-label); line-height: 1.5; color: var(--color-text-faint); margin: 9px 0 0; }
+  .comp-disc-hero { margin-top: 16px; max-width: var(--measure); }
+  .comp-disc-hero .comp-table { font-size: var(--d-cap); }
+  .comp-disc-hero .comp-lot a, .comp-disc-hero .comp-lot > span { -webkit-line-clamp: 1; }
+  .comp-note b { color: var(--color-text-secondary); font-weight: 600; }
+
+  /* ── archive coverage ───────────────────────────────────────────── */
+  .cov { margin: clamp(26px, 3vw, 34px) 0 0; position: relative; }
+  .cov-grid { position: relative; height: 16px; margin-left: 0; }
+  .cov-tick { position: absolute; top: 0; width: 1px; height: 100%; background: var(--hairline); }
+  .cov-tick i {
+    position: absolute; top: 0; left: 4px; font-style: normal;
+    font-family: var(--font-mono), monospace; font-size: var(--d-label);
+    color: var(--color-text-faint); letter-spacing: 0.04em;
+  }
+  .cov-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas: "house from n" "track track track";
+    gap: 7px 10px;
+    align-items: baseline;
+    padding: 8px 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .cov-house { grid-area: house; font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
+  .cov-track { grid-area: track; position: relative; display: block; height: 10px; }
+  .cov-track::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%;
+    height: 1px; background: var(--hairline);
+  }
+  .cov-from { grid-area: from; }
+  .cov-n { grid-area: n; }
+  .cov-from::after { content: " ·"; }
+  .cov-thin, .cov-solid { position: absolute; top: 0; height: 100%; border-radius: 5px; }
+  .cov-thin { background: color-mix(in srgb, var(--color-fg) 30%, transparent); }
+  .cov-solid { background: var(--color-fg); }
+  .cov-from, .cov-n {
+    font-size: var(--d-cap); color: var(--color-text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .cov-n { color: var(--color-text-secondary); }
+  @media (min-width: 760px) {
+    .cov-grid { margin-left: 132px; margin-right: 148px; }
+    .cov-row {
+      grid-template-columns: 132px minmax(0, 1fr) 52px 86px;
+      grid-template-areas: "house track from n";
+      gap: 0 16px; align-items: center; padding: 11px 0;
+    }
+    .cov-from { text-align: right; }
+    .cov-from::after { content: none; }
+    .cov-n { text-align: right; }
+  }
+  .cov-split { margin-top: clamp(34px, 4.5vw, 54px); }
+
+  /* ── the chain ──────────────────────────────────────────────────── */
+  .chain { list-style: none; margin: clamp(26px, 3vw, 36px) 0 clamp(22px, 2.5vw, 30px); padding: 0; }
+  .chain-node {
+    position: relative;
+    padding: 0 0 clamp(20px, 2.4vw, 26px) 34px;
+    border-left: 1px solid var(--hairline);
+    display: grid;
+    grid-template-rows: auto auto auto;
+    align-content: start;
+  }
+  .chain-node:last-child { border-left-color: transparent; padding-bottom: 0; }
+  .chain-node:last-child::after {
+    content: ""; position: absolute; left: -1px; top: 0; width: 1px; height: 10px;
+    background: var(--hairline);
+  }
+  .chain-node::before {
+    content: "";
+    position: absolute; left: -5px; top: 6px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--color-text-faint);
+  }
+  .chain-node:first-child::before { background: var(--color-butter); box-shadow: 0 0 10px rgba(232,218,182,.25); }
+  .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+  .chain-v { display: inline; font-size: var(--d-body); line-height: 1.6; color: var(--color-text-secondary); }
+  @media (min-width: 900px) {
+    .chain { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; }
+    .chain-node { border-left: none; border-top: 1px solid var(--hairline); padding: 22px 18px 0 0; }
+    .chain-node:last-child { border-top: none; }
+    .chain-node:last-child::after {
+      content: ""; position: absolute; left: 0; top: -1px; width: 8px; height: 1px;
+      background: var(--hairline);
+    }
+    .chain-node::before { left: 0; top: -5px; }
+    .chain-k { font-size: var(--d-ui); }
+    .chain-v { display: block; font-size: var(--d-cap); margin-top: 4px; }
+  }
+
+  /* ── corpus bars ────────────────────────────────────────────────── */
+  .corpus { margin-top: clamp(26px, 3vw, 36px); }
+  .corpus-item {
+    display: grid;
+    grid-template-columns: 96px minmax(0,1fr) auto 52px;
+    gap: 14px; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--hairline);
+    font-variant-numeric: tabular-nums;
+  }
+  .corpus-item:last-child { border-bottom: 1px solid var(--hairline); }
+  .corpus-label { font-size: var(--d-body); font-weight: 600; color: var(--color-fg); }
+  .corpus-track { display: block; height: 14px; }
+  .corpus-bar {
+    display: block; height: 100%;
+    background: var(--color-text-muted);
+    border-radius: 0 4px 4px 0;
+  }
+  .corpus-n { font-size: var(--d-ui); color: var(--color-text-secondary); }
+  .corpus-pct { font-size: var(--d-cap); color: var(--color-text-faint); text-align: right; }
+  @media (max-width: 620px) {
+    .corpus-item { grid-template-columns: 1fr auto; gap: 4px 10px; }
+    .corpus-track { grid-column: 1 / -1; }
+    .corpus-pct { grid-column: 2; }
+  }
+
+  /* ── record charts + table ──────────────────────────────────────── */
+  .dist, .yrs { margin: clamp(26px, 3.2vw, 38px) 0 0; padding: 0; }
+  .dist-legend { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-bottom: 14px; }
+  .dist-key { display: inline-flex; align-items: center; gap: 8px; font-size: var(--d-cap); color: var(--color-text-secondary); }
+  .dist-key i { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+  .dist-key b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dist-key-u i { background: color-mix(in srgb, var(--color-fg) 20%, transparent); border: 1px solid color-mix(in srgb, var(--color-fg) 40%, transparent); }
+  .dist-key-f i { background: transparent; border: 2px solid var(--color-butter); }
+  .dist-plot { position: relative; padding: 0 0 26px 42px; }
+  .dist-svg { display: block; width: 100%; height: clamp(165px, 19vw, 230px); overflow: visible; }
+  .yrs .dist-svg { height: clamp(125px, 14vw, 170px); }
+  .dist-ylab { position: absolute; left: 0; top: 0; bottom: 26px; width: 38px; }
+  .dist-ylab span {
+    position: absolute; right: 8px; transform: translateY(-50%);
+    font-family: var(--font-mono), monospace; font-size: var(--d-label);
+    color: var(--color-text-faint); white-space: nowrap;
+  }
+  .dist-xlab { position: absolute; left: 42px; right: 0; bottom: 4px; height: 16px; }
+  .dist-xlab span {
+    position: absolute; transform: translateX(-50%);
+    font-family: var(--font-mono), monospace; font-size: var(--d-label);
+    color: var(--color-text-faint); white-space: nowrap;
+  }
+  .dist-xlab-zero { color: var(--color-fg) !important; }
+  @media (max-width: 620px) {
+    .dist-xlab span { display: none; }
+    .dist-xlab span:nth-child(1), .dist-xlab span:nth-child(3),
+    .dist-xlab span:nth-child(6), .dist-xlab span:nth-child(8) { display: block; }
+  }
+  .dist-below { fill: color-mix(in srgb, var(--color-fg) 3%, transparent); }
+  .dist-grid { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .dist-zero { stroke: var(--color-fg); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.45; vector-effect: non-scaling-stroke; }
+  .dist-zero-h { stroke: color-mix(in srgb, var(--color-fg) 45%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .dist-area-u { fill: color-mix(in srgb, var(--color-fg) 15%, transparent); stroke: color-mix(in srgb, var(--color-fg) 38%, transparent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .dist-line-f { fill: none; stroke: var(--color-butter); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  .dist-foot {
+    display: flex; margin: 2px 0 0; padding-left: 42px;
+    font-size: var(--d-label); letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--color-text-faint); font-family: var(--font-mono), monospace;
+  }
+  .dist-foot-u { width: 33.333%; text-align: right; padding-right: 10px; white-space: nowrap; }
+  .dist-foot-o { flex: 1; text-align: left; padding-left: 10px; }
+  @media (max-width: 620px) { .dist-foot { font-size: 9px; letter-spacing: 0.06em; } }
+  .dist-cap { font-size: var(--d-cap); line-height: 1.6; color: var(--color-text-faint); margin: 12px 0 0; max-width: var(--measure); }
+  .dist-cap b { color: var(--color-text-secondary); font-weight: 600; }
+  .yrs-band { fill: color-mix(in srgb, var(--color-butter) 20%, transparent); }
+  .yrs-line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  .yrs-line-u { stroke: color-mix(in srgb, var(--color-fg) 45%, transparent); }
+  .yrs-line-f { stroke: var(--color-butter); }
+
+  .rec-table { width: 100%; border-collapse: collapse; margin-top: clamp(30px, 3.6vw, 44px); }
+  .rec-table th, .rec-table td { text-align: left; vertical-align: baseline; }
+  .rec-table thead th {
+    font-size: var(--d-label); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--color-text-faint); font-weight: 600;
+    padding: 0 0 9px; border-bottom: 1px solid var(--hairline);
+  }
+  .rec-table tbody th {
+    font-size: var(--d-body); font-weight: 650; color: var(--color-fg);
+    padding: 14px 16px 14px 0; border-bottom: 1px solid var(--hairline);
+  }
+  .rec-table tbody th i {
+    display: block; font-style: normal; font-weight: 400;
+    font-size: var(--d-cap); color: var(--color-text-faint); margin-top: 3px;
+    max-width: 46ch;
+  }
+  .rec-table td { padding: 14px 0; border-bottom: 1px solid var(--hairline); }
+  .rec-num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rec-table tbody .rec-num { font-size: var(--d-body); font-weight: 700; padding-left: 14px; }
+  .rec-ctrl { color: var(--color-text-faint); }
+  .rec-flag { color: var(--color-fg); }
+  .rec-edge { color: var(--color-butter); }
+  @media (max-width: 560px) {
+    .rec-table tbody th i { display: none; }
+    .rec-table tbody .rec-num, .rec-table thead th { font-size: var(--d-cap); }
+  }
+
+  /* ── proof cards ────────────────────────────────────────────────── */
+  .proof-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: clamp(26px, 3vw, 38px); }
+  .proof-card {
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    background: var(--panel);
+    overflow: hidden;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    transition: transform .45s var(--ease-signature), box-shadow .45s var(--ease-signature), border-color .45s var(--ease-signature);
+  }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .proof-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-pop);
+      border-color: var(--color-border-mid);
+    }
+    .proof-card .proof-shot img { transition: transform 1.1s var(--ease-signature); }
+    .proof-card:hover .proof-shot img { transform: scale(1.025); }
+  }
+  .proof-shot {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background: var(--panel-mat, var(--color-bg-elevated));
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .proof-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+  @media (min-width: 760px) {
+    .proof-shot img { position: sticky; top: 88px; inset: auto; height: 260px; }
+    .proof-card:has(details[open]) .proof-shot { padding-block: 18px; }
+  }
+  .proof-shot:has(img) .proof-mono { display: none; }
+  .proof-mono { font-size: var(--d-figure-md); font-weight: 700; color: var(--color-text-faint); opacity: 0.5; }
+  .proof-body { padding: 18px 18px 20px; display: flex; flex-direction: column; flex: 1; }
+  .proof-meta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .proof-conf { border: 1px solid var(--hairline); border-radius: 999px; padding: 2px 9px; color: var(--color-text-muted); }
+  .proof-conf-mid { border-style: dashed; }
+  .proof-title { font-size: var(--d-body); font-weight: 650; line-height: 1.3; color: var(--color-fg); margin: 9px 0 15px; }
+  .proof-figs { display: flex; gap: 26px; align-items: baseline; margin-bottom: 10px; }
+  .proof-fig { display: flex; flex-direction: column; gap: 3px; }
+  .proof-fig-k { color: var(--color-text-faint); }
+  .proof-fig-v { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+  .proof-fig-ref .proof-fig-v { color: var(--color-text-muted); font-weight: 600; }
+  .proof-bullet {
+    position: relative; height: 14px; width: 100%;
+    background: var(--color-bg-elevated);
+    border-radius: 0 4px 4px 0;
+  }
+  .proof-bullet-paid {
+    display: block; height: 100%;
+    background: var(--color-text-muted);
+    border-radius: 0 4px 4px 0;
+  }
+  .proof-bullet-ref {
+    position: absolute; top: -4px; bottom: -4px; left: calc(100% - 2px);
+    width: 2px; background: var(--color-fg);
+  }
+  .proof-foot {
+    margin-top: auto; padding-top: 14px;
+    border-top: 1px solid var(--hairline);
+    font-size: var(--d-label); line-height: 1.55; color: var(--color-text-faint);
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .proof-gap { font-size: var(--d-figure-sm); font-weight: 750; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
+  @media (min-width: 760px) {
+    .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 1.8vw, 22px); align-items: start; }
+    .proof-card { flex-direction: row; }
+    .proof-shot {
+      aspect-ratio: auto;
+      flex: 0 0 34%;
+      border-bottom: none;
+      border-right: 1px solid var(--hairline);
+      align-self: stretch;
+    }
+    .proof-body { padding: 20px 20px 22px; }
+  }
+  @media (min-width: 1180px) {
+    .proof-shot { flex-basis: 36%; }
+  }
+`;
