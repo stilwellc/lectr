@@ -129,6 +129,21 @@ const makerPublish = Object.values(makerIdx).filter((m) =>
 const refCount = (refs as { refs?: unknown[] }).refs?.length ?? 0;
 const calN = backtest.calibration?.n ?? null;
 
+/* ── DEMO LINKS for §06 — the graph as a tour, not a diagram ─────────────
+   Derived, never hardcoded: the maker link must point at a maker whose index
+   actually publishes (the node's own claim), and the ref link at a dossier
+   that exists in tonight's refs.json. Recognisable names preferred; any
+   publishable maker as fallback. */
+const DEMO_MAKER =
+  ['rolex', 'patek-philippe', 'cartier', 'audemars-piguet'].find((s) => {
+    const m = makerIdx[s];
+    return m && Object.values(m.horizons || {}).some((h) => h?.publishable);
+  })
+  ?? Object.entries(makerIdx).find(([, m]) => Object.values(m.horizons || {}).some((h) => h?.publishable))?.[0]
+  ?? null;
+const DEMO_REF = (refs as { refs?: { key: string; n: number }[] }).refs
+  ?.slice().sort((a, b) => b.n - a.n)[0]?.key ?? null;
+
 /* ── THE CURVE: the corpus accumulating, 1989 → today ────────────────────
    Drawn from meta.soldByYear, the same accumulation the OG card plots. The
    hero numeral IS this curve's final value — numeral = line, the product's
@@ -623,9 +638,15 @@ export default function AboutPage() {
               </span>
             </h1>
             <p className="dk-sub">
-              lectr has read every settled lot across <b>{meta.sources.length} houses</b>, and prices
-              what comes next against the sales that resemble it.
+              lectr is the intelligence desk for the auction market. It has read every settled lot
+              across <b>{meta.sources.length} houses</b>, and prices what comes next against the
+              sales that resemble it.
             </p>
+            <div className="dk-cover-cta">
+              <Link href="/value" className="close-cta">See tonight&rsquo;s calls <Flick size={12} /></Link>
+              <a href="#ch-01" className="close-alt">How it works</a>
+            </div>
+            <p className="dk-free">Public and free. No account needed.</p>
             <div className="dk-statband dk-s">
               <Stat figure={<span data-count>{fmt(meta.totalLots)}</span>} label="Lots under tracking" note="live and settled, one graph" />
               <Stat figure={<span data-count>{String(meta.sources.length)}</span>} label="Auction houses" note="named, with their coverage, below" />
@@ -670,7 +691,9 @@ export default function AboutPage() {
           </div>
         )}
 
-        <Sec ord="01" label="The corpus" title={<>Depth is the moat. It took {ARCHIVE_YEARS} years to build.</>}>
+        {/* "It took 35 years to build" overclaimed — lectr didn't spend the
+            years, the record spans them. Same swagger, honest verb. */}
+        <Sec ord="01" label="The corpus" title={<>Depth is the moat. {ARCHIVE_YEARS} years of results, one schema.</>}>
           <p style={p}>
             Comparable-sales pricing is only as good as the pool behind it, and auction results are
             scattered across houses that publish in different shapes, purge lots when a sale closes,
@@ -777,7 +800,9 @@ export default function AboutPage() {
           <p style={p}>
             The record above is an aggregate. This is what it looks like as individual lots: the
             engine priced each object from comparable sold evidence, and the hammer came in under
-            that number.
+            that number. Two of the six below carried <b style={{ color: 'var(--color-fg)' }}>no house
+            estimate at all</b> — lectr&rsquo;s figure was the only valuation in existence when the
+            hammer fell.
           </p>
           <div className="proof-grid dk-s">
             {proof.cases.filter((c) => !(c as { hero?: boolean }).hero).map((c) => <ProofCase key={c.id} c={c} />)}
@@ -786,10 +811,11 @@ export default function AboutPage() {
             <b style={{ color: 'var(--color-text-muted)' }}>How these were chosen.</b> Of {fmt(PROV.targets)} lots sold
             since 2024 above a $3,000 estimate, the engine priced {fmt(PROV.priced)} from at least eight
             comparable sold lots at non-low confidence — and {fmt(PROV.hits)} of those cleared 30% or more below
-            the number. That sweep is exhaustive, not a sample. Four of the six above are drawn from it,
-            as is the lot below; the other two come from houses that publish{' '}
-            <b style={{ color: 'var(--color-text-muted)' }}>no estimate at all</b> (Goldin, Sotheby&rsquo;s NBA
-            auctions), where lectr&rsquo;s figure was the only valuation in existence when the hammer fell.
+            the number. That sweep is exhaustive, not a sample; four of the six above are drawn from it,
+            as is the lot below.
+          </p>
+          <p style={caption}>
+            The no-estimate pair come from Goldin and Sotheby&rsquo;s NBA auctions, which publish none.
             That population has not been swept exhaustively, so no rate is claimed for it.
           </p>
         </Sec>
@@ -832,28 +858,32 @@ export default function AboutPage() {
         <Sec ord="06" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
           <p style={p}>
             A price is not an answer on its own. Every lot resolves into a chain you can walk — and
-            every step of it is a page, not a footnote.
+            every step of it is a page, not a footnote. The links below open real ones.
           </p>
 
+          {/* Each node links to a LIVE example — the graph as a tour, not a
+              diagram. Targets are derived (DEMO_MAKER must actually publish;
+              DEMO_REF is tonight's deepest dossier) so a link can never demo
+              a claim the data no longer makes. */}
           <ol className="chain dk-s">
             <li className="chain-node">
-              <span className="chain-k">The lot</span>
+              <Link className="chain-k" href="/value">The lot</Link>
               <span className="chain-v">what it was expected to make, what it made, and the call that preceded it</span>
             </li>
             <li className="chain-node">
-              <span className="chain-k">Its comparables</span>
+              <a className="chain-k" href="#ch-04">Its comparables</a>
               <span className="chain-v">the exact settled sales the call was argued from, each one clickable</span>
             </li>
             <li className="chain-node">
-              <span className="chain-k">Its sub-market</span>
+              <Link className="chain-k" href="/analytics">Its sub-market</Link>
               <span className="chain-v">cards by era and sport, watch families, art kinds, design materials</span>
             </li>
             <li className="chain-node">
-              <span className="chain-k">Its maker</span>
+              <Link className="chain-k" href={DEMO_MAKER ? `/${DEMO_MAKER}` : '/makers'}>Its maker</Link>
               <span className="chain-v">a quality-controlled index, published only where the interval resolves</span>
             </li>
             <li className="chain-node">
-              <span className="chain-k">Its reference</span>
+              <Link className="chain-k" href={DEMO_REF ? `/ref?id=${DEMO_REF}` : '/analytics'}>Its reference</Link>
               <span className="chain-v">one of {fmt(refCount)} dossiers, each with the full yearly series for that model line</span>
             </li>
           </ol>
@@ -865,7 +895,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="07" label="What it changes" title={<>What it changes, for the person holding the paddle.</>}>
+        <Sec ord="07" label="What it changes" title={<>For the person holding the paddle.</>}>
           <p style={p}>
             A price is only useful if it changes what someone does. Four people ask the same question
             — what does this actually clear at, and how sure can you be — and get four different days
@@ -1086,6 +1116,8 @@ const DECK_CSS = `
     color: var(--color-text-secondary); max-width: 58ch; margin: 0;
   }
   .dk-sub b { color: var(--color-fg); font-weight: 600; }
+  .dk-cover-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: clamp(22px, 2.6vw, 32px); }
+  .dk-free { font-size: var(--d-cap); color: var(--color-text-faint); margin: 12px 0 0; }
   .dk-statband {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: clamp(20px, 2.2vw, 30px);
@@ -1105,9 +1137,11 @@ const DECK_CSS = `
     @keyframes dkWrite { to { clip-path: inset(0 0 0 0); } }
     .dk-u::after { transform: scaleX(0); transform-origin: left; animation: dkUnder .9s var(--ease-draw) 1.7s forwards; }
     @keyframes dkUnder { to { transform: scaleX(1); } }
-    .dk-kickrow, .dk-h1, .dk-sub { animation: dkRise .8s var(--ease-signature) both; }
+    .dk-kickrow, .dk-h1, .dk-sub, .dk-cover-cta, .dk-free { animation: dkRise .8s var(--ease-signature) both; }
     .dk-h1 { animation-delay: .12s; }
     .dk-sub { animation-delay: .24s; }
+    .dk-cover-cta { animation-delay: .34s; }
+    .dk-free { animation-delay: .42s; }
     @keyframes dkRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
   }
 
@@ -1501,6 +1535,12 @@ const DECK_CSS = `
   }
   .chain-node:first-child::before { background: var(--color-butter); box-shadow: 0 0 10px rgba(232,218,182,.25); }
   .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+  a.chain-k {
+    width: fit-content; text-decoration: none;
+    border-bottom: 1px solid var(--hairline);
+    transition: border-color .25s var(--ease-ui);
+  }
+  a.chain-k:hover { border-bottom-color: var(--color-fg); }
   .chain-v { display: inline; font-size: var(--d-body); line-height: 1.6; color: var(--color-text-secondary); }
   @media (min-width: 900px) {
     .chain { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 0; }
