@@ -1945,6 +1945,10 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtMonFigure[data-dir='up'] { color: var(--color-up); }
 .mtMonFigure[data-dir='down'] { color: var(--color-down); }
 .mtMonBeam { width: 100%; max-width: 300px; margin-top: 6px; }
+/* the demand line (design/culture/science monuments) must fill the card like
+   the CI beam does — the global mobile cap min(260px,80vw) left it stopping
+   short of the right edge, which read as a broken chart */
+.mtMonBeam .demandLine { width: 100% !important; margin-top: 0 !important; }
 .mtMonSub { font-size: 12.5px; color: var(--tt-muted); font-variant-numeric: tabular-nums; }
 
 /* mobile masthead: kicker left, serial right, above the monument card */
@@ -2066,11 +2070,16 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .mtMonWrapM { padding: 6px 0 8px; border-bottom: none; }
   .mtMonGhost { width: 64%; right: -8%; }
   .mtMastheadM { padding: 0 2px 6px; }
-  .mtMon { padding: 12px 14px; gap: 2px; }
+  .mtMon { position: relative; padding: 12px 14px; gap: 2px; }
   .mtMonMarket { font-size: 21px; }
   .mtMonFigure { font-size: 26px; }
   .mtMonSub { font-size: 10.5px; margin-top: 2px; }
-  .mtMonKicker { font-size: 9.5px; }
+  /* the read-type label rides the top-right corner; the market name leads
+     the card from the top-left */
+  .mtMonKicker {
+    position: absolute; top: 13px; right: 14px;
+    font-size: 9px; max-width: 48%; text-align: right; line-height: 1.3;
+  }
   .mtMonBeam { margin-top: 4px; }
   .mtMon .beamLarge .beamStage { height: 14px; }
   .mtMon .beamLarge .beamEnds { margin-top: 4px; font-size: 10.5px; }
