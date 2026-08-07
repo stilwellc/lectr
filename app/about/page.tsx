@@ -879,7 +879,9 @@ export default function AboutPage() {
               <span className="chain-v">cards by era and sport, watch families, art kinds, design materials</span>
             </li>
             <li className="chain-node">
-              <Link className="chain-k" href={DEMO_MAKER ? `/${DEMO_MAKER}` : '/makers'}>Its maker</Link>
+              {/* plain <a>, not Link: artist routes ship no RSC .txt payload,
+                  so Link's viewport prefetch 404s in the console sitewide */}
+              <a className="chain-k" href={DEMO_MAKER ? `/${DEMO_MAKER}` : '/makers'}>Its maker</a>
               <span className="chain-v">a quality-controlled index, published only where the interval resolves</span>
             </li>
             <li className="chain-node">
