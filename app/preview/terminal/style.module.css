@@ -2082,26 +2082,6 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .mtTag { font-size: 9px; }
 }
 
-/* mobile: the 7 pills become ONE snap row (the wall's strip pattern) — three
-   stacked pill rows were ~230px of a screen that must hold the whole scene.
-   Terminal-scoped; other routes keep the wrapped grid. */
-@media (max-width: 700px) {
-  .switchStrip :global(.ray-markets) {
-    display: flex;   /* the mobile pill sheet is a GRID — without this the
-                        nowrap/overflow pair is a no-op (re-applied Aug 6;
-                        the earlier fix rode in a reverted commit) */
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-    padding: 6px 2px;              /* room for the lit halo */
-    margin: -6px -2px;
-  }
-  .switchStrip :global(.ray-markets)::-webkit-scrollbar { display: none; }
-  .switchStrip :global(.ray-market-tab) { flex: none; white-space: nowrap; scroll-snap-align: start; }
-}
-
 /* ══ FROSTED LIQUID GLASS (Aug 6, the Robinhood pass) ══
    Restraint is the treatment: three surfaces only — the market pills, the
    monument plate, the search — each a translucent pane over the page's own
