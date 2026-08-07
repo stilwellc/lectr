@@ -143,6 +143,7 @@ export default function IndexHero({
   const hero = useHeroSeries(activeKey, demand, realized);
   const lead = useMemo(() => pickLead(market, demandAll, realized, activeKey), [market, demandAll, realized, activeKey]);
   const serialNo = serial ? `NO. ${String(serial).slice(0, 10).replace(/-/g, '')}` : null;
+  const showMonument = activeKey !== 'all' && !!lead;   // never on Total market
   const vals = hero.idx.map((p) => p.value);
   const level = vals.length ? vals[vals.length - 1] : 0;
 
@@ -196,15 +197,15 @@ export default function IndexHero({
             {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
           </m.div>
 
-          {lead && (
+          {showMonument && (
             <m.div className={styles.mtMonWrapM} {...rise(0.07)}>
-              <TapeMonument row={lead} play={play} />
+              <TapeMonument row={lead!} play={play} />
             </m.div>
           )}
 
           <m.div className={styles.mtStage} {...rise(0.12)}>
             {activeKey === 'all'
-              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
+              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} />
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
@@ -268,13 +269,13 @@ export default function IndexHero({
         <div className={styles.mtBoard}>
           <m.div className={styles.mtBoardMain} {...rise(0.1)}>
             {activeKey === 'all'
-              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} omit={lead?.key} />
+              ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} />
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
           <m.aside className={styles.mtSide} {...rise(0.16)}>
-            {lead && <TapeMonument row={lead} play={play} />}
-            <div className={styles.heroRail} data-under-monument={lead ? 'true' : undefined}>
+            {showMonument && <TapeMonument row={lead!} play={play} />}
+            <div className={styles.heroRail} data-under-monument={showMonument ? 'true' : undefined}>
               <div className={styles.railRow}>
                 <span className={styles.railLabel}>On the block</span>
                 <span className={styles.railVal}>{fmtInt(onBlock)}</span>
