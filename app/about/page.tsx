@@ -1023,11 +1023,11 @@ const DECK_CSS = `
       letter-spacing: .08em; text-decoration: none;
       color: var(--color-text-faint);
       transition: color .35s var(--ease-ui);
-      /* full-bleed content (the tape) passes under the fixed rail — the pill
-         keeps the label legible while anything crosses it */
+      /* full-bleed content (the tape) passes under the fixed rail — the blur
+         keeps the label legible while anything crosses, and is invisible over
+         the flat ground (a tinted pill read as a slab in the cover's light pool) */
       padding: 3px 8px 3px 0; border-radius: 6px;
-      background: color-mix(in srgb, var(--color-bg-deep, #0B0A07) 72%, transparent);
-      backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
     }
     .dk-rail a i { display: block; width: 12px; height: 1px; background: currentColor; transition: width .35s var(--ease-ui); }
     .dk-rail a.act { color: var(--color-butter); }
