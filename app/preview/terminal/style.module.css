@@ -1246,6 +1246,12 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   justify-content: center;
 }
 .slipRoom:empty { display: none; }
+/* the settlement slip is the ONLY thing in this room, so recordBandWrap's
+   default 64px top margin (meant for stacking under other content) is pure
+   dead space here — it added a lopsided ~116px cream band above the receipt
+   while the bottom kept only the 52px pad, and it broke the flex centring.
+   Zero it so the room hugs the slip symmetrically. */
+.slipRoom .recordBandWrap { margin-top: 0; }
 
 
 /* ── Room B mobile ── */
@@ -1857,6 +1863,24 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtHero .demandPath, .mHero .demandPath { stroke: var(--tt-secondary); }
 .mtHero .demandBase, .mHero .demandBase { stroke: rgba(154, 143, 125, 0.5); }
 .mtHero .demandDot, .mHero .demandDot { fill: var(--tt-butter); }
+/* the CI beam reads direction too — a hedonic/repeat-sale move IS a market
+   move, so its interval and point estimate carry the same green-up/red-down
+   ink the demand sparklines do, rather than a flat butter that made the
+   certified rows look inert beside the coloured descriptive ones. Butter
+   stays the fallback for a genuinely flat read (no data-dir). Same colours
+   and same surfaces (hero row, monument, stage) as the demand direction ink. */
+.mtHero [data-dir='up'] .beamRule,
+.mHero [data-dir='up'] .beamRule,
+.mtMon[data-dir='up'] .beamRule { stroke: rgba(87, 190, 135, 0.9); }
+.mtHero [data-dir='down'] .beamRule,
+.mHero [data-dir='down'] .beamRule,
+.mtMon[data-dir='down'] .beamRule { stroke: rgba(204, 106, 92, 0.9); }
+.mtHero [data-dir='up'] .beamDiamond::before,
+.mHero [data-dir='up'] .beamDiamond::before,
+.mtMon[data-dir='up'] .beamDiamond::before { background: #57BE87; }
+.mtHero [data-dir='down'] .beamDiamond::before,
+.mHero [data-dir='down'] .beamDiamond::before,
+.mtMon[data-dir='down'] .beamDiamond::before { background: #CC6A5C; }
 /* direction ink — the sparklines read green up / red down like every other
    figure on the page. Both the row spark (demandLineMini) and the monument
    line (demandLine) carry it, across the hero, the sub-tape and the plate. */
@@ -1931,10 +1955,21 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtMon .beamLarge .beamLabel { display: none; }  /* the sub caption already names the read */
 .mtMon .beamLarge .beamStage { height: 16px; }
 .mtMon .beamLarge .beamEnds { margin-top: 5px; font-size: 12px; font-weight: 500; color: var(--tt-muted) !important; }
+/* flat fallback; the [data-dir] rules above re-ink it green/red on a signed read */
 .mtMon .beamLarge .beamRule { stroke: rgba(237, 230, 218, 0.75); }
 .mtMon .beamLarge .beamDiamond::before { background: var(--tt-butter); }
+.mtMon[data-dir='up'] .beamLarge .beamRule { stroke: rgba(87, 190, 135, 0.9); }
+.mtMon[data-dir='down'] .beamLarge .beamRule { stroke: rgba(204, 106, 92, 0.9); }
+.mtMon[data-dir='up'] .beamLarge .beamDiamond::before { background: #57BE87; }
+.mtMon[data-dir='down'] .beamLarge .beamDiamond::before { background: #CC6A5C; }
 .mtSide .heroRail { grid-area: auto; align-self: stretch; }
 .mtSide .heroRail[data-under-monument='true'] { border-top: 1px solid var(--tt-hair-2); padding-top: clamp(14px, 1.6vw, 20px); }
+/* Total-market view has no monument, so the rail is the whole right column and
+   used to top-pack — leaving a ~350px void beneath it while the left tape ran
+   six rows deep. Distribute its rows to fill the frame like the departures-board
+   tape opposite (the search pill anchors the bottom). Scoped-market views keep
+   the rail packed under the monument. */
+.mtSide .heroRail:not([data-under-monument='true']) { justify-content: space-between; }
 
 /* the monument — the strongest honest read as the focal object. Unboxed,
    like everything on the desk; the beam IS the composition. */
