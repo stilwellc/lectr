@@ -190,6 +190,11 @@ const tagFor = (read: TapeRowData['read']): string => {
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
+/** direction of a value series — last vs first — for coloring a descriptive
+    (price) sparkline green/red the way demand reads already sign. */
+const seriesDir = (s: { value: number }[]): 'up' | 'down' | undefined =>
+  s.length >= 2 ? (s[s.length - 1].value >= s[0].value ? 'up' : 'down') : undefined;
+
 /** the lead read — the row the monument enthrones. Certified beats measured
     beats descriptive, so as more verticals clear the CI bar the monument
     upgrades itself; today it is Art's certified 5Y. Scoped, it is that
@@ -243,7 +248,7 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
           <span className={`${styles.mtMonFigure} ${styles.pctData}`} data-dir={r.now >= 0 ? 'up' : 'down'}>
             {fmtPct(r.now)}
           </span>
-          <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} />}</span>
+          <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} dir={r.now >= 0 ? 'up' : 'down'} />}</span>
           <span className={styles.mtMonSub}>demand · sold over estimate · {fmtInt(row.lots)} lots</span>
         </>
       )}
@@ -288,9 +293,9 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
               <CIBeam mini lo={r.read.ciLo} hi={r.read.ciHi} point={r.read.changePct}
                 dir={r.read.changePct >= 0 ? 'up' : 'down'} play={play} />
             )}
-            {r.read.kind === 'demand' && r.read.series.length >= 2 && <DemandLine mini series={r.read.series} />}
+            {r.read.kind === 'demand' && r.read.series.length >= 2 && <DemandLine mini series={r.read.series} dir={r.read.now >= 0 ? 'up' : 'down'} />}
             {r.read.kind === 'descriptive' && (r.read.series.length >= 2
-              ? <DemandLine mini series={r.read.series} />
+              ? <DemandLine mini series={r.read.series} dir={seriesDir(r.read.series)} />
               : <span className={styles.mtAbstain}>—</span>)}
           </span>
           <span className={styles.mtRight}>
@@ -390,7 +395,7 @@ export function SubTape({ market, activeKey, play }: {
                   point={idx.changePct} dir={idx.changePct >= 0 ? 'up' : 'down'} play={play} />
               )}
               {!idx && r.readType === 'demand' && (r.demandSeries?.length ?? 0) >= 2 && (
-                <DemandLine mini series={r.demandSeries as { period: string; value: number }[]} />
+                <DemandLine mini series={r.demandSeries as { period: string; value: number }[]} dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'} />
               )}
               {!idx && r.readType !== 'demand' && <span className={styles.mtAbstain}>—</span>}
             </span>

@@ -237,7 +237,7 @@ export function CIBeam({ lo, hi, point, dir, mini = false, play = true, large = 
 }
 
 /* ── the demand line — the real quarterly series over its median. */
-export function DemandLine({ series, mini = false }: { series: { period: string; value: number }[]; mini?: boolean }) {
+export function DemandLine({ series, mini = false, dir }: { series: { period: string; value: number }[]; mini?: boolean; dir?: 'up' | 'down' }) {
   const pts = useMemo(() => {
     // decimate to ≤48 points
     const step = Math.max(1, Math.ceil(series.length / 48));
@@ -260,7 +260,7 @@ export function DemandLine({ series, mini = false }: { series: { period: string;
   }, [series]);
   if (!pts) return null;
   return (
-    <div className={mini ? styles.demandLineMini : styles.demandLine} aria-hidden>
+    <div className={mini ? styles.demandLineMini : styles.demandLine} data-dir={dir} aria-hidden>
       <svg viewBox="0 0 100 72" preserveAspectRatio="none" className={styles.demandSvg}>
         <line x1="0" y1={pts.medianY} x2="100" y2={pts.medianY} className={styles.demandBase} vectorEffect="non-scaling-stroke" />
         <path d={pts.d} className={styles.demandPath} fill="none" vectorEffect="non-scaling-stroke" />

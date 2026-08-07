@@ -1787,8 +1787,8 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtTape, .mtLadder { display: grid; grid-template-columns: 1fr; }
 .mtRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) 104px fit-content(46%);
-  gap: 0 18px;
+  grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr);
+  gap: 0 22px;
   align-items: center;
   min-height: 64px;
   padding: 10px 2px;
@@ -1824,7 +1824,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    wider than this cell, so sparks ran into the figures. The cell is the law. */
 .mtInstrument > * { width: 100% !important; }
 .mtAbstain { color: var(--tt-faint); font-size: 15px; display: block; text-align: center; }
-.mtRight { display: grid; gap: 3px; justify-items: end; text-align: right; }
+.mtRight { display: grid; gap: 3px; justify-items: end; justify-self: end; text-align: right; }
 .mtFigure {
   font-size: clamp(15px, 1.35vw, 19px);
   font-weight: 600;
@@ -1857,10 +1857,29 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtHero .demandPath, .mHero .demandPath { stroke: var(--tt-secondary); }
 .mtHero .demandBase, .mHero .demandBase { stroke: rgba(154, 143, 125, 0.5); }
 .mtHero .demandDot, .mHero .demandDot { fill: var(--tt-butter); }
+/* direction ink — the sparklines read green up / red down like every other
+   figure on the page. Both the row spark (demandLineMini) and the monument
+   line (demandLine) carry it, across the hero, the sub-tape and the plate. */
+.mtHero [data-dir='up'] .demandPath,
+.mHero [data-dir='up'] .demandPath,
+.mtStage [data-dir='up'] .demandPath,
+.mtMon [data-dir='up'] .demandPath { stroke: #57BE87 !important; }
+.mtHero [data-dir='down'] .demandPath,
+.mHero [data-dir='down'] .demandPath,
+.mtStage [data-dir='down'] .demandPath,
+.mtMon [data-dir='down'] .demandPath { stroke: #CC6A5C !important; }
+.mtHero [data-dir='up'] .demandDot,
+.mHero [data-dir='up'] .demandDot,
+.mtStage [data-dir='up'] .demandDot,
+.mtMon [data-dir='up'] .demandDot { fill: #57BE87 !important; }
+.mtHero [data-dir='down'] .demandDot,
+.mHero [data-dir='down'] .demandDot,
+.mtStage [data-dir='down'] .demandDot,
+.mtMon [data-dir='down'] .demandDot { fill: #CC6A5C !important; }
 .mtHero .demandEnds, .mHero .demandEnds { color: var(--tt-faint); }
 
 @media (max-width: 700px) {
-  .mtRow { grid-template-columns: minmax(0, 1fr) 76px fit-content(50%); gap: 0 12px; min-height: 58px; }
+  .mtRow { grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr); gap: 0 14px; min-height: 58px; }
   .mtInstrument { width: 72px; }
   .mtReason { max-width: 24ch; font-size: 11.5px; }
 }
@@ -1895,7 +1914,7 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtBoardMain { min-width: 0; display: grid; }
 .mtBoardMain .mtTape { height: 100%; grid-auto-rows: 1fr; align-items: center; }
 /* board rows: taller, figures louder — this is the show now */
-.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1.1fr) 116px fit-content(46%); }
+.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr); column-gap: 26px; }
 .mtHero .mtLabel { font-size: clamp(15px, 1.2vw, 17px); }
 .mtHero .mtFigure { font-size: clamp(15px, 1.3vw, 19px); }
 .mtHero .mtInstrument { width: 112px; }
