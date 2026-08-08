@@ -2166,30 +2166,116 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 /* no local light pool: the page's fixed bgField supplies the atmosphere the
    frost refracts. A hero-scoped gradient box painted a visible seam. */
 
-/* the pills: frosted panes. Inactive pills were near-invisible hairlines;
-   now each is a real glass chip — blur, saturation lift, a top light. */
+/* the pills: LIQUID GLASS (Aug 8). Same layout, thicker material — each chip
+   is a lens, not a pane. The recipe: a vertical glass-body gradient (light
+   enters top, pools bottom), a lensed rim (specular above, shade below, lit
+   flanks), refraction lift in the backdrop, a curvature glare cap (::before),
+   and a one-shot specular sweep when a pill takes the light (::after). */
 .switchStrip :global(.ray-market-tab) {
+  flex: none;   /* never shrink-clip a label — the strip scrolls instead */
   padding-right: 46px !important;   /* the watermark zone — labels never touch it */
-  background: rgba(255, 252, 245, 0.045) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  backdrop-filter: blur(18px) saturate(1.5);
-  border: 1px solid rgba(237, 230, 218, 0.13) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 4px 16px -8px rgba(8, 6, 3, 0.5) !important;
-  transition: background 160ms var(--ease-signature, ease), border-color 160ms var(--ease-signature, ease);
+  background: linear-gradient(180deg,
+    rgba(255, 252, 245, 0.085),
+    rgba(255, 252, 245, 0.025) 46%,
+    rgba(255, 252, 245, 0.06)) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.65) brightness(1.05);
+  backdrop-filter: blur(22px) saturate(1.65) brightness(1.05);
+  border: 1px solid rgba(237, 230, 218, 0.16) !important;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.18),
+    inset 0 -1.5px 2px rgba(8, 6, 3, 0.42),
+    inset 1.5px 0 2px -1px rgba(255, 255, 255, 0.07),
+    inset -1.5px 0 2px -1px rgba(255, 255, 255, 0.07),
+    0 1px 1px rgba(8, 6, 3, 0.32),
+    0 10px 26px -14px rgba(8, 6, 3, 0.62) !important;
+  transition:
+    background 180ms var(--ease-signature, ease),
+    border-color 180ms var(--ease-signature, ease),
+    transform 180ms var(--ease-signature, ease),
+    box-shadow 180ms var(--ease-signature, ease);
 }
+/* the glare cap — the curvature. Sits above the glass body, below the ink
+   (z:-1 with the watermark, DOM order keeps the emboss on top of it). */
+.switchStrip :global(.ray-market-tab)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(130% 95% at 50% -32%,
+    rgba(255, 255, 255, 0.17),
+    rgba(255, 255, 255, 0.04) 48%,
+    transparent 64%);
+  pointer-events: none;
+}
+/* hover: the chip lifts and its rim ignites — physics, not swelling */
 .switchStrip :global(.ray-market-tab:hover) {
-  background: rgba(255, 252, 245, 0.075) !important;
-  border-color: rgba(237, 230, 218, 0.22) !important;
+  background: linear-gradient(180deg,
+    rgba(255, 252, 245, 0.12),
+    rgba(255, 252, 245, 0.045) 46%,
+    rgba(255, 252, 245, 0.085)) !important;
+  border-color: rgba(237, 230, 218, 0.3) !important;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.24),
+    inset 0 -1.5px 2px rgba(8, 6, 3, 0.42),
+    inset 1.5px 0 2px -1px rgba(255, 255, 255, 0.09),
+    inset -1.5px 0 2px -1px rgba(255, 255, 255, 0.09),
+    0 2px 2px rgba(8, 6, 3, 0.3),
+    0 14px 30px -14px rgba(8, 6, 3, 0.68) !important;
 }
-/* the active pill stays solid butter — one crisp anchor on the glass row */
+/* press: the gel gives — squash beats the hover lift while held */
+.switchStrip :global(.ray-market-tab:active) {
+  transform: translateY(0) scale(0.955);
+}
+/* the active pill: the glossy butter plate — real depth, still the one light.
+   Light enters the top face, the mass shades toward the base, the halo rides
+   in the shadow stack. */
 .switchStrip :global(.ray-market-tab[data-active='true']),
 .switchStrip :global(.ray-market-tab[aria-selected='true']) {
   padding-right: 13px !important;   /* active pill carries no watermark */
-  background: var(--color-butter, #E8DAB6) !important;
+  background: linear-gradient(180deg,
+    #F4E9CB 0%,
+    var(--color-butter, #E8DAB6) 52%,
+    #DBC99C 100%) !important;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border-color: color-mix(in srgb, var(--color-butter, #E8DAB6) 80%, transparent) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 6px 20px -10px rgba(8, 6, 3, 0.6) !important;
+  border-color: rgba(255, 248, 228, 0.6) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -2px 3px rgba(122, 100, 60, 0.38),
+    0 1px 1px rgba(8, 6, 3, 0.35),
+    0 12px 30px -12px rgba(8, 6, 3, 0.7),
+    0 0 24px -4px rgba(232, 218, 182, 0.3) !important;
+}
+/* the specular sweep — one pass of light across the plate as it takes the
+   switch. Fires on activation (and once at load on the resting active pill,
+   folding into the switch-on). Momentary, then the face is calm glass. */
+.switchStrip :global(.ray-market-tab)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 42%;
+  z-index: 2;
+  background: linear-gradient(105deg,
+    transparent,
+    rgba(255, 255, 255, 0.32) 50%,
+    transparent);
+  transform: translateX(-140%) skewX(-18deg);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .switchStrip :global(.ray-market-tab[data-active='true'])::after {
+    animation: glassSweep 720ms var(--ease-signature, ease) 90ms 1 both;
+  }
+}
+@keyframes glassSweep {
+  0%   { opacity: 0; transform: translateX(-140%) skewX(-18deg); }
+  16%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(380%) skewX(-18deg); }
 }
 
 /* the monument plate: the same pane, one register brighter */
