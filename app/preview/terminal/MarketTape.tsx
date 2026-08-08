@@ -278,7 +278,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
   if (!rows.length) return null;
   return (
     <div className={styles.mtTape} role="list" data-play={play ? 'true' : undefined}>
-      {rows.map((r) => (
+      {rows.map((r, i) => (
         <button
           key={r.key} type="button" role="listitem" className={styles.mtRow}
           onClick={() => setMarket(r.key)}
@@ -291,7 +291,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
           <span className={styles.mtInstrument} aria-hidden>
             {r.read.kind === 'index' && (
               <CIBeam mini lo={r.read.ciLo} hi={r.read.ciHi} point={r.read.changePct}
-                dir={r.read.changePct >= 0 ? 'up' : 'down'} play={play} />
+                dir={r.read.changePct >= 0 ? 'up' : 'down'} play={play} delay={i * 0.08} />
             )}
             {r.read.kind === 'demand' && r.read.series.length >= 2 && <DemandLine mini series={r.read.series} dir={r.read.now >= 0 ? 'up' : 'down'} />}
             {r.read.kind === 'descriptive' && (r.read.series.length >= 2
@@ -303,7 +303,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
               <>
                 <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={r.read.changePct >= 0 ? 'up' : 'down'}>
                   <span className={styles.tri} data-dir={r.read.changePct >= 0 ? 'up' : 'down'} aria-hidden />
-                  {fmtPct(r.read.changePct)} · {r.read.horizon}
+                  {fmtPct(r.read.changePct)}<span className={styles.mtHz}>{r.read.horizon}</span>
                 </span>
                 <span className={styles.mtSub}>
                   CI {fmtCI(r.read.ciLo)} to {fmtCI(r.read.ciHi)} · {r.read.method === 'repeat-sale' ? `${fmtInt(r.read.n)} pairs` : `${fmtInt(r.lots)} lots`}
@@ -314,14 +314,14 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
               <>
                 <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={r.read.now >= 0 ? 'up' : 'down'}>
                   <span className={styles.tri} data-dir={r.read.now >= 0 ? 'up' : 'down'} aria-hidden />
-                  {fmtPct(r.read.now)}
+                  {fmtPct(r.read.now)}<span className={styles.mtHz} aria-hidden />
                 </span>
                 <span className={styles.mtSub}>over estimate · {fmtInt(r.lots)} lots</span>
               </>
             )}
             {r.read.kind === 'descriptive' && (
               <>
-                <span className={styles.mtFigure}>Typical {fmtMoneyCompact(r.read.typicalUsd)}</span>
+                <span className={styles.mtFigure}>Typical {fmtMoneyCompact(r.read.typicalUsd)}<span className={styles.mtHz} aria-hidden /></span>
                 <span className={styles.mtSub}>at hammer · {fmtInt(r.lots)} lots</span>
               </>
             )}
@@ -381,7 +381,7 @@ export function SubTape({ market, activeKey, play }: {
   if (!rows.length) return null;
   return (
     <div className={styles.mtTape} role="list" data-play={play ? 'true' : undefined}>
-      {rows.map((r) => {
+      {rows.map((r, i) => {
         const idx = r.readType === 'index' ? r.index : null;
         return (
           <Link key={r.slug} href={subHref(r)} role="listitem" className={styles.mtRow}>
@@ -392,7 +392,7 @@ export function SubTape({ market, activeKey, play }: {
             <span className={styles.mtInstrument} aria-hidden>
               {idx && idx.changePct != null && (
                 <CIBeam mini lo={idx.ciLoPct ?? idx.changePct} hi={idx.ciHiPct ?? idx.changePct}
-                  point={idx.changePct} dir={idx.changePct >= 0 ? 'up' : 'down'} play={play} />
+                  point={idx.changePct} dir={idx.changePct >= 0 ? 'up' : 'down'} play={play} delay={i * 0.08} />
               )}
               {!idx && r.readType === 'demand' && (r.demandSeries?.length ?? 0) >= 2 && (
                 <DemandLine mini series={r.demandSeries as { period: string; value: number }[]} dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'} />
@@ -404,7 +404,7 @@ export function SubTape({ market, activeKey, play }: {
                 <>
                   <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={idx.changePct >= 0 ? 'up' : 'down'}>
                     <span className={styles.tri} data-dir={idx.changePct >= 0 ? 'up' : 'down'} aria-hidden />
-                    {fmtPct(idx.changePct)}{idx.horizon ? ` · ${idx.horizon}` : ''}
+                    {fmtPct(idx.changePct)}<span className={styles.mtHz}>{idx.horizon || ''}</span>
                   </span>
                   <span className={styles.mtSub}>
                     CI {fmtCI(idx.ciLoPct ?? idx.changePct)} to {fmtCI(idx.ciHiPct ?? idx.changePct)}{r.lots ? ` · ${fmtInt(r.lots)} lots` : ''}
@@ -415,14 +415,14 @@ export function SubTape({ market, activeKey, play }: {
                 <>
                   <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'}>
                     <span className={styles.tri} data-dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'} aria-hidden />
-                    {fmtPct(r.demandNow ?? 0)}
+                    {fmtPct(r.demandNow ?? 0)}<span className={styles.mtHz} aria-hidden />
                   </span>
                   <span className={styles.mtSub}>over estimate{r.lots ? ` · ${fmtInt(r.lots)} lots` : ''}</span>
                 </>
               )}
               {!idx && r.readType !== 'demand' && (
                 <>
-                  <span className={styles.mtFigure}>{r.typicalUsd ? `Typical ${fmtMoneyCompact(r.typicalUsd)}` : '—'}</span>
+                  <span className={styles.mtFigure}>{r.typicalUsd ? `Typical ${fmtMoneyCompact(r.typicalUsd)}` : '—'}<span className={styles.mtHz} aria-hidden /></span>
                   <span className={styles.mtSub}>{r.record?.usd ? `record ${fmtMoneyCompact(r.record.usd)} · ` : ''}{fmtInt(r.lots ?? 0)} lots</span>
                 </>
               )}

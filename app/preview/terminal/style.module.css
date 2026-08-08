@@ -261,18 +261,20 @@
   outline: 2px solid rgba(232, 218, 182, 0.7);
   outline-offset: 3px;
 }
+/* keycap jewelry — a real key: mono glyph, shaded bottom edge, pressed face */
 .kbd {
   display: inline-grid;
   place-items: center;
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
   padding: 0 5px;
-  border-radius: 6px;
-  border: 1px solid var(--tt-hair-2);
-  border-bottom-color: rgba(0, 0, 0, 0.4);
-  background: rgba(232, 218, 182, 0.06);
-  font-family: var(--font-inter), sans-serif;
-  font-size: 12.5px;
+  border-radius: 5px;
+  border: 1px solid rgba(232, 218, 182, 0.16);
+  border-bottom-color: rgba(8, 6, 3, 0.55);
+  background: rgba(255, 252, 245, 0.06);
+  box-shadow: inset 0 -1px 0 rgba(8, 6, 3, 0.35);
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 11px;
   color: var(--tt-fg);
 }
 .cmdLabel {
@@ -366,7 +368,35 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.03em;
   text-transform: uppercase; color: var(--tt-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.mHero .cmdPillFull { width: 100%; justify-content: center; padding: 14px; }
+/* mobile search joins the glass family SOLID (no new frost surface — seven
+   blurred keys already run above it on the tightest paint path) */
+.mHero .cmdPillFull {
+  width: 100%;
+  justify-content: center;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(255, 252, 245, 0.05), rgba(255, 252, 245, 0.02));
+  border: 1px solid rgba(237, 230, 218, 0.13);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+/* the stat tiles: same pane, no blur — the below-market tile whispers butter */
+.mHero .mStat {
+  background: linear-gradient(180deg, rgba(255, 252, 245, 0.045), rgba(255, 252, 245, 0.015));
+  border-color: rgba(232, 218, 182, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.mHero .mStat[data-accent='true'] {
+  border-color: rgba(232, 218, 182, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 18px -6px rgba(232, 218, 182, 0.18);
+}
+/* the phone ledger sits under a centred lamp: hairlines brightest mid-row */
+@media (max-width: 700px) {
+  .mHero .mtRow, .mtStage .mtRow {
+    border-bottom: 1px solid transparent;
+    border-image: linear-gradient(90deg, rgba(232, 218, 182, 0.04), rgba(232, 218, 182, 0.13) 50%, rgba(232, 218, 182, 0.04)) 1;
+  }
+  .mHero .mtRow:last-child, .mtStage .mtRow:last-child { border-image: none; border-bottom: 0; }
+}
 
 /* ── RETURN HERO — ROI number coloring + the horizon toggle ── */
 
@@ -612,14 +642,21 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   align-items: center;
   text-align: center;
   gap: 6px;
-  margin-bottom: 22px;
+  margin-bottom: 28px;
 }
-
+/* plate index — 01–05 mono jewelry, echoing the masthead's inventory tag */
+.wallIdx {
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 9px;
+  line-height: 12px;
+  letter-spacing: 0.18em;
+  color: var(--tt-faint);
+}
 
 .wallRow {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
+  gap: 20px 14px;
 }
 .wallPlate {
   display: flex;
@@ -635,56 +672,155 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   font: inherit;
 }
 .wallPlate:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 3px; }
+/* THE MUSEUM MAT — a lit gallery frame, not a felt swatch: warm light pools
+   from the top of the mat, the base falls into shade, an inner bevel gives
+   the frame thickness, and the object casts a real contact shadow onto it. */
 .wallMat {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 116px;
-  padding: 10px;
-  border-radius: 10px;
-  background: #1c1a14;
-  border: 1px solid rgba(232, 218, 182, 0.07);
+  height: 150px;
+  padding: 14px;
+  border-radius: 6px;
   overflow: hidden;
-  transition: border-color 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(232, 218, 182, 0.05), transparent 60%),
+    linear-gradient(180deg, #211E17 0%, #1C1A14 55%, #171510 100%);
+  border: 1px solid rgba(232, 218, 182, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 252, 240, 0.05),
+    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
+    0 10px 24px -14px rgba(8, 6, 3, 0.65);
+  transform-origin: 50% 100%;
+  transition:
+    transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)),
+    box-shadow 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)),
+    border-color 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
+/* the vitrine glass front — a fixed 105° glare on the EXACT axis of the
+   active pill's specular sweep four hundred pixels above: one lamp, one
+   room. On hover the reflection lags the frame — that lag is the glass. */
+.wallMat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, rgba(255, 252, 245, 0.075) 0%, rgba(255, 252, 245, 0.02) 30%, transparent 48%);
+  pointer-events: none;
+  transition: transform 320ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.wallPlate:hover .wallMat::after { transform: translateX(8px); }
 .wallMat img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain; /* never crop artwork */
   display: block;
+  filter: drop-shadow(0 6px 10px rgba(8, 6, 3, 0.55));
+  transition: filter 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
-.wallPlate:hover .wallMat { border-color: rgba(232, 218, 182, 0.22); }
-/* the verdict ring — the same green the feed's rings speak (real signal only) */
+/* frame-lift: the visitor takes the frame off the wall — the mat rises, its
+   shadow deepens, the object's contact shadow stretches. The label stays. */
+.wallPlate:hover .wallMat {
+  transform: translateY(-4px) scale(1.015);
+  border-color: rgba(232, 218, 182, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 252, 240, 0.08),
+    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.5),
+    0 22px 34px -16px rgba(8, 6, 3, 0.75);
+}
+.wallPlate:hover .wallMat img { filter: drop-shadow(0 10px 14px rgba(8, 6, 3, 0.6)); }
+.wallPlate:active .wallMat { transform: translateY(-1px) scale(0.995); }
+.wallPlate:hover .wallMaker { color: var(--tt-butter); }
+/* the verdict ring — quieter than it was, still LIGHT: a 1.5px filament and
+   one tight skirt. Green stays a real below-market flag; five plates must
+   never read as five lamps. */
 .wallPlate[data-tone='up'] .wallMat {
-  box-shadow: inset 0 0 0 2px rgba(87, 190, 135, 0.9), 0 0 14px 1px rgba(87, 190, 135, 0.28);
-  border-color: rgba(87, 190, 135, 0.5);
+  border-color: rgba(87, 190, 135, 0.45);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(87, 190, 135, 0.85),
+    inset 0 1px 0 rgba(255, 252, 240, 0.05),
+    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
+    0 0 12px 0 rgba(87, 190, 135, 0.22),
+    0 10px 24px -14px rgba(8, 6, 3, 0.65);
 }
-.wallMeta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wallPlate[data-tone='up']:hover .wallMat {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(87, 190, 135, 0.95),
+    inset 0 1px 0 rgba(255, 252, 240, 0.08),
+    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.5),
+    0 0 14px 0 rgba(87, 190, 135, 0.28),
+    0 22px 34px -16px rgba(8, 6, 3, 0.75);
+}
+/* the ignite — a filament striking: overshoot at 60%, settling to the exact
+   static ring. (This keyframe was referenced for months and never defined —
+   the mobile rings had never actually animated.) */
+@keyframes ttRingIgnite {
+  0% {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(87, 190, 135, 0),
+      inset 0 1px 0 rgba(255, 252, 240, 0.05),
+      inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
+      0 0 12px 0 rgba(87, 190, 135, 0),
+      0 10px 24px -14px rgba(8, 6, 3, 0.65);
+  }
+  60% {
+    box-shadow:
+      inset 0 0 0 2px rgba(87, 190, 135, 1),
+      inset 0 1px 0 rgba(255, 252, 240, 0.05),
+      inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
+      0 0 18px 1px rgba(87, 190, 135, 0.34),
+      0 10px 24px -14px rgba(8, 6, 3, 0.65);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(87, 190, 135, 0.85),
+      inset 0 1px 0 rgba(255, 252, 240, 0.05),
+      inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
+      0 0 12px 0 rgba(87, 190, 135, 0.22),
+      0 10px 24px -14px rgba(8, 6, 3, 0.65);
+  }
+}
+/* desktop: rings ignite after their plates land */
+@media (prefers-reduced-motion: no-preference) {
+  .wall[data-anim='true'][data-seen='true'] .wallPlate[data-tone='up'] .wallMat {
+    animation: ttRingIgnite 340ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+    animation-delay: calc(660ms + var(--wall-i, 0) * 80ms);
+  }
+}
+/* museum wall-text: index · maker · fact, quiet tiers under the frame */
+.wallMeta { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 4px 2px 0; }
 .wallMaker {
   font-family: var(--font-inter), sans-serif;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--tt-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .wallEst {
   font-family: var(--font-inter), sans-serif;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--tt-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* the call tag — a stamped chip, same press as the masthead serial */
 .wallCallTag {
   font-style: normal;
   margin-left: 6px;
   color: var(--tt-butter);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  font-size: 9px;
+  font-size: 8.5px;
+  padding: 1.5px 5px 1px;
+  border: 1px solid rgba(232, 218, 182, 0.35);
+  border-radius: 3px;
 }
 .wallSignal {
   font-family: var(--font-inter), sans-serif;
@@ -694,11 +830,27 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* entrance: plates rise 12px, 80ms stagger, from the open's T+1200 */
-.wall[data-anim='true'] .wallPlate {
-  opacity: 0;
+/* entrance: plates hang as the reader ARRIVES (data-seen is scroll-driven on
+   both variants now) — 80ms stagger, never spent below the fold */
+.wall[data-anim='true'] .wallPlate { opacity: 0; }
+.wall[data-anim='true'][data-seen='true'] .wallPlate {
   animation: ttWallRise 520ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
   animation-delay: calc(var(--wall-base, 0ms) + var(--wall-i, 0) * 80ms);
+}
+/* reduced motion: the wall is simply hung — no rise, no ignite, full opacity
+   (ttWallRise had NO reduced-motion path; under seen-gating plates would
+   have rested invisible) */
+@media (prefers-reduced-motion: reduce) {
+  .wall[data-anim='true'] .wallPlate,
+  .wallStrip[data-anim='true'] .wallPlate {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .wall[data-anim='true'] .wallPlate[data-tone='up'] .wallMat,
+  .wallStrip[data-anim='true'] .wallPlate[data-tone='up'] .wallMat {
+    animation: none;
+  }
 }
 @keyframes ttWallRise {
   from { opacity: 0; transform: translateY(12px); }
@@ -711,21 +863,24 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 
 .wallStrip .wallRow {
   display: flex;
-  gap: 10px;
+  gap: 14px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--gutter, 16px);
   scrollbar-width: none;
   padding-bottom: 4px;
   margin-inline: calc(-1 * var(--gutter, 16px));
   padding-inline: var(--gutter, 16px);
 }
 .wallStrip .wallRow::-webkit-scrollbar { display: none; }
+/* walking the gallery: ~2.1 frames at 390px — the partial third frame is
+   the walk-on cue */
 .wallStrip .wallPlate {
   flex: 0 0 auto;
-  width: 168px;
+  width: 176px;
   scroll-snap-align: start;
 }
-.wallStrip .wallMat { height: 132px; }
+.wallStrip .wallMat { height: 158px; padding: 12px; }
 /* plates rise as the strip enters view; rings light left→right */
 .wallStrip[data-anim='true'] .wallPlate {
   opacity: 0;
@@ -736,8 +891,9 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   animation-delay: calc(var(--wall-i, 0) * 80ms);
 }
 .wallStrip[data-anim='true'][data-seen='true'] .wallPlate[data-tone='up'] .wallMat {
-  animation: ttRingIgnite 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) both;
-  animation-delay: calc(260ms + var(--wall-i, 0) * 60ms);
+  /* the filament strikes after its plate has landed — same pop curve as desktop */
+  animation: ttRingIgnite 340ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+  animation-delay: calc(600ms + var(--wall-i, 0) * 60ms);
 }
 
 /* ── M11 · the serif section head — one italic butter word ── */
@@ -1245,15 +1401,43 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .slipRoom { padding-block: 24px 32px; }
 }
 
-/* a padded seam between the hero's search and Tonight's Wall — reads as a
-   separate area, with a hairline rule to mark the transition */
+/* THE SECOND SCORE LINE — the same engraved groove that opens the hero under
+   the masthead closes it here: shadow lip over catch-light lip, centred and
+   edge-faded under the one lamp. The hero is a single milled plate, scored
+   at its top and bottom edges; below this line, the gallery begins. */
 .wallSeparator {
-  margin-top: clamp(40px, 6vw, 88px);
-  padding-top: clamp(40px, 6vw, 88px);
-  border-top: 2px dotted var(--tt-hair-2, rgba(232, 218, 182, 0.2));
+  position: relative;
+  margin-top: clamp(48px, 6vw, 96px);
+  padding-top: clamp(44px, 5.5vw, 84px);
+}
+.wallSeparator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(620px, 70%);
+  height: 2px;
+  background:
+    linear-gradient(90deg, transparent, rgba(4, 3, 2, 0.65) 16%, rgba(4, 3, 2, 0.65) 84%, transparent) left top / 100% 1px no-repeat,
+    linear-gradient(90deg, transparent, rgba(242, 238, 227, 0.1) 16%, rgba(242, 238, 227, 0.1) 84%, transparent) left bottom / 100% 1px no-repeat;
+}
+/* the groove scores itself outward from centre as the reader arrives (the
+   wall's data-seen is the arrival signal); browsers without :has() and
+   reduced-motion readers get the finished groove — a complete static design */
+@media (prefers-reduced-motion: no-preference) {
+  .wallSeparator:has(.wall[data-anim='true'][data-seen='true'])::before,
+  .wallSeparator:has(.wallStrip[data-anim='true'][data-seen='true'])::before {
+    clip-path: inset(0 50% 0 50%);
+    animation: seamScore 640ms cubic-bezier(0.23, 1, 0.32, 1) 120ms forwards;
+  }
+}
+@keyframes seamScore {
+  to { clip-path: inset(0 0 0 0); }
 }
 @media (max-width: 900px) {
-  .wallSeparator { margin-top: 32px; padding-top: 32px; }
+  .wallSeparator { margin-top: 36px; padding-top: 34px; }
+  .wallSeparator::before { width: min(320px, 78%); }
 }
 
 /* ════ THE VALUE ENGINE — chapter grammar for Room A ════ */
@@ -1901,9 +2085,41 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    at display scale with the functional rail beneath it. ══ */
 .mtHero { padding: clamp(22px, 2.6vw, 38px) 0 clamp(12px, 1.4vw, 18px); }
 .mtMasthead {
+  position: relative;
   display: flex; align-items: baseline; gap: 16px;
-  padding-bottom: clamp(8px, 1vw, 12px);
-  border-bottom: 1px solid var(--tt-hair-2);
+  padding-bottom: clamp(10px, 1.2vw, 14px);
+  /* THE ENGRAVED GROOVE — not a border but an incision in the plate: a
+     shadow lip above a catch-light lip, both fading at the ends because the
+     lamp is centered. The same score line closes the hero at the seam. */
+  background:
+    linear-gradient(90deg, transparent, rgba(4, 3, 2, 0.65) 12%, rgba(4, 3, 2, 0.65) 88%, transparent) left calc(100% - 1px) / 100% 1px no-repeat,
+    linear-gradient(90deg, transparent, rgba(242, 238, 227, 0.09) 12%, rgba(242, 238, 227, 0.09) 88%, transparent) left bottom / 100% 1px no-repeat;
+}
+/* the glint — a 110px light runs the groove once as the board lands,
+   arriving at the serial as it stamps in. Paint-only, gated on data-play. */
+.mtMasthead::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(242, 238, 227, 0.5) 50%, transparent) no-repeat;
+  background-size: 110px 1px;
+  background-position: -120px 0;
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mtHero[data-play='true'] .mtMasthead::after {
+    animation: mtRuleSweep 1000ms cubic-bezier(0.33, 0, 0.35, 1) 140ms 1 both;
+  }
+}
+@keyframes mtRuleSweep {
+  0% { opacity: 0; background-position: -120px 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { opacity: 0; background-position: calc(100% + 120px) 0; }
 }
 .mtMasthead .sectionKicker { margin-bottom: 0; font-size: 14px; color: var(--tt-fg); }
 .mtMastheadNote { font-size: 12.5px; color: var(--tt-faint); font-weight: 500; }
@@ -1911,6 +2127,17 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   margin-left: auto;
   font-family: var(--font-ibm-plex-mono), monospace;
   font-size: 11px; letter-spacing: 0.16em; color: var(--tt-faint);
+  /* a pressed inventory tag — the masthead's one object */
+  padding: 3px 8px 2px;
+  border-radius: 6px;
+  background: rgba(255, 252, 245, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mtHero[data-play='true'] .mtSerial {
+    opacity: 0;
+    animation: mtRowIn 450ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) 480ms forwards;
+  }
 }
 .mtBoard {
   display: grid;
@@ -1923,11 +2150,51 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 }
 .mtBoardMain { min-width: 0; display: grid; }
 .mtBoardMain .mtTape { height: 100%; grid-auto-rows: 1fr; align-items: center; }
-/* board rows: taller, figures louder — this is the show now */
-.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr); column-gap: 26px; }
-.mtHero .mtLabel { font-size: clamp(15px, 1.2vw, 17px); }
-.mtHero .mtFigure { font-size: clamp(15px, 1.3vw, 19px); }
-.mtHero .mtInstrument { width: 112px; }
+/* board rows: taller, figures louder — this is the show now. THE MACHINED
+   BOARD pass: type on shared 4px-rhythm baselines, the luminance split
+   (figures are the lit facts, labels are furniture), the instrument cell
+   equal to its grid column, and hairlines that dim down the board as the
+   lamp's light falls off. */
+.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr); column-gap: 24px; }
+.mtHero .mtLabel { font-size: 16px; line-height: 20px; font-weight: 570; letter-spacing: -0.011em; color: rgba(237, 230, 218, 0.87); }
+.mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 650; letter-spacing: 0.13em; }
+.mtHero .mtLabelBlock { gap: 4px; }
+.mtHero .mtFigure { font-size: 17px; line-height: 20px; font-weight: 620; color: #F2EDE3; }
+.mtHero .mtFigure[data-dir='up'] { color: var(--color-up); }
+.mtHero .mtFigure[data-dir='down'] { color: var(--color-down); }
+.mtHero .mtSub { font-size: 11.5px; line-height: 16px; }
+.mtHero .mtRight { gap: 4px; padding-right: 2px; }
+.mtHero .mtInstrument { width: 116px; }
+/* THE NUMERAL SPINE — the horizon rides in a reserved mono slot AFTER the
+   percentage (horizon-less rows render the empty spacer), so every figure's
+   last digit lands on ONE shared vertical datum, top row to bottom. */
+.mtHz {
+  display: inline-block;
+  min-width: 36px;
+  margin-left: 8px;
+  text-align: right;
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--tt-faint);
+  vertical-align: 1px;
+}
+/* falling light: the board's hairlines dim toward its base */
+.mtBoardMain .mtRow { border-bottom-color: rgba(232, 218, 182, 0.105); }
+.mtBoardMain .mtRow:nth-child(n+3) { border-bottom-color: rgba(232, 218, 182, 0.085); }
+.mtBoardMain .mtRow:nth-child(n+5) { border-bottom-color: rgba(232, 218, 182, 0.065); }
+/* hover answers with light, not paint: a wash that decays from the pen-tick
+   spine at the left margin. Data rows never squash — only glass gels. */
+.mtHero .mtRow:hover {
+  background: linear-gradient(90deg, rgba(232, 218, 182, 0.055), rgba(232, 218, 182, 0.015));
+  box-shadow: inset 2px 0 0 rgba(232, 218, 182, 0.3);
+}
+.mtHero .mtRow:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.45);
+  background: rgba(232, 218, 182, 0.03);
+}
 .mtSide { display: grid; gap: clamp(18px, 2vw, 26px); min-width: 0; }
 /* the 02 board's .beam ships width:min(440px,82vw) — wider than this column —
    and .heroRail still carries grid-area:rail from the old hero grid, which
@@ -2052,6 +2319,36 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 .mtSide .heroRail .railRow,
 .mtSide .heroRail .railBtn,
 .mtSide .heroRail .railCmd { border-top-style: solid; border-bottom-style: solid; border-color: var(--tt-hair); }
+/* the ledger's hairlines obey the lamp — this column is lit from its left
+   (toward page centre), so each score line decays rightward */
+.mtSide .heroRail .railRow,
+.mtSide .heroRail .railBtn {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(232, 218, 182, 0.13), rgba(232, 218, 182, 0.04)) 1;
+}
+/* rail hover speaks the tape's language: the pen-tick spine + decaying wash */
+.mtSide .railBtn:hover {
+  background: linear-gradient(90deg, rgba(232, 218, 182, 0.05), rgba(232, 218, 182, 0.015));
+  box-shadow: inset 2px 0 0 rgba(232, 218, 182, 0.3);
+}
+.railGo { display: inline-block; transition: transform 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)); }
+.railBtn:hover .railGo { transform: translate(2px, -2px); }
+/* a butter figure is a sign, not a lamp — only the pill emits */
+.mtSide .railVal[data-accent='true'] { text-shadow: none; }
+/* the ledger settles beneath the monument's final beat — opacity only,
+   layout occupied from paint */
+@media (prefers-reduced-motion: no-preference) {
+  .mtHero[data-play='true'] .heroRail > * {
+    opacity: 0;
+    animation: mtRowIn 450ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
+  }
+  .mtHero[data-play='true'] .heroRail > *:nth-child(1) { animation-delay: 0.68s; }
+  .mtHero[data-play='true'] .heroRail > *:nth-child(2) { animation-delay: 0.75s; }
+  .mtHero[data-play='true'] .heroRail > *:nth-child(3) { animation-delay: 0.82s; }
+  .mtHero[data-play='true'] .heroRail > *:nth-child(4) { animation-delay: 0.89s; }
+  .mtHero[data-play='true'] .heroRail > *:nth-child(5) { animation-delay: 0.96s; }
+  .mtHero[data-play='true'] .heroRail .railCmd { animation-delay: 1.02s; }
+}
 
 /* mobile: the monument joins the ledger — no card chrome, one frame */
 .mtMonWrapM { padding: 12px 2px 18px; border-bottom: 1px solid var(--tt-hair-2); }
@@ -2172,9 +2469,11 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
     inset 0 -1px 2px rgba(8, 6, 3, 0.28),
     0 1px 1px rgba(8, 6, 3, 0.3),
     0 12px 28px -16px rgba(8, 6, 3, 0.6) !important;
+  /* gel physics: the squash is near-instant (see :active), the release
+     overshoots ~1.5% on the pop curve — glass with give */
   transition:
-    transform 180ms var(--ease-signature, ease),
-    box-shadow 180ms var(--ease-signature, ease);
+    transform 320ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)),
+    box-shadow 200ms var(--ease-signature, ease);
 }
 /* the rim — a 1px gradient ring masked out of a filled pseudo. Brightest at
    the crown, near-silent at the flanks, a whisper of bounce light at the
@@ -2208,9 +2507,26 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
     0 16px 32px -16px rgba(8, 6, 3, 0.66) !important;
 }
 .switchStrip :global(.ray-market-tab:hover)::before { filter: brightness(1.5); }
-/* press: the gel gives — squash beats the hover lift while held */
+/* press: the gel gives — squash beats the hover lift while held, and lands
+   fast; the slow overshoot release lives on the base transition above */
 .switchStrip :global(.ray-market-tab:active) {
   transform: translateY(0) scale(0.955);
+  transition-duration: 90ms, 90ms;
+}
+/* the lamp spills: a whisper of butter light pooling from the switch onto
+   the masthead plate below — far too faint to compete with the lit plate */
+.switchStrip { position: relative; }
+.switchStrip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: min(640px, 78vw);
+  height: 90px;
+  transform: translate(-50%, -12px);
+  background: radial-gradient(52% 100% at 50% 0%, rgba(232, 218, 182, 0.045), transparent 72%);
+  pointer-events: none;
+  z-index: -1;
 }
 /* the active pill: the glossy butter plate — real depth, still the one light.
    Light enters the top face, the mass shades toward the base, the halo rides
@@ -2230,11 +2546,16 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border-color: transparent !important;
+  /* the halo obeys inverse-square physics: hot core, mid skirt, far wash —
+     each layer roughly doubles in radius and halves in alpha. The plate is
+     the band's ONE lamp; everything below only reflects it. */
   box-shadow:
     inset 0 -2px 3px rgba(122, 100, 60, 0.35),
     0 1px 1px rgba(8, 6, 3, 0.35),
     0 12px 30px -12px rgba(8, 6, 3, 0.7),
-    0 0 24px -4px rgba(232, 218, 182, 0.3) !important;
+    0 0 10px -2px rgba(240, 228, 196, 0.45),
+    0 0 30px -6px rgba(232, 218, 182, 0.28),
+    0 0 68px -10px rgba(232, 218, 182, 0.13) !important;
 }
 .switchStrip :global(.ray-market-tab[data-active='true'])::before,
 .switchStrip :global(.ray-market-tab[aria-selected='true'])::before {
@@ -2267,6 +2588,13 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   .switchStrip :global(.ray-market-tab[data-active='true'])::after {
     animation: glassSweep 720ms var(--ease-signature, ease) 90ms 1 both;
   }
+  /* THE HANDOFF: on the once-per-session open, the ignite ripple runs the
+     row and visibly STRIKES the active plate — its sweep fires at its own
+     ignite peak (150ms ripple base + i×60ms pitch + 210ms = the 35% frame
+     of the 420ms ignite). On-click switches keep the 90ms rule above. */
+  .switchStrip :global(.ray-mkt-open .ray-market-tab[data-active='true'])::after {
+    animation-delay: calc(150ms + var(--ripple-i, 0) * 60ms + 210ms);
+  }
 }
 @keyframes glassSweep {
   0%   { opacity: 0; transform: translateX(-140%) skewX(-18deg); }
@@ -2276,8 +2604,11 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 
 /* the monument plate: the same pane, one register brighter */
 .mtMon {
+  /* the pane catches the CENTERED lamp — light arrives from up-left of this
+     column (it used to pool from 74% -12%, a second off-page light source
+     contradicting every pill's crown) */
   background:
-    radial-gradient(120% 90% at 74% -12%, rgba(232, 218, 182, 0.07), transparent 62%),
+    radial-gradient(120% 90% at 28% -16%, rgba(232, 218, 182, 0.07), transparent 62%),
     rgba(255, 252, 245, 0.05);
   -webkit-backdrop-filter: blur(22px) saturate(1.5);
   backdrop-filter: blur(22px) saturate(1.5);
@@ -2295,14 +2626,26 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
   border: 1px solid rgba(237, 230, 218, 0.13);
-  border-radius: 10px;
+  border-radius: 12px;   /* concentric: monument 14 → inner control 12 */
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   padding: 10px 14px;
 }
-.mtSide .railCmd:hover { border-color: rgba(237, 230, 218, 0.24); }
+/* search hover lifts — it never glows; the lamp is spoken for */
+.mtSide .railCmd:hover {
+  border-color: rgba(237, 230, 218, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 8px 20px -12px rgba(8, 6, 3, 0.5);
+}
 
 
-/* mobile: the grid cells keep a tighter inset than the desktop chips */
+/* mobile: the grid cells — 44px touch targets, and the frost halved (seven
+   blurred keys on the tightest paint path; the lighter blur is invisible at
+   phone scale and funds the rest of the band) */
 @media (max-width: 899px) {
-  .switchStrip :global(.ray-market-tab) { padding: 10px 10px !important; }
+  .switchStrip :global(.ray-market-tab) {
+    padding: 12px 10px !important;
+    /* keypad keys, concentric with the 14px monument card below */
+    border-radius: 14px;
+    -webkit-backdrop-filter: blur(14px) saturate(1.5) brightness(1.05);
+    backdrop-filter: blur(14px) saturate(1.5) brightness(1.05);
+  }
 }

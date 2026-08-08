@@ -209,7 +209,8 @@ export default function IndexHero({
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
-          <m.div className={styles.mHeroStats} {...rise(0.16)}>
+          {/* the stat tiles settle AFTER the tape lands, not racing it */}
+          <m.div className={styles.mHeroStats} {...rise(0.64)}>
             {roi != null && (
               <span className={styles.mStat} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
                 <span className={`${styles.mStatVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
@@ -257,7 +258,9 @@ export default function IndexHero({
   // The functional rail sits under the monument: glance the state, act.
   return (
     <LazyMotion features={domAnimation} strict>
-      <section className={styles.mtHero}>
+      {/* data-play gates the CSS choreography (masthead glint, serial stamp,
+          rail settle) on the same fresh-arrival contract as the framer rises */}
+      <section className={styles.mtHero} data-play={play ? 'true' : undefined}>
         <m.div className={styles.mtMasthead} {...rise(0.04)}>
           <span className={styles.sectionKicker}>{hero.kicker}</span>
           <span className={styles.mtMastheadNote}>

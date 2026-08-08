@@ -112,7 +112,7 @@ export default function TonightsWall({
       ref={stripRef}
       className={mobile ? styles.wallStrip : styles.wall}
       data-anim={play ? 'true' : undefined}
-      data-seen={!mobile || seen ? 'true' : undefined}
+      data-seen={seen ? 'true' : undefined}
     >
       <div className={styles.wallHead}>
         <div>
@@ -148,6 +148,7 @@ export default function TonightsWall({
               />
             </span>
             <span className={styles.wallMeta}>
+              <span className={styles.wallIdx} aria-hidden>{String(i + 1).padStart(2, '0')}</span>
               <span className={styles.wallMaker}>{ARTIST_LABEL[it.lot.artist] || it.lot.artist}</span>
               <span className={styles.wallEst}>
                 {estLine(it.lot)}

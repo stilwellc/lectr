@@ -49,6 +49,9 @@
 
   /* Motion — one easing, three durations */
   --ease-signature: cubic-bezier(0.23, 1, 0.32, 1);
+  /* the release curve — press-release overshoot, diamond pops, ring ignites.
+     Never for entrances. */
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 200ms;
   --duration-base: 500ms;
   --duration-slow: 800ms;
@@ -2094,10 +2097,22 @@ body {
     100% { filter: brightness(1); }
   }
   .ray-mkt-open .ray-market-tab {
-    /* T900 hero-land, then index × 60ms down the row */
+    /* the band OPENS with the toggle: T+150, then index × 60ms down the row
+       (was T+900 — stranded after the hero had already landed) */
     animation: lectrPillIgnite 420ms var(--ease-signature) both;
-    animation-delay: calc(900ms + var(--ripple-i, 0) * 60ms);
+    animation-delay: calc(150ms + var(--ripple-i, 0) * 60ms);
   }
+  /* mobile keypad: tighter pitch — seven keys light in under half a second */
+  @media (max-width: 899px) {
+    .ray-mkt-open .ray-market-tab {
+      animation-delay: calc(150ms + var(--ripple-i, 0) * 45ms);
+    }
+  }
+}
+/* keyboard-native focus for the market keys */
+.ray-markets-compact .ray-market-tab:focus-visible {
+  outline: 1.5px solid rgba(232, 218, 182, 0.6);
+  outline-offset: 3px;
 }
 
 /* the pill row never clips invisibly — the right edge admits there's more */
