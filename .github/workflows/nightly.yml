@@ -78,7 +78,13 @@ jobs:
         # path): it installs Chrome + runs the Playwright resolver, isolated so
         # its browser dependency and any CF flakiness can never touch the other
         # houses' segments.
-        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction]
+        # rea/hugginsscott/scp = the sports+pop-culture expansion (Aug 2026).
+        # Each runs its own standalone crawler (curl, no headless), writes+merges
+        # its own segment, and rides the same pull/push/artifact plumbing. They
+        # crawl a bounded recent window and MERGE into their segment, so a run
+        # never wipes accumulated history. Additive: they can only add lots to
+        # the sports/pop verticals, never regress the existing corpus.
+        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp]
     runs-on: ubuntu-latest
     # RAISED 60→90 (Aug 4 2026): christies measured 43.9min (Aug 3) / 34.6min
     # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
@@ -108,11 +114,22 @@ jobs:
       # every fetch-based house crawls via the monolith; RR runs its headless
       # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
-        if: matrix.house != 'rrauction'
+        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp"]'), matrix.house) }}
         run: npx tsx scripts/ray-crawl.ts
       - name: Crawl rrauction (headless)
         if: matrix.house == 'rrauction'
         run: npx tsx scripts/resolve-rrauction.ts --write
+      # sports/pop expansion — standalone crawlers (curl, no headless). Each
+      # crawls a bounded recent window and MERGES into its segment.
+      - name: Crawl REA
+        if: matrix.house == 'rea'
+        run: npx tsx scripts/crawl-rea.ts --start 198000 --end 210000 --delay 200 --write
+      - name: Crawl Huggins & Scott
+        if: matrix.house == 'hugginsscott'
+        run: npx tsx scripts/crawl-hugginsscott.ts --months 3 --delay 150 --write
+      - name: Crawl SCP
+        if: matrix.house == 'scp'
+        run: npx tsx scripts/crawl-scp.ts --auctions 3 --cap 600 --delay 150 --write
       # Christie's online-only + Sotheby's ResultHidden sales gate results away
       # from the crawl paths; the resolvers pull them from the public sources
       # (onlineonly pages / the Algolia search index) so closed lots can't rot
@@ -169,7 +186,7 @@ jobs:
         run: |
           mkdir -p data/corpus/segments
           pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other; do
+          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp; do
             if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
               echo "segment $h fresh from artifact — skipping R2"
             else

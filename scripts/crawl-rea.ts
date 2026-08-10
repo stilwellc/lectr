@@ -11,8 +11,7 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { writeSegment } from './corpus-io';
-import { getHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate } from './lib/sports-crawl';
+import { getHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate, writeMergedSegment } from './lib/sports-crawl';
 
 const LOT_BASE = 'https://bid.collectrea.com/lots';
 const IMG_HINT = /rea-image-archive[^"'\s]+\.(?:jpg|jpeg|png|webp)/i;
@@ -146,8 +145,8 @@ async function main() {
 
   if (process.argv.includes('--write')) {
     if (report.fatal.length) { console.error('[REA] refusing to write: invariant FATALs present'); process.exit(1); }
-    writeSegment('rea', lots as unknown as Record<string, unknown>[]);
-    console.log(`[REA] wrote isolated segment 'rea' (${lots.length} lots) — NOT in nightly/assemble.`);
+    const r = writeMergedSegment('rea', lots);
+    console.log(`[REA] merged into segment 'rea': +${r.added} new, ${r.total} total.`);
   } else {
     console.log('[REA] dry run (pass --write to persist the isolated segment)');
     const s = lots.find(l => l.status === 'sold');

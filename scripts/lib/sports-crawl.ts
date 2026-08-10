@@ -12,7 +12,23 @@
 // (Collin: "bring them all in") — the drop-vs-flag threshold is tomorrow's tune.
 
 import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
-import type { PriceBasis, Currency } from '../../app/types';
+import { readSegment, writeSegment } from '../corpus-io';
+import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
+
+// Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
+// good segment, union the fresh lots over it (fresh id wins), write the union.
+// A failed/empty crawl therefore leaves the segment intact (never wipes), and
+// history grows night over night instead of the window overwriting it.
+export function writeMergedSegment(name: string, fresh: AuctionLot[]): { total: number; added: number } {
+  const existing = readSegment(name) as unknown as AuctionLot[];
+  const byId = new Map<string, AuctionLot>();
+  for (const l of existing) if (l && l.id) byId.set(l.id, l);
+  const before = byId.size;
+  for (const l of fresh) if (l && l.id) byId.set(l.id, l);
+  const union = Array.from(byId.values());
+  writeSegment(name, union as unknown as Record<string, unknown>[]);
+  return { total: union.length, added: union.length - before };
+}
 
 export const REAL_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';

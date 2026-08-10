@@ -8,8 +8,7 @@
 //   RAY_SKIP_MAIN=1 npx tsx scripts/crawl-scp.ts --auctions 1 --cap 40 [--write]
 import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { writeSegment } from './corpus-io';
-import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd } from './lib/sports-crawl';
+import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSegment } from './lib/sports-crawl';
 
 const HOST = 'https://catalogs.scpauctions.com';
 
@@ -132,8 +131,8 @@ async function main() {
   console.log('[SCP] by category:', byCat, '| confidence:', byConf);
   if (process.argv.includes('--write')) {
     if (report.fatal.length) { console.error('[SCP] refusing to write: FATALs'); process.exit(1); }
-    writeSegment('scp', lots as unknown as Record<string, unknown>[]);
-    console.log(`[SCP] wrote isolated segment 'scp' (${lots.length}) — NOT in nightly/assemble.`);
+    const r = writeMergedSegment('scp', lots);
+    console.log(`[SCP] merged into segment 'scp': +${r.added} new, ${r.total} total.`);
   } else {
     const s = lots.find(l => (l as { subCat?: string }).subCat === 'game-used') || lots[0];
     if (s) console.log('[SCP] sample:', JSON.stringify({ id: s.id, artist: s.artist, title: s.title.slice(0, 55), saleDate: s.saleDate, priceUsd: (s as { priceUsd?: number }).priceUsd, cert: (s as { authCert?: string }).authCert, conf: (s as { authConfidence?: string }).authConfidence }, null, 0));

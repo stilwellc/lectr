@@ -8,8 +8,7 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { writeSegment } from './corpus-io';
-import { getHtml } from './lib/sports-crawl';
+import { getHtml, writeMergedSegment } from './lib/sports-crawl';
 import { parseReaLot } from './crawl-rea';
 
 const BASE = 'https://hugginsandscott.com';
@@ -98,8 +97,8 @@ async function main() {
 
   if (process.argv.includes('--write')) {
     if (report.fatal.length) { console.error('[H&S] refusing to write: FATALs'); process.exit(1); }
-    writeSegment('hugginsscott', lots as unknown as Record<string, unknown>[]);
-    console.log(`[H&S] wrote isolated segment 'hugginsscott' (${lots.length}) — NOT in nightly/assemble.`);
+    const r = writeMergedSegment('hugginsscott', lots);
+    console.log(`[H&S] merged into segment 'hugginsscott': +${r.added} new, ${r.total} total.`);
   } else {
     const s = lots[0];
     if (s) console.log('[H&S] sample:', JSON.stringify({ id: s.id, artist: s.artist, title: s.title.slice(0, 50), saleDate: s.saleDate, priceUsd: (s as { priceUsd?: number }).priceUsd }, null, 0));
