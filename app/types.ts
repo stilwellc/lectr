@@ -1,4 +1,4 @@
-export type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 'Rago' | 'Heritage' | 'Bonhams' | 'Hindman' | 'Goldin' | 'RR Auction';
+export type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 'Rago' | 'LAMA' | 'Heritage' | 'Bonhams' | 'Hindman' | 'Goldin' | 'RR Auction';
 /** 'withdrawn'/'unknown-result' are actively used post-migration for vanished
     or unreconciled non-Goldin lots (see §1d + W11). */
 export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn' | 'unknown-result';

@@ -41,6 +41,12 @@ const HOUSE_ID_SLUGS: Record<AuctionHouse, string[]> = {
   // a legitimate provenance artifact here, not the crosstalk this invariant
   // exists to catch.
   Rago: ['rago', 'wright'],
+  // LAMA (Los Angeles Modern Auctions) joined the Rago/Wright group in 2021 and
+  // sells on the same Laravel/Inertia stack, but it is NOT Rago: it mints its
+  // own clean `lama-` ids (no permalink history to preserve), crawled by
+  // crawlLama and filed in the shared `wright` segment (one operator, one
+  // crawl job — see corpus-io HOUSE_TO_SEGMENT).
+  LAMA: ['lama'],
   Heritage: ['heritage', 'ha'],
   Bonhams: ['bonhams'],
   Hindman: ['hindman'],

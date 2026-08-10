@@ -28,6 +28,9 @@ export type SegmentName = (typeof SEGMENT_NAMES)[number];
 const HOUSE_TO_SEGMENT: Record<string, SegmentName> = {
   'Goldin': 'goldin', "Sotheby's": 'sothebys', 'Sothebys': 'sothebys', "Christie's": 'christies',
   'Christies': 'christies', 'Bonhams': 'bonhams', 'Phillips': 'phillips', 'Wright': 'wright', 'Rago': 'wright',
+  // LAMA sells on the Wright/Rago platform and is crawled inside the wright
+  // segment's job — one operator, one segment (like Rago).
+  'LAMA': 'wright',
   'RR Auction': 'rrauction',
 };
 /** Which segment a lot belongs to — keyed on its auction house. */
