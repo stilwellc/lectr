@@ -84,7 +84,10 @@ jobs:
         # crawl a bounded recent window and MERGE into their segment, so a run
         # never wipes accumulated history. Additive: they can only add lots to
         # the sports/pop verticals, never regress the existing corpus.
-        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp]
+        # lelands/memorylane/lotg = the CreateAuction trio — HEADLESS legs (same
+        # Cloudflare-clearing Playwright pattern as rrauction; one crawler, three
+        # houses). rea/hugginsscott/scp = curl legs. All additive to sports/pop.
+        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, lelands, memorylane, lotg]
     runs-on: ubuntu-latest
     # RAISED 60→90 (Aug 4 2026): christies measured 43.9min (Aug 3) / 34.6min
     # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
@@ -108,13 +111,13 @@ jobs:
         run: bash scripts/data-store.sh pull-segment ${{ matrix.house }}
       # RR Auction only: install Chrome for the headless resolver. Scoped to
       # this leg so no other house pays the browser-install cost.
-      - name: Install Chrome (rrauction only)
-        if: matrix.house == 'rrauction'
+      - name: Install Chrome (headless legs)
+        if: ${{ contains(fromJSON('["rrauction","lelands","memorylane","lotg"]'), matrix.house) }}
         run: npx playwright install --with-deps chrome
       # every fetch-based house crawls via the monolith; RR runs its headless
       # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
-        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp"]'), matrix.house) }}
+        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","lelands","memorylane","lotg"]'), matrix.house) }}
         run: npx tsx scripts/ray-crawl.ts
       - name: Crawl rrauction (headless)
         if: matrix.house == 'rrauction'
@@ -130,6 +133,17 @@ jobs:
       - name: Crawl SCP
         if: matrix.house == 'scp'
         run: npx tsx scripts/crawl-scp.ts --auctions 3 --cap 600 --delay 150 --write
+      # CreateAuction trio — HEADLESS (Playwright clears Cloudflare, same as
+      # rrauction). Bounded itemid window over the current/recent auction.
+      - name: Crawl Lelands (headless)
+        if: matrix.house == 'lelands'
+        run: npx tsx scripts/crawl-createauction.ts --house lelands --start 131600 --end 131900 --write
+      - name: Crawl Memory Lane (headless)
+        if: matrix.house == 'memorylane'
+        run: npx tsx scripts/crawl-createauction.ts --house memorylane --start 92500 --end 92800 --write
+      - name: Crawl Love of the Game (headless)
+        if: matrix.house == 'lotg'
+        run: npx tsx scripts/crawl-createauction.ts --house lotg --start 46350 --end 46650 --write
       # Christie's online-only + Sotheby's ResultHidden sales gate results away
       # from the crawl paths; the resolvers pull them from the public sources
       # (onlineonly pages / the Algolia search index) so closed lots can't rot
@@ -186,7 +200,7 @@ jobs:
         run: |
           mkdir -p data/corpus/segments
           pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp; do
+          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp lelands memorylane lotg; do
             if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
               echo "segment $h fresh from artifact — skipping R2"
             else
