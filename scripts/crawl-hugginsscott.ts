@@ -8,7 +8,7 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { getHtml, writeMergedSegment, settledOnly } from './lib/sports-crawl';
+import { getHtml, writeMergedSegment, settledOnly, installCrashGuard } from './lib/sports-crawl';
 import { parseReaLot } from './crawl-rea';
 
 const BASE = 'https://hugginsandscott.com';
@@ -71,19 +71,27 @@ async function main() {
   const months = oldest ? sorted.slice(0, monthsWanted) : sorted.reverse().slice(0, monthsWanted);
   console.log(`[H&S] ${idx.length} month indexes; crawling ${oldest ? 'oldest' : 'newest'} ${monthsWanted}: ${months.map(m => m.split('/auction/')[1]).join(', ')}`);
 
+  const write = process.argv.includes('--write');
+  if (write) installCrashGuard('H&S');
   const lots: AuctionLot[] = [];
   let miss = 0;
   for (const mu of months) {
     const urls = await lotUrlsForMonth(mu);
+    const monthLots: AuctionLot[] = [];
     console.log(`  [H&S] ${mu}: ${urls.length} lot urls`);
     for (const u of urls) {
       const html = await getHtml(u);
       if (!html) { miss++; continue; }
       try {
         const lot = parseReaLot(html, idFromUrl(u), 'Huggins & Scott', u);
-        if (lot) lots.push(lot); else miss++;
+        if (lot) { lots.push(lot); monthLots.push(lot); } else miss++;
       } catch { miss++; }
       await new Promise(r => setTimeout(r, delayMs));
+    }
+    // INCREMENTAL: persist after each month so a mid-run crash keeps progress
+    if (write && monthLots.length) {
+      const { good } = settledOnly(monthLots);
+      if (good.length) { const r = writeMergedSegment('hugginsscott', good); console.log(`    [H&S] segment now ${r.total} lots`); }
     }
   }
   console.log(`[H&S] parsed ${lots.length} sold lots (${miss} skipped)`);

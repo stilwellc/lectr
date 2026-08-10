@@ -8,7 +8,7 @@
 //   RAY_SKIP_MAIN=1 npx tsx scripts/crawl-scp.ts --auctions 1 --cap 40 [--write]
 import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSegment, settledOnly } from './lib/sports-crawl';
+import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSegment, settledOnly, installCrashGuard } from './lib/sports-crawl';
 
 const HOST = 'https://catalogs.scpauctions.com';
 
@@ -102,6 +102,8 @@ async function lotUrls(catalogUrl: string, maxPages = 30): Promise<string[]> {
 }
 
 async function main() {
+  const write = process.argv.includes('--write');
+  if (write) installCrashGuard('SCP');
   const auctionsWanted = arg('auctions', 1);
   const cap = arg('cap', 40);
   const delayMs = arg('delay', 200);
@@ -111,12 +113,18 @@ async function main() {
   let miss = 0;
   for (const cu of cats.slice(0, auctionsWanted)) {
     const urls = await lotUrls(cu);
+    const auctionLots: AuctionLot[] = [];
     console.log(`  [SCP] ${cu.split('/').slice(-2)[0]}: ${urls.length} lots (capping ${cap})`);
     for (const u of urls.slice(0, cap)) {
       const html = await getHtml(u);
       if (!html) { miss++; continue; }
-      try { const lot = parseScpLot(html, u); if (lot) lots.push(lot); else miss++; } catch { miss++; }
+      try { const lot = parseScpLot(html, u); if (lot) { lots.push(lot); auctionLots.push(lot); } else miss++; } catch { miss++; }
       await new Promise(r => setTimeout(r, delayMs));
+    }
+    // INCREMENTAL: persist after each auction so a mid-run crash keeps progress
+    if (write && auctionLots.length) {
+      const { good } = settledOnly(auctionLots);
+      if (good.length) { const r = writeMergedSegment('scp', good); console.log(`    [SCP] segment now ${r.total} lots`); }
     }
   }
   console.log(`[SCP] parsed ${lots.length} sold lots (${miss} skipped)`);

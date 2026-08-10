@@ -45,12 +45,28 @@ export function writeMergedSegment(name: string, fresh: AuctionLot[]): { total: 
 export const REAL_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
-export async function getHtml(url: string, timeoutMs = 30000): Promise<string | null> {
-  try {
-    const r = await fetch(url, { headers: { 'User-Agent': REAL_UA }, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
-    if (!r.ok) return null;
-    return await r.text();
-  } catch { return null; }
+export async function getHtml(url: string, timeoutMs = 30000, retries = 2): Promise<string | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': REAL_UA }, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+      if (!r.ok) return null; // a real 404/4xx is a fact, not a transient error — don't retry
+      return await r.text();
+    } catch {
+      // transient (UND_ERR_SOCKET, HTTP/2 stream reset, timeout) — back off + retry
+      if (attempt < retries) await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
+// Long backfills hit occasional undici HTTP/2 socket errors that surface as
+// UNCAUGHT (async, past the per-fetch try/catch) and kill the process. Combined
+// with incremental per-auction segment writes, this backstop means a crash
+// loses at most the in-flight auction, never the whole run.
+export function installCrashGuard(label: string) {
+  const noop = (e: unknown) => console.error(`[${label}] non-fatal network error (continuing):`, (e as Error)?.message || e);
+  process.on('uncaughtException', noop);
+  process.on('unhandledRejection', noop);
 }
 
 export function decodeHtml(s: string): string {
