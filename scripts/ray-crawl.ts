@@ -149,7 +149,7 @@ interface ArtistConfig {
   hindman?: string;
 }
 
-const ARTISTS: ArtistConfig[] = [
+export const ARTISTS: ArtistConfig[] = [
   {
     slug: 'george-condo',
     displayName: 'George Condo',
@@ -1361,7 +1361,10 @@ function parseLamaItem(item: any, artistSlug: string): AuctionLot | null {
 
   const hammer = item.result_amount || null;
   const premium = item.result_premium_amount || null;
-  const isSold = item.item_status === 'Sold' || (premium != null && premium > 0);
+  // sold requires an actual price — a lot flagged item_status 'Sold' with NO
+  // hammer/premium (a data gap / bought-in mislabel) is not a confirmed sale
+  // (invariant: a sold lot needs realizedUsd>0). Deep-history LAMA had one.
+  const isSold = (premium != null && premium > 0) || (hammer != null && hammer > 0);
 
   // LAMA has no session.start_date; the sale date lives on the auction object.
   let saleDate = '';
