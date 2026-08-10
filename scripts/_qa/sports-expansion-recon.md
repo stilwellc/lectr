@@ -45,6 +45,15 @@ Run: `RAY_SKIP_MAIN=1 npx tsx scripts/crawl-<house>.ts [args] --write`
 - Provenance: breadcrumb + description (featured-collection consignments are first-class).
 - Enumerate: `/pastauctionlanding.aspx` (archive back to 2004) → `catalog.aspx?auctionid={id}` → `Category/All_Items-1.html?auctionid={id}` (inline `Final Price` — id alone won't build the slug URL, harvest hrefs). Date: `Bidding ended on M/D/YYYY`.
 
+### Julien's + Propstore — Wayback backfill VERIFIED (no headless needed for the archive)
+- Fetch: `http://web.archive.org/web/2id_/<liveUrl>` returns the full server-rendered lot (200).
+- Enumerate: Wayback CDX — `http://web.archive.org/cdx/search/cdx?url=propstoreauction.com/lot-details*&output=json&filter=statuscode:200` (Julien's: `julienslive.com/lot-details*`). Both have deep coverage.
+- Sold price selector (EXACT): within `<div class="message-closed"> Lot Closed - Sold Price:<span class="exratetip" …>US$1,920</span>` — take the exratetip text INSIDE message-closed, strip currency prefix. Propstore label is "Winning bid" and value is **£16,250 → GBP, needs fxRateFor/toUsdDated conversion** (NOT stampRealizedUsd — that's USD-only; use the currency-aware path or the index inherits a money bug). "Lot Closed - unsold" = skip.
+- Julien's trust gate: require an inline `PROVENANCE` string in the description (estate-anchored). A "signed"/"autograph" title WITHOUT it = untrusted standalone autograph → drop.
+- Propstore COA: literal "comes with a Propstore Certificate of Authenticity."
+- Date: `Date: M/D/YYYY` on the lot. Category: from parent catalog/section (not per-lot).
+- NOTE: Wayback = BACKFILL (historical). Live incremental still needs headless (Julien's CF-Turnstile severe; Propstore AWS-WAF moderate) OR a Wayback re-crawl (lags live by days).
+
 ### Julien's + Propstore — shared Struts/Java platform (ONE parser)
 - Engine: shared white-label (`sam.serverData`, `m_lotDetails_index.js`, `.action`). Lot URL both:
   `/lot-details/index/catalog/{catalogId}/lot/{lotId}` (both ids numeric-enumerable).
