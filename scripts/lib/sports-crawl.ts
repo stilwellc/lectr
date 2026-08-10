@@ -63,6 +63,22 @@ export async function getHtml(url: string, timeoutMs = 30000, retries = 2): Prom
 // UNCAUGHT (async, past the per-fetch try/catch) and kill the process. Combined
 // with incremental per-auction segment writes, this backstop means a crash
 // loses at most the in-flight auction, never the whole run.
+// Bounded-concurrency map: run fn over items with at most `conc` in flight.
+// The full-depth per-lot crawls are I/O-bound, so N-way concurrency is ~N×
+// faster; keep N moderate on small-business servers to avoid rate-limit/blocks.
+export async function mapPool<T, R>(items: T[], conc: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      try { out[i] = await fn(items[i], i); } catch { out[i] = undefined as unknown as R; }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(conc, items.length) }, () => worker()));
+  return out;
+}
+
 export function installCrashGuard(label: string) {
   const noop = (e: unknown) => console.error(`[${label}] non-fatal network error (continuing):`, (e as Error)?.message || e);
   process.on('uncaughtException', noop);
