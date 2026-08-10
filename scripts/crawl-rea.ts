@@ -22,6 +22,8 @@ function arg(name: string, def: number): number {
   return i >= 0 && process.argv[i + 1] ? parseInt(process.argv[i + 1], 10) : def;
 }
 
+// REA renders the fields as <dt>/<dd>; H&S (same stack, different template)
+// renders them as <li>Label: value</li>. Read BOTH so one parser serves both.
 function dtMap($: cheerio.CheerioAPI): Record<string, string> {
   const m: Record<string, string> = {};
   $('dt').each((_, el) => {
@@ -29,17 +31,37 @@ function dtMap($: cheerio.CheerioAPI): Record<string, string> {
     const dd = $(el).next('dd');
     if (k && dd.length) m[k] = dd.text().replace(/\s+/g, ' ').trim();
   });
+  $('li').each((_, el) => {
+    const txt = $(el).text().replace(/\s+/g, ' ').trim();
+    const c = txt.indexOf(':');
+    if (c > 0 && c < 30) {
+      const k = txt.slice(0, c).trim().toLowerCase();
+      const v = txt.slice(c + 1).trim();
+      if (k && v && /^(sold for|year|auction|lot #|category|auction category)$/.test(k)) m[k] = m[k] || v;
+    }
+  });
   return m;
 }
 
 /** Parse one REA lot page into an AuctionLot (or null if unsold / unparseable).
  *  Exported so the H&S crawler reuses it on the same markup. */
-export function parseReaLot(html: string, id: number, house: 'REA' | 'Huggins & Scott' = 'REA', urlOverride?: string): AuctionLot | null {
+export function parseReaLot(html: string, id: number | string, house: 'REA' | 'Huggins & Scott' = 'REA', urlOverride?: string): AuctionLot | null {
   const $ = cheerio.load(html);
   const map = dtMap($);
 
-  const rawTitle = ($('title').first().text() || '').replace(/\s*\|\s*REA Archive.*$/i, '').replace(/\s*\|\s*Huggins.*$/i, '').trim();
-  const title = rawTitle || $('h1').first().text().trim();
+  // REA puts the lot name in <title>; H&S's <title> is generic ("… Auction
+  // Archive"), so fall back to the lot-name heading (h3/h1), then the URL slug.
+  let rawTitle = ($('title').first().text() || '').replace(/\s*\|\s*REA Archive.*$/i, '').replace(/\s*\|\s*Huggins.*$/i, '').trim();
+  if (!rawTitle || /auction archive|^search$/i.test(rawTitle)) {
+    const heads = $('h3, h1').map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get()
+      .filter(t => t && !/^(search|auction|menu|login)$/i.test(t));
+    rawTitle = heads.sort((a, b) => b.length - a.length)[0] || '';
+  }
+  if (!rawTitle && typeof urlOverride === 'string') {
+    const slug = urlOverride.split('/').pop() || '';
+    rawTitle = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+  }
+  const title = rawTitle;
   if (!title) return null;
 
   // Sold For → realized (premium-inclusive). No price = unsold/withdrawn → skip.
