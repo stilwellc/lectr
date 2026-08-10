@@ -1,0 +1,142 @@
+// Shared helpers for the sports + pop-culture expansion crawlers (REA, Huggins
+// & Scott, SCP, Lelands, Memory Lane, Love of the Game, Julien's, Hake's,
+// Propstore). Each house's crawler writes an ISOLATED segment; none is wired
+// into the nightly matrix or assemble list until it clears verification.
+//
+// Doctrine gates live here so every house applies them identically:
+//  - game-used  → third-party photo-match / MeiGray / Resolution / ResMatch LOA
+//  - unopened wax → BBCE authentication
+//  - graded cards → PSA / SGC / CGC / BGS slab
+//  - autographs → PSA/DNA / JSA / Beckett
+// A lot that fails its category's gate is KEPT but stamped authConfidence:'low'
+// (Collin: "bring them all in") — the drop-vs-flag threshold is tomorrow's tune.
+
+import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
+import type { PriceBasis, Currency } from '../../app/types';
+
+export const REAL_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+export async function getHtml(url: string, timeoutMs = 30000): Promise<string | null> {
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': REAL_UA }, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+    if (!r.ok) return null;
+    return await r.text();
+  } catch { return null; }
+}
+
+export function decodeHtml(s: string): string {
+  return s
+    .replace(/&quot;/g, '"').replace(/&#34;/g, '"').replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#0?39;/g, "'").replace(/&nbsp;/g, ' ');
+}
+
+// ── money (USD houses; premium-inclusive "Sold For" → realized basis) ────────
+export function stampRealizedUsd(realizedNative: number, saleDate: string, opts?: { basis?: PriceBasis }) {
+  const cur: Currency = 'USD';
+  const basis: PriceBasis = opts?.basis ?? 'realized';
+  const { rate, asOf } = fxRateFor(cur, saleDate);
+  const usd = toUsdDated(realizedNative, cur, saleDate).usd;
+  const premiumInclusive = basis === 'realized';
+  return {
+    nativeCurrency: cur,
+    hammerNative: premiumInclusive ? null : realizedNative,
+    premiumNative: premiumInclusive ? realizedNative : null,
+    realizedNative,
+    buyerPremiumPct: null,
+    fxRate: rate, fxAsOf: asOf,
+    hammerUsd: premiumInclusive ? null : usd,
+    premiumUsd: premiumInclusive ? usd : null,
+    realizedUsd: usd,
+    estLowNative: null, estHighNative: null, estLowUsd: null, estHighUsd: null,
+    priceBasis: basis,
+    currency: cur, estimateLow: null, estimateHigh: null,
+    hammerPrice: premiumInclusive ? null : realizedNative,
+    premiumPrice: premiumInclusive ? realizedNative : null,
+    priceUsd: usd,
+  };
+}
+
+// ── category classification → lectr sports/pop pseudo-artist + fake-risk gate ──
+export type SportsCategory =
+  | 'game-used' | 'graded-card' | 'ticket' | 'autograph' | 'unopened-wax'
+  | 'equipment' | 'photograph' | 'program-publication' | 'trophy-award'
+  | 'pop-memorabilia' | 'other-memorabilia';
+
+/** Maps a house's category label + title into our taxonomy. `catLabel` is the
+ *  house's own field (REA/H&S "Auction Category"); `title` is the lot title. */
+export function classifySports(catLabel: string, title: string): SportsCategory {
+  const c = (catLabel || '').toLowerCase();
+  const t = (title || '').toLowerCase();
+  const both = c + ' ' + t;
+  if (/\b(unopened|sealed|wax box|wax pack|cello|rack pack|vending)\b/.test(both)) return 'unopened-wax';
+  if (/\b(ticket|stub|pass|full ticket)\b/.test(both)) return 'ticket';
+  if (/\b(game[- ]?used|game[- ]?worn|match[- ]?worn|player[- ]?worn|jersey|bat|glove|cleats|helmet|worn)\b/.test(both)) return 'game-used';
+  if (/\b(trophy|award|ring|medal|championship ring|mvp)\b/.test(both)) return 'trophy-award';
+  if (/\b(type (1|i|one)|type-1|photograph|original photo|wire photo|press photo)\b/.test(both)) return 'photograph';
+  if (/\b(program|yearbook|magazine|publication|pennant|scorecard)\b/.test(both)) return 'program-publication';
+  if (/\b(seat|turnstile|base|stadium|signage|display)\b/.test(both)) return 'equipment';
+  if (/\b(signed|autograph|auto|cut signature|inscribed)\b/.test(both) && !/\bcard\b/.test(c)) return 'autograph';
+  if (/\bcard\b/.test(both) || /\b(psa|sgc|bgs|cgc)\s*(gem|mint|nm|ex|vg|\d)/.test(both) || /\b(topps|bowman|leaf|fleer|donruss|upper deck|panini|goudey|cracker jack|t20[0-9]|e9[0-9])\b/.test(both)) return 'graded-card';
+  if (/\b(poster|prop|costume|comic|toy|figure|record|album|guitar|memorabilia)\b/.test(both)) return 'pop-memorabilia';
+  return 'other-memorabilia';
+}
+
+/** The pseudo-artist slug a category slots into (the sports vertical is keyed on
+ *  category pseudo-artists, exactly like Goldin's game-used/tickets-passes). */
+export function pseudoArtist(cat: SportsCategory): string {
+  const map: Record<SportsCategory, string> = {
+    'game-used': 'game-used', 'graded-card': 'graded-cards', 'ticket': 'tickets-passes',
+    'autograph': 'autographs', 'unopened-wax': 'unopened-wax', 'equipment': 'equipment-artifacts',
+    'photograph': 'type-1-photos', 'program-publication': 'programs-publications',
+    'trophy-award': 'trophies-awards', 'pop-memorabilia': 'pop-memorabilia',
+    'other-memorabilia': 'memorabilia',
+  };
+  return map[cat];
+}
+
+// ── authentication extraction + per-category doctrine gate ───────────────────
+export interface AuthRead { cert: string | null; grade: string | null; confidence: 'high' | 'low'; marks: string[]; }
+
+const CERT_RE = /\b(PSA\/?DNA|PSA|SGC|BGS|BVG|CGC|CBCS|JSA|Beckett|GAI)\b/gi;
+const GRADE_RE = /\b(?:PSA|SGC|BGS|CGC)\s*(GEM[- ]?MT|MINT|NM[- ]?MT|NM|EX[- ]?MT|EX|VG[- ]?EX|VG|GOOD|PR|AUTHENTIC|\d{1,2}(?:\.\d)?)\b/i;
+const PHOTOMATCH_RE = /\b(photo[- ]?match(?:ed|ing)?|MeiGray|Resolution Photomatching|ResMatch|Sports Investors Auth|SIA)\b/i;
+const BBCE_RE = /\bBBCE\b/i;
+
+/** Reads cert/grade from title+description and applies the per-category gate.
+ *  Never drops — flags. */
+export function readAuth(cat: SportsCategory, title: string, description: string): AuthRead {
+  const text = `${title}\n${description}`;
+  const marks = Array.from(new Set((text.match(CERT_RE) || []).map(s => s.toUpperCase())));
+  const gradeM = text.match(GRADE_RE);
+  const grade = gradeM ? gradeM[0].replace(/\s+/g, ' ').trim() : null;
+  const hasPhotoMatch = PHOTOMATCH_RE.test(text);
+  const hasBBCE = BBCE_RE.test(text);
+  if (hasPhotoMatch) marks.push('PHOTO-MATCH');
+  if (hasBBCE) marks.push('BBCE');
+
+  let confidence: 'high' | 'low' = 'low';
+  switch (cat) {
+    case 'game-used': confidence = hasPhotoMatch ? 'high' : 'low'; break;         // photo-match required
+    case 'unopened-wax': confidence = hasBBCE ? 'high' : 'low'; break;            // BBCE required
+    case 'graded-card': confidence = marks.some(m => /PSA|SGC|BGS|CGC/.test(m)) ? 'high' : 'low'; break;
+    case 'autograph': confidence = marks.some(m => /PSA|JSA|BECKETT/.test(m)) ? 'high' : 'low'; break;
+    case 'photograph': confidence = /type[- ]?(1|i|one)/i.test(text) ? 'high' : 'low'; break;
+    default: confidence = 'high'; break; // tickets/programs/equipment/trophies = provenance/condition
+  }
+  return { cert: marks[0] || null, grade, confidence, marks: Array.from(new Set(marks)) };
+}
+
+/** Season/quarter label → an approximate mid-month sale date (YYYY-MM-DD). REA
+ *  and H&S publish "2018 Spring" etc.; the exact day isn't posted. */
+export function seasonToDate(label: string): string | null {
+  const m = label.match(/(20[0-2]\d)/);
+  if (!m) return null;
+  const year = m[1];
+  const l = label.toLowerCase();
+  const mm = /spring/.test(l) ? '04' : /summer/.test(l) ? '07' : /(fall|autumn)/.test(l) ? '10' : /winter/.test(l) ? '12'
+    : /jan/.test(l) ? '01' : /feb/.test(l) ? '02' : /mar/.test(l) ? '03' : /apr/.test(l) ? '04' : /may/.test(l) ? '05'
+    : /jun/.test(l) ? '06' : /jul/.test(l) ? '07' : /aug/.test(l) ? '08' : /sep/.test(l) ? '09' : /oct/.test(l) ? '10'
+    : /nov/.test(l) ? '11' : /dec/.test(l) ? '12' : '06';
+  return `${year}-${mm}-15`;
+}

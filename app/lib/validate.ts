@@ -52,6 +52,16 @@ const HOUSE_ID_SLUGS: Record<AuctionHouse, string[]> = {
   Hindman: ['hindman'],
   Goldin: ['goldin'],
   'RR Auction': ['rrauction', 'rr'],
+  // sports + pop-culture expansion (isolated segments; clean per-house prefixes)
+  REA: ['rea'],
+  'Huggins & Scott': ['hugginsscott'],
+  SCP: ['scp'],
+  Lelands: ['lelands'],
+  'Memory Lane': ['memorylane'],
+  'Love of the Game': ['lotg'],
+  "Julien's": ['juliens'],
+  "Hake's": ['hakes'],
+  Propstore: ['propstore'],
 };
 
 const SALE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

@@ -22,6 +22,11 @@ export const SERVED_DIR = path.join(process.cwd(), 'public', 'data', 'ray');
 // clean concat. Each house's crawlers own their segment. Wright+Rago share a
 // crawler → one 'wright' segment.
 export const SEGMENTS_DIR = path.join(CORPUS_DIR, 'segments');
+// NOTE: the sports/pop-culture expansion segments (rea, scp, …) are DELIBERATELY
+// omitted from this list AND from the nightly matrix + assemble list until each
+// house's crawler clears verification — they are built isolated (scripts/
+// crawl-<house>.ts write their own segment file directly) so nothing reaches the
+// production corpus until explicitly wired in.
 export const SEGMENT_NAMES = ['goldin', 'sothebys', 'christies', 'bonhams', 'phillips', 'wright', 'rrauction', 'rrauction-archive', 'other'] as const;
 export type SegmentName = (typeof SEGMENT_NAMES)[number];
 
@@ -32,6 +37,14 @@ const HOUSE_TO_SEGMENT: Record<string, SegmentName> = {
   // segment's job — one operator, one segment (like Rago).
   'LAMA': 'wright',
   'RR Auction': 'rrauction',
+  // sports + pop-culture expansion — one isolated segment per house. These map
+  // to 'other' via the fallback until each is verified and added to the assemble
+  // list; the standalone crawlers write their named segment directly.
+  'REA': 'rea' as SegmentName, 'Huggins & Scott': 'hugginsscott' as SegmentName,
+  'SCP': 'scp' as SegmentName, 'Lelands': 'lelands' as SegmentName,
+  'Memory Lane': 'memorylane' as SegmentName, 'Love of the Game': 'lotg' as SegmentName,
+  "Julien's": 'juliens' as SegmentName, "Hake's": 'hakes' as SegmentName,
+  'Propstore': 'propstore' as SegmentName,
 };
 /** Which segment a lot belongs to — keyed on its auction house. */
 export function segmentOf(auctionHouse: string): SegmentName {
