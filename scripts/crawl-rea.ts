@@ -157,4 +157,8 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error('[REA] fatal', e); process.exit(1); });
+// run main() ONLY when executed directly — importing parseReaLot (crawl-
+// hugginsscott, backfill-rea) must NOT spawn a competing crawl.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(e => { console.error('[REA] fatal', e); process.exit(1); });
+}

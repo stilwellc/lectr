@@ -8,7 +8,7 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { getHtml, writeMergedSegment, settledOnly, installCrashGuard } from './lib/sports-crawl';
+import { getHtml, writeMergedSegment, settledOnly, installCrashGuard, mapPool } from './lib/sports-crawl';
 import { parseReaLot } from './crawl-rea';
 
 const BASE = 'https://hugginsandscott.com';
@@ -33,7 +33,7 @@ async function monthIndexes(): Promise<string[]> {
 }
 
 /** lot detail URLs from one month index, paginating ?page=N until empty */
-async function lotUrlsForMonth(monthUrl: string, maxPages = 40): Promise<string[]> {
+async function lotUrlsForMonth(monthUrl: string, maxPages = 300): Promise<string[]> {
   const out: string[] = [];
   for (let page = 1; page <= maxPages; page++) {
     const html = await getHtml(`${monthUrl.replace(/\/$/, '')}/?page=${page}`);
@@ -75,19 +75,19 @@ async function main() {
   if (write) installCrashGuard('H&S');
   const lots: AuctionLot[] = [];
   let miss = 0;
+  const conc = arg('conc', 1);
   for (const mu of months) {
     const urls = await lotUrlsForMonth(mu);
-    const monthLots: AuctionLot[] = [];
     console.log(`  [H&S] ${mu}: ${urls.length} lot urls`);
-    for (const u of urls) {
+    // concurrent per-lot fetch (H&S is plain HTTP); conc 1 = sequential (default)
+    const monthLots = (await mapPool(urls, conc, async (u) => {
       const html = await getHtml(u);
-      if (!html) { miss++; continue; }
-      try {
-        const lot = parseReaLot(html, idFromUrl(u), 'Huggins & Scott', u);
-        if (lot) { lots.push(lot); monthLots.push(lot); } else miss++;
-      } catch { miss++; }
-      await new Promise(r => setTimeout(r, delayMs));
-    }
+      if (!html) return null;
+      try { return parseReaLot(html, idFromUrl(u), 'Huggins & Scott', u); } catch { return null; }
+    })).filter((x): x is AuctionLot => !!x);
+    miss += urls.length - monthLots.length;
+    lots.push(...monthLots);
+    if (conc <= 1) await new Promise(r => setTimeout(r, delayMs));
     // INCREMENTAL: persist after each month so a mid-run crash keeps progress
     if (write && monthLots.length) {
       const { good } = settledOnly(monthLots);

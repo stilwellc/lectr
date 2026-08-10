@@ -13,7 +13,7 @@ import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSe
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
-const HOUSES: Record<string, { host: string; house: AuctionHouse; seg: string; prefix: string }> = {
+export const HOUSES: Record<string, { host: string; house: AuctionHouse; seg: string; prefix: string }> = {
   lelands: { host: 'https://auction.lelands.com', house: 'Lelands', seg: 'lelands', prefix: 'lelands' },
   memorylane: { host: 'https://bid.memorylaneinc.com', house: 'Memory Lane', seg: 'memorylane', prefix: 'memorylane' },
   lotg: { host: 'https://bid.loveofthegameauctions.com', house: 'Love of the Game', seg: 'lotg', prefix: 'lotg' },
@@ -32,7 +32,7 @@ async function open(): Promise<Browser> {
   return chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
 }
 
-async function settle(page: Page, maxMs = 30000): Promise<boolean> {
+export async function settle(page: Page, maxMs = 30000): Promise<boolean> {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     const state = await page.evaluate(() => ({
@@ -46,11 +46,11 @@ async function settle(page: Page, maxMs = 30000): Promise<boolean> {
   return false;
 }
 
-interface RawLot { price: string; title: string; catLine: string; endLine: string; desc: string; img: string | null; closed: boolean; }
+export interface RawLot { price: string; title: string; catLine: string; endLine: string; desc: string; img: string | null; closed: boolean; }
 
 /** parse one lot page (server-rendered after CF clears). No named arrow-consts
  *  inside evaluate — tsx/esbuild would inject an undefined __name helper. */
-async function extract(page: Page): Promise<RawLot | null> {
+export async function extract(page: Page): Promise<RawLot | null> {
   // NO named functions / named const-arrows inside evaluate — tsx/esbuild would
   // inject an undefined __name helper (mirrors resolve-rrauction's style).
   return page.evaluate(() => {
@@ -112,7 +112,7 @@ function moneyOf(s: string): number {
   return m ? parseInt(m[1], 10) : 0;
 }
 
-function buildLot(raw: RawLot, id: number, cfg: { host: string; house: AuctionHouse; prefix: string }): AuctionLot | null {
+export function buildLot(raw: RawLot, id: number, cfg: { host: string; house: AuctionHouse; prefix: string }): AuctionLot | null {
   // only SOLD lots (class alert-success renders "SOLD FOR $X")
   if (!/sold\s*for/i.test(raw.price)) return null;
   const soldNum = moneyOf(raw.price);
@@ -192,4 +192,8 @@ async function main() {
     console.log('[CA] dry run (pass --write to persist)');
   }
 }
-main().catch(e => { console.error('[CA] fatal', e); process.exit(1); });
+// run main() ONLY when executed directly — importing extract/buildLot/HOUSES
+// (backfill-createauction) must NOT spawn a competing crawl.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(e => { console.error('[CA] fatal', e); process.exit(1); });
+}
