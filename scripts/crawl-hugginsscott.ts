@@ -8,7 +8,7 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { getHtml, writeMergedSegment } from './lib/sports-crawl';
+import { getHtml, writeMergedSegment, settledOnly } from './lib/sports-crawl';
 import { parseReaLot } from './crawl-rea';
 
 const BASE = 'https://hugginsandscott.com';
@@ -96,8 +96,11 @@ async function main() {
   console.log('[H&S] by category:', byCat);
 
   if (process.argv.includes('--write')) {
-    if (report.fatal.length) { console.error('[H&S] refusing to write: FATALs'); process.exit(1); }
-    const r = writeMergedSegment('hugginsscott', lots);
+    const { good, dropped } = settledOnly(lots);
+    if (dropped) console.log(`[H&S] dropped ${dropped} unsettled/future-dated lots (upcoming months)`);
+    const rep = assertInvariants(good);
+    if (rep.fatal.length) { console.error(`[H&S] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f)); process.exit(1); }
+    const r = writeMergedSegment('hugginsscott', good);
     console.log(`[H&S] merged into segment 'hugginsscott': +${r.added} new, ${r.total} total.`);
   } else {
     const s = lots[0];

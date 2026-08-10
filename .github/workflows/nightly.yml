@@ -126,7 +126,9 @@ jobs:
       # crawls a bounded recent window and MERGES into its segment.
       - name: Crawl REA
         if: matrix.house == 'rea'
-        run: npx tsx scripts/crawl-rea.ts --start 198000 --end 210000 --delay 200 --write
+        # ~2500 recent ids (per-lot ~1.2s → ~50min, safely under the 90min cap;
+        # 12k ids last run blew the timeout and got cancelled)
+        run: npx tsx scripts/crawl-rea.ts --start 207500 --end 210000 --delay 150 --write
       - name: Crawl Huggins & Scott
         if: matrix.house == 'hugginsscott'
         run: npx tsx scripts/crawl-hugginsscott.ts --months 3 --delay 150 --write

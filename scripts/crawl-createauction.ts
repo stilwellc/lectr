@@ -9,7 +9,7 @@
 import { chromium, type Browser, type Page } from 'playwright-core';
 import type { AuctionLot, LotCategory, AuctionHouse } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSegment } from './lib/sports-crawl';
+import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSegment, settledOnly } from './lib/sports-crawl';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
@@ -180,8 +180,11 @@ async function main() {
   console.log(`[CA:${houseKey}] by category:`, byCat);
 
   if (process.argv.includes('--write')) {
-    if (report.fatal.length) { console.error('[CA] refusing to write: FATALs'); process.exit(1); }
-    const res = writeMergedSegment(cfg.seg, lots);
+    const { good, dropped } = settledOnly(lots);
+    if (dropped) console.log(`[CA:${houseKey}] dropped ${dropped} unsettled/future-dated lots`);
+    const rep = assertInvariants(good);
+    if (rep.fatal.length) { console.error(`[CA] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f)); process.exit(1); }
+    const res = writeMergedSegment(cfg.seg, good);
     console.log(`[CA:${houseKey}] merged into segment '${cfg.seg}': +${res.added} new, ${res.total} total.`);
   } else {
     const s = lots[0];

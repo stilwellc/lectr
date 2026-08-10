@@ -8,7 +8,7 @@
 //   RAY_SKIP_MAIN=1 npx tsx scripts/crawl-scp.ts --auctions 1 --cap 40 [--write]
 import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSegment } from './lib/sports-crawl';
+import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, writeMergedSegment, settledOnly } from './lib/sports-crawl';
 
 const HOST = 'https://catalogs.scpauctions.com';
 
@@ -130,8 +130,11 @@ async function main() {
   }
   console.log('[SCP] by category:', byCat, '| confidence:', byConf);
   if (process.argv.includes('--write')) {
-    if (report.fatal.length) { console.error('[SCP] refusing to write: FATALs'); process.exit(1); }
-    const r = writeMergedSegment('scp', lots);
+    const { good, dropped } = settledOnly(lots);
+    if (dropped) console.log(`[SCP] dropped ${dropped} unsettled/future-dated lots`);
+    const rep = assertInvariants(good);
+    if (rep.fatal.length) { console.error(`[SCP] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f)); process.exit(1); }
+    const r = writeMergedSegment('scp', good);
     console.log(`[SCP] merged into segment 'scp': +${r.added} new, ${r.total} total.`);
   } else {
     const s = lots.find(l => (l as { subCat?: string }).subCat === 'game-used') || lots[0];

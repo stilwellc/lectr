@@ -11,7 +11,7 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { getHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate, writeMergedSegment } from './lib/sports-crawl';
+import { getHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate, writeMergedSegment, settledOnly } from './lib/sports-crawl';
 
 const LOT_BASE = 'https://bid.collectrea.com/lots';
 const IMG_HINT = /rea-image-archive[^"'\s]+\.(?:jpg|jpeg|png|webp)/i;
@@ -144,8 +144,11 @@ async function main() {
   console.log('[REA] by auth-confidence:', byConf);
 
   if (process.argv.includes('--write')) {
-    if (report.fatal.length) { console.error('[REA] refusing to write: invariant FATALs present'); process.exit(1); }
-    const r = writeMergedSegment('rea', lots);
+    const { good, dropped } = settledOnly(lots);
+    if (dropped) console.log(`[REA] dropped ${dropped} unsettled/future-dated lots`);
+    const rep = assertInvariants(good);
+    if (rep.fatal.length) { console.error(`[REA] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f)); process.exit(1); }
+    const r = writeMergedSegment('rea', good);
     console.log(`[REA] merged into segment 'rea': +${r.added} new, ${r.total} total.`);
   } else {
     console.log('[REA] dry run (pass --write to persist the isolated segment)');

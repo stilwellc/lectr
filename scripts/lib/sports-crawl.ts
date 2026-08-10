@@ -19,6 +19,18 @@ import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
 // good segment, union the fresh lots over it (fresh id wins), write the union.
 // A failed/empty crawl therefore leaves the segment intact (never wipes), and
 // history grows night over night instead of the window overwriting it.
+// Drop lots that would FATAL the write: a future/missing sale date (an
+// upcoming or soft-closing auction that isn't settled history yet). One bad
+// batch must not kill the whole house — filter, then write the good ones.
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
+export function settledOnly(lots: AuctionLot[]): { good: AuctionLot[]; dropped: number } {
+  const good = lots.filter((l) => {
+    const d = (l as { saleDate?: string }).saleDate;
+    return !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= TODAY_ISO;
+  });
+  return { good, dropped: lots.length - good.length };
+}
+
 export function writeMergedSegment(name: string, fresh: AuctionLot[]): { total: number; added: number } {
   const existing = readSegment(name) as unknown as AuctionLot[];
   const byId = new Map<string, AuctionLot>();
