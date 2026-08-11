@@ -2596,16 +2596,17 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
     transform 160ms var(--ease-signature, ease);
 }
 .mtSide .railCmd .cmdLabel { color: var(--tt-fg); font-weight: 500; font-size: 14px; }
-/* the return key reads as a real key, tinted butter — the affordance to act */
+/* the return key reads as a real key — neutral, matching the ⌘/K keycaps */
 .mtSide .railCmd .cmdArrow {
-  color: #08090a;
-  background: var(--tt-butter);
+  color: var(--tt-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 5px;
   padding: 1px 6px;
   margin-left: 4px;
   font-size: 12px;
   line-height: 1.4;
-  box-shadow: 0 0 12px -3px rgba(232, 218, 182, 0.5);
+  box-shadow: none;
 }
 /* hover: the bar lifts and lights butter — the one place warmth answers a reach */
 .mtSide .railCmd:hover {
