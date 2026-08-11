@@ -2595,7 +2595,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
 
 const BONHAMS_SEARCH_URL = 'https://api01.bonhams.com/search-proxy/collections/lots/documents/search';
 
-async function crawlBonhams(artist: ArtistConfig): Promise<AuctionLot[]> {
+export async function crawlBonhams(artist: ArtistConfig): Promise<AuctionLot[]> {
   if (!artist.bonhams) return [];
   const lots: AuctionLot[] = [];
   const query = encodeURIComponent(artist.bonhams);
