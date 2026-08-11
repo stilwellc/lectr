@@ -191,6 +191,22 @@ export function runMarketBuild() {
     playerCache.set(l.id, p);
     return p;
   };
+  // GAME-USED COMP AXES (doctrine, Aug 2026): beyond same-player, a game-used
+  // comp must share TEAM (when the lot names one), the specific GAME (when the
+  // title names one — a specific-game item is only comparable to same-game
+  // items), and USE CLASS — game-used/worn is never comped against game-issued.
+  // Title-derived + cached; each axis only constrains when the lot itself
+  // carries it (a team-less lot isn't filtered on team), and a thin/empty pool
+  // just abstains (value=null) — never a looser fallback.
+  const { guTeamOf, guUseClass, guGameKey } = require('./lib/corpus-normalize') as {
+    guTeamOf: (t: string) => string | null;
+    guUseClass: (t: string) => 'issued' | 'used';
+    guGameKey: (t: string, y?: number | null) => string | null;
+  };
+  const teamCache = new Map<string, string | null>(), useCache = new Map<string, string>(), gameCache = new Map<string, string | null>();
+  const teamOf = (l: AuctionLot) => { let v = teamCache.get(l.id); if (v === undefined) { v = guTeamOf(l.title || ''); teamCache.set(l.id, v); } return v; };
+  const useOf = (l: AuctionLot) => { let v = useCache.get(l.id); if (v === undefined) { v = guUseClass(l.title || ''); useCache.set(l.id, v); } return v; };
+  const gameOf = (l: AuctionLot) => { let v = gameCache.get(l.id); if (v === undefined) { v = guGameKey(l.title || '', (l as { sportYear?: number | null }).sportYear ?? null); gameCache.set(l.id, v); } return v; };
   for (const lot of upcoming) {
     let pool = soldByArtist.get(lot.artist) || [];
     if (SPORTS_SET.has(lot.artist)) {
@@ -202,6 +218,13 @@ export function runMarketBuild() {
         // (value=null). Do NOT fall back to same-sport — that reintroduces the
         // cross-player bug.
         pool = pool.filter(c => playerSlugOf(c) === pid);
+        if (lot.artist === 'game-used') {
+          const use = useOf(lot), team = teamOf(lot), game = gameOf(lot);
+          pool = pool.filter(c =>
+            useOf(c) === use &&                       // never used↔issued
+            (!team || teamOf(c) === team) &&          // same team when named
+            (!game || gameOf(c) === game));           // same game when named
+        }
       } else {
         // NO readable player (~19% the title parser can't read) → same-SPORT is
         // the best-available fallback, gated ≥3 as before.

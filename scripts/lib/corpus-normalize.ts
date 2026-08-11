@@ -493,6 +493,66 @@ export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: numbe
   return { stamped, total, coverage: total ? covered / total : 1 };
 }
 
+/* ── GAME-USED COMP KEYS — the three axes a game-used lot must match a comp on
+   (doctrine, Aug 2026): (1) team, (2) the specific game when a title names one,
+   and (3) the USE CLASS — game-USED/worn is a different market than game-ISSUED
+   (never worn), so the two are never comped against each other. All three are
+   title-derived and consistent (the same string maps to the same key on the lot
+   and on every candidate), so they act as clean equality filters on the pool. */
+
+// team MASCOTS — the mascot is the near-unique team key; the same-player prefilter
+// already disambiguates the few city-shared ones (Cardinals, Giants, Rangers,
+// Kings). "magic" is deliberately omitted (collides with Magic Johnson).
+const GU_MASCOTS = new Set(('hawks celtics nets hornets bulls cavaliers mavericks nuggets pistons warriors rockets pacers clippers lakers grizzlies heat bucks timberwolves pelicans knicks thunder suns spurs raptors jazz wizards supersonics sonics ' +
+  'bengals steelers ravens patriots jets bills dolphins cowboys eagles commanders redskins bears lions packers vikings falcons panthers saints buccaneers seahawks 49ers niners chargers broncos raiders chiefs colts texans titans jaguars browns ' +
+  'yankees mets cubs dodgers padres athletics mariners angels astros royals twins tigers guardians indians orioles rays braves marlins nationals expos phillies pirates reds brewers diamondbacks rockies ' +
+  'bruins canadiens senators sabres blackhawks blues avalanche stars predators flames oilers canucks kraken sharks ducks lightning hurricanes capitals flyers penguins devils islanders ' +
+  'cardinals rangers giants kings').split(/\s+/));
+
+/** the team a game-used title names (mascot key), or null. Takes the LAST mascot
+    in the title — team follows the player, so this avoids a player name that
+    happens to be a mascot word. */
+export function guTeamOf(title: string): string | null {
+  const t = ' ' + (title || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ') + ' ';
+  if (/\bred sox\b/.test(t)) return 'red-sox';
+  if (/\bwhite sox\b/.test(t)) return 'white-sox';
+  if (/\bmaple leafs\b/.test(t)) return 'maple-leafs';
+  if (/\bblue jays\b/.test(t)) return 'blue-jays';
+  if (/\bgolden knights\b|\bvegas\b/.test(t)) return 'golden-knights';
+  if (/\btrail blazers\b|\bblazers\b/.test(t)) return 'blazers';
+  const toks = t.trim().split(' ');
+  for (let i = toks.length - 1; i >= 0; i--) if (GU_MASCOTS.has(toks[i])) return toks[i];
+  return null;
+}
+
+/** game-USED/worn vs game-ISSUED. Only an explicit "issued" with no worn/used
+    marker reads as 'issued'; everything else (incl. unmarked) is 'used'. */
+export function guUseClass(title: string): 'issued' | 'used' {
+  const t = (title || '').toLowerCase();
+  const worn = /\b(game[- ]?used|game[- ]?worn|match[- ]?worn|player[- ]?worn|worn|used)\b/.test(t);
+  const issued = /\b(game[- ]?issued|team[- ]?issued|issued)\b/.test(t);
+  return (issued && !worn) ? 'issued' : 'used';
+}
+
+/** the specific game a title names (year + game descriptor), or null when it is
+    only attributed to a season. Used to tighten comps to same-game items. */
+export function guGameKey(title: string, sportYear?: number | null): string | null {
+  const t = title || '';
+  const md = t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/i);
+  if (md) return `${md[3]}-${md[1].slice(0, 3).toLowerCase()}-${md[2].padStart(2, '0')}`;
+  const mdy = t.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
+  const yr = (t.match(/\b(?:19|20)\d{2}\b/) || [])[0] || (sportYear ? String(sportYear) : '');
+  if (!yr) return null;
+  const g = t.match(/\b(world series|nba finals|stanley cup(?: final)?|world cup|super bowl|alcs|nlcs|alds|nlds|finals)\b[^.]{0,24}?\bgame\s+(\d+|[ivx]+)\b/i);
+  if (g) return `${yr}:${g[1].toLowerCase().replace(/\s+/g, '-')}-g${g[2].toLowerCase()}`;
+  if (/\bopening day\b/i.test(t)) return `${yr}:opening-day`;
+  if (/\bworld series\b/i.test(t)) return `${yr}:world-series`;
+  if (/\bnba finals\b/i.test(t)) return `${yr}:nba-finals`;
+  if (/\bsuper bowl\b/i.test(t)) return `${yr}:super-bowl`;
+  return null;
+}
+
 // ── ★3c · stampCultureAxes — subjectKeys[] + itemClass for culture slugs.
 const CULTURE_SLUGS_NORM = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia']);
 const CULT_ITEM_RULES: [RegExp, string][] = [
