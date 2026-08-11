@@ -219,11 +219,11 @@ export function runMarketBuild() {
         // cross-player bug.
         pool = pool.filter(c => playerSlugOf(c) === pid);
         if (lot.artist === 'game-used') {
-          const use = useOf(lot), team = teamOf(lot), dated = !!gameOf(lot);
+          const use = useOf(lot), team = teamOf(lot), game = gameOf(lot);
           pool = pool.filter(c =>
             useOf(c) === use &&                       // never used↔issued
             (!team || teamOf(c) === team) &&          // same team when named
-            (!!gameOf(c)) === dated);                 // never cross a dated (specific-game) item with an undated one — the pool still falls back to player+team within each class
+            gameOf(c) === game);                      // exact game match: a dated (specific-game) lot comps ONLY same-game; an undated lot (game=null) comps ONLY other undated
         }
       } else {
         // NO readable player (~19% the title parser can't read) → same-SPORT is
