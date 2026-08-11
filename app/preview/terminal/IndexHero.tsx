@@ -11,6 +11,26 @@ import { fmtInt, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
 import styles from './style.module.css';
 
+/* RAIL MARKS — the constructed-mark language on the "Right now" metrics:
+   on the block = an auction paddle, value trend = a rising line + arrow, bid
+   competition = competing bids, below market = a lot under the market line,
+   search = a loupe. 24-grid, currentColor, round caps. */
+function RailMark({ k }: { k: 'onBlock' | 'trend' | 'bids' | 'below' | 'search' }) {
+  const paths: Record<string, React.ReactNode> = {
+    onBlock: <><rect x="6.5" y="4" width="9" height="7" rx="2" /><path d="M11 11v8.5" /></>,
+    trend: <><path d="M4.5 15.5l4-4 3 2.5 5-6" /><path d="M14.5 8H18.5V12" /></>,
+    bids: <><path d="M8 19V8M8 8l-2.4 2.4M8 8l2.4 2.4" /><path d="M16 19v-7M16 12l-2.4 2.4M16 12l2.4 2.4" /></>,
+    below: <><path d="M4.5 9h15" /><path d="M12 15.6V11" /><circle cx="12" cy="16.4" r="2" fill="currentColor" stroke="none" /></>,
+    search: <><circle cx="10.5" cy="10.5" r="6" /><path d="M19.5 19.5l-4.8-4.8" /></>,
+  };
+  return (
+    <svg className={styles.railMark} width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {paths[k]}
+    </svg>
+  );
+}
+
 /* ============================================================
    THE MARKET-SCOPED INDEX HERO. The honest engine will NOT
    stand behind a market-level return (the pooled index abstains
@@ -295,35 +315,36 @@ export default function IndexHero({
                 </div>
               )}
               <div className={styles.railRow}>
-                <span className={styles.railLabel}>On the block</span>
+                <span className={styles.railLabel}><RailMark k="onBlock" />On the block</span>
                 <span className={styles.railVal}>{fmtInt(onBlock)}</span>
               </div>
               {roi != null && (
                 <div className={styles.railRow} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
-                  <span className={styles.railLabel}>Value trend · est.</span>
+                  <span className={styles.railLabel}><RailMark k="trend" />Value trend · est.</span>
                   <span className={`${styles.railVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
                 </div>
               )}
               {roiFlag && <div className={styles.railFlagLine}>{roiFlag}</div>}
               {bc && (
                 <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
-                  <span className={styles.railLabel}>Bid competition</span>
+                  <span className={styles.railLabel}><RailMark k="bids" />Bid competition</span>
                   <span className={styles.railVal}>{bc.now} bids/lot</span>
                 </div>
               )}
               {belowMkt ? (
                 <button type="button" className={styles.railBtn} onClick={onOpenBelow}
                   aria-label={`${belowMkt} below-market lots — see them`}>
-                  <span className={styles.railLabel}>Below market now</span>
+                  <span className={styles.railLabel}><RailMark k="below" />Below market now</span>
                   <span className={styles.railVal} data-accent="true">{fmtInt(belowMkt)}<em className={styles.railGo} aria-hidden>↗</em></span>
                 </button>
               ) : (
                 <div className={styles.railRow}>
-                  <span className={styles.railLabel}>Below market now</span>
+                  <span className={styles.railLabel}><RailMark k="below" />Below market now</span>
                   <span className={styles.railVal}>—</span>
                 </div>
               )}
               <button type="button" className={styles.railCmd} onClick={onCommand}>
+                <RailMark k="search" />
                 <kbd className={styles.kbd}>⌘</kbd>
                 <kbd className={styles.kbd}>K</kbd>
                 <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>

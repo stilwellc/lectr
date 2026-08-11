@@ -2813,6 +2813,11 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   text-transform: uppercase;
   color: var(--color-up);
 }
+/* the metric marks — a quiet leading glyph on each rail label, and a loupe
+   on the search bar. They ride the label's own muted tone. */
+.railLabel { display: inline-flex; align-items: center; gap: 6px; }
+.railMark { flex: none; opacity: 0.8; }
+.mtSide .railCmd .railMark { color: var(--tt-muted); opacity: 1; margin-right: 2px; }
 
 /* — the metric cells: label small-grey on top, the number at dashboard scale
    below. Each cell breathes to fill the panel; hairlines seam them. */
