@@ -397,8 +397,8 @@ const GU_TEAM_WORDS = new Set(('atlanta boston brooklyn charlotte chicago clevel
   'bruins canadiens maple leafs senators sabres wings blackhawks blues wild avalanche stars predators flames oilers canucks kraken sharks ducks knights coyotes lightning hurricanes capitals flyers penguins devils islanders ' +
   'seattle supersonics sonics new jersey st louis tampa bay green anaheim colorado columbus carolina nashville edmonton calgary vancouver winnipeg montreal ottawa quebec florida arizona texas california oakland usa team ' +
   'real madrid barcelona manchester united city liverpool chelsea arsenal tottenham juventus milan inter bayern munich paris saint-germain psg ajax').split(/\s+/));
-const GU_STOP_WORDS = new Set('game match team worn used issued signed autographed auto inscribed rookie debut career final finals championship world series super bowl season professional model style era circa nba nfl mlb nhl wnba mls kia emirates cup playoffs playoff conference photo practice warm warmup training jersey shorts pants sneakers shoes cleats cleat boot jacket helmet cap hat glove mitt bat ball puck ring belt trophy award medal home road away alternate icon association statement classic edition the a an and with vs at of for from includes long short sleeve sleeved left right'.split(/\s+/));
-const GU_MONTHS = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\.?$/i;
+const GU_STOP_WORDS = new Set('game match team worn used issued signed autographed auto inscribed rookie debut career final finals championship world series super bowl season professional model style era circa nba nfl mlb nhl wnba mls kia emirates cup playoffs playoff conference photo practice warm warmup training jersey shorts pants sneakers shoes cleats cleat boot jacket helmet cap hat glove mitt bat ball puck ring belt trophy award medal home road away alternate icon association statement classic edition hof mvp the a an and with vs at of for from includes long short sleeve sleeved left right'.split(/\s+/));
+const GU_MONTHS = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\.?$|^(january|february|march|april|june|july|august|september|october|november|december)$/i;
 
 /** Extract the athlete from a game-used title (measured 93.9% sold coverage,
     97.8% prefix-agreement with existing stamps). Never run on card-brand
@@ -408,8 +408,13 @@ export function recoverPlayerSlug(title: string): string | null {
   s = s.replace(/\|[^]*$/, ' ');
   s = s.replace(/[‘“][^‘’“”]*[’”]/g, ' ');
   s = s.replace(/(^|\s)['"][^'"]*['"](?=\s|$|[,.])/g, ' ');
+  // expansion-house noise (Lelands / Memory Lane / Love of the Game): the
+  // catalogue tag that leads a title and the auction-listing tail that trails
+  // it, neither of which appears in a Goldin/Sotheby's title.
+  s = s.replace(/^\s*(?:highlight|featured)\s+/i, ' ');
+  s = s.replace(/\s+(?:bids:\s*\d|opening bid:|status:\s*sold).*$/i, ' ');
   s = s.trim();
-  const segs = s.split(/\s+-\s+/);
+  const segs = s.split(/\s+[-–—]\s+/);
   let si = 0;
   while (si < segs.length - 1) {
     const seg = segs[si];
@@ -420,7 +425,17 @@ export function recoverPlayerSlug(title: string): string | null {
   s = segs.slice(si).join(' ');
   const toks = s.split(/\s+/).filter(Boolean);
   let i = 0;
-  while (i < toks.length && (GU_MONTHS.test(toks[i]) || /^['’]?\d/.test(toks[i]))) i++;
+  // Leading skip: months, year/date tokens, the "circa"/"c." date qualifier
+  // (and "c.1995"), and a leading tobacco/card SET-CODE (T206, N172, E90…).
+  // A name token is pure alpha, so skipping any leading token that carries a
+  // digit — or is the circa qualifier — never eats a player name.
+  while (i < toks.length && (
+    GU_MONTHS.test(toks[i]) ||
+    /^['’]?\d/.test(toks[i]) ||
+    /^(?:circa|c\.?)$/i.test(toks[i]) ||
+    /^c\.?\d/i.test(toks[i]) ||
+    /^[A-Za-z]{1,3}\d{2,4}[a-z]?$/.test(toks[i])
+  )) i++;
   const kept: string[] = [];
   for (; i < toks.length; i++) {
     const lw = toks[i].normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
