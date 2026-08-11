@@ -355,44 +355,68 @@
   font-family: var(--font-inter), sans-serif; font-size: 10px;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-faint); margin-top: 6px;
 }
-.mHeroStats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-.mStat {
-  display: flex; flex-direction: column; gap: 4px; min-width: 0; text-align: left;
-  border: 1px solid var(--tt-hair-2); border-radius: 12px; padding: 11px 11px;
-  background: rgba(232, 218, 182, 0.015);
-}
-button.mStat { cursor: pointer; font: inherit; }
-button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
-.mStat[data-accent='true'] { border-color: rgba(232, 218, 182, 0.24); }
-.mStatVal { font-family: var(--font-inter), sans-serif; font-size: 18px; font-weight: 500; letter-spacing: -0.01em; color: var(--tt-fg); }
-.mStat[data-accent='true'] .mStatVal { color: var(--tt-butter); }
-.mStatLabel {
-  /* merged 8.5→10 (type audit); tracking eased 0.08em→0.03em so the longest
-     label ("Below market ↗") still fits the 3-up tiles on a 390px screen */
-  font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.03em;
-  text-transform: uppercase; color: var(--tt-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* mobile search joins the glass family SOLID (no new frost surface — seven
-   blurred keys already run above it on the tightest paint path) */
-.mHero .cmdPillFull {
-  width: 100%;
-  justify-content: center;
+/* ── THE MOBILE "RIGHT NOW" PANEL — the desktop pulse card, phone-native:
+   a contained Linear card holding the 3-up metric tiles and the search. ── */
+.mRightNow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 14px;
-  background: linear-gradient(180deg, rgba(255, 252, 245, 0.05), rgba(255, 252, 245, 0.02));
-  border: 1px solid rgba(237, 230, 218, 0.13);
-  border-radius: 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-}
-/* the stat tiles: same pane, no blur — the below-market tile whispers butter */
-.mHero .mStat {
-  background: linear-gradient(180deg, rgba(255, 252, 245, 0.045), rgba(255, 252, 245, 0.015));
-  border-color: rgba(232, 218, 182, 0.1);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(255, 255, 255, 0.022), transparent 60%),
+    rgba(255, 255, 255, 0.018);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
-.mHero .mStat[data-accent='true'] {
-  border-color: rgba(232, 218, 182, 0.24);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 18px -6px rgba(232, 218, 182, 0.18);
+.mRightNow .railHead { padding: 0 2px 0; }
+
+.mHeroStats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.mStat {
+  /* Linear matte tile: flat cool surface, one fine border, near-white figure */
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 12px 11px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+button.mStat { cursor: pointer; font: inherit; transition: background 140ms var(--ease-signature, ease), border-color 140ms var(--ease-signature, ease); }
+button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.6); outline-offset: 2px; }
+button.mStat:active { background: rgba(255, 255, 255, 0.06); }
+/* the one butter accent — the actionable below-market tile */
+.mStat[data-accent='true'] {
+  border-color: rgba(232, 218, 182, 0.3);
+  background: rgba(232, 218, 182, 0.05);
+}
+.mStatVal { font-family: var(--font-inter), sans-serif; font-size: 21px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: #f7f8f8; }
+.mStat[data-accent='true'] .mStatVal { color: var(--tt-butter); }
+.mStatLabel {
+  /* tracking eased so the longest label ("Below market ↗") still fits the
+     3-up tiles on a 390px screen; cool Linear grey */
+  font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.02em;
+  text-transform: uppercase; color: var(--tt-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* mobile search — the elevated command bar (matches the desktop rail search):
+   brighter surface, a real drop shadow lifting it off the panel */
+.mHero .cmdPillFull {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 6px 18px -10px rgba(0, 0, 0, 0.75);
+  color: var(--tt-fg);
+}
+.mHero .cmdPillFull .cmdLabel { color: var(--tt-fg); font-weight: 500; }
+.mHero .cmdPillFull .cmdArrow {
+  margin-left: auto;
+  color: var(--tt-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+.mHero .cmdPillFull:active { transform: scale(0.99); }
 /* the phone ledger sits under a centred lamp: hairlines brightest mid-row */
 @media (max-width: 700px) {
   .mHero .mtRow, .mtStage .mtRow {

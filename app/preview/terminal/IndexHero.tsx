@@ -209,43 +209,52 @@ export default function IndexHero({
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
-          {/* the stat tiles settle AFTER the tape lands, not racing it */}
-          <m.div className={styles.mHeroStats} {...rise(0.64)}>
-            {roi != null && (
-              <span className={styles.mStat} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
-                <span className={`${styles.mStatVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
-                <span className={styles.mStatLabel}>Value trend · est.</span>
-              </span>
+          {/* the stat tiles + search — a mobile "Right now" panel, the phone-
+              native twin of the desktop pulse card. Settles AFTER the tape. */}
+          <m.div className={styles.mRightNow} {...rise(0.64)}>
+            {!showMonument && (
+              <div className={styles.railHead} aria-hidden>
+                <span className={styles.railHeadLabel}>Right now</span>
+                <span className={styles.railHeadTick}>live</span>
+              </div>
             )}
-            {bc ? (
-              <span className={styles.mStat} title="Median bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
-                <span className={styles.mStatVal}>{bc.now}</span>
-                <span className={styles.mStatLabel}>Bids/lot</span>
-              </span>
-            ) : (
-              <span className={styles.mStat}>
-                <span className={styles.mStatVal}>{fmtInt(onBlock)}</span>
-                <span className={styles.mStatLabel}>On the block</span>
-              </span>
-            )}
-            {belowMkt ? (
-              <button type="button" className={styles.mStat} data-accent="true" onClick={onOpenBelow} aria-label={`${belowMkt} below-market lots — see them`}>
-                <span className={styles.mStatVal}>{fmtInt(belowMkt)}</span>
-                <span className={styles.mStatLabel}>Below market ↗</span>
-              </button>
-            ) : (
-              <span className={styles.mStat}>
-                <span className={styles.mStatVal}>—</span>
-                <span className={styles.mStatLabel}>Below market</span>
-              </span>
-            )}
-          </m.div>
+            <div className={styles.mHeroStats}>
+              {roi != null && (
+                <span className={styles.mStat} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
+                  <span className={`${styles.mStatVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
+                  <span className={styles.mStatLabel}>Value trend · est.</span>
+                </span>
+              )}
+              {bc ? (
+                <span className={styles.mStat} title="Median bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
+                  <span className={styles.mStatVal}>{bc.now}</span>
+                  <span className={styles.mStatLabel}>Bids/lot</span>
+                </span>
+              ) : (
+                <span className={styles.mStat}>
+                  <span className={styles.mStatVal}>{fmtInt(onBlock)}</span>
+                  <span className={styles.mStatLabel}>On the block</span>
+                </span>
+              )}
+              {belowMkt ? (
+                <button type="button" className={styles.mStat} data-accent="true" onClick={onOpenBelow} aria-label={`${belowMkt} below-market lots — see them`}>
+                  <span className={styles.mStatVal}>{fmtInt(belowMkt)}</span>
+                  <span className={styles.mStatLabel}>Below market ↗</span>
+                </button>
+              ) : (
+                <span className={styles.mStat}>
+                  <span className={styles.mStatVal}>—</span>
+                  <span className={styles.mStatLabel}>Below market</span>
+                </span>
+              )}
+            </div>
 
-          <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
-            <kbd className={styles.kbd}>⌘K</kbd>
-            <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
-            <span className={styles.cmdArrow} aria-hidden>↵</span>
-          </button>
+            <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
+              <kbd className={styles.kbd}>⌘K</kbd>
+              <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
+              <span className={styles.cmdArrow} aria-hidden>↵</span>
+            </button>
+          </m.div>
         </section>
       </LazyMotion>
     );
