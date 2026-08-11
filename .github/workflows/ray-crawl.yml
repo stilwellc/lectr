@@ -124,4 +124,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "no CF token — skipping deploy"; exit 0; fi
-          npx wrangler pages deploy out --project-name collectr --branch main --commit-dirty=true
+          npx wrangler@4.120.1 pages deploy out --project-name collectr --branch main --commit-dirty=true

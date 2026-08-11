@@ -85,7 +85,7 @@ jobs:
             echo "::error::CLOUDFLARE_API_TOKEN secret is not set — create a token at dash.cloudflare.com/profile/api-tokens (Custom: Account → Cloudflare Pages → Edit) and add it with: gh secret set CLOUDFLARE_API_TOKEN"
             exit 1
           fi
-          out=$(npx wrangler pages deploy out --project-name collectr --branch main --commit-dirty=true 2>&1)
+          out=$(npx wrangler@4.120.1 pages deploy out --project-name collectr --branch main --commit-dirty=true 2>&1)
           echo "$out"
           url=$(echo "$out" | grep -oE 'https://[a-z0-9]+\.collectr-2ks\.pages\.dev' | head -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
