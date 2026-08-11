@@ -2819,20 +2819,64 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .railMark { flex: none; opacity: 0.8; }
 .mtSide .railCmd .railMark { color: var(--tt-muted); opacity: 1; margin-right: 2px; }
 
-/* — the metric cells: label small-grey on top, the number at dashboard scale
-   below. Each cell breathes to fill the panel; hairlines seam them. */
+/* — the metric cells: a BIG constructed mark flush-left, the label + number
+   stacked to its right (the Robinhood stat-row form). Each cell breathes to
+   fill the panel; hairlines seam them. */
 .mtSide .heroRail:not([data-under-monument='true']) .railRow,
 .mtSide .heroRail:not([data-under-monument='true']) .railBtn {
   flex: 1 1 0;
   min-height: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 5px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
   padding: 14px 2px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   text-align: left;
+}
+/* the mark as a design element — large, left, quiet secondary tone (metric
+   rows only; the search loupe in .railCmd keeps its small size) */
+.mtSide .heroRail:not([data-under-monument='true']) .railRow > .railMark,
+.mtSide .heroRail:not([data-under-monument='true']) .railBtn > .railMark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  opacity: 1;
+  color: var(--tt-secondary);
+}
+.mtSide .heroRail:not([data-under-monument='true']) .railStack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+/* — SCOPED-MARKET rail (under the monument): keep it a compact ledger row —
+   a small leading mark, then label and value on one baseline. */
+.mtSide .heroRail[data-under-monument='true'] .railRow,
+.mtSide .heroRail[data-under-monument='true'] .railBtn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 11px;
+}
+.mtSide .heroRail[data-under-monument='true'] .railRow > .railMark,
+.mtSide .heroRail[data-under-monument='true'] .railBtn > .railMark {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  opacity: 0.85;
+  color: var(--tt-muted);
+}
+.mtSide .heroRail[data-under-monument='true'] .railStack {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
 }
 .mtSide .heroRail:not([data-under-monument='true']) .railRow:first-of-type,
 .mtSide .heroRail:not([data-under-monument='true']) .railHead + .railRow {

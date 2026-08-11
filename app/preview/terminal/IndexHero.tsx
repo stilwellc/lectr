@@ -315,32 +315,47 @@ export default function IndexHero({
                 </div>
               )}
               <div className={styles.railRow}>
-                <span className={styles.railLabel}><RailMark k="onBlock" />On the block</span>
-                <span className={styles.railVal}>{fmtInt(onBlock)}</span>
+                <RailMark k="onBlock" />
+                <span className={styles.railStack}>
+                  <span className={styles.railLabel}>On the block</span>
+                  <span className={styles.railVal}>{fmtInt(onBlock)}</span>
+                </span>
               </div>
               {roi != null && (
                 <div className={styles.railRow} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
-                  <span className={styles.railLabel}><RailMark k="trend" />Value trend · est.</span>
-                  <span className={`${styles.railVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
+                  <RailMark k="trend" />
+                  <span className={styles.railStack}>
+                    <span className={styles.railLabel}>Value trend · est.</span>
+                    <span className={`${styles.railVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
+                  </span>
                 </div>
               )}
               {roiFlag && <div className={styles.railFlagLine}>{roiFlag}</div>}
               {bc && (
                 <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
-                  <span className={styles.railLabel}><RailMark k="bids" />Bid competition</span>
-                  <span className={styles.railVal}>{bc.now} bids/lot</span>
+                  <RailMark k="bids" />
+                  <span className={styles.railStack}>
+                    <span className={styles.railLabel}>Bid competition</span>
+                    <span className={styles.railVal}>{bc.now} bids/lot</span>
+                  </span>
                 </div>
               )}
               {belowMkt ? (
                 <button type="button" className={styles.railBtn} onClick={onOpenBelow}
                   aria-label={`${belowMkt} below-market lots — see them`}>
-                  <span className={styles.railLabel}><RailMark k="below" />Below market now</span>
-                  <span className={styles.railVal} data-accent="true">{fmtInt(belowMkt)}<em className={styles.railGo} aria-hidden>↗</em></span>
+                  <RailMark k="below" />
+                  <span className={styles.railStack}>
+                    <span className={styles.railLabel}>Below market now</span>
+                    <span className={styles.railVal} data-accent="true">{fmtInt(belowMkt)}<em className={styles.railGo} aria-hidden>↗</em></span>
+                  </span>
                 </button>
               ) : (
                 <div className={styles.railRow}>
-                  <span className={styles.railLabel}><RailMark k="below" />Below market now</span>
-                  <span className={styles.railVal}>—</span>
+                  <RailMark k="below" />
+                  <span className={styles.railStack}>
+                    <span className={styles.railLabel}>Below market now</span>
+                    <span className={styles.railVal}>—</span>
+                  </span>
                 </div>
               )}
               <button type="button" className={styles.railCmd} onClick={onCommand}>
