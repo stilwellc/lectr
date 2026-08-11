@@ -11,6 +11,7 @@ import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
 import { daysWord } from '../../components/Terminal';
 import { confidenceMeter } from '../../components/LotCard';
+import MarketIcon from '../../components/MarketIcon';
 import styles from './style.module.css';
 
 /* ============================================================
@@ -366,10 +367,42 @@ function ReplaySeal({ n, play }: { n: number; play: boolean }) {
   );
 }
 
+/* ── section glyphs — the constructed-mark language, one per chapter:
+   the engine (a gear/mechanism), the markets (an index of bars), the receipt
+   (a perforated settlement slip). 24-grid, currentColor, round caps. ── */
+const CHAPTER_GLYPHS: Record<string, React.ReactNode> = {
+  'the engine': (
+    <>
+      <circle cx="12" cy="12" r="4.1" />
+      <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <path d="M12 3.9v2.3M12 17.8v2.3M3.9 12h2.3M17.8 12h2.3M6.4 6.4l1.6 1.6M16 16l1.6 1.6M17.6 6.4l-1.6 1.6M6.4 17.6l1.6-1.6" />
+    </>
+  ),
+  'the markets': (
+    <>
+      <path d="M4 19h16" />
+      <path d="M7 19v-5M12 19V8.5M17 19v-8" />
+    </>
+  ),
+  'the receipt': (
+    <>
+      <path d="M7 4.5h10v13l-1.65-1.15-1.6 1.15-1.65-1.15-1.6 1.15-1.65-1.15L7 17.5z" />
+      <path d="M10 8.6h4M10 11.6h4" />
+    </>
+  ),
+};
+
 /* ── a chapter marker — "01 · The engine", hairlines either side ── */
 function Chapter({ no, label }: { no: string; label: string }) {
+  const glyph = CHAPTER_GLYPHS[label.toLowerCase()];
   return (
     <div className={styles.chapter}>
+      {glyph && (
+        <svg className={styles.chapterGlyph} width="15" height="15" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {glyph}
+        </svg>
+      )}
       <b>{no}</b> · {label}
     </div>
   );
@@ -520,7 +553,12 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
         style={{ textDecoration: 'none', color: 'inherit' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <span className={styles.tapeLabel}>{r.label}</span>
+        <span className={styles.tapeLabel}>
+          <span className={styles.tapeGlyph} aria-hidden>
+            <MarketIcon market={r.vertical as Market} size={13} />
+          </span>
+          {r.label}
+        </span>
         <span className={styles.tapeTag}>{tapeTag(r)}</span>
       </Link>
       <span className={styles.tapeInstrument} aria-hidden>

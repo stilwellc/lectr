@@ -10,6 +10,53 @@ import Flick from './Flick';
 import { useAuth } from '../lib/account';
 import { useUnseenAlertCount } from '../lib/alerts';
 
+/* NAV MARKS — the constructed line-mark language on the top bar: overview is a
+   dashboard grid, value the CI caliper (lectr's own read), makers a signature,
+   analytics an axis + rising line, blog a document, profile a bust, sign-in an
+   arrow through a door. 24-grid, currentColor, round caps — one family with
+   the category glyphs. */
+function NavMark({ d }: { d: React.ReactNode }) {
+  return (
+    <svg className="ray-nav-mark" width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {d}
+    </svg>
+  );
+}
+const NAV_ICONS: Record<string, React.ReactNode> = {
+  overview: <NavMark d={<>
+    <rect x="4.5" y="4.5" width="6.3" height="6.3" rx="1.2" />
+    <rect x="13.2" y="4.5" width="6.3" height="6.3" rx="1.2" />
+    <rect x="4.5" y="13.2" width="6.3" height="6.3" rx="1.2" />
+    <rect x="13.2" y="13.2" width="6.3" height="6.3" rx="1.2" />
+  </>} />,
+  value: <NavMark d={<>
+    <path d="M5 12h14M5 9.4v5.2M19 9.4v5.2" />
+    <path d="M12 9.3 14.7 12 12 14.7 9.3 12Z" fill="currentColor" stroke="none" />
+  </>} />,
+  makers: <NavMark d={<>
+    <path d="M4.8 14.6c1.4 0 1.8-5.4 3-5.4.8 0 .5 4.8 1.5 4.8 1.1 0 1.5-3.4 2.6-3.4.8 0 .7 2.8 1.7 2.8.7 0 1.1-1 2-1" />
+    <path d="M6 18h9" />
+  </>} />,
+  analytics: <NavMark d={<>
+    <path d="M5 5v14h14" />
+    <path d="M8.2 15l3-3 2.4 1.9 4-4.9" />
+    <circle cx="17.6" cy="9" r="1.1" fill="currentColor" stroke="none" />
+  </>} />,
+  blog: <NavMark d={<>
+    <rect x="5.5" y="4.5" width="13" height="15" rx="1.6" />
+    <path d="M8.6 9h6.8M8.6 12.4h6.8M8.6 15.8h4" />
+  </>} />,
+  profile: <NavMark d={<>
+    <circle cx="12" cy="8.7" r="3.2" />
+    <path d="M6 19a6 6 0 0 1 12 0" />
+  </>} />,
+  signin: <NavMark d={<>
+    <path d="M13 5.5h4.4a1.6 1.6 0 0 1 1.6 1.6v9.8a1.6 1.6 0 0 1-1.6 1.6H13" />
+    <path d="M4.5 12h9M10 8.5l3.5 3.5L10 15.5" />
+  </>} />,
+};
+
 export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
   const [lit, setLit] = useState(false);
@@ -108,15 +155,15 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   // mobile they lead the full-screen menu so it is a real nav, not just a
   // maker finder.
   const sections = [
-    { label: 'Overview', path: homePath, active: activeSlug === null },
-    { label: 'Value', path: '/value', active: activeSlug === 'value' },
-    { label: 'Makers', path: '/makers', active: activeSlug === 'artists' },
-    { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics' },
-    { label: 'Blog', path: '/blog', active: activeSlug === 'blog' },
+    { label: 'Overview', path: homePath, active: activeSlug === null, icon: NAV_ICONS.overview },
+    { label: 'Value', path: '/value', active: activeSlug === 'value', icon: NAV_ICONS.value },
+    { label: 'Makers', path: '/makers', active: activeSlug === 'artists', icon: NAV_ICONS.makers },
+    { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics', icon: NAV_ICONS.analytics },
+    { label: 'Blog', path: '/blog', active: activeSlug === 'blog', icon: NAV_ICONS.blog },
     // ONE identity entry, LAST — same order as the desktop bar: signed in (or
     // auth unconfigured) → My profile; signed out → the sheet's Sign in row
     // stands alone instead.
-    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/profile', active: activeSlug === 'saved' }] : []),
+    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/profile', active: activeSlug === 'saved', icon: NAV_ICONS.profile }] : []),
   ];
 
   // Shared finder pieces — the filter input and the grouped maker list — reused
@@ -461,6 +508,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-maker-navitem {
           display: flex;
           align-items: center;
+          gap: 13px;
           width: 100%;
           text-align: left;
           padding: 15px 20px;
@@ -475,6 +523,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           color: var(--color-fg);
         }
         .ray-maker-navitem[data-active=true] { color: var(--color-fg); }
+        .ray-navitem-mark { display: inline-flex; flex: none; opacity: 0.85; }
+        .ray-navitem-mark svg { width: 19px; height: 19px; }
         .ray-maker-sheet-sub {
           padding: 18px 20px 4px;
           font-family: var(--font-sans), sans-serif;
@@ -495,14 +545,14 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         {/* Desktop quick links — one click to each room; the dropdown stays
             the artist index. Hidden on mobile where the dropdown covers all. */}
         <nav className="ray-nav-links" aria-label="Sections">
-          <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>Overview</button>
-          <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>Value</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/makers')}>Makers</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>Analytics</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>Blog</button>
+          <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>{NAV_ICONS.overview}Overview</button>
+          <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>{NAV_ICONS.value}Value</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/makers')}>{NAV_ICONS.makers}Makers</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>{NAV_ICONS.analytics}Analytics</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>{NAV_ICONS.blog}Blog</button>
           {(!authEnabled || user) ? (
             <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
-              My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
+              {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
               {unseenAlerts > 0 && (
                 // butter marker: the nightly crawl left unread search matches
                 <span aria-label={`${unseenAlerts} new matches`} style={{
@@ -512,7 +562,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
               )}
             </button>
           ) : (
-            <button className="ray-nav-link" onClick={openLogin}>Sign in</button>
+            <button className="ray-nav-link" onClick={openLogin}>{NAV_ICONS.signin}Sign in</button>
           )}
         </nav>
 
@@ -591,6 +641,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     data-active={s.active ? 'true' : 'false'}
                     onClick={() => navigate(s.path)}
                   >
+                    <span className="ray-navitem-mark" aria-hidden>{s.icon}</span>
                     {s.label}
                     {s.path === '/profile' && unseenAlerts > 0 && (
                       <span aria-label={`${unseenAlerts} new matches`} style={{
@@ -607,6 +658,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     className="ray-maker-navitem"
                     onClick={() => { openLogin(); setOpen(false); }}
                   >
+                    <span className="ray-navitem-mark" aria-hidden>{NAV_ICONS.signin}</span>
                     Sign in
                   </button>
                 )}

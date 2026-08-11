@@ -1093,7 +1093,13 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   text-transform: none !important;
   padding: 7px 13px !important;
   color: var(--color-text-muted);
+  /* leading constructed mark sits inline with the label */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+.ray-nav-mark { flex: none; opacity: 0.82; }
+.ray-nav-link[data-active=true] .ray-nav-mark { opacity: 1; }
 .ray-nav-link:hover { color: var(--color-fg); background: var(--color-hover-item); }
 .ray-nav-link[data-active=true] {
   color: var(--color-fg) !important;

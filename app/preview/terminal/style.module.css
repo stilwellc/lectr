@@ -606,7 +606,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   pointer-events: none;
   z-index: 1;
   background: center/contain no-repeat
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='%231C1712' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M26 34l-5 20 11-6 11 6-5-20'/%3E%3Ccircle cx='32' cy='24' r='16'/%3E%3Ccircle cx='32' cy='24' r='10.5'/%3E%3Cpath d='M32 18l1.7 3.6 3.9.5-2.9 2.7.8 3.9L32 26.9l-3.5 1.7.8-3.9-2.9-2.7 3.9-.5z'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='%231C1712' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M26 34l-5 20 11-6 11 6-5-20'/%3E%3Ccircle cx='32' cy='24' r='15'/%3E%3Cpath d='M25.5 24.5 30 29 39 17.5'/%3E%3C/svg%3E");
 }
 
 /* the richer Terminal pill emblems sit a touch brighter than the plain
@@ -1482,6 +1482,17 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   color: var(--paper-muted, #5A5240);
 }
 .chapter b { color: #8A7440; font-weight: 700; }
+/* the chapter's constructed section glyph — sits in the gold accent, quiet */
+.chapterGlyph { flex: none; color: #8A7440; opacity: 0.85; }
+/* the sub-market row's parent-market tag — a quiet leading glyph on the label */
+.tapeGlyph {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -2px;
+  margin-right: 7px;
+  opacity: 0.5;
+}
+.tapeGlyph svg { flex: none; }
 .chapter::before,
 .chapter::after {
   content: '';
