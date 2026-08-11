@@ -325,6 +325,17 @@ export const ARTISTS: ArtistConfig[] = [
     wright: 'kenny-scharf',
     bonhams: 'Kenny Scharf',
   },
+  // ── blue-chip modern/contemporary added Aug 2026. Sotheby's/Christie's lots
+  // arrive via the auction crawlers + ART_MAKER_ROUTES (the per-artist page
+  // path is flaky); Bonhams via Typesense name search; Wright/LAMA via slug
+  // (sparse for these art names but harmless). Phillips maker ids TBD — the
+  // Phillips search API was erroring; add { phillips: { id, slug } } once known.
+  { slug: 'jean-michel-basquiat', displayName: 'Jean-Michel Basquiat', sothebys: 'jean-michel-basquiat', christies: 'jean-michel-basquiat', wright: 'jean-michel-basquiat', bonhams: 'Jean-Michel Basquiat' },
+  { slug: 'roy-lichtenstein', displayName: 'Roy Lichtenstein', sothebys: 'roy-lichtenstein', christies: 'roy-lichtenstein', wright: 'roy-lichtenstein', bonhams: 'Roy Lichtenstein' },
+  { slug: 'francis-bacon', displayName: 'Francis Bacon', sothebys: 'francis-bacon', christies: 'francis-bacon', wright: 'francis-bacon', bonhams: 'Francis Bacon' },
+  { slug: 'alexander-calder', displayName: 'Alexander Calder', sothebys: 'alexander-calder', christies: 'alexander-calder', wright: 'alexander-calder', bonhams: 'Alexander Calder' },
+  { slug: 'rashid-johnson', displayName: 'Rashid Johnson', sothebys: 'rashid-johnson', christies: 'rashid-johnson', wright: 'rashid-johnson', bonhams: 'Rashid Johnson' },
+  { slug: 'jeff-koons', displayName: 'Jeff Koons', sothebys: 'jeff-koons', christies: 'jeff-koons', wright: 'jeff-koons', bonhams: 'Jeff Koons' },
 
   // ── The watches vertical: makers, not artists. Phillips (the watch house)
   // maker pages + Christie's maker pages + Bonhams keyword search.
@@ -1511,6 +1522,14 @@ const ART_MAKER_ROUTES: [RegExp, string][] = [
   [/\bfrancesco clemente\b|\bclemente\b/, 'francesco-clemente'],
   [/\beddie martinez\b/, 'eddie-martinez'],
   [/\bkenny scharf\b|\bscharf\b/, 'kenny-scharf'],
+  // added Aug 2026 — blue-chip modern/contemporary. Distinctive surnames allowed;
+  // Bacon (food/philosopher) and Johnson (common) require the full name.
+  [/\bjean.?michel basquiat\b|\bbasquiat\b/, 'jean-michel-basquiat'],
+  [/\broy lichtenstein\b|\blichtenstein\b/, 'roy-lichtenstein'],
+  [/\bfrancis bacon\b/, 'francis-bacon'],
+  [/\balexander calder\b|\bcalder\b/, 'alexander-calder'],
+  [/\brashid johnson\b/, 'rashid-johnson'],
+  [/\bjeff koons\b|\bkoons\b/, 'jeff-koons'],
   // design
   [/\bgeorge nakashima\b|\bnakashima\b/, 'george-nakashima'],
   [/\bcharles (and |& )?ray eames\b|\b(charles|ray) eames\b|\beames\b/, 'charles-eames'],

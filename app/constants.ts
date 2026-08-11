@@ -40,6 +40,12 @@ export const ARTISTS = [
   { slug: 'pierre-jeanneret', label: 'Pierre Jeanneret', market: 'design' },
   { slug: 'eddie-martinez', label: 'Eddie Martinez', market: 'art' },
   { slug: 'kenny-scharf', label: 'Kenny Scharf', market: 'art' },
+  { slug: 'jean-michel-basquiat', label: 'Jean-Michel Basquiat', market: 'art' },
+  { slug: 'roy-lichtenstein', label: 'Roy Lichtenstein', market: 'art' },
+  { slug: 'francis-bacon', label: 'Francis Bacon', market: 'art' },
+  { slug: 'alexander-calder', label: 'Alexander Calder', market: 'art' },
+  { slug: 'rashid-johnson', label: 'Rashid Johnson', market: 'art' },
+  { slug: 'jeff-koons', label: 'Jeff Koons', market: 'art' },
   // the watches vertical: makers, not artists
   { slug: 'rolex', label: 'Rolex', market: 'watches' },
   { slug: 'patek-philippe', label: 'Patek Philippe', market: 'watches' },
