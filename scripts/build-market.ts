@@ -958,6 +958,44 @@ export function runMarketBuild() {
     // corpus-only: SOLD sport cards stay off the wire — except the sample above.
     // Live cards always ship (they're on the block).
     (l: Record<string, unknown>) => l.artist === 'sports-cards' && l.status === 'sold' && !cardSample.has(String(l.id)));
+
+  // ── SOLD-OUTCOMES LEDGER — a slim id→[priceUsd, saleDate] map so the profile
+  // can resolve SAVED lots that sold into the archive / corpus-only tiers (whose
+  // full rows are never shipped to the browser). Bounded to the last 24 months:
+  // the saveable window — a user can only save an UPCOMING lot, and nothing
+  // older than our live-crawl history was ever upcoming, so a 24-mo cut is
+  // complete for real saves while keeping the payload small. Sharded to stay
+  // under Cloudflare Pages' 25 MiB/file cap; loaded on-demand, profile-only. ──
+  const LEDGER_CUT = new Date(Date.now() - 24 * 31 * 864e5).toISOString().slice(0, 10);
+  const ledger: Record<string, [number, string]> = {};
+  for (const l of all) {
+    const lot = l as AuctionLot & { realizedUsd?: number };
+    if (lot.status !== 'sold') continue;
+    const sd = (lot.saleDate || '').slice(0, 10);
+    if (!sd || sd < LEDGER_CUT) continue;         // window excludes the deep archives
+    const px = lot.priceUsd || lot.realizedUsd || 0;
+    if (px > 0) ledger[lot.id] = [px, sd];
+  }
+  const ledgerEntries = Object.entries(ledger);
+  const LEDGER_SHARD = 15 * 1048576;              // ~15 MiB raw per shard, cap-safe
+  let li = 0, lshard = 0;
+  while (li < ledgerEntries.length) {
+    const obj: Record<string, [number, string]> = {};
+    let bytes = 2;
+    while (li < ledgerEntries.length) {
+      const [id, v] = ledgerEntries[li];
+      const add = JSON.stringify(id).length + JSON.stringify(v).length + 2;
+      if (bytes > 2 && bytes + add > LEDGER_SHARD) break;
+      obj[id] = v; bytes += add; li++;
+    }
+    fs.writeFileSync(path.join(SERVED, `sold-ledger-${lshard}.json`), JSON.stringify(obj));
+    lshard++;
+  }
+  // clear any stale shards beyond the new count
+  for (let i = lshard; ; i++) { const p = path.join(SERVED, `sold-ledger-${i}.json`); if (fs.existsSync(p)) fs.unlinkSync(p); else break; }
+  fs.writeFileSync(path.join(SERVED, 'sold-ledger-index.json'), JSON.stringify({ shards: lshard, entries: ledgerEntries.length, since: LEDGER_CUT }));
+  console.log(`[market] sold-ledger: ${ledgerEntries.length} outcomes since ${LEDGER_CUT} → ${lshard} shard(s)`);
+
   // rebuild the eager payload so upcoming lots carry their fresh `value`
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED);

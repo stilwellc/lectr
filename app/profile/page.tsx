@@ -3,7 +3,7 @@
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { useFullLots } from '../hooks/useRayData';
+import { useFullLots, useSoldLedger } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
 import { supabase } from '../lib/supabase';
@@ -86,6 +86,15 @@ const SAVEDVIEW_KEY = 'ray-savedview';
 
 interface Snapshot { d: string; paid: number; appraised: number; pieces: number }
 
+// Loads the on-demand sold-outcomes ledger (24-mo id→[price,date]) and lifts it
+// to the page. Rendered ONLY when there are orphan saved lots, so a user with
+// no orphans never pays the fetch.
+function LedgerGate({ onLedger }: { onLedger: (m: Map<string, [number, string]>) => void }) {
+  const { ledger } = useSoldLedger();
+  useEffect(() => { onLedger(ledger); }, [ledger, onLedger]);
+  return null;
+}
+
 export default function SavedPage() {
   // useFullLots: saved lots may have rolled off upcoming into the corpus, and
   // the collection valuation gates on fullLoaded — trigger phase 2. market
@@ -119,6 +128,23 @@ export default function SavedPage() {
     const have = new Set(allLots.map(l => l.id));
     return savedIds.filter(id => !have.has(id));
   }, [savedIds, allLots, fullLoaded]);
+
+  // Resolve orphans against the sold-outcomes ledger (loaded on-demand by
+  // LedgerGate below): a Goldin lot that sold into the archive / corpus-only
+  // tier isn't shipped as a full row, but its hammer result is in the ledger.
+  // Split into genuinely-sold (show price + date) vs truly gone (withdrawn).
+  const [ledger, setLedger] = useState<Map<string, [number, string]>>(new Map());
+  const { soldOrphans, goneOrphans } = useMemo(() => {
+    const soldO: { id: string; priceUsd: number; saleDate: string }[] = [];
+    const goneO: string[] = [];
+    for (const id of orphanIds) {
+      const hit = ledger.get(id);
+      if (hit) soldO.push({ id, priceUsd: hit[0], saleDate: hit[1] });
+      else goneO.push(id);
+    }
+    soldO.sort((a, b) => (a.saleDate < b.saleDate ? 1 : -1));
+    return { soldOrphans: soldO, goneOrphans: goneO };
+  }, [orphanIds, ledger]);
 
   const badgeCount = fullLoaded ? savedLots.length : savedIds.length;
 
@@ -649,7 +675,7 @@ export default function SavedPage() {
                     to the hammer.
                   </>
                 : collection.rows.length > 0
-                  ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {sold.length} settled.</>
+                  ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {sold.length + soldOrphans.length} settled.</>
                   : <>
                       Watching <Accent>{upcoming.length || savedLots.length} {(upcoming.length || savedLots.length) === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
                     </>}
@@ -1090,14 +1116,48 @@ export default function SavedPage() {
             </section>
           )}
 
-          {orphanIds.length > 0 && (
+          {/* on-demand: only fetch the ledger when there are orphans to resolve */}
+          {orphanIds.length > 0 && <LedgerGate onLedger={setLedger} />}
+
+          {soldOrphans.length > 0 && (
+            <section className="rail ray-enter" style={{ paddingBlock: '34px 8px' }}>
+              <h2 className="ray-h2" style={{ marginBottom: 6 }}>Settled off the block</h2>
+              <p style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 14px' }}>
+                Saved lots that sold — the hammer result, from the archive.
+              </p>
+              <div className="glass glass-quiet">
+                {soldOrphans.map(o => {
+                  const m = savedMeta[o.id];
+                  return (
+                    <div key={o.id} className="ray-saved-orphan">
+                      <span>
+                        <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
+                          {m?.title || o.id}
+                          {m?.artist && <>, {ARTIST_LABEL[m.artist] || m.artist}</>}
+                        </span>
+                        <span style={{ color: 'var(--color-text-faint)' }}> · sold {formatDate(o.saleDate)}</span>
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                        <span style={{ color: 'var(--color-up, #57BE87)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                          {formatPrice(o.priceUsd)}
+                        </span>
+                        <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {goneOrphans.length > 0 && (
             <section className="rail ray-enter" style={{ paddingBlock: '34px 64px' }}>
               <h2 className="ray-h2" style={{ marginBottom: 6 }}>No longer on the block</h2>
               <p style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 14px' }}>
                 Saved lots the crawl no longer carries — withdrawn, relisted or purged by the house.
               </p>
               <div className="glass glass-quiet">
-                {orphanIds.map(id => {
+                {goneOrphans.map(id => {
                   const m = savedMeta[id];
                   return (
                     <div key={id} className="ray-saved-orphan">

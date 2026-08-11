@@ -520,6 +520,60 @@ export function retryArchiveLoad() {
   if (retryArchive && !inflightArchive && !archiveLoadedState) retryArchive();
 }
 
+// ── the SOLD-OUTCOMES LEDGER (id → [priceUsd, saleDate]) — a slim on-demand
+// tier the PROFILE loads to resolve saved lots that sold into the archive /
+// corpus-only tiers, whose full rows are never shipped to the browser. Bounded
+// to the last 24 months (the saveable window). Own module cache + inflight
+// guard + 3-try backoff, independent of phases 1/2/3. ──
+interface LedgerState { ledger: Map<string, [number, string]>; ledgerLoaded: boolean; ledgerError: boolean }
+let cachedLedger: Map<string, [number, string]> | null = null;
+let ledgerLoadedState = false;
+let ledgerErrorState = false;
+let inflightLedger = false;
+const ledgerListeners = new Set<(s: LedgerState) => void>();
+function notifyLedger() {
+  const s: LedgerState = { ledger: cachedLedger || new Map(), ledgerLoaded: ledgerLoadedState, ledgerError: ledgerErrorState };
+  ledgerListeners.forEach(fn => fn(s));
+}
+function loadSoldLedger() {
+  if (inflightLedger || ledgerLoadedState) return;
+  inflightLedger = true;
+  if (ledgerErrorState) { ledgerErrorState = false; notifyLedger(); }
+  (async () => {
+    let core = cached;
+    if (!core) { try { core = await loadRayData(); } catch { core = cached; } }
+    const ver = core?.lastCrawl ? `?v=${encodeURIComponent(core.lastCrawl)}` : '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+      try {
+        const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
+        const idx = await fetchJson(`/data/ray/sold-ledger-index.json${ver}`, { cache: cacheMode }) as { shards: number };
+        const parts = await Promise.all(Array.from({ length: idx.shards }, (_, i) =>
+          fetchJson(`/data/ray/sold-ledger-${i}.json${ver}`, { cache: cacheMode }) as Promise<Record<string, [number, string]>>));
+        const map = new Map<string, [number, string]>();
+        for (const p of parts) for (const k in p) map.set(k, p[k]);
+        cachedLedger = map; ledgerLoadedState = true; ledgerErrorState = false; notifyLedger();
+        return;
+      } catch { /* retry, then surface */ }
+    }
+    ledgerErrorState = true; notifyLedger();
+  })().finally(() => { inflightLedger = false; });
+}
+/** On-demand sold-outcomes ledger. Mounting fetches it (contract, like
+    useSoldArchive) — only mount it behind a real need (saved-lot orphans). */
+export function useSoldLedger(): LedgerState {
+  const [state, setState] = useState<LedgerState>(() => ({ ledger: cachedLedger || new Map(), ledgerLoaded: ledgerLoadedState, ledgerError: ledgerErrorState }));
+  useEffect(() => {
+    let active = true;
+    const listener = (s: LedgerState) => { if (active) setState(s); };
+    ledgerListeners.add(listener);
+    listener({ ledger: cachedLedger || new Map(), ledgerLoaded: ledgerLoadedState, ledgerError: ledgerErrorState });
+    loadSoldLedger();
+    return () => { active = false; ledgerListeners.delete(listener); };
+  }, []);
+  return state;
+}
+
 export function useRayData(): RayData {
   const [data, setData] = useState<RayPayload | null>(cached);
   // "cache warm at mount" per the doc contract — phase-1 presence, NOT
