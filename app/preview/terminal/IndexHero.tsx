@@ -279,6 +279,12 @@ export default function IndexHero({
           <m.aside className={styles.mtSide} {...rise(0.16)}>
             {showMonument && <TapeMonument row={lead!} play={play} />}
             <div className={styles.heroRail} data-under-monument={showMonument ? 'true' : undefined}>
+              {!showMonument && (
+                <div className={styles.railHead} aria-hidden>
+                  <span className={styles.railHeadLabel}>Right now</span>
+                  <span className={styles.railHeadTick}>live</span>
+                </div>
+              )}
               <div className={styles.railRow}>
                 <span className={styles.railLabel}>On the block</span>
                 <span className={styles.railVal}>{fmtInt(onBlock)}</span>

@@ -8,17 +8,21 @@
    ============================================================ */
 
 .root {
-  /* local palette — butter accent + terminal greys, self-contained */
-  --tt-bg: var(--color-bg, #0d0b08);
-  --tt-panel: #14110d;
-  --tt-panel-2: #1a160f;
-  --tt-fg: var(--color-fg, #ede6da);
-  --tt-butter: #e8dab6;
-  --tt-secondary: #c9beac;
-  --tt-muted: #9a8f7d;
-  --tt-faint: #756c5d;
-  --tt-hair: rgba(232, 218, 182, 0.09);
-  --tt-hair-2: rgba(232, 218, 182, 0.14);
+  /* LECTR × LINEAR — the dark chrome runs on Linear's cool-neutral ramp
+     (ground/surfaces/greys/hairlines lifted straight from linear.app's token
+     system), so the non-beige canvas reads crisp and precision-built. Butter
+     survives as the ONE warm accent — the lit element, nothing else — and the
+     beige rooms below carry the brand's warmth in full. */
+  --tt-bg: #08090a;                     /* Linear bg-primary — cool near-black */
+  --tt-panel: #1c1c1f;                  /* Linear bg-secondary */
+  --tt-panel-2: #232326;                /* Linear bg-tertiary */
+  --tt-fg: #f7f8f8;                      /* Linear text-primary — near-white */
+  --tt-butter: #e8dab6;                  /* the accent — unchanged */
+  --tt-secondary: #d0d6e0;               /* Linear text-secondary */
+  --tt-muted: #8a8f98;                   /* Linear text-tertiary — the signature grey */
+  --tt-faint: #62666d;                   /* Linear text-quaternary */
+  --tt-hair: rgba(255, 255, 255, 0.06);  /* Linear border-primary, as alpha */
+  --tt-hair-2: rgba(255, 255, 255, 0.10);/* Linear border-secondary, as alpha */
   --color-up: var(--color-up, #57be87);
   --color-down: var(--color-down, #cc6a5c);
 
@@ -269,13 +273,13 @@
   height: 20px;
   padding: 0 5px;
   border-radius: 5px;
-  border: 1px solid rgba(232, 218, 182, 0.16);
-  border-bottom-color: rgba(8, 6, 3, 0.55);
-  background: rgba(255, 252, 245, 0.06);
-  box-shadow: inset 0 -1px 0 rgba(8, 6, 3, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom-color: rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.3);
   font-family: var(--font-ibm-plex-mono), monospace;
   font-size: 11px;
-  color: var(--tt-fg);
+  color: var(--tt-secondary);
 }
 .cmdLabel {
   font-variant-numeric: tabular-nums;
@@ -2130,8 +2134,8 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
   /* a pressed inventory tag — the masthead's one object */
   padding: 3px 8px 2px;
   border-radius: 6px;
-  background: rgba(255, 252, 245, 0.03);
-  box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 @media (prefers-reduced-motion: no-preference) {
   .mtHero[data-play='true'] .mtSerial {
@@ -2187,13 +2191,15 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 /* hover answers with light, not paint: a wash that decays from the pen-tick
    spine at the left margin. Data rows never squash — only glass gels. */
 .mtHero .mtRow:hover {
-  background: linear-gradient(90deg, rgba(232, 218, 182, 0.055), rgba(232, 218, 182, 0.015));
-  box-shadow: inset 2px 0 0 rgba(232, 218, 182, 0.3);
+  /* Linear row hover: a flat, even neutral fill — no warm wash, no accent
+     spine. Quiet and precise. */
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
 }
 .mtHero .mtRow:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.45);
-  background: rgba(232, 218, 182, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
 }
 .mtSide { display: grid; gap: clamp(18px, 2vw, 26px); min-width: 0; }
 /* the 02 board's .beam ships width:min(440px,82vw) — wider than this column —
@@ -2443,75 +2449,40 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 /* no local light pool: the page's fixed bgField supplies the atmosphere the
    frost refracts. A hero-scoped gradient box painted a visible seam. */
 
-/* the pills: LIQUID GLASS (Aug 8, v2 — the watermark is gone, the optics
-   carry everything). Each chip is a lens: a glass body whose light enters
-   the top face and pools at the base, a true GRADIENT RIM (::before ring —
-   bright crown, quiet flanks, a faint bounce light at the base — the way
-   real glass catches an overhead light), refraction in the backdrop, and a
-   one-shot specular sweep when a pill takes the switch (::after). */
+/* THE PILLS — LINEAR SEGMENTED CHIPS (Aug 2026 rebuild). The liquid-glass
+   dome/rim/specular is gone; each inactive chip is a flat matte surface with a
+   single fine hairline border and cool-grey text — linear.app's exact chip
+   grammar. No blur, no drop shadow, no gel bounce. The one lit chip (butter)
+   carries all the warmth; everything else is quiet, precise, understated. */
 .switchStrip :global(.ray-market-tab) {
   flex: none;   /* never shrink-clip a label — the strip scrolls instead */
-  padding: 8px 17px !important;
-  background:
-    radial-gradient(130% 100% at 50% -35%,
-      rgba(255, 255, 255, 0.14),
-      rgba(255, 255, 255, 0.03) 52%,
-      transparent 68%),
-    linear-gradient(180deg,
-      rgba(255, 252, 245, 0.08),
-      rgba(255, 252, 245, 0.02) 48%,
-      rgba(255, 252, 245, 0.055)) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.7) brightness(1.06);
-  backdrop-filter: blur(24px) saturate(1.7) brightness(1.06);
-  border: 1px solid transparent !important;
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.1),
-    inset 0 -1px 2px rgba(8, 6, 3, 0.28),
-    0 1px 1px rgba(8, 6, 3, 0.3),
-    0 12px 28px -16px rgba(8, 6, 3, 0.6) !important;
-  /* gel physics: the squash is near-instant (see :active), the release
-     overshoots ~1.5% on the pop curve — glass with give */
+  padding: 7px 15px !important;
+  border-radius: 9px !important;   /* Linear rounds controls ~8px, not full pills */
+  background: rgba(255, 255, 255, 0.04) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+  color: #8a8f98 !important;   /* Linear text-tertiary at rest */
   transition:
-    transform 320ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)),
-    box-shadow 200ms var(--ease-signature, ease);
+    background 140ms var(--ease-signature, ease),
+    border-color 140ms var(--ease-signature, ease),
+    color 140ms var(--ease-signature, ease),
+    transform 90ms var(--ease-signature, ease);
 }
-/* the rim — a 1px gradient ring masked out of a filled pseudo. Brightest at
-   the crown, near-silent at the flanks, a whisper of bounce light at the
-   base. This is the line that makes the chip read as ground glass instead
-   of a bordered div. */
-.switchStrip :global(.ray-market-tab)::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.32),
-    rgba(255, 255, 255, 0.08) 38%,
-    rgba(255, 255, 255, 0.03) 66%,
-    rgba(255, 255, 255, 0.12));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  transition: filter 180ms var(--ease-signature, ease);
-}
-/* hover: the chip lifts, the rim catches more light — physics, not swelling */
+.switchStrip :global(.ray-market-tab)::before { content: none !important; }
+/* hover: a crisp, fast surface + text brighten — flat, no lift, no swell */
 .switchStrip :global(.ray-market-tab:hover) {
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.14),
-    inset 0 -1px 2px rgba(8, 6, 3, 0.28),
-    0 2px 2px rgba(8, 6, 3, 0.28),
-    0 16px 32px -16px rgba(8, 6, 3, 0.66) !important;
+  transform: none;
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f7f8f8 !important;
+  box-shadow: none !important;
 }
-.switchStrip :global(.ray-market-tab:hover)::before { filter: brightness(1.5); }
-/* press: the gel gives — squash beats the hover lift while held, and lands
-   fast; the slow overshoot release lives on the base transition above */
+.switchStrip :global(.ray-market-tab:hover)::before { content: none !important; }
+/* press: a small, tight tap — no gel overshoot */
 .switchStrip :global(.ray-market-tab:active) {
-  transform: translateY(0) scale(0.955);
-  transition-duration: 90ms, 90ms;
+  transform: scale(0.98);
 }
 /* the lamp spills: a whisper of butter light pooling from the switch onto
    the masthead plate below — far too faint to compete with the lit plate */
@@ -2534,36 +2505,23 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
    plate sits IN the row, not printed on it. */
 .switchStrip :global(.ray-market-tab[data-active='true']),
 .switchStrip :global(.ray-market-tab[aria-selected='true']) {
-  background:
-    radial-gradient(120% 90% at 50% -30%,
-      rgba(255, 255, 255, 0.5),
-      rgba(255, 255, 255, 0.08) 55%,
-      transparent 70%),
-    linear-gradient(180deg,
-      #F5EACC 0%,
-      var(--color-butter, #E8DAB6) 52%,
-      #D9C698 100%) !important;
+  /* the ONE lit chip — a clean, flat butter fill (Linear restraint: solid
+     surface, crisp edge, ink text), lit by a single tight halo rather than a
+     glossy dome. It is unmistakably the active element without shouting. */
+  background: var(--color-butter, #E8DAB6) !important;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border-color: transparent !important;
-  /* the halo obeys inverse-square physics: hot core, mid skirt, far wash —
-     each layer roughly doubles in radius and halves in alpha. The plate is
-     the band's ONE lamp; everything below only reflects it. */
+  color: #08090a !important;
+  border: 1px solid rgba(255, 246, 224, 0.5) !important;
   box-shadow:
-    inset 0 -2px 3px rgba(122, 100, 60, 0.35),
-    0 1px 1px rgba(8, 6, 3, 0.35),
-    0 12px 30px -12px rgba(8, 6, 3, 0.7),
-    0 0 10px -2px rgba(240, 228, 196, 0.45),
-    0 0 30px -6px rgba(232, 218, 182, 0.28),
-    0 0 68px -10px rgba(232, 218, 182, 0.13) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 0 0 0.5px rgba(232, 218, 182, 0.4),
+    0 2px 10px -3px rgba(232, 218, 182, 0.28),
+    0 0 22px -6px rgba(232, 218, 182, 0.22) !important;
 }
 .switchStrip :global(.ray-market-tab[data-active='true'])::before,
 .switchStrip :global(.ray-market-tab[aria-selected='true'])::before {
-  background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.9),
-    rgba(255, 252, 240, 0.25) 40%,
-    rgba(140, 116, 72, 0.25) 78%,
-    rgba(122, 100, 60, 0.45));
+  content: none !important;
 }
 /* the specular sweep — one pass of light across the plate as it takes the
    switch. Fires on activation (and once at load on the resting active pill,
@@ -2604,36 +2562,67 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
 
 /* the monument plate: the same pane, one register brighter */
 .mtMon {
-  /* the pane catches the CENTERED lamp — light arrives from up-left of this
-     column (it used to pool from 74% -12%, a second off-page light source
-     contradicting every pill's crown) */
-  background:
-    radial-gradient(120% 90% at 28% -16%, rgba(232, 218, 182, 0.07), transparent 62%),
-    rgba(255, 252, 245, 0.05);
-  -webkit-backdrop-filter: blur(22px) saturate(1.5);
-  backdrop-filter: blur(22px) saturate(1.5);
-  border: 1px solid rgba(237, 230, 218, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 44px -18px rgba(8, 6, 3, 0.55);
+  /* Linear elevated surface: a flat cool translucent pane with a single fine
+     border and a 1px top-highlight — no glass dome, no warm pool. */
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
-.mtMon:hover { border-color: rgba(237, 230, 218, 0.26); }
+.mtMon:hover { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.045); }
 
 /* the search: a glass input, same family. The base .railCmd padding
    (11px 2px 2px) belongs to the borderless ledger-row it once was — inside
    a bordered glass box it crowded the left, right and bottom edges. A real
    input insets its content evenly. */
 .mtSide .railCmd {
-  background: rgba(255, 252, 245, 0.045);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  backdrop-filter: blur(18px) saturate(1.5);
-  border: 1px solid rgba(237, 230, 218, 0.13);
-  border-radius: 12px;   /* concentric: monument 14 → inner control 12 */
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  padding: 10px 14px;
+  /* the primary action — an elevated command bar that lifts off the panel:
+     brighter surface, a real drop shadow for depth, a crisp top-highlight. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 6px 18px -10px rgba(0, 0, 0, 0.75);
+  padding: 13px 14px;
+  color: var(--tt-fg);
+  transition:
+    background 160ms var(--ease-signature, ease),
+    border-color 160ms var(--ease-signature, ease),
+    box-shadow 160ms var(--ease-signature, ease),
+    transform 160ms var(--ease-signature, ease);
 }
-/* search hover lifts — it never glows; the lamp is spoken for */
+.mtSide .railCmd .cmdLabel { color: var(--tt-fg); font-weight: 500; font-size: 14px; }
+/* the return key reads as a real key, tinted butter — the affordance to act */
+.mtSide .railCmd .cmdArrow {
+  color: #08090a;
+  background: var(--tt-butter);
+  border-radius: 5px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 0 12px -3px rgba(232, 218, 182, 0.5);
+}
+/* hover: the bar lifts and lights butter — the one place warmth answers a reach */
 .mtSide .railCmd:hover {
-  border-color: rgba(237, 230, 218, 0.24);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 8px 20px -12px rgba(8, 6, 3, 0.5);
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06));
+  border-color: rgba(232, 218, 182, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px -10px rgba(0, 0, 0, 0.8),
+    0 0 26px -8px rgba(232, 218, 182, 0.32);
+}
+.mtSide .railCmd:focus-visible {
+  outline: none;
+  border-color: rgba(232, 218, 182, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 3px rgba(232, 218, 182, 0.18);
 }
 
 
@@ -2648,4 +2637,203 @@ button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outlin
     -webkit-backdrop-filter: blur(14px) saturate(1.5) brightness(1.05);
     backdrop-filter: blur(14px) saturate(1.5) brightness(1.05);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LINEAR DARK PASS (Aug 2026) — the non-beige canvas re-tuned toward
+   linear.app's language: a crisp, cool-clean near-black with a deliberate
+   top-glow, understated MATTE chips (Linear flattens where Apple-glass
+   domed), precise 1px hairlines (not receipt-dots), and a lift in type
+   contrast. The brand laws hold: warm ground, ONE butter lamp (the active
+   pill), green/red on signal only. This block sits last so it overrides
+   by source order; it only touches the INACTIVE surfaces — the lit plate,
+   its rim, halo and sweep are left exactly as authored.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* — atmosphere: Linear's field is a clean cool near-black touched by one
+   restrained luminance at the top. A whisper of butter keeps the brand's warmth
+   present without muddying the darks; a faint cool crown sharpens the crest. */
+.bgField {
+  background:
+    radial-gradient(70% 38% at 50% -6%, rgba(208, 214, 224, 0.03), transparent 60%),
+    radial-gradient(120% 70% at 72% -12%, rgba(232, 218, 182, 0.035), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 16%);
+}
+
+/* The inactive-pill matte-chip look now lives in the core .switchStrip block
+   above (the full liquid-glass rebuild). This block carries the rest of the
+   Linear hero pass: rail hairlines and type contrast on the cool ramp. */
+
+/* — the rail: receipt-style 2px dotted rules → Linear's precise 1px solid
+   hairlines, resolved on the cool neutral border tone. */
+.railRow,
+.railBtn,
+.railCmd {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--tt-hair-2);
+}
+.railRow:first-child { border-top: none; }
+
+/* — type contrast: Linear runs a sharp split — near-white primaries against
+   cool-grey secondaries. Values ride at text-primary, labels at text-tertiary. */
+.mtHero .mtLabel { color: #f7f8f8; }
+.railVal { color: #f7f8f8; }
+.railVal[data-dir='up'] { color: var(--color-up); }
+.railVal[data-dir='down'] { color: var(--color-down); }
+.railVal[data-accent='true'] { color: var(--tt-butter); }
+.railLabel { color: var(--tt-muted); }
+.mtSub { color: var(--tt-muted); }
+
+/* — the masthead title: crisp near-white, tight — Linear's heading voice */
+.mtMasthead .sectionKicker { color: #f7f8f8; letter-spacing: -0.008em; }
+
+/* ══ THE NAV — Linear top bar (scoped to the lander: the nav sits INSIDE the
+   terminal .root here, so these never touch the nav on other pages). Grey
+   links that brighten to near-white, an understated translucent active chip,
+   and a flat Linear search input — no warm elevated blocks, no glass. ══ */
+.root :global(.ray-nav-link) {
+  color: var(--tt-muted) !important;   /* Linear text-tertiary */
+  border-radius: 8px !important;
+  transition: color 140ms var(--ease-signature, ease), background 140ms var(--ease-signature, ease), box-shadow 140ms var(--ease-signature, ease) !important;
+}
+.root :global(.ray-nav-link:hover) {
+  color: #f7f8f8 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+.root :global(.ray-nav-link[data-active='true']) {
+  color: #f7f8f8 !important;
+  /* the active section: a quiet translucent chip with a fine inset edge —
+     inset box-shadow draws the border so the row never shifts by 1px */
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+.root :global(.ray-nav-link-value[data-active='true']) { color: var(--tt-butter) !important; }
+
+/* the desktop search — flatten the glass to a Linear input */
+.root :global(.ray-artist-select-btn) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: var(--tt-muted) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  transition: background 140ms var(--ease-signature, ease), border-color 140ms var(--ease-signature, ease) !important;
+}
+.root :global(.ray-artist-select-btn)::before,
+.root :global(.ray-artist-select-btn)::after { display: none !important; }
+.root :global(.ray-artist-select-btn:hover) {
+  background: rgba(255, 255, 255, 0.065) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f7f8f8 !important;
+}
+.root :global(.ray-nav-kbd) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: var(--tt-muted) !important;
+  box-shadow: none !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   THE "RIGHT NOW" PANEL — the Total-market rail, re-authored as a contained
+   Linear market-pulse card (scoped to :not([data-under-monument]) so the
+   scoped-market rail under the monument keeps its compact ledger). A live
+   pulse gives it motion, the metrics ride at dashboard scale, and the one
+   butter accent stays on the single actionable read. Pure design — same
+   numbers, better instrument.
+   ══════════════════════════════════════════════════════════════════════ */
+.mtSide .heroRail:not([data-under-monument='true']) {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px 16px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(255, 255, 255, 0.022), transparent 60%),
+    rgba(255, 255, 255, 0.018);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* — the header: a live pulse + "Right now", a status eyebrow */
+.railHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 12px;
+}
+.railHeadLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--tt-secondary);
+}
+.railHeadTick {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-up);
+}
+
+/* — the metric cells: label small-grey on top, the number at dashboard scale
+   below. Each cell breathes to fill the panel; hairlines seam them. */
+.mtSide .heroRail:not([data-under-monument='true']) .railRow,
+.mtSide .heroRail:not([data-under-monument='true']) .railBtn {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  padding: 14px 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+.mtSide .heroRail:not([data-under-monument='true']) .railRow:first-of-type,
+.mtSide .heroRail:not([data-under-monument='true']) .railHead + .railRow {
+  border-top: none;
+}
+.mtSide .heroRail:not([data-under-monument='true']) .railLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tt-muted);
+}
+.mtSide .heroRail:not([data-under-monument='true']) .railVal {
+  font-size: clamp(26px, 2.5vw, 32px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #f7f8f8;
+}
+/* the one actionable read — butter number, a Linear row-hover affordance, the
+   ↗ riding up beside the figure. It IS a button; make it feel like one. */
+.mtSide .heroRail:not([data-under-monument='true']) button.railBtn {
+  cursor: pointer;
+  border-radius: 10px;
+  margin: 0 -6px;
+  padding-inline: 8px;
+  transition: background 140ms var(--ease-signature, ease);
+}
+.mtSide .heroRail:not([data-under-monument='true']) button.railBtn:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.mtSide .heroRail:not([data-under-monument='true']) button.railBtn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.5);
+}
+.mtSide .heroRail:not([data-under-monument='true']) .railVal[data-accent='true'] { color: var(--tt-butter); }
+.mtSide .heroRail:not([data-under-monument='true']) .railGo {
+  font-size: 0.5em;
+  vertical-align: 0.35em;
+  margin-left: 4px;
+  opacity: 1;
+}
+
+/* — the search: the panel's footer action, pinned to the base */
+.mtSide .heroRail:not([data-under-monument='true']) .railCmd {
+  margin-top: 14px;
 }
