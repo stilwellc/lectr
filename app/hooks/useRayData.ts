@@ -525,8 +525,9 @@ export function retryArchiveLoad() {
 // corpus-only tiers, whose full rows are never shipped to the browser. Bounded
 // to the last 24 months (the saveable window). Own module cache + inflight
 // guard + 3-try backoff, independent of phases 1/2/3. ──
-interface LedgerState { ledger: Map<string, [number, string]>; ledgerLoaded: boolean; ledgerError: boolean }
-let cachedLedger: Map<string, [number, string]> | null = null;
+export type LedgerEntry = [number, string] | [number, string, 1]; // [priceUsd, saleDate, provisional?]
+interface LedgerState { ledger: Map<string, LedgerEntry>; ledgerLoaded: boolean; ledgerError: boolean }
+let cachedLedger: Map<string, LedgerEntry> | null = null;
 let ledgerLoadedState = false;
 let ledgerErrorState = false;
 let inflightLedger = false;
@@ -549,8 +550,8 @@ function loadSoldLedger() {
         const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
         const idx = await fetchJson(`/data/ray/sold-ledger-index.json${ver}`, { cache: cacheMode }) as { shards: number };
         const parts = await Promise.all(Array.from({ length: idx.shards }, (_, i) =>
-          fetchJson(`/data/ray/sold-ledger-${i}.json${ver}`, { cache: cacheMode }) as Promise<Record<string, [number, string]>>));
-        const map = new Map<string, [number, string]>();
+          fetchJson(`/data/ray/sold-ledger-${i}.json${ver}`, { cache: cacheMode }) as Promise<Record<string, LedgerEntry>>));
+        const map = new Map<string, LedgerEntry>();
         for (const p of parts) for (const k in p) map.set(k, p[k]);
         cachedLedger = map; ledgerLoadedState = true; ledgerErrorState = false; notifyLedger();
         return;

@@ -3,7 +3,7 @@
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { useFullLots, useSoldLedger } from '../hooks/useRayData';
+import { useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
 import { supabase } from '../lib/supabase';
@@ -89,7 +89,7 @@ interface Snapshot { d: string; paid: number; appraised: number; pieces: number 
 // Loads the on-demand sold-outcomes ledger (24-mo id→[price,date]) and lifts it
 // to the page. Rendered ONLY when there are orphan saved lots, so a user with
 // no orphans never pays the fetch.
-function LedgerGate({ onLedger }: { onLedger: (m: Map<string, [number, string]>) => void }) {
+function LedgerGate({ onLedger }: { onLedger: (m: Map<string, LedgerEntry>) => void }) {
   const { ledger } = useSoldLedger();
   useEffect(() => { onLedger(ledger); }, [ledger, onLedger]);
   return null;
@@ -133,13 +133,13 @@ export default function SavedPage() {
   // LedgerGate below): a Goldin lot that sold into the archive / corpus-only
   // tier isn't shipped as a full row, but its hammer result is in the ledger.
   // Split into genuinely-sold (show price + date) vs truly gone (withdrawn).
-  const [ledger, setLedger] = useState<Map<string, [number, string]>>(new Map());
+  const [ledger, setLedger] = useState<Map<string, LedgerEntry>>(new Map());
   const { soldOrphans, goneOrphans } = useMemo(() => {
-    const soldO: { id: string; priceUsd: number; saleDate: string }[] = [];
+    const soldO: { id: string; priceUsd: number; saleDate: string; provisional: boolean }[] = [];
     const goneO: string[] = [];
     for (const id of orphanIds) {
       const hit = ledger.get(id);
-      if (hit) soldO.push({ id, priceUsd: hit[0], saleDate: hit[1] });
+      if (hit) soldO.push({ id, priceUsd: hit[0], saleDate: hit[1], provisional: hit.length > 2 });
       else goneO.push(id);
     }
     soldO.sort((a, b) => (a.saleDate < b.saleDate ? 1 : -1));
@@ -1138,9 +1138,19 @@ export default function SavedPage() {
                         <span style={{ color: 'var(--color-text-faint)' }}> · sold {formatDate(o.saleDate)}</span>
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                        <span style={{ color: 'var(--color-up, #57BE87)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                          {formatPrice(o.priceUsd)}
-                        </span>
+                        {o.provisional ? (
+                          /* promoted close — our last-tracked bid, NOT the final
+                             hammer (extended bidding runs past our snapshot).
+                             Never present it as the result; the sold sweep
+                             confirms the true figure within a day or two. */
+                          <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }} title="Sold — final price settling; Goldin posts results shortly after the close.">
+                            result settling…
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--color-up, #57BE87)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                            {formatPrice(o.priceUsd)}
+                          </span>
+                        )}
                         <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
                       </span>
                     </div>

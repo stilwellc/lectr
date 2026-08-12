@@ -2581,6 +2581,42 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     );
     goldinStatusOk = true; // only a verified fetch may drive promotion/eviction
     console.log(`  [Goldin] ${goldinCompletedAuctions.size} auctions marked Completed (promotion source)`);
+
+    // 3b · RECENT-CLOSE SOLD SWEEP — the authoritative price CORRECTION pass.
+    // Promotion (below) stamps a closed lot with its LAST-TRACKED bid, but
+    // Goldin's endgame (extended bidding) happens after our last snapshot, so
+    // promoted prices run systematically low — and the global sold-index tail
+    // above can't reach cards at all (10k pagination cap over a 348k history).
+    // Per-AUCTION sold queries stay far under the cap (an auction is ≤ a few
+    // thousand lots), so: for every auction completed in the last N days,
+    // re-pull its full sold list — true final prices — and ingest. The merge's
+    // fresh-wins overwrite then corrects any promoted placeholder, cards
+    // included. N via RAY_GOLDIN_SWEEP_DAYS (default 21 — Goldin indexes sold
+    // results within ~2 days; 21 is a wide safety net at ~2min of API time).
+    const SWEEP_DAYS = parseInt(process.env.RAY_GOLDIN_SWEEP_DAYS || '21', 10);
+    const sweepCut = Date.now() - SWEEP_DAYS * 86_400_000;
+    const recentDone = auctions.filter((a: any) => {
+      if (a.status !== 'Completed' || !a.auction_id) return false;
+      const end = new Date(a.end_timestamp || 0).getTime();
+      return !isNaN(end) && end >= sweepCut;
+    });
+    let sweptSold = 0;
+    for (const a of recentDone) {
+      try {
+        let from = 0, total = Infinity;
+        while (from < Math.min(total, 6000)) {
+          const { lots, total: t } = await goldinQuery({ queryType: 'Ending_Soonest', show_only: 'Sold', auction_id: [a.auction_id], size: 100, from });
+          total = t;
+          if (!lots.length) break;
+          for (const l of lots) if (ingestSold(l, null, true)) sweptSold++;
+          from += 100;
+          await sleep(400);
+        }
+      } catch (e) {
+        console.log(`  [Goldin] sold sweep '${(a.title || '').slice(0, 40)}' failed:`, e);
+      }
+    }
+    console.log(`  [Goldin] recent-close sold sweep: ${recentDone.length} auctions (≤${SWEEP_DAYS}d), ${sweptSold} sold lots ingested`);
   } catch (e) {
     // Leave goldinStatusOk false: the merge skips the whole promotion/eviction
     // pass and tracked lots simply wait for the next run — nothing is lost by
@@ -3593,8 +3629,11 @@ async function main() {
         if (bid > 0) {
           const bp = lot.buyerPremium || 22;
           // v2: stamp the FULL money block on promotion (native hammer =
-          // last bid, realized = hammer + premium, dated USD, basis) so a
-          // promoted lot is byte-identical to a fresh ingestSold row.
+          // last bid, realized = hammer + premium, dated USD). Basis is
+          // 'last-tracked-bid' — HONEST: this is our last snapshot, not the
+          // final hammer (extended bidding runs after it). The recent-close
+          // sold sweep (3b) overwrites with the true price, and downstream
+          // consumers (ledger/UI) treat this basis as provisional.
           Object.assign(lot, stampMoney({
             isSold: true,
             nativeCurrency: 'USD',
@@ -3603,7 +3642,7 @@ async function main() {
             premiumNative: Math.round(bid * (1 + bp / 100)),
             estLowNative: null,
             estHighNative: null,
-            priceBasis: 'final-bid-plus-bp',
+            priceBasis: 'last-tracked-bid',
             buyerPremiumPct: bp,
           }));
           lot.status = 'sold';

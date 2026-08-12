@@ -967,20 +967,24 @@ export function runMarketBuild() {
   // complete for real saves while keeping the payload small. Sharded to stay
   // under Cloudflare Pages' 25 MiB/file cap; loaded on-demand, profile-only. ──
   const LEDGER_CUT = new Date(Date.now() - 24 * 31 * 864e5).toISOString().slice(0, 10);
-  const ledger: Record<string, [number, string]> = {};
+  // entry: [priceUsd, saleDate] — or [priceUsd, saleDate, 1] when the price is
+  // PROVISIONAL (basis 'last-tracked-bid': a promoted close whose true hammer
+  // hasn't been confirmed by the sold sweep yet — extended bidding means the
+  // real figure is usually higher; the UI must not present it as the result).
+  const ledger: Record<string, [number, string] | [number, string, 1]> = {};
   for (const l of all) {
-    const lot = l as AuctionLot & { realizedUsd?: number };
+    const lot = l as AuctionLot & { realizedUsd?: number; priceBasis?: string };
     if (lot.status !== 'sold') continue;
     const sd = (lot.saleDate || '').slice(0, 10);
     if (!sd || sd < LEDGER_CUT) continue;         // window excludes the deep archives
     const px = lot.priceUsd || lot.realizedUsd || 0;
-    if (px > 0) ledger[lot.id] = [px, sd];
+    if (px > 0) ledger[lot.id] = lot.priceBasis === 'last-tracked-bid' ? [px, sd, 1] : [px, sd];
   }
   const ledgerEntries = Object.entries(ledger);
   const LEDGER_SHARD = 15 * 1048576;              // ~15 MiB raw per shard, cap-safe
   let li = 0, lshard = 0;
   while (li < ledgerEntries.length) {
-    const obj: Record<string, [number, string]> = {};
+    const obj: Record<string, [number, string] | [number, string, 1]> = {};
     let bytes = 2;
     while (li < ledgerEntries.length) {
       const [id, v] = ledgerEntries[li];
