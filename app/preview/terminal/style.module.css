@@ -208,15 +208,23 @@
 }
 .pulseBlock:hover .pulsePaddle { transform: rotate(1deg) translateY(-1px); }
 .pulsePaddleHead {
+  position: relative;
   display: flex; align-items: center; justify-content: center;
   min-width: 72px; padding: 10px 15px 9px;
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 11px;
   /* signage, not a button: one flat body, one quiet rim, the numeral IS
-     the design. No keyline, no tint, no bevel theater. */
+     the design. */
   background: #1d2023;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 6px 16px -12px rgba(0, 0, 0, 0.8);
+}
+/* the printed keyline — the one drawn detail the card keeps (Collin's call);
+   hairline-thin so it reads as ink, not a frame */
+.pulsePaddleHead::before {
+  content: ''; position: absolute; inset: 4px; border-radius: 7px;
+  border: 0.5px solid rgba(232, 218, 182, 0.22);
+  pointer-events: none;
 }
 .pulsePaddleStem {
   width: 7px; height: 15px; margin-top: -1px;
@@ -2429,11 +2437,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   margin-left: auto;
   font-family: var(--font-ibm-plex-mono), monospace;
   font-size: 11px; letter-spacing: 0.16em; color: var(--tt-faint);
-  /* a pressed inventory tag — the masthead's one object */
-  padding: 3px 8px 2px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  /* bare mono stamp — pills are for clickable things only */
 }
 @media (prefers-reduced-motion: no-preference) {
   .mtHero[data-play='true'] .mtSerial {
