@@ -208,40 +208,21 @@
 }
 .pulseBlock:hover .pulsePaddle { transform: rotate(1deg) translateY(-1px); }
 .pulsePaddleHead {
-  position: relative;
   display: flex; align-items: center; justify-content: center;
-  min-width: 76px; padding: 11px 16px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px;
-  /* ink over light: one solid body, ONE tint, ONE inner light — no sheen,
-     no glare, no vignette. Radii on the 2px grid: 14 head / 10 keyline. */
-  background:
-    radial-gradient(120% 110% at 28% 0%, rgba(232, 218, 182, 0.10), transparent 58%),
-    #202327;
+  min-width: 72px; padding: 10px 15px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 11px;
+  /* signage, not a button: one flat body, one quiet rim, the numeral IS
+     the design. No keyline, no tint, no bevel theater. */
+  background: #1d2023;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),      /* one inner light */
-    0 1px 2px rgba(0, 0, 0, 0.5),                 /* contact */
-    0 8px 20px -14px rgba(0, 0, 0, 0.85);         /* lift */
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 16px -12px rgba(0, 0, 0, 0.8);
 }
-/* the printed keyline — INK, not light: the one drawn detail the card keeps */
-.pulsePaddleHead::before {
-  content: ''; position: absolute; inset: 4px; border-radius: 10px;
-  border: 1px solid rgba(232, 218, 182, 0.18);
-  pointer-events: none;
-}
-/* the handle: butter ferrule at the joint, cylindrical shading, grip cap */
 .pulsePaddleStem {
-  position: relative;
-  width: 10px; height: 24px; margin-top: -1px;
-  border: 1px solid rgba(255, 255, 255, 0.13); border-top: none;
-  border-radius: 2px 2px 4px 4px;
-  background: #17191c; /* flat — the handle is a shape, not a cylinder render */
-  box-shadow: 0 6px 14px -10px rgba(0, 0, 0, 0.8);
-}
-/* the ferrule: one flat butter band at the joint — ink, not gradient */
-.pulsePaddleStem::before {
-  content: ''; position: absolute; top: 0; left: -1.5px; right: -1.5px; height: 3px;
-  border-radius: 1px;
-  background: rgba(232, 218, 182, 0.30);
+  width: 7px; height: 15px; margin-top: -1px;
+  border-radius: 0 0 2px 2px;
+  /* a stick, drawn flat — no border, no band, no tongue */
+  background: #26292d;
 }
 /* the raise: the paddle comes up from the lap on fresh arrival */
 .pulse[data-play='true'] .pulsePaddle {
@@ -296,16 +277,12 @@
   /* the strung end runs long — hole, a stretch of blank stock, THEN the
      printed number, like a real swing tag */
   padding: 8px 13px 7px 36px;
-  border: 1px solid rgba(232, 218, 182, 0.45);
-  border-radius: 8px 12px 12px 8px; /* tighter at the strung end */
-  /* ink over light: one warm solid, one tint, one inner light */
-  background:
-    radial-gradient(120% 110% at 70% 0%, rgba(232, 218, 182, 0.14), transparent 60%),
-    #232019;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 244, 214, 0.12),
-    0 1px 2px rgba(0, 0, 0, 0.5),
-    0 8px 20px -14px rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(232, 218, 182, 0.40);
+  border-radius: 5px 9px 9px 5px; /* a ticket, not a pill — crisper corners */
+  /* a printed ticket: dark stock, butter as INK — the rule, the hole's ring,
+     the numeral. No warm body, no inner light. */
+  background: #17181b;
+  box-shadow: 0 6px 16px -12px rgba(0, 0, 0, 0.8);
   transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .pulseAction:hover .pulseTag { transform: translateY(-1px); }
@@ -315,25 +292,14 @@
   background: none; box-shadow: none;
 }
 .pulseTagGhost::before { border-color: rgba(232, 218, 182, 0.28); background: none; }
-.pulseTagGhost::after { opacity: 0.5; }
 .pulseTagGhost .pulseTagVal { color: rgba(232, 218, 182, 0.38); text-shadow: none; }
-/* the punched eyelet — reinforced ring, dark hole, one glint */
+/* the punched eyelet — one crisp ring, a flat hole; no string (at this
+   scale it read as noise — the eyelet and the long strung end say "tag") */
 .pulseTag::before {
-  content: ''; position: absolute; left: 8px; top: 50%; margin-top: -4px;
-  width: 8px; height: 8px; border-radius: 50%;
-  border: 1.5px solid rgba(232, 218, 182, 0.55);
-  background: #0c0d0e; /* the punched hole is flat dark — a hole, not a jewel */
-}
-/* the string — a short arc falling away from the eyelet */
-/* the string: ONE clean quarter-arc, anchored at the hole's left edge and
-   falling away below — it must touch the eyelet, not float near it */
-.pulseTag::after {
-  content: ''; position: absolute; left: -8px; top: calc(50% - 1px);
-  width: 16px; height: 14px;
-  border: none;
-  border-left: 1.5px solid rgba(232, 218, 182, 0.35);
-  border-bottom-left-radius: 14px;
-  pointer-events: none;
+  content: ''; position: absolute; left: 8px; top: 50%; margin-top: -3.5px;
+  width: 7px; height: 7px; border-radius: 50%;
+  border: 1px solid rgba(232, 218, 182, 0.5);
+  background: #0c0d0e;
 }
 .pulseTagVal {
   font-family: var(--font-inter), sans-serif; font-size: 20px; font-weight: 600;
