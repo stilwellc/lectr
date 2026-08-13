@@ -162,22 +162,6 @@
   font-family: var(--font-inter), sans-serif; font-size: 11px; font-weight: 600;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-muted);
 }
-.pulseLiveTag {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono-data), monospace; font-size: 10px;
-  letter-spacing: 0.22em; text-transform: uppercase; color: var(--tt-muted);
-}
-.pulseDot {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--color-up, #57be87);
-  box-shadow: 0 0 0 0 rgba(87, 190, 135, 0.5);
-  animation: pulseBeat 2.6s cubic-bezier(0.23, 1, 0.32, 1) infinite;
-}
-@keyframes pulseBeat {
-  0% { box-shadow: 0 0 0 0 rgba(87, 190, 135, 0.45); }
-  60% { box-shadow: 0 0 0 7px rgba(87, 190, 135, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(87, 190, 135, 0); }
-}
-
 /* slim rows, one grammar: words left, instrument right — no dead space */
 .pulseGrid { display: flex; flex-direction: column; gap: 6px; }
 .pulseBlock {
@@ -209,11 +193,16 @@
   font-size: clamp(24px, 1.9vw, 30px); font-weight: 600;
   letter-spacing: -0.03em; line-height: 1; color: #f7f8f8;
   font-variant-numeric: tabular-nums;
+  /* letterpress — the number sits IN the paddle face, not on it */
+  text-shadow: 0 1.5px 2px rgba(0, 0, 0, 0.55), 0 0.5px 0 rgba(0, 0, 0, 0.4);
 }
-/* ── THE PADDLE ── the room's population worn as a raised bidder number.
-   Block geometry (the paddle IS a block), Linear surfaces (hairline rim, one
-   inner light), a playful 2.5° raise that settles on entrance. Rides the
-   RIGHT edge of the lead cell; the stem tucks behind the cell's bottom. */
+/* ── THE PADDLE ── the room's population worn as a raised bidder number,
+   built as an OBJECT, not a tile: a solid head with a machined bevel (top
+   light, bottom shade, edge vignette), the printed card-frame real bid
+   paddles carry (a butter hairline inset), one specular glare across the
+   upper face, a butter ferrule collaring the handle joint, and a shaded
+   cylindrical handle with a grip cap. Rides the RIGHT edge of the lead
+   cell; the handle tucks behind the cell's bottom. */
 .pulsePaddle {
   display: flex; flex-direction: column; align-items: center;
   width: max-content; flex: none;
@@ -223,21 +212,58 @@
 }
 .pulseBlock:hover .pulsePaddle { transform: rotate(1deg) translateY(-1px); }
 .pulsePaddleHead {
+  position: relative;
   display: flex; align-items: center; justify-content: center;
-  min-width: 74px; padding: 10px 15px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px;
+  min-width: 76px; padding: 11px 16px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.17); border-radius: 16px;
+  /* a solid body under the light — it must read as a THING, not glass */
   background:
-    radial-gradient(120% 95% at 30% 10%, rgba(232, 218, 182, 0.11), transparent 62%),
-    rgba(255, 255, 255, 0.045);
+    radial-gradient(130% 115% at 27% 6%, rgba(232, 218, 182, 0.15), rgba(232, 218, 182, 0.03) 46%, transparent 66%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 52%, rgba(0, 0, 0, 0.10)),
+    #1c1e21;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 12px 26px -16px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),      /* machined top bevel */
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.5),          /* under-shade */
+    inset 0 0 14px rgba(0, 0, 0, 0.28),           /* edge vignette */
+    0 2px 5px -2px rgba(0, 0, 0, 0.65),           /* contact shadow */
+    0 16px 30px -18px rgba(0, 0, 0, 0.9);         /* lift */
 }
+/* the printed card frame — the butter rule every real bid card carries */
+.pulsePaddleHead::before {
+  content: ''; position: absolute; inset: 4px; border-radius: 11px;
+  border: 1px solid rgba(232, 218, 182, 0.17);
+  pointer-events: none;
+}
+/* one specular glare across the upper face */
+.pulsePaddleHead::after {
+  content: ''; position: absolute; top: 2.5px; left: 10%; right: 34%; height: 34%;
+  border-radius: 100px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.015) 80%, transparent);
+  pointer-events: none;
+}
+/* the handle: butter ferrule at the joint, cylindrical shading, grip cap */
 .pulsePaddleStem {
-  width: 9px; height: 16px; margin-top: -1px;
-  border: 1px solid rgba(255, 255, 255, 0.13); border-top: none;
-  border-radius: 0 0 5px 5px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  position: relative;
+  width: 10px; height: 24px; margin-top: -1px;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-top: none;
+  border-radius: 2.5px 2.5px 6px 6px;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.48), rgba(255, 255, 255, 0.10) 42%, rgba(255, 255, 255, 0.15) 52%, rgba(255, 255, 255, 0.04) 66%, rgba(0, 0, 0, 0.42)),
+    #191b1d;
+  box-shadow:
+    inset 0 -3px 4px rgba(0, 0, 0, 0.45),
+    0 10px 16px -10px rgba(0, 0, 0, 0.85);
+}
+.pulsePaddleStem::before {
+  content: ''; position: absolute; top: 0; left: -1.5px; right: -1.5px; height: 3.5px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(232, 218, 182, 0.38), rgba(232, 218, 182, 0.12));
+  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.5);
+}
+.pulsePaddleStem::after {
+  content: ''; position: absolute; bottom: 2px; left: 2px; right: 2px; height: 1.5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.09);
 }
 /* the raise: the paddle comes up from the lap on fresh arrival */
 .pulse[data-play='true'] .pulsePaddle {
@@ -351,7 +377,6 @@
 @keyframes pulseSettle { from { opacity: 0; transform: translateY(10px); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .pulseDot { animation: none; }
   .pulse[data-play='true'] .pulseGrid > *, .pulse[data-play='true'] .pulseTicker { animation: none; }
   .pulseAction:hover { transform: none; }
 }

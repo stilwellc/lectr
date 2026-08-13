@@ -246,7 +246,6 @@ export default function IndexHero({
     <div className={styles.pulse} data-play={play ? 'true' : undefined}>
       <div className={styles.pulseHead} aria-hidden>
         <span className={styles.pulseTitle}>Right now</span>
-        <span className={styles.pulseLiveTag}><i className={styles.pulseDot} />Live</span>
       </div>
 
       {/* every cell speaks the same grammar: words left, instrument right —
