@@ -345,9 +345,7 @@ export default function IndexHero({
             {pulseBoard}
             <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
               <RailMark k="search" />
-              <kbd className={styles.kbd}>⌘K</kbd>
               <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
-              <span className={styles.cmdArrow} aria-hidden>↵</span>
             </button>
             {tickerEl}
           </m.div>
@@ -385,14 +383,11 @@ export default function IndexHero({
             {showMonument && <TapeMonument row={lead!} play={play} />}
             <div className={styles.heroRail} data-under-monument={showMonument ? 'true' : undefined}>
               {pulseBoard}
-              {tickerEl}
               <button type="button" className={styles.railCmd} onClick={onCommand}>
                 <RailMark k="search" />
-                <kbd className={styles.kbd}>⌘</kbd>
-                <kbd className={styles.kbd}>K</kbd>
                 <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
-                <span className={styles.cmdArrow} aria-hidden>↵</span>
               </button>
+              {tickerEl}
             </div>
           </m.aside>
         </div>
