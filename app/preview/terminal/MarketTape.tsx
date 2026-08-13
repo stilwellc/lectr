@@ -223,10 +223,16 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
       data-dir={r.kind === 'index' ? (r.changePct >= 0 ? 'up' : 'down') : r.kind === 'demand' ? (r.now >= 0 ? 'up' : 'down') : undefined}
       onClick={() => setMarket(row.key)}
       aria-label={`${row.label} — open the ${row.label} lander`}>
+      {/* the certificate row — the ledger's dotted leader carries the horizon
+          to the edge (a first-class read, not a mid-sentence aside) */}
       <span className={styles.mtMonKicker}>
-        {r.kind === 'index'
-          ? (r.method === 'repeat-sale' ? 'Certified · repeat-sale' : r.method === 'composite' ? 'Certified · composite' : 'Certified · hedonic')
-          : r.kind === 'demand' ? 'The strongest read' : 'The read'}
+        <span>
+          {r.kind === 'index'
+            ? (r.method === 'repeat-sale' ? 'Certified · repeat-sale' : r.method === 'composite' ? 'Certified · composite' : 'Certified · hedonic')
+            : r.kind === 'demand' ? 'The strongest read' : 'The read'}
+        </span>
+        <i className={styles.mtMonLead} aria-hidden />
+        {r.kind === 'index' && <em className={styles.mtMonHorizon}>{r.horizon}</em>}
       </span>
       <span className={styles.mtMonMarket}>{row.label}</span>
       {r.kind === 'index' && (
@@ -236,10 +242,18 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
           </span>
           <span className={styles.mtMonBeam}><CIBeam lo={r.ciLo} hi={r.ciHi} point={r.changePct}
             dir={r.changePct >= 0 ? 'up' : 'down'} play={play} large /></span>
-          <span className={styles.mtMonSub}>
-            {r.method === 'repeat-sale'
-              ? `same ${row.key === 'sports' ? 'card' : row.key === 'watches' ? 'reference' : 'edition'} resold · past ${r.horizon.replace('Y', r.horizon === '1Y' ? ' year' : ' years')} · ${fmtInt(r.n)} pairs${r.scope ? ` · ${r.scope}` : ''}`
-              : `${r.method === 'composite' ? 'hedonic composite' : 'hedonic index'} · past ${r.horizon.replace('Y', r.horizon === '1Y' ? ' year' : ' years')} · ${fmtInt(row.lots)} lots`}
+          {/* the meta footer — basis left, sample right, the micro-ledger voice */}
+          <span className={styles.mtMonMeta}>
+            <span>
+              {r.method === 'repeat-sale'
+                ? `same ${row.key === 'sports' ? 'card' : row.key === 'watches' ? 'reference' : 'edition'} resold`
+                : r.method === 'composite' ? 'hedonic composite' : 'hedonic index'}
+            </span>
+            <span>
+              {r.method === 'repeat-sale'
+                ? `${fmtInt(r.n)} pairs${r.scope ? ` · ${r.scope}` : ''}`
+                : `${fmtInt(row.lots)} lots`}
+            </span>
           </span>
         </>
       )}
@@ -249,13 +263,19 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
             {fmtPct(r.now)}
           </span>
           <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} dir={r.now >= 0 ? 'up' : 'down'} />}</span>
-          <span className={styles.mtMonSub}>demand · sold over estimate · {fmtInt(row.lots)} lots</span>
+          <span className={styles.mtMonMeta}>
+            <span>demand · sold over estimate</span>
+            <span>{fmtInt(row.lots)} lots</span>
+          </span>
         </>
       )}
       {r.kind === 'descriptive' && (
         <>
           <span className={styles.mtMonFigure}>{fmtMoneyCompact(r.typicalUsd)}</span>
-          <span className={styles.mtMonSub}>typical at hammer · {fmtInt(row.lots)} lots</span>
+          <span className={styles.mtMonMeta}>
+            <span>typical at hammer</span>
+            <span>{fmtInt(row.lots)} lots</span>
+          </span>
         </>
       )}
     </button>

@@ -2548,8 +2548,15 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .mtMon:hover .mtMonMarket { color: var(--tt-butter); }
 .mtMonKicker {
+  display: flex; align-items: center; width: 100%;
   font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--tt-faint);
+}
+/* the certificate leader — same dotted rule the pulse board's header wears */
+.mtMonLead { flex: 1; margin: 0 10px; border: none; border-top: 2px dotted var(--tt-hair); transform: translateY(0.5px); }
+.mtMonHorizon {
+  font-style: normal; font-family: var(--font-mono-data), monospace;
+  font-size: 10px; letter-spacing: 0.14em; color: var(--tt-muted);
 }
 .mtMonMarket {
   font-family: var(--font-serif-display), serif;
@@ -2572,6 +2579,18 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    short of the right edge, which read as a broken chart */
 .mtMonBeam .demandLine { width: 100% !important; margin-top: 0 !important; }
 .mtMonSub { font-size: 12.5px; color: var(--tt-muted); font-variant-numeric: tabular-nums; }
+/* the meta footer — a rule-topped two-slot ledger row: basis left, sample
+   right. Data presented as a record, not a sentence. */
+.mtMonMeta {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; margin-top: 8px; padding-top: 8px;
+  border-top: 2px dotted var(--tt-hair);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--tt-faint); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mtMonMeta > span:last-child { color: var(--tt-muted); overflow: hidden; text-overflow: ellipsis; }
 
 /* mobile masthead: kicker left, serial right, above the monument card */
 .mtMastheadM {
