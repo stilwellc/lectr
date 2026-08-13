@@ -1015,9 +1015,12 @@ export function runMarketBuild() {
   fs.writeFileSync(path.join(SERVED, 'sold-ledger-index.json'), JSON.stringify({ shards: lshard, entries: ledgerEntries.length, since: LEDGER_CUT }));
   console.log(`[market] sold-ledger: ${ledgerEntries.length} outcomes since ${LEDGER_CUT} → ${lshard} shard(s)`);
 
-  // rebuild the eager payload so upcoming lots carry their fresh `value`
+  // rebuild the eager payload so upcoming lots carry their fresh `value`.
+  // Hand it the IN-MEMORY corpus: letting it re-read the gz from disk doubled
+  // the full lot set in RAM while `all` was still live — the +40k Pokémon rows
+  // tipped that over the runner's ceiling (OOM, Aug 13 dispatch run).
   const { buildUpcoming } = require('./build-upcoming');
-  buildUpcoming(SERVED);
+  buildUpcoming(SERVED, all as unknown as AuctionLot[]);
   console.log(`[market] done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 }
 
