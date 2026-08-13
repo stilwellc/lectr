@@ -178,25 +178,26 @@
   100% { box-shadow: 0 0 0 0 rgba(87, 190, 135, 0); }
 }
 
-.pulseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+/* slim rows, one grammar: words left, instrument right — no dead space */
+.pulseGrid { display: flex; flex-direction: column; gap: 6px; }
 .pulseBlock {
-  position: relative; display: flex; flex-direction: column; gap: 7px;
-  min-width: 0; padding: 13px 13px 12px; overflow: hidden;
+  position: relative; display: flex; flex-direction: row; align-items: center;
+  justify-content: space-between; gap: 12px;
+  min-width: 0; padding: 11px 13px; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px;
   background: rgba(255, 255, 255, 0.028);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease);
 }
 .pulseBlock:hover { border-color: rgba(255, 255, 255, 0.12); }
-/* the lead block — the room's population at display scale, lit by a corner
-   of golden hour */
+.pulseCellText { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+/* the lead cell — lit by a corner of golden hour, paddle on the right */
 .pulseBlock[data-lead='true'] {
-  grid-column: 1 / -1; padding: 15px 14px 13px;
+  padding: 12px 13px;
   background:
     radial-gradient(150% 100% at 16% 0%, rgba(232, 218, 182, 0.06), transparent 55%),
     rgba(255, 255, 255, 0.028);
 }
-.pulseBlock[data-span2='true'] { grid-column: 1 / -1; }
 .pulseLabel {
   display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--font-inter), sans-serif; font-size: 10px;
@@ -205,25 +206,26 @@
 }
 .pulseValLead {
   font-family: var(--font-inter), sans-serif;
-  font-size: clamp(30px, 2.3vw, 38px); font-weight: 600;
-  letter-spacing: -0.03em; line-height: 0.95; color: #f7f8f8;
+  font-size: clamp(24px, 1.9vw, 30px); font-weight: 600;
+  letter-spacing: -0.03em; line-height: 1; color: #f7f8f8;
   font-variant-numeric: tabular-nums;
 }
 /* ── THE PADDLE ── the room's population worn as a raised bidder number.
    Block geometry (the paddle IS a block), Linear surfaces (hairline rim, one
-   inner light), a playful 2.5° raise that settles on entrance. */
-.pulseLeadRow { display: flex; align-items: center; gap: 16px; padding: 4px 0 2px; }
+   inner light), a playful 2.5° raise that settles on entrance. Rides the
+   RIGHT edge of the lead cell; the stem tucks behind the cell's bottom. */
 .pulsePaddle {
   display: flex; flex-direction: column; align-items: center;
   width: max-content; flex: none;
-  transform: rotate(-2.5deg);
+  margin: 2px 2px -14px 0;
+  transform: rotate(2.5deg);
   transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
-.pulseBlock:hover .pulsePaddle { transform: rotate(-1deg) translateY(-1px); }
+.pulseBlock:hover .pulsePaddle { transform: rotate(1deg) translateY(-1px); }
 .pulsePaddleHead {
   display: flex; align-items: center; justify-content: center;
-  min-width: 92px; padding: 13px 18px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px;
+  min-width: 74px; padding: 10px 15px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px;
   background:
     radial-gradient(120% 95% at 30% 10%, rgba(232, 218, 182, 0.11), transparent 62%),
     rgba(255, 255, 255, 0.045);
@@ -232,9 +234,9 @@
     0 12px 26px -16px rgba(0, 0, 0, 0.85);
 }
 .pulsePaddleStem {
-  width: 10px; height: 20px; margin-top: -1px;
+  width: 9px; height: 16px; margin-top: -1px;
   border: 1px solid rgba(255, 255, 255, 0.13); border-top: none;
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 5px 5px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
 }
 /* the raise: the paddle comes up from the lap on fresh arrival */
@@ -242,12 +244,12 @@
   animation: paddleRaise 0.9s 0.4s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
 }
 @keyframes paddleRaise {
-  from { opacity: 0; transform: rotate(-11deg) translateY(16px); }
-  to { opacity: 1; transform: rotate(-2.5deg) translateY(0); }
+  from { opacity: 0; transform: rotate(11deg) translateY(16px); }
+  to { opacity: 1; transform: rotate(2.5deg) translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .pulse[data-play='true'] .pulsePaddle { animation: none; }
-  .pulseBlock:hover .pulsePaddle { transform: rotate(-2.5deg); }
+  .pulseBlock:hover .pulsePaddle { transform: rotate(2.5deg); }
 }
 .pulseVal {
   display: flex; align-items: baseline; gap: 6px;
@@ -264,8 +266,9 @@
 .pulseDir[data-dir='down'] { color: var(--color-down, #cc6a5c); }
 .pulseSub { font-family: var(--font-inter), sans-serif; font-size: 10.5px; letter-spacing: 0.02em; color: var(--tt-faint); }
 .pulseFlag { font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.05em; color: #d8a24a; }
-/* the trend spark — descriptive ink, never the up/down register */
-.pulseSpark { width: 100%; height: 26px; margin-top: 2px; color: rgba(237, 230, 218, 0.5); }
+/* the trend spark — descriptive ink, never the up/down register; rides the
+   cell's right edge at intrinsic size */
+.pulseSpark { width: 120px; height: 26px; flex: none; color: rgba(237, 230, 218, 0.5); }
 .pulseSpark path { stroke-dasharray: 1; stroke-dashoffset: 0; }
 .pulseSpark[data-play='true'] path { stroke-dashoffset: 1; animation: sparkDraw 1.1s 0.5s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards; }
 @keyframes sparkDraw { to { stroke-dashoffset: 0; } }
@@ -318,20 +321,31 @@
 .pulseChip[data-tonight='true'] em { color: var(--tt-butter); }
 /* desktop rail: the ticker rides between the board and the search */
 .heroRail .pulseTicker { margin-top: 10px; }
-/* ── PHONE SHELL RECOMPOSITION ── the lead + trend pair up 2-across (the
-   bento tightens to the thumb), the bid read runs full-width beneath, and the
-   departures line closes the card AFTER the search. */
-.mRightNow .pulseBlock[data-lead='true'] { grid-column: auto; padding: 13px 13px 12px; }
-.mRightNow .pulseBlock[data-pair='true'] { grid-column: auto; }
-/* half-width blocks: the label tightens so "VALUE TREND · EST." never clips */
-.mRightNow .pulseBlock[data-pair='true'] .pulseLabel,
-.mRightNow .pulseBlock[data-lead='true'] .pulseLabel { font-size: 9.5px; letter-spacing: 0.06em; gap: 6px; }
-.mRightNow .pulseBlock[data-bc='true'] { grid-column: 1 / -1; }
-.mRightNow .pulseValLead { font-size: 25px; }
-/* half-width lead: the paddle stacks over its caption, trimmed to the thumb */
-.mRightNow .pulseLeadRow { flex-direction: column; align-items: flex-start; gap: 8px; padding: 2px 0 0; }
-.mRightNow .pulsePaddleHead { min-width: 72px; padding: 10px 14px 9px; border-radius: 16px; }
-.mRightNow .pulsePaddleStem { width: 8px; height: 15px; }
+/* ── PHONE SHELL ── the pair is ON THE BLOCK (left) + BELOW MARKET (right);
+   value trend is a desktop read (hidden here). Compact cells: label top,
+   instrument tucked low — no dead space. The departures line closes the card
+   AFTER the search. */
+.mRightNow .pulseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mRightNow .pulseGrid > * { grid-column: 1 / -1; order: 3; }
+.mRightNow .pulseBlock[data-trend='true'] { display: none; }
+.mRightNow .pulseBlock[data-lead='true'] { grid-column: auto; order: 1; }
+.mRightNow .pulseGrid > [data-below='true'] { grid-column: auto; order: 2; }
+.mRightNow .pulseBlock[data-lead='true'],
+.mRightNow .pulseGrid > [data-below='true'] {
+  flex-direction: column; align-items: stretch; gap: 7px; padding: 11px 12px 10px;
+}
+.mRightNow .pulseBlock[data-lead='true'] .pulseLabel,
+.mRightNow .pulseGrid > [data-below='true'] .pulseLabel { font-size: 9.5px; letter-spacing: 0.06em; gap: 6px; }
+/* the labels already say it — captions are dead weight at thumb scale */
+.mRightNow .pulseBlock[data-lead='true'] .pulseSub,
+.mRightNow .pulseGrid > [data-below='true'] .pulseSub { display: none; }
+.mRightNow .pulseValLead { font-size: 22px; }
+.mRightNow .pulsePaddleHead { min-width: 64px; padding: 9px 13px 8px; border-radius: 14px; }
+.mRightNow .pulsePaddleStem { width: 8px; height: 13px; }
+.mRightNow .pulsePaddle { align-self: flex-end; margin: 0 0 -11px; }
+/* the butter numeral mirrors the paddle: bottom-right of its cell */
+.mRightNow .pulseGrid > [data-below='true'] .pulseActionVal,
+.mRightNow .pulseGrid > [data-below='true'] .pulseVal { align-self: flex-end; margin-top: auto; font-size: 26px; }
 .mRightNow .pulseTicker { flex-direction: column; align-items: flex-start; gap: 8px; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
