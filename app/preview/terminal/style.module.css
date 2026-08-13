@@ -291,28 +291,80 @@
 .pulseDir[data-dir='up'] { color: var(--color-up, #57be87); }
 .pulseDir[data-dir='down'] { color: var(--color-down, #cc6a5c); }
 .pulseSub { font-family: var(--font-inter), sans-serif; font-size: 10.5px; letter-spacing: 0.02em; color: var(--tt-faint); }
-/* the one action on the board — butter, full-width, unmissable */
+/* the one action on the board — a dark host cell holding the butter object:
+   the LOT TAG. The paddle is the bidder's object; the tag is the lot's — the
+   marker the engine hangs on every flagged lot. Same craft register: solid
+   warm body, machined bevel, printed rule, punched eyelet with a string arc,
+   letterpressed count, a tilt mirroring the paddle's. */
 .pulseAction {
-  grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 12px 14px; cursor: pointer;
-  border: 1px solid rgba(232, 218, 182, 0.32); border-radius: 12px;
-  background: linear-gradient(180deg, rgba(232, 218, 182, 0.10), rgba(232, 218, 182, 0.05));
-  transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease), transform 200ms var(--ease-signature, ease);
+  position: relative; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 10px 13px; cursor: pointer; overflow: hidden;
+  border: 1px solid rgba(232, 218, 182, 0.20); border-radius: 12px;
+  background: rgba(232, 218, 182, 0.032);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease);
 }
 .pulseAction:hover {
-  border-color: rgba(232, 218, 182, 0.52);
-  background: linear-gradient(180deg, rgba(232, 218, 182, 0.14), rgba(232, 218, 182, 0.07));
-  transform: translateY(-1px);
+  border-color: rgba(232, 218, 182, 0.45);
+  background: rgba(232, 218, 182, 0.055);
 }
-.pulseAction:active { transform: translateY(0); }
 .pulseAction:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
-.pulseAction .pulseLabel { color: rgba(232, 218, 182, 0.75); }
-.pulseActionVal {
-  font-family: var(--font-inter), sans-serif; font-size: 22px; font-weight: 600;
+.pulseAction .pulseLabel { color: rgba(232, 218, 182, 0.72); }
+.pulseTag {
+  position: relative; flex: none;
+  display: flex; align-items: center;
+  margin: 2px 0;
+  padding: 8px 13px 7px 21px; /* left room for the punched eyelet */
+  border: 1px solid rgba(232, 218, 182, 0.42);
+  border-radius: 8px 12px 12px 8px; /* tighter at the strung end */
+  transform: rotate(-2deg);
+  /* solid warm body — the tag is a THING in the light */
+  background:
+    radial-gradient(130% 115% at 72% 4%, rgba(232, 218, 182, 0.22), rgba(232, 218, 182, 0.06) 52%, transparent 72%),
+    linear-gradient(180deg, rgba(232, 218, 182, 0.15), rgba(232, 218, 182, 0.04) 55%, rgba(0, 0, 0, 0.12)),
+    #211f1a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 214, 0.16),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.45),
+    inset 0 0 10px rgba(0, 0, 0, 0.22),
+    0 2px 5px -2px rgba(0, 0, 0, 0.6),
+    0 14px 26px -16px rgba(0, 0, 0, 0.85);
+  transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.pulseAction:hover .pulseTag { transform: rotate(-0.5deg) translateY(-1px); }
+/* the punched eyelet — reinforced ring, dark hole, one glint */
+.pulseTag::before {
+  content: ''; position: absolute; left: 7px; top: 50%; margin-top: -4.5px;
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 1.5px solid rgba(232, 218, 182, 0.55);
+  background: radial-gradient(circle at 35% 30%, rgba(0, 0, 0, 0.92), rgba(0, 0, 0, 0.6));
+  box-shadow: 0 0.5px 0 rgba(255, 244, 214, 0.22), inset 0 1px 1.5px rgba(0, 0, 0, 0.85);
+}
+/* the string — a short arc falling away from the eyelet */
+.pulseTag::after {
+  content: ''; position: absolute; left: -13px; top: 48%;
+  width: 15px; height: 13px;
+  border-left: 1px solid rgba(232, 218, 182, 0.30);
+  border-bottom: 1px solid rgba(232, 218, 182, 0.18);
+  border-bottom-left-radius: 12px;
+  transform: rotate(14deg);
+  pointer-events: none;
+}
+.pulseTagVal {
+  font-family: var(--font-inter), sans-serif; font-size: 20px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: var(--tt-butter);
   font-variant-numeric: tabular-nums; white-space: nowrap;
+  text-shadow: 0 1.5px 2px rgba(0, 0, 0, 0.5); /* letterpressed, like the paddle */
 }
-.pulseGo { font-style: normal; font-size: 13px; margin-left: 7px; opacity: 0.9; }
+.pulseGo { font-style: normal; font-size: 12px; margin-left: 6px; opacity: 0.9; }
+/* the tag swings in as the paddle raises — mirrored entrances */
+.pulse[data-play='true'] .pulseTag {
+  animation: tagSwing 0.9s 0.5s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
+}
+@keyframes tagSwing {
+  from { opacity: 0; transform: rotate(-10deg) translateY(12px); }
+  to { opacity: 1; transform: rotate(-2deg) translateY(0); }
+}
 
 /* closing next — the departures line under the board (label above, chips
    flowing left — both shells) */
@@ -364,8 +416,9 @@
 .mRightNow .pulsePaddleHead { min-width: 60px; padding: 8px 12px 7px; border-radius: 13px; }
 .mRightNow .pulsePaddleStem { width: 8px; height: 12px; }
 .mRightNow .pulsePaddle { align-self: flex-end; margin: 0 0 -13px; }
-/* the butter numeral holds the right edge, mirroring the paddle */
-.mRightNow .pulseGrid > [data-below='true'] .pulseActionVal,
+/* the tag trims to thumb scale, mirroring the paddle */
+.mRightNow .pulseGrid > [data-below='true'] .pulseTagVal { font-size: 17px; }
+.mRightNow .pulseGrid > [data-below='true'] .pulseTag { padding: 7px 11px 6px 19px; }
 .mRightNow .pulseGrid > [data-below='true'] .pulseVal { font-size: 24px; flex: none; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
@@ -378,7 +431,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pulse[data-play='true'] .pulseGrid > *, .pulse[data-play='true'] .pulseTicker { animation: none; }
-  .pulseAction:hover { transform: none; }
+  .pulse[data-play='true'] .pulseTag { animation: none; }
+  .pulseAction:hover .pulseTag { transform: rotate(-2deg); }
 }
 
 /* ── THE %-REGISTER ── percent-CHANGE figures (and only those) speak in the

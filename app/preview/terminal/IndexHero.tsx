@@ -283,7 +283,9 @@ export default function IndexHero({
           <button type="button" className={styles.pulseAction} data-below="true" onClick={onOpenBelow}
             aria-label={`${belowMkt} below-market lots — see them`}>
             <span className={styles.pulseLabel}>Below market now</span>
-            <span className={styles.pulseActionVal}>{fmtInt(belowShown)}<em className={styles.pulseGo} aria-hidden>↗</em></span>
+            <span className={styles.pulseTag}>
+              <span className={styles.pulseTagVal}>{fmtInt(belowShown)}<em className={styles.pulseGo} aria-hidden>↗</em></span>
+            </span>
           </button>
         ) : (
           <div className={styles.pulseBlock} data-below="true">
