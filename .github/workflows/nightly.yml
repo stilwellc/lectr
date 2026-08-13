@@ -122,30 +122,37 @@ jobs:
       - name: Crawl rrauction (headless)
         if: matrix.house == 'rrauction'
         run: npx tsx scripts/resolve-rrauction.ts --write
-      # sports/pop expansion — standalone crawlers (curl, no headless). Each
-      # crawls a bounded recent window and MERGES into its segment.
+      # sports/pop expansion — standalone crawlers. --live snapshots the house's
+      # CURRENT auction as status:'upcoming' lots (same lifecycle as Goldin/RR:
+      # re-snapshotted + updated every night, replaced-not-unioned so closed
+      # lots never linger) and RESOLVES closed upcoming ids into settled sales —
+      # which is also how new sold history now arrives, replacing the old
+      # hand-tuned id windows (they sat fully-harvested at +0 new for weeks).
       - name: Crawl REA
         if: matrix.house == 'rea'
-        # ~2500 recent ids (per-lot ~1.2s → ~50min, safely under the 90min cap;
-        # 12k ids last run blew the timeout and got cancelled)
-        run: npx tsx scripts/crawl-rea.ts --start 207500 --end 210000 --delay 150 --write
+        # live grid enumerates the running auction (ids are NOT contiguous —
+        # 2026 Summer spans 185118..195743, so no id window can cover it)
+        run: npx tsx scripts/crawl-rea.ts --live --write
       - name: Crawl Huggins & Scott
         if: matrix.house == 'hugginsscott'
-        run: npx tsx scripts/crawl-hugginsscott.ts --months 3 --delay 150 --write
+        # archive months (settled) + the new bid.hugginsandscott.com live grid
+        run: npx tsx scripts/crawl-hugginsscott.ts --months 3 --delay 150 --live --write
       - name: Crawl SCP
         if: matrix.house == 'scp'
-        run: npx tsx scripts/crawl-scp.ts --auctions 3 --cap 600 --delay 150 --write
+        # past sweep is ALSO the sold-resolve for closed live sales (same ids)
+        run: npx tsx scripts/crawl-scp.ts --auctions 3 --cap 600 --delay 150 --live --write
       # CreateAuction trio — HEADLESS (Playwright clears Cloudflare, same as
-      # rrauction). Bounded itemid window over the current/recent auction.
+      # rrauction). --live reads the current sale off /Lots/Gallery (one nav,
+      # bids inline) + per-lot resolve of closed upcoming ids.
       - name: Crawl Lelands (headless)
         if: matrix.house == 'lelands'
-        run: npx tsx scripts/crawl-createauction.ts --house lelands --start 131600 --end 131900 --write
+        run: npx tsx scripts/crawl-createauction.ts --house lelands --live --write
       - name: Crawl Memory Lane (headless)
         if: matrix.house == 'memorylane'
-        run: npx tsx scripts/crawl-createauction.ts --house memorylane --start 92500 --end 92800 --write
+        run: npx tsx scripts/crawl-createauction.ts --house memorylane --live --write
       - name: Crawl Love of the Game (headless)
         if: matrix.house == 'lotg'
-        run: npx tsx scripts/crawl-createauction.ts --house lotg --start 46350 --end 46650 --write
+        run: npx tsx scripts/crawl-createauction.ts --house lotg --live --write
       # Christie's online-only + Sotheby's ResultHidden sales gate results away
       # from the crawl paths; the resolvers pull them from the public sources
       # (onlineonly pages / the Algolia search index) so closed lots can't rot

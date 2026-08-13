@@ -42,6 +42,99 @@ export function writeMergedSegment(name: string, fresh: AuctionLot[]): { total: 
   return { total: union.length, added: union.length - before };
 }
 
+// ── LIVE (upcoming) lots ─────────────────────────────────────────────────────
+// The expansion houses carry current lots the same way Goldin/RR do: each crawl
+// re-snapshots the house's live inventory and the segment's upcoming set is
+// REPLACED by that snapshot (sold history still accumulates via union). The
+// replace — not union — is the purge: a lot that closed, was withdrawn, or
+// (H&S) settles under a different archive id can never linger as a zombie
+// 'upcoming' row, because only tonight's live snapshot survives the write.
+// The isolated segments never pass through ray-crawl's W11 reconciliation, so
+// this write-time purge is the ONLY stale-upcoming defense these houses have.
+// `liveLegOk` gates the replace exactly like Goldin gates eviction on a good
+// auctions fetch: when the live enumeration itself failed (site down, CF wall),
+// keep last night's upcoming rows rather than mass-evict on a transient error.
+export function writeMergedSegmentWithLive(
+  name: string,
+  freshSettled: AuctionLot[],
+  freshLive: AuctionLot[],
+  liveLegOk: boolean,
+): { total: number; added: number; upcoming: number } {
+  const existing = readSegment(name) as unknown as AuctionLot[];
+  const byId = new Map<string, AuctionLot>();
+  const prevById = new Map<string, AuctionLot>();
+  for (const l of existing) {
+    if (!l || !l.id) continue;
+    prevById.set(l.id, l);
+    if ((l as { status?: string }).status === 'upcoming' && liveLegOk) continue; // replaced by tonight's snapshot
+    byId.set(l.id, l);
+  }
+  const before = byId.size;
+  // live first, settled second: a lot that closed mid-crawl and parsed BOTH
+  // ways settles as sold (a live bid is not a sale; the sold record wins).
+  for (const l of freshLive) {
+    if (!l || !l.id) continue;
+    const prev = prevById.get(l.id);
+    if (prev && (prev as { status?: string }).status === 'sold') continue; // never un-sell
+    const firstSeen = (prev as { firstSeen?: string } | undefined)?.firstSeen || (l as { firstSeen?: string }).firstSeen;
+    byId.set(l.id, { ...l, firstSeen } as AuctionLot);
+  }
+  for (const l of freshSettled) if (l && l.id) byId.set(l.id, l);
+  const union = Array.from(byId.values());
+  writeSegment(name, union as unknown as Record<string, unknown>[]);
+  const upcoming = union.filter(l => (l as { status?: string }).status === 'upcoming').length;
+  return { total: union.length, added: union.length - before, upcoming };
+}
+
+/** Delete specific ids from a segment — for lots the source now says were
+ *  WITHDRAWN/passed. The old unbounded card-walk stamped some of these with a
+ *  NEIGHBOR's sold price (the $3.1M ×27 bleed); the fixed extractors skip them
+ *  going forward, so the poisoned ghosts must be removed explicitly. */
+export function purgeFromSegment(name: string, ids: Set<string>): number {
+  if (!ids.size) return 0;
+  const rows = readSegment(name);
+  const keep = rows.filter(r => !ids.has(String((r as { id?: string }).id)));
+  const purged = rows.length - keep.length;
+  if (purged) writeSegment(name, keep);
+  return purged;
+}
+
+const TODAY = new Date().toISOString().slice(0, 10);
+
+/** Money block for a LIVE lot — the mirror of stampRealizedUsd for isSold:false
+ *  (ray-crawl's stampMoney non-sold branch): every realized/hammer/premium field
+ *  NULL (invariant FATAL-2), USD identity fx, estimates only if the house posts
+ *  them. currentBid/bidCount ride NEXT TO this block, never inside it. */
+export function stampUpcomingUsd(saleDate: string, est?: { low?: number | null; high?: number | null }) {
+  const { rate, asOf } = fxRateFor('USD', saleDate);
+  const estLow = est?.low ?? null;
+  const estHigh = est?.high ?? null;
+  return {
+    nativeCurrency: 'USD' as Currency,
+    hammerNative: null, premiumNative: null, realizedNative: null,
+    buyerPremiumPct: null,
+    fxRate: rate, fxAsOf: asOf,
+    hammerUsd: null, premiumUsd: null, realizedUsd: null,
+    estLowNative: estLow, estHighNative: estHigh,
+    estLowUsd: estLow, estHighUsd: estHigh,
+    currency: 'USD' as Currency, estimateLow: estLow, estimateHigh: estHigh,
+    hammerPrice: null, premiumPrice: null, priceUsd: null,
+  };
+}
+
+/** Shared shape check for a live lot before it enters a segment: dated today or
+ *  later (FATAL-3), and carrying NO realized money (FATAL-2). Filter — the same
+ *  one-bad-batch philosophy as settledOnly. */
+export function liveOnly(lots: AuctionLot[]): { good: AuctionLot[]; dropped: number } {
+  const good = lots.filter((l) => {
+    const d = (l as { saleDate?: string }).saleDate;
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d) || d < TODAY) return false;
+    const p = l as { realizedUsd?: number | null; priceUsd?: number | null; realizedNative?: number | null };
+    return p.realizedUsd == null && p.priceUsd == null && p.realizedNative == null;
+  });
+  return { good, dropped: lots.length - good.length };
+}
+
 export const REAL_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 

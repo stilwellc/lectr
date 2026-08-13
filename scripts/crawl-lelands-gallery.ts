@@ -8,7 +8,7 @@
 import { chromium, type Browser, type Page } from 'playwright-core';
 import type { AuctionLot, LotCategory, AuctionHouse } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate, writeMergedSegment, settledOnly, installCrashGuard } from './lib/sports-crawl';
+import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate, writeMergedSegment, settledOnly, installCrashGuard, purgeFromSegment } from './lib/sports-crawl';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const HOUSES: Record<string, { host: string; house: AuctionHouse; seg: string; prefix: string }> = {
@@ -29,7 +29,7 @@ async function clearCF(page: Page, maxMs = 30000): Promise<boolean> {
   return false;
 }
 
-interface RawCard { id: string; title: string; sold: string; img: string | null; }
+interface RawCard { id: string; title: string; sold: string; img: string | null; wd?: boolean; }
 async function extractCards(page: Page): Promise<RawCard[]> {
   return page.evaluate(() => {
     const seen = new Set<string>(); const out: RawCard[] = [];
@@ -37,12 +37,26 @@ async function extractCards(page: Page): Promise<RawCard[]> {
       const href = (a as HTMLAnchorElement).href;
       const id = (href.match(/itemid=(\d+)/) || [])[1];
       if (!id || seen.has(id)) return; seen.add(id);
-      let el: Element | null = a;
-      for (let i = 0; i < 5 && el; i++) { if (/sold for|current bid/i.test(el.textContent || '')) break; el = el.parentElement; }
-      const txt = (el?.textContent || '').replace(/\s+/g, ' ').trim();
-      const sold = (txt.match(/sold for\s*\$[\d,]+(?:\.\d+)?/i) || [])[0] || '';
-      const img = (el?.querySelector('img') as HTMLImageElement | null)?.getAttribute('src') || null;
-      out.push({ id, title: txt.replace(/sold for\s*\$[\d,.]+/i, '').replace(/current bid.*/i, '').trim().slice(0, 200), sold, img });
+      // walk up ONLY while the element holds a single itemid — past that is the
+      // grid, where a priceless (withdrawn) card would steal a NEIGHBOR's
+      // "SOLD FOR" (this exact bug wrote 27 Lelands lots at the same $3.1M)
+      let el: Element | null = a; let card: Element | null = a;
+      for (let i = 0; i < 6 && el; i++) {
+        const ids = new Set<string>();
+        el.querySelectorAll('a[href*="bidplace.aspx?itemid="]').forEach((x) => {
+          const m = (x.getAttribute('href') || '').match(/itemid=(\d+)/);
+          if (m) ids.add(m[1]);
+        });
+        if (ids.size > 1) break;
+        card = el;
+        if (/sold for|current bid/i.test(el.textContent || '')) break;
+        el = el.parentElement;
+      }
+      const txt = (card?.textContent || '').replace(/\s+/g, ' ').trim();
+      const wd = /\bwithdrawn\b/i.test(txt); // withdrawn ≠ a sale — reported so its ghost row gets purged
+      const sold = wd ? '' : (txt.match(/sold for\s*\$[\d,]+(?:\.\d+)?/i) || [])[0] || '';
+      const img = (card?.querySelector('img') as HTMLImageElement | null)?.getAttribute('src') || null;
+      out.push({ id, title: txt.replace(/sold for\s*\$[\d,.]+/i, '').replace(/current bid.*/i, '').trim().slice(0, 200), sold, img, wd });
     });
     return out;
   }).catch(() => [] as RawCard[]);
@@ -129,11 +143,16 @@ async function main() {
     } catch (e) { console.error(`  [gal] ${a.name} failed:`, (e as Error).message.slice(0, 50)); await ctx.close(); continue; }
     await ctx.close();
 
-    const lots = cards.map((c) => buildLot(c, saleDate, cfg)).filter((x): x is AuctionLot => !!x);
+    const lots = cards.filter((c) => !c.wd).map((c) => buildLot(c, saleDate, cfg)).filter((x): x is AuctionLot => !!x);
+    const wdIds = new Set(cards.filter((c) => c.wd).map((c) => `${cfg.prefix}-${c.id}`));
     all.push(...lots);
     done++;
-    console.log(`  [gal] ${a.name} (${a.id}): ${lots.length} sold lots  [running ${all.length}]`);
-    if (write && lots.length) { const { good } = settledOnly(lots); if (good.length) { const r = writeMergedSegment(cfg.seg, good); console.log(`    → segment ${r.total}`); } }
+    console.log(`  [gal] ${a.name} (${a.id}): ${lots.length} sold lots, ${wdIds.size} withdrawn  [running ${all.length}]`);
+    if (write) {
+      if (lots.length) { const { good } = settledOnly(lots); if (good.length) { const r = writeMergedSegment(cfg.seg, good); console.log(`    → segment ${r.total}`); } }
+      const purged = purgeFromSegment(cfg.seg, wdIds);
+      if (purged) console.log(`    → purged ${purged} withdrawn ghost rows`);
+    }
   }
   await browser.close();
 

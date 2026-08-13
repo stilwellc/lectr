@@ -1,0 +1,59 @@
+# One-shot data heal for the CreateAuction trio — re-crawls EVERY settled
+# auction off /Lots/Gallery with the boundary-scoped card extractor and purges
+# withdrawn ghost rows. Why: the original extractor's unbounded parent walk let
+# priceless (withdrawn) cards steal a NEIGHBOR's "SOLD FOR" — measured Aug 2026:
+# 27 Lelands rows at an identical $3,107,372, 21 LOTG at $436,970, 10 Memory
+# Lane at $612,000 — comp-pool poison. Re-running the gallery over all auctions
+# overwrites every priced card by id and deletes the withdrawn ghosts.
+# Manual dispatch; safe to re-run (idempotent, incremental per-auction writes).
+name: Gallery heal (CreateAuction trio)
+on:
+  workflow_dispatch:
+    inputs:
+      houses:
+        description: 'comma list: lelands,memorylane,lotg'
+        required: false
+        default: 'lelands,memorylane,lotg'
+
+concurrency:
+  group: gallery-heal-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
+jobs:
+  heal:
+    strategy:
+      fail-fast: false
+      matrix:
+        house: [lelands, memorylane, lotg]
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Skip if not requested
+        id: gate
+        run: |
+          if [[ ",${{ github.event.inputs.houses || 'lelands,memorylane,lotg' }}," == *",${{ matrix.house }},"* ]]; then
+            echo "run=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Pull this house's segment (last-good)
+        if: steps.gate.outputs.run == '1'
+        run: bash scripts/data-store.sh pull-segment ${{ matrix.house }}
+      - name: Install Chrome (headless CF clear)
+        if: steps.gate.outputs.run == '1'
+        run: npx playwright install --with-deps chrome
+      - name: Re-crawl all settled auctions (fixed extractor)
+        if: steps.gate.outputs.run == '1'
+        run: RAY_SKIP_MAIN=1 npx tsx scripts/crawl-lelands-gallery.ts --house ${{ matrix.house }} --write
+      - name: Push healed segment
+        if: steps.gate.outputs.run == '1'
+        run: bash scripts/data-store.sh push-segment ${{ matrix.house }}

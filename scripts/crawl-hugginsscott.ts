@@ -8,8 +8,9 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
-import { getHtml, writeMergedSegment, settledOnly, installCrashGuard, mapPool } from './lib/sports-crawl';
-import { parseReaLot } from './crawl-rea';
+import { getHtml, writeMergedSegment, writeMergedSegmentWithLive, settledOnly, liveOnly, installCrashGuard, mapPool } from './lib/sports-crawl';
+import { parseReaLot, crawlReaLive } from './crawl-rea';
+import { readSegment } from './corpus-io';
 
 const BASE = 'https://hugginsandscott.com';
 
@@ -96,7 +97,24 @@ async function main() {
   }
   console.log(`[H&S] parsed ${lots.length} sold lots (${miss} skipped)`);
 
-  const report = assertInvariants(lots);
+  // ── live leg: H&S live bidding runs on bid.hugginsandscott.com — the SAME
+  // Livewire stack as bid.collectrea.com (REA owns H&S), so the REA live
+  // crawler transfers verbatim. Pre-open the grid renders an "opening soon"
+  // shell with zero lot links → 0 upcoming lots, which is a fact, not an error.
+  let liveLots: AuctionLot[] = [];
+  let liveOk = false;
+  if (process.argv.includes('--live')) {
+    const prevUpcoming = (readSegment('hugginsscott') as unknown as AuctionLot[]).filter(l => (l as { status?: string }).status === 'upcoming');
+    const r = await crawlReaLive('https://bid.hugginsandscott.com', 'Huggins & Scott', prevUpcoming);
+    liveOk = r.ok;
+    lots.push(...r.resolved);
+    const lg = liveOnly(r.live);
+    if (lg.dropped) console.log(`[H&S] dropped ${lg.dropped} malformed live lots`);
+    liveLots = lg.good;
+    console.log(`[H&S] live: ${liveLots.length} upcoming lots (grid ${liveOk ? 'ok' : 'FAILED — keeping prior snapshot'})`);
+  }
+
+  const report = assertInvariants(lots.concat(liveLots));
   console.log(`[H&S] invariant FATALs: ${report.fatal.length} | warns: ${report.warn.length}`);
   report.fatal.slice(0, 8).forEach(f => console.error('  FATAL', f));
   const byCat: Record<string, number> = {};
@@ -106,10 +124,12 @@ async function main() {
   if (process.argv.includes('--write')) {
     const { good, dropped } = settledOnly(lots);
     if (dropped) console.log(`[H&S] dropped ${dropped} unsettled/future-dated lots (upcoming months)`);
-    const rep = assertInvariants(good);
+    const rep = assertInvariants(good.concat(liveLots));
     if (rep.fatal.length) { console.error(`[H&S] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f)); process.exit(1); }
-    const r = writeMergedSegment('hugginsscott', good);
-    console.log(`[H&S] merged into segment 'hugginsscott': +${r.added} new, ${r.total} total.`);
+    const r = process.argv.includes('--live')
+      ? writeMergedSegmentWithLive('hugginsscott', good, liveLots, liveOk)
+      : { ...writeMergedSegment('hugginsscott', good), upcoming: undefined as number | undefined };
+    console.log(`[H&S] merged into segment 'hugginsscott': +${r.added} new, ${r.total} total${r.upcoming !== undefined ? `, ${r.upcoming} upcoming` : ''}.`);
   } else {
     const s = lots[0];
     if (s) console.log('[H&S] sample:', JSON.stringify({ id: s.id, artist: s.artist, title: s.title.slice(0, 50), saleDate: s.saleDate, priceUsd: (s as { priceUsd?: number }).priceUsd }, null, 0));
