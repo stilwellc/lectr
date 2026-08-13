@@ -157,17 +157,19 @@
    micro-motion (Linear's precision). One accent rule holds: butter belongs to
    the single actionable block; everything else stays in the neutral register. */
 .pulse { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.pulseHead { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.pulseHead { display: flex; align-items: center; padding: 0 2px; }
+/* the leader — the ledger's dotted rule carries the title to the edge */
+.pulseRule { flex: 1; margin-left: 12px; border: none; border-top: 2px dotted var(--tt-hair); transform: translateY(0.5px); }
 .pulseTitle {
   font-family: var(--font-inter), sans-serif; font-size: 11px; font-weight: 600;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-muted);
 }
 /* slim rows, one grammar: words left, instrument right — no dead space */
-.pulseGrid { display: flex; flex-direction: column; gap: 6px; }
+.pulseGrid { display: flex; flex-direction: column; gap: 7px; }
 .pulseBlock {
   position: relative; display: flex; flex-direction: row; align-items: center;
   justify-content: space-between; gap: 12px;
-  min-width: 0; padding: 11px 13px; overflow: hidden;
+  min-width: 0; padding: 12px 13px; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px;
   background: rgba(255, 255, 255, 0.028);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
@@ -175,13 +177,9 @@
 }
 .pulseBlock:hover { border-color: rgba(255, 255, 255, 0.12); }
 .pulseCellText { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-/* the lead cell — lit by a corner of golden hour, paddle on the right */
-.pulseBlock[data-lead='true'] {
-  padding: 12px 13px;
-  background:
-    radial-gradient(150% 100% at 16% 0%, rgba(232, 218, 182, 0.06), transparent 55%),
-    rgba(255, 255, 255, 0.028);
-}
+/* the lead cell hosts the paddle — same quiet stock as its siblings; the
+   OBJECT carries the warmth (one-accent discipline) */
+.pulseBlock[data-lead='true'] { padding: 12px 13px; }
 .pulseLabel {
   display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--font-inter), sans-serif; font-size: 10px;
@@ -206,7 +204,7 @@
 .pulsePaddle {
   display: flex; flex-direction: column; align-items: center;
   width: max-content; flex: none;
-  margin: 2px 2px -14px 0;
+  margin: 2px 0 -14px;
   transform: rotate(2.5deg);
   transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
@@ -267,7 +265,7 @@
 }
 /* the raise: the paddle comes up from the lap on fresh arrival */
 .pulse[data-play='true'] .pulsePaddle {
-  animation: paddleRaise 0.9s 0.4s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
+  animation: paddleRaise 0.9s 0.55s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
 }
 @keyframes paddleRaise {
   from { opacity: 0; transform: rotate(11deg) translateY(16px); }
@@ -285,7 +283,7 @@
 }
 .pulseUnit {
   font-style: normal; font-family: var(--font-inter), sans-serif;
-  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tt-faint);
+  font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tt-faint);
 }
 .pulseDir { font-style: normal; font-size: 9px; }
 .pulseDir[data-dir='up'] { color: var(--color-up, #57be87); }
@@ -298,16 +296,17 @@
    letterpressed count, a tilt mirroring the paddle's. */
 .pulseAction {
   position: relative; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 10px 13px; cursor: pointer; overflow: hidden;
-  border: 1px solid rgba(232, 218, 182, 0.20); border-radius: 12px;
-  background: rgba(232, 218, 182, 0.032);
+  gap: 12px; padding: 12px 13px; cursor: pointer; overflow: hidden;
+  border: 1px solid rgba(232, 218, 182, 0.18); border-radius: 12px;
+  background: rgba(255, 255, 255, 0.028);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease);
 }
 .pulseAction:hover {
-  border-color: rgba(232, 218, 182, 0.45);
-  background: rgba(232, 218, 182, 0.055);
+  border-color: rgba(232, 218, 182, 0.42);
+  background: rgba(255, 255, 255, 0.04);
 }
+.pulseAction:active .pulseTag { transform: translateY(0) scale(0.98); }
 .pulseAction:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
 .pulseAction .pulseLabel { color: rgba(232, 218, 182, 0.72); }
 .pulseTag {
@@ -333,6 +332,14 @@
   transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .pulseAction:hover .pulseTag { transform: translateY(-1px); }
+/* the ghost — blank tag stock, waiting to be hung: dashed rule, no body */
+.pulseTagGhost {
+  border-style: dashed; border-color: rgba(232, 218, 182, 0.24);
+  background: none; box-shadow: none;
+}
+.pulseTagGhost::before { border-color: rgba(232, 218, 182, 0.28); background: rgba(0, 0, 0, 0.4); box-shadow: none; }
+.pulseTagGhost::after { opacity: 0.5; }
+.pulseTagGhost .pulseTagVal { color: rgba(232, 218, 182, 0.38); text-shadow: none; }
 /* the punched eyelet — reinforced ring, dark hole, one glint */
 .pulseTag::before {
   content: ''; position: absolute; left: 7px; top: 50%; margin-top: -4.5px;
@@ -359,7 +366,7 @@
 }
 /* the tag swings in as the paddle raises — mirrored entrances */
 .pulse[data-play='true'] .pulseTag {
-  animation: tagSwing 0.9s 0.5s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
+  animation: tagSwing 0.9s 0.65s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
 }
 @keyframes tagSwing {
   from { opacity: 0; transform: rotate(-7deg) translateY(12px); }
@@ -376,11 +383,11 @@
   font-family: var(--font-inter), sans-serif; font-size: 9.5px;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-faint); white-space: nowrap;
 }
-.pulseTickerChips { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.pulseTickerChips { display: flex; gap: 7px; flex-wrap: wrap; min-width: 0; }
 .pulseChip {
   display: inline-flex; align-items: baseline; gap: 6px;
   font-family: var(--font-inter), sans-serif; font-size: 11px; color: var(--tt-fg);
-  padding: 4px 9px; white-space: nowrap;
+  padding: 4px 10px; white-space: nowrap;
   border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 100px;
   background: rgba(255, 255, 255, 0.03);
 }
@@ -422,11 +429,11 @@
 .mRightNow .pulseGrid > [data-below='true'] .pulseVal { font-size: 24px; flex: none; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
-.pulse[data-play='true'] .pulseGrid > *:nth-child(1) { animation: pulseSettle 0.7s 0.24s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
-.pulse[data-play='true'] .pulseGrid > *:nth-child(2) { animation: pulseSettle 0.7s 0.32s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
-.pulse[data-play='true'] .pulseGrid > *:nth-child(3) { animation: pulseSettle 0.7s 0.40s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
-.pulse[data-play='true'] .pulseGrid > *:nth-child(4) { animation: pulseSettle 0.7s 0.48s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
-.pulse[data-play='true'] .pulseTicker { animation: pulseSettle 0.7s 0.58s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
+.pulse[data-play='true'] .pulseGrid > *:nth-child(1) { animation: pulseSettle 0.7s 0.18s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
+.pulse[data-play='true'] .pulseGrid > *:nth-child(2) { animation: pulseSettle 0.7s 0.26s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
+.pulse[data-play='true'] .pulseGrid > *:nth-child(3) { animation: pulseSettle 0.7s 0.34s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
+.pulse[data-play='true'] .pulseGrid > *:nth-child(4) { animation: pulseSettle 0.7s 0.42s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
+.pulse[data-play='true'] .pulseTicker { animation: pulseSettle 0.7s 0.78s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
 @keyframes pulseSettle { from { opacity: 0; transform: translateY(10px); } }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2927,7 +2934,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    input insets its content evenly. */
 .mtSide .railCmd {
   /* the primary action — an elevated command bar that lifts off the panel:
-     brighter surface, a real drop shadow for depth, a crisp top-highlight. */
+     brighter surface, a real drop shadow for depth, a crisp top-highlight,
+     and the same Linear glint the phone's bar carries (one system). */
+  position: relative; overflow: hidden; isolation: isolate;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -2966,6 +2975,21 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 10px 26px -10px rgba(0, 0, 0, 0.8),
     0 0 26px -8px rgba(232, 218, 182, 0.32);
+}
+.mtSide .railCmd::after {
+  content: '';
+  position: absolute;
+  inset: -40% auto -40% -60%;
+  width: 42%;
+  transform: skewX(-18deg) translateX(0);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08) 45%, rgba(255, 255, 255, 0.14) 50%, rgba(255, 255, 255, 0.08) 55%, transparent);
+  animation: cmdGlint 5.6s cubic-bezier(0.23, 1, 0.32, 1) 2.2s infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+.mtSide .railCmd:active { transform: scale(0.99); }
+@media (prefers-reduced-motion: reduce) {
+  .mtSide .railCmd::after { animation: none; opacity: 0; }
 }
 .mtSide .railCmd:focus-visible {
   outline: none;

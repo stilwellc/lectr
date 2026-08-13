@@ -246,6 +246,7 @@ export default function IndexHero({
     <div className={styles.pulse} data-play={play ? 'true' : undefined}>
       <div className={styles.pulseHead} aria-hidden>
         <span className={styles.pulseTitle}>Right now</span>
+        <i className={styles.pulseRule} />
       </div>
 
       {/* every cell speaks the same grammar: words left, instrument right —
@@ -293,7 +294,11 @@ export default function IndexHero({
               <span className={styles.pulseLabel}>Below market now</span>
               <span className={styles.pulseSub}>no flags in the live book</span>
             </span>
-            <span className={styles.pulseVal}>—</span>
+            {/* the empty state keeps the object language: a blank tag stock,
+                waiting to be hung */}
+            <span className={`${styles.pulseTag} ${styles.pulseTagGhost}`} aria-hidden>
+              <span className={styles.pulseTagVal}>0</span>
+            </span>
           </div>
         )}
       </div>
