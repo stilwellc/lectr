@@ -328,7 +328,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `saleDate←saleDateTime reconciled=${datesFixed} · ` +
     `formKey restamped=${restamped} · ` +
     `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered}) · ` +
-    `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates}`
+    `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates} pkmn-grades=${healed.grades}`
   );
   // BUILD CANARY (spec §3.4): game-used identity is a maintained-list parser —
   // a Sotheby's title-format change must fail the build, not silently starve
@@ -345,8 +345,8 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
    boilerplate ("… Bids: 19 Opening Bid: $50,000 Status: …"), REA imageUrls
    without a scheme (98.7% of 181k), and a few empty-string saleDates.
    Idempotent: every check is a no-op once healed. */
-function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; images: number; dates: number } {
-  let tokens = 0, titles = 0, images = 0, dates = 0;
+function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; images: number; dates: number; grades: number } {
+  let tokens = 0, titles = 0, images = 0, dates = 0, grades = 0;
   for (const l of lots) {
     const t = l.title as string | undefined;
     if (t) {
@@ -364,8 +364,18 @@ function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; image
       l.titleTokens = titleTokensOf(l.title as string);
       tokens++;
     }
+    // Pokémon grade parse — grades sit in 40k titles ("PSA GEM MT 10",
+    // "BGS NM-MT+ 8.5", "CGC 9.5") but only 3 rows carried gradeLabel
+    if (l.artist === 'pokemon' && !l.gradeLabel && typeof l.title === 'string') {
+      const g = (l.title as string).match(/\b(PSA|BGS|CGC|SGC)\s*(?:GEM\s*MT|GEM\s*MINT|MINT|NM-?MT\+?|NM|EX-?MT|EX|VG)?\s*(10|[1-9](?:\.5)?)\b/i);
+      if (g) {
+        (l as unknown as { gradeLabel: string | null }).gradeLabel = g[0].replace(/\s+/g, ' ').trim().toUpperCase();
+        if (!l.authCert) (l as unknown as { authCert: string | null }).authCert = g[1].toUpperCase();
+        grades++;
+      }
+    }
   }
-  return { tokens, titles, images, dates };
+  return { tokens, titles, images, dates, grades };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

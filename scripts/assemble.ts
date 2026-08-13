@@ -37,6 +37,26 @@ async function main() {
   const JUNK_TITLE = /\.pagination\s*\{|\{\s*clear:\s*both|^\d*\s*Lot Withdrawn\b/i;
   const allLots = allLotsRaw.filter(l => !JUNK_TITLE.test(String(l.title || '')));
   if (allLotsRaw.length !== allLots.length) console.log(`[assemble] junk gate dropped ${allLotsRaw.length - allLots.length} rows`);
+  // CONTENT DEDUPE (Aug 13 audit): ~9k sold rows duplicated under distinct ids
+  // (double-crawls: same house + saleDate + price + title). Conservative key,
+  // sold rows only, keep the lexically-first id (deterministic).
+  {
+    const seen = new Map<string, string>();
+    const drop = new Set<string>();
+    for (const l of allLots) {
+      if (l.status !== 'sold' || !(l.priceUsd || (l as { realizedUsd?: number }).realizedUsd)) continue;
+      const key = `${l.auctionHouse}|${l.saleDate}|${l.priceUsd ?? (l as { realizedUsd?: number }).realizedUsd}|${String(l.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`;
+      const prev = seen.get(key);
+      if (prev === undefined) seen.set(key, String(l.id));
+      else if (String(l.id) < prev) { drop.add(prev); seen.set(key, String(l.id)); }
+      else drop.add(String(l.id));
+    }
+    if (drop.size) {
+      const before = allLots.length;
+      for (let i = allLots.length - 1; i >= 0; i--) if (drop.has(String(allLots[i].id))) allLots.splice(i, 1);
+      console.log(`[assemble] content dedupe dropped ${before - allLots.length} duplicate sold rows`);
+    }
+  }
   console.log(`[assemble] reunioned ${allLots.length} lots from segments`);
 
   // ── SANITY GATE ─────────────────────────────────────────────────────────

@@ -1045,6 +1045,15 @@ export function runMarketBuild() {
   fs.writeFileSync(path.join(SERVED, 'sold-ledger-index.json'), JSON.stringify({ shards: lshard, entries: ledgerEntries.length, since: LEDGER_CUT }));
   console.log(`[market] sold-ledger: ${ledgerEntries.length} outcomes since ${LEDGER_CUT} → ${lshard} shard(s)`);
 
+  // ── CALLS RECORD — grade the settled tape for the unreceipted products
+  {
+    const { gradeCalls } = require('./lib/calls-ledger');
+    const soldById = new Map<string, { realizedUsd: number; saleDate: string }>();
+    for (const l of all) if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
+    const rec = gradeCalls(soldById);
+    (markets.all.analytics as unknown as Record<string, unknown>).callsRecord = rec;
+    console.log(`[market] calls record — card: ${rec.card.graded}/${rec.card.n} graded medRatio=${rec.card.medRatio} within30=${rec.card.within30Pct}% · vsbid: ${rec.vsbid.graded}/${rec.vsbid.n} medRatio=${rec.vsbid.medRatio} belowHit=${rec.vsbid.belowHit}%`);
+  }
   // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit) — how much of final hammer
   // arrives in the last days, fitted from Goldin's own nightly bidHistory on
   // SOLD lots: growth(bucket) = median(finalBid / bidAtSnapshot) for snapshots

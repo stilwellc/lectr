@@ -22,6 +22,7 @@ import {
 import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app/lib/demand';
 import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
 import { lotAllInFactor } from '../app/lib/premiums';
+import { appendCalls, type Call } from './lib/calls-ledger';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -79,6 +80,8 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     const cc = mj?.markets?.all?.analytics?.closeCurve;
     if (cc?.buckets?.length) closeCurve = cc;
   } catch { /* no curve yet */ }
+  const freshCalls: Call[] = [];
+  const todayCall = new Date().toISOString().slice(0, 10);
   // results-pending grace: keep a just-closed lot visible only through the day
   // after its sale while results post; anything older that never resolved (e.g.
   // Christie's results gated behind login and never scraped) drops, not lingers.
@@ -228,8 +231,11 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
             const cardMed = (l as { cardComps?: { med?: number | null } }).cardComps?.med || null;
             const floor = (v?.low && v.low > 0 ? v.low : null) ?? (cardMed ? Math.round(cardMed * 0.85) : null);
             emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}) };
+            if (floor) freshCalls.push({ id: String(l.id), d: todayCall, k: 'vsbid', p: projAllIn, f: floor, m: marketOf(l.artist) });
           }
         }
+        const cc = (l as { cardComps?: { med?: number | null; n?: number } }).cardComps;
+        if (cc?.med && (cc.n || 0) >= 3) freshCalls.push({ id: String(l.id), d: todayCall, k: 'card', p: cc.med, m: marketOf(l.artist) });
       }
       // W5 · precompute soldComp for upcoming sports/science lots, analogous to
       // signal — so a card/modal can paint the realized band before the archive
@@ -243,6 +249,11 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       }
       return emitted;
     });
+
+  if (freshCalls.length) {
+    const led = appendCalls(freshCalls);
+    console.log(`[upcoming] calls ledger: +${led.added} new calls (${led.total} total)`);
+  }
 
   // pre-parse saleDate → numeric ms ONCE for the recency sorts below (tape +
   // recentSold each parse both operands per comparison otherwise, over the full
