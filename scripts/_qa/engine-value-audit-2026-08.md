@@ -96,3 +96,26 @@ below comps" digest section. No full assemble; corpus stays nightly.
 3. Global receipt over-claims for watches (publish per-market splits).
 4. Conformal "70%" + house-calibration lines: bare assertions, no drill-through.
 5. backtest.json freshness (Aug 5 vs Aug 13 market) — stamp + display recency.
+
+## SHIPPED (Aug 13-14 batch) + deliberate deferrals
+
+Shipped: per-house BP schedule (app/lib/premiums.ts — measured Goldin 1.220
+n=182k, REA 1.175 via increment quantization, tiered big-three) wired into
+backtest-core; odds-gated flag admission (below requires ≥50% calibrated
+market beat-rate, strong ≥60% — per-market calibration already flowed, the
+gate was the missing piece); close-day growth curve fitted from Goldin
+bidHistory + bidProj stamps on bid-house lots (projected all-in close vs
+value floor, receipt accumulates in nightly payloads before it ranks any
+ledger); graded-cards through every card path (identity, cardKey cross-house
+comps, tiered valuer, grade ladder, served sample — engine exclusion kept);
+bought-in shadow (artist sell-through attached to value meta, suppression
+off pending measurement); bid snapshots on all six live-leg houses.
+Found already shipped: recency decay in comp aggregation (24mo-class
+half-life weighting predates this audit).
+
+Deferred deliberately: watches era gate (the spec's own precondition —
+measure via watches-backtest2 first); dimensions crawl-stamps (per-house
+crawler work, feeds design modelKey/repeat-sale next); deep expansion
+playerSlug parser iteration (canary-firewalled; the card-path routing
+already covers the card mass via parseCard — remaining gap is expansion
+game-used prose formats).

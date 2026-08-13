@@ -72,8 +72,14 @@ async function main() {
       const truth = buildLot(raw, idNum(row), cfg);
       if (truth && typeof (truth as { priceUsd?: number }).priceUsd === 'number') {
         const newPrice = (truth as { priceUsd?: number }).priceUsd!;
-        if (Math.abs(newPrice - row.priceUsd!) > 0.5) { byId.set(row.id, { ...row, ...truth }); fixed++; }
-        else kept++;
+        // PRESERVE the row's original saleDate/saleDateTime: old lot pages
+        // surface the CURRENT auction's "End:" banner, so truth's date is the
+        // run-day clamp, not the sale's true date (~1.9k Lelands rows mis-dated
+        // in the Aug 13 pass; only the PRICE was ever suspect here).
+        if (Math.abs(newPrice - row.priceUsd!) > 0.5) {
+          byId.set(row.id, { ...row, ...truth, saleDate: row.saleDate, saleDateTime: (row as { saleDateTime?: string | null }).saleDateTime ?? null } as typeof row);
+          fixed++;
+        } else kept++;
       } else if (/\bwithdrawn\b/i.test(`${raw.price} ${raw.title} ${raw.desc}`) || !/sold\s*for/i.test(raw.price)) {
         byId.delete(row.id); deleted++; // the page itself says: not a sale
       } else kept++;

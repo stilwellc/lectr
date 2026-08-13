@@ -21,6 +21,7 @@ import {
 } from '../app/lib/comps';
 import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app/lib/demand';
 import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
+import { lotAllInFactor } from '../app/lib/premiums';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -70,6 +71,14 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // parsing 'YYYY-MM-DD' as UTC midnight). The build always precedes the client
   // load, so `>= today` here never drops a lot the client would still show.
   const today = new Date().toISOString().slice(0, 10);
+  // close-day growth curve (analytics.closeCurve) — the projection factor for
+  // bid-house lots. Absent (first build) → no projections stamped.
+  let closeCurve: { buckets: (number | null)[]; edges: number[] } | null = null;
+  try {
+    const mj = JSON.parse(fs.readFileSync(path.join(dataDir, 'market.json'), 'utf8'));
+    const cc = mj?.markets?.all?.analytics?.closeCurve;
+    if (cc?.buckets?.length) closeCurve = cc;
+  } catch { /* no curve yet */ }
   // results-pending grace: keep a just-closed lot visible only through the day
   // after its sale while results post; anything older that never resolved (e.g.
   // Christie's results gated behind login and never scraped) drops, not lingers.
@@ -199,6 +208,29 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       // does. bidVelocity is NOT in STRIP, so slimForClient keeps it (verified).
       const vel = velById.get(l.id);
       if (vel) emitted.bidVelocity = vel;
+      // BID PROJECTION (bid houses): expected close = currentBid × the fitted
+      // close-day growth median for this lot's days-out bucket, grossed to
+      // all-in by the house premium schedule. `below` = projection still under
+      // the lot's value-band low (or 0.85× the exact-card median). This is a
+      // DATA read with its own basis — the receipt accumulates in nightly
+      // payload snapshots before it ever ranks a ledger.
+      {
+        const bid = (l as { currentBid?: number }).currentBid || 0;
+        const sdtP = (l as { saleDateTime?: string | null }).saleDateTime || l.saleDate;
+        const closeMs = sdtP ? new Date(sdtP).getTime() : NaN;
+        if (closeCurve && bid > 0 && !isNaN(closeMs)) {
+          const daysOut = Math.max(0, (closeMs - Date.now()) / 86400000);
+          let b = 0; for (const e of closeCurve.edges) { if (daysOut < e) break; b++; }
+          const g = closeCurve.buckets[b];
+          if (g && g >= 1) {
+            const projAllIn = Math.round(bid * g * lotAllInFactor(l as { auctionHouse?: string | null; buyerPremiumPct?: number | null }, bid * g));
+            const v = (l as { value?: { low?: number } }).value;
+            const cardMed = (l as { cardComps?: { med?: number | null } }).cardComps?.med || null;
+            const floor = (v?.low && v.low > 0 ? v.low : null) ?? (cardMed ? Math.round(cardMed * 0.85) : null);
+            emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}) };
+          }
+        }
+      }
       // W5 · precompute soldComp for upcoming sports/science lots, analogous to
       // signal — so a card/modal can paint the realized band before the archive
       // loads. soldCompBand returns null for every non-sports/science-object lot

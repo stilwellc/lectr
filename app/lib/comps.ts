@@ -446,10 +446,12 @@ export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
    a Bonhams GBP lot stops dividing a USD price by a native-GBP estimate. The
    old fields become aliases of the *Usd fields at migration, so both agree. */
 function estUsdBand(lot: AuctionLot): { low: number | null; high: number | null } {
-  return {
-    low: lot.estLowUsd ?? lot.estimateLow,
-    high: lot.estHighUsd ?? lot.estimateHigh,
-  };
+  // Single-point fallback (the SIXTH sighting of the both-bounds bug — RR
+  // publishes estimateLow only; demand.ts:43 learned this first): a house
+  // that posts one bound still posted an estimate. low||high mirrors it.
+  const low = lot.estLowUsd ?? lot.estimateLow;
+  const high = lot.estHighUsd ?? lot.estimateHigh;
+  return { low: low ?? high, high: high ?? low };
 }
 
 /** the named series of a print title ("…, from Jazz (…)") — normalized, ≥3 chars */

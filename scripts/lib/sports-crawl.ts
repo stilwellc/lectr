@@ -72,12 +72,22 @@ export function writeMergedSegmentWithLive(
   const before = byId.size;
   // live first, settled second: a lot that closed mid-crawl and parsed BOTH
   // ways settles as sold (a live bid is not a sale; the sold record wins).
+  // Each pass also APPENDS a bid snapshot {d,b,n} (the Goldin bidHistory
+  // pattern) so build-upcoming's bidVelocity can rank these houses too —
+  // REA scrapes real bidCounts nightly; snapshots cap at 59 like Goldin's.
+  const todayIso = new Date().toISOString();
   for (const l of freshLive) {
     if (!l || !l.id) continue;
     const prev = prevById.get(l.id);
     if (prev && (prev as { status?: string }).status === 'sold') continue; // never un-sell
     const firstSeen = (prev as { firstSeen?: string } | undefined)?.firstSeen || (l as { firstSeen?: string }).firstSeen;
-    byId.set(l.id, { ...l, firstSeen } as AuctionLot);
+    type Snap = { d: string; b: number; n: number };
+    const hist: Snap[] = ((prev as { bidHistory?: Snap[] } | undefined)?.bidHistory || []).slice(-58);
+    const b = (l as { currentBid?: number }).currentBid || 0;
+    const n = (l as { bidCount?: number }).bidCount || 0;
+    const last = hist[hist.length - 1];
+    if (!last || last.b !== b || last.n !== n) hist.push({ d: todayIso, b, n });
+    byId.set(l.id, { ...l, firstSeen, ...(hist.length ? { bidHistory: hist } : {}) } as AuctionLot);
   }
   for (const l of freshSettled) if (l && l.id) byId.set(l.id, l);
   const union = Array.from(byId.values());

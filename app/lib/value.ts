@@ -207,7 +207,10 @@ export function estimateValue(
   const exactC = top.find(c => c.match.cls === 'physicalMatch') || top.find(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
   const exact = exactC ? { id: exactC.id, realizedUsd: exactC.realizedUsd, saleDate: exactC.saleDate, cls: exactC.match.cls as 'physicalMatch' | 'modelMatch' } : null;
 
-  const estMid = lot.estLowUsd && lot.estHighUsd ? (lot.estLowUsd + lot.estHighUsd) / 2 : null;
+  // single-point fallback (RR posts low only) — mirror estUsdBand/demand.ts
+  const eLo = lot.estLowUsd ?? lot.estHighUsd;
+  const eHi = lot.estHighUsd ?? lot.estLowUsd;
+  const estMid = eLo && eHi ? (eLo + eHi) / 2 : null;
 
   // DIRECTIONAL signal (estimate lots)
   let signal: ValueResult['signal'] = null;
@@ -231,10 +234,16 @@ export function estimateValue(
       }
     }
     const br = beatRate(compRatio, CAL?.marketBySlug?.[lot.artist]);
-    const label = compRatio >= 1.3 ? 'below comparable market'      // lot priced under where comps trade → likely undervalued
+    // ODDS GATE (Aug 13 value audit): admission by the market's CALIBRATED
+    // beat rate, not the raw ratio alone. The 1.3 threshold was near a coin
+    // flip in watches' low buckets (35-36%) while cr>2.0 runs 69-72% in every
+    // market — a 'below' flag must carry ≥50% calibrated odds, 'strong' ≥60%.
+    // This deletes the weak tail per-vertical automatically as calibration
+    // refits, and keeps every strong flag.
+    const label = compRatio >= 1.3 && br >= 50 ? 'below comparable market'
       : compRatio <= 0.75 ? 'above comparable market'
         : 'at comparable market';
-    const strength = compRatio >= 2 || compRatio <= 0.55 ? 'strong'
+    const strength = (compRatio >= 2 && br >= 60) || compRatio <= 0.55 ? 'strong'
       : compRatio >= 1.3 || compRatio <= 0.75 ? 'moderate' : 'slight';
     signal = { label, strength, beatRatePct: br };
   }

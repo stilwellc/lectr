@@ -3,6 +3,7 @@ import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle } from '../../app/lib/comps';
+import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -300,6 +301,9 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
   // ENGINE SPEC v2 order: category flips (2c) run BEFORE identity work;
   // restampIdentityKeys (5) runs LAST so every flip re-derives its formKey.
+  // healExpansionRows runs FIRST: it cleans titles (every parser below reads
+  // them) and stamps the missing identity tokens.
+  const healed = healExpansionRows(ls);
   const yearsNulled = clampImpossibleYears(ls);
   const reroute = rerouteScienceMisroutes(ls);
   const relic = rerouteRelicCards(ls);
@@ -323,7 +327,8 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `culture axes stamped=${cultureStamped} · ` +
     `saleDate←saleDateTime reconciled=${datesFixed} · ` +
     `formKey restamped=${restamped} · ` +
-    `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered})`
+    `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered}) · ` +
+    `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates}`
   );
   // BUILD CANARY (spec §3.4): game-used identity is a maintained-list parser —
   // a Sotheby's title-format change must fail the build, not silently starve
@@ -331,6 +336,36 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   if (players.total >= 200 && players.coverage < 0.85) {
     throw new Error(`[normalize] game-used playerSlug coverage ${(players.coverage * 100).toFixed(1)}% < 85% floor — title parser drifted; refusing to publish`);
   }
+}
+
+/* ── EXPANSION-ROW HEAL (Aug 13 audit) — the isolated-segment crawlers never
+   pass through ray-crawl's per-lot v2 identity stamp, so their rows reached
+   the corpus with no titleTokens (the value engine literally cannot see them:
+   97% of the live book), Memory Lane titles carrying windows-era bid
+   boilerplate ("… Bids: 19 Opening Bid: $50,000 Status: …"), REA imageUrls
+   without a scheme (98.7% of 181k), and a few empty-string saleDates.
+   Idempotent: every check is a no-op once healed. */
+function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; images: number; dates: number } {
+  let tokens = 0, titles = 0, images = 0, dates = 0;
+  for (const l of lots) {
+    const t = l.title as string | undefined;
+    if (t) {
+      const cut = t.search(/\s+(?:Bids:\s*\d|Opening Bid:|Status:\s)/);
+      if (cut > 4) { l.title = t.slice(0, cut).trim(); titles++; }
+    }
+    const img = l.imageUrl as string | undefined;
+    if (img && !/^https?:\/\//.test(img) && !img.startsWith('data:')) {
+      l.imageUrl = 'https://' + img.replace(/^\/+/, '');
+      images++;
+    }
+    if (l.saleDate === '') { (l as unknown as { saleDate: string | null }).saleDate = null; dates++; }
+    const tt = l.titleTokens as unknown[] | undefined;
+    if ((!Array.isArray(tt) || !tt.length) && typeof l.title === 'string' && l.title) {
+      l.titleTokens = titleTokensOf(l.title as string);
+      tokens++;
+    }
+  }
+  return { tokens, titles, images, dates };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -554,7 +589,7 @@ export function guGameKey(title: string, sportYear?: number | null): string | nu
 }
 
 // ── ★3c · stampCultureAxes — subjectKeys[] + itemClass for culture slugs.
-const CULTURE_SLUGS_NORM = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pokemon']);
+const CULTURE_SLUGS_NORM = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pokemon', 'pop-memorabilia']);
 const CULT_ITEM_RULES: [RegExp, string][] = [
   [/\b(gem mint|psa \d|bgs \d|sgc \d|cgc \d|tag \d|graded|rookie card|trading card|hobby box|#\d+)/i, 'card'],
   [/\bsigned (cut|index card)\b/i, 'signed-cut'],
@@ -639,7 +674,7 @@ export function stampCultureAxes(lots: Lot[]): number {
 
 // ── ★5 · restampIdentityKeys — formKey re-derivation, every lot, every build.
 //    MUST run LAST (after every category flip, with the current classifyForm).
-const SPORTS_SLUGS_NORM = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
+const SPORTS_SLUGS_NORM = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia', 'graded-cards', 'memorabilia', 'autographs', 'unopened-wax', 'type-1-photos', 'programs-publications', 'equipment-artifacts']);
 const SPORTS_FORMKEY_BLOCK = new Set(['jewelry', 'wristwatch', 'pocket-watch', 'clock', 'mineral', 'fossil', 'space', 'instrument', 'tech']);
 
 export function restampIdentityKeys(lots: Lot[]): number {

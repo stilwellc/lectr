@@ -25,8 +25,10 @@ import type { AuctionLot } from '../app/types';
 export type L = AuctionLot & { _v?: Record<string, number>; estLowUsd?: number; estHighUsd?: number; realizedUsd?: number; hammerUsd?: number | null };
 
 // global premium fallback where the house didn't publish a hammer — measured
-// median realized/hammer is 1.25, flat 22–26% across houses and price bands.
+// median realized/hammer is 1.25. Kept as the last-resort constant; the
+// per-house schedule (app/lib/premiums) now takes precedence at the use site.
 export const PREMIUM_FALLBACK = 1.25;
+import { houseAllInFactor } from '../app/lib/premiums';
 
 export function median(sorted: number[]): number {
   if (!sorted.length) return 0;
@@ -132,7 +134,9 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
   if (!v || !v.signal) return false;
   const estMid = (lot.estLowUsd! + lot.estHighUsd!) / 2;
   const realized = lot.realizedUsd!;
-  const hammer = (lot.hammerUsd || 0) > 0 ? lot.hammerUsd! : realized / PREMIUM_FALLBACK;
+  // per-house premium schedule (measured + published; flat 1.25 was up to
+  // ~10% biased cross-house — REA runs 1.175, Bonhams low bands 1.28)
+  const hammer = (lot.hammerUsd || 0) > 0 ? lot.hammerUsd! : realized / houseAllInFactor(lot.auctionHouse, realized);
   const isBelow = v.signal.label.startsWith('below');
   const isAbove = v.signal.label.startsWith('above');
   const bucket = isBelow ? st.flagged : isAbove ? st.above : st.unflagged;

@@ -66,6 +66,18 @@ export const ARTISTS = [
   { slug: 'trophies-awards', label: 'Trophies & Awards', market: 'sports' },
   { slug: 'tickets-passes', label: 'Tickets & Passes', market: 'sports' },
   { slug: 'sports-memorabilia', label: 'Sports Memorabilia', market: 'sports' },
+  // Aug-2026 expansion pseudo-artists (REA/H&S/SCP/Lelands/ML/LOTG). Absent
+  // from ARTISTS, marketOf() fell back to 'art' and ~250k sold rows fed no
+  // vertical surface (Aug 13 audit). graded-cards stays ENGINE-excluded like
+  // sports-cards (mass-produced; see build-market) — registration here is
+  // about vertical membership, stats, tape and maker pages.
+  { slug: 'graded-cards', label: 'Graded Cards', market: 'sports' },
+  { slug: 'memorabilia', label: 'Memorabilia', market: 'sports' },
+  { slug: 'autographs', label: 'Autographs', market: 'sports' },
+  { slug: 'unopened-wax', label: 'Unopened Wax', market: 'sports' },
+  { slug: 'type-1-photos', label: 'Type 1 Photos', market: 'sports' },
+  { slug: 'programs-publications', label: 'Programs & Publications', market: 'sports' },
+  { slug: 'equipment-artifacts', label: 'Equipment & Artifacts', market: 'sports' },
   // the pop-culture vertical: high-end 1/1 cultural artifacts, never mass
   // (no comics/cards/video games) — screen-used film & TV, stage-worn music,
   // handwritten lyrics, and the iconic entertainment/historic catch-all
@@ -77,6 +89,7 @@ export const ARTISTS = [
   // sports surface by vertical membership; bulk sold history rides the same
   // engine-exclusion + corpus-only sampling as sports-cards.
   { slug: 'pokemon', label: 'Pokémon', market: 'culture' },
+  { slug: 'pop-memorabilia', label: 'Pop Memorabilia', market: 'culture' },
 ] as const;
 
 export const ARTIST_LABEL: Record<string, string> = Object.fromEntries(

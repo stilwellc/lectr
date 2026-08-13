@@ -25,6 +25,16 @@ const SPORTS_KIND: Record<string, string> = {
   'sports-memorabilia': 'memorabilia',
   'tickets-passes': 'tickets',
   'trophies-awards': 'trophies',
+  // Aug-2026 expansion pseudo-artists (REA/H&S/SCP/Lelands/ML/LOTG) — absent
+  // from this map, stampSubCats was WIPING their crawler-stamped subCats
+  // (~280k rows, Aug 13 audit)
+  'graded-cards': 'cards',
+  'memorabilia': 'memorabilia',
+  'autographs': 'autographs',
+  'unopened-wax': 'wax',
+  'type-1-photos': 'photos',
+  'programs-publications': 'programs',
+  'equipment-artifacts': 'equipment',
 };
 // Goldin's stamped sport values → our drill slugs
 const SPORT_SLUG: Record<string, string> = {

@@ -128,9 +128,14 @@ export function runMarketBuild() {
   // cards, 40k+ sold rows — data asset, never engine-valued.
   const CARDS = 'sports-cards';
   const POKEMON = 'pokemon';
+  // graded-cards (the expansion houses' 165k card rows) rides the same
+  // exclusion: mass-produced, now tokenized by the audit heal — without this
+  // it would enter the O(pool²) passes the moment titleTokens exist.
+  const EXP_CARDS = 'graded-cards';
   const engineAll = all.filter(l =>
     l.artist !== CARDS &&
     l.artist !== POKEMON &&
+    l.artist !== EXP_CARDS &&
     (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
 
   const sold = engineAll.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
@@ -167,6 +172,18 @@ export function runMarketBuild() {
   for (const s of soldSorted) (soldByArtist.get(s.artist) || soldByArtist.set(s.artist, []).get(s.artist)!).push(s);
   const upcoming = engineAll.filter(l => l.status === 'upcoming');
   let valued = 0;
+  // artist-level sell-through (sold vs bought-in) — the bought-in shadow read
+  const artistSellThrough = new Map<string, number>();
+  {
+    const acc = new Map<string, { sold: number; bi: number }>();
+    for (const l of all) {
+      if (l.status !== 'sold' && l.status !== 'bought_in') continue;
+      const a = acc.get(l.artist) || { sold: 0, bi: 0 };
+      if (l.status === 'sold') a.sold++; else a.bi++;
+      acc.set(l.artist, a);
+    }
+    acc.forEach((a, k) => { if (a.sold + a.bi >= 50 && a.bi > 0) artistSellThrough.set(k, Math.round(100 * a.sold / (a.sold + a.bi))); });
+  }
   const tVal = Date.now();
   // sports lots: restrict priors to comps sharing the extracted sport/entity —
   // measured on the Goldin holdout: coverage +44% relative with a paired
@@ -241,7 +258,15 @@ export function runMarketBuild() {
     }
     const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl);
     const v = estimateValue(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
-    if (v) { (lot as AuctionLot & { value?: ValueResult }).value = v; valued++; }
+    if (v) {
+      // BOUGHT-IN SHADOW (Aug 13 value audit): comp pools are sold-only, so
+      // their medians carry survivorship. Attach the artist's contemporaneous
+      // sell-through as flag METADATA (no suppression yet — measure first;
+      // the failToSell receipt already shows flags don't chase no-sales).
+      const st = artistSellThrough.get(lot.artist);
+      if (st !== undefined) (v as ValueResult & { poolSellThroughPct?: number }).poolSellThroughPct = st;
+      (lot as AuctionLot & { value?: ValueResult }).value = v; valued++;
+    }
     else (lot as AuctionLot & { value?: ValueResult | null }).value = null;
   }
   console.log(`[market] valued ${valued}/${upcoming.length} upcoming lots · ${((Date.now() - tVal) / 1000).toFixed(0)}s`);
@@ -558,6 +583,11 @@ export function runMarketBuild() {
       return c;
     };
     const SPORT_SET = new Set(MARKETS.sports);
+    // graded-cards (REA/H&S/SCP/Lelands/ML/LOTG — 165k sold, 30yr archive)
+    // joins every card path: _card identity, cardKey cross-house comps, the
+    // tiered card valuer, the grade ladder. It stays ENGINE-excluded (the
+    // O(pool²) passes) — the card paths are linear.
+    const CARD_SLUGS = new Set(['sports-cards', 'graded-cards']);
     const sportsSold = all.filter(l => SPORT_SET.has(l.artist) && l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate);
 
     // one parse pass over every sold sports lot
@@ -566,7 +596,7 @@ export function runMarketBuild() {
     const byCardKey = new Map<string, AuctionLot[]>();
     const byLadderKey = new Map<string, AuctionLot[]>();
     for (const l of sportsSold as PLot[]) {
-      if (l.artist === 'sports-cards') {
+      if (CARD_SLUGS.has(l.artist)) {
         const c = parseCardCached(l.title || '');
         l._card = c; l._pid = c.playerSlug; l._pname = c.player;
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
@@ -589,7 +619,7 @@ export function runMarketBuild() {
     // constants at the top (PSA-10 ≈10× the PSA-8 base, not 7×). Thin rungs keep
     // the old constant. The tier-2 grade-adjust valuer consumes ladder.mult.
     const gradeLadderFit = fitGradeLadder(
-      (sportsSold as PLot[]).filter(l => l.artist === 'sports-cards'),
+      (sportsSold as PLot[]).filter(l => CARD_SLUGS.has(l.artist)),
     );
     console.log(`[market] grade ladder fitted from ${gradeLadderFit.pairs} within-card pairs (${gradeLadderFit.groups} groups): ` +
       gradeLadderFit.rungs.map(r => `${r.grade}=${r.mult.toFixed(2)}${r.fitted ? '' : '*'}`).join(' ') + ' (*=kept old constant)');
@@ -692,7 +722,7 @@ export function runMarketBuild() {
       // player into _pid/_pname (same objects live in `all`), so reuse it —
       // fall back to a fresh playerOf() parse for any lot §3 skipped (no
       // realizedUsd/saleDate). Idempotent: re-running overwrites the same slug.
-      if (l.status === 'sold' && l.artist !== 'sports-cards') {
+      if (l.status === 'sold' && !CARD_SLUGS.has(l.artist)) {
         const sw = l as AuctionLot & { _pid?: string | null; _pname?: string | null; playerSlug?: string | null; playerName?: string | null };
         let pid = sw._pid ?? null, pname = sw._pname ?? null;
         if (pid == null) { const p = playerOf(l.title || '', l.artist); pid = p.playerSlug; pname = p.player; }
@@ -702,7 +732,7 @@ export function runMarketBuild() {
       }
       if (l.status !== 'upcoming') continue;
       const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null; cardComps?: unknown };
-      if (l.artist === 'sports-cards') {
+      if (CARD_SLUGS.has(l.artist)) {
         const c = parseCardCached(l.title || '');
         lw.playerSlug = c.playerSlug; lw.playerName = c.player;
         const ck = cardKey(c); const lk = cardLadderKey(c);
@@ -786,7 +816,7 @@ export function runMarketBuild() {
             const isGraded = c.gradeNum != null;
             const entry = byPlayer.get(c.playerSlug);
             const pool = (entry?.lots || []).filter(s =>
-              s.artist === 'sports-cards' &&
+              (s.artist === 'sports-cards' || s.artist === 'graded-cards') &&
               ((s as PLot)._card?.gradeNum != null) === isGraded &&
               (s as AuctionLot & { _saleMs?: number })._saleMs! > GRADE_CUT &&
               (s.realizedUsd || 0) > 0);
@@ -942,7 +972,7 @@ export function runMarketBuild() {
   // rows (record sale, past results, realized cohort) but 288k would blow the
   // payload — ship the most-recent 1,500 + top 500 by price (the record lives
   // in the top slice) on the ON-DEMAND archive tier; the rest stay corpus-only.
-  const soldCards = lotsForSlug('sports-cards').filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0);
+  const soldCards = lotsForSlug('sports-cards').concat(lotsForSlug('graded-cards')).filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0);
   const cardSample = new Set<string>();
   soldCards.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => cardSample.add(String(l.id)));
   soldCards.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => cardSample.add(String(l.id)));
@@ -971,7 +1001,7 @@ export function runMarketBuild() {
     // corpus-only: SOLD sport cards + Pokémon stay off the wire — except the
     // samples above. Live lots always ship (they're on the block).
     (l: Record<string, unknown>) =>
-      (l.artist === 'sports-cards' && l.status === 'sold' && !cardSample.has(String(l.id))) ||
+      ((l.artist === 'sports-cards' || l.artist === 'graded-cards') && l.status === 'sold' && !cardSample.has(String(l.id))) ||
       (l.artist === 'pokemon' && l.status === 'sold' && !pokemonSample.has(String(l.id))));
 
   // ── SOLD-OUTCOMES LEDGER — a slim id→[priceUsd, saleDate] map so the profile
@@ -1014,6 +1044,42 @@ export function runMarketBuild() {
   for (let i = lshard; ; i++) { const p = path.join(SERVED, `sold-ledger-${i}.json`); if (fs.existsSync(p)) fs.unlinkSync(p); else break; }
   fs.writeFileSync(path.join(SERVED, 'sold-ledger-index.json'), JSON.stringify({ shards: lshard, entries: ledgerEntries.length, since: LEDGER_CUT }));
   console.log(`[market] sold-ledger: ${ledgerEntries.length} outcomes since ${LEDGER_CUT} → ${lshard} shard(s)`);
+
+  // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit) — how much of final hammer
+  // arrives in the last days, fitted from Goldin's own nightly bidHistory on
+  // SOLD lots: growth(bucket) = median(finalBid / bidAtSnapshot) for snapshots
+  // daysOut ∈ [<1, 1-2, 2-4, 4-8, 8+]. This is the honest projection factor
+  // that turns a stale nightly currentBid into an expected close, and the
+  // basis for the bid-house 'projected below comps' read. Served in
+  // market.json analytics.closeCurve; buildUpcoming stamps per-lot projections.
+  const CURVE_EDGES = [1, 2, 4, 8];
+  const curveBucket = (daysOut: number) => { let b = 0; for (const e of CURVE_EDGES) { if (daysOut < e) break; b++; } return b; };
+  {
+    const perBucket: number[][] = [[], [], [], [], []];
+    for (const l of all) {
+      if (l.status !== 'sold' || !(l.realizedUsd! > 0)) continue;
+      const bh = (l as AuctionLot & { bidHistory?: Array<{ d: string; b: number; n: number }> }).bidHistory;
+      if (!Array.isArray(bh) || bh.length < 2) continue;
+      const closeMs = new Date((l as AuctionLot & { saleDateTime?: string | null }).saleDateTime || l.saleDate || '').getTime();
+      if (isNaN(closeMs)) continue;
+      const { lotAllInFactor } = require('../app/lib/premiums');
+      const finalBid = l.realizedUsd! / lotAllInFactor(l, l.realizedUsd);
+      for (const snap of bh) {
+        if (!(snap.b > 0)) continue;
+        const daysOut = (closeMs - new Date(snap.d).getTime()) / 86400000;
+        if (daysOut < 0 || daysOut > 30) continue;
+        const g = finalBid / snap.b;
+        if (g >= 1 && g < 50) perBucket[curveBucket(daysOut)].push(g);
+      }
+    }
+    const closeCurve = perBucket.map(a => {
+      if (a.length < 200) return null;
+      a.sort((x, y) => x - y);
+      return Math.round(a[Math.floor(a.length / 2)] * 1000) / 1000;
+    });
+    (markets.all.analytics as unknown as Record<string, unknown>).closeCurve = { buckets: closeCurve, edges: CURVE_EDGES, n: perBucket.map(a => a.length) };
+    console.log('[market] close curve (median finalBid/bid by daysOut):', closeCurve.join(' '), '| n:', perBucket.map(a => a.length).join(' '));
+  }
 
   // rebuild the eager payload so upcoming lots carry their fresh `value`.
   // Hand it the IN-MEMORY corpus: letting it re-read the gz from disk doubled

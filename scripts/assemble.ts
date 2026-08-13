@@ -29,8 +29,14 @@ const isArchiveTier = (l: Record<string, unknown>) => isGoldinSold(l) || l.archi
 
 async function main() {
   const DATA_DIR = SERVED_DIR;
-  const allLots = readAllSegments() as unknown as AuctionLot[];
-  if (!allLots.length) throw new Error('[assemble] no segments found — refusing to publish an empty corpus');
+  const allLotsRaw = readAllSegments() as unknown as AuctionLot[];
+  if (!allLotsRaw.length) throw new Error('[assemble] no segments found — refusing to publish an empty corpus');
+  // JUNK GATE (Aug 13 audit): broken scrapes that carry CSS instead of a title
+  // (435 rows, Lelands/LOTG windows-era) and the one "Lot Withdrawn … Status:
+  // Sold" row — dead weight in token space, never a real lot.
+  const JUNK_TITLE = /\.pagination\s*\{|\{\s*clear:\s*both|^\d*\s*Lot Withdrawn\b/i;
+  const allLots = allLotsRaw.filter(l => !JUNK_TITLE.test(String(l.title || '')));
+  if (allLotsRaw.length !== allLots.length) console.log(`[assemble] junk gate dropped ${allLotsRaw.length - allLots.length} rows`);
   console.log(`[assemble] reunioned ${allLots.length} lots from segments`);
 
   // ── SANITY GATE ─────────────────────────────────────────────────────────
