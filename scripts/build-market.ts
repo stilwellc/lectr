@@ -124,9 +124,13 @@ export function runMarketBuild() {
   // physical-match signal. Like cards, they stay in `all` (so they feed
   // stats.json / market series / records / the sold archive) but never enter
   // the engine pool — no value, no comps, no repeat-sale grouping.
+  // Pokémon (the culture TCG slug) rides the SAME exclusion: mass-produced
+  // cards, 40k+ sold rows — data asset, never engine-valued.
   const CARDS = 'sports-cards';
+  const POKEMON = 'pokemon';
   const engineAll = all.filter(l =>
     l.artist !== CARDS &&
+    l.artist !== POKEMON &&
     (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
 
   const sold = engineAll.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
@@ -943,6 +947,13 @@ export function runMarketBuild() {
   soldCards.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => cardSample.add(String(l.id)));
   soldCards.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => cardSample.add(String(l.id)));
   console.log(`[market] served sold-card sample: ${cardSample.size} of ${soldCards.length}`);
+  // Pokémon: same sampling doctrine — the maker page needs real rows (record
+  // sale, past results) but the 40k history stays corpus-only.
+  const soldPokemon = lotsForSlug('pokemon').filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0);
+  const pokemonSample = new Set<string>();
+  soldPokemon.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => pokemonSample.add(String(l.id)));
+  soldPokemon.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => pokemonSample.add(String(l.id)));
+  console.log(`[market] served sold-pokemon sample: ${pokemonSample.size} of ${soldPokemon.length}`);
   // Culture is a MIXED vertical (Goldin no-estimate + Sotheby's/Christie's
   // estimate-bearing), and only sports/science surfaces mount the phase-3
   // archive — so Goldin culture sold rows (~9k) went unreachable, hiding half
@@ -954,10 +965,14 @@ export function runMarketBuild() {
   // `archived === true` clause once leaked the 252K-row RR sold archive into
   // the phase-2 shards (~290MB on the wire for every useFullLots surface).
   writeCorpusAndServed(all as unknown as Record<string, unknown>[],
+    // NOTE: 'pokemon' is deliberately NOT in CULTURE_KEEP — its bulk sold
+    // history goes to the archive tier like sports cards, not phase-2 shards.
     (l: Record<string, unknown>) => (l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string)) || l.archived === true,
-    // corpus-only: SOLD sport cards stay off the wire — except the sample above.
-    // Live cards always ship (they're on the block).
-    (l: Record<string, unknown>) => l.artist === 'sports-cards' && l.status === 'sold' && !cardSample.has(String(l.id)));
+    // corpus-only: SOLD sport cards + Pokémon stay off the wire — except the
+    // samples above. Live lots always ship (they're on the block).
+    (l: Record<string, unknown>) =>
+      (l.artist === 'sports-cards' && l.status === 'sold' && !cardSample.has(String(l.id))) ||
+      (l.artist === 'pokemon' && l.status === 'sold' && !pokemonSample.has(String(l.id))));
 
   // ── SOLD-OUTCOMES LEDGER — a slim id→[priceUsd, saleDate] map so the profile
   // can resolve SAVED lots that sold into the archive / corpus-only tiers (whose

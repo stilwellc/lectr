@@ -2156,6 +2156,15 @@ const GOLDIN_EXCLUDE_MISC = /\b(sports illustrated|magazine|newsstand|comic|shon
 // lots.json OR sold-archive.json, where a surface could render them verbatim.
 const GOLDIN_LEAK_NOTE = /\bdo not list\b|per shaneeza|per wagner|do not sell\b/i;
 
+// POKÉMON — the one allowlisted Non-Sport TCG line (Collin, Aug 2026): routed
+// to the 'pokemon' culture slug, never a sports slug. Checked BEFORE the card
+// gates in goldinRoute/ingest so (a) the dedicated Non-Sport passes keep their
+// lots and (b) a Pokémon card surfacing in a MIXED sweep (the §3b per-auction
+// recent-close sweep runs sportScoped over ALL completed auctions, TCG Weekly
+// included) routes 'pokemon' instead of falling through looksLikeCard into
+// sports-cards. Other TCG (Magic/YGO/One Piece/…) stays excluded.
+const GOLDIN_POKEMON = /\bpok[eé]mon\b/i;
+
 const GOLDIN_GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|fight[- ]worn|tour[- ](used|worn)|warm[- ]?up[- ]worn|practice[- ]worn|game bat|game ball|photo[- ]?match(ed)?|mears\b)\b/i;
 const GOLDIN_TROPHY = /\b(trophy|award|championship ring|title belt|winners? medal|olympic medal|plaque|mvp\b|heisman|hall of fame ring|championship pendant)\b/i;
 const GOLDIN_TICKET = /\b(tickets?\b|stub|full ticket|season pass|press pass|credential|all[- ]access pass)\b/i;
@@ -2171,8 +2180,11 @@ const GOLDIN_TICKET = /\b(tickets?\b|stub|full ticket|season pass|press pass|cre
 // keep the original doctrine (cards blocked) since they can surface Non-Sport.
 function goldinRoute(title: string, sportScoped = false): string | null {
   const t = title.toLowerCase();
-  if (GOLDIN_EXCLUDE_GAMES.test(t)) return 'blocked';   // never video games
+  if (GOLDIN_EXCLUDE_GAMES.test(t)) return 'blocked';   // never video games (incl. sealed Pokémon games)
   if (GOLDIN_EXCLUDE_MISC.test(t)) return 'blocked';    // magazines, theme parks, props
+  // Pokémon wins BEFORE every card gate — including the sportScoped card
+  // fallback, so a TCG lot in a mixed sweep can never land in sports-cards.
+  if (GOLDIN_POKEMON.test(t)) return 'pokemon';
   if (!sportScoped && GOLDIN_CARD_MAKERS.test(t)) return 'blocked'; // unscoped: never cards
   // sports objects win over the card default — a game-used jersey in a Sport
   // pass is game-used, not a card (checked before the sportScoped card fallback)
@@ -2291,8 +2303,10 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     // artifacts). Otherwise sport-scoped or plain object routing.
     // sport-scoped (category:['Sport']) passes KEEP cards → sports-cards; only
     // unscoped passes hard-drop cards (they could be Non-Sport/Pokémon).
-    if (!cultureScoped && (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t)))) { dropped++; return; }
-    const routed = cultureScoped ? routeCulture(lot.title) : goldinRoute(lot.title, sportScoped);
+    if (!cultureScoped && (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t) && !GOLDIN_POKEMON.test(t)))) { dropped++; return; }
+    const routed = cultureScoped
+      ? (GOLDIN_POKEMON.test(t) && !GOLDIN_EXCLUDE_GAMES.test(t) ? 'pokemon' : routeCulture(lot.title))
+      : goldinRoute(lot.title, sportScoped);
     // 'blocked' is a hard exclusion (slab with no object signal, etc.) — the
     // facet fallback must never resurrect it, or graded cards ride the
     // Tickets/Game-Used facets straight into the sports vertical.
@@ -2358,7 +2372,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     if (byId.has(lot.lot_id)) return false; // live pass or an earlier sold row won
     const t = lot.title.toLowerCase();
     if (GOLDIN_LEAK_NOTE.test(lot.title)) { dropped++; return false; }
-    if (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t))) { dropped++; return false; }
+    if (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t) && !GOLDIN_POKEMON.test(t))) { dropped++; return false; }
     const routed = goldinRoute(lot.title, sportScoped);
     if (routed === 'blocked') { dropped++; return false; }
     const artist = routed || fallback;
@@ -2485,6 +2499,33 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
     if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
     console.log(`  [Goldin] live Culture pass: ${Math.min(total, CAP)} lots enumerated`);
+  }
+  // 1a-pokemon · LIVE POKÉMON — the one allowlisted Non-Sport TCG line
+  // (category:['Non-Sport'], sub_category:['Pokemon'] — Goldin's own facet, so
+  // the query scope IS the identity). Routes to the 'pokemon' culture slug;
+  // the 40k sold history is the one-time backfill (backfill-goldin-pokemon),
+  // the nightly Completed-flip + §3b sweep grow it — same doctrine as cards.
+  {
+    let from = 0, total = Infinity;
+    const CAP = 3000; // live Pokémon runs ~950 today; headroom for TCG Elite weeks
+    while (from < Math.min(total, CAP)) {
+      try {
+        const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Non-Sport'], sub_category: ['Pokemon'], size: 100, from });
+        total = t;
+        if (!lots.length) break;
+        lots.forEach((l: any) => ingest(l, 'pokemon'));
+        from += 100;
+        await sleep(400);
+      } catch (e) {
+        console.log(`  [Goldin] live Pokémon pass truncated at ${from}:`, e);
+        goldinFeedComplete = false;
+        break;
+      }
+    }
+    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit ≠ enumerated
+    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP));
+    console.log(`  [Goldin] live Pokémon pass: ${Math.min(total, CAP)} lots enumerated`);
   }
   // 1b · AUCTION-AWARE LIVE PASS — newly launched flagship auctions (e.g.
   // "2026 Summer Game Used Memorabilia Auction") can go Active with their

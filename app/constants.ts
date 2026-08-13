@@ -72,6 +72,11 @@ export const ARTISTS = [
   { slug: 'movie-tv', label: 'Film & TV', market: 'culture' },
   { slug: 'music-memorabilia', label: 'Music', market: 'culture' },
   { slug: 'entertainment-memorabilia', label: 'Entertainment & Icons', market: 'culture' },
+  // the one allowlisted TCG line (Aug 2026): Goldin's Non-Sport Pokémon facet —
+  // cards, sealed boxes/packs, sets. Lives in culture, firewalled from every
+  // sports surface by vertical membership; bulk sold history rides the same
+  // engine-exclusion + corpus-only sampling as sports-cards.
+  { slug: 'pokemon', label: 'Pokémon', market: 'culture' },
 ] as const;
 
 export const ARTIST_LABEL: Record<string, string> = Object.fromEntries(

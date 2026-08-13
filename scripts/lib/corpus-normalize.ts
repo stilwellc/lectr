@@ -554,7 +554,7 @@ export function guGameKey(title: string, sportYear?: number | null): string | nu
 }
 
 // ── ★3c · stampCultureAxes — subjectKeys[] + itemClass for culture slugs.
-const CULTURE_SLUGS_NORM = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia']);
+const CULTURE_SLUGS_NORM = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pokemon']);
 const CULT_ITEM_RULES: [RegExp, string][] = [
   [/\b(gem mint|psa \d|bgs \d|sgc \d|cgc \d|tag \d|graded|rookie card|trading card|hobby box|#\d+)/i, 'card'],
   [/\bsigned (cut|index card)\b/i, 'signed-cut'],
