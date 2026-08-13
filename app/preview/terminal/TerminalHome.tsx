@@ -427,6 +427,23 @@ export default function TerminalHomePage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
+  // The pulse board's "closing next" line: each house's NEAREST close in the
+  // scoped live book, soonest first. n = lots that settle that day.
+  const closingNext = useMemo(() => {
+    const byHouse = new Map<string, { house: string; when: string; n: number }>();
+    for (const l of upcoming) {
+      if (l.resultsPending) continue;
+      const h = l.auctionHouse;
+      if (!h) continue;
+      const when = trueSaleDay(l);
+      if (!when) continue;
+      const cur = byHouse.get(h);
+      if (!cur || when < cur.when) byHouse.set(h, { house: h, when, n: 1 });
+      else if (when === cur.when) cur.n++;
+    }
+    return Array.from(byHouse.values()).sort((a, b) => (a.when < b.when ? -1 : 1)).slice(0, 3);
+  }, [upcoming]);
+
   // One shared below-market pass.
   const belowSignal = useMemo(() => {
     const ids = new Set<string>();
@@ -725,6 +742,7 @@ export default function TerminalHomePage() {
               play={!fromCache}
               isMobile={mounted && isMobile}
               serial={lastCrawl}
+              closingNext={closingNext}
             />
 
             {/* ══ TONIGHT'S WALL — the photographed front row (kept). A padded

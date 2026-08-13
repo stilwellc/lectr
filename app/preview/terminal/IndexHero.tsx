@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
@@ -60,6 +60,77 @@ function RailMark({ k }: { k: 'onBlock' | 'trend' | 'bids' | 'below' | 'search' 
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
+/* ── THE PULSE BOARD PRIMITIVES ─────────────────────────────────────────────
+   The "Right now" panel is the lander's heartbeat: a bento of live blocks
+   (Block's geometry), numerals that settle like a ticker (Robinhood's data-as-
+   protagonist), hairline precision and choreographed micro-motion (Linear).
+   Everything below is display grammar only — every figure keeps its existing
+   honest label; nothing new masquerades as a verified read. */
+
+/** Ticker settle: the numeral counts to its value on fresh arrival. Tabular
+ *  nums upstream keep the width stable; reduced-motion (or a cached back-nav)
+ *  renders resolved instantly. */
+function useCountUp(target: number, animate: boolean): number {
+  const [shown, setShown] = useState(animate ? 0 : target);
+  const raf = useRef<number | null>(null);
+  useEffect(() => {
+    if (!animate) { setShown(target); return; }
+    const t0 = performance.now();
+    const dur = 900;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      const e = 1 - Math.pow(1 - p, 3); // ease-out cubic — fast start, soft landing
+      setShown(Math.round(target * e));
+      if (p < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+  }, [target, animate]);
+  return shown;
+}
+
+/** The trend block's spine — the scoped market's real hero series (demand /
+ *  realized quarterly medians), drawn as a single quiet line. Descriptive ink
+ *  only: it never wears the up/down register (the CI'd reads live elsewhere). */
+function Spark({ pts, play }: { pts: number[]; play: boolean }) {
+  if (pts.length < 3) return null;
+  const w = 120, h = 26, pad = 2;
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const span = max - min || 1;
+  const d = pts
+    .map((v, i) => {
+      const x = pad + (i / (pts.length - 1)) * (w - pad * 2);
+      const y = pad + (1 - (v - min) / span) * (h - pad * 2);
+      return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  const last = pts[pts.length - 1];
+  const lx = w - pad, ly = pad + (1 - (last - min) / span) * (h - pad * 2);
+  return (
+    <svg className={styles.pulseSpark} viewBox={`0 0 ${w} ${h}`} width={w} height={h}
+      data-play={play ? 'true' : undefined} aria-hidden>
+      <path d={d} pathLength={1} fill="none" stroke="currentColor" strokeWidth="1.6"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r="2.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** 'YYYY-MM-DD' → the room's shorthand: tonight / tmrw / Fri / Aug 16. */
+function relDay(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - today.getTime()) / 86400000);
+  if (days <= 0) return 'tonight';
+  if (days === 1) return 'tmrw';
+  if (days < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export interface ClosingHouse { house: string; when: string; n: number }
+
 // the hero series' point shape (period/value/n)
 type IndexPoint = HeroPoint;
 
@@ -95,6 +166,9 @@ interface Props {
   isMobile?: boolean;
   /** the data date, worn as the masthead serial (NO. YYYYMMDD) */
   serial?: string | null;
+  /** the live book's nearest closes, per house (soonest first) — the pulse
+      board's "closing next" ticker */
+  closingNext?: ClosingHouse[];
 }
 
 const median = (a: number[]): number => {
@@ -158,6 +232,7 @@ export default function IndexHero({
   play,
   isMobile,
   serial,
+  closingNext,
 }: Props) {
   const reduce = useReducedMotion();
   const hero = useHeroSeries(activeKey, demand, realized);
@@ -205,6 +280,82 @@ export default function IndexHero({
     transition: { duration: 0.6, ease: EASE, delay: reduce || !play ? 0 : delay },
   });
 
+  // ── THE PULSE BOARD — the shared "Right now" composition (desktop rail +
+  // mobile card render the same instrument; only the shell differs).
+  const settle = play && !reduce;
+  const onBlockShown = useCountUp(onBlock, settle);
+  const belowShown = useCountUp(belowMkt, settle);
+  const sparkPts = useMemo(() => hero.idx.slice(-12).map((p) => p.value), [hero.idx]);
+  const closes = (closingNext || []).slice(0, 3);
+  const pulseBoard = (
+    <div className={styles.pulse} data-play={play ? 'true' : undefined}>
+      <div className={styles.pulseHead} aria-hidden>
+        <span className={styles.pulseTitle}>Right now</span>
+        <span className={styles.pulseLiveTag}><i className={styles.pulseDot} />Live</span>
+      </div>
+
+      <div className={styles.pulseGrid}>
+        {/* the lead block — the room's population, at display scale */}
+        <div className={styles.pulseBlock} data-lead="true">
+          <span className={styles.pulseLabel}><RailMark k="onBlock" />On the block</span>
+          <span className={styles.pulseValLead}>{fmtInt(onBlockShown)}</span>
+          <span className={styles.pulseSub}>lots open across the room</span>
+        </div>
+
+        {/* a lone small block spans the row — the bento never shows a hole */}
+        {roi != null && (
+          <div className={styles.pulseBlock} data-span2={!bc ? 'true' : undefined}
+            title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
+            <span className={styles.pulseLabel}><RailMark k="trend" />Value trend · est.</span>
+            <span className={`${styles.pulseVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
+            <Spark pts={sparkPts} play={settle} />
+            {roiFlag && <span className={styles.pulseFlag}>{roiFlag}</span>}
+          </div>
+        )}
+
+        {bc && (
+          <div className={styles.pulseBlock} data-span2={roi == null ? 'true' : undefined}
+            title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
+            <span className={styles.pulseLabel}><RailMark k="bids" />Bid competition</span>
+            <span className={styles.pulseVal}>
+              {bc.now}
+              <em className={styles.pulseUnit}>bids/lot</em>
+              {bc.dir && <i className={styles.pulseDir} data-dir={bc.dir} aria-hidden>{bc.dir === 'up' ? '▲' : '▼'}</i>}
+            </span>
+          </div>
+        )}
+
+        {/* the one action on the board — butter, full width, unmissable */}
+        {belowMkt ? (
+          <button type="button" className={styles.pulseAction} onClick={onOpenBelow}
+            aria-label={`${belowMkt} below-market lots — see them`}>
+            <span className={styles.pulseLabel}><RailMark k="below" />Below market now</span>
+            <span className={styles.pulseActionVal}>{fmtInt(belowShown)}<em className={styles.pulseGo} aria-hidden>↗</em></span>
+          </button>
+        ) : (
+          <div className={styles.pulseBlock} data-span2="true">
+            <span className={styles.pulseLabel}><RailMark k="below" />Below market now</span>
+            <span className={styles.pulseVal}>—</span>
+            <span className={styles.pulseSub}>no flags in the live book</span>
+          </div>
+        )}
+      </div>
+
+      {closes.length > 0 && (
+        <div className={styles.pulseTicker} aria-label="Auctions closing next">
+          <span className={styles.pulseTickerLabel}>Closing next</span>
+          <span className={styles.pulseTickerChips}>
+            {closes.map((c) => (
+              <span key={c.house} className={styles.pulseChip} data-tonight={relDay(c.when) === 'tonight' ? 'true' : undefined}>
+                {c.house}<em>{relDay(c.when)}</em>
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+
 
   // ── MOBILE: its own scene — a compact "index card" (a premium trading-app
   // asset tile), NOT the desktop slab scaled down.
@@ -229,46 +380,10 @@ export default function IndexHero({
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
-          {/* the stat tiles + search — a mobile "Right now" panel, the phone-
-              native twin of the desktop pulse card. Settles AFTER the tape. */}
+          {/* the pulse board — the lander's heartbeat, phone-native shell.
+              Settles AFTER the tape. */}
           <m.div className={styles.mRightNow} {...rise(0.64)}>
-            {!showMonument && (
-              <div className={styles.railHead} aria-hidden>
-                <span className={styles.railHeadLabel}>Right now</span>
-                <span className={styles.railHeadTick}>live</span>
-              </div>
-            )}
-            <div className={styles.mHeroStats}>
-              {roi != null && (
-                <span className={styles.mStat} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
-                  <span className={`${styles.mStatVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
-                  <span className={styles.mStatLabel}>Value trend · est.</span>
-                </span>
-              )}
-              {bc ? (
-                <span className={styles.mStat} title="Median bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
-                  <span className={styles.mStatVal}>{bc.now}</span>
-                  <span className={styles.mStatLabel}>Bids/lot</span>
-                </span>
-              ) : (
-                <span className={styles.mStat}>
-                  <span className={styles.mStatVal}>{fmtInt(onBlock)}</span>
-                  <span className={styles.mStatLabel}>On the block</span>
-                </span>
-              )}
-              {belowMkt ? (
-                <button type="button" className={styles.mStat} data-accent="true" onClick={onOpenBelow} aria-label={`${belowMkt} below-market lots — see them`}>
-                  <span className={styles.mStatVal}>{fmtInt(belowMkt)}</span>
-                  <span className={styles.mStatLabel}>Below market ↗</span>
-                </button>
-              ) : (
-                <span className={styles.mStat}>
-                  <span className={styles.mStatVal}>—</span>
-                  <span className={styles.mStatLabel}>Below market</span>
-                </span>
-              )}
-            </div>
-
+            {pulseBoard}
             <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
               <kbd className={styles.kbd}>⌘K</kbd>
               <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
@@ -308,56 +423,7 @@ export default function IndexHero({
           <m.aside className={styles.mtSide} {...rise(0.16)}>
             {showMonument && <TapeMonument row={lead!} play={play} />}
             <div className={styles.heroRail} data-under-monument={showMonument ? 'true' : undefined}>
-              {!showMonument && (
-                <div className={styles.railHead} aria-hidden>
-                  <span className={styles.railHeadLabel}>Right now</span>
-                  <span className={styles.railHeadTick}>live</span>
-                </div>
-              )}
-              <div className={styles.railRow}>
-                <RailMark k="onBlock" />
-                <span className={styles.railStack}>
-                  <span className={styles.railLabel}>On the block</span>
-                  <span className={styles.railVal}>{fmtInt(onBlock)}</span>
-                </span>
-              </div>
-              {roi != null && (
-                <div className={styles.railRow} title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
-                  <RailMark k="trend" />
-                  <span className={styles.railStack}>
-                    <span className={styles.railLabel}>Value trend · est.</span>
-                    <span className={`${styles.railVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
-                  </span>
-                </div>
-              )}
-              {roiFlag && <div className={styles.railFlagLine}>{roiFlag}</div>}
-              {bc && (
-                <div className={styles.railRow} title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
-                  <RailMark k="bids" />
-                  <span className={styles.railStack}>
-                    <span className={styles.railLabel}>Bid competition</span>
-                    <span className={styles.railVal}>{bc.now} bids/lot</span>
-                  </span>
-                </div>
-              )}
-              {belowMkt ? (
-                <button type="button" className={styles.railBtn} onClick={onOpenBelow}
-                  aria-label={`${belowMkt} below-market lots — see them`}>
-                  <RailMark k="below" />
-                  <span className={styles.railStack}>
-                    <span className={styles.railLabel}>Below market now</span>
-                    <span className={styles.railVal} data-accent="true">{fmtInt(belowMkt)}<em className={styles.railGo} aria-hidden>↗</em></span>
-                  </span>
-                </button>
-              ) : (
-                <div className={styles.railRow}>
-                  <RailMark k="below" />
-                  <span className={styles.railStack}>
-                    <span className={styles.railLabel}>Below market now</span>
-                    <span className={styles.railVal}>—</span>
-                  </span>
-                </div>
-              )}
+              {pulseBoard}
               <button type="button" className={styles.railCmd} onClick={onCommand}>
                 <RailMark k="search" />
                 <kbd className={styles.kbd}>⌘</kbd>
