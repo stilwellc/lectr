@@ -288,19 +288,21 @@ export default function IndexHero({
               <span className={styles.pulseTagVal}>{fmtInt(belowShown)}</span>
             </span>
           </button>
-        ) : (
+        ) : activeKey === 'all' ? (
+          // the empty state keeps the object language: blank tag stock,
+          // waiting to be hung. TOTAL MARKET ONLY — a scoped lander with no
+          // flags just drops the row (several verticals rarely flag, and a
+          // permanent ghost there reads as a broken feature, not a fact).
           <div className={styles.pulseBlock} data-below="true">
             <span className={styles.pulseCellText}>
               <span className={styles.pulseLabel}>Below market now</span>
               <span className={styles.pulseSub}>no flags in the live book</span>
             </span>
-            {/* the empty state keeps the object language: a blank tag stock,
-                waiting to be hung */}
             <span className={`${styles.pulseTag} ${styles.pulseTagGhost}`} aria-hidden>
               <span className={styles.pulseTagVal}>0</span>
             </span>
           </div>
-        )}
+        ) : null}
       </div>
 
     </div>
