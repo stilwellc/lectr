@@ -276,7 +276,18 @@
 }
 .pulseChip[data-tonight='true'] { border-color: rgba(232, 218, 182, 0.35); }
 .pulseChip[data-tonight='true'] em { color: var(--tt-butter); }
-/* phone shell: the departures line stacks — label above, chips flowing left */
+/* desktop rail: the ticker rides between the board and the search */
+.heroRail .pulseTicker { margin-top: 10px; }
+/* ── PHONE SHELL RECOMPOSITION ── the lead + trend pair up 2-across (the
+   bento tightens to the thumb), the bid read runs full-width beneath, and the
+   departures line closes the card AFTER the search. */
+.mRightNow .pulseBlock[data-lead='true'] { grid-column: auto; padding: 13px 13px 12px; }
+.mRightNow .pulseBlock[data-pair='true'] { grid-column: auto; }
+/* half-width blocks: the label tightens so "VALUE TREND · EST." never clips */
+.mRightNow .pulseBlock[data-pair='true'] .pulseLabel,
+.mRightNow .pulseBlock[data-lead='true'] .pulseLabel { font-size: 9.5px; letter-spacing: 0.06em; gap: 6px; }
+.mRightNow .pulseBlock[data-bc='true'] { grid-column: 1 / -1; }
+.mRightNow .pulseValLead { font-size: 30px; }
 .mRightNow .pulseTicker { flex-direction: column; align-items: flex-start; gap: 8px; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
@@ -538,17 +549,47 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.02em;
   text-transform: uppercase; color: var(--tt-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* mobile search — the elevated command bar (matches the desktop rail search):
-   brighter surface, a real drop shadow lifting it off the panel */
+/* mobile search — THE COMMAND BAR. It must never read as the action bar's
+   sibling: butter belongs to below-market; the search is the brightest
+   surface on the card, and a Linear glint — a light streak sweeping the bar
+   every few seconds — marks it as the instrument you can TYPE into. */
 .mHero .cmdPillFull {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   width: 100%;
   justify-content: flex-start;
+  gap: 10px;
   padding: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045));
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.055));
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 6px 18px -10px rgba(0, 0, 0, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 6px 18px -10px rgba(0, 0, 0, 0.75),
+    0 0 22px -12px rgba(255, 255, 255, 0.35);
   color: var(--tt-fg);
+}
+.mHero .cmdPillFull .railMark { color: var(--tt-muted); }
+/* the glint — one diagonal streak, a long idle between passes */
+.mHero .cmdPillFull::after {
+  content: '';
+  position: absolute;
+  inset: -40% auto -40% -60%;
+  width: 42%;
+  transform: skewX(-18deg) translateX(0);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09) 45%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.09) 55%, transparent);
+  animation: cmdGlint 5.6s cubic-bezier(0.23, 1, 0.32, 1) 1.6s infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes cmdGlint {
+  0% { transform: skewX(-18deg) translateX(0); }
+  22% { transform: skewX(-18deg) translateX(420%); }
+  100% { transform: skewX(-18deg) translateX(420%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mHero .cmdPillFull::after { animation: none; opacity: 0; }
 }
 .mHero .cmdPillFull .cmdLabel { color: var(--tt-fg); font-weight: 500; }
 .mHero .cmdPillFull .cmdArrow {

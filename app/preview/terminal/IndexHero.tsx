@@ -304,7 +304,7 @@ export default function IndexHero({
 
         {/* a lone small block spans the row — the bento never shows a hole */}
         {roi != null && (
-          <div className={styles.pulseBlock} data-span2={!bc ? 'true' : undefined}
+          <div className={styles.pulseBlock} data-span2={!bc ? 'true' : undefined} data-pair="true"
             title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
             <span className={styles.pulseLabel}><RailMark k="trend" />Value trend · est.</span>
             <span className={`${styles.pulseVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
@@ -314,7 +314,7 @@ export default function IndexHero({
         )}
 
         {bc && (
-          <div className={styles.pulseBlock} data-span2={roi == null ? 'true' : undefined}
+          <div className={styles.pulseBlock} data-span2={roi == null ? 'true' : undefined} data-bc="true"
             title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
             <span className={styles.pulseLabel}><RailMark k="bids" />Bid competition</span>
             <span className={styles.pulseVal}>
@@ -341,20 +341,23 @@ export default function IndexHero({
         )}
       </div>
 
-      {closes.length > 0 && (
-        <div className={styles.pulseTicker} aria-label="Auctions closing next">
-          <span className={styles.pulseTickerLabel}>Closing next</span>
-          <span className={styles.pulseTickerChips}>
-            {closes.map((c) => (
-              <span key={c.house} className={styles.pulseChip} data-tonight={relDay(c.when) === 'tonight' ? 'true' : undefined}>
-                {c.house}<em>{relDay(c.when)}</em>
-              </span>
-            ))}
-          </span>
-        </div>
-      )}
     </div>
   );
+
+  // the departures line — inside the board on desktop, after the search on
+  // the phone (the shell decides; the element is one and the same)
+  const tickerEl = closes.length > 0 ? (
+    <div className={styles.pulseTicker} aria-label="Auctions closing next">
+      <span className={styles.pulseTickerLabel}>Closing next</span>
+      <span className={styles.pulseTickerChips}>
+        {closes.map((c) => (
+          <span key={c.house} className={styles.pulseChip} data-tonight={relDay(c.when) === 'tonight' ? 'true' : undefined}>
+            {c.house}<em>{relDay(c.when)}</em>
+          </span>
+        ))}
+      </span>
+    </div>
+  ) : null;
 
 
   // ── MOBILE: its own scene — a compact "index card" (a premium trading-app
@@ -381,14 +384,16 @@ export default function IndexHero({
           </m.div>
 
           {/* the pulse board — the lander's heartbeat, phone-native shell.
-              Settles AFTER the tape. */}
+              Settles AFTER the tape. Phone order: board → search → departures. */}
           <m.div className={styles.mRightNow} {...rise(0.64)}>
             {pulseBoard}
             <button type="button" className={styles.cmdPillFull} onClick={onCommand}>
+              <RailMark k="search" />
               <kbd className={styles.kbd}>⌘K</kbd>
               <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
               <span className={styles.cmdArrow} aria-hidden>↵</span>
             </button>
+            {tickerEl}
           </m.div>
         </section>
       </LazyMotion>
@@ -424,6 +429,7 @@ export default function IndexHero({
             {showMonument && <TapeMonument row={lead!} play={play} />}
             <div className={styles.heroRail} data-under-monument={showMonument ? 'true' : undefined}>
               {pulseBoard}
+              {tickerEl}
               <button type="button" className={styles.railCmd} onClick={onCommand}>
                 <RailMark k="search" />
                 <kbd className={styles.kbd}>⌘</kbd>
