@@ -299,7 +299,7 @@ export default function IndexHero({
       <div className={styles.pulseGrid}>
         <div className={styles.pulseBlock} data-lead="true">
           <span className={styles.pulseCellText}>
-            <span className={styles.pulseLabel}><RailMark k="onBlock" />On the block</span>
+            <span className={styles.pulseLabel}>On the block</span>
             <span className={styles.pulseSub}>lots open across the room</span>
           </span>
           <span className={styles.pulsePaddle}>
@@ -314,7 +314,7 @@ export default function IndexHero({
           <div className={styles.pulseBlock} data-trend="true"
             title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
             <span className={styles.pulseCellText}>
-              <span className={styles.pulseLabel}><RailMark k="trend" />Value trend · est.</span>
+              <span className={styles.pulseLabel}>Value trend · est.</span>
               <span className={`${styles.pulseVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
               {roiFlag && <span className={styles.pulseFlag}>{roiFlag}</span>}
             </span>
@@ -326,7 +326,7 @@ export default function IndexHero({
           <div className={styles.pulseBlock}
             title="Median number of bids drawn per sold lot — a demand primitive from Goldin's bid auctions. Not a price move.">
             <span className={styles.pulseCellText}>
-              <span className={styles.pulseLabel}><RailMark k="bids" />Bid competition</span>
+              <span className={styles.pulseLabel}>Bid competition</span>
             </span>
             <span className={styles.pulseVal}>
               {bc.now}
@@ -340,13 +340,13 @@ export default function IndexHero({
         {belowMkt ? (
           <button type="button" className={styles.pulseAction} data-below="true" onClick={onOpenBelow}
             aria-label={`${belowMkt} below-market lots — see them`}>
-            <span className={styles.pulseLabel}><RailMark k="below" />Below market now</span>
+            <span className={styles.pulseLabel}>Below market now</span>
             <span className={styles.pulseActionVal}>{fmtInt(belowShown)}<em className={styles.pulseGo} aria-hidden>↗</em></span>
           </button>
         ) : (
           <div className={styles.pulseBlock} data-below="true">
             <span className={styles.pulseCellText}>
-              <span className={styles.pulseLabel}><RailMark k="below" />Below market now</span>
+              <span className={styles.pulseLabel}>Below market now</span>
               <span className={styles.pulseSub}>no flags in the live book</span>
             </span>
             <span className={styles.pulseVal}>—</span>

@@ -332,20 +332,23 @@
 .mRightNow .pulseGrid > [data-below='true'] { grid-column: auto; order: 2; }
 .mRightNow .pulseBlock[data-lead='true'],
 .mRightNow .pulseGrid > [data-below='true'] {
-  flex-direction: column; align-items: stretch; gap: 7px; padding: 11px 12px 10px;
+  flex-direction: row; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 12px;
 }
 .mRightNow .pulseBlock[data-lead='true'] .pulseLabel,
-.mRightNow .pulseGrid > [data-below='true'] .pulseLabel { font-size: 9.5px; letter-spacing: 0.06em; gap: 6px; }
+.mRightNow .pulseGrid > [data-below='true'] .pulseLabel {
+  font-size: 9px; letter-spacing: 0.05em; white-space: normal; line-height: 1.35;
+}
 /* the labels already say it — captions are dead weight at thumb scale */
 .mRightNow .pulseBlock[data-lead='true'] .pulseSub,
 .mRightNow .pulseGrid > [data-below='true'] .pulseSub { display: none; }
 .mRightNow .pulseValLead { font-size: 22px; }
-.mRightNow .pulsePaddleHead { min-width: 64px; padding: 9px 13px 8px; border-radius: 14px; }
-.mRightNow .pulsePaddleStem { width: 8px; height: 13px; }
-.mRightNow .pulsePaddle { align-self: flex-end; margin: 0 0 -11px; }
-/* the butter numeral mirrors the paddle: bottom-right of its cell */
+.mRightNow .pulsePaddleHead { min-width: 60px; padding: 8px 12px 7px; border-radius: 13px; }
+.mRightNow .pulsePaddleStem { width: 8px; height: 12px; }
+.mRightNow .pulsePaddle { align-self: flex-end; margin: 0 0 -13px; }
+/* the butter numeral holds the right edge, mirroring the paddle */
 .mRightNow .pulseGrid > [data-below='true'] .pulseActionVal,
-.mRightNow .pulseGrid > [data-below='true'] .pulseVal { align-self: flex-end; margin-top: auto; font-size: 26px; }
+.mRightNow .pulseGrid > [data-below='true'] .pulseVal { font-size: 24px; flex: none; }
 .mRightNow .pulseTicker { flex-direction: column; align-items: flex-start; gap: 8px; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
