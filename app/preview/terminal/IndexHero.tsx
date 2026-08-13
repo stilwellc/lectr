@@ -295,11 +295,19 @@ export default function IndexHero({
       </div>
 
       <div className={styles.pulseGrid}>
-        {/* the lead block — the room's population, at display scale */}
+        {/* the lead block — the room's population, worn as a raised bidder
+            paddle (the constructed-mark language at display scale) */}
         <div className={styles.pulseBlock} data-lead="true">
           <span className={styles.pulseLabel}><RailMark k="onBlock" />On the block</span>
-          <span className={styles.pulseValLead}>{fmtInt(onBlockShown)}</span>
-          <span className={styles.pulseSub}>lots open across the room</span>
+          <span className={styles.pulseLeadRow}>
+            <span className={styles.pulsePaddle}>
+              <span className={styles.pulsePaddleHead}>
+                <span className={styles.pulseValLead}>{fmtInt(onBlockShown)}</span>
+              </span>
+              <span className={styles.pulsePaddleStem} aria-hidden />
+            </span>
+            <span className={styles.pulseSub}>lots open<br />across the room</span>
+          </span>
         </div>
 
         {/* a lone small block spans the row — the bento never shows a hole */}

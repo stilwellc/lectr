@@ -205,9 +205,49 @@
 }
 .pulseValLead {
   font-family: var(--font-inter), sans-serif;
-  font-size: clamp(34px, 2.6vw, 42px); font-weight: 600;
+  font-size: clamp(30px, 2.3vw, 38px); font-weight: 600;
   letter-spacing: -0.03em; line-height: 0.95; color: #f7f8f8;
   font-variant-numeric: tabular-nums;
+}
+/* ── THE PADDLE ── the room's population worn as a raised bidder number.
+   Block geometry (the paddle IS a block), Linear surfaces (hairline rim, one
+   inner light), a playful 2.5° raise that settles on entrance. */
+.pulseLeadRow { display: flex; align-items: center; gap: 16px; padding: 4px 0 2px; }
+.pulsePaddle {
+  display: flex; flex-direction: column; align-items: center;
+  width: max-content; flex: none;
+  transform: rotate(-2.5deg);
+  transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.pulseBlock:hover .pulsePaddle { transform: rotate(-1deg) translateY(-1px); }
+.pulsePaddleHead {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 92px; padding: 13px 18px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px;
+  background:
+    radial-gradient(120% 95% at 30% 10%, rgba(232, 218, 182, 0.11), transparent 62%),
+    rgba(255, 255, 255, 0.045);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 12px 26px -16px rgba(0, 0, 0, 0.85);
+}
+.pulsePaddleStem {
+  width: 10px; height: 20px; margin-top: -1px;
+  border: 1px solid rgba(255, 255, 255, 0.13); border-top: none;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+}
+/* the raise: the paddle comes up from the lap on fresh arrival */
+.pulse[data-play='true'] .pulsePaddle {
+  animation: paddleRaise 0.9s 0.4s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
+}
+@keyframes paddleRaise {
+  from { opacity: 0; transform: rotate(-11deg) translateY(16px); }
+  to { opacity: 1; transform: rotate(-2.5deg) translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse[data-play='true'] .pulsePaddle { animation: none; }
+  .pulseBlock:hover .pulsePaddle { transform: rotate(-2.5deg); }
 }
 .pulseVal {
   display: flex; align-items: baseline; gap: 6px;
@@ -287,7 +327,11 @@
 .mRightNow .pulseBlock[data-pair='true'] .pulseLabel,
 .mRightNow .pulseBlock[data-lead='true'] .pulseLabel { font-size: 9.5px; letter-spacing: 0.06em; gap: 6px; }
 .mRightNow .pulseBlock[data-bc='true'] { grid-column: 1 / -1; }
-.mRightNow .pulseValLead { font-size: 30px; }
+.mRightNow .pulseValLead { font-size: 25px; }
+/* half-width lead: the paddle stacks over its caption, trimmed to the thumb */
+.mRightNow .pulseLeadRow { flex-direction: column; align-items: flex-start; gap: 8px; padding: 2px 0 0; }
+.mRightNow .pulsePaddleHead { min-width: 72px; padding: 10px 14px 9px; border-radius: 16px; }
+.mRightNow .pulsePaddleStem { width: 8px; height: 15px; }
 .mRightNow .pulseTicker { flex-direction: column; align-items: flex-start; gap: 8px; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
