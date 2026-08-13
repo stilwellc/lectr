@@ -284,7 +284,7 @@ export default function IndexHero({
             aria-label={`${belowMkt} below-market lots — see them`}>
             <span className={styles.pulseLabel}>Below market now</span>
             <span className={styles.pulseTag}>
-              <span className={styles.pulseTagVal}>{fmtInt(belowShown)}<em className={styles.pulseGo} aria-hidden>↗</em></span>
+              <span className={styles.pulseTagVal}>{fmtInt(belowShown)}</span>
             </span>
           </button>
         ) : (
