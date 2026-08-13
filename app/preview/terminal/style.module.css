@@ -190,9 +190,7 @@
   font-family: var(--font-inter), sans-serif;
   font-size: clamp(24px, 1.9vw, 30px); font-weight: 600;
   letter-spacing: -0.03em; line-height: 1; color: #f7f8f8;
-  font-variant-numeric: tabular-nums;
-  /* letterpress — the number sits IN the paddle face, not on it */
-  text-shadow: 0 1.5px 2px rgba(0, 0, 0, 0.55), 0 0.5px 0 rgba(0, 0, 0, 0.4);
+  font-variant-numeric: tabular-nums; /* crisp — the numeral is foreground, never lit */
 }
 /* ── THE PADDLE ── the room's population worn as a raised bidder number,
    built as an OBJECT, not a tile: a solid head with a machined bevel (top
@@ -213,55 +211,37 @@
   position: relative;
   display: flex; align-items: center; justify-content: center;
   min-width: 76px; padding: 11px 16px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.17); border-radius: 16px;
-  /* a solid body under the light — it must read as a THING, not glass */
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px;
+  /* ink over light: one solid body, ONE tint, ONE inner light — no sheen,
+     no glare, no vignette. Radii on the 2px grid: 14 head / 10 keyline. */
   background:
-    radial-gradient(130% 115% at 27% 6%, rgba(232, 218, 182, 0.15), rgba(232, 218, 182, 0.03) 46%, transparent 66%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 52%, rgba(0, 0, 0, 0.10)),
-    #1c1e21;
+    radial-gradient(120% 110% at 28% 0%, rgba(232, 218, 182, 0.10), transparent 58%),
+    #202327;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.11),      /* machined top bevel */
-    inset 0 -1.5px 0 rgba(0, 0, 0, 0.5),          /* under-shade */
-    inset 0 0 14px rgba(0, 0, 0, 0.28),           /* edge vignette */
-    0 2px 5px -2px rgba(0, 0, 0, 0.65),           /* contact shadow */
-    0 16px 30px -18px rgba(0, 0, 0, 0.9);         /* lift */
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),      /* one inner light */
+    0 1px 2px rgba(0, 0, 0, 0.5),                 /* contact */
+    0 8px 20px -14px rgba(0, 0, 0, 0.85);         /* lift */
 }
-/* the printed card frame — the butter rule every real bid card carries */
+/* the printed keyline — INK, not light: the one drawn detail the card keeps */
 .pulsePaddleHead::before {
-  content: ''; position: absolute; inset: 4px; border-radius: 11px;
-  border: 1px solid rgba(232, 218, 182, 0.17);
-  pointer-events: none;
-}
-/* one specular glare across the upper face */
-.pulsePaddleHead::after {
-  content: ''; position: absolute; top: 2.5px; left: 10%; right: 34%; height: 34%;
-  border-radius: 100px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.015) 80%, transparent);
+  content: ''; position: absolute; inset: 4px; border-radius: 10px;
+  border: 1px solid rgba(232, 218, 182, 0.18);
   pointer-events: none;
 }
 /* the handle: butter ferrule at the joint, cylindrical shading, grip cap */
 .pulsePaddleStem {
   position: relative;
   width: 10px; height: 24px; margin-top: -1px;
-  border: 1px solid rgba(255, 255, 255, 0.12); border-top: none;
-  border-radius: 2.5px 2.5px 6px 6px;
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.48), rgba(255, 255, 255, 0.10) 42%, rgba(255, 255, 255, 0.15) 52%, rgba(255, 255, 255, 0.04) 66%, rgba(0, 0, 0, 0.42)),
-    #191b1d;
-  box-shadow:
-    inset 0 -3px 4px rgba(0, 0, 0, 0.45),
-    0 10px 16px -10px rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.13); border-top: none;
+  border-radius: 2px 2px 4px 4px;
+  background: #17191c; /* flat — the handle is a shape, not a cylinder render */
+  box-shadow: 0 6px 14px -10px rgba(0, 0, 0, 0.8);
 }
+/* the ferrule: one flat butter band at the joint — ink, not gradient */
 .pulsePaddleStem::before {
-  content: ''; position: absolute; top: 0; left: -1.5px; right: -1.5px; height: 3.5px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, rgba(232, 218, 182, 0.38), rgba(232, 218, 182, 0.12));
-  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.5);
-}
-.pulsePaddleStem::after {
-  content: ''; position: absolute; bottom: 2px; left: 2px; right: 2px; height: 1.5px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.09);
+  content: ''; position: absolute; top: 0; left: -1.5px; right: -1.5px; height: 3px;
+  border-radius: 1px;
+  background: rgba(232, 218, 182, 0.30);
 }
 /* the raise: the paddle comes up from the lap on fresh arrival */
 .pulse[data-play='true'] .pulsePaddle {
@@ -316,19 +296,16 @@
   /* the strung end runs long — hole, a stretch of blank stock, THEN the
      printed number, like a real swing tag */
   padding: 8px 13px 7px 36px;
-  border: 1px solid rgba(232, 218, 182, 0.42);
+  border: 1px solid rgba(232, 218, 182, 0.45);
   border-radius: 8px 12px 12px 8px; /* tighter at the strung end */
-  /* solid warm body — the tag is a THING in the light */
+  /* ink over light: one warm solid, one tint, one inner light */
   background:
-    radial-gradient(130% 115% at 72% 4%, rgba(232, 218, 182, 0.22), rgba(232, 218, 182, 0.06) 52%, transparent 72%),
-    linear-gradient(180deg, rgba(232, 218, 182, 0.15), rgba(232, 218, 182, 0.04) 55%, rgba(0, 0, 0, 0.12)),
-    #211f1a;
+    radial-gradient(120% 110% at 70% 0%, rgba(232, 218, 182, 0.14), transparent 60%),
+    #232019;
   box-shadow:
-    inset 0 1px 0 rgba(255, 244, 214, 0.16),
-    inset 0 -1.5px 0 rgba(0, 0, 0, 0.45),
-    inset 0 0 10px rgba(0, 0, 0, 0.22),
-    0 2px 5px -2px rgba(0, 0, 0, 0.6),
-    0 14px 26px -16px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 244, 214, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 8px 20px -14px rgba(0, 0, 0, 0.85);
   transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .pulseAction:hover .pulseTag { transform: translateY(-1px); }
@@ -337,32 +314,31 @@
   border-style: dashed; border-color: rgba(232, 218, 182, 0.24);
   background: none; box-shadow: none;
 }
-.pulseTagGhost::before { border-color: rgba(232, 218, 182, 0.28); background: rgba(0, 0, 0, 0.4); box-shadow: none; }
+.pulseTagGhost::before { border-color: rgba(232, 218, 182, 0.28); background: none; }
 .pulseTagGhost::after { opacity: 0.5; }
 .pulseTagGhost .pulseTagVal { color: rgba(232, 218, 182, 0.38); text-shadow: none; }
 /* the punched eyelet — reinforced ring, dark hole, one glint */
 .pulseTag::before {
-  content: ''; position: absolute; left: 7px; top: 50%; margin-top: -4.5px;
-  width: 9px; height: 9px; border-radius: 50%;
+  content: ''; position: absolute; left: 8px; top: 50%; margin-top: -4px;
+  width: 8px; height: 8px; border-radius: 50%;
   border: 1.5px solid rgba(232, 218, 182, 0.55);
-  background: radial-gradient(circle at 35% 30%, rgba(0, 0, 0, 0.92), rgba(0, 0, 0, 0.6));
-  box-shadow: 0 0.5px 0 rgba(255, 244, 214, 0.22), inset 0 1px 1.5px rgba(0, 0, 0, 0.85);
+  background: #0c0d0e; /* the punched hole is flat dark — a hole, not a jewel */
 }
 /* the string — a short arc falling away from the eyelet */
+/* the string: ONE clean quarter-arc, anchored at the hole's left edge and
+   falling away below — it must touch the eyelet, not float near it */
 .pulseTag::after {
-  content: ''; position: absolute; left: -13px; top: 48%;
-  width: 15px; height: 13px;
-  border-left: 1px solid rgba(232, 218, 182, 0.30);
-  border-bottom: 1px solid rgba(232, 218, 182, 0.18);
-  border-bottom-left-radius: 12px;
-  transform: rotate(14deg);
+  content: ''; position: absolute; left: -8px; top: calc(50% - 1px);
+  width: 16px; height: 14px;
+  border: none;
+  border-left: 1.5px solid rgba(232, 218, 182, 0.35);
+  border-bottom-left-radius: 14px;
   pointer-events: none;
 }
 .pulseTagVal {
   font-family: var(--font-inter), sans-serif; font-size: 20px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: var(--tt-butter);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-  text-shadow: 0 1.5px 2px rgba(0, 0, 0, 0.5); /* letterpressed, like the paddle */
+  font-variant-numeric: tabular-nums; white-space: nowrap; /* crisp foreground */
 }
 /* the tag swings in as the paddle raises — mirrored entrances */
 .pulse[data-play='true'] .pulseTag {
