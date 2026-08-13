@@ -8,7 +8,6 @@ import type { Market } from '../../constants';
 import type { HeroPoint } from './HeroChart';
 import { MarketTape, SubTape, TapeMonument, pickLead } from './MarketTape';
 import { fmtInt, useReducedMotion } from './hooks';
-import { fmtPct } from './verified';
 import styles from './style.module.css';
 
 /* RAIL MARKS — the constructed-mark language on the "Right now" metrics:
@@ -87,33 +86,6 @@ function useCountUp(target: number, animate: boolean): number {
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
   }, [target, animate]);
   return shown;
-}
-
-/** The trend block's spine — the scoped market's real hero series (demand /
- *  realized quarterly medians), drawn as a single quiet line. Descriptive ink
- *  only: it never wears the up/down register (the CI'd reads live elsewhere). */
-function Spark({ pts, play }: { pts: number[]; play: boolean }) {
-  if (pts.length < 3) return null;
-  const w = 120, h = 26, pad = 2;
-  const min = Math.min(...pts), max = Math.max(...pts);
-  const span = max - min || 1;
-  const d = pts
-    .map((v, i) => {
-      const x = pad + (i / (pts.length - 1)) * (w - pad * 2);
-      const y = pad + (1 - (v - min) / span) * (h - pad * 2);
-      return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-  const last = pts[pts.length - 1];
-  const lx = w - pad, ly = pad + (1 - (last - min) / span) * (h - pad * 2);
-  return (
-    <svg className={styles.pulseSpark} viewBox={`0 0 ${w} ${h}`} width={w} height={h}
-      data-play={play ? 'true' : undefined} aria-hidden>
-      <path d={d} pathLength={1} fill="none" stroke="currentColor" strokeWidth="1.6"
-        strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={lx} cy={ly} r="2.4" fill="currentColor" stroke="none" />
-    </svg>
-  );
 }
 
 /** 'YYYY-MM-DD' → the room's shorthand: tonight / tmrw / Fri / Aug 16. */
@@ -225,7 +197,6 @@ export default function IndexHero({
   bidComp,
   totalLots,
   belowMkt,
-  appreciation,
   onBlock,
   onOpenBelow,
   onCommand,
@@ -239,21 +210,6 @@ export default function IndexHero({
   const lead = useMemo(() => pickLead(market, demandAll, realized, activeKey), [market, demandAll, realized, activeKey]);
   const serialNo = serial ? `NO. ${String(serial).slice(0, 10).replace(/-/g, '')}` : null;
   const showMonument = activeKey !== 'all' && !!lead;   // never on Total market
-  const vals = hero.idx.map((p) => p.value);
-  const level = vals.length ? vals[vals.length - 1] : 0;
-
-  // ── ROI × DEMAND cross-check (the left read-out). Demand is a RELATIVE beat
-  // (sold over estimate) — it can run hot while houses quietly cut estimates,
-  // so it's paired with the absolute value trend (annualized appreciation). When
-  // lots are beating ask (demand up) but typical values are falling YoY, the
-  // tile raises a flag: the heat is beating a softening bar, not real strength.
-  // Rendered NEUTRAL and labelled an estimate: appreciationRate is a coarse
-  // price-level read, not a verified repeat-comparison index — descriptive
-  // figures never wear green/red or a "verified" claim (the CI'd reads live
-  // in makerIndex/drills).
-  const roi = appreciation;
-  const demandHot = hero.unit === 'demand' && level > 0;
-  const roiFlag = demandHot && roi != null && roi < -1.5 ? 'beating soft estimates' : undefined;
 
   // ── BID-COMPETITION read (sports/cards). Goldin publishes no estimate, so the
   // cards vertical has no %-over-estimate demand — but every lot carries a
@@ -285,7 +241,6 @@ export default function IndexHero({
   const settle = play && !reduce;
   const onBlockShown = useCountUp(onBlock, settle);
   const belowShown = useCountUp(belowMkt, settle);
-  const sparkPts = useMemo(() => hero.idx.slice(-12).map((p) => p.value), [hero.idx]);
   const closes = (closingNext || []).slice(0, 3);
   const pulseBoard = (
     <div className={styles.pulse} data-play={play ? 'true' : undefined}>
@@ -309,18 +264,6 @@ export default function IndexHero({
             <span className={styles.pulsePaddleStem} aria-hidden />
           </span>
         </div>
-
-        {roi != null && (
-          <div className={styles.pulseBlock} data-trend="true"
-            title="Sales-weighted annualized change in typical sale prices — a coarse price-level estimate, not a verified index read.">
-            <span className={styles.pulseCellText}>
-              <span className={styles.pulseLabel}>Value trend · est.</span>
-              <span className={`${styles.pulseVal} ${styles.pctData}`}>{fmtPct(roi)}</span>
-              {roiFlag && <span className={styles.pulseFlag}>{roiFlag}</span>}
-            </span>
-            <Spark pts={sparkPts} play={settle} />
-          </div>
-        )}
 
         {bc && (
           <div className={styles.pulseBlock}

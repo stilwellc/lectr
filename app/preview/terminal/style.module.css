@@ -265,14 +265,6 @@
 .pulseDir[data-dir='up'] { color: var(--color-up, #57be87); }
 .pulseDir[data-dir='down'] { color: var(--color-down, #cc6a5c); }
 .pulseSub { font-family: var(--font-inter), sans-serif; font-size: 10.5px; letter-spacing: 0.02em; color: var(--tt-faint); }
-.pulseFlag { font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.05em; color: #d8a24a; }
-/* the trend spark — descriptive ink, never the up/down register; rides the
-   cell's right edge at intrinsic size */
-.pulseSpark { width: 120px; height: 26px; flex: none; color: rgba(237, 230, 218, 0.5); }
-.pulseSpark path { stroke-dasharray: 1; stroke-dashoffset: 0; }
-.pulseSpark[data-play='true'] path { stroke-dashoffset: 1; animation: sparkDraw 1.1s 0.5s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards; }
-@keyframes sparkDraw { to { stroke-dashoffset: 0; } }
-
 /* the one action on the board — butter, full-width, unmissable */
 .pulseAction {
   grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
@@ -296,9 +288,10 @@
 }
 .pulseGo { font-style: normal; font-size: 13px; margin-left: 7px; opacity: 0.9; }
 
-/* closing next — the departures line under the board */
+/* closing next — the departures line under the board (label above, chips
+   flowing left — both shells) */
 .pulseTicker {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
   padding: 10px 2px 0; border-top: 2px dotted var(--tt-hair);
 }
 .pulseTickerLabel {
@@ -327,7 +320,6 @@
    AFTER the search. */
 .mRightNow .pulseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .mRightNow .pulseGrid > * { grid-column: 1 / -1; order: 3; }
-.mRightNow .pulseBlock[data-trend='true'] { display: none; }
 .mRightNow .pulseBlock[data-lead='true'] { grid-column: auto; order: 1; }
 .mRightNow .pulseGrid > [data-below='true'] { grid-column: auto; order: 2; }
 .mRightNow .pulseBlock[data-lead='true'],
@@ -349,7 +341,6 @@
 /* the butter numeral holds the right edge, mirroring the paddle */
 .mRightNow .pulseGrid > [data-below='true'] .pulseActionVal,
 .mRightNow .pulseGrid > [data-below='true'] .pulseVal { font-size: 24px; flex: none; }
-.mRightNow .pulseTicker { flex-direction: column; align-items: flex-start; gap: 8px; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
 .pulse[data-play='true'] .pulseGrid > *:nth-child(1) { animation: pulseSettle 0.7s 0.24s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards; }
@@ -361,7 +352,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pulseDot { animation: none; }
-  .pulseSpark[data-play='true'] path { animation: none; stroke-dashoffset: 0; }
   .pulse[data-play='true'] .pulseGrid > *, .pulse[data-play='true'] .pulseTicker { animation: none; }
   .pulseAction:hover { transform: none; }
 }
