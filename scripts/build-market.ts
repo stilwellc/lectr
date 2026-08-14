@@ -711,6 +711,19 @@ export function runMarketBuild() {
     // corpus + served shards + upcoming.json). playerSlug stamps every live
     // sports lot so the client links to /player without re-parsing.
     let stamped = 0, laddered = 0, soldStamped = 0;
+    // CROSS-HOUSE LIVE COLLISIONS — the same cardKey live at 2+ houses right
+    // now (the venue-arbitrage read no single-house tool can produce). Built
+    // in a pre-pass so every card's stamp can cite its siblings.
+    const liveByCardKey = new Map<string, { id: string; house: string; bid: number }[]>();
+    for (const l of all) {
+      if (l.status !== 'upcoming' || !CARD_SLUGS.has(l.artist)) continue;
+      const ck = cardKey(parseCardCached(l.title || ''));
+      if (!ck) continue;
+      const arr = liveByCardKey.get(ck) || [];
+      arr.push({ id: String(l.id), house: String(l.auctionHouse), bid: (l as AuctionLot & { currentBid?: number }).currentBid || 0 });
+      liveByCardKey.set(ck, arr);
+    }
+    let crossLiveStamped = 0;
     for (const l of all) {
       if (!SPORT_SET.has(l.artist)) continue;
       // Stamp playerSlug/playerName on SOLD sports OBJECT lots too (game-used,
@@ -758,6 +771,16 @@ export function runMarketBuild() {
             lastSales,
             gradeLadder: gradeLadder.length > 1 ? gradeLadder : [],
           };
+        }
+        // cross-house: this exact card (key incl. grade) live elsewhere NOW
+        {
+          const sibs = (ck ? liveByCardKey.get(ck) : undefined)?.filter(x => x.id !== String(l.id)) || [];
+          if (sibs.length) {
+            (lw as AuctionLot & { crossLive?: unknown }).crossLive = sibs
+              .sort((a, b) => a.bid - b.bid).slice(0, 3)
+              .map(x => ({ id: x.id, house: x.house, bid: x.bid }));
+            crossLiveStamped++;
+          }
           stamped++;
           if (gradeLadder.length > 1) laddered++;
         }
@@ -868,6 +891,7 @@ export function runMarketBuild() {
     const cardValued = tierCounts.exact + tierCounts['grade-adj'] + tierCounts.player;
     const cardBidOnly = cardValued + tierCounts.none;
     console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · none=${tierCounts.none}`);
+    console.log(`[market] cross-house live collisions stamped: ${crossLiveStamped}`);
   }
 
   // ── 3f · stats.json rows for corpus-only / non-ARTISTS slugs ──

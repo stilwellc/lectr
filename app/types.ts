@@ -271,6 +271,10 @@ export interface AuctionLot {
       lot's percentile among live peers. DESCRIPTIVE demand primitive —
       never a price, never a %-change (no green/red). */
   bidVelocity?: { delta: number; hours: number; pctile: number | null };
+  /** cross-house live collisions: this exact cardKey live elsewhere NOW */
+  crossLive?: { id: string; house: string; bid: number }[];
+  /** projected close (bid × close-day growth curve, all-in) vs the value floor */
+  bidProj?: { g: number; allIn: number; floor?: number; below?: boolean };
   playerName?: string | null;
   /** parsed trading-card identity — the composite fingerprint keying the card
       repeat-sales index (same player+year+set+cardNo+grade = the same product).

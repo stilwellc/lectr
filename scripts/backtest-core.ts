@@ -45,7 +45,7 @@ export const hasEst = (l: L) => (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 
 // raw arrays (not the rounded summary) is what lets the incremental reproduce a
 // median / weighted rate / conformal quantile that a full replay would compute.
 export type Bucket = { perfs: number[]; hammerPerfs: number[]; beat: number; hammerBeat: number; n: number; boughtIn: number };
-export type CalObs = { m: string; cr: number; beat: boolean; r: number; conf: string; ageY: number };
+export type CalObs = { m: string; cr: number; beat: boolean; r: number; conf: string; ageY: number; pf?: number; fl?: boolean };
 export type YearObs = { flagged: number[]; unflagged: number[] };
 
 export interface BacktestState {
@@ -158,6 +158,8 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
       r: realized / v.compValueUsd,
       conf: v.confidence,
       ageY: Math.max(0, (st.nowMs - new Date(lot.saleDate).getTime()) / 31_557_600_000),
+      pf: realized / estMid - 1,
+      fl: isBelow,
     });
   }
 
@@ -306,6 +308,20 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
     const q = (p: number) => src[Math.min(src.length - 1, Math.max(0, Math.floor(p * (src.length - 1))))];
     return { lo: Math.round(Math.min(1, Math.max(0.3, q(0.15))) * 1000) / 1000, hi: Math.round(Math.min(4, Math.max(1, q(0.85))) * 1000) / 1000 };
   };
+  // PER-MARKET RECORD (Aug 13 value audit): the +41/+16 receipt was global-
+  // only — a watches user read an art/design-dominant number. Split it.
+  const byMarket: Record<string, { flagged: { n: number; medPct: number | null }; unflagged: { n: number; medPct: number | null } }> = {};
+  {
+    const medOf = (a: number[]) => { if (a.length < 50) return null; const x = [...a].sort((p, q) => p - q); return Math.round(x[Math.floor(x.length / 2)] * 1000) / 10; };
+    const mkts = Array.from(new Set(calObs.map(o => o.m).filter(m => m && m !== 'all')));
+    for (const m of mkts) {
+      const rows = calObs.filter(o => o.m === m && typeof o.pf === 'number');
+      byMarket[m] = {
+        flagged: { n: rows.filter(o => o.fl).length, medPct: medOf(rows.filter(o => o.fl).map(o => o.pf!)) },
+        unflagged: { n: rows.filter(o => !o.fl).length, medPct: medOf(rows.filter(o => !o.fl).map(o => o.pf!)) },
+      };
+    }
+  }
   const calibration = {
     edges: EDGES,
     beatRate: {
@@ -322,6 +338,7 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
     unflagged: summarize(st.unflagged),
     above: summarize(st.above),
     flaggedTiers: { main: summarize(st.flaggedMain), fallback: summarize(st.flaggedFallback) },
+    byMarket,
     calibration,
     series,
     distribution: distributionOf(st.flagged, st.unflagged),

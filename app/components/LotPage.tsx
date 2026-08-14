@@ -12,6 +12,7 @@ import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
@@ -677,6 +678,44 @@ export default function LotPage({ lotId, initialLot }: {
               {isUpcoming && !sig && band && (
                 <LeaderRow k="Similar sold" v={`${formatPrice(band.low)}–${formatPrice(band.high)}`} sub={`${band.n} sales`} />
               )}
+
+              {/* ── the action rows (Aug 13 value audit): turn the read into a bid ── */}
+              {isUpcoming && (lot.currentBid || 0) > 0 && (
+                <LeaderRow
+                  k="All-in today"
+                  v={formatPrice(Math.round(lot.currentBid! * lotAllInFactor(lot, lot.currentBid)))}
+                  sub={`${formatPrice(lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
+                />
+              )}
+              {isUpcoming && (() => {
+                const floor = (lot.value?.low && lot.value.low > 0 ? lot.value.low : null)
+                  ?? (lot.cardComps?.med ? Math.round(lot.cardComps.med * 0.85) : null);
+                if (!floor) return null;
+                return (
+                  <LeaderRow
+                    k="Max bid"
+                    v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
+                    sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
+                  />
+                );
+              })()}
+              {isUpcoming && lot.bidProj?.allIn != null && (
+                <LeaderRow
+                  k="Projected close"
+                  v={`~${formatPrice(lot.bidProj.allIn)}`}
+                  tone={lot.bidProj.below ? 'up' : undefined}
+                  sub={lot.bidProj.floor
+                    ? (lot.bidProj.below ? `still under the ${formatPrice(lot.bidProj.floor)} floor` : `vs ${formatPrice(lot.bidProj.floor)} floor`)
+                    : 'bid × close-day curve · all-in'}
+                />
+              )}
+              {isUpcoming && lot.crossLive?.length ? (
+                <LeaderRow
+                  k="Also live at"
+                  v={`${lot.crossLive[0].house} · ${lot.crossLive[0].bid > 0 ? formatPrice(lot.crossLive[0].bid) + ' bid' : 'open'}`}
+                  sub={lot.crossLive.length > 1 ? `same card at ${lot.crossLive.length} other venues` : 'the same card, head to head'}
+                />
+              ) : null}
 
               {isSold ? (
                 <LeaderRow k="Hammered" v={formatDate(lot.saleDate)} />
