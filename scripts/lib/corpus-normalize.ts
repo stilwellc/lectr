@@ -359,6 +359,17 @@ function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; image
       images++;
     }
     if (l.saleDate === '') { (l as unknown as { saleDate: string | null }).saleDate = null; dates++; }
+    // winter-label re-date: seasonToDate stamped hobby Winter auctions Dec 15
+    // of the label year; they close ~February. Only the SYNTHETIC mid-month
+    // stamp is touched (REA/H&S id or saleName carries the winter label).
+    if (typeof l.saleDate === 'string' && /-(12)-15$/.test(l.saleDate as string)) {
+      const idStr = String(l.id || '');
+      const saleName = String((l as { saleName?: string | null }).saleName || '');
+      if (/-winter-/i.test(idStr) || /\bwinter\b/i.test(saleName)) {
+        (l as unknown as { saleDate: string }).saleDate = (l.saleDate as string).replace(/-12-15$/, '-02-15');
+        dates++;
+      }
+    }
     const tt = l.titleTokens as unknown[] | undefined;
     if ((!Array.isArray(tt) || !tt.length) && typeof l.title === 'string' && l.title) {
       l.titleTokens = titleTokensOf(l.title as string);

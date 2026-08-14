@@ -36,9 +36,19 @@ async function monthIndexes(): Promise<string[]> {
 /** lot detail URLs from one month index, paginating ?page=N until empty */
 async function lotUrlsForMonth(monthUrl: string, maxPages = 300): Promise<string[]> {
   const out: string[] = [];
+  // A null page mid-pagination is NOT end-of-month: CI datacenter IPs get
+  // rate-limited around page ~41, and treating the 429 as "done" capped every
+  // month at exactly 400 lots (40 pages × 10) since 2022-11 (Aug 13 audit).
+  // Back off and retry twice before believing the month ended.
+  let pageMisses = 0;
   for (let page = 1; page <= maxPages; page++) {
     const html = await getHtml(`${monthUrl.replace(/\/$/, '')}/?page=${page}`);
-    if (!html) break;
+    if (!html) {
+      if (++pageMisses <= 3) { await new Promise(r => setTimeout(r, 4000 * pageMisses)); page--; continue; }
+      console.log(`  [H&S] ${monthUrl} pagination truncated at page ${page} after retries`);
+      break;
+    }
+    pageMisses = 0;
     const $ = cheerio.load(html);
     const found: string[] = [];
     $('a[href*="/auction/"]').each((_, el) => {
@@ -50,7 +60,7 @@ async function lotUrlsForMonth(monthUrl: string, maxPages = 300): Promise<string
       }
     });
     if (!found.length) break;
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 350));
   }
   return Array.from(new Set(out));
 }

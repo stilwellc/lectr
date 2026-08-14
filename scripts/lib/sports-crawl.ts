@@ -297,7 +297,11 @@ export function seasonToDate(label: string): string | null {
   if (!m) return null;
   const year = m[1];
   const l = label.toLowerCase();
-  const mm = /spring/.test(l) ? '04' : /summer/.test(l) ? '07' : /(fall|autumn)/.test(l) ? '10' : /winter/.test(l) ? '12'
+  // winter → FEBRUARY, not December: hobby "Winter YYYY" auctions close early
+  // in the label year. The old '12' future-dated every in-progress winter
+  // month and settledOnly dropped ENTIRE months nightly (H&S 2026-winter:
+  // 1,485 lots, all FATAL "future saleDate", Aug 13 audit).
+  const mm = /spring/.test(l) ? '04' : /summer/.test(l) ? '07' : /(fall|autumn)/.test(l) ? '10' : /winter/.test(l) ? '02'
     : /jan/.test(l) ? '01' : /feb/.test(l) ? '02' : /mar/.test(l) ? '03' : /apr/.test(l) ? '04' : /may/.test(l) ? '05'
     : /jun/.test(l) ? '06' : /jul/.test(l) ? '07' : /aug/.test(l) ? '08' : /sep/.test(l) ? '09' : /oct/.test(l) ? '10'
     : /nov/.test(l) ? '11' : /dec/.test(l) ? '12' : '06';
