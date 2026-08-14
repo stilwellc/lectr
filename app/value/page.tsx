@@ -38,7 +38,7 @@ const ROWS_PAGE = 12;
 export default function ValuePage() {
   // useFullLots: the value engine (callPool/appraisal) reads the full corpus
   // and gates on fullLoaded, so this route must trigger phase 2.
-  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache } = useFullLots();
+  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, deepValue } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -446,6 +446,47 @@ export default function ValuePage() {
                 : 'No lots are flagged below market right now — the crawl refreshes daily.'}
             />
           </section>
+
+          {/* ── DEEP VALUE · CLOSING SOON — the bid-house read (Aug 14):
+              projected close (bid × the fitted close-day curve, all-in) still
+              ≥25% under the lot's value floor inside the final days. A
+              PROJECTION product — its receipt is accumulating in the calls
+              ledger; it wears no certified language. */}
+          {(deepValue?.[activeKey]?.length ?? 0) > 0 && (
+            <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                <h2 style={{ fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-muted)', fontWeight: 700 }}>
+                  Deep value · closing soon
+                </h2>
+                <span style={{ fontSize: 11, color: 'var(--color-faint)' }}>
+                  projected close vs value floor · projection read, record accruing
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {deepValue[activeKey].slice(0, 12).map(r => {
+                  const lot = allLots.find(l => String(l.id) === r.id);
+                  if (!lot) return null;
+                  return (
+                    <Link key={r.id} href={`/lot/${r.id}`} style={{
+                      display: 'flex', alignItems: 'baseline', gap: 14, padding: '10px 2px',
+                      borderTop: '2px dotted var(--color-hair, rgba(255,255,255,0.06))',
+                      color: 'inherit', textDecoration: 'none',
+                    }}>
+                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--color-up)', minWidth: 74 }}>
+                        {Math.round(r.depth * 100)}% under
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {lot.title}
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                        {lot.auctionHouse} · proj {formatPrice(r.allIn)} vs {formatPrice(r.floor)} · closes {formatDate(r.closes)}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {call && (
             <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>

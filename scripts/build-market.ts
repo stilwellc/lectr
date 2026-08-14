@@ -986,6 +986,52 @@ export function runMarketBuild() {
     ...(gradeLadderArtifact ? { gradeLadder: { base: 8, rungs: gradeLadderArtifact, ...gradeLadderMeta } } : {}),
   };
   fs.mkdirSync(SERVED, { recursive: true });
+  // ── CALLS RECORD — grade the settled tape for the unreceipted products
+  {
+    const { gradeCalls } = require('./lib/calls-ledger');
+    const soldById = new Map<string, { realizedUsd: number; saleDate: string }>();
+    for (const l of all) if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
+    const rec = gradeCalls(soldById);
+    (markets.all.analytics as unknown as Record<string, unknown>).callsRecord = rec;
+    console.log(`[market] calls record — card: ${rec.card.graded}/${rec.card.n} graded medRatio=${rec.card.medRatio} within30=${rec.card.within30Pct}% · vsbid: ${rec.vsbid.graded}/${rec.vsbid.n} medRatio=${rec.vsbid.medRatio} belowHit=${rec.vsbid.belowHit}%`);
+  }
+  // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit) — how much of final hammer
+  // arrives in the last days, fitted from Goldin's own nightly bidHistory on
+  // SOLD lots: growth(bucket) = median(finalBid / bidAtSnapshot) for snapshots
+  // daysOut ∈ [<1, 1-2, 2-4, 4-8, 8+]. This is the honest projection factor
+  // that turns a stale nightly currentBid into an expected close, and the
+  // basis for the bid-house 'projected below comps' read. Served in
+  // market.json analytics.closeCurve; buildUpcoming stamps per-lot projections.
+  const CURVE_EDGES = [1, 2, 4, 8];
+  const curveBucket = (daysOut: number) => { let b = 0; for (const e of CURVE_EDGES) { if (daysOut < e) break; b++; } return b; };
+  {
+    const perBucket: number[][] = [[], [], [], [], []];
+    for (const l of all) {
+      if (l.status !== 'sold' || !(l.realizedUsd! > 0)) continue;
+      const bh = (l as AuctionLot & { bidHistory?: Array<{ d: string; b: number; n: number }> }).bidHistory;
+      if (!Array.isArray(bh) || bh.length < 2) continue;
+      const closeMs = new Date((l as AuctionLot & { saleDateTime?: string | null }).saleDateTime || l.saleDate || '').getTime();
+      if (isNaN(closeMs)) continue;
+      const { lotAllInFactor } = require('../app/lib/premiums');
+      const finalBid = l.realizedUsd! / lotAllInFactor(l, l.realizedUsd);
+      for (const snap of bh) {
+        if (!(snap.b > 0)) continue;
+        const daysOut = (closeMs - new Date(snap.d).getTime()) / 86400000;
+        if (daysOut < 0 || daysOut > 30) continue;
+        const g = finalBid / snap.b;
+        if (g >= 1 && g < 50) perBucket[curveBucket(daysOut)].push(g);
+      }
+    }
+    const closeCurve = perBucket.map(a => {
+      if (a.length < 200) return null;
+      a.sort((x, y) => x - y);
+      return Math.round(a[Math.floor(a.length / 2)] * 1000) / 1000;
+    });
+    (markets.all.analytics as unknown as Record<string, unknown>).closeCurve = { buckets: closeCurve, edges: CURVE_EDGES, n: perBucket.map(a => a.length) };
+    console.log('[market] close curve (median finalBid/bid by daysOut):', closeCurve.join(' '), '| n:', perBucket.map(a => a.length).join(' '));
+  }
+
+
   fs.writeFileSync(path.join(SERVED, 'market.json'), JSON.stringify(market));
   console.log(`[market] wrote market.json (${(fs.statSync(path.join(SERVED, 'market.json')).size / 1024).toFixed(0)}KB)`);
 
@@ -1068,51 +1114,6 @@ export function runMarketBuild() {
   for (let i = lshard; ; i++) { const p = path.join(SERVED, `sold-ledger-${i}.json`); if (fs.existsSync(p)) fs.unlinkSync(p); else break; }
   fs.writeFileSync(path.join(SERVED, 'sold-ledger-index.json'), JSON.stringify({ shards: lshard, entries: ledgerEntries.length, since: LEDGER_CUT }));
   console.log(`[market] sold-ledger: ${ledgerEntries.length} outcomes since ${LEDGER_CUT} → ${lshard} shard(s)`);
-
-  // ── CALLS RECORD — grade the settled tape for the unreceipted products
-  {
-    const { gradeCalls } = require('./lib/calls-ledger');
-    const soldById = new Map<string, { realizedUsd: number; saleDate: string }>();
-    for (const l of all) if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
-    const rec = gradeCalls(soldById);
-    (markets.all.analytics as unknown as Record<string, unknown>).callsRecord = rec;
-    console.log(`[market] calls record — card: ${rec.card.graded}/${rec.card.n} graded medRatio=${rec.card.medRatio} within30=${rec.card.within30Pct}% · vsbid: ${rec.vsbid.graded}/${rec.vsbid.n} medRatio=${rec.vsbid.medRatio} belowHit=${rec.vsbid.belowHit}%`);
-  }
-  // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit) — how much of final hammer
-  // arrives in the last days, fitted from Goldin's own nightly bidHistory on
-  // SOLD lots: growth(bucket) = median(finalBid / bidAtSnapshot) for snapshots
-  // daysOut ∈ [<1, 1-2, 2-4, 4-8, 8+]. This is the honest projection factor
-  // that turns a stale nightly currentBid into an expected close, and the
-  // basis for the bid-house 'projected below comps' read. Served in
-  // market.json analytics.closeCurve; buildUpcoming stamps per-lot projections.
-  const CURVE_EDGES = [1, 2, 4, 8];
-  const curveBucket = (daysOut: number) => { let b = 0; for (const e of CURVE_EDGES) { if (daysOut < e) break; b++; } return b; };
-  {
-    const perBucket: number[][] = [[], [], [], [], []];
-    for (const l of all) {
-      if (l.status !== 'sold' || !(l.realizedUsd! > 0)) continue;
-      const bh = (l as AuctionLot & { bidHistory?: Array<{ d: string; b: number; n: number }> }).bidHistory;
-      if (!Array.isArray(bh) || bh.length < 2) continue;
-      const closeMs = new Date((l as AuctionLot & { saleDateTime?: string | null }).saleDateTime || l.saleDate || '').getTime();
-      if (isNaN(closeMs)) continue;
-      const { lotAllInFactor } = require('../app/lib/premiums');
-      const finalBid = l.realizedUsd! / lotAllInFactor(l, l.realizedUsd);
-      for (const snap of bh) {
-        if (!(snap.b > 0)) continue;
-        const daysOut = (closeMs - new Date(snap.d).getTime()) / 86400000;
-        if (daysOut < 0 || daysOut > 30) continue;
-        const g = finalBid / snap.b;
-        if (g >= 1 && g < 50) perBucket[curveBucket(daysOut)].push(g);
-      }
-    }
-    const closeCurve = perBucket.map(a => {
-      if (a.length < 200) return null;
-      a.sort((x, y) => x - y);
-      return Math.round(a[Math.floor(a.length / 2)] * 1000) / 1000;
-    });
-    (markets.all.analytics as unknown as Record<string, unknown>).closeCurve = { buckets: closeCurve, edges: CURVE_EDGES, n: perBucket.map(a => a.length) };
-    console.log('[market] close curve (median finalBid/bid by daysOut):', closeCurve.join(' '), '| n:', perBucket.map(a => a.length).join(' '));
-  }
 
   // rebuild the eager payload so upcoming lots carry their fresh `value`.
   // Hand it the IN-MEMORY corpus: letting it re-read the gz from disk doubled

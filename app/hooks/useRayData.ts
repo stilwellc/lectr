@@ -17,6 +17,8 @@ export type RealizedByMarket = Record<string, RealizedPoint[]>;
     demand (%) and realized ($) so it never renders as a price or a percent. */
 export type BidCompByMarket = Record<string, BidCompetitionPoint[]>;
 export type RecentSoldByMarket = Record<string, unknown[]>;
+export type DeepValueRow = { id: string; depth: number; allIn: number; floor: number; closes: string };
+export type DeepValueByMarket = Record<string, DeepValueRow[]>;
 export interface Backtest {
   flagged: BacktestBucket;
   unflagged: BacktestBucket;
@@ -60,6 +62,7 @@ interface RayData {
   /** lightweight last-N Goldin closes per sports/science market so the home
       Recent-results row paints without the 10MB archive. Eager. */
   recentSold: RecentSoldByMarket;
+  deepValue: DeepValueByMarket;
   backtest: Backtest | null;
   market: MarketData | null;
   lastCrawl: string;
@@ -206,6 +209,7 @@ interface RayPayload {
   realized: RealizedByMarket;
   bidComp: BidCompByMarket;
   recentSold: RecentSoldByMarket;
+  deepValue: DeepValueByMarket;
   backtest: Backtest | null;
   lastCrawl: string;
   sources: string[];
@@ -312,6 +316,7 @@ function loadRayData(): Promise<RayPayload> {
           realized?: RealizedByMarket;
           bidComp?: BidCompByMarket;
           recentSold?: RecentSoldByMarket;
+          deepValue?: DeepValueByMarket;
           lots?: AuctionLot[];
         })
       : null;
@@ -325,6 +330,7 @@ function loadRayData(): Promise<RayPayload> {
         realized: up.realized || {},
         bidComp: up.bidComp || {},
         recentSold: up.recentSold || {},
+        deepValue: up.deepValue || {},
         backtest,
         market,
         lastCrawl: metaData.lastCrawl || '',
@@ -425,6 +431,7 @@ function loadRayData(): Promise<RayPayload> {
       realized: {},
       bidComp: {},
       recentSold: {},
+      deepValue: {},
       market: null,
       backtest,
       lastCrawl: metaData.lastCrawl || '',
@@ -599,6 +606,7 @@ export function useRayData(): RayData {
     realized: data?.realized || {},
     bidComp: data?.bidComp || {},
     recentSold: data?.recentSold || {},
+    deepValue: data?.deepValue || {},
     backtest: data?.backtest || null,
     market: data?.market || null,
     lastCrawl: data?.lastCrawl || '',

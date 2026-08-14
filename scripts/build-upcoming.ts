@@ -404,7 +404,43 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     sports: bidCompetitionSeries(lots as unknown as AuctionLot[], { slug: 'sports-cards' }),
   };
 
-  const out = { generatedAt: new Date().toISOString(), tape, demand, realized, bidComp, recentSold, lots: upcoming };
+  // ── DEEP VALUE (no-estimate lots) — Collin, Aug 14: projected close still
+  // FAR under the value floor with the hammer approaching. The close curve
+  // already prices in the late-bid surge, so a lot that projects ≥25% under
+  // its floor inside the final ~3.5 days is genuinely behind, not merely
+  // early. Ranked by depth; capped per market. Labeled a PROJECTION read —
+  // the calls ledger is accumulating its receipt before it wears any
+  // certified language.
+  const deepValue: Record<string, Array<{ id: string; depth: number; allIn: number; floor: number; closes: string }>> = {};
+  {
+    const nowMs = Date.now();
+    const rows: Array<{ m: string; id: string; depth: number; allIn: number; floor: number; closes: string }> = [];
+    for (const e of upcoming) {
+      const bp = (e as { bidProj?: { allIn: number; floor?: number; below?: boolean } }).bidProj;
+      if (!bp?.below || !bp.floor || !(bp.allIn > 0)) continue;
+      const sdt = (e as { saleDateTime?: string | null }).saleDateTime || (e as { saleDate?: string }).saleDate;
+      const closeMs = sdt ? new Date(String(sdt)).getTime() : NaN;
+      if (isNaN(closeMs)) continue;
+      const daysOut = (closeMs - nowMs) / 86400000;
+      if (daysOut < 0 || daysOut > 3.5) continue; // "coming up on hammer"
+      const depth = 1 - bp.allIn / bp.floor;
+      if (depth < 0.25) continue; // ≥25% under floor AFTER the growth projection
+      // too-good-to-be-true gate: >90% under floor is almost always a floor
+      // error (damaged/partial lot comped against clean copies), not value
+      if (depth > 0.9) continue;
+      const vv = (e as { value?: { low?: number; confidence?: string } }).value;
+      if (vv?.low && vv.low > 0 && vv.confidence === 'low') continue; // weak floor, no board seat
+      rows.push({ m: marketOf(String((e as { artist?: string }).artist)), id: String((e as { id?: string }).id), depth: Math.round(depth * 100) / 100, allIn: bp.allIn, floor: bp.floor, closes: String((e as { saleDate?: string }).saleDate || '') });
+    }
+    rows.sort((a, b) => b.depth - a.depth);
+    for (const r of rows) {
+      const arr = deepValue[r.m] || (deepValue[r.m] = []);
+      if (arr.length < 40) arr.push({ id: r.id, depth: r.depth, allIn: r.allIn, floor: r.floor, closes: r.closes });
+    }
+    const dvCounts = Object.keys(deepValue).map(k => `${k}:${deepValue[k].length}`).join(' ') || 'none';
+    console.log(`[upcoming] deep value (proj ≥25% under floor, closes ≤3.5d): ${dvCounts}`);
+  }
+  const out = { generatedAt: new Date().toISOString(), tape, demand, realized, bidComp, recentSold, deepValue, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
   const recentCounts = Object.keys(recentSold).map(k => `${k}:${recentSold[k].length}`).join(' ');
