@@ -10,6 +10,8 @@ on:
 concurrency:
   group: close-board
   cancel-in-progress: true
+permissions:
+  contents: write
 jobs:
   board:
     runs-on: ubuntu-latest
