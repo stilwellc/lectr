@@ -298,12 +298,13 @@ function loadRayData(): Promise<RayPayload> {
 
   inflight = (async () => {
     // ── phase 1: the small eager payload — stats + meta + upcoming (w/ signals)
-    const [statsR, metaR, upR, btR, mkR] = await Promise.allSettled([
+    const [statsR, metaR, upR, btR, mkR, cbR] = await Promise.allSettled([
       fetchJson('/data/ray/stats.json'),
       fetchJson('/data/ray/meta.json'),
       fetchJson('/data/ray/upcoming.json'),
       fetchJson('/data/ray/backtest.json'),
       fetchJson('/data/ray/market.json'),
+      fetchJson('/data/ray/close-board.json'),
     ]);
     const market = mkR.status === 'fulfilled' ? (mkR.value as MarketData) : null;
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
@@ -320,6 +321,31 @@ function loadRayData(): Promise<RayPayload> {
           lots?: AuctionLot[];
         })
       : null;
+
+    // ── CLOSE-BOARD OVERLAY — intraday bid refresh for lots closing <24h.
+    // Newer-generatedAt only; overrides currentBid/bidCount/bidProj and the
+    // affected markets' deep-value rows so every surface reads close-fresh.
+    const cb = cbR.status === 'fulfilled' ? (cbR.value as {
+      generatedAt?: string;
+      bids?: Record<string, { b: number; n: number; proj?: number; floor?: number; below?: boolean }>;
+      deepValue?: Array<{ id: string; depth: number; allIn: number; floor: number; closes: string; m?: string }>;
+    }) : null;
+    const upGen = (up as { generatedAt?: string } | null)?.generatedAt;
+    if (cb?.bids && up?.lots && (!upGen || !cb.generatedAt || cb.generatedAt > upGen)) {
+      for (const l of up.lots) {
+        const o = cb.bids[String((l as { id?: string }).id)];
+        if (!o) continue;
+        const lw = l as AuctionLot & { bidProj?: { g: number; allIn: number; floor?: number; below?: boolean } };
+        if (o.b > 0) lw.currentBid = o.b;
+        if (o.n > 0) lw.bidCount = o.n;
+        if (o.proj) lw.bidProj = { g: lw.bidProj?.g ?? 1, allIn: o.proj, ...(o.floor ? { floor: o.floor, below: o.below } : {}) };
+      }
+      if (cb.deepValue?.length && up.deepValue) {
+        const byM: Record<string, typeof cb.deepValue> = {};
+        for (const r of cb.deepValue) { const m = r.m || 'sports'; (byM[m] || (byM[m] = [])).push(r); }
+        for (const m of Object.keys(byM)) (up.deepValue as DeepValueByMarket)[m] = byM[m] as DeepValueRow[];
+      }
+    }
 
     if (up && statsData) {
       const core: RayPayload = {

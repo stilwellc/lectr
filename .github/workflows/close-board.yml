@@ -1,0 +1,32 @@
+# CLOSE-DAY BOARD — the intraday leg of the engine's timeliness fix. Refreshes
+# current bids for lots closing <24h (Goldin API passes + REA lot pages),
+# re-projects with the served close curve, and commits the overlay; the
+# on-push deploy ships it. Corpus untouched.
+name: Close board (intraday)
+on:
+  schedule:
+    - cron: '30 */4 * * *'   # every 4h, offset from the 06:00 nightly
+  workflow_dispatch:
+concurrency:
+  group: close-board
+  cancel-in-progress: true
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Build the overlay
+        run: RAY_SKIP_MAIN=1 npx tsx scripts/close-board.ts
+      - name: Commit + push if changed
+        run: |
+          git config user.name "close-board[bot]"
+          git config user.email "noreply@lectr.bid"
+          git add -f public/data/ray/close-board.json
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -m "close-board: intraday overlay $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase origin main
+          git push origin main

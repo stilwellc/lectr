@@ -39,3 +39,5 @@ next-env.d.ts
 # wrangler local state
 .wrangler/
 data/rr-archive/
+# the intraday close-board overlay IS committed (CI writes it; deploy ships it)
+!public/data/ray/close-board.json
