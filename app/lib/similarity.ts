@@ -30,6 +30,7 @@
  * so scoring stays pure and deterministic given the same table.
  */
 import type { AuctionLot } from '../types';
+import { numericWatchRef, watchMaterialCoarse, editionIdentityKey, isEditionLot, autographFormatOf, WATCH_SLUGS, AUTOGRAPH_SLUGS } from './identity';
 
 // ── IDF ────────────────────────────────────────────────────────────────────
 export type IdfTable = { N: number; df: Record<string, number> };
@@ -70,6 +71,18 @@ const SPORTS_SCIENCE = new Set([
   'game-used', 'trophies-awards', 'tickets-passes',
   'space-exploration', 'meteorites', 'fossils', 'scientific-instruments',
 ]);
+// Natural-history / instrument slugs where the art-derived formKey and the
+// person-entity gate are NOISE, not identity (Aug 14 autopsy: formKey mismatch
+// killed 68% of scientific-instrument pairs; fossil "entities" were junk like
+// "THE TOOTH OF" — two T-rex teeth could never comp). Identity here lives in
+// the title cosine; these slugs skip both gates.
+const SCI_LOOSE = new Set(['fossils', 'meteorites', 'scientific-instruments', 'science-tech']);
+// Culture/space memorabilia: the entity IS identity (Aldrin ≠ Armstrong) but
+// the extractor leaves junk affixes ("Buzz Aldrin Signed") — normalize before
+// comparing so a suffix never rejects a same-person comp.
+const entityNorm = (e: string): string => e.toLowerCase()
+  .replace(/\b(signed|autographed|the|an?|and|of)\b/g, ' ')
+  .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Same broad object class — a hard gate (a painting never comps a print). */
 export function sameForm(a: AuctionLot, b: AuctionLot): boolean {
@@ -93,6 +106,50 @@ export interface Match {
   cosine: number;           // raw IDF-cosine, 0–1
   cls: MatchClass;
   reasons: string[];        // human-readable agreement notes (for the modal)
+  /** exact structured identity: same numeric watch reference (materials not in
+   *  conflict) or same art edition. Bypasses the comp-pool cosine gates —
+   *  catalog styles differ across houses but the ref/edition IS the object. */
+  idExact?: boolean;
+}
+
+/** A/B kill-switch for the exact-identity tier + autograph format gate —
+ *  mutable so the holdout harness can measure with/without (same pattern as
+ *  value.ts COMP_GATE). Production always runs enabled. */
+export const ID_TIER = { enabled: true };
+
+// per-lot memo caches — these keys are derived by regex over titles and the
+// matcher runs O(pool²)-ish in the backtest; recomputing per PAIR would put
+// regex work on a hundred-million-call hot path
+const memo = <T>(fn: (l: AuctionLot) => T) => {
+  const c = new WeakMap<object, T>();
+  return (l: AuctionLot): T => { let v = c.get(l); if (v === undefined) { v = fn(l); c.set(l, v); } return v; };
+};
+const refOf = memo(numericWatchRef);
+const matOf = memo(watchMaterialCoarse);
+const edOf = memo((l: AuctionLot) => (isEditionLot(l) ? editionIdentityKey(l) : null));
+const fmtOf = memo((l: AuctionLot) => autographFormatOf(l.title));
+const gateIdOf = memo((l: AuctionLot) => {
+  const ps = (l as { playerSlug?: string | null }).playerSlug;
+  return ps ? ps.replace(/-/g, ' ') : (l.entity ? entityNorm(l.entity) : null);
+});
+
+/** Exact non-card identity between two same-maker lots. Cheap string compares,
+ *  callable before any cosine work. */
+function exactIdentity(a: AuctionLot, b: AuctionLot): string | null {
+  if (a.artist !== b.artist) return null;
+  if (WATCH_SLUGS.has(a.artist)) {
+    const ra = refOf(a), rb = refOf(b);
+    if (ra && ra === rb) {
+      // same numeric ref, but a platinum and a steel 3940 are different money —
+      // require materials not to CONFLICT (unknown on either side is fine)
+      const ma = matOf(a), mb = matOf(b);
+      if (!ma || !mb || ma === mb) return `same reference ${String(a.reference).toLowerCase()}`;
+    }
+    return null;
+  }
+  const ea = edOf(a);
+  if (ea && ea === edOf(b)) return 'same edition';
+  return null;
 }
 
 /**
@@ -103,8 +160,10 @@ export interface Match {
 export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: AuctionLot & { _v?: Record<string, number> }, tbl: IdfTable): Match {
   if (a.id === b.id) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
 
-  // hard gate: same broad form/category
-  if (!sameForm(a, b)) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+  // hard gate: same broad form/category (formKey half waived on SCI_LOOSE —
+  // the art-derived form classifier is noise on instruments/naturals)
+  if (a.category !== b.category) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+  if (!SCI_LOOSE.has(a.artist) && a.formKey && b.formKey && a.formKey !== b.formKey) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
   // hard gate: same PLAYER for sports/science non-maker OBJECT lots. A game-used
   // object's identity IS its player — a Jordan jersey never comps a LeBron one,
   // regardless of title cosine. Only reject when BOTH sides carry a player id and
@@ -113,21 +172,35 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
   // also makes the CLIENT-side ComparableModal / computeDeepSignal comps
   // same-player. The soft +0.05 same-entity bonus below still rewards the match.
   {
-    const isSportsSci = (SPORTS_SCIENCE.has(a.artist) || a.category === 'object') && a.entityClass !== 'maker';
+    const isSportsSci = (SPORTS_SCIENCE.has(a.artist) || a.category === 'object') && a.entityClass !== 'maker'
+      && !SCI_LOOSE.has(a.artist);   // naturals/instruments: entity field is junk, skip
     if (isSportsSci) {
-      const pa = (a as { playerSlug?: string | null }).playerSlug ?? a.entity;
-      const pb = (b as { playerSlug?: string | null }).playerSlug ?? b.entity;
+      const pa = gateIdOf(a), pb = gateIdOf(b);
       if (pa && pb && pa !== pb) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
     }
   }
   // hard gate: dimensions grossly different when both known
   const sr = sizeRatio(a, b);
   if (sr !== null && sr > 1.6) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+  // hard gate: autograph FORMAT (science/culture/sports-autographs). An ALS and
+  // a signed photo of the same person are different markets (RR spells the
+  // format out on 24% of these titles) — mismatch never comps. Only reject when
+  // BOTH sides declare a format.
+  const fmtGated = ID_TIER.enabled && AUTOGRAPH_SLUGS.has(a.artist);
+  const fa = fmtGated ? fmtOf(a) : null;
+  const fb = fmtGated ? fmtOf(b) : null;
+  if (fa && fb && fa !== fb) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+
+  // exact structured identity (numeric watch ref / art edition) — computed
+  // BEFORE the cosine floor: the same reference photographed by two houses can
+  // read under 0.4 on title wording alone, and that's exactly the comp the
+  // cosine engine loses.
+  const idReason = ID_TIER.enabled ? exactIdentity(a, b) : null;
 
   const va = a._v || tokenVector(a.titleTokens, tbl);
   const vb = b._v || tokenVector(b.titleTokens, tbl);
   const cos = cosine(va, vb);
-  if (cos < 0.4) return { score: 0, cosine: cos, cls: 'none', reasons: [] };
+  if (cos < (idReason ? 0.2 : 0.4)) return { score: 0, cosine: cos, cls: 'none', reasons: [] };
 
   const reasons: string[] = [];
   let bonus = 0;             // structured agreement, added to the cosine base
@@ -135,6 +208,8 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
   // model / reference exact agreement — the strongest structured signal
   if (a.modelKey && b.modelKey && a.modelKey === b.modelKey) { bonus += 0.06; reasons.push(`same model ${a.modelKey}`); }
   if (a.reference && b.reference && a.reference === b.reference) { bonus += 0.08; reasons.push(`same reference ${a.reference}`); }
+  if (idReason) { bonus += 0.15; reasons.push(idReason); }
+  if (fa && fa === fb) { bonus += 0.05; reasons.push(`same format (${fa.toUpperCase()})`); }
 
   // dimension proximity (both known): tighter than 1.15× is a real signal
   if (sr !== null) {
@@ -162,7 +237,11 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
   const raw = Math.max(0, Math.min(1, cos + bonus));
   const score = Math.round(raw * 100);
 
-  return { score, cosine: cos, cls: classify(a, b, cos, bonus, reasons), reasons };
+  let cls = classify(a, b, cos, bonus, reasons);
+  // an exact ref/edition identity is at least the same MODEL unit, whatever
+  // the wording similarity says
+  if (idReason && (cls === 'similar' || cls === 'none')) cls = 'modelMatch';
+  return { score, cosine: cos, cls, reasons, idExact: !!idReason };
 }
 
 /** Decide which identity claim the score justifies. */

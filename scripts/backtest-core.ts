@@ -37,6 +37,16 @@ export function median(sorted: number[]): number {
 }
 
 export const hasEst = (l: L) => (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 && (l.estLowUsd! + l.estHighUsd!) / 2 > 0;
+// SINGLE-POINT estimates (Aug 14): RR publishes "Estimate: $500+" — low only.
+// 90k sold science/culture lots carry one, and requiring a band made the
+// entire RR mass invisible to measurement while production flags it daily.
+// Point lots are scored into calObs (calibration, byMarket record, band
+// coverage) but NOT the certified global flagged/unflagged buckets — those
+// stay band-basis so the flagship receipt's meaning doesn't shift.
+export const hasAnyEst = (l: L) => (l.estLowUsd || 0) > 0 || (l.estHighUsd || 0) > 0;
+export const estMidOf = (l: L) => { const lo = l.estLowUsd || 0, hi = l.estHighUsd || 0; return lo && hi ? (lo + hi) / 2 : (lo || hi); };
+export const estTopOf = (l: L) => (l.estHighUsd || l.estLowUsd || 0);
+export const estKindOf = (l: L): 'b' | 'p' => ((l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 ? 'b' : 'p');
 
 // ── ACCUMULATOR STATE ──
 // Every published number derives from these raw arrays/counts. The full build
@@ -45,7 +55,7 @@ export const hasEst = (l: L) => (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 
 // raw arrays (not the rounded summary) is what lets the incremental reproduce a
 // median / weighted rate / conformal quantile that a full replay would compute.
 export type Bucket = { perfs: number[]; hammerPerfs: number[]; beat: number; hammerBeat: number; n: number; boughtIn: number };
-export type CalObs = { m: string; cr: number; beat: boolean; r: number; conf: string; ageY: number; pf?: number; fl?: boolean; kt?: string };
+export type CalObs = { m: string; cr: number; beat: boolean; r: number; conf: string; ageY: number; pf?: number; fl?: boolean; kt?: string; et?: 'b' | 'p' };
 export type YearObs = { flagged: number[]; unflagged: number[] };
 
 export interface BacktestState {
@@ -132,29 +142,35 @@ export function valueOne(prep: Prepared, lot: L) {
 export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
   const v = valueOne(prep, lot);
   if (!v || !v.signal) return false;
-  const estMid = (lot.estLowUsd! + lot.estHighUsd!) / 2;
+  const estMid = estMidOf(lot);
+  const estTop = estTopOf(lot);
+  const et = estKindOf(lot);
   const realized = lot.realizedUsd!;
   // per-house premium schedule (measured + published; flat 1.25 was up to
   // ~10% biased cross-house — REA runs 1.175, Bonhams low bands 1.28)
   const hammer = (lot.hammerUsd || 0) > 0 ? lot.hammerUsd! : realized / houseAllInFactor(lot.auctionHouse, realized);
   const isBelow = v.signal.label.startsWith('below');
   const isAbove = v.signal.label.startsWith('above');
-  const bucket = isBelow ? st.flagged : isAbove ? st.above : st.unflagged;
-  const push = (b: Bucket) => {
-    b.perfs.push(realized / estMid - 1);
-    b.hammerPerfs.push(hammer / estMid - 1);
-    if (realized > lot.estHighUsd!) b.beat++;
-    if (hammer > lot.estHighUsd!) b.hammerBeat++;
-    b.n++;
-  };
-  push(bucket);
-  if (isBelow) push(v.tier === 'fallback' ? st.flaggedFallback : st.flaggedMain);
+  // point-estimate lots (RR "$500+") feed calObs ONLY — the certified global
+  // buckets + byYear stay band-basis so their published meaning never shifts
+  if (et === 'b') {
+    const bucket = isBelow ? st.flagged : isAbove ? st.above : st.unflagged;
+    const push = (b: Bucket) => {
+      b.perfs.push(realized / estMid - 1);
+      b.hammerPerfs.push(hammer / estMid - 1);
+      if (realized > estTop) b.beat++;
+      if (hammer > estTop) b.hammerBeat++;
+      b.n++;
+    };
+    push(bucket);
+    if (isBelow) push(v.tier === 'fallback' ? st.flaggedFallback : st.flaggedMain);
+  }
 
   if (v.compRatio != null && v.compValueUsd > 0) {
     st.calObs.push({
       m: prep.marketBySlug[lot.artist] || 'all',
       cr: v.compRatio,
-      beat: realized > lot.estHighUsd!,
+      beat: realized > estTop,
       r: realized / v.compValueUsd,
       conf: v.confidence,
       ageY: Math.max(0, (st.nowMs - new Date(lot.saleDate).getTime()) / 31_557_600_000),
@@ -163,15 +179,18 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
       // watches era-gate MEASUREMENT (spec 8a precondition): reference-keyed
       // vs model-name-keyed error splits fall out of the Sunday full replay
       kt: prep.marketBySlug[lot.artist] === 'watches' ? ((lot as L & { reference?: string | null }).reference ? 'ref' : 'model') : undefined,
+      et,
     });
   }
 
-  const y = +lot.saleDate.slice(0, 4);
-  if (y >= 2000) {
-    const yb = st.byYear[y] || { flagged: [], unflagged: [] };
-    if (isBelow) yb.flagged.push(realized / estMid - 1);
-    else if (!isAbove) yb.unflagged.push(realized / estMid - 1);
-    st.byYear[y] = yb;
+  if (et === 'b') {
+    const y = +lot.saleDate.slice(0, 4);
+    if (y >= 2000) {
+      const yb = st.byYear[y] || { flagged: [], unflagged: [] };
+      if (isBelow) yb.flagged.push(realized / estMid - 1);
+      else if (!isAbove) yb.unflagged.push(realized / estMid - 1);
+      st.byYear[y] = yb;
+    }
   }
   return true;
 }
@@ -296,8 +315,8 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
   const globalAcc = rate(calObs);
   const globalLevels = globalAcc.map(a => (a.w > 0 ? a.wb / a.w : 0.55));
   const K = 60;
-  const levelsFor = (mkt: string) => {
-    const acc = rate(calObs.filter(o => o.m === mkt));
+  const levelsOf = (obs: CalObs[]) => {
+    const acc = rate(obs);
     const lv = acc.map((a, b) => {
       if (a.n < 100) return globalLevels[b];
       return (a.wb + K * globalLevels[b]) / (a.w + K);
@@ -305,6 +324,7 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
     for (let b = 1; b <= 4; b++) lv[b] = Math.max(lv[b], lv[b - 1]);
     return lv.map(x => Math.round(Math.min(0.85, Math.max(0.3, x)) * 100));
   };
+  const levelsFor = (mkt: string) => levelsOf(calObs.filter(o => o.m === mkt));
   const bandFor = (conf: string) => {
     const rs = calObs.filter(o => o.conf === conf).map(o => o.r).sort((a, b) => a - b);
     const src = rs.length >= 150 ? rs : calObs.map(o => o.r).sort((a, b) => a - b);
@@ -346,10 +366,22 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
     edges: EDGES,
     watchKt,
     bandCoverage,
-    beatRate: {
-      global: levelsFor('__none__').map((_, b) => Math.round(Math.min(0.85, Math.max(0.3, globalLevels[b])) * 100)),
-      art: levelsFor('art'), design: levelsFor('design'), watches: levelsFor('watches'),
-    },
+    beatRate: (() => {
+      // EVERY market present gets a row (science/culture/sports ran on the
+      // global fallback before), plus a ':pt' split where single-point (RR)
+      // observations are deep enough — "beat" means beating the LOW estimate
+      // there, a different claim that must never blend into the band rows.
+      const rows: Record<string, number[]> = {
+        global: levelsFor('__none__').map((_, b) => Math.round(Math.min(0.85, Math.max(0.3, globalLevels[b])) * 100)),
+      };
+      for (const m of Array.from(new Set(calObs.map(o => o.m).filter(x => x && x !== 'all')))) {
+        const band = calObs.filter(o => o.m === m && o.et !== 'p');
+        if (band.length >= 100) rows[m] = levelsOf(band);
+        const pt = calObs.filter(o => o.m === m && o.et === 'p');
+        if (pt.length >= 200) rows[`${m}:pt`] = levelsOf(pt);
+      }
+      return rows;
+    })(),
     band: { high: bandFor('high'), medium: bandFor('medium'), low: bandFor('low') },
     n: calObs.length,
   };
@@ -380,7 +412,7 @@ export function summaryLine(out: ReturnType<typeof summarizeState>): string {
  *  a usable estimate). Shared so both entry points draw targets from the same
  *  predicate; the incremental just filters these by close-date afterward. */
 export function targetsOf(prep: Prepared): { soldTargets: L[]; biTargets: L[] } {
-  const soldTargets = prep.sold.filter(hasEst);
+  const soldTargets = prep.sold.filter(hasAnyEst);   // band + single-point (RR)
   const biTargets = prep.lots.filter(l => l.status === 'bought_in' && l.saleDate && l.titleTokens && l.titleTokens.length && hasEst(l));
   return { soldTargets, biTargets };
 }

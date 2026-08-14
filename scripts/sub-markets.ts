@@ -23,6 +23,7 @@ import type { MakerIndexResult } from './hedonic-index';
 import { buildRepeatSaleIndex } from './repeat-sales';
 import { bidCompetitionSeries } from '../app/lib/demand';
 import { subCatLabel } from './lib/sub-cats';
+import { editionIdentityKey as editionKey, isEditionLot } from '../app/lib/identity';
 
 // ── the emitted row (mirrors SubMarketRead in app/hooks/useRayData.ts) ──
 export interface SubMarketRead {
@@ -250,21 +251,6 @@ function watchRefKey(l: AuctionLot): string | null {
  *  dates so siblings of one edition pair up — model-level identity, like a
  *  watch reference. Restricted to edition-structured lots by the caller;
  *  unique originals must never enter this key. */
-function editionKey(l: AuctionLot): string | null {
-  const t = (l.title || '').toLowerCase()
-    .replace(/\b\d+\s*\/\s*\d+\b/g, '')
-    .replace(/\b(ap|pp|hc|tp|ed\.?|edition|numbered|signed)\b/g, '')
-    .replace(/\([^)]*\d{4}[^)]*\)/g, '')
-    .replace(/[^a-z0-9 ]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return t.length >= 8 ? `${l.artist}|${t}` : null;
-}
-
-function isEditionLot(l: AuctionLot): boolean {
-  const f = `${l.formKey || ''} ${l.medium || ''}`.toLowerCase();
-  return /print|multiple|edition|poster|lithograph|screenprint|etching/.test(f);
-}
 
 /** The one repeat-sale attempt, shared by drills and slug rows: pick the pool's
  *  natural identity (card > watch reference > art edition), require a real pool,

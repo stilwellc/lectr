@@ -52,6 +52,9 @@ export interface ValueResult {
    *  bid-only Goldin card valued from past sales of that exact card / that player,
    *  NOT the hedonic engine — signal is always null on these. */
   basis?: 'hedonic' | 'card-comp';
+  /** count of exact-identity comps (same watch reference / same art edition)
+   *  in the top pool — the non-card analogue of a card tier-1 match */
+  idn?: number;
 }
 
 const MIN_COS = 0.65;   // comp-pool inclusion (calibrated: below this is a different object)
@@ -71,9 +74,13 @@ export const COMP_GATE = { cosFloor: 0.50, minScore: 65 };
 // coverage) whose flagged cohort measured +38.9%/63.1%, statistically
 // indistinguishable from the main engine; confidence is capped at 'medium'.
 export const FALLBACK_GATE = { cosFloor: 0.45, minScore: 55 };
-function passesGateWith(g: { cosFloor: number; minScore: number }, m: { cls: string; cosine: number; score: number }): boolean {
-  return m.cls !== 'none'
-    && m.cosine >= g.cosFloor
+function passesGateWith(g: { cosFloor: number; minScore: number }, m: { cls: string; cosine: number; score: number; idExact?: boolean }): boolean {
+  if (m.cls === 'none') return false;
+  // exact structured identity (same numeric watch reference / same art
+  // edition) IS the object — admit past the wording gates. similarity already
+  // floors these at cosine 0.2 so pure noise never carries the flag.
+  if (m.idExact) return true;
+  return m.cosine >= g.cosFloor
     && (g.minScore === 0 || m.score >= g.minScore);
 }
 function passesGate(m: { cls: string; cosine: number; score: number }): boolean {
@@ -120,9 +127,12 @@ export function setCalibration(cal: EngineCalibration | null) { CAL = cal; }
 
 /** Calibrated beat-high rate as a function of compRatio (comps / estimate-mid).
  *  Falls back to the original holdout fit (n=5,215, monotonic 42% → 69%). */
-function beatRate(compRatio: number, market?: string): number {
+function beatRate(compRatio: number, market?: string, estKind?: 'b' | 'p'): number {
   if (CAL) {
-    const row = (market && CAL.beatRate[market]) || CAL.beatRate.global;
+    // single-point (RR "$500+") lots read the ':pt' row when calibrated —
+    // there "beat" means beating the LOW estimate, a different base rate
+    const row = (market && estKind === 'p' && CAL.beatRate[`${market}:pt`])
+      || (market && CAL.beatRate[market]) || CAL.beatRate.global;
     if (row && row.length === CAL.edges.length + 1) {
       let b = 0;
       for (const e of CAL.edges) { if (compRatio < e) break; b++; }
@@ -196,9 +206,13 @@ export function estimateValue(
   const dLow = quantile(vals, 0.25);
   const dHigh = quantile(vals, 0.75);
   const disp = dHigh > 0 ? dHigh / Math.max(dLow, 1) : 99;
+  // idExact comps (same watch reference / same art edition) carry identity the
+  // title cosine can't see — a pool anchored on them earns tiers on pool size
+  // + dispersion alone, bestCos waived.
+  const idn = top.filter(c => c.match.idExact).length;
   let confidence: ValueResult['confidence'] = 'low';
-  if (pool.length >= 6 && bestCos >= 0.85 && disp <= 1.5) confidence = 'high';
-  else if (pool.length >= 4 && bestCos >= 0.72 && disp <= 2.5) confidence = 'medium';
+  if (pool.length >= 6 && (bestCos >= 0.85 || idn >= 4) && disp <= 1.5) confidence = 'high';
+  else if (pool.length >= 4 && (bestCos >= 0.72 || idn >= 3) && disp <= 2.5) confidence = 'medium';
   // a relaxed-gate pool never claims the top tier
   if (tier === 'fallback' && confidence === 'high') confidence = 'medium';
 
@@ -233,7 +247,8 @@ export function estimateValue(
         if (confidence === 'high') confidence = 'medium';
       }
     }
-    const br = beatRate(compRatio, CAL?.marketBySlug?.[lot.artist]);
+    const br = beatRate(compRatio, CAL?.marketBySlug?.[lot.artist],
+      (lot.estLowUsd && lot.estHighUsd) ? 'b' : 'p');
     // ODDS GATE (Aug 13 value audit): admission by the market's CALIBRATED
     // beat rate, not the raw ratio alone. The 1.3 threshold was near a coin
     // flip in watches' low buckets (35-36%) while cr>2.0 runs 69-72% in every
@@ -284,6 +299,7 @@ export function estimateValue(
     confidence,
     tier,
     exact,
+    idn: idn || undefined,
   };
 }
 
