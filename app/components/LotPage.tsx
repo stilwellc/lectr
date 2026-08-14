@@ -3,6 +3,7 @@
 import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
+import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
@@ -394,18 +395,39 @@ export default function LotPage({ lotId, initialLot }: {
       const pool = (ev.poolIds || [])
         .map(id => byId.get(id))
         .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
-      if (pool.length) return { pool, n: ev.n || pool.length, med: ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
+      // pool may resolve EMPTY (engine pools draw on the off-wire corpus
+      // tier) — keep the engine call anyway; the evidence fetch below fills
+      // the rows. Falling through to signalWithPool would print a DIFFERENT
+      // read against the same header (the contradiction Collin caught).
+      return { pool, n: ev.n || pool.length, med: ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
     }
     const read = signalWithPool(lot, allLots);
     return read ? { pool: read.pool, n: read.pool.length, med: read.signal.med, form: read.signal.form as string, kind: read.signal.kind } : null;
   }, [lot, allLots, band]);
 
+  // build-shipped evidence rows for engine calls whose poolIds aren't on-wire
+  // (undefined = loading · null = fetched, nothing there)
+  const [evRows, setEvRows] = useState<AuctionLot[] | null | undefined>(undefined);
+  const needEvidence = (!!lot && !!called && called.pool.length === 0 && !band)
+    || (!!lot && !called && !band && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
+  useEffect(() => {
+    if (!needEvidence || !lot) { setEvRows(null); return; }
+    let live = true;
+    setEvRows(undefined);
+    loadCompEvidence().then(map => {
+      if (!live) return;
+      const rows = map?.[String(lot.id)];
+      setEvRows(rows && rows.length ? evRowsToLots(rows, lot) : null);
+    });
+    return () => { live = false; };
+  }, [needEvidence, lot]);
+
   const compRows = useMemo(() => {
-    const pool = band ? band.pool : called ? called.pool : [];
+    const pool = band ? band.pool : called ? (called.pool.length ? called.pool : (evRows || [])) : (evRows || []);
     return [...pool]
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
       .slice(0, 12);
-  }, [band, called]);
+  }, [band, called, evRows]);
 
   // ── provenance: the same physical object across the book ──
   // repeatSaleGroupId is the engine's strict physical-match verdict (photo/
@@ -505,7 +527,8 @@ export default function LotPage({ lotId, initialLot }: {
   const formLabel = (band && ((FORM_LABEL as Record<string, string>)[band.form] || band.form))
     || (called?.form && (FORM_LABEL as Record<string, string>)[called.form])
     || 'sales';
-  const compsPending = !band && !called && !fullLoaded && !fullError;
+  const compsPending = (!band && !called && !fullLoaded && !fullError)
+    || (needEvidence && evRows === undefined);
   // D2 P1 — ComparableModal's isCardComp suppression, mirrored: a card-comp
   // lot's proof surface IS the exact-card rows + grade ladder already on the
   // certificate (its poolIds are sold-card ids outside the client corpus), so
@@ -882,7 +905,9 @@ export default function LotPage({ lotId, initialLot }: {
                       Try again
                     </button>
                   </>
-                : <>No comparable sales clear the gates for this lot — lectr doesn&rsquo;t manufacture a pool.</>}
+                : (called && called.n > 0) || (lot?.status === 'upcoming' && (lot?.signal?.basis || 0) > 0)
+                  ? <>The {(called && called.n) || lot?.signal?.basis} sales behind this call sit in the deep corpus — the evidence rows couldn&rsquo;t be loaded right now.</>
+                  : <>No comparable sales clear the gates for this lot — lectr doesn&rsquo;t manufacture a pool.</>}
             </div>
           ) : (
             <div style={{ marginTop: 6 }}>

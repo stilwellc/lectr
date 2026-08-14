@@ -8,6 +8,7 @@ import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
+import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import { safeHref } from '../lib/safe-href';
 import type { MarketData, Backtest } from '../hooks/useRayData';
 import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
@@ -537,6 +538,30 @@ export default function ComparableModal({
     return signalWithPool(lot, allLots);
   }, [lot, allLots]);
 
+  // EVIDENCE FALLBACK: the engine's pool draws on the corpus-only tier, so
+  // poolIds often resolve to ZERO on-wire rows — and the section would then
+  // contradict its own header ("8 sales" … "no comparable sales"). The build
+  // ships the pool's actual rows in comp-evidence.json; fetch them lazily
+  // whenever the engine made the call but the client corpus can't show it.
+  // undefined = still loading · null = fetched, nothing there
+  const [evRows, setEvRows] = useState<AuctionLot[] | null | undefined>(undefined);
+  // engine call with an unresolvable pool, OR a crawl-stamped signal with no
+  // call at all (its fallback pool also lives in the full corpus) — both have
+  // build-shipped evidence. Sports/science objects keep their archive band.
+  const needEvidence = (!!called && called.pool.length === 0)
+    || (!called && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
+  useEffect(() => {
+    if (!needEvidence) { setEvRows(null); return; }
+    let live = true;
+    setEvRows(undefined);
+    loadCompEvidence().then(map => {
+      if (!live) return;
+      const rows = map?.[String(lot.id)];
+      setEvRows(rows && rows.length ? evRowsToLots(rows, lot) : null);
+    });
+    return () => { live = false; };
+  }, [needEvidence, lot]);
+
   // A bid-only sports CARD valued by the §3 card-comp estimator. Its evidence
   // is the same-card sales / grade ladder rendered by CardCompsBlock in the
   // header (the poolIds — sold-card ids — aren't in the client corpus, so the
@@ -572,12 +597,16 @@ export default function ComparableModal({
   // is still downloading: the client read is running against a truncated pool,
   // so a confident "0 comparable sales (no call)" would contradict the card
   // glow. Show the loading state instead (LotPage's compsPending pattern).
-  const compsPending = !called && !band && !fullLoaded && !fullError;
+  const compsPending = (!called && !band && !fullLoaded && !fullError)
+    || (needEvidence && evRows === undefined);
 
   const comparables = useMemo(() => {
     if (called) {
-      // the call's own pool, most recent first — this IS the statistic
-      return [...called.pool]
+      // the call's own pool, most recent first — this IS the statistic.
+      // When the on-wire corpus can't resolve the ids, the build-shipped
+      // evidence rows are the same pool (deep-corpus sales), not a substitute.
+      const poolRows = called.pool.length ? called.pool : (evRows || []);
+      return [...poolRows]
         .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
         .map(l => ({ lot: l, score: 1 }));
     }
@@ -601,8 +630,15 @@ export default function ComparableModal({
       if (Math.abs(a.score - b.score) > 0.01) return b.score - a.score;
       return new Date(b.lot.saleDate).getTime() - new Date(a.lot.saleDate).getTime();
     });
+    // crawl-stamped signal with no client-derivable pool: the build-shipped
+    // evidence rows ARE its pool (deep-corpus sales, most recent first)
+    if (!scored.length && evRows?.length) {
+      return [...evRows]
+        .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+        .map(l => ({ lot: l, score: 1 }));
+    }
     return scored.slice(0, MAX_COMPARABLES);
-  }, [lot, allLots, called, band]);
+  }, [lot, allLots, called, band, evRows]);
 
   const compStats = useMemo(() => {
     if (comparables.length === 0) return null;
@@ -1100,7 +1136,11 @@ export default function ComparableModal({
                 ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
                 : compsPending || comparables.length === 0
                   ? 'Context — comparable sales'
-                  : `Context — ${comparables.length} comparable sales (no call on this lot)`}
+                  : lot.status === 'upcoming' && (lot.signal?.basis || 0) > 0
+                    // crawl-signal lot whose pool arrived via the evidence
+                    // fetch — these rows ARE the call's pool, never "no call"
+                    ? `The call — ${comparables.length} comparable sales`
+                    : `Context — ${comparables.length} comparable sales (no call on this lot)`}
           </div>
 
           {/* Realized prices are hammer + premium, not an estimate call —
@@ -1145,8 +1185,15 @@ export default function ComparableModal({
               fontSize: 13.5,
             }}>
               {/* one message, one voice (LotPage's phrasing) — the header
-                  above already dropped its own "0 comparable sales" count */}
-              No comparable sales clear the gates for this lot &mdash; lectr doesn&rsquo;t manufacture a pool.
+                  above already dropped its own "0 comparable sales" count.
+                  When the ENGINE called it, the pool exists in the deep corpus
+                  — say that, never "no comps" against our own header. */}
+              {(() => {
+                const n = (called && (called.signal as { basis?: number }).basis) || (lot.status === 'upcoming' && lot.signal?.basis) || 0;
+                return n > 0
+                  ? <>The {n} sales behind this call sit in the deep corpus &mdash; the evidence rows couldn&rsquo;t be loaded right now.</>
+                  : <>No comparable sales clear the gates for this lot &mdash; lectr doesn&rsquo;t manufacture a pool.</>;
+              })()}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

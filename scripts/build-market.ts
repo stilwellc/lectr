@@ -272,6 +272,35 @@ export function runMarketBuild() {
   }
   console.log(`[market] valued ${valued}/${upcoming.length} upcoming lots · ${((Date.now() - tVal) / 1000).toFixed(0)}s`);
 
+  // ── COMP EVIDENCE (Aug 14): the certificate must show its pool. Engine
+  // pools draw on the corpus-only tier that never ships to the client, so the
+  // modal could print "8 sales" in the header and then resolve none of them —
+  // a self-contradiction under a trust product. Ship the rows themselves for
+  // every signal-carrying lot; the comps modal lazy-fetches this file.
+  {
+    const soldByIdEv = new Map<string, AuctionLot>();
+    for (const g of Array.from(soldByArtist.values())) for (const s of g) soldByIdEv.set(String(s.id), s);
+    const byLot: Record<string, { i: string; t: string; h: string; d: string; p: number }[]> = {};
+    let evLots = 0;
+    for (const lot of upcoming) {
+      const v = (lot as AuctionLot & { value?: ValueResult | null }).value;
+      if (!v?.signal || v.signal.label.startsWith('at')) continue;
+      const rows = (v.poolIds || [])
+        .map(id => soldByIdEv.get(String(id)))
+        .filter((s): s is AuctionLot => !!s && ((s as { realizedUsd?: number }).realizedUsd || s.priceUsd || 0) > 0)
+        .slice(0, 10)
+        .map(s => ({
+          i: String(s.id), t: (s.title || '').slice(0, 90), h: String(s.auctionHouse || ''),
+          d: String(s.saleDate || '').slice(0, 10),
+          p: Math.round((s as { realizedUsd?: number }).realizedUsd || s.priceUsd || 0),
+        }));
+      if (rows.length) { byLot[String(lot.id)] = rows; evLots++; }
+    }
+    fs.mkdirSync(SERVED, { recursive: true });
+    fs.writeFileSync(path.join(SERVED, 'comp-evidence.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), byLot }));
+    console.log(`[market] comp evidence: ${evLots} signal lots → comp-evidence.json`);
+  }
+
   // ── 2 · repeat-sale groups: physical matches among SOLD lots ──
   // union-find over physicalMatch pairs (title-justified, per the doctrine).
   // BLOCKING (measured Jul 2026): the old maker∪rare-token CandidateIndex made

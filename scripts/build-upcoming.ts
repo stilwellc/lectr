@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { readCorpus as readCorpusShared, slimForClient } from './corpus-io';
 import {
-  computeDeepSignal, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
+  computeDeepSignal, signalWithPool, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
 import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app/lib/demand';
 import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
@@ -143,6 +143,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     v.pctile = Math.round(((lo + hi / 2) / pool.length) * 100);
   }
 
+  // evidence rows for FALLBACK-signal lots (client-engine pools over the full
+  // corpus) — merged into build-market's comp-evidence.json below
+  const fallbackEvidence = new Map<string, { i: string; t: string; h: string; d: string; p: number }[]>();
   const upcoming = upcomingLots
     .map(l => {
       const lot = l as unknown as AuctionLot;
@@ -183,7 +186,18 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
         // 'at comparable market' → no flag, and no client fallback either:
         // the engine looked and called it fairly priced.
       } else {
-        signal = computeDeepSignal(lot, lots as unknown as AuctionLot[]);
+        // fallback read — capture the POOL too: its sales live in the full
+        // build corpus (incl. the off-wire tier), so the client can't resolve
+        // them and the comps surface would contradict the signal it prints.
+        // The rows go into comp-evidence.json alongside the engine pools.
+        const read = signalWithPool(lot, lots as unknown as AuctionLot[]);
+        signal = read?.signal ?? null;
+        if (read && signal && read.pool.length) {
+          fallbackEvidence.set(String(l.id), read.pool.slice(0, 10).map(s => ({
+            i: String(s.id), t: (s.title || '').slice(0, 90), h: String(s.auctionHouse || ''),
+            d: String(s.saleDate || '').slice(0, 10), p: Math.round(s.priceUsd || 0),
+          })).filter(r => r.p > 0));
+        }
       }
       // EAGER-SLIM (the leak kill): this map used to spread the RAW corpus row
       // into the payload, so every eager lot shipped the full engine schema —
@@ -443,6 +457,19 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     console.log(`[upcoming] deep value (proj ≥25% under floor, closes ≤3.5d): ${dvCounts}`);
   }
   const out = { generatedAt: new Date().toISOString(), tape, demand, realized, bidComp, recentSold, deepValue, lots: upcoming };
+  // merge fallback-signal pools into comp-evidence.json (engine pools were
+  // written by build-market moments earlier in the same pipeline)
+  if (fallbackEvidence.size) {
+    const evPath = path.join(dataDir, 'comp-evidence.json');
+    let ev: { generatedAt: string; byLot: Record<string, unknown> } = { generatedAt: new Date().toISOString().slice(0, 10), byLot: {} };
+    try { ev = JSON.parse(fs.readFileSync(evPath, 'utf8')); } catch { /* fresh file */ }
+    let added = 0;
+    Array.from(fallbackEvidence.entries()).forEach(([id, rows]) => {
+      if (!ev.byLot[id] && rows.length) { ev.byLot[id] = rows; added++; }
+    });
+    fs.writeFileSync(evPath, JSON.stringify(ev));
+    console.log(`[upcoming] comp evidence: +${added} fallback-signal lots (file now ${Object.keys(ev.byLot).length})`);
+  }
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
   const recentCounts = Object.keys(recentSold).map(k => `${k}:${recentSold[k].length}`).join(' ');
