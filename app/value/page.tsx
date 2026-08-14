@@ -566,6 +566,35 @@ export default function ValuePage() {
 
           {backtest && backtest.flagged.n >= 100 && <RecordByYear backtest={backtest} />}
 
+          {/* PER-MARKET RECORD + HONESTY PROOFS (Aug 14) — the global receipt
+              was art/design-dominant; a vertical's user deserves ITS number.
+              byMarket + bandCoverage fill from the next backtest replay; the
+              section renders only when present. */}
+          {backtest && (backtest as { byMarket?: Record<string, { flagged: { n: number; medPct: number | null }; unflagged: { n: number; medPct: number | null } }> }).byMarket && (
+            <section className="rail ray-enter" style={{ paddingTop: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 22px', fontSize: 12.5, color: 'var(--color-text-muted)' }}>
+                <span style={{ letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: 10.5, color: 'var(--color-text-faint)' }}>By market</span>
+                {Object.entries((backtest as unknown as { byMarket: Record<string, { flagged: { n: number; medPct: number | null }; unflagged: { n: number; medPct: number | null } }> }).byMarket)
+                  .filter(([, r]) => r.flagged.medPct != null && r.unflagged.medPct != null)
+                  .map(([m, r]) => (
+                    <span key={m} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      <b style={{ color: 'var(--color-fg)' }}>{m}</b>{' '}
+                      flagged {r.flagged.medPct! >= 0 ? '+' : ''}{r.flagged.medPct}% vs {r.unflagged.medPct! >= 0 ? '+' : ''}{r.unflagged.medPct}% · n {r.flagged.n.toLocaleString()}
+                    </span>
+                  ))}
+              </div>
+              {(backtest as unknown as { calibration?: { bandCoverage?: Record<string, number | null> } }).calibration?.bandCoverage && (
+                <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 6 }}>
+                  Band honesty: realized landed inside our published band{' '}
+                  {Object.entries((backtest as unknown as { calibration: { bandCoverage: Record<string, number | null> } }).calibration.bandCoverage)
+                    .filter(([, v]) => v != null)
+                    .map(([conf, v]) => `${v}% of the time (${conf})`)
+                    .join(' · ')}.
+                </p>
+              )}
+            </section>
+          )}
+
           {/* #20 HONESTY-FLEX — name the WEAKEST cohort year openly (adequate
               sample only, ≥30 flagged). Naming the low, not just the average,
               is the strongest trust signal. Green/red only because it's a real

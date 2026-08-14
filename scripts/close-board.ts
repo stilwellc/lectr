@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { marketOf } from '../app/constants';
+import { hasConditionFlag } from './lib/condition';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const GOLDIN_API = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';
@@ -124,7 +125,7 @@ async function main() {
         entry.floor = floor;
         entry.below = projAllIn < floor;
         const depth = 1 - projAllIn / floor;
-        if (entry.below && depth >= 0.25 && depth <= 0.9) {
+        if (entry.below && depth >= 0.25 && depth <= 0.9 && !hasConditionFlag(l.title)) {
           deep.push({ id: l.id, depth: Math.round(depth * 100) / 100, allIn: projAllIn, floor, closes: String(l.saleDate || ''), m: marketOf(String(l.artist || '')) });
         }
       }

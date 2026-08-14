@@ -329,7 +329,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `saleDate←saleDateTime reconciled=${datesFixed} · ` +
     `formKey restamped=${restamped} · ` +
     `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered}) · ` +
-    `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates} pkmn-grades=${healed.grades} · culture→science=${techMoved}`
+    `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates} pkmn-grades=${healed.grades} dims=${healed.dims} · culture→science=${techMoved}`
   );
   // BUILD CANARY (spec §3.4): game-used identity is a maintained-list parser —
   // a Sotheby's title-format change must fail the build, not silently starve
@@ -366,8 +366,8 @@ export function rerouteCultureTech(lots: Lot[]): number {
    boilerplate ("… Bids: 19 Opening Bid: $50,000 Status: …"), REA imageUrls
    without a scheme (98.7% of 181k), and a few empty-string saleDates.
    Idempotent: every check is a no-op once healed. */
-function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; images: number; dates: number; grades: number } {
-  let tokens = 0, titles = 0, images = 0, dates = 0, grades = 0;
+function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; images: number; dates: number; grades: number; dims: number } {
+  let tokens = 0, titles = 0, images = 0, dates = 0, grades = 0, dims = 0;
   for (const l of lots) {
     const t = l.title as string | undefined;
     if (t) {
@@ -396,6 +396,26 @@ function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; image
       l.titleTokens = titleTokensOf(l.title as string);
       tokens++;
     }
+    // DIMS extraction (Aug 14) — the size gate fires on 0.28% of pairs vs
+    // 29.8% possible; where the dimensions FIELD is empty but the description
+    // (or title) prints a measured size, lift it. Conservative: needs an
+    // explicit unit; inches → cm.
+    if (!l.dimensions && (l.description || l.title)) {
+      const src = `${l.title ?? ''} ${l.description ?? ''}`;
+      const dm = src.match(/(\d+(?:[.,]\d+)?)\s*(?:x|×)\s*(\d+(?:[.,]\d+)?)(?:\s*(?:x|×)\s*(\d+(?:[.,]\d+)?))?\s*(in(?:ches)?\b|\"|cm\b)/i);
+      if (dm) {
+        const unit = /cm/i.test(dm[4]) ? 1 : 2.54;
+        const num = (x?: string) => x ? Math.round(parseFloat(x.replace(',', '.')) * unit * 10) / 10 : null;
+        const w = num(dm[1]), h = num(dm[2]), dpt = num(dm[3] || undefined);
+        if (w && h && w < 1000 && h < 1000) {
+          (l as Lot & { dimensions?: string | null }).dimensions = dm[0];
+          (l as Lot & { widthCm?: number | null }).widthCm = w;
+          (l as Lot & { heightCm?: number | null }).heightCm = h;
+          if (dpt && dpt < 1000) (l as Lot & { depthCm?: number | null }).depthCm = dpt;
+          dims++;
+        }
+      }
+    }
     // Pokémon grade parse — grades sit in 40k titles ("PSA GEM MT 10",
     // "BGS NM-MT+ 8.5", "CGC 9.5") but only 3 rows carried gradeLabel
     if (l.artist === 'pokemon' && !l.gradeLabel && typeof l.title === 'string') {
@@ -407,7 +427,7 @@ function healExpansionRows(lots: Lot[]): { tokens: number; titles: number; image
       }
     }
   }
-  return { tokens, titles, images, dates, grades };
+  return { tokens, titles, images, dates, grades, dims };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -474,7 +494,7 @@ const GU_TEAM_WORDS = new Set(('atlanta boston brooklyn charlotte chicago clevel
   'bruins canadiens maple leafs senators sabres wings blackhawks blues wild avalanche stars predators flames oilers canucks kraken sharks ducks knights coyotes lightning hurricanes capitals flyers penguins devils islanders ' +
   'seattle supersonics sonics new jersey st louis tampa bay green anaheim colorado columbus carolina nashville edmonton calgary vancouver winnipeg montreal ottawa quebec florida arizona texas california oakland usa team ' +
   'real madrid barcelona manchester united city liverpool chelsea arsenal tottenham juventus milan inter bayern munich paris saint-germain psg ajax').split(/\s+/));
-const GU_STOP_WORDS = new Set('game match team worn used issued signed autographed auto inscribed rookie debut career final finals championship world series super bowl season professional model style era circa nba nfl mlb nhl wnba mls kia emirates cup playoffs playoff conference photo practice warm warmup training jersey shorts pants sneakers shoes cleats cleat boot jacket helmet cap hat glove mitt bat ball puck ring belt trophy award medal home road away alternate icon association statement classic edition hof mvp the a an and with vs at of for from includes long short sleeve sleeved left right'.split(/\s+/));
+const GU_STOP_WORDS = new Set('game match team worn used issued signed autographed auto inscribed rookie debut career final finals championship world series super bowl season professional model style era circa nba nfl mlb nhl wnba mls kia emirates cup playoffs playoff conference photo practice warm warmup training jersey shorts pants sneakers shoes cleats cleat boot jacket helmet cap hat glove mitt bat ball puck ring belt trophy award medal home road away alternate icon association statement classic edition hof mvp the a an and with vs at of for from includes long short sleeve sleeved left right hr rbi mini decal store salesman single full advertising presentation presentational all star'.split(/\s+/));
 const GU_MONTHS = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\.?$|^(january|february|march|april|june|july|august|september|october|november|december)$/i;
 
 /** Extract the athlete from a game-used title (measured 93.9% sold coverage,

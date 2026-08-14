@@ -45,7 +45,7 @@ export const hasEst = (l: L) => (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 
 // raw arrays (not the rounded summary) is what lets the incremental reproduce a
 // median / weighted rate / conformal quantile that a full replay would compute.
 export type Bucket = { perfs: number[]; hammerPerfs: number[]; beat: number; hammerBeat: number; n: number; boughtIn: number };
-export type CalObs = { m: string; cr: number; beat: boolean; r: number; conf: string; ageY: number; pf?: number; fl?: boolean };
+export type CalObs = { m: string; cr: number; beat: boolean; r: number; conf: string; ageY: number; pf?: number; fl?: boolean; kt?: string };
 export type YearObs = { flagged: number[]; unflagged: number[] };
 
 export interface BacktestState {
@@ -160,6 +160,9 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
       ageY: Math.max(0, (st.nowMs - new Date(lot.saleDate).getTime()) / 31_557_600_000),
       pf: realized / estMid - 1,
       fl: isBelow,
+      // watches era-gate MEASUREMENT (spec 8a precondition): reference-keyed
+      // vs model-name-keyed error splits fall out of the Sunday full replay
+      kt: prep.marketBySlug[lot.artist] === 'watches' ? ((lot as L & { reference?: string | null }).reference ? 'ref' : 'model') : undefined,
     });
   }
 
@@ -322,8 +325,27 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
       };
     }
   }
+  // WATCH KEY-TYPE SPLIT — the era-gate measurement (fills as replays run)
+  const watchKt: Record<string, { n: number; medAbsErr: number | null }> = {};
+  for (const kt of ['ref', 'model']) {
+    const rows = calObs.filter(o => o.kt === kt && o.r > 0);
+    const errs = rows.map(o => Math.abs(Math.log(o.r))).sort((a, b) => a - b);
+    watchKt[kt] = { n: rows.length, medAbsErr: errs.length >= 50 ? Math.round(errs[Math.floor(errs.length / 2)] * 1000) / 1000 : null };
+  }
+  // CONFORMAL BAND COVERAGE — the honesty proof: what share of realized
+  // prices actually landed inside the published band, per confidence tier
+  const bandCoverage: Record<string, number | null> = {};
+  for (const conf of ['high', 'medium', 'low']) {
+    const b = bandFor(conf);
+    const rows = calObs.filter(o => o.conf === conf && o.r > 0);
+    bandCoverage[conf] = rows.length >= 100
+      ? Math.round(100 * rows.filter(o => o.r >= b.lo && o.r <= b.hi).length / rows.length)
+      : null;
+  }
   const calibration = {
     edges: EDGES,
+    watchKt,
+    bandCoverage,
     beatRate: {
       global: levelsFor('__none__').map((_, b) => Math.round(Math.min(0.85, Math.max(0.3, globalLevels[b])) * 100)),
       art: levelsFor('art'), design: levelsFor('design'), watches: levelsFor('watches'),

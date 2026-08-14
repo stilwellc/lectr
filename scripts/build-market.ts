@@ -12,6 +12,7 @@
  * Run: npx tsx scripts/build-market.ts   (after a crawl / migrate)
  */
 import * as fs from 'fs';
+import { hasConditionFlag } from './lib/condition';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';
@@ -597,6 +598,9 @@ export function runMarketBuild() {
     const byLadderKey = new Map<string, AuctionLot[]>();
     for (const l of sportsSold as PLot[]) {
       if (CARD_SLUGS.has(l.artist)) {
+        // condition-flagged sales never enter the comp medians clean lots
+        // are valued against (the "Missing Back at clean prices" class)
+        if (hasConditionFlag(l.title)) continue;
         const c = parseCardCached(l.title || '');
         l._card = c; l._pid = c.playerSlug; l._pname = c.player;
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
@@ -618,6 +622,42 @@ export function runMarketBuild() {
     // (median |log err| 0.474 fitted vs 0.507 old), and steeper than the old
     // constants at the top (PSA-10 ≈10× the PSA-8 base, not 7×). Thin rungs keep
     // the old constant. The tier-2 grade-adjust valuer consumes ladder.mult.
+    // ── VENUE EFFECTS (Aug 14) — the same cardKey realizes differently per
+    // house; cross-house pairs let us MEASURE it. Per-house mean log-price
+    // deviation within same-key groups spanning ≥2 houses, shrunk (K=50) and
+    // clamped ±10%. Applied to the tier valuation only (comps adjusted toward
+    // the TARGET lot's venue); displayed medians stay raw facts. Served in
+    // analytics.venueFactors.
+    const venueFactor = new Map<string, number>();
+    {
+      const acc = new Map<string, { sum: number; n: number }>();
+      for (const group of Array.from(byCardKey.values())) {
+        if (group.length < 2) continue;
+        const houses = new Set(group.map((g: AuctionLot) => String(g.auctionHouse)));
+        if (houses.size < 2) continue;
+        const logs = group.map((g: AuctionLot) => Math.log(g.realizedUsd!));
+        const mean = logs.reduce((a: number, b: number) => a + b, 0) / logs.length;
+        group.forEach((g: AuctionLot, i: number) => {
+          const h = String(g.auctionHouse);
+          const a = acc.get(h) || { sum: 0, n: 0 };
+          a.sum += logs[i] - mean; a.n++;
+          acc.set(h, a);
+        });
+      }
+      const K = 50;
+      acc.forEach((a, h) => {
+        const f = Math.exp(a.sum / (a.n + K));
+        venueFactor.set(h, Math.min(1.1, Math.max(0.9, Math.round(f * 1000) / 1000)));
+      });
+      (markets.all.analytics as unknown as Record<string, unknown>).venueFactors =
+        Object.fromEntries(Array.from(venueFactor.entries()).map(([h, f]) => [h, f]));
+      console.log('[market] venue factors (same-card cross-house):', JSON.stringify(Object.fromEntries(venueFactor)));
+    }
+    const venueAdj = (s: AuctionLot, targetHouse: string): number => {
+      const fT = venueFactor.get(targetHouse) ?? 1;
+      const fS = venueFactor.get(String(s.auctionHouse)) ?? 1;
+      return s.realizedUsd! * (fT / fS);
+    };
     const gradeLadderFit = fitGradeLadder(
       (sportsSold as PLot[]).filter(l => CARD_SLUGS.has(l.artist)),
     );
@@ -748,6 +788,9 @@ export function runMarketBuild() {
       if (CARD_SLUGS.has(l.artist)) {
         const c = parseCardCached(l.title || '');
         lw.playerSlug = c.playerSlug; lw.playerName = c.player;
+        // a condition-flagged lot must not wear a clean-comp floor: no
+        // cardComps → no deep-value seat, no misleading "med" on the page
+        if (hasConditionFlag(l.title)) continue;
         const ck = cardKey(c); const lk = cardLadderKey(c);
         const exact: AuctionLot[] = (ck ? byCardKey.get(ck) : undefined) || [];
         const ladder: AuctionLot[] = (lk ? byLadderKey.get(lk) : undefined) || [];
@@ -800,8 +843,8 @@ export function runMarketBuild() {
           let tier: CardTier = 'none';
 
           if (exact.length >= 2) {
-            // Tier 1 — exact same card + grade.
-            value = Math.round(median(exact.map(s => s.realizedUsd!)));
+            // Tier 1 — exact same card + grade, comps venue-adjusted to this house.
+            value = Math.round(median(exact.map(s => venueAdj(s, String(l.auctionHouse))).sort((a, b) => a - b)));
             poolIds = exact.map(s => s.id);
             poolN = exact.length;
             confidence = 'high';
@@ -812,7 +855,7 @@ export function runMarketBuild() {
             // whose grade is nearest the live card's grade, scale by the grade
             // multiplier ratio. If we can't score this card's grade, use the flat
             // ladder median (a coarse cross-grade proxy).
-            const rungs = ladder.map(s => ({ n: (s as PLot)._card?.gradeNum ?? null, p: s.realizedUsd! }))
+            const rungs = ladder.map(s => ({ n: (s as PLot)._card?.gradeNum ?? null, p: venueAdj(s, String(l.auctionHouse)) }))
               .filter(r => r.p > 0);
             const target = c.gradeNum;
             if (target != null && rungs.some(r => r.n != null)) {
@@ -957,7 +1000,7 @@ export function runMarketBuild() {
   // and art editions. Only verticals where at least one horizon certifies are
   // emitted — an all-abstain block would be dead weight.
   const repeatSale: Record<string, ReturnType<typeof buildVerticalRepeatSale>> = {};
-  for (const v of ['watches', 'art', 'sports']) {
+  for (const v of ['watches', 'art', 'sports', 'culture']) {
     try {
       const vLots = all.filter(l => (MARKETS[v] || []).includes(l.artist) && l.status === 'sold' && (l.priceUsd || 0) > 0);
       const r = buildVerticalRepeatSale(vLots, v);

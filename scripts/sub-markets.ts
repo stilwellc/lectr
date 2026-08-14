@@ -321,6 +321,27 @@ export interface VerticalRepeatSale {
   series: { period: string; value: number; n: number }[];
 }
 
+// ── POKÉMON IDENTITY (Aug 14) — graded Pokémon carries the same strong
+// identity that certifies the sports flagship: year + set + card number +
+// edition + grade. Grades were healed into gradeLabel corpus-wide; the key
+// re-derives from the title so it works on any row. High precision: all of
+// year/cardNo/grade required.
+const PKMN_GRADE = /\b(PSA|BGS|CGC|SGC)\s*(?:GEM\s*MT|GEM\s*MINT|MINT|NM-?MT\+?|NM|EX-?MT|EX|VG)?\s*(10|[1-9](?:\.5)?)\b/i;
+export function pokemonKey(l: AuctionLot): string | null {
+  if (l.artist !== 'pokemon') return null;
+  const t = l.title || '';
+  const yr = (t.match(/\b(19|20)\d{2}\b/) || [])[0];
+  const no = (t.match(/#([A-Za-z0-9]+)\b/) || [])[1];
+  const g = t.match(PKMN_GRADE);
+  if (!yr || !no || !g) return null;
+  const setPart = t.slice(t.indexOf(yr) + 4).split('#')[0]
+    .replace(/\b(pok[eé]mon|holo(?:foil)?|1st edition|shadowless|unlimited|reverse|japanese|english)\b/gi, ' ')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).slice(0, 4).join('-');
+  if (!setPart) return null;
+  const ed = /1st edition/i.test(t) ? '1st' : /shadowless/i.test(t) ? 'shadowless' : 'unl';
+  return `${yr}|${setPart}|${no}|${ed}|${g[1].toUpperCase()}${g[2]}`;
+}
+
 export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): VerticalRepeatSale | null {
   let pool: AuctionLot[]; let key: (l: AuctionLot) => string | null;
   let basis: string; let scope: string | null;
@@ -333,8 +354,13 @@ export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): V
   } else if (vertical === 'sports') {
     pool = sold.filter(l => cardKey(l) != null); key = cardKey;
     basis = 'same card, same grade, resold'; scope = 'cards';
-  } else return null; // culture/science: title-proxy identity is too weak to certify —
-                      // a "same title" pair is not a same-object pair for autographs.
+  } else if (vertical === 'culture') {
+    // culture's ONE strong identity: graded Pokémon (year|set|no|edition|grade).
+    // Autograph/title-proxy identity stays uncertifiable — this pool is
+    // pokémon-only by construction.
+    pool = sold.filter(l => pokemonKey(l) != null); key = pokemonKey;
+    basis = 'same card, same grade, resold'; scope = 'pokémon';
+  } else return null; // science: title-proxy identity is too weak to certify.
   if (pool.length < 400) return null;
   const rs = buildRepeatSaleIndex(pool, key);
   const horizons: VerticalRepeatSale['horizons'] = {};

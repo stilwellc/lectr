@@ -23,6 +23,7 @@ import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app
 import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { appendCalls, type Call } from './lib/calls-ledger';
+import { hasConditionFlag } from './lib/condition';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -418,6 +419,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     for (const e of upcoming) {
       const bp = (e as { bidProj?: { allIn: number; floor?: number; below?: boolean } }).bidProj;
       if (!bp?.below || !bp.floor || !(bp.allIn > 0)) continue;
+      if (hasConditionFlag((e as { title?: string }).title)) continue; // dirty lot, clean floor — never a board seat
       const sdt = (e as { saleDateTime?: string | null }).saleDateTime || (e as { saleDate?: string }).saleDate;
       const closeMs = sdt ? new Date(String(sdt)).getTime() : NaN;
       if (isNaN(closeMs)) continue;
