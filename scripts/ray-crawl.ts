@@ -2304,8 +2304,16 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     // sport-scoped (category:['Sport']) passes KEEP cards → sports-cards; only
     // unscoped passes hard-drop cards (they could be Non-Sport/Pokémon).
     if (!cultureScoped && (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t) && !GOLDIN_POKEMON.test(t)))) { dropped++; return; }
+    // culture-scoped lots get a SCIENCE pre-check before routeCulture: Goldin
+    // files Jobs/Wozniak cuts and Apple hardware under Pop Culture, but the
+    // product's home for computing/space is the science vertical (Collin,
+    // Aug 14 — 26 Jobs cuts were sitting in entertainment-memorabilia).
+    const sciRoute = cultureScoped ? goldinRoute(lot.title) : null;
+    const SCI_SLUGS_SET = ['space-exploration', 'scientific-instruments', 'meteorites', 'fossils'];
     const routed = cultureScoped
-      ? (GOLDIN_POKEMON.test(t) && !GOLDIN_EXCLUDE_GAMES.test(t) ? 'pokemon' : routeCulture(lot.title))
+      ? (GOLDIN_POKEMON.test(t) && !GOLDIN_EXCLUDE_GAMES.test(t) ? 'pokemon'
+        : sciRoute && SCI_SLUGS_SET.includes(sciRoute) ? sciRoute
+        : routeCulture(lot.title))
       : goldinRoute(lot.title, sportScoped);
     // 'blocked' is a hard exclusion (slab with no object signal, etc.) — the
     // facet fallback must never resurrect it, or graded cards ride the

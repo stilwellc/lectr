@@ -304,6 +304,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   // healExpansionRows runs FIRST: it cleans titles (every parser below reads
   // them) and stamps the missing identity tokens.
   const healed = healExpansionRows(ls);
+  const techMoved = rerouteCultureTech(ls);
   const yearsNulled = clampImpossibleYears(ls);
   const reroute = rerouteScienceMisroutes(ls);
   const relic = rerouteRelicCards(ls);
@@ -328,7 +329,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `saleDate←saleDateTime reconciled=${datesFixed} · ` +
     `formKey restamped=${restamped} · ` +
     `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered}) · ` +
-    `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates} pkmn-grades=${healed.grades}`
+    `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates} pkmn-grades=${healed.grades} · culture→science=${techMoved}`
   );
   // BUILD CANARY (spec §3.4): game-used identity is a maintained-list parser —
   // a Sotheby's title-format change must fail the build, not silently starve
@@ -336,6 +337,26 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   if (players.total >= 200 && players.coverage < 0.85) {
     throw new Error(`[normalize] game-used playerSlug coverage ${(players.coverage * 100).toFixed(1)}% < 85% floor — title parser drifted; refusing to publish`);
   }
+}
+
+/* ── CULTURE→SCIENCE REROUTE (Aug 14) — Apple/computing lots filed under the
+   pop-culture slugs (RR's regex gaps: "Apple IIe"/"Apple III"/"Apple
+   Computer"/"Altair 8800b"; Goldin's culture pass bypassing science routing).
+   Tight signals only — computing hardware & founders, never a bare surname
+   ("Tandy" matches Jessica Tandy; require computer context). Hardware/
+   apparatus → scientific-instruments; documents/figures → science-tech. */
+const CULT_SLUGS_TECH = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pop-memorabilia']);
+const TECH_HW = /\b(apple[- ]?(1|one|iii?\w{0,2})\b|apple (computer|lisa)|macintosh|iphone|ipod|ipad|imac|powerbook|next ?(computer|cube)|commodore|amiga|altair \d{3,4}\w?|ibm (pc|5150)|trs-80|osborne 1|circuit board|motherboard|logic board|microprocessor|enigma machine|difference engine|oscilloscope|prototype (board|computer|phone|device))\b/i;
+const TECH_DOC = /\b(steve jobs|steve wozniak|\bwoz\b|bill gates|alan turing|ada lovelace|charles babbage|xerox parc)\b/i;
+export function rerouteCultureTech(lots: Lot[]): number {
+  let moved = 0;
+  for (const l of lots) {
+    if (!CULT_SLUGS_TECH.has(l.artist)) continue;
+    const t = `${l.title ?? ''}`;
+    if (TECH_HW.test(t)) { l.artist = 'scientific-instruments'; moved++; }
+    else if (TECH_DOC.test(t)) { l.artist = 'science-tech'; moved++; }
+  }
+  return moved;
 }
 
 /* ── EXPANSION-ROW HEAL (Aug 13 audit) — the isolated-segment crawlers never
