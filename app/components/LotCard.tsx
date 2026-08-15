@@ -458,7 +458,7 @@ function LotCard({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: saved ? 'var(--color-fg)' : 'rgba(12,10,6,0.5)',
+              background: saved ? 'var(--color-fg)' : 'rgba(0,0,0,0.5)',
               border: 'none',
               borderRadius: 100,
               cursor: 'pointer',

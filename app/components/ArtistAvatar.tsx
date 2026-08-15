@@ -26,7 +26,7 @@ export default function ArtistAvatar({ label, size = 28 }: { label: string; size
         width: size,
         height: size,
         fontSize: Math.round(size * 0.38),
-        ['--av-bg' as string]: `hsl(${hue}, 16%, 21%)`,
+        ['--av-bg' as string]: `hsl(${hue}, 16%, 18%)`,
         color: `hsl(${hue}, 22%, 72%)`,
       }}
     >

@@ -12,6 +12,8 @@ import ArtistNav from './ArtistNav';
 import { LOTPAGE_CSS } from './LotPage';
 import { Colophon } from './Terminal';
 import Flick from './Flick';
+import HeroChart, { type HeroLine } from '../preview/terminal/HeroChart';
+import { LAYER_PALETTE } from '../lib/heroLayers';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 // the shared refs fetch (module-cached, one pull per session) — the same hook
@@ -24,27 +26,20 @@ import PlateImg from './PlateImg';
 
 export type { RefEntry };
 
-/** The yearly median as a plain monoline — the numeral IS the line. */
+/** The yearly median on the shared hero instrument — every point a real
+    yearly reading, drawn as a cool money line (matches SubPage's adapter). */
 function RefLine({ yearly }: { yearly: RefEntry['yearly'] }) {
   if (yearly.length < 3) return null;
-  const W = 640, H = 150, PAD = 6;
-  const vals = yearly.map(p => p.med);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const span = max - min || 1;
-  const pts = yearly.map((p, i) => {
-    const x = PAD + (i / (yearly.length - 1)) * (W - PAD * 2);
-    const y = H - PAD - ((p.med - min) / span) * (H - PAD * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+  const anchor: HeroLine = {
+    key: 'ref-median',
+    label: 'Yearly median',
+    color: LAYER_PALETTE[0],
+    unit: 'money',
+    points: yearly.map(p => ({ period: String(p.y), value: p.med, n: p.n })),
+  };
   return (
     <div style={{ marginTop: 18 }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="Yearly median sale price">
-        <polyline points={pts} fill="none" stroke="var(--color-fg)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-        <span>{yearly[0].y} · {formatPrice(yearly[0].med)}</span>
-        <span>{yearly[yearly.length - 1].y} · {formatPrice(yearly[yearly.length - 1].med)}</span>
-      </div>
+      <HeroChart anchor={anchor} play={false} height={200} />
     </div>
   );
 }
@@ -67,7 +62,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
 
   if (!entry) {
     return (
-      <>
+      <div className="terminal-shell">
         {nav}
         {/* while refs.json loads, fill the viewport so the colophon never
             paints on screen and then gets shoved down by the dossier (CLS).
@@ -86,7 +81,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
           )}
         </div>
         <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
-      </>
+      </div>
     );
   }
 
@@ -95,7 +90,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
     ? Math.round(100 * (entry.ttmMedianUsd / entry.medianUsd - 1)) : null;
 
   return (
-    <>
+    <div className="terminal-shell">
       {nav}
       <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
@@ -183,6 +178,6 @@ export default function RefPage({ refKey }: { refKey: string }) {
         </section>
       </div>
       <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
-    </>
+    </div>
   );
 }

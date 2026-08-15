@@ -18,10 +18,11 @@ import type { Market } from '../constants';
 
 type Range = '1Y' | '5Y' | 'MAX';
 
-/* the terminal numeral register for the maker hero (Wave 3 editorial pass) */
+/* the terminal numeral register for the maker hero — Inter for the level
+   numeral (the homepage rule: Inter on levels, mono only on %-deltas) */
 const heroNumStyle: CSSProperties = {
-  fontFamily: 'var(--font-mono), monospace',
-  fontWeight: 500,
+  fontFamily: 'var(--font-inter), sans-serif',
+  fontWeight: 650,
   letterSpacing: '-0.02em',
   fontVariantNumeric: 'tabular-nums',
 };

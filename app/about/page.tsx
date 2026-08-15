@@ -598,7 +598,7 @@ export default function AboutPage() {
   const liveBook = readLiveBook();
   const serial = String(meta.lastCrawl).slice(0, 10).replace(/-/g, '');
   return (
-    <div className="deck-scope" style={{ minHeight: '100vh', background: 'var(--color-bg-deep, var(--color-bg))', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div className="deck-scope terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg-deep, var(--color-bg))', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       {/* The proof lots hotlink four house CDNs; they stay lazy (the LCP is the
           cover headline) but DNS resolves off the scroll path. */}
       <link rel="preconnect" href="https://sothebys-com.brightspotcdn.com" crossOrigin="" />
@@ -1128,7 +1128,7 @@ const DECK_CSS = `
     border-top: 1px solid var(--hairline);
   }
   .dk-stat-fig {
-    font-size: clamp(26px, 3vw, 44px); font-weight: 700;
+    font-size: clamp(26px, 3vw, 44px); font-weight: 600;
     letter-spacing: -0.035em; color: var(--color-fg); line-height: 1;
     font-variant-numeric: tabular-nums;
   }

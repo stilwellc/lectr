@@ -150,7 +150,7 @@ export default function SubPage({ slug }: { slug: string }) {
 
   if (!row) {
     return (
-      <>
+      <div className="terminal-shell">
         {nav}
         {/* while market.json loads, fill the viewport so the colophon never
             paints on screen and then gets shoved down by the dossier (CLS) */}
@@ -170,7 +170,7 @@ export default function SubPage({ slug }: { slug: string }) {
           )}
         </div>
         <Colophon record={null} />
-      </>
+      </div>
     );
   }
 
@@ -181,7 +181,7 @@ export default function SubPage({ slug }: { slug: string }) {
   const parentLabel = subCatLabel(row.parent);
 
   return (
-    <>
+    <div className="terminal-shell">
       {nav}
       <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
@@ -266,6 +266,6 @@ export default function SubPage({ slug }: { slug: string }) {
         </p>
       </div>
       <Colophon record={null} />
-    </>
+    </div>
   );
 }

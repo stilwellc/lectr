@@ -502,10 +502,8 @@ export default function ArtistDetailPage() {
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   return (
-    <div style={{
+    <div className="terminal-shell" style={{
       minHeight: '100vh',
-      background: 'var(--color-bg)',
-      color: 'var(--color-fg)',
       fontFamily: "var(--font-sans), sans-serif",
     }}>
       <ArtistNav activeSlug={slug} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />

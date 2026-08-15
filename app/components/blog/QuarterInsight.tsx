@@ -48,7 +48,7 @@ export default function QuarterInsight({
   headline?: HeadlineLot;
 }) {
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div className="terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="blog" />
       <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 6 }}>
@@ -59,13 +59,15 @@ export default function QuarterInsight({
           <p style={{ ...p, fontSize: 16 }}>{dek}</p>
         </header>
 
-        {/* stat band */}
+        {/* stat band — flat Linear tiles, mirroring the homepage .mStat idiom:
+            cool white-alpha surface, one fine border, near-white figure at 600,
+            a hairline top-highlight. */}
         <div style={{ ...wrap, margin: '18px auto 6px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, background: 'var(--hairline)', border: '1px solid var(--hairline)', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {stats.map(s => (
-              <div key={s.label} style={{ background: 'var(--color-bg-elevated)', padding: '14px 16px' }}>
+              <div key={s.label} style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 11, padding: '14px 16px', boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
                 <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 5 }}>{s.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: s.tone === 'up' ? 'var(--color-up)' : s.tone === 'down' ? 'var(--color-down)' : 'var(--color-fg)' }}>{s.value}</div>
+                <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: s.tone === 'up' ? 'var(--color-up)' : s.tone === 'down' ? 'var(--color-down)' : 'var(--color-fg)' }}>{s.value}</div>
                 {s.sub && <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 3 }}>{s.sub}</div>}
               </div>
             ))}
@@ -92,7 +94,8 @@ export default function QuarterInsight({
                 />
                 <span aria-hidden style={{
                   position: 'absolute', inset: 0, pointerEvents: 'none',
-                  boxShadow: 'inset 0 0 0 1px rgba(242,238,227,0.05), inset 0 -46px 60px -34px rgba(12,10,6,0.55), inset 0 34px 44px -38px rgba(12,10,6,0.35)',
+                  background: 'radial-gradient(120% 90% at 50% 6%, rgba(232,218,182,0.05), transparent 60%)',
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 -46px 60px -34px rgba(6,7,8,0.6), inset 0 34px 44px -38px rgba(6,7,8,0.4)',
                 }} />
               </div>
               <figcaption style={{

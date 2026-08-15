@@ -59,7 +59,7 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
    (display:contents) and CSS order restores the single-column reading order:
    plate → certificate → provenance → ladder → comps. */
 .lectr-lot-cola,.lectr-lot-colb{min-width:0}
-.lectr-lot-head{position:relative;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:12px}
+.lectr-lot-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:12px}
 .lectr-lot-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
 .lectr-lot-head .no{color:var(--color-text-muted);font-weight:600;font-variant-numeric:tabular-nums}
 .lectr-lot-title{font-size:clamp(24px,3.4vw,34px);font-weight:650;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0 0 4px}
@@ -67,14 +67,14 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-leaders{margin-top:16px;border-top:1px solid var(--hairline);padding-top:4px}
 .lectr-lot-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
 .lectr-lot-k{color:var(--color-text-muted)}
-.lectr-lot-fill{flex:1;border-bottom:1px dotted rgba(242,238,227,0.2);transform:translateY(-3px)}
+.lectr-lot-fill{flex:1;border-bottom:1px dotted rgba(255,255,255,0.09);transform:translateY(-3px)}
 .lectr-lot-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-lot-v.up{color:var(--color-up)}
 .lectr-lot-v.down{color:var(--color-down)}
 .lectr-lot-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
 .lectr-lot-dots{font-size:8.5px;letter-spacing:1px;color:var(--color-butter);margin-right:7px}
 .lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
-.lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(242,238,227,0.28) 4px,rgba(242,238,227,0.28) 5px)}
+.lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(255,255,255,0.28) 4px,rgba(255,255,255,0.28) 5px)}
 .lectr-lot-monoglyph{font-size:64px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
 .lectr-lot .ray-plate-mat{padding:18px;margin-bottom:0}
 .lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
@@ -82,13 +82,13 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11px;color:var(--color-text-muted);text-align:left}
 .lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--hairline)}
 .lectr-lot-comps{margin-top:44px}
-.lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
+.lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
 .lectr-lot-comps-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
 .lectr-lot-comps-head .ctx{color:var(--color-text-muted);font-weight:600}
 .lectr-lot-comp{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--hairline-soft);text-decoration:none;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
 .lectr-lot-comp:hover{background:var(--color-hover-item)}
 .lectr-lot-comp-i{font-size:12px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;width:18px;text-align:right;flex-shrink:0}
-.lectr-lot-comp-thumb{width:40px;height:40px;flex-shrink:0;position:relative;overflow:hidden;background:var(--color-bg-elevated);outline:1px solid rgba(242,238,227,0.1);outline-offset:-1px;display:flex;align-items:center;justify-content:center}
+.lectr-lot-comp-thumb{width:40px;height:40px;flex-shrink:0;position:relative;overflow:hidden;background:var(--color-bg-elevated);outline:1px solid rgba(255,255,255,0.1);outline-offset:-1px;display:flex;align-items:center;justify-content:center}
 .lectr-lot-comp-thumb span{font-size:16px;font-weight:600;color:var(--color-text-faint)}
 .lectr-lot-comp-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .lectr-lot-comp-t{flex:1;min-width:0}
@@ -485,7 +485,7 @@ export default function LotPage({ lotId, initialLot }: {
     const archiveSettled = !isGoldinId || archive.archiveLoaded || archive.archiveError;
     const settled = !lotId || (!loading && mainSettled && archiveSettled && dbSettled);
     return (
-      <>
+      <div className="terminal-shell">
         <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
         {wantsArchive && <ArchiveProbe onState={setArchive} />}
         {settled ? (
@@ -509,7 +509,7 @@ export default function LotPage({ lotId, initialLot }: {
         ) : (
           <LotPageSkeleton />
         )}
-      </>
+      </div>
     );
   }
 
@@ -538,7 +538,7 @@ export default function LotPage({ lotId, initialLot }: {
   const hideComps = isCardComp && compRows.length === 0;
 
   return (
-    <>
+    <div className="terminal-shell">
       <ArtistNav activeSlug={lot.artist in ARTIST_LABEL ? lot.artist : null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
       {wantsArchive && <ArchiveProbe onState={setArchive} />}
       <div className="lectr-lot rail">
@@ -941,6 +941,6 @@ export default function LotPage({ lotId, initialLot }: {
         </div>
       </div>
       <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />
-    </>
+    </div>
   );
 }

@@ -69,10 +69,8 @@ export default function MakersPage() {
   }, [marketData, activeKey]);
 
   return (
-    <div style={{
+    <div className="terminal-shell" style={{
       minHeight: '100vh',
-      background: 'var(--color-bg)',
-      color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
       <ArtistNav activeSlug="artists" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />

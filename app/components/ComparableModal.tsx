@@ -687,12 +687,12 @@ export default function ComparableModal({
     <div
       onClick={onClose}
       role="presentation"
-      className="comp-modal-overlay"
+      className="comp-modal-overlay terminal-shell"
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 1000,
-        background: 'rgba(8, 6, 3, 0.7)',
+        background: 'rgba(0, 0, 0, 0.7)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
@@ -1028,8 +1028,8 @@ export default function ComparableModal({
                     gap: 6,
                     padding: '8px 20px',
                     borderRadius: 100,
-                    background: 'var(--color-accent-wine)',
-                    color: 'var(--color-bg)',
+                    background: 'var(--color-butter)',
+                    color: 'var(--color-butter-ink)',
                     fontSize: 12.5,
                     fontWeight: 600,
                     letterSpacing: '-0.01em',
@@ -1244,13 +1244,13 @@ export default function ComparableModal({
                         borderRadius: 8,
                         overflow: 'hidden',
                         flexShrink: 0,
-                        background: 'radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent-gold) 8%, transparent), transparent 72%), var(--color-bg-elevated)',
-                        border: '1px solid color-mix(in srgb, var(--color-accent-gold) 13%, transparent)',
+                        background: 'radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-butter) 8%, transparent), transparent 72%), var(--color-bg-elevated)',
+                        border: '1px solid color-mix(in srgb, var(--color-butter) 13%, transparent)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}>
-                        <span style={{ fontFamily: 'var(--font-serif), serif', fontStyle: 'italic', fontWeight: 300, fontSize: 20, lineHeight: 1, color: 'color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint))' }}>
+                        <span style={{ fontFamily: 'var(--font-serif), serif', fontStyle: 'italic', fontWeight: 300, fontSize: 20, lineHeight: 1, color: 'color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))' }}>
                           {(craftTitle(comp.title) || '?').charAt(0)}
                         </span>
                         {comp.imageUrl && (

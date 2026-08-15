@@ -460,10 +460,8 @@ export default function SavedPage() {
   );
 
   return (
-    <div style={{
+    <div className="terminal-shell" style={{
       minHeight: '100vh',
-      background: 'var(--color-bg)',
-      color: 'var(--color-fg)',
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
       {/* __html, not a text child: '>' combinators entity-escape in SSR text
@@ -487,7 +485,7 @@ export default function SavedPage() {
         .ray-since {
           display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
           margin-top: 20px; padding: 12px 18px;
-          border: 2px dotted color-mix(in srgb, var(--color-fg) 16%, transparent);
+          border: 2px dotted var(--hairline);
           border-radius: 18px;
         }
         .ray-since-k { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-faint); }
@@ -495,13 +493,13 @@ export default function SavedPage() {
         .ray-since-go { margin-left: auto; font-size: 12px; color: var(--color-text-muted); text-decoration: none; white-space: nowrap; }
         .ray-since-go:hover { color: var(--color-fg); }
         .ray-brief {
-          border: 2px dotted color-mix(in srgb, var(--color-fg) 15%, transparent);
+          border: 2px dotted var(--hairline);
           border-radius: 20px; padding: 6px 18px; margin-top: 22px;
         }
         .ray-brief-row {
           display: flex; align-items: baseline; gap: 12px;
           padding: 10px 0; text-decoration: none; color: inherit;
-          border-top: 2px dotted color-mix(in srgb, var(--color-fg) 8%, transparent);
+          border-top: 2px dotted var(--hairline);
         }
         .ray-brief-row:first-of-type { border-top: none; }
         .ray-brief-row:hover .ray-brief-title { color: var(--color-fg); }
@@ -528,7 +526,7 @@ export default function SavedPage() {
           gap: 14px; margin-top: 22px;
         }
         .ray-desk-cell {
-          border: 2px dotted color-mix(in srgb, var(--color-fg) 13%, transparent);
+          border: 2px dotted var(--hairline);
           border-radius: 18px; padding: 14px 16px 12px;
         }
         .ray-desk-cell .k { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-faint); }
@@ -551,7 +549,7 @@ export default function SavedPage() {
           transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
         }
         .ray-savedview-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
-        .ray-savedview-btn[data-active=true] { background: var(--color-fg); border-color: var(--color-fg); color: var(--color-bg); }
+        .ray-savedview-btn[data-active=true] { background: var(--color-butter); border-color: var(--color-butter); color: var(--color-butter-ink); }
         .ray-saved-cols {
           display: grid;
           grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) 110px 96px 104px 104px;
@@ -585,7 +583,7 @@ export default function SavedPage() {
           transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature);
         }
         .ray-own-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
-        .ray-own-btn[data-on=true] { background: var(--color-fg); border-color: var(--color-fg); color: var(--color-bg); }
+        .ray-own-btn[data-on=true] { background: var(--color-butter); border-color: var(--color-butter); color: var(--color-butter-ink); }
         .ray-settled-mobile { display: none; }
         @media (max-width: 899px) {
           .ray-settled-desk { display: none; }

@@ -278,6 +278,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           font-size: 13.5px;
           border-bottom: 1px solid var(--color-border);
           white-space: nowrap;
+          font-variant-numeric: tabular-nums;
         }
         /* the maker column stays pinned while the table scrolls sideways so
            rows remain identifiable — solid ground + a right hairline seam */
@@ -474,7 +475,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                           alignItems: 'center',
                           gap: 10,
                         }}
-                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent-gold)')}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-butter)')}
                         onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
                       >
                         <ArtistAvatar label={row.label} size={24} />
@@ -538,7 +539,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                       alignItems: 'center',
                       gap: 10,
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent-gold)')}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-butter)')}
                     onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
                   >
                     <ArtistAvatar label={row.label} size={24} />

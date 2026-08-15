@@ -199,7 +199,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                     fontFamily: "var(--font-serif), serif",
                     fontSize: 20,
                     fontWeight: 300,
-                    color: i === 0 ? 'var(--color-accent-wine-text)' : 'var(--color-text-faint)',
+                    color: i === 0 ? 'var(--color-butter-text)' : 'var(--color-text-faint)',
                   }}>
                     {i + 1}
                   </td>
@@ -228,7 +228,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                         lineHeight: 1.3,
                         transition: 'color var(--duration-fast) var(--ease-signature)',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent-gold)')}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-butter)')}
                       onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
                     >
                       {title}
@@ -240,6 +240,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                     fontSize: 15,
                     color: 'var(--color-fg)',
                     whiteSpace: 'nowrap',
+                    fontVariantNumeric: 'tabular-nums',
                   }}>
                     {formatPrice(lot.priceUsd || 0)}
                   </td>
@@ -248,6 +249,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                     fontWeight: 500,
                     fontSize: 13,
                     whiteSpace: 'nowrap',
+                    fontVariantNumeric: 'tabular-nums',
                     color: overEst === null || toneOf(overEst) === 'flat'
                       ? 'var(--color-text-muted)'
                       : toneOf(overEst) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)',

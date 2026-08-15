@@ -1044,8 +1044,121 @@ h1 {
   --shadow-pop: 0 12px 32px rgba(8, 6, 3, 0.45);     /* dropdowns, cmd-k */
   --shadow-modal: 0 24px 64px rgba(8, 6, 3, 0.60), 0 4px 16px rgba(8, 6, 3, 0.40);
 
+  /* ── SAFE ALIASES — a handful of pages referenced token names that were
+     never defined (invisible skeletons, mis-coloured headers). Point them at
+     the real tokens so those sites render as intended, warm or cool. ── */
+  --color-surface: var(--color-bg-elevated);
+  --color-muted: var(--color-text-muted);
+  --color-faint: var(--color-text-faint);
+  --color-hair: var(--hairline);
+
   --grain-opacity: 0;
   color-scheme: dark;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   .terminal-shell — the migration scope. The homepage runs the cool Linear
+   "Terminal" ramp; sub-pages ran the warm HEARTH ramp. Wrapping a page's root
+   in .terminal-shell re-points the warm chrome tokens to the cool --tt-* set,
+   so every token-driven child (Masthead, ledgers, cards, kickers, deltas)
+   inherits the cool ground with no per-component edits.
+
+   DELIBERATELY UNCHANGED (the two-tone the homepage keeps): the warm --paper-*
+   certificate cards (.ray-band / .ray-paper) stay beige — a second colour that
+   breaks the dark scroll — given only the Terminal radius so they rhyme. The
+   warm nav glass (--color-nav-bg) also stays, matching the homepage chrome.
+   ════════════════════════════════════════════════════════════════════════ */
+.terminal-shell {
+  /* ground + surfaces → Linear cool near-black */
+  --color-bg: #08090a;
+  --color-bg-deep: #060708;
+  --color-bg-elevated: #1c1c1f;
+  --color-surface: #1c1c1f;
+  --panel: #17171a;
+  --panel-mat: #17171a;
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-bg-hover: rgba(255, 255, 255, 0.045);
+
+  /* text → cool ramp */
+  --color-fg: #f7f8f8;
+  --color-text-secondary: #d0d6e0;
+  --color-text-muted: #8a8f98;
+  --color-text-faint: #62666d;
+
+  /* hairlines → white-alpha */
+  --hairline: rgba(255, 255, 255, 0.06);
+  --hairline-soft: rgba(255, 255, 255, 0.045);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-mid: rgba(255, 255, 255, 0.14);
+  --color-hover-item: rgba(255, 255, 255, 0.03);
+  --color-hair: rgba(255, 255, 255, 0.06);
+
+  /* deltas → the Terminal's muted mint / coral */
+  --color-up: #57be87;
+  --color-up-soft: rgba(87, 190, 135, 0.12);
+  --color-down: #cc6a5c;
+  --color-down-text: #d98a7f;
+  --color-down-soft: rgba(204, 106, 92, 0.12);
+
+  /* chart chrome → cool */
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-ref: rgba(255, 255, 255, 0.15);
+  --chart-tick: #8a8f98;
+  --chart-line-2: #62666d;
+  --chart-cursor: rgba(232, 218, 182, 0.30);
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  isolation: isolate;
+  overflow-x: clip;
+  font-variant-numeric: tabular-nums;
+}
+
+/* quiet atmosphere — one gold pool top-right + a fainter one bottom-left,
+   matching the homepage bgField, without extra markup */
+.terminal-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 78% -10%, rgba(232, 218, 182, 0.06), transparent 60%),
+    radial-gradient(90% 60% at 8% 108%, rgba(232, 218, 182, 0.03), transparent 55%);
+}
+.terminal-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* flatten frosted glass → the Terminal's flat matte panel (the biggest
+   off-system tell). No blur, no sheen layers, white-alpha border + top light. */
+.terminal-shell .glass,
+.terminal-shell .glass-quiet {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+.terminal-shell .glass::before,
+.terminal-shell .glass::after,
+.terminal-shell .glass-quiet::before,
+.terminal-shell .glass-quiet::after {
+  display: none !important;
+}
+.terminal-shell .glass:hover,
+.terminal-shell .glass-quiet:hover {
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+/* keep the warm paper certificates; just give them the Terminal radius so
+   they rhyme with the cool panels (mirrors the homepage's own treatment) */
+.terminal-shell :is(.ray-band, .ray-paper, .ray-recordband) {
+  border-radius: 14px;
 }
 
 /* the marquee rule: exactly one element per view carries the halo.

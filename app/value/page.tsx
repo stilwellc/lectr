@@ -184,10 +184,7 @@ export default function ValuePage() {
   const callMedian = callPool?.signal.med ?? null;
 
   return (
-    <div className="ray-mobnav-pad" style={{
-      minHeight: '100vh',
-      background: 'var(--color-bg)',
-      color: 'var(--color-fg)',
+    <div className="ray-mobnav-pad terminal-shell" style={{
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
       {/* __html, not a text child: this CSS carries '<date>' inside a comment

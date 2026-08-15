@@ -1006,6 +1006,30 @@ export default function TerminalHomePage() {
               </section>
             )}
 
+            {/* ══ MARKET-LEVEL EMPTY STATE — a thin vertical (e.g. watches)
+                can gate off the wall, the board AND the feed at once, leaving
+                the hero stranded over nothing. Mirror the value page's
+                thin-vertical pattern: a short honest line + the two live
+                surfaces this market always has. Only shows when all three
+                body sections are absent. ══ */}
+            {upcoming.length === 0 && !wallEl && !marketData?.subMarkets && (
+              <section className={styles.feedSection}>
+                <div className="ray-enter" style={{ textAlign: 'center', padding: '40px 20px 60px' }}>
+                  <p style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 8, color: 'var(--tt-muted)' }}>
+                    Nothing on the block in the {activeKey === 'all' ? 'total' : marketMeta.label} market yet — the crawl refreshes daily.
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 22px', justifyContent: 'center', marginTop: 18 }}>
+                    <Link href={`/value/${activeKey}`} className="link-action" style={{ color: 'var(--color-fg)' }}>
+                      See {activeKey === 'all' ? 'the' : `the ${marketMeta.label}`} buy signals <Flick size={10} style={{ marginLeft: 5 }} />
+                    </Link>
+                    <Link href={`/analytics/${activeKey}`} className="link-action" style={{ color: 'var(--color-fg)' }}>
+                      Open the {activeKey === 'all' ? 'research desk' : `${marketMeta.label} research desk`} <Flick size={10} style={{ marginLeft: 5 }} />
+                    </Link>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* phase-2 trigger — the settlement slip below reads the full sold
                 corpus; the sentinel starts that fetch as the reader approaches */}
             <Phase2Sentinel />

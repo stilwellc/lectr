@@ -17,6 +17,7 @@ import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { formatPrice, formatDate, getUpcomingCounts } from '../utils';
 import FollowButton from './FollowButton';
+import HeroChart, { type HeroLine } from '../preview/terminal/HeroChart';
 import type { AuctionLot } from '../types';
 
 interface CatCell { n: number; medUsd: number; ttmMedUsd: number | null }
@@ -55,26 +56,35 @@ function usePlayers(): { players: PlayerEntry[] | null; failed: boolean } {
   return state;
 }
 
-function TrendLine({ yearly }: { yearly: PlayerEntry['yearly'] }) {
+// The yearly card-median trend, drawn on the shared HeroChart money-line
+// instrument (same adapter shape as SubPage / MakerDecadeBand: a yearly series
+// mapped to a money HeroLine). A mix-affected median level, labeled as such —
+// not appreciation. Abstains under 3 qualifying years, as the old line did.
+function TrendLine({ yearly, name }: { yearly: PlayerEntry['yearly']; name: string }) {
+  const points = useMemo<HeroLine['points']>(
+    () => yearly.map(p => ({ period: String(p.y), value: p.med, n: p.n })),
+    [yearly],
+  );
   if (yearly.length < 3) return null;
-  const W = 640, H = 130, PAD = 6;
-  const vals = yearly.map(p => p.med);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const span = max - min || 1;
-  const pts = yearly.map((p, i) => {
-    const x = PAD + (i / (yearly.length - 1)) * (W - PAD * 2);
-    const y = H - PAD - ((p.med - min) / span) * (H - PAD * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+  const anchor: HeroLine = {
+    key: 'card-median',
+    label: `${name} · yearly card median`,
+    color: 'var(--color-fg, #f7f8f8)',
+    unit: 'money',
+    points,
+  };
   return (
-    <div style={{ marginTop: 16 }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="Yearly median card sale">
-        <polyline points={pts} fill="none" stroke="var(--color-fg)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-        <span>{yearly[0].y} · {formatPrice(yearly[0].med)} card median</span>
-        <span>{yearly[yearly.length - 1].y} · {formatPrice(yearly[yearly.length - 1].med)}</span>
+    <div style={{ marginTop: 20 }}>
+      <div className="lectr-lot-comps-head">
+        <span>Yearly card median</span>
+        <span className="ctx">median realized, by year</span>
       </div>
+      <div style={{ marginTop: 8 }}>
+        <HeroChart anchor={anchor} height={150} play={false} compact hideTickLabels={false} />
+      </div>
+      <p style={{ fontSize: 11.5, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.5 }}>
+        The typical (median) price a {name} card fetched each year — a mix-affected level, not an appreciation rate.
+      </p>
     </div>
   );
 }
@@ -100,7 +110,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
 
   if (!entry) {
     return (
-      <>
+      <div className="terminal-shell">
         {nav}
         <div className="rail" style={{ paddingBlock: 80, textAlign: 'center' }}>
           {players === null && !loadFailed ? (
@@ -115,7 +125,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           )}
         </div>
         <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />
-      </>
+      </div>
     );
   }
 
@@ -123,7 +133,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
   const gearMed = entry.cats['game-used']?.medUsd ?? null;
 
   return (
-    <>
+    <div className="terminal-shell">
       {nav}
       <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
@@ -131,7 +141,9 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           {entry.sport ? `${entry.sport} · ` : ''}player dossier
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 750, letterSpacing: '-0.02em', margin: 0 }}>
+          {/* the athlete's name in the shared dossier display face (Fraunces) —
+              reads like the maker/entity pages, not a raw <h1> */}
+          <h1 className="lectr-dossier-name" style={{ fontSize: 'clamp(28px, 5vw, 44px)' }}>
             {entry.name}
           </h1>
           <FollowButton slug={entry.slug} name={entry.name} />
@@ -182,7 +194,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           })}
         </div>
 
-        <TrendLine yearly={entry.yearly} />
+        <TrendLine yearly={entry.yearly} name={entry.name} />
 
         {live.length > 0 && (
           <section style={{ marginTop: 34 }} aria-label="On the block now">
@@ -253,6 +265,6 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
         </section>
       </div>
       <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />
-    </>
+    </div>
   );
 }
