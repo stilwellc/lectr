@@ -53,10 +53,11 @@ const NON_NAME = new Set([
   'star', 'wars', 'trek', 'wagon', 'train', 'show', 'team', 'club', 'company',
 ]);
 
-/** True when a cleaned string reads like a 2–3 token personal name. */
+/** True when a cleaned string reads like a personal name (First [Middle…] Last,
+ *  particles/initials allowed). Up to 4 name-words for compound names. */
 function looksLikePerson(name: string): boolean {
   const toks = name.trim().split(/\s+/).filter(Boolean);
-  if (toks.length < 2 || toks.length > 3) return false; // First [Middle] Last
+  if (toks.length < 2 || toks.length > 5) return false;
   if (FORMAT_OR_MATERIAL.test(name)) return false;
   let caps = 0;
   for (const t of toks) {
@@ -65,7 +66,7 @@ function looksLikePerson(name: string): boolean {
     if (isCap(t)) caps++;
     else if (!PARTICLES.has(low)) return false; // lowercase non-particle → not a clean name
   }
-  return caps >= 2; // at least a first + last
+  return caps >= 2 && caps <= 4; // First + Last … up to a compound name
 }
 
 /** Strip dates, parentheticals, quoted signatures, honorifics, trailing punct. */
@@ -122,6 +123,45 @@ function fromNameComma(text: string): string | null {
   return looksLikePerson(name) ? name : null;
 }
 
+// The first format/object word ENDS the signer run in RR Auction's
+// "Firstname Lastname <Format>…" titles (e.g. "George Bush Autograph Letter
+// Signed", "Sam Houston Document Signed", "Roald Amundsen Signed Photograph").
+const FORMAT_ANCHOR =
+  /\b(autograph(?:ed)?|typed|handwritten|manuscript|signed|document|letter|note|photograph|photo|portrait|quotation|quote|check|cheque|album|inscribed|endorsement|first)\b/i;
+
+// Auction descriptors RR wedges between the name and the format ("War-Dated
+// Document Signed", "Twice-Signed", "Oversized Signed Photograph") — the name is
+// the leading run BEFORE the first of these.
+const DESCRIPTOR = new Set([
+  'war', 'dated', 'wardated', 'twice', 'oversized', 'early', 'late', 'scarce',
+  'handsome', 'vintage', 'original', 'presentation', 'framed', 'matted', 'unsigned',
+  'fine', 'choice', 'superb', 'historic', 'important', 'rare', 'partly', 'boldly',
+  'desirable', 'magnificent', 'exceptional', 'museum', 'large', 'small', 'group',
+  'archive', 'impressive', 'extraordinary', 'remarkable', 'stunning', 'beautiful',
+  'significant', 'notable', 'iconic', 'wartime', 'undated', 'triple', 'multi',
+]);
+
+/** RR/eBay shape "Firstname Lastname <Format>…" → the leading name run (stopping
+ *  at a descriptor). Abstains when the name isn't leading (Christie's "A SIGNED
+ *  PHOTOGRAPH …") or on multi-signer prefixes. Handles ", Jr./Sr." suffixes. */
+function fromLeadingName(title: string): string | null {
+  const m = title.match(FORMAT_ANCHOR);
+  if (!m || m.index === undefined || m.index < 3) return null; // format at the head → not RR shape
+  let prefix = title.slice(0, m.index).replace(/\(\d+\)/g, ' ').split(':')[0].trim(); // "Name: descriptor" → Name
+  prefix = prefix.replace(/,\s*(jr|sr|ii|iii|iv)\.?\s*$/i, ''); // keep "King, Jr." as one signer
+  if (/\band\b|&/i.test(prefix)) return null; // multi-signer group
+  if (prefix.includes(',')) return null; // a remaining comma = a list of signers
+  // take the leading run, stopping at the first descriptor/non-name word
+  const run: string[] = [];
+  for (const t of prefix.split(/\s+/).filter(Boolean)) {
+    const low = t.toLowerCase().replace(/[.'’-]/g, '');
+    if (DESCRIPTOR.has(low) || NON_NAME.has(low)) break;
+    run.push(t);
+  }
+  const name = cleanName(run.join(' '));
+  return looksLikePerson(name) ? name : null;
+}
+
 /** Parse an INDIVIDUAL signer NAME from a lot's descriptive title/medium, or
  *  null to abstain. Only the high-precision shapes — groups/themes/events
  *  (STAR WARS:, MERCURY SEVEN –) abstain, because eBay's autograph listings are
@@ -136,7 +176,7 @@ export function parseSignerName(l: { title?: string | null; medium?: string | nu
       : '';
   for (const text of [title, medium]) {
     if (!text) continue;
-    const hit = fromCatalog(text) || fromNaturalWithDates(text) || fromNameComma(text);
+    const hit = fromCatalog(text) || fromNaturalWithDates(text) || fromNameComma(text) || fromLeadingName(text);
     if (hit) return hit;
   }
   return null;
