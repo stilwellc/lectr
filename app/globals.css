@@ -1389,9 +1389,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 
 .ray-close-map {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.6fr;
-  gap: 48px;
-  max-width: 760px;
+  grid-template-columns: 1fr 1fr 1.5fr 1.5fr;
+  gap: 40px;
+  max-width: 980px;
   margin: 34px auto 0;
   padding-top: 26px;
   border-top: 1px solid var(--hairline-soft, rgba(242, 238, 227, 0.065));
@@ -1414,46 +1414,13 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-close-col a:hover { color: var(--color-fg); }
 .ray-close-record p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--color-text-secondary); }
 .ray-close-record b.up { color: var(--color-up); font-weight: 700; }
+/* the buy-side (Starling) column — mirrors the record column; butter CTA */
+.ray-close-buyside p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--color-text-secondary); }
+.ray-close-buyside .ray-close-cta { color: var(--color-butter-text, var(--color-butter)) !important; }
+.ray-close-buyside .ray-close-cta span { display: inline-block; transition: transform 200ms var(--ease-signature, ease); }
+.ray-close-buyside .ray-close-cta:hover span { transform: translate(2px, -2px); }
 .ray-close-cta { margin-top: 10px; font-weight: 600; color: var(--color-fg) !important; }
 
-/* sibling-product cross-link — quiet, one butter accent (Starling), off-site ↗.
-   Sits between the map and the legal baseline: a peer desk, not a nav item. */
-.ray-close-sibling {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  margin-top: 30px;
-  padding-top: 16px;
-  border-top: 1px solid var(--hairline-soft, rgba(242, 238, 227, 0.065));
-  text-decoration: none;
-  width: fit-content;
-}
-.ray-close-sibling-k {
-  flex: none;
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--color-text-muted);
-}
-.ray-close-sibling-line {
-  font-size: 13px;
-  color: var(--color-text-faint);
-  transition: color 200ms var(--ease-signature, ease);
-}
-.ray-close-sibling-line b {
-  font-weight: 700;
-  color: var(--color-butter-text, var(--color-butter));
-}
-.ray-close-sibling-arrow {
-  margin-left: 6px;
-  color: var(--color-text-faint);
-  transition: transform 200ms var(--ease-signature, ease);
-  display: inline-block;
-}
-.ray-close-sibling:hover .ray-close-sibling-line { color: var(--color-text-secondary); }
-.ray-close-sibling:hover .ray-close-sibling-arrow { transform: translate(2px, -2px); }
-@media (max-width: 720px) {
-  .ray-close-sibling { flex-direction: column; gap: 4px; }
-}
 .ray-close-base {
   display: flex;
   justify-content: space-between;
@@ -1469,7 +1436,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-close-mark { height: 84px; }
 
   .ray-close-map { grid-template-columns: 1fr 1fr; gap: 32px; }
-  .ray-close-record { grid-column: 1 / -1; }
+  .ray-close-record,
+  .ray-close-buyside { grid-column: 1 / -1; }
   .ray-close-base { flex-direction: column; gap: 6px; }
 }
 
