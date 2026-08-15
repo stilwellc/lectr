@@ -259,22 +259,35 @@ function main() {
   fs.writeFileSync(tmp, gz);
   console.log(`[value-book] wrote ${(gz.length / 1024).toFixed(0)}KB gz → ${tmp}`);
 
-  // Push to PRIVATE R2 (overwrite latest/; the nightly cadence dwarfs R2's
-  // ~10-15min overwrite GET-lag, so a plain overwrite is fine here).
+  // Push to PRIVATE R2 the house way (data-store.sh pattern): the payload goes
+  // to a WRITE-ONCE versioned key — a fresh key can never be stale-cached, its
+  // first read is authoritative — and only a tiny pointer is overwritten.
+  // (Measured: an overwritten 220KB `latest/` object served 79-minutes-stale
+  // reads; a few-byte pointer flips fast. Never overwrite payloads.)
   const token = process.env.CLOUDFLARE_API_TOKEN;
   const account = process.env.CLOUDFLARE_ACCOUNT_ID || '5bcc5f43136c9ba6b6cb7f949813f473';
   if (!token) {
     console.warn('[value-book] no CLOUDFLARE_API_TOKEN — wrote local file only, skipping R2 push.');
     return;
   }
-  const key = 'latest/value-book.json.gz';
-  const url = `https://api.cloudflare.com/client/v4/accounts/${account}/r2/buckets/lectr-data/objects/${encodeURIComponent(key)}`;
-  execFileSync(
-    'curl',
-    ['-sf', '-X', 'PUT', '-H', `Authorization: Bearer ${token}`, '-H', 'Content-Type: application/octet-stream', '--data-binary', `@${tmp}`, url],
-    { stdio: 'inherit' },
-  );
-  console.log(`[value-book] pushed → lectr-data/${key}`);
+  const objUrl = (key: string) =>
+    `https://api.cloudflare.com/client/v4/accounts/${account}/r2/buckets/lectr-data/objects/${encodeURIComponent(key)}`;
+  const put = (key: string, file: string, type = 'application/octet-stream') =>
+    execFileSync(
+      'curl',
+      ['-sf', '-X', 'PUT', '-H', `Authorization: Bearer ${token}`, '-H', `Content-Type: ${type}`, '--data-binary', `@${file}`, objUrl(key)],
+      { stdio: 'inherit' },
+    );
+
+  const stamp = book.builtAt.replace(/[-:]/g, '').replace(/\..+/, '');
+  const versionKey = `value-book/versions/${stamp}.json.gz`;
+  put(versionKey, tmp);
+  const ptr = path.join(os.tmpdir(), 'value-book-pointer.txt');
+  fs.writeFileSync(ptr, versionKey);
+  put('value-book/latest.txt', ptr, 'text/plain');
+  // legacy key for one transition cycle (older Starling readers)
+  put('latest/value-book.json.gz', tmp);
+  console.log(`[value-book] pushed → lectr-data/${versionKey} (+ pointer value-book/latest.txt)`);
 }
 
 main();
