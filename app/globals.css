@@ -1416,10 +1416,19 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-close-record b.up { color: var(--color-up); font-weight: 700; }
 /* the buy-side call — a second CTA in the record column, pointing to Starling.
    Butter (the one outbound/product link), sits just under "See the record". */
+.ray-close-partner-k {
+  display: block;
+  margin-top: 16px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
 .ray-close-buyside-cta {
   display: block;
   width: fit-content;
-  margin-top: 9px;
+  margin-top: 3px;
   font-weight: 600;
   color: var(--color-butter-text, var(--color-butter)) !important;
 }

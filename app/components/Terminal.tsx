@@ -432,6 +432,7 @@ export function Colophon({ record }: {
               </p>
             )}
             <Link href="/value" className="ray-close-cta">See the record <Flick size={12} /></Link>
+            <span className="ray-close-partner-k">Partner site</span>
             <a
               href="https://starling-6s1.pages.dev"
               target="_blank"
