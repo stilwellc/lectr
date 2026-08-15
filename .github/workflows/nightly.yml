@@ -224,6 +224,11 @@ jobs:
         run: npx tsx scripts/assemble.ts
       - name: Rebuild eager upcoming payload
         run: npx tsx scripts/build-upcoming.ts
+      # Emit the value book for Starling (the buy-side sibling) → PRIVATE R2.
+      # Best-effort: a failure here must never break lectr's own nightly.
+      - name: Emit value book → private R2 (Starling)
+        run: npx tsx scripts/emit-value-book.ts
+        continue-on-error: true
       - name: Push corpus + served to R2
         run: bash scripts/data-store.sh push
       # versions/ retention: each push adds ~176MB of write-once payloads; keep

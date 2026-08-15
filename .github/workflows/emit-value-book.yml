@@ -1,0 +1,30 @@
+name: Emit value book (Starling)
+
+# Standalone, manually-triggerable emit of the Starling value book. The nightly
+# already runs this as a step; this lets us push a fresh book to private R2
+# on demand without a full nightly (crawl + assemble).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_OPTIONS: --max-old-space-size=10240
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  emit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Pull corpus from R2 (last-good)
+        run: bash scripts/data-store.sh pull
+      - name: Emit value book → private R2
+        run: npx tsx scripts/emit-value-book.ts
