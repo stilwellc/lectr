@@ -122,11 +122,29 @@ function fromNameComma(text: string): string | null {
   return looksLikePerson(name) ? name : null;
 }
 
-/** Extract an INDIVIDUAL signer slug from a lot, or null to abstain. Only the
- *  high-precision shapes — groups/themes/events (STAR WARS:, MERCURY SEVEN –)
- *  abstain, because eBay's autograph listings are single-signer and those
- *  wouldn't join anyway. Precedence: structured → catalog → natural(dates) →
- *  Christie's "NAME, date" medium/title. */
+/** Parse an INDIVIDUAL signer NAME from a lot's descriptive title/medium, or
+ *  null to abstain. Only the high-precision shapes — groups/themes/events
+ *  (STAR WARS:, MERCURY SEVEN –) abstain, because eBay's autograph listings are
+ *  single-signer and those wouldn't join anyway. This is the piece stamped into
+ *  `l.entity` at corpus-normalize time (like recoverPlayerSlug stamps playerSlug),
+ *  so lectr's own comps/similarity and the value book both read one field. */
+export function parseSignerName(l: { title?: string | null; medium?: string | null }): string | null {
+  const title = l.title || '';
+  const medium =
+    l.medium && !/^(unknown|photograph|print|document|letter|paper|ink)$/i.test(l.medium.trim())
+      ? l.medium
+      : '';
+  for (const text of [title, medium]) {
+    if (!text) continue;
+    const hit = fromCatalog(text) || fromNaturalWithDates(text) || fromNameComma(text);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Signer slug for a lot: structured field first (playerSlug/entity — both now
+ *  stamped at normalize time), then a parse fallback. The value-book emitter
+ *  uses this; after normalize stamps `entity`, the field branch answers. */
 export function extractSignerSlug(l: {
   playerSlug?: string | null;
   entity?: string | null;
@@ -138,14 +156,6 @@ export function extractSignerSlug(l: {
     const e = cleanName(l.entity);
     if (looksLikePerson(e)) return signerSlug(e);
   }
-
-  const title = l.title || '';
-  const medium = l.medium && !/^(unknown|photograph|print|document|letter|paper|ink)$/i.test(l.medium.trim()) ? l.medium : '';
-
-  for (const text of [title, medium]) {
-    if (!text) continue;
-    const hit = fromCatalog(text) || fromNaturalWithDates(text) || fromNameComma(text);
-    if (hit) return signerSlug(hit);
-  }
-  return null; // abstain — no confident individual signer
+  const name = parseSignerName(l);
+  return name ? signerSlug(name) : null;
 }

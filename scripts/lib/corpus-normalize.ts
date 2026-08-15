@@ -5,6 +5,8 @@ import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle } from '../../app/lib/comps';
 import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
+import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
+import { parseSignerName } from './autograph-signer';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -311,6 +313,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   const cat = normalizeArtCategory(ls);
   const refsFilled = enrichWatchReferences(ls);
   const players = recoverPlayerSlugs(ls);
+  const signers = recoverAutographSigners(ls);
   const cultureStamped = stampCultureAxes(ls);
   const datesFixed = reconcileSaleDates(ls);
   const restamped = restampIdentityKeys(ls);
@@ -325,6 +328,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `art category heal o2p=${cat.o2p} p2o=${cat.p2o} · ` +
     `watch references filled=${refsFilled} · ` +
     `playerSlug stamped=${players.stamped} (coverage ${(players.coverage * 100).toFixed(1)}%) · ` +
+    `autograph signers stamped=${signers.stamped}/${signers.candidates} · ` +
     `culture axes stamped=${cultureStamped} · ` +
     `saleDate←saleDateTime reconciled=${datesFixed} · ` +
     `formKey restamped=${restamped} · ` +
@@ -588,6 +592,29 @@ export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: numbe
     if (cover) covered++;
   }
   return { stamped, total, coverage: total ? covered / total : 1 };
+}
+
+// ── ★3c · recoverAutographSigners — signer identity from the title/medium.
+// 94% of the 300k autograph lots carry the signer only in a descriptive title
+// ("EINSTEIN, Albert (1879-1955). Typed letter signed") or medium ("HARRY
+// HOUDINI, 1913"), never in a field — so lectr's own comps/similarity/indexes
+// (which read `entity`) can't use them, and neither could the value book. Parse
+// it here and stamp `entity`, exactly as recoverPlayerSlug stamps playerSlug.
+// HIGH-PRECISION only (parseSignerName abstains on themes/groups); we never
+// overwrite an existing entity, and we require a canonical autograph format so
+// relics ("a fence rail cane") are skipped.
+export function recoverAutographSigners(lots: Lot[]): { stamped: number; candidates: number } {
+  let stamped = 0, candidates = 0;
+  for (const l of lots) {
+    const w = l as Lot & { entity?: string | null; playerSlug?: string | null; medium?: string | null };
+    if (!AUTOGRAPH_SLUGS.has(l.artist)) continue;
+    if (w.entity || w.playerSlug) continue; // already identified — never overwrite
+    if (!autographFormatOf(l.title)) continue; // must be an actual signed item
+    candidates++;
+    const name = parseSignerName({ title: l.title, medium: w.medium });
+    if (name) { w.entity = name; stamped++; }
+  }
+  return { stamped, candidates };
 }
 
 /* ── GAME-USED COMP KEYS — the three axes a game-used lot must match a comp on
