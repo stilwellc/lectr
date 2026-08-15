@@ -75,6 +75,10 @@ function lerpQuantile(sortedVals: number[], q: number): number {
 function cardKeyNoSerial(l: AuctionLot): string | null {
   const c = l._card;
   if (!c || !c.playerSlug || !c.year || !c.cardNo) return null;
+  // Serial-numbered parallels (/25, 1/1) are a DIFFERENT market than the base
+  // card — pooling them into the base key inflates its median, and Starling's
+  // eBay matcher joins base pools. Exclude them rather than mis-price the base.
+  if (c.serialOf != null) return null;
   const grade = c.gradeCo && c.gradeNum != null ? `${c.gradeCo}${c.gradeNum}` : 'raw';
   const set = (c.setName || '').toLowerCase().replace(/\s+/g, ' ').trim();
   return `${c.playerSlug}|${c.year}|${set}|${c.cardNo}|${grade}`;
@@ -213,13 +217,22 @@ function main() {
     else if (n >= 4 && disp <= (MEDIUM_DISP[p.v] ?? 2.5)) conf = 'medium';
     if (!conf) continue; // drop 'low' — only high/medium ship
 
+    // Staleness gate: a pool whose LATEST sale is >4y old is not a tradable
+    // book — "60% under" a 2015 median is not a live call. (2–4y rows ship and
+    // Starling badges them "aging"; older is dropped.)
+    if (REF_MS - Date.parse(p.last) > 4 * YEAR_MS) continue;
+
     const wpairs: [number, number][] = p.prices.map(([usd, ms]) => [
       usd,
       Math.pow(0.5, (REF_MS - ms) / YEAR_MS / 2),
     ]);
     const med = Math.round(weightedMedian(wpairs));
-    const lo = Math.round(lerpQuantile(vals, 0.15));
-    const hi = Math.round(lerpQuantile(vals, 0.85));
+    // Band from unweighted quantiles, CLAMPED to contain the recency-weighted
+    // median — a med outside its own band (11% of rows otherwise, when recent
+    // sales run hot/cold vs the all-time distribution) breaks the display
+    // semantics and the honesty of "the band".
+    const lo = Math.min(Math.round(lerpQuantile(vals, 0.15)), med);
+    const hi = Math.max(Math.round(lerpQuantile(vals, 0.85)), med);
 
     // 1Y trend: trailing-12mo median vs prior-12mo median (fraction), else null.
     const t12 = p.prices.filter(([, ms]) => REF_MS - ms <= YEAR_MS).map((x) => x[0]).sort((a, b) => a - b);
