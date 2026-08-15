@@ -435,6 +435,20 @@ export function Colophon({ record }: {
           </div>
         </div>
 
+        {/* the sibling desk — lectr's book, pointed at the buy side */}
+        <a
+          href="https://starling-6s1.pages.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ray-close-sibling"
+        >
+          <span className="ray-close-sibling-k">The buy side</span>
+          <span className="ray-close-sibling-line">
+            <b>Starling</b> points this book at eBay Buy It Now — deep-value deals, risk-graded
+            <span className="ray-close-sibling-arrow" aria-hidden="true">↗</span>
+          </span>
+        </a>
+
         {/* baseline */}
         <div className="ray-close-base">
           <span suppressHydrationWarning>© {new Date().getFullYear()} lectr · auction intelligence</span>
