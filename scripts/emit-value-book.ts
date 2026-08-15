@@ -194,10 +194,10 @@ function main() {
 
   // Aggregate each key: recency-weighted median + band + confidence tier + trend.
   const rows: ValueBookRow[] = [];
-  for (const [k, p] of pools) {
+  for (const [k, p] of Array.from(pools.entries())) {
     const n = p.prices.length;
     if (n < 4) continue; // below the medium bar → never ships
-    const vals = p.prices.map((x) => x[0]).sort((a, b) => a - b);
+    const vals = p.prices.map((x: [number, number]) => x[0]).sort((a: number, b: number) => a - b);
     const disp = quantile(vals, 0.75) / Math.max(quantile(vals, 0.25), 1);
     // Vertical-aware dispersion tolerance for the MEDIUM tier. Graded cards are
     // fungible (same card+grade → same price) so stay strict; autographs and
@@ -235,11 +235,11 @@ function main() {
     const hi = Math.max(Math.round(lerpQuantile(vals, 0.85)), med);
 
     // 1Y trend: trailing-12mo median vs prior-12mo median (fraction), else null.
-    const t12 = p.prices.filter(([, ms]) => REF_MS - ms <= YEAR_MS).map((x) => x[0]).sort((a, b) => a - b);
+    const t12 = p.prices.filter(([, ms]) => REF_MS - ms <= YEAR_MS).map((x: [number, number]) => x[0]).sort((a: number, b: number) => a - b);
     const p12 = p.prices
       .filter(([, ms]) => REF_MS - ms > YEAR_MS && REF_MS - ms <= 2 * YEAR_MS)
-      .map((x) => x[0])
-      .sort((a, b) => a - b);
+      .map((x: [number, number]) => x[0])
+      .sort((a: number, b: number) => a - b);
     const trend =
       t12.length && p12.length ? Number((quantile(t12, 0.5) / quantile(p12, 0.5) - 1).toFixed(3)) : null;
 
