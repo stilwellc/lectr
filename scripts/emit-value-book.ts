@@ -31,6 +31,7 @@ import {
   AUTOGRAPH_SLUGS,
 } from '../app/lib/identity';
 import { marketOf } from '../app/constants';
+import { extractSignerSlug } from './lib/autograph-signer';
 import type { AuctionLot } from '../app/types';
 
 // ── Starling's slug (replicated verbatim so keys match) ──────────────────────
@@ -110,9 +111,9 @@ function keyForLot(l: AuctionLot): { key: string; v: Vertical } | null {
   if (AUTOGRAPH_SLUGS.has(l.artist)) {
     const fmt = autographFormatOf(l.title);
     if (!fmt) return null;
-    const signer = l.playerSlug ?? (l.entity ? slug(l.entity) : null);
+    const signer = extractSignerSlug(l); // structured field OR parsed from RR/Christie's title/medium
     if (!signer) return null;
-    return { key: `${slug(signer)}|${fmt}`, v: 'autographs' };
+    return { key: `${signer}|${fmt}`, v: 'autographs' };
   }
   if (l.artist === 'pokemon') {
     const k = pokemonKey(l);
