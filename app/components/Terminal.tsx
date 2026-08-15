@@ -432,17 +432,13 @@ export function Colophon({ record }: {
               </p>
             )}
             <Link href="/value" className="ray-close-cta">See the record <Flick size={12} /></Link>
-          </div>
-          <div className="ray-close-col ray-close-buyside">
-            <span className="ray-close-k">The buy side</span>
-            <p>This book, pointed at eBay Buy It Now — deep-value deals, risk-graded.</p>
             <a
               href="https://starling-6s1.pages.dev"
               target="_blank"
               rel="noopener noreferrer"
-              className="ray-close-cta"
+              className="ray-close-cta ray-close-buyside-cta"
             >
-              Open Starling <span aria-hidden="true">↗</span>
+              Starling — the same book on eBay <span aria-hidden="true">↗</span>
             </a>
           </div>
         </div>

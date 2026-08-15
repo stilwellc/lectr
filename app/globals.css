@@ -1389,9 +1389,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 
 .ray-close-map {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.5fr 1.5fr;
-  gap: 40px;
-  max-width: 980px;
+  grid-template-columns: 1fr 1fr 1.6fr;
+  gap: 48px;
+  max-width: 760px;
   margin: 34px auto 0;
   padding-top: 26px;
   border-top: 1px solid var(--hairline-soft, rgba(242, 238, 227, 0.065));
@@ -1414,11 +1414,17 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-close-col a:hover { color: var(--color-fg); }
 .ray-close-record p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--color-text-secondary); }
 .ray-close-record b.up { color: var(--color-up); font-weight: 700; }
-/* the buy-side (Starling) column — mirrors the record column; butter CTA */
-.ray-close-buyside p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--color-text-secondary); }
-.ray-close-buyside .ray-close-cta { color: var(--color-butter-text, var(--color-butter)) !important; }
-.ray-close-buyside .ray-close-cta span { display: inline-block; transition: transform 200ms var(--ease-signature, ease); }
-.ray-close-buyside .ray-close-cta:hover span { transform: translate(2px, -2px); }
+/* the buy-side call — a second CTA in the record column, pointing to Starling.
+   Butter (the one outbound/product link), sits just under "See the record". */
+.ray-close-buyside-cta {
+  display: block;
+  width: fit-content;
+  margin-top: 9px;
+  font-weight: 600;
+  color: var(--color-butter-text, var(--color-butter)) !important;
+}
+.ray-close-buyside-cta span { display: inline-block; transition: transform 200ms var(--ease-signature, ease); }
+.ray-close-buyside-cta:hover span { transform: translate(2px, -2px); }
 .ray-close-cta { margin-top: 10px; font-weight: 600; color: var(--color-fg) !important; }
 
 .ray-close-base {
@@ -1436,8 +1442,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-close-mark { height: 84px; }
 
   .ray-close-map { grid-template-columns: 1fr 1fr; gap: 32px; }
-  .ray-close-record,
-  .ray-close-buyside { grid-column: 1 / -1; }
+  .ray-close-record { grid-column: 1 / -1; }
   .ray-close-base { flex-direction: column; gap: 6px; }
 }
 
