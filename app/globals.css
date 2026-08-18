@@ -1155,6 +1155,21 @@ h1 {
   background: rgba(255, 255, 255, 0.045) !important;
 }
 
+/* FLOATING SHEETS/MODALS are the exception to the flatten: they overlay page
+   content, so the translucent in-page panel material makes them unreadable
+   (the board bleeds straight through). Opaque cool surface + real shadow. */
+.terminal-shell .comp-modal-panel,
+.terminal-shell .ray-sheet {
+  background: #121316 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+.terminal-shell .comp-modal-panel:hover,
+.terminal-shell .ray-sheet:hover {
+  background: #121316 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
 /* keep the warm paper certificates; just give them the Terminal radius so
    they rhyme with the cool panels (mirrors the homepage's own treatment) */
 .terminal-shell :is(.ray-band, .ray-paper, .ray-recordband) {
