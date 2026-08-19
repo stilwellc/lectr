@@ -299,8 +299,73 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
   return { subCats, drills, sportRecovered };
 }
 
+// ── ★0b · dedupeWrightFamilyMirrors — LAMA/Rago/Wright are ONE company on ONE
+// platform: the same sale is served on wright20.com, lamodern.com and
+// ragoarts.com with the SAME numeric lot id (wright-301456~ ≡ lama-301456~).
+// With all three scanners running, every mirrored sale lands 2–3×. The platform
+// id is globally unique, so id-equality within the family is an airtight dedup
+// key (same-house lots with different ids — e.g. two identical Eames chairs in
+// one sale — are genuinely distinct and untouched). Keeper preference:
+// sold > live > upcoming (realized data wins), then Wright > Rago > LAMA.
+const WRIGHT_FAMILY = new Set(['Wright', 'LAMA', 'Rago', 'Toomey & Co.', 'Toomey']);
+const FAMILY_RANK: Record<string, number> = { Wright: 0, Rago: 1, LAMA: 2 };
+const STATUS_RANK: Record<string, number> = { sold: 0, live: 1, upcoming: 2 };
+export function dedupeWrightFamilyMirrors(lots: Lot[]): number {
+  // Two mirror signatures (the platform runs TWO id schemes, so id-equality
+  // alone misses ~2/3 of mirrors — e.g. rago-413558 ≡ lama-299487~):
+  //   1. shared numeric platform id
+  //   2. identical sale URL PATH (domain-stripped) — "the sale path inside the
+  //      URL is the true session key" (ray-crawl doctrine). Same path on two
+  //      domains = the same lot slot in the same mirrored sale. Distinct lots
+  //      (even two identical chairs in one sale) sit at distinct slots, so
+  //      legit multiples are never touched.
+  const best = new Map<string, { idx: number; l: Lot }>();
+  const drop = new Set<number>();
+  const consider = (key: string, i: number, l: Lot) => {
+    const prev = best.get(key);
+    if (!prev) {
+      best.set(key, { idx: i, l });
+      return;
+    }
+    if (prev.idx === i || drop.has(prev.idx)) {
+      best.set(key, { idx: i, l });
+      return;
+    }
+    const a = prev.l;
+    const sa = STATUS_RANK[a.status as string] ?? 3;
+    const sb = STATUS_RANK[l.status as string] ?? 3;
+    const ha = FAMILY_RANK[(a as { auctionHouse?: string }).auctionHouse || ''] ?? 9;
+    const hb = FAMILY_RANK[(l as { auctionHouse?: string }).auctionHouse || ''] ?? 9;
+    const keepNew = sb < sa || (sb === sa && hb < ha);
+    if (keepNew) {
+      drop.add(prev.idx);
+      best.set(key, { idx: i, l });
+    } else {
+      drop.add(i);
+    }
+  };
+  for (let i = 0; i < lots.length; i++) {
+    const l = lots[i];
+    const house = (l as { auctionHouse?: string }).auctionHouse || '';
+    if (!WRIGHT_FAMILY.has(house)) continue;
+    const idm = String((l as { id?: string }).id || '').match(/-(\d+)~?$/);
+    if (idm) consider(`id:${idm[1]}`, i, l);
+    if (drop.has(i)) continue; // already dropped by the id key
+    const tail = String((l as { url?: string }).url || '').replace(/^https?:\/\/[^/]+/, '');
+    if (/^\/auctions\/.+\/\d+\/?$/.test(tail)) consider(`path:${tail.replace(/\/$/, '')}`, i, l);
+  }
+  if (!drop.size) return 0;
+  // O(n) in-place compaction — assemble persists this array, so the dedupe
+  // bakes into the corpus gz and heals every downstream consumer.
+  let w = 0;
+  for (let i = 0; i < lots.length; i++) if (!drop.has(i)) lots[w++] = lots[i];
+  lots.length = w;
+  return drop.size;
+}
+
 export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
+  const mirrorDupes = dedupeWrightFamilyMirrors(ls);
   // ENGINE SPEC v2 order: category flips (2c) run BEFORE identity work;
   // restampIdentityKeys (5) runs LAST so every flip re-derives its formKey.
   // healExpansionRows runs FIRST: it cleans titles (every parser below reads
@@ -327,6 +392,7 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
     `relic cards→sports-cards=${relic.total} · ` +
     `art category heal o2p=${cat.o2p} p2o=${cat.p2o} · ` +
     `watch references filled=${refsFilled} · ` +
+    `wright-family mirror dupes dropped=${mirrorDupes} · ` +
     `playerSlug stamped=${players.stamped} (coverage ${(players.coverage * 100).toFixed(1)}%) · ` +
     `autograph signers stamped=${signers.stamped}/${signers.candidates} · ` +
     `culture axes stamped=${cultureStamped} · ` +
