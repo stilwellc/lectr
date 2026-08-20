@@ -208,6 +208,22 @@ export default function SavedPage() {
     [savedLots]
   );
 
+  /* ── SETTLED, ONE SURFACE — full rows and archive-resolved results in one
+     date-sorted ledger. Archive rows (Goldin: a no-reserve house that publishes
+     NO estimates) can never be judged vs estimate — they render first-class
+     with an honest '—' basis, never a second-class strip. ── */
+  type SettledRow =
+    | { kind: 'lot'; lot: AuctionLot; date: string }
+    | { kind: 'ledger'; o: { id: string; priceUsd: number; saleDate: string; provisional: boolean }; date: string };
+  const settledRows = useMemo<SettledRow[]>(() => {
+    const rows: SettledRow[] = [
+      ...sold.map(lot => ({ kind: 'lot' as const, lot, date: lot.saleDate || '' })),
+      ...soldOrphans.map(o => ({ kind: 'ledger' as const, o, date: o.saleDate || '' })),
+    ];
+    rows.sort((a, b) => (a.date < b.date ? 1 : -1));
+    return rows;
+  }, [sold, soldOrphans]);
+
   /* ── COLLECTION — engine-appraised, with reference-band context where the
      engine abstains. A reference RANGE is context only: it NEVER enters the
      total (un-appraisable pieces carry at their bought price). ── */
@@ -1047,7 +1063,32 @@ export default function SavedPage() {
                   <span style={{ textAlign: 'right' }}>vs est</span>
                   <span style={{ textAlign: 'right' }}>Own it</span>
                 </div>
-                {sold.map(lot => {
+                {settledRows.map(row => {
+                  if (row.kind === 'ledger') {
+                    const o = row.o;
+                    const m = savedMeta[o.id];
+                    return (
+                      <div key={o.id} className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
+                        <span className="maker">{m?.artist ? (ARTIST_LABEL[m.artist] || m.artist) : '—'}</span>
+                        <span className="work">
+                          {m?.title || o.id}
+                          <span style={{ color: 'var(--color-text-faint)' }}> · archive</span>
+                        </span>
+                        <span style={{ textAlign: 'right', color: 'var(--color-text-faint)' }} title="No estimate published — Goldin runs no-reserve sales">—</span>
+                        <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{m?.signalPct != null ? fmtSignedPct(Math.round(m.signalPct)) : '—'}</span>
+                        <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {o.provisional
+                            ? <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }} title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
+                            : <b>{formatPrice(o.priceUsd)}</b>}
+                        </span>
+                        <span style={{ textAlign: 'right', color: 'var(--color-text-faint)' }} title="No estimate on file — outside the vs-est median">—</span>
+                        <span style={{ textAlign: 'right' }}>
+                          <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
+                        </span>
+                      </div>
+                    );
+                  }
+                  const lot = row.lot;
                   const m = metaFor(lot.id);
                   const pct = overEstimatePct(lot);
                   const pending = !lot.priceUsd;
@@ -1086,7 +1127,27 @@ export default function SavedPage() {
 
               {/* mobile settled rows */}
               <div className="ray-settled-mobile">
-                {sold.map(lot => {
+                {settledRows.map(row => {
+                  if (row.kind === 'ledger') {
+                    const o = row.o;
+                    const m = savedMeta[o.id];
+                    return (
+                      <div key={o.id} className="ray-settled-mrow">
+                        <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m?.title || o.id}</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
+                          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                            {m?.artist ? (ARTIST_LABEL[m.artist] || m.artist) : 'archive'}
+                            {m?.signalPct != null && <> · your call {fmtSignedPct(Math.round(m.signalPct))}</>}
+                            <span style={{ color: 'var(--color-text-faint)' }}> · archive</span>
+                          </span>
+                          <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            {o.provisional ? <span style={{ color: 'var(--color-text-faint)' }}>settling…</span> : <b>{formatPrice(o.priceUsd)}</b>}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  const lot = row.lot;
                   const m = metaFor(lot.id);
                   const pct = overEstimatePct(lot);
                   const pending = !lot.priceUsd;
@@ -1122,45 +1183,6 @@ export default function SavedPage() {
                 })}
               </div>
 
-              {/* From the archive — settled watches whose full row left the
-                  served corpus (archive-tier houses). Result-only basis:
-                  COUNTED as settled, excluded from the vs-est median (no
-                  estimate on file) — stated, never silent. */}
-              {soldOrphans.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <div className="kicker" style={{ padding: '0 2px 8px' }}>
-                    From the archive · result only — no estimate on file, so outside the vs-est median
-                  </div>
-                  <div className="glass glass-quiet">
-                    {soldOrphans.map(o => {
-                      const m = savedMeta[o.id];
-                      return (
-                        <div key={o.id} className="ray-saved-orphan">
-                          <span>
-                            <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
-                              {m?.title || o.id}
-                              {m?.artist && <>, {ARTIST_LABEL[m.artist] || m.artist}</>}
-                            </span>
-                            <span style={{ color: 'var(--color-text-faint)' }}> · sold {formatDate(o.saleDate)}</span>
-                          </span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                            {o.provisional ? (
-                              <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }} title="Sold — final price settling; the house posts results shortly after the close.">
-                                result settling…
-                              </span>
-                            ) : (
-                              <span style={{ color: 'var(--color-up, #57BE87)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                                {formatPrice(o.priceUsd)}
-                              </span>
-                            )}
-                            <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </section>
           )}
 
