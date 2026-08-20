@@ -109,11 +109,18 @@ jobs:
       - run: npm ci
       - name: Pull this house's segment (last-good)
         run: bash scripts/data-store.sh pull-segment ${{ matrix.house }}
-      # RR Auction only: install Chrome for the headless resolver. Scoped to
-      # this leg so no other house pays the browser-install cost.
+      # Headless legs only: Chrome for the resolver. Scoped so no other house
+      # pays the install cost. Aug 18+19 2026 this step HUNG for the full 90-min
+      # job cap on lelands/lotg/rrauction (orphan `playwright install
+      # --with-deps` killed at timeout — apt dependency path stalls). Runners
+      # already ship system Chrome, so: hard 8-min step cap, try the dep-less
+      # install first, and fall through to the preinstalled stable channel —
+      # a failed install now fails the LEG in minutes (rides R2 last-good)
+      # instead of silently burning the whole crawl window.
       - name: Install Chrome (headless legs)
         if: ${{ contains(fromJSON('["rrauction","lelands","memorylane","lotg"]'), matrix.house) }}
-        run: npx playwright install --with-deps chrome
+        timeout-minutes: 8
+        run: npx playwright install chrome || npx playwright install --with-deps chrome || which google-chrome
       # every fetch-based house crawls via the monolith; RR runs its headless
       # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
