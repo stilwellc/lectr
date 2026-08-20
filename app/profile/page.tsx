@@ -3,7 +3,7 @@
 import React, { useMemo, useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
+import { retryFullLoad, useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { useAuth } from '../lib/account';
 import { supabase } from '../lib/supabase';
@@ -99,7 +99,7 @@ export default function SavedPage() {
   // useFullLots: saved lots may have rolled off upcoming into the corpus, and
   // the collection valuation gates on fullLoaded — trigger phase 2. market
   // carries the drills (sub-market reads) for the exposure block.
-  const { allLots, lastCrawl, loading, fullLoaded, fromCache, market: marketData } = useFullLots();
+  const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
 
@@ -284,14 +284,18 @@ export default function SavedPage() {
     if (!supabase || !user || !fullLoaded || collection.rows.length === 0) return;
     const day = new Date().toISOString().slice(0, 10);
     const guardKey = `lectr-snap-${user.id.slice(0, 8)}`;
-    try { if (localStorage.getItem(guardKey) === day) return; } catch { /* private mode */ }
+    // guard on day+totals, not the bare day: 'I won it' changes the collection
+    // intra-session, and the day's snapshot row must follow (upsert is keyed
+    // on user+date, so this rewrites the same row, never duplicates).
+    const guardVal = `${day}:${Math.round(collection.totalPaid)}:${Math.round(collection.totalAppraised)}:${collection.rows.length}`;
+    try { if (localStorage.getItem(guardKey) === guardVal) return; } catch { /* private mode */ }
     supabase.from('collection_snapshots').upsert({
       user_id: user.id, snap_date: day,
       total_paid: Math.round(collection.totalPaid),
       total_appraised: Math.round(collection.totalAppraised),
       pieces: collection.rows.length,
     }, { onConflict: 'user_id,snap_date' }).then(({ error }) => {
-      if (!error) { try { localStorage.setItem(guardKey, day); } catch { /* ignore */ } }
+      if (!error) { try { localStorage.setItem(guardKey, guardVal); } catch { /* ignore */ } }
     });
     // user?.id, not the user object: Supabase mints a fresh user object on
     // every auth event — an object dep re-fires the write chain needlessly
@@ -635,6 +639,10 @@ export default function SavedPage() {
           transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature);
         }
         .ray-own-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
+        @media (max-width: 899px) {
+          /* the settled ledger's primary controls meet the 44px touch floor */
+          .ray-own-btn, .ray-call-btn-quiet { min-height: 44px; }
+        }
         .ray-own-btn[data-on=true] { background: var(--color-butter); border-color: var(--color-butter); color: var(--color-butter-ink); }
         .ray-settled-mobile { display: none; }
         @media (max-width: 899px) {
@@ -696,6 +704,16 @@ export default function SavedPage() {
         </RayEntrance>
       ) : loading || !authReady || !savedReady ? (
         <RayLoading />
+      ) : savedLots.length === 0 && !fullLoaded && fullError ? (
+        /* phase-2 corpus failed — never hold the skeleton forever; say so and retry */
+        <RayEntrance animate={false}>
+          <section className="rail" style={{ paddingBlock: 48, textAlign: 'center' }}>
+            <p style={{ color: 'var(--color-text-muted)', marginBottom: 14 }}>
+              Couldn&apos;t load the full book to resolve your saved lots.
+            </p>
+            <button className="ray-call-btn" onClick={() => retryFullLoad()}>Try again</button>
+          </section>
+        </RayEntrance>
       ) : savedLots.length === 0 && !fullLoaded ? (
         /* saves exist but may all be CONCLUDED — pre-phase-2 the eager slice
            can't see them; hold the loader instead of flashing the false
@@ -1143,6 +1161,9 @@ export default function SavedPage() {
                           <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                             {o.provisional ? <span style={{ color: 'var(--color-text-faint)' }}>settling…</span> : <b>{formatPrice(o.priceUsd)}</b>}
                           </span>
+                        </div>
+                        <div style={{ marginTop: 6 }}>
+                          <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
                         </div>
                       </div>
                     );

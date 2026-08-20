@@ -183,10 +183,12 @@ export function estimateValue(
   // hl=2y for estimate lots (directional signal); hl=1y on the no-estimate
   // (Goldin absolute) path — memorabilia cycles faster, and the uncapped
   // holdout measured MdAPE 41.2%→38.8% at hl≈1y there.
-  const halflife = (lot.estLowUsd && lot.estHighUsd) ? 2 : 1;
+  // ANY estimate (incl. RR's single-point low) = the directional path → 2y;
+  // only the true no-estimate (Goldin absolute) path takes the 1y halflife.
+  const halflife = (lot.estLowUsd || lot.estHighUsd) ? 2 : 1;
   const decay = (c: Comp) => {
     const t = new Date(c.saleDate || '').getTime();
-    if (isNaN(t)) return 1;
+    if (isNaN(t)) return 0.25; // undated comp: penalty weight, never max recency
     const ageYears = Math.max(0, (refMs - t) / 31_557_600_000);
     return Math.pow(0.5, ageYears / halflife);
   };
@@ -202,7 +204,7 @@ export function estimateValue(
   // on the tight q1..q3 (unchanged from the tier experiment); thresholds
   // tightened (2.2→1.5, 4→2.5) so the tiers order strictly by accuracy —
   // "high" now earns its label (medAbsErr 31%→27%, holds in split-half).
-  const bestCos = top[0].match.cosine;
+  const bestCos = top.reduce((m, c) => Math.max(m, c.match.cosine), 0);
   const dLow = quantile(vals, 0.25);
   const dHigh = quantile(vals, 0.75);
   const disp = dHigh > 0 ? dHigh / Math.max(dLow, 1) : 99;
@@ -237,8 +239,11 @@ export function estimateValue(
     // Recompute from the exact-class comps only; cap confidence at medium.
     // Fired cohort measured unflagged-like (+16%/−7% hammer, 52% beat); the
     // base compValue was 7.3× high vs 0.87 after. Edge 20.4→20.6pt, art +0.8.
+    // eLo/eHi (not the raw fields): RR posts estLow only, and 2*undefined=NaN
+    // made this guard DEAD on every single-point lot — the exact cohort it
+    // was validated to protect.
     if (compRatio > 5 && exactC
-        && exactC.realizedUsd >= 0.5 * lot.estLowUsd! && exactC.realizedUsd <= 2 * lot.estHighUsd!) {
+        && exactC.realizedUsd >= 0.5 * eLo! && exactC.realizedUsd <= 2 * eHi!) {
       const exactPool = top.filter(c => c.match.cls === 'physicalMatch'
         || (c.match.cls === 'modelMatch' && c.match.cosine >= 0.92));
       if (exactPool.length) {

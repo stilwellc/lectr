@@ -95,8 +95,17 @@ export function readAllSegments(): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
   for (const f of fs.readdirSync(SEGMENTS_DIR).sort()) {
     if (!f.endsWith('.ndjson.gz')) continue;
-    const rows = parseNdjson(zlib.gunzipSync(fs.readFileSync(path.join(SEGMENTS_DIR, f))));
-    for (const r of rows) out.push(r); // loop-append: spread overflows past ~100k
+    // Per-segment isolation: a truncated/corrupt segment must degrade ONE
+    // house (its lots simply absent this run; the sanity gate judges the
+    // total), never abort the whole reunion and forfeit every other house's
+    // fresh crawl. The R2 last-good fallback only fills MISSING files, so a
+    // present-but-corrupt file previously killed the night.
+    try {
+      const rows = parseNdjson(zlib.gunzipSync(fs.readFileSync(path.join(SEGMENTS_DIR, f))));
+      for (const r of rows) out.push(r); // loop-append: spread overflows past ~100k
+    } catch (e) {
+      console.error(`[corpus-io] SEGMENT CORRUPT — skipping ${f}: ${(e as Error).message}`);
+    }
   }
   return out;
 }

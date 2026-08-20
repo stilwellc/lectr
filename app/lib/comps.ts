@@ -205,7 +205,9 @@ export function parseDims(dims: string | null | undefined): [number, number] | n
   let str = dims;
   const sheet = dims.match(/[IS]\.\s*(.+?)(?:\(|[IS]\.|$)/);
   if (sheet) str = sheet[1].trim();
-  const useIn = str.toLowerCase().includes('in');
+  // word-boundary: bare includes('in') fired on 'included'/'in.' suffixes of
+  // cm-first strings and mis-scaled dims 2.54× (area gates then reject true comps)
+  const useIn = /(?:\b(?:in|inch|inches)\b|")/.test(str.toLowerCase());
   const tokens = str.split(/\s*(?:[x×]|\bby\b)\s*/i).map(s => s.trim());
   if (tokens.length < 2) return null;
   const h = parseFrac(tokens[0]);

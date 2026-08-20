@@ -631,7 +631,19 @@ export default function TerminalHomePage() {
       .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
     let bestMove: { from: number; to: number } | null = null;
     for (const l of live) {
-      const m = savedMeta[l.id];
+      // saved-time meta may be keyed by a pre-resolve/pre-dedupe id (id~ flip,
+      // wright/rago/lama mirror) — try the aliases before giving up.
+      const m = savedMeta[l.id]
+        ?? savedMeta[l.id.endsWith('~') ? l.id.slice(0, -1) : `${l.id}~`]
+        ?? (() => {
+          const fam = l.id.match(/^(wright|rago|lama)-(\d+)~?$/);
+          if (!fam) return undefined;
+          for (const h of ['wright', 'rago', 'lama']) {
+            const hit = savedMeta[`${h}-${fam[2]}`] ?? savedMeta[`${h}-${fam[2]}~`];
+            if (hit) return hit;
+          }
+          return undefined;
+        })();
       if (!m || m.signalPct == null) continue;
       const s = lotSignal(l, allLots);
       if (!s || s.label !== 'Below Market') continue;

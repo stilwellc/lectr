@@ -101,7 +101,14 @@ async function main() {
   // year clamp, and reference back-fill are baked into the persisted corpus gz
   // and flow through stats/market/hedonic. build-market re-runs the same pass
   // idempotently on the corpus it reads.
+  const preNormalize = allLots.length;
   normalizeCorpus(allLots);
+  // The sanity gate above ran on the PRE-normalize array; normalize passes can
+  // now compact it (mirror dedupe, science evictions). Re-assert so a runaway
+  // pass can never ship an eviscerated corpus that becomes tomorrow's baseline.
+  if (allLots.length < preNormalize * 0.9) {
+    throw new Error(`[assemble] normalize dropped ${preNormalize} → ${allLots.length} (>10%) — refusing to publish`);
+  }
 
   // ── per-artist stats over the FULL corpus (build-market §3f adds the
   //    corpus-only slugs: sports-cards + culture + sports-memorabilia) ──

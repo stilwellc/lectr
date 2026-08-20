@@ -176,7 +176,11 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
       && !SCI_LOOSE.has(a.artist);   // naturals/instruments: entity field is junk, skip
     if (isSportsSci) {
       const pa = gateIdOf(a), pb = gateIdOf(b);
-      if (pa && pb && pa !== pb) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+      // prefix tolerance: 'michael jordan chicago' (entity w/ team words) IS
+      // 'michael jordan' — a hard kill here rejected ~19% of legit same-player
+      // comps (no-playerSlug rows).
+      const samePrefix = !!pa && !!pb && (pa.startsWith(pb + ' ') || pb.startsWith(pa + ' '));
+      if (pa && pb && pa !== pb && !samePrefix) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
     }
   }
   // hard gate: dimensions grossly different when both known
@@ -230,7 +234,13 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
   if (a.mediumCanon && b.mediumCanon && a.mediumCanon === b.mediumCanon) { bonus += 0.02; }
 
   // sports/science entity agreement — the identity of a game-used object
-  if (a.entity && b.entity && a.entity === b.entity) { bonus += 0.05; reasons.push(`same ${a.entity}`); }
+  {
+    // normalized identity (same canon as the hard gate) — raw string equality
+    // missed 'Buzz Aldrin Signed' vs 'Buzz Aldrin', making admission depend on
+    // title affixes.
+    const ga = gateIdOf(a), gb = gateIdOf(b);
+    if (ga && gb && ga === gb) { bonus += 0.05; reasons.push(`same ${ga}`); }
+  }
   if (a.eventKey && b.eventKey && a.eventKey === b.eventKey) { bonus += 0.04; reasons.push('same event'); }
   if (a.objectType && b.objectType && a.objectType === b.objectType) { bonus += 0.02; }
 

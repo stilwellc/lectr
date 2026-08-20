@@ -163,8 +163,21 @@ apply_pulled() { # corpus_key getter — shared tail of pull(): extract, guard, 
     echo "[data-store] R2 data ($remote) is OLDER than local ($local_stamp) — keeping local"
     return 0
   fi
+  # The intraday close-board overlay is committed to git every 4h, but the R2
+  # served tarball only carries the copy from the last NIGHTLY — replacing the
+  # dir wholesale froze the overlay at ~1x/day (up to ~28h stale). Keep
+  # whichever generatedAt is newer.
+  if [ -f public/data/ray/close-board.json ]; then cp public/data/ray/close-board.json "$TMP/cb-checkout.json"; fi
   rm -rf public/data/ray && mkdir -p public/data/ray
   cp -R "$TMP/served/." public/data/ray/
+  if [ -f "$TMP/cb-checkout.json" ]; then
+    cb_l=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('generatedAt',''))" "$TMP/cb-checkout.json" 2>/dev/null || echo "")
+    cb_r=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('generatedAt',''))" public/data/ray/close-board.json 2>/dev/null || echo "")
+    if [ -n "$cb_l" ] && [[ "$cb_l" > "$cb_r" ]]; then
+      cp "$TMP/cb-checkout.json" public/data/ray/close-board.json
+      echo "[data-store] kept fresher checked-out close-board.json ($cb_l > ${cb_r:-none})"
+    fi
+  fi
   echo "[data-store] served payloads pulled from R2 (lastCrawl $remote)"
   if "$getter" "$corpus_key" "$TMP/corpus.tar"; then
     mkdir -p data/corpus

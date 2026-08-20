@@ -243,7 +243,13 @@ function cardKey(l: AuctionLot): string | null {
  *  20,272 pairs across 3,498 references certify ALL three horizons at the
  *  watches vertical with the production gates untouched. */
 function watchRefKey(l: AuctionLot): string | null {
-  return l.reference ? `${l.artist}|${String(l.reference).toLowerCase().replace(/\s+/g, '')}` : null;
+  if (!l.reference) return null;
+  const r = String(l.reference).toLowerCase().replace(/\s+/g, '');
+  // digit required: the reference field also carries ~43 model-NAME tokens
+  // ('daytona', 'tank') that span eras/materials — linking those as "the same
+  // object resold" injects cross-era pairs the 20x guard can't catch
+  // (identity.ts doctrine; numericWatchRef exists for exactly this).
+  return /\d/.test(r) ? `${l.artist}|${r}` : null;
 }
 
 /** Edition-level art identity: same maker + same normalized title on a

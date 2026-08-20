@@ -347,7 +347,10 @@ function loadRayData(): Promise<RayPayload> {
       }
     }
 
-    if (up && statsData) {
+    // statsData may be null (a transient stats.json failure) — parseStats
+    // handles it; requiring it here forced the full-corpus fallback (152MB)
+    // and dropped every eager field over a one-request blip.
+    if (up) {
       const core: RayPayload = {
         statsByArtist: parseStats(statsData, up.lots || []),
         allLots: up.lots || [],
@@ -412,12 +415,15 @@ function loadRayData(): Promise<RayPayload> {
               const bidVels = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).bidVelocity]));
               const merged = full.map(l => {
                 let x = l;
-                if (signals.has(l.id)) x = { ...x, signal: signals.get(l.id) };
+                if (signals.get(l.id) != null) x = { ...x, signal: signals.get(l.id) };
                 if (soldComps.get(l.id) != null) x = { ...x, soldComp: soldComps.get(l.id) };
                 if (bidVels.get(l.id) != null) x = { ...x, bidVelocity: bidVels.get(l.id) };
                 return x;
               });
               notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });
+              // phase 2 is done for the session — drop the retry closure so the
+              // eager payload (up.lots et al) it captures can be collected.
+              retryFull = null;
               return;
             } catch { /* retry, then surface */ }
           }
@@ -527,7 +533,9 @@ function loadSoldArchive() {
         let archive: AuctionLot[];
         try {
           const idx = await fetchJson(`/data/ray/sold-archive-index.json${ver}`, { cache: cacheMode }) as { shards: number };
-          const parts = await Promise.all(Array.from({ length: idx.shards }, (_, i) =>
+          const nShards = Number(idx?.shards) || 0;
+          if (nShards < 1) throw new Error('bad sold-archive index');
+          const parts = await Promise.all(Array.from({ length: nShards }, (_, i) =>
             fetchJson(`/data/ray/sold-archive-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>));
           archive = parts.flat();
         } catch {
@@ -582,7 +590,9 @@ function loadSoldLedger() {
       try {
         const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
         const idx = await fetchJson(`/data/ray/sold-ledger-index.json${ver}`, { cache: cacheMode }) as { shards: number };
-        const parts = await Promise.all(Array.from({ length: idx.shards }, (_, i) =>
+        const nShards = Number(idx?.shards) || 0;
+        if (nShards < 1) throw new Error('bad sold-ledger index');
+        const parts = await Promise.all(Array.from({ length: nShards }, (_, i) =>
           fetchJson(`/data/ray/sold-ledger-${i}.json${ver}`, { cache: cacheMode }) as Promise<Record<string, LedgerEntry>>));
         const map = new Map<string, LedgerEntry>();
         for (const p of parts) for (const k in p) map.set(k, p[k]);
