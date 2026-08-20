@@ -205,7 +205,7 @@ interface ValueBookRow {
   n: number;
   lastSale: string;
   trend: number | null;
-  conf: 'high' | 'medium';
+  conf: 'high' | 'medium' | 'thin';
 }
 
 const YEAR_MS = 365.25 * 864e5;
@@ -253,7 +253,7 @@ function main() {
   const rows: ValueBookRow[] = [];
   for (const [k, p] of Array.from(pools.entries())) {
     const n = p.prices.length;
-    if (n < 4) continue; // below the medium bar → never ships
+    if (n < 3) continue; // n=3 ships as the labeled 'thin' tier (Starling demands extra depth)
     const vals = p.prices.map((x: [number, number]) => x[0]).sort((a: number, b: number) => a - b);
     const disp = quantile(vals, 0.75) / Math.max(quantile(vals, 0.25), 1);
     // Vertical-aware dispersion tolerance for the MEDIUM tier. Graded cards are
@@ -269,10 +269,11 @@ function main() {
       'art-editions': 3.5,
       autographs: 5.0,
     };
-    let conf: 'high' | 'medium' | null = null;
+    let conf: 'high' | 'medium' | 'thin' | null = null;
     if (n >= 6 && disp <= 1.5) conf = 'high';
     else if (n >= 4 && disp <= (MEDIUM_DISP[p.v] ?? 2.5)) conf = 'medium';
-    if (!conf) continue; // drop 'low' — only high/medium ship
+    else if (n === 3 && disp <= (MEDIUM_DISP[p.v] ?? 2.5) * 1.4) conf = 'thin';
+    if (!conf) continue; // wide-dispersion pools still never ship
 
     // Staleness gate: a pool whose LATEST sale is >4y old is not a tradable
     // book — "60% under" a 2015 median is not a live call. (2–4y rows ship and
@@ -330,7 +331,19 @@ function main() {
   // schema stays 1 — `context` is ADDITIVE (current Starling ignores unknown
   // fields; the v2 sync reads it when present). Bumping would break the live
   // board overnight for zero gain.
-  const book = { schema: 1 as const, builtAt: new Date().toISOString(), rows, context };
+  // grade ladder + certified vertical indexes ride along from market.json —
+  // Starling prices grade-adjacent cards (basis 'ladder') and shows trend.
+  let gradeLadder: unknown = null;
+  let indexes: Record<string, unknown> = {};
+  try {
+    const mj = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'public', 'data', 'ray', 'market.json'), 'utf8'));
+    if (mj.gradeLadder) gradeLadder = mj.gradeLadder;
+    for (const [v, r] of Object.entries((mj.repeatSale || {}) as Record<string, { nPairs?: number; horizons?: Record<string, { publishable?: boolean; changePct?: number | null }> }>)) {
+      const hs = Object.entries(r.horizons || {}).filter(([, h]) => h.publishable && h.changePct != null);
+      if (hs.length) indexes[v] = Object.fromEntries(hs.map(([k, h]) => [k, h.changePct]));
+    }
+  } catch { console.warn('[value-book] market.json not readable — no ladder/indexes this emit'); }
+  const book = { schema: 1 as const, builtAt: new Date().toISOString(), rows, context, gradeLadder, indexes };
 
   // Per-vertical tally for the log.
   const byV: Record<string, number> = {};
