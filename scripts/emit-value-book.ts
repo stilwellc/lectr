@@ -147,6 +147,55 @@ function keyForLot(l: AuctionLot): { key: string; v: Vertical } | null {
   return null;
 }
 
+// ── CONTEXT TIER (schema-additive, Aug 19) ───────────────────────────────────
+// The hunt lane's fix: a hit with no exact book row shouldn't read "no book
+// value" when lectr HAS nearby evidence. Context rows are honest rollups one
+// level up the identity ladder — signer across formats, player × object slug,
+// curated natural-history/early-tech classes, artist edition rollups. Looser
+// bar (n≥3, no dispersion gate — the band carries the spread), same staleness
+// gate, and every row is labeled by kind so Starling can caption it honestly
+// ("Charles Schulz signed material — 41 sales, $150–$2.4K").
+// CLASS_CANON is a cross-repo contract: Starling's context matcher implements
+// the same regexes — keep ids stable.
+const CLASS_CANON: [string, RegExp][] = [
+  ['trex-tooth', /\b(?:t[- ]?rex|tyrannosaur\w*)\b.*\btooth|\btooth\b.*\b(?:t[- ]?rex|tyrannosaur\w*)\b/i],
+  ['megalodon-tooth', /\bmegalodon\b/i],
+  ['mosasaur-tooth', /\bmosasaur\w*\b/i],
+  ['raptor-claw', /\braptor\b.*\bclaw|\bclaw\b.*\braptor\b/i],
+  ['ammonite', /\bammonite\b/i],
+  ['trilobite', /\btrilobite\b/i],
+  ['dinosaur-egg', /\bdinosaur\b.*\begg|\begg\b.*\bdinosaur\b/i],
+  ['meteorite', /\bmeteorite\b/i],
+  ['apple-1', /\bapple[- ]?(?:1|one)\b/i],
+  ['apple-ii', /\bapple[- ]?(?:2|ii)\b/i],
+  ['macintosh-vintage', /\bmacintosh\b|\bmac\b.*\b(?:128k|512k|plus|se)\b/i],
+];
+interface ContextRow {
+  k: string; v: Vertical | 'sports' | 'science';
+  kind: 'signer' | 'player-object' | 'class' | 'artist';
+  med: number; lo: number; hi: number; n: number; lastSale: string;
+}
+function contextKeysForLot(l: AuctionLot): { key: string; v: ContextRow['v']; kind: ContextRow['kind'] }[] {
+  const out: { key: string; v: ContextRow['v']; kind: ContextRow['kind'] }[] = [];
+  const t = l.title || '';
+  if (AUTOGRAPH_SLUGS.has(l.artist) && /signed|autograph/i.test(t)) {
+    const signer = extractSignerSlug(l);
+    if (signer) out.push({ key: signer, v: 'autographs', kind: 'signer' });
+  }
+  const m = marketOf(l.artist);
+  if (m === 'sports' && !/card/.test(l.artist)) {
+    const ps = (l as { playerSlug?: string | null }).playerSlug;
+    if (ps) out.push({ key: `${ps}|${l.artist}`, v: 'sports', kind: 'player-object' });
+  }
+  if (m === 'science' || l.artist === 'science-tech' || l.artist === 'scientific-instruments') {
+    for (const [id, re] of CLASS_CANON) {
+      if (re.test(t)) { out.push({ key: id, v: 'science', kind: 'class' }); break; }
+    }
+  }
+  if (m === 'art' && isEditionLot(l)) out.push({ key: l.artist, v: 'art-editions', kind: 'artist' });
+  return out;
+}
+
 interface ValueBookRow {
   k: string;
   v: Vertical;
@@ -172,6 +221,7 @@ function main() {
 
   // Pool settled sales by identity key.
   const pools = new Map<string, { v: Vertical; prices: [number, number][]; last: string }>();
+  const ctxPools = new Map<string, { v: ContextRow['v']; kind: ContextRow['kind']; prices: [number, number][]; last: string }>();
   let sold = 0;
   for (const l of all) {
     if (l.status !== 'sold') continue;
@@ -179,6 +229,13 @@ function main() {
     if (!price || price <= 0 || !l.saleDate) continue;
     const ms = Date.parse(l.saleDate);
     if (!Number.isFinite(ms)) continue;
+    for (const c of contextKeysForLot(l)) {
+      const ck = `${c.kind}:${c.key}`;
+      let cp = ctxPools.get(ck);
+      if (!cp) { cp = { v: c.v, kind: c.kind, prices: [], last: l.saleDate }; ctxPools.set(ck, cp); }
+      cp.prices.push([price, ms]);
+      if (l.saleDate > cp.last) cp.last = l.saleDate;
+    }
     const kv = keyForLot(l);
     if (!kv) continue;
     sold++;
@@ -247,7 +304,33 @@ function main() {
   }
 
   rows.sort((a, b) => (a.v < b.v ? -1 : a.v > b.v ? 1 : b.med - a.med));
-  const book = { schema: 1 as const, builtAt: new Date().toISOString(), rows };
+
+  // context tier: n≥3, staleness-gated, no dispersion bar (labeled rollups)
+  const context: ContextRow[] = [];
+  for (const [ck, p] of Array.from(ctxPools.entries())) {
+    const n = p.prices.length;
+    if (n < 3) continue;
+    if (REF_MS - Date.parse(p.last) > 4 * YEAR_MS) continue;
+    const vals = p.prices.map((x: [number, number]) => x[0]).sort((a: number, b: number) => a - b);
+    const wpairs: [number, number][] = p.prices.map(([usd, ms]) => [usd, Math.pow(0.5, (REF_MS - ms) / YEAR_MS / 2)]);
+    const med = Math.round(weightedMedian(wpairs));
+    context.push({
+      k: ck.slice(ck.indexOf(':') + 1), v: p.v, kind: p.kind,
+      med,
+      lo: Math.min(Math.round(lerpQuantile(vals, 0.15)), med),
+      hi: Math.max(Math.round(lerpQuantile(vals, 0.85)), med),
+      n, lastSale: p.last,
+    });
+  }
+  context.sort((a, b) => (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : b.n - a.n));
+  const byKind: Record<string, number> = {};
+  for (const c of context) byKind[c.kind] = (byKind[c.kind] ?? 0) + 1;
+  console.log(`[value-book] context tier: ${context.length.toLocaleString()} rollups ${JSON.stringify(byKind)}`);
+
+  // schema stays 1 — `context` is ADDITIVE (current Starling ignores unknown
+  // fields; the v2 sync reads it when present). Bumping would break the live
+  // board overnight for zero gain.
+  const book = { schema: 1 as const, builtAt: new Date().toISOString(), rows, context };
 
   // Per-vertical tally for the log.
   const byV: Record<string, number> = {};
