@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useState, useRef } from 'react';
+import React, { useMemo, useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
@@ -116,18 +116,54 @@ export default function SavedPage() {
     try { localStorage.setItem(SAVEDVIEW_KEY, v); } catch { /* private mode */ }
   };
 
-  const savedLots = useMemo(() =>
-    savedIds
-      .map(id => allLots.find(l => l.id === id))
-      .filter(Boolean) as typeof allLots,
-    [savedIds, allLots]
-  );
-
-  const orphanIds = useMemo(() => {
-    if (!fullLoaded) return [] as string[];
-    const have = new Set(allLots.map(l => l.id));
-    return savedIds.filter(id => !have.has(id));
+  // Saved ids can go stale while the LOT lives on: the upcoming→sold resolve
+  // rewrites `id~` → id, and the Wright-family mirror dedupe keeps ONE copy of
+  // a lot the platform serves on three domains (wright/rago/lama share numeric
+  // platform ids). Resolve through those aliases BEFORE declaring an orphan —
+  // otherwise a settled watch falls off the corpus, lands in the archive strip
+  // with price-only data, and silently drops OUT of the track-record math
+  // (selection bias in "your record" — the exact bad practice to avoid).
+  const { savedLots, savedIdByLotId, orphanIds } = useMemo(() => {
+    const byId = new Map(allLots.map(l => [l.id, l]));
+    const resolve = (id: string): AuctionLot | undefined => {
+      const direct = byId.get(id);
+      if (direct) return direct;
+      const flipped = id.endsWith('~') ? id.slice(0, -1) : `${id}~`;
+      const t = byId.get(flipped);
+      if (t) return t;
+      const fam = id.match(/^(wright|rago|lama)-(\d+)~?$/);
+      if (fam) {
+        for (const h of ['wright', 'rago', 'lama']) {
+          if (h === fam[1]) continue;
+          const hit = byId.get(`${h}-${fam[2]}`) ?? byId.get(`${h}-${fam[2]}~`);
+          if (hit) return hit;
+        }
+      }
+      return undefined;
+    };
+    const lots: AuctionLot[] = [];
+    const idMap = new Map<string, string>(); // resolved row id → original saved id
+    const seen = new Set<string>();
+    const orphans: string[] = [];
+    for (const id of savedIds) {
+      const l = resolve(id);
+      if (l) {
+        if (seen.has(l.id)) continue; // two saved mirror copies → one row
+        seen.add(l.id);
+        lots.push(l);
+        if (l.id !== id) idMap.set(l.id, id);
+      } else if (fullLoaded) {
+        orphans.push(id);
+      }
+    }
+    return { savedLots: lots, savedIdByLotId: idMap, orphanIds: orphans };
   }, [savedIds, allLots, fullLoaded]);
+
+  /** savedMeta is keyed by the id AT SAVE TIME — reach it through the alias. */
+  const metaFor = useCallback(
+    (rowId: string) => savedMeta[savedIdByLotId.get(rowId) ?? rowId],
+    [savedMeta, savedIdByLotId],
+  );
 
   // Resolve orphans against the sold-outcomes ledger (loaded on-demand by
   // LedgerGate below): a Goldin lot that sold into the archive / corpus-only
@@ -299,14 +335,14 @@ export default function SavedPage() {
     let moved = 0;
     let newBids = 0;
     for (const lot of upcoming) {
-      const m = savedMeta[lot.id];
+      const m = metaFor(lot.id);
       if (!m) continue;
       const cur = lotSignal(lot, allLots);
       if (m.signalPct != null && cur !== null && Math.round(cur.pct) !== Math.round(m.signalPct)) moved++;
       if (m.bidCount != null && (lot.bidCount || 0) > m.bidCount) newBids += (lot.bidCount || 0) - m.bidCount;
     }
     return { moved, newBids };
-  }, [upcoming, savedMeta, allLots]);
+  }, [upcoming, metaFor, allLots]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
@@ -406,13 +442,13 @@ export default function SavedPage() {
     // priceUsd is premium-inclusive — this sum is REALIZED money, never call it hammer
     const realized = judged.reduce((s, x) => s + (x.l.priceUsd || 0), 0);
     const med = median(judged.map(x => x.pct));
-    const flaggedAtSave = judged.filter(x => (savedMeta[x.l.id]?.signalPct ?? 0) <= -10);
-    const restAtSave = judged.filter(x => (savedMeta[x.l.id]?.signalPct ?? 0) > -10 && savedMeta[x.l.id]?.signalPct != null);
+    const flaggedAtSave = judged.filter(x => (metaFor(x.l.id)?.signalPct ?? 0) <= -10);
+    const restAtSave = judged.filter(x => (metaFor(x.l.id)?.signalPct ?? 0) > -10 && metaFor(x.l.id)?.signalPct != null);
     const split = flaggedAtSave.length >= 3 && restAtSave.length >= 3
       ? { flagged: median(flaggedAtSave.map(x => x.pct)), flaggedN: flaggedAtSave.length, rest: median(restAtSave.map(x => x.pct)), restN: restAtSave.length }
       : null;
     return { n: judged.length, realized, med, split };
-  }, [sold, savedMeta]);
+  }, [sold, metaFor]);
 
   // #56 · SINCE YOUR LAST VISIT — capture the prior visit timestamp once (then
   // stamp now), and diff which watched lots settled in the interim. State (not
@@ -797,7 +833,7 @@ export default function SavedPage() {
                 </div>
                 {upcoming.map(lot => {
                   const sig = lotSignal(lot, allLots);
-                  const m = savedMeta[lot.id];
+                  const m = metaFor(lot.id);
                   const dPP = m?.signalPct != null && sig !== null
                     ? Math.round(sig.pct) - Math.round(m.signalPct)
                     : null;
@@ -844,9 +880,9 @@ export default function SavedPage() {
                       showArtist
                       allLots={allLots}
                       saved={isSaved(lot.id)}
-                      onToggleSave={id => toggle(id, lot)}
+                      onToggleSave={id => toggle(savedIdByLotId.get(id) ?? id, lot)}
                     />
-                    <SavedDelta lot={lot} meta={savedMeta[lot.id]} allLots={allLots} />
+                    <SavedDelta lot={lot} meta={metaFor(lot.id)} allLots={allLots} />
                   </div>
                 ))}
               </div>
@@ -965,13 +1001,13 @@ export default function SavedPage() {
           )}
 
           {/* ══ LEDGER 3 · SETTLED — what happened to the lots you watched ══ */}
-          {sold.length > 0 && (
+          {(sold.length > 0 || soldOrphans.length > 0) && (
             <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
                 <h2 className="ray-h2" style={{ margin: 0 }}>Settled · your track record</h2>
                 {record && record.med != null && (
                   <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {record.n} judged · your picks went{' '}
+                    {sold.length + soldOrphans.length} settled · {record.n} judged · your picks went{' '}
                     <b style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                       {fmtSignedPct(Math.round(record.med))}
                     </b>{' '}
@@ -1012,7 +1048,7 @@ export default function SavedPage() {
                   <span style={{ textAlign: 'right' }}>Own it</span>
                 </div>
                 {sold.map(lot => {
-                  const m = savedMeta[lot.id];
+                  const m = metaFor(lot.id);
                   const pct = overEstimatePct(lot);
                   const pending = !lot.priceUsd;
                   const owned = ownedIds.includes(lot.id);
@@ -1051,7 +1087,7 @@ export default function SavedPage() {
               {/* mobile settled rows */}
               <div className="ray-settled-mobile">
                 {sold.map(lot => {
-                  const m = savedMeta[lot.id];
+                  const m = metaFor(lot.id);
                   const pct = overEstimatePct(lot);
                   const pending = !lot.priceUsd;
                   const owned = ownedIds.includes(lot.id);
@@ -1085,6 +1121,46 @@ export default function SavedPage() {
                   );
                 })}
               </div>
+
+              {/* From the archive — settled watches whose full row left the
+                  served corpus (archive-tier houses). Result-only basis:
+                  COUNTED as settled, excluded from the vs-est median (no
+                  estimate on file) — stated, never silent. */}
+              {soldOrphans.length > 0 && (
+                <div style={{ marginTop: 18 }}>
+                  <div className="kicker" style={{ padding: '0 2px 8px' }}>
+                    From the archive · result only — no estimate on file, so outside the vs-est median
+                  </div>
+                  <div className="glass glass-quiet">
+                    {soldOrphans.map(o => {
+                      const m = savedMeta[o.id];
+                      return (
+                        <div key={o.id} className="ray-saved-orphan">
+                          <span>
+                            <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
+                              {m?.title || o.id}
+                              {m?.artist && <>, {ARTIST_LABEL[m.artist] || m.artist}</>}
+                            </span>
+                            <span style={{ color: 'var(--color-text-faint)' }}> · sold {formatDate(o.saleDate)}</span>
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                            {o.provisional ? (
+                              <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }} title="Sold — final price settling; the house posts results shortly after the close.">
+                                result settling…
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--color-up, #57BE87)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                {formatPrice(o.priceUsd)}
+                              </span>
+                            )}
+                            <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
@@ -1106,7 +1182,7 @@ export default function SavedPage() {
                       showArtist
                       allLots={allLots}
                       saved={isSaved(lot.id)}
-                      onToggleSave={id => toggle(id, lot)}
+                      onToggleSave={id => toggle(savedIdByLotId.get(id) ?? id, lot)}
                     />
                   </div>
                 ))}
@@ -1117,46 +1193,6 @@ export default function SavedPage() {
           {/* on-demand: only fetch the ledger when there are orphans to resolve */}
           {orphanIds.length > 0 && <LedgerGate onLedger={setLedger} />}
 
-          {soldOrphans.length > 0 && (
-            <section className="rail ray-enter" style={{ paddingBlock: '34px 8px' }}>
-              <h2 className="ray-h2" style={{ marginBottom: 6 }}>Settled off the block</h2>
-              <p style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 14px' }}>
-                Saved lots that sold — the hammer result, from the archive.
-              </p>
-              <div className="glass glass-quiet">
-                {soldOrphans.map(o => {
-                  const m = savedMeta[o.id];
-                  return (
-                    <div key={o.id} className="ray-saved-orphan">
-                      <span>
-                        <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
-                          {m?.title || o.id}
-                          {m?.artist && <>, {ARTIST_LABEL[m.artist] || m.artist}</>}
-                        </span>
-                        <span style={{ color: 'var(--color-text-faint)' }}> · sold {formatDate(o.saleDate)}</span>
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                        {o.provisional ? (
-                          /* promoted close — our last-tracked bid, NOT the final
-                             hammer (extended bidding runs past our snapshot).
-                             Never present it as the result; the sold sweep
-                             confirms the true figure within a day or two. */
-                          <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }} title="Sold — final price settling; Goldin posts results shortly after the close.">
-                            result settling…
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--color-up, #57BE87)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                            {formatPrice(o.priceUsd)}
-                          </span>
-                        )}
-                        <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
 
           {goneOrphans.length > 0 && (
             <section className="rail ray-enter" style={{ paddingBlock: '34px 64px' }}>
