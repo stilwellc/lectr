@@ -17,26 +17,26 @@ type DrillRow = SubMarketRead & { parent: string };
 interface Ranked { row: DrillRow; value: number; rank: number }
 
 const CSS = `
-.ray-rs-spread{margin:0 0 10px;font-size:11.5px;color:#7A8087}
+.ray-rs-spread{margin:0 0 10px;font-size:11.5px;color:var(--color-text-muted,#8a8f98)}
 .ray-rs-spread .num{font-family:var(--font-mono,ui-monospace),monospace;font-variant-numeric:tabular-nums;color:var(--color-fg,#E8EAED)}
 .ray-rs-cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 30px}
-.ray-rs-colhead{font-size:10.5px;font-weight:650;letter-spacing:0.08em;text-transform:uppercase;color:#7A8087;padding:4px 0 7px;border-bottom:1px solid rgba(255,255,255,0.09)}
+.ray-rs-colhead{font-family:var(--font-mono,ui-monospace),monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-muted,#8a8f98);padding:4px 0 7px;border-bottom:1px solid rgba(255,255,255,0.09)}
 .ray-rs-row{display:grid;grid-template-columns:20px minmax(0,1fr) 90px auto;gap:10px;align-items:center;padding:8px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;cursor:pointer;transition:background 0.14s ease}
 .ray-rs-row:last-child{border-bottom:none}
 a.ray-rs-row:hover{background:rgba(255,255,255,0.045)}
-a.ray-rs-row:hover .ray-rs-name{color:#FFF}
-.ray-rs-rank{font-size:11px;color:#7A8087;font-variant-numeric:tabular-nums;text-align:right}
-.ray-rs-name{display:block;font-size:13px;color:var(--fg,#E8EAED);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ray-rs-kind{color:#7A8087;font-size:11px;margin-left:6px}
-.ray-rs-n{display:block;color:#7A8087;font-size:10.5px;font-variant-numeric:tabular-nums}
+a.ray-rs-row:hover .ray-rs-name{color:var(--color-fg,#f7f8f8)}
+.ray-rs-rank{font-size:11px;color:var(--color-text-muted,#8a8f98);font-variant-numeric:tabular-nums;text-align:right}
+.ray-rs-name{display:block;font-size:13px;color:var(--color-fg,#f7f8f8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ray-rs-kind{color:var(--color-text-muted,#8a8f98);font-size:11px;margin-left:6px}
+.ray-rs-n{display:block;color:var(--color-text-muted,#8a8f98);font-size:10.5px;font-variant-numeric:tabular-nums}
 .ray-rs-spark{display:block;opacity:0.9}
 .ray-rs-sparkgap{display:block;width:90px}
 .ray-rs-read{text-align:right;white-space:nowrap}
 .ray-rs-read .num{display:block;font-family:var(--font-mono,ui-monospace),monospace;font-size:13px;font-variant-numeric:tabular-nums}
-.ray-rs-read[data-dir="up"] .num{color:var(--color-up,#2FBF71)}
-.ray-rs-read[data-dir="down"] .num{color:var(--color-down-text,#E5484D)}
-.ray-rs-read .sub{display:block;color:#7A8087;font-size:10px;font-variant-numeric:tabular-nums}
-.ray-rs-foot{margin:12px 0 0;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);font-size:11.5px;color:#7A8087}
+.ray-rs-read[data-dir="up"] .num{color:var(--color-up,#57be87)}
+.ray-rs-read[data-dir="down"] .num{color:var(--color-down-text,#cc6a5c)}
+.ray-rs-read .sub{display:block;color:var(--color-text-muted,#8a8f98);font-size:10px;font-variant-numeric:tabular-nums}
+.ray-rs-foot{margin:12px 0 0;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);font-size:11.5px;color:var(--color-text-muted,#8a8f98)}
 @media (max-width:720px){.ray-rs-cols{grid-template-columns:1fr}.ray-rs-col+.ray-rs-col{margin-top:14px}.ray-rs-row{grid-template-columns:20px minmax(0,1fr) auto}.ray-rs-spark,.ray-rs-sparkgap{display:none}}
 `;
 

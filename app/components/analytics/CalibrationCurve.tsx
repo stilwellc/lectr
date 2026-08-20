@@ -4,11 +4,13 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import type { Backtest } from '../../hooks/useRayData';
 
 const BUCKET_LABELS = ['<0.6×', '0.6–0.9×', '0.9–1.3×', '1.3–2×', '2–10×', '10×+'];
+// cool categorical set (the IndexLab layer palette) — the global cohort is the
+// hero and rides the chart-hero token; per-market cohorts stay distinguishable
 const MARKET_COLORS: Record<string, string> = {
-  global: '#F2EEE3',
-  art: '#A19B8D',
-  design: '#8A8477',
-  watches: '#6B6558',
+  global: 'var(--chart-hero, #e8dab6)',
+  art: '#7EA4CC',
+  design: '#6FB5AC',
+  watches: '#A98BC8',
 };
 
 /**
@@ -35,7 +37,7 @@ export default function CalibrationCurve({ backtest }: { backtest: Backtest }) {
   // this in a .rail div — a second rail double-applied the gutter and inset
   // this panel relative to its siblings.
   return (
-    <section className="ray-calibration" style={{ paddingBlock: 'var(--sect-t) var(--sect-b)' }}>
+    <section className="ray-calibration" style={{ paddingBlock: 'var(--sect-t) var(--sect-b)', fontVariantNumeric: 'tabular-nums' }}>
       <div style={{ marginBottom: 4 }}>
         <h2 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
           What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>

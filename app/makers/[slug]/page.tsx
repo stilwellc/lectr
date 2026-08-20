@@ -80,11 +80,13 @@ const DOSSIER_FEATURE_CSS = `
 .mkr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;transition:background 0.14s ease}
 .mkr-row:last-child{border-bottom:none}
 a.mkr-row:hover{background:rgba(255,255,255,0.045)}
-a.mkr-row:hover .mkr-row-name{color:#FFF}
+a.mkr-row:hover .mkr-row-name{color:var(--color-fg,#f7f8f8)}
 .mkr-row-name{font-size:13.5px;color:var(--color-fg,#E8EAED)}
 .mkr-row-sub{color:var(--color-text-faint,#7A8087);font-size:12px;margin-left:7px}
 .mkr-row-val{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;color:var(--color-fg,#E8EAED)}
-.mkr-row-val .num{font-family:var(--font-mono,ui-monospace),monospace}
+/* $ levels stay sans (mono is reserved for %-deltas/serials) — matches the
+   sub-market directory's grammar in the same view */
+.mkr-row-val .num{font-variant-numeric:tabular-nums}
 .mkr-row-val .tag{color:var(--color-text-faint,#7A8087);font-size:11px;margin-left:5px}
 .mkr-row-meta{color:var(--color-text-faint,#7A8087);font-size:11.5px;font-variant-numeric:tabular-nums;text-align:right;min-width:64px}
 @media (max-width:640px){.mkr-row{grid-template-columns:1fr auto}.mkr-row-meta{display:none}}
@@ -171,14 +173,17 @@ function PlayerStrip({ lots, label }: { lots: AuctionLot[]; label: string }) {
 // n · median · TTM delta (a real measured median-over-median move, so it may
 // light up/down). Gated on refs loaded — honest loading/empty/failed states.
 function RefLedger({ slug, label }: { slug: string; label: string }) {
-  const { refs, failed } = useRefs();
+  const { refs, failed, retry } = useRefs();
   const rows = useMemo(() => refsForMaker(refs, slug).slice(0, 8), [refs, slug]);
 
   if (failed) {
     return (
       <div className="ray-vm ray-vm-card glass glass-quiet mkr-panel">
         <div className="mkr-panel-head"><span className="mkr-panel-title">References</span></div>
-        <p className="mkr-note">The reference book didn&rsquo;t load. It&rsquo;ll retry on the next visit.</p>
+        <p className="mkr-note">The reference book didn&rsquo;t load.</p>
+        <button className="ray-show-more" style={{ marginTop: 10, padding: '7px 20px' }} onClick={retry}>
+          Try again
+        </button>
       </div>
     );
   }
@@ -221,7 +226,7 @@ function RefLedger({ slug, label }: { slug: string; label: string }) {
               <span className="mkr-row-val">
                 <span className="num">{fmtUsdCompact(r.medianUsd)}</span>
                 {ttmDelta !== null && Math.abs(ttmDelta) >= 1 && (
-                  <span className="tag" style={{ color: ttmDelta >= 0 ? 'var(--color-up)' : 'var(--color-down)' }}>
+                  <span className="tag" style={{ color: ttmDelta >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                     {ttmDelta >= 0 ? '+' : ''}{ttmDelta.toFixed(0)}% ttm
                   </span>
                 )}
@@ -399,6 +404,9 @@ function MakerSections({
           <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
             The desk refreshes daily as auction houses post new sales and results.
           </p>
+          <Link href="/makers" className="ray-show-more" style={{ display: 'inline-block', marginTop: 20, textDecoration: 'none' }}>
+            Back to the roster
+          </Link>
         </div>
       )}
       {sold.length > 0 && (

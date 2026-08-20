@@ -714,7 +714,8 @@ export default function ComparableModal({
         @media (min-width: 901px) and (prefers-reduced-motion: no-preference) {
           .comp-modal-panel { animation: compModalRise 220ms cubic-bezier(0.22, 0.9, 0.24, 1) backwards; }
         }
-        .comp-modal-row:hover { background: var(--color-bg-elevated) !important; }
+        .comp-modal-row[href]:hover { background: var(--color-bg-elevated) !important; }
+        .comp-modal-row:not([href]) { cursor: default; }
         .comp-modal-close:hover { color: var(--color-fg) !important; }
         .comp-modal-panel {
           width: 100%;
@@ -836,6 +837,7 @@ export default function ComparableModal({
             color: 'var(--color-text-faint)',
             fontSize: 18,
             zIndex: 2,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
             transition: 'color var(--duration-fast) var(--ease-signature)',
           }}
         >
@@ -865,6 +867,7 @@ export default function ComparableModal({
               cursor: 'pointer',
               padding: 0,
               zIndex: 2,
+              boxShadow: '0 2px 12px rgba(0,0,0,0.45)',
             }}
           >
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
@@ -1075,7 +1078,7 @@ export default function ComparableModal({
             gap: 0,
           }}>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontFamily: "var(--font-serif), serif" }}>
+              <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatPrice(compStats.median)}
               </div>
               <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
@@ -1084,7 +1087,7 @@ export default function ComparableModal({
             </div>
             <div style={{ width: 1, background: 'var(--color-border)', margin: '0 4px' }} />
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontFamily: "var(--font-serif), serif" }}>
+              <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatPrice(compStats.low)} — {formatPrice(compStats.high)}
               </div>
               <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', marginTop: 3 }}>
@@ -1098,8 +1101,8 @@ export default function ComparableModal({
                   <div style={{
                     fontSize: 18,
                     fontWeight: 500,
-                    fontFamily: "var(--font-serif), serif",
-                    color: 'var(--color-fg)',
+                    fontVariantNumeric: 'tabular-nums',
+                    color: compStats.hammerVsEst >= 1 ? 'var(--color-up)' : 'var(--color-down-text)',
                   }}>
                     {/* signalMagnitude caps broken percents — never "+5976%" */}
                     {compStats.hammerVsEst >= 1
@@ -1169,13 +1172,21 @@ export default function ComparableModal({
               </button>
             </div>
           ) : (wantsArchive && !archiveLoaded) || compsPending ? (
-            <div style={{
-              padding: '40px 0',
-              textAlign: 'center',
-              color: 'var(--color-text-faint)',
-              fontSize: 13.5,
-            }}>
-              Loading comparable sales&hellip;
+            // Skeleton shaped like what arrives (band + stat strip + rows) so
+            // the sheet doesn't jump when the evidence lands.
+            <div aria-label="Loading comparable sales" role="status" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ height: 76, margin: '4px 12px 10px', borderRadius: 12, background: 'var(--color-bg-elevated)', opacity: 0.55 }} />
+              <div style={{ height: 52, margin: '0 12px 14px', borderRadius: 12, background: 'var(--color-bg-elevated)', opacity: 0.4 }} />
+              {[0, 1, 2, 3, 4].map(i => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 12px', opacity: Math.max(0.12, 0.4 - i * 0.07) }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 8, background: 'var(--color-bg-elevated)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ height: 12, width: '38%', borderRadius: 4, background: 'var(--color-bg-elevated)' }} />
+                    <div style={{ height: 10, width: '58%', borderRadius: 4, background: 'var(--color-bg-elevated)' }} />
+                  </div>
+                  <div style={{ height: 12, width: 48, borderRadius: 4, background: 'var(--color-bg-elevated)' }} />
+                </div>
+              ))}
             </div>
           ) : comparables.length === 0 ? (
             <div style={{

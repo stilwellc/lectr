@@ -88,7 +88,6 @@ export default function MakersPage() {
               title={<>Every maker, read as a live <Accent>market curve</Accent>.</>}
               sub={
                 <>
-                  {rosterCount} {noun} ·{' '}
                   <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                     {summary.live} live lots
                   </b>{' '}
@@ -134,16 +133,8 @@ export default function MakersPage() {
                   <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0 }}>
                     The full sold history didn&rsquo;t load, so the market curves are missing.
                   </p>
-                  <button
-                    onClick={() => retryFullLoad()}
-                    style={{
-                      fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600,
-                      padding: '8px 20px', borderRadius: 100, border: '1px solid var(--hairline)',
-                      background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer',
-                      fontFamily: 'var(--font-sans), system-ui, sans-serif',
-                    }}
-                  >
-                    Retry
+                  <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>
+                    Try again
                   </button>
                 </div>
               ) : (

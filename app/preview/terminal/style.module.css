@@ -252,12 +252,12 @@
 }
 .pulseUnit {
   font-style: normal; font-family: var(--font-inter), sans-serif;
-  font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tt-faint);
+  font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tt-muted, #8a8f98);
 }
 .pulseDir { font-style: normal; font-size: 9px; }
 .pulseDir[data-dir='up'] { color: var(--color-up, #57be87); }
 .pulseDir[data-dir='down'] { color: var(--color-down, #cc6a5c); }
-.pulseSub { font-family: var(--font-inter), sans-serif; font-size: 10.5px; letter-spacing: 0.02em; color: var(--tt-faint); }
+.pulseSub { font-family: var(--font-inter), sans-serif; font-size: 10.5px; letter-spacing: 0.02em; color: var(--tt-muted, #8a8f98); }
 /* the one action on the board — a dark host cell holding the butter object:
    the LOT TAG. The paddle is the bidder's object; the tag is the lot's — the
    marker the engine hangs on every flagged lot. Same craft register: solid
@@ -2175,7 +2175,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.05em;
-  fill: #61666D;
+  fill: #8a8f98;
 }
 .hcCross { stroke: rgba(232, 234, 237, 0.35); stroke-width: 1; stroke-dasharray: 2 6; }
 .hcLineLabel { font-family: var(--font-inter), sans-serif; font-size: 10.5px; font-weight: 550; letter-spacing: 0.03em; }

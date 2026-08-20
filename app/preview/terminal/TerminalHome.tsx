@@ -717,17 +717,10 @@ export default function TerminalHomePage() {
 
       {error ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12, position: 'relative', zIndex: 2 }}>
-          <p style={{ fontSize: 13.5, color: 'var(--tt-muted)', textAlign: 'center' }}>{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600,
-              padding: '8px 20px', borderRadius: 100, border: '1px solid var(--tt-hair-2)',
-              background: 'none', color: 'var(--tt-muted)', cursor: 'pointer',
-              fontFamily: 'var(--font-sans), system-ui, sans-serif',
-            }}
-          >
-            Retry
+          <Flick size={28} draw style={{ color: 'var(--color-text-faint)' }} />
+          <p style={{ fontSize: 13.5, color: 'var(--tt-muted)', textAlign: 'center', margin: 0 }}>{error}</p>
+          <button className="ray-show-more" style={{ marginTop: 4 }} onClick={() => window.location.reload()}>
+            Try again
           </button>
         </div>
       ) : loading ? (
@@ -826,7 +819,7 @@ export default function TerminalHomePage() {
                 />
 
                 {effectiveView === 'table' && feed.length > 0 ? (
-                  <div key={feedKey} className="ray-feed-rekey" style={{ overflowX: 'auto' }}>
+                  <div key={feedKey} className="ray-feed-rekey ray-feedtable-scroll" style={{ overflowX: 'auto' }}>
                     <table className="ray-feedtable">
                       <thead>
                         <tr>
@@ -997,20 +990,7 @@ export default function TerminalHomePage() {
 
                 {visibleUpcoming < feed.length && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
-                    <button
-                      onClick={() => setVisibleUpcoming(v => v + pageSize)}
-                      style={{
-                        background: 'none',
-                        border: '1px solid var(--tt-hair-2)',
-                        borderRadius: 100,
-                        padding: '10px 32px',
-                        fontSize: 13,
-                        color: 'var(--tt-muted)',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-sans), system-ui, sans-serif',
-                      }}
-                    >
+                    <button className="ray-show-more" onClick={() => setVisibleUpcoming(v => v + pageSize)}>
                       Show more ({(feed.length - visibleUpcoming).toLocaleString()} remaining)
                     </button>
                   </div>

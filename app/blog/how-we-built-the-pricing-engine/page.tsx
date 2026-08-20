@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     'The math behind lectr\'s appreciation numbers: a per-maker Huber-robust hedonic log-price regression that controls for the within-maker mix, and a confidence gate that publishes a return only when its 95% CI resolves the sign. The result is that almost everything abstains — and the few makers that clear the bar are the whole point.',
 };
 
-const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
+const wrap: React.CSSProperties = { maxWidth: 648, margin: '0 auto', padding: '0 24px' };
 const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 22, fontWeight: 400, letterSpacing: '-0.015em', margin: '46px 0 10px' };
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.72, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };

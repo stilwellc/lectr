@@ -88,8 +88,8 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-comp{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--hairline-soft);text-decoration:none;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
 .lectr-lot-comp:hover{background:var(--color-hover-item)}
 .lectr-lot-comp-i{font-size:12px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;width:18px;text-align:right;flex-shrink:0}
-.lectr-lot-comp-thumb{width:40px;height:40px;flex-shrink:0;position:relative;overflow:hidden;background:var(--color-bg-elevated);outline:1px solid rgba(255,255,255,0.1);outline-offset:-1px;display:flex;align-items:center;justify-content:center}
-.lectr-lot-comp-thumb span{font-size:16px;font-weight:600;color:var(--color-text-faint)}
+.lectr-lot-comp-thumb{width:40px;height:40px;flex-shrink:0;position:relative;overflow:hidden;border-radius:8px;background:radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-butter) 8%, transparent), transparent 72%), var(--color-bg-elevated);border:1px solid color-mix(in srgb, var(--color-butter) 13%, transparent);display:flex;align-items:center;justify-content:center}
+.lectr-lot-comp-thumb span{font-family:var(--font-serif), serif;font-style:italic;font-weight:300;font-size:17px;line-height:1;color:color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))}
 .lectr-lot-comp-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .lectr-lot-comp-t{flex:1;min-width:0}
 .lectr-lot-comp-title{font-size:13.5px;font-weight:600;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -219,17 +219,14 @@ export default function TopSales({ allLots, market, series }: Props) {
                         lot page's own CTA row */}
                     <Link
                       href={`/lot?id=${encodeURIComponent(lot.id)}`}
+                      className="ray-maker-link"
                       style={{
                         fontFamily: "var(--font-serif), serif",
                         fontSize: 17,
                         fontWeight: 400,
-                        color: 'var(--color-fg)',
-                        textDecoration: 'none',
                         lineHeight: 1.3,
-                        transition: 'color var(--duration-fast) var(--ease-signature)',
+                        display: 'inline',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-butter)')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
                     >
                       {title}
                     </Link>

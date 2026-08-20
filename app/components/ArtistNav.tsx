@@ -390,7 +390,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             justify-content: center;
             margin-left: auto;
             padding: 8px 8px;
-            min-height: 42px;
+            min-height: 44px;
             background: none;
             border: none;
             color: var(--color-fg);
@@ -402,7 +402,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             align-items: center;
             gap: 7px;
             padding: 8px 12px;
-            min-height: 42px;
+            min-height: 44px;
             background: none;
             border: none;
             color: var(--color-fg);

@@ -4,7 +4,7 @@ import Flick from '../../components/Flick';
 import { Colophon } from '../../components/Terminal';
 import Masthead, { Accent } from '../../components/Masthead';
 
-const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
+const wrap: React.CSSProperties = { maxWidth: 648, margin: '0 auto', padding: '0 24px' };
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.72, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
 

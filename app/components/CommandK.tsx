@@ -210,13 +210,17 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
           onChange={e => setQ(e.target.value)}
           placeholder="Search a maker, a market, or a live lot…"
           aria-label="Search"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="ray-ck-listbox"
+          aria-activedescendant={shown[idx] ? `ray-ck-opt-${idx}` : undefined}
           onKeyDown={e => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, shown.length - 1)); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
             else if (e.key === 'Enter' && shown[idx]) go(shown[idx]);
           }}
         />
-        <div className="ray-ck-list" role="listbox" ref={listRef}>
+        <div className="ray-ck-list" role="listbox" id="ray-ck-listbox" ref={listRef}>
           {filtered.length === 0 ? (
             <div className="ray-ck-empty">Nothing matches.</div>
           ) : (
@@ -228,6 +232,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
               return (
                 <button
                   key={`${item.kind}-${item.label}-${item.path}`}
+                  id={`ray-ck-opt-${i}`}
                   role="option"
                   aria-selected={i === idx}
                   className={isHeader ? 'ray-ck-item kicker' : 'ray-ck-item'}

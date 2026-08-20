@@ -90,8 +90,7 @@ export default function UpcomingLots({
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
           font-weight: 600;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
+          letter-spacing: -0.01em;
           padding: 6px 16px;
           border-radius: 100px;
           border: 1px solid var(--color-border);
@@ -227,23 +226,7 @@ export default function UpcomingLots({
 
       {!expanded && sorted.length > COLLAPSED_CARDS && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
-          <button
-            onClick={() => setExpanded(true)}
-            style={{
-              background: 'none',
-              border: '1px solid var(--color-border)',
-              borderRadius: 100,
-              padding: '10px 32px',
-              fontSize: 12.5,
-              letterSpacing: '-0.01em',
-              textTransform: 'none',
-              color: 'var(--color-text-muted)',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-sans), sans-serif',
-              transition: 'border-color var(--duration-fast) var(--ease-signature)',
-            }}
-          >
+          <button className="ray-show-more" onClick={() => setExpanded(true)}>
             Show all {sorted.length}
           </button>
         </div>

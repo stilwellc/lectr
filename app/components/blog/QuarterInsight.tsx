@@ -7,7 +7,7 @@ import { formatPrice } from '../../utils';
 export interface TopSale { title: string; priceUsd: number; house: string; date: string; maker: string }
 export interface Mover { label: string; chgPct: number; n: number; slug?: string }
 
-const wrap: React.CSSProperties = { maxWidth: 720, margin: '0 auto', padding: '0 24px' };
+const wrap: React.CSSProperties = { maxWidth: 648, margin: '0 auto', padding: '0 24px' };
 const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 21, fontWeight: 400, letterSpacing: '-0.015em', margin: '42px 0 10px' };
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '4px 0 8px', fontSize: 14 };

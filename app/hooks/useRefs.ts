@@ -18,8 +18,9 @@ export interface RefEntry {
 
 let refsCache: RefEntry[] | null = null;
 
-export function useRefs(): { refs: RefEntry[] | null; failed: boolean } {
+export function useRefs(): { refs: RefEntry[] | null; failed: boolean; retry: () => void } {
   const [state, setState] = useState<{ refs: RefEntry[] | null; failed: boolean }>({ refs: refsCache, failed: false });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (refsCache) return;
     let dead = false;
@@ -28,8 +29,9 @@ export function useRefs(): { refs: RefEntry[] | null; failed: boolean } {
       .then(j => { refsCache = j.refs || []; if (!dead) setState({ refs: refsCache, failed: false }); })
       .catch(() => { if (!dead) setState({ refs: null, failed: true }); });
     return () => { dead = true; };
-  }, []);
-  return state;
+  }, [attempt]);
+  const retry = () => { setState({ refs: refsCache, failed: false }); setAttempt(a => a + 1); };
+  return { ...state, retry };
 }
 
 /** the refs for one maker, sorted by sample size (the deepest first) */

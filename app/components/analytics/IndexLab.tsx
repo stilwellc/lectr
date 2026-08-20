@@ -20,7 +20,9 @@ import type { MarketData } from '../../hooks/useRayData';
 const CSS = `
 .ray-il-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .ray-il-tf{display:inline-flex;gap:5px}
-.ray-il-tfbtn{font-family:var(--font-sans),sans-serif;font-size:11px;font-weight:600;padding:4px 12px;border-radius:100px;border:1px solid var(--color-border);background:transparent;color:var(--color-text-muted);cursor:pointer}
+.ray-il-tfbtn{font-family:var(--font-sans),sans-serif;font-size:11px;font-weight:600;padding:4px 12px;border-radius:100px;border:1px solid var(--color-border);background:transparent;color:var(--color-text-muted);cursor:pointer;transition:border-color var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
+.ray-il-tfbtn:hover{border-color:var(--color-border-mid);color:var(--color-fg)}
+@media (max-width:768px){.ray-il-tfbtn{position:relative}.ray-il-tfbtn::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100%;height:100%;min-width:44px;min-height:44px}}
 .ray-il-tfbtn[data-on=true]{background:var(--color-fg);border-color:var(--color-fg);color:var(--color-bg)}
 .ray-il-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px}
 .ray-il-key{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--color-text-muted)}
@@ -69,7 +71,19 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
     return { anchor, main, sub, anchorLast: anchor.points[anchor.points.length - 1].value };
   }, [idx, tf, layerDefs]);
 
-  if (!built) return null;
+  // thin history: keep the card (a silent gap reads as a bug) and say why
+  if (!built) {
+    return (
+      <div className="ray-vm ray-vm-card glass glass-quiet">
+        <div className="ray-vm-head">
+          <span className="ray-vm-title">The index laboratory</span>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '10px 0 4px' }}>
+          Not enough settled history to chart an index for this market yet — it lights up as quarters accrue.
+        </p>
+      </div>
+    );
+  }
 
   const key = (label: string, color: string, last: number, kind: HeroLayer['kind'] | 'anchor') => (
     <span key={label} className="ray-il-key">

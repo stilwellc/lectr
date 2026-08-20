@@ -121,6 +121,9 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
               <p style={{ color: 'var(--color-text-faint)', fontSize: 13.5, marginTop: 8 }}>
                 {loadFailed ? 'The player data didn’t load — try again shortly.' : 'lectr keeps a dossier only where at least 25 sales back it.'}
               </p>
+              <Link href="/sports" className="ray-show-more" style={{ display: 'inline-block', marginTop: 20, textDecoration: 'none' }}>
+                Back to the sports market
+              </Link>
             </>
           )}
         </div>

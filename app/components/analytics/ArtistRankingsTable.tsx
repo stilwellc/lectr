@@ -467,16 +467,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                     {row.href ? (
                       <Link
                         href={row.href}
-                        style={{
-                          textDecoration: 'none',
-                          color: 'var(--color-fg)',
-                          transition: 'color var(--duration-fast) var(--ease-signature)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 10,
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-butter)')}
-                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
+                        className="ray-maker-link"
                       >
                         <ArtistAvatar label={row.label} size={24} />
                         {row.label}
@@ -529,19 +520,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
             {(expanded ? sorted : sorted.slice(0, COLLAPSED_ROWS)).map((row) => (
               <tr key={row.slug} className="ray-rankings-row">
                 <td className="ray-rankings-td ray-rankings-sticky" style={{ fontWeight: 500 }}>
-                  <Link
-                    href={`/makers/${row.slug}`}
-                    style={{
-                      textDecoration: 'none',
-                      color: 'var(--color-fg)',
-                      transition: 'color var(--duration-fast) var(--ease-signature)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-butter)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-fg)')}
-                  >
+                  <Link href={`/makers/${row.slug}`} className="ray-maker-link">
                     <ArtistAvatar label={row.label} size={24} />
                     {row.label}
                   </Link>

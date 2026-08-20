@@ -328,7 +328,7 @@ export default function SavedPage() {
         points: snaps.map(s => ({ period: s.d, value: s.appraised, n: s.pieces })),
       },
       layers: [{
-        key: 'paid', label: 'Bought', color: '#8F9BA8', unit: 'money' as const,
+        key: 'paid', label: 'Bought', color: 'var(--chart-line-2, #8F9BA8)', unit: 'money' as const,
         points: snaps.map(s => ({ period: s.d, value: s.paid, n: s.pieces })),
       }],
     };
@@ -662,6 +662,11 @@ export default function SavedPage() {
         }
         .ray-coll-chip:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
         @media (max-width: 768px) {
+          /* chips are real links — meet the touch floor without inflating the visual pill */
+          .ray-coll-chip { position: relative; }
+          .ray-coll-chip::before { content: ""; position: absolute; inset: -14px 0; }
+        }
+        @media (max-width: 768px) {
           .ray-saved-grid { grid-template-columns: 1fr; gap: 26px; }
           .ray-saved-section { padding-block: 32px 32px; }
         }
@@ -711,7 +716,7 @@ export default function SavedPage() {
             <p style={{ color: 'var(--color-text-muted)', marginBottom: 14 }}>
               Couldn&apos;t load the full book to resolve your saved lots.
             </p>
-            <button className="ray-call-btn" onClick={() => retryFullLoad()}>Try again</button>
+            <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryFullLoad()}>Try again</button>
           </section>
         </RayEntrance>
       ) : savedLots.length === 0 && !fullLoaded ? (
@@ -894,7 +899,7 @@ export default function SavedPage() {
                           <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
                         ) : null}
                       </span>
-                      <span className="num" style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                      <span style={{ textAlign: 'right', fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
                         {hammerWord(days)}
                       </span>
                     </Link>
@@ -1092,16 +1097,16 @@ export default function SavedPage() {
                           {m?.title || o.id}
                           <span style={{ color: 'var(--color-text-faint)' }}> · archive</span>
                         </span>
-                        <span style={{ textAlign: 'right', color: 'var(--color-text-faint)' }} title="No estimate published — Goldin runs no-reserve sales">—</span>
-                        <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{m?.signalPct != null ? fmtSignedPct(Math.round(m.signalPct)) : '—'}</span>
-                        <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        <span className="num" style={{ color: 'var(--color-text-faint)' }} title="No estimate published — Goldin runs no-reserve sales">—</span>
+                        <span className="num">{m?.signalPct != null ? fmtSignedPct(Math.round(m.signalPct)) : '—'}</span>
+                        <span className="num" style={{ fontWeight: 600 }}>
                           {o.provisional
-                            ? <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }} title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
-                            : <b>{formatPrice(o.priceUsd)}</b>}
+                            ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }} title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
+                            : formatPrice(o.priceUsd)}
                         </span>
-                        <span style={{ textAlign: 'right', color: 'var(--color-text-faint)' }} title="No estimate on file — outside the vs-est median">—</span>
+                        <span className="num" style={{ color: 'var(--color-text-faint)' }} title="No estimate on file — outside the vs-est median">—</span>
                         <span style={{ textAlign: 'right' }}>
-                          <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
+                          <button className="ray-own-btn" onClick={() => toggle(o.id)}>Remove</button>
                         </span>
                       </div>
                     );
@@ -1154,7 +1159,7 @@ export default function SavedPage() {
                         <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m?.title || o.id}</div>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
                           <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                            {m?.artist ? (ARTIST_LABEL[m.artist] || m.artist) : 'archive'}
+                            {m?.artist ? (ARTIST_LABEL[m.artist] || m.artist) : '—'}
                             {m?.signalPct != null && <> · your call {fmtSignedPct(Math.round(m.signalPct))}</>}
                             <span style={{ color: 'var(--color-text-faint)' }}> · archive</span>
                           </span>
@@ -1163,7 +1168,7 @@ export default function SavedPage() {
                           </span>
                         </div>
                         <div style={{ marginTop: 6 }}>
-                          <button className="ray-call-btn ray-call-btn-quiet" onClick={() => toggle(o.id)}>Remove</button>
+                          <button className="ray-own-btn" onClick={() => toggle(o.id)}>Remove</button>
                         </div>
                       </div>
                     );

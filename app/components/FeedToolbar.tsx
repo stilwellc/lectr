@@ -450,7 +450,7 @@ export default function FeedToolbar({
           padding: 16px 2px 10px;
         }
         .ray-feedsheet-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-        .ray-feedsheet-chips .ray-toolbar-pill { min-height: 38px; }
+        .ray-feedsheet-chips .ray-toolbar-pill { min-height: 44px; }
         .ray-feedsheet-catpill[data-active=true] {
           background: var(--color-butter);
           border-color: var(--color-butter);
@@ -483,7 +483,7 @@ export default function FeedToolbar({
           /* the one lead row breathes a little tighter so lens + category +
              sort-and-filter sit on a single line at 390px */
           .ray-toolbar-row-lead { gap: 5px !important; }
-          .ray-toolbar-row-lead > .ray-toolbar-pill { padding-left: 10px; padding-right: 10px; font-size: 12.5px; gap: 5px; }
+          .ray-toolbar-row-lead > .ray-toolbar-pill { padding-left: 10px; padding-right: 10px; font-size: 12.5px; gap: 5px; min-height: 44px; }
           .ray-toolbar-row-lead .ray-toolbar-divider { display: none; }
         }
       ` }} />

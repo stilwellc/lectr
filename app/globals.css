@@ -1582,7 +1582,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* ───────────────────────── toolbar, humanized ───────────────────────── */
 .ray-toolbar { border-bottom-color: var(--color-border); }
 .ray-toolbar-search { border-bottom: none; background: var(--color-bg-elevated); border-radius: 12px; padding: 9px 14px; max-width: 380px; }
-.ray-toolbar-search:focus-within { outline: 1.5px solid var(--color-border-mid); }
+.ray-toolbar-search:focus-within { outline: 1.5px solid rgba(232, 218, 182, 0.6); }
 .ray-toolbar-search input { font-family: var(--font-sans); font-style: normal; font-size: 14px; }
 /* 16px on touch widths — anything smaller makes iOS Safari zoom the page on focus */
 @media (max-width: 768px) {
@@ -1957,6 +1957,35 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-call-btn-quiet { background: var(--color-bg); color: var(--color-text-secondary); }
 .ray-call-btn-quiet:hover { color: var(--color-fg); }
 
+/* ── maker name links in data tables — CSS-driven hover/focus (keyboard gets
+   the same butter cue the mouse gets; no inline JS color swapping) ── */
+.ray-maker-link {
+  color: var(--color-fg);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: color var(--duration-fast) var(--ease-signature);
+}
+.ray-maker-link:hover, .ray-maker-link:focus-visible { color: var(--color-butter); }
+
+/* ── shared list-pagination pill — one grammar for every "Show all n" ── */
+.ray-show-more {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 100px;
+  padding: 10px 32px;
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans), sans-serif;
+  transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature), transform 120ms var(--ease-signature);
+}
+.ray-show-more:hover { border-color: var(--color-border-mid); color: var(--color-fg); background: var(--color-hover-item); }
+.ray-show-more:active { transform: scale(0.98); }
+
 /* ── feed view toggle + table ── */
 .ray-viewtoggle { display: inline-flex; gap: 2px; background: var(--color-bg-elevated); border-radius: 10px; padding: 3px; }
 .ray-viewtoggle button {
@@ -1976,9 +2005,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
    invisible pad centered on each button extends the tap target so the visual
    ink (and the active pill) never moves and neighbors never shift */
 @media (max-width: 768px) {
-  .ray-range-btn, .ray-seg-btn, .ray-viewtoggle button, .ray-tbl-save { position: relative; }
+  .ray-range-btn, .ray-seg-btn, .ray-viewtoggle button, .ray-tbl-save, .ray-sort-pill { position: relative; }
   .ray-range-btn::before, .ray-seg-btn::before,
-  .ray-viewtoggle button::before, .ray-tbl-save::before {
+  .ray-viewtoggle button::before, .ray-tbl-save::before, .ray-sort-pill::before {
     content: '';
     position: absolute;
     top: 50%;
@@ -2278,6 +2307,14 @@ body {
   mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
 }
 .ray-markets-fade::-webkit-scrollbar { display: none; }
+/* tablet band where the 10-col ledger genuinely overflows: fade the clipped
+   edge so the scroll is discoverable (desktop fits; ≤640 folds to the grid) */
+@media (min-width: 641px) and (max-width: 899px) {
+  .ray-feedtable-scroll {
+    -webkit-mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
+    mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
+  }
+}
 /* center-oriented pill rail (the lander): drop the scroll fade and center the
    pills when they fit; fall back to a left-aligned scroll on narrow phones. */
 
@@ -3055,7 +3092,7 @@ body {
 /* #5 · bid-velocity marker on feed rows/cards — descriptive count, butter accent */
 .ray-bidvel {
   display: inline-flex; align-items: center; gap: 5px; margin-top: 3px;
-  font-size: 10.5px; color: var(--color-text-faint, #7A8087); white-space: nowrap;
+  font-size: 10.5px; color: var(--color-text-muted, #8a8f98); white-space: nowrap;
 }
-.ray-bidvel-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-butter, #e8b95b); flex: none; }
-.ray-bidvel-sub { display: block; font-size: 9.5px; color: var(--color-butter, #e8b95b); letter-spacing: 0.02em; }
+.ray-bidvel-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-butter, #e8dab6); flex: none; }
+.ray-bidvel-sub { display: block; font-size: 9.5px; color: var(--color-butter, #e8dab6); letter-spacing: 0.02em; }

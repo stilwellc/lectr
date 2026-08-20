@@ -333,6 +333,12 @@ export default function ValuePage() {
         }
         .ray-value-save:hover, .ray-value-save:focus-visible,
         .ray-value-save[data-saved="true"] { opacity: 1; }
+        .ray-value-save:active .ray-value-save-glyph { transform: scale(0.92); }
+        .ray-value-row:active { background: var(--color-bg-elevated); }
+        .ray-deepvalue-row:hover { background: var(--color-hover-item); }
+        @media (max-width: 768px) {
+          .ray-value-save { width: 44px; height: 44px; right: 2px; }
+        }
         .ray-value-save-glyph {
           width: 26px; height: 26px; display: flex; align-items: center;
           justify-content: center; border-radius: 100px;
@@ -452,7 +458,7 @@ export default function ValuePage() {
           {(deepValue?.[activeKey]?.length ?? 0) > 0 && (
             <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-                <h2 style={{ fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-muted)', fontWeight: 700 }}>
+                <h2 className="ray-h2" style={{ marginBottom: 0 }}>
                   Deep value · closing soon
                 </h2>
                 <span style={{ fontSize: 11, color: 'var(--color-faint)' }}>
@@ -464,12 +470,13 @@ export default function ValuePage() {
                   const lot = allLots.find(l => String(l.id) === r.id);
                   if (!lot) return null;
                   return (
-                    <Link key={r.id} href={`/lot/${r.id}`} style={{
+                    <Link key={r.id} href={`/lot/${r.id}`} className="ray-deepvalue-row" style={{
                       display: 'flex', alignItems: 'baseline', gap: 14, padding: '10px 2px',
                       borderTop: '2px dotted var(--color-hair, rgba(255,255,255,0.06))',
                       color: 'inherit', textDecoration: 'none',
+                      transition: 'background var(--duration-fast) var(--ease-signature)',
                     }}>
-                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--color-up)', minWidth: 74 }}>
+                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--color-up)', minWidth: 72 }}>
                         {Math.round(r.depth * 100)}% under
                       </span>
                       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

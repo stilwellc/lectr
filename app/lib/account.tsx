@@ -413,15 +413,6 @@ const AUTH_CSS = `
 .ray-auth-lede { font-size: 13px; line-height: 1.5; color: var(--color-text-secondary); margin: 8px 0 18px; }
 .ray-auth-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px; border-radius: 10px; border: 1px solid var(--color-border); background: #fff; color: #1f1f1f; font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; }
 .ray-auth-google:hover { background: #f3f3f3; }
-.ray-auth-or { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--color-text-faint); font-size: 12px; }
-.ray-auth-or::before, .ray-auth-or::after { content: ''; flex: 1; height: 1px; background: var(--color-border); }
-.ray-auth-form { display: flex; flex-direction: column; gap: 10px; }
-.ray-auth-input { width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-fg); font-family: var(--font-sans), sans-serif; font-size: 16px; outline: none; }
-.ray-auth-input:focus { border-color: var(--color-text-muted); }
-.ray-auth-submit { width: 100%; padding: 11px; border-radius: 10px; border: none; background: var(--color-butter); color: var(--color-butter-ink); font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; }
-.ray-auth-submit:disabled { opacity: 0.6; cursor: default; }
-.ray-auth-sent { padding: 12px; border-radius: 10px; background: var(--color-butter-subtle); color: var(--color-butter-text); font-size: 13.5px; text-align: center; font-weight: 600; }
-.ray-auth-err { font-size: 12.5px; color: var(--color-down-text); }
 @keyframes rayAuthIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rayAuthUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 `;

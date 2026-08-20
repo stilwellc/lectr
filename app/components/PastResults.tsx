@@ -155,12 +155,13 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         .ray-result-maker { position: relative; z-index: 2; }
         .ray-result-maker:hover { text-decoration: underline; }
         .ray-result-row .ray-save-btn { width: 32px; height: 32px; }
+        .ray-result-own:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
+        .ray-result-own[aria-pressed=true]:hover { color: var(--color-butter-ink); opacity: 0.9; }
         .ray-sort-pill {
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
           font-weight: 600;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
+          letter-spacing: -0.01em;
           padding: 6px 16px;
           border-radius: 100px;
           border: 1px solid var(--color-border);
@@ -445,7 +446,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     const pct = Math.round(raw);
                     if (Math.abs(pct) > 2000) return null; // bad estimate data — say nothing
                     return (
-                      <span style={{ color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down)', fontWeight: 600 }}>
+                      <span style={{ color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 600 }}>
                         {pct >= 0 ? '+' : ''}{pct}% vs est ·{' '}
                       </span>
                     );
@@ -503,19 +504,13 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     flexShrink: 0, position: 'relative', zIndex: 2, cursor: 'pointer',
                     fontFamily: 'var(--font-sans), sans-serif', fontSize: 11.5, fontWeight: 600,
                     padding: '5px 12px', borderRadius: 100, whiteSpace: 'nowrap',
-                    background: ownedIds.includes(lot.id) ? 'var(--color-beige)' : 'transparent',
-                    color: ownedIds.includes(lot.id) ? 'var(--paper-ink)' : 'var(--color-text-muted)',
-                    border: ownedIds.includes(lot.id) ? '1px solid var(--color-beige)' : '1px solid var(--color-border)',
+                    background: ownedIds.includes(lot.id) ? 'var(--color-butter)' : 'transparent',
+                    color: ownedIds.includes(lot.id) ? 'var(--color-butter-ink)' : 'var(--color-text-muted)',
+                    border: ownedIds.includes(lot.id) ? '1px solid var(--color-butter)' : '1px solid var(--color-border)',
+                    transition: 'border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature)',
                   }}
                 >
-                  {ownedIds.includes(lot.id) ? (
-                    <>
-                      Owned{' '}
-                      <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 1 }}>
-                        <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                      </svg>
-                    </>
-                  ) : 'Own it?'}
+                  {ownedIds.includes(lot.id) ? 'Owned ✓' : 'Own it?'}
                 </button>
               )}
               {onToggleSave && (
@@ -554,24 +549,8 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
 
       {visible < sorted.length && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
-          <button
-            onClick={() => setVisible((v) => v + 20)}
-            style={{
-              background: 'none',
-              border: '1px solid var(--color-border)',
-              borderRadius: 100,
-              padding: '10px 32px',
-              fontSize: 12.5,
-              letterSpacing: '-0.01em',
-              textTransform: 'none',
-              color: 'var(--color-text-muted)',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: "var(--font-sans), sans-serif",
-              transition: 'border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature)',
-            }}
-          >
-            Show More
+          <button className="ray-show-more" onClick={() => setVisible((v) => v + 20)}>
+            Show more
           </button>
         </div>
       )}

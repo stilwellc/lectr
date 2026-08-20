@@ -140,7 +140,7 @@ export default function BlogIndex() {
               <span className="kicker">Latest from the desk</span>
               <span className="kicker no">{fmtLong(lead.date)}</span>
             </div>
-            <div className="ray-blog-date">{fmtLong(lead.date)}</div>
+            <div className="ray-blog-date">{fmtShort(lead.date)}</div>
             <h2 className="ray-blog-title">{lead.title}</h2>
             <p className="ray-blog-dek">{lead.dek}</p>
             <span className="ray-blog-read">Read the note <Flick size={12} /></span>
