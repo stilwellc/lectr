@@ -318,7 +318,7 @@ export default function ValuePage() {
            the desktop ledger the gap column already owns the right edge, so the
            control tucks just inside without colliding. ── */
         .ray-value-rowwrap { position: relative; }
-        .ray-value-rowwrap .ray-value-row { padding-right: 44px; }
+        .ray-value-rowwrap .ray-value-row { padding-right: 46px; }
         .ray-value-save {
           position: absolute;
           top: 50%;

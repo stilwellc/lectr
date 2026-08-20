@@ -286,11 +286,12 @@ jobs:
     # incremental now finishes in minutes; only the weekly full needs headroom.)
     continue-on-error: true
     # Headroom sized for the WEEKLY full replay (the O(targets×priors) pass runs
-    # well past 70min at current corpus size). 300 (5h, under GH's 6h job cap)
-    # gives the Sunday full room to finish; the Mon–Sat incremental returns in
-    # minutes and never approaches it. continue-on-error is the belt-and-braces
-    # so even an overrun can't gate the run.
-    timeout-minutes: 300
+    # well past 70min at current corpus size). Aug 16 2026 the full replay was
+    # KILLED at the old 300-min cap (corpus growth outran it) — 350 rides just
+    # under GH's hard 360-min job ceiling. If a Sunday hits THIS cap, the replay
+    # must be split (per-market legs), not re-capped. continue-on-error is the
+    # belt-and-braces so even an overrun can't gate the run.
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
