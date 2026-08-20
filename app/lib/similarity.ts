@@ -59,14 +59,22 @@ export function tokenVector(tokens: string[] | undefined, tbl: IdfTable): Record
   return v;
 }
 
-function cosine(a: Record<string, number>, b: Record<string, number>): number {
-  let dot = 0, na = 0, nb = 0;
+function cosine(a: Record<string, number>, b: Record<string, number>, an?: number, bn?: number): number {
+  let dot = 0;
+  if (an && bn) {
+    for (const t in a) if (b[t]) dot += a[t] * b[t];
+    return dot / (an * bn) || 0;
+  }
+  let na = 0, nb = 0;
   for (const t in a) { na += a[t] * a[t]; if (b[t]) dot += a[t] * b[t]; }
   for (const t in b) nb += b[t] * b[t];
   return na && nb ? dot / Math.sqrt(na * nb) : 0;
 }
 
 // ── structured agreement ─────────────────────────────────────────────────────
+/** In-process A/B switches for harnesses (gate-ab) — production default ON. */
+export const SIM_FLAGS = { entityBonus: true };
+
 const SPORTS_SCIENCE = new Set([
   'game-used', 'trophies-awards', 'tickets-passes',
   'space-exploration', 'meteorites', 'fossils', 'scientific-instruments',
@@ -203,7 +211,8 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
 
   const va = a._v || tokenVector(a.titleTokens, tbl);
   const vb = b._v || tokenVector(b.titleTokens, tbl);
-  const cos = cosine(va, vb);
+  const cos = cosine(va, vb,
+    (a as { _vn?: number })._vn, (b as { _vn?: number })._vn);
   if (cos < (idReason ? 0.2 : 0.4)) return { score: 0, cosine: cos, cls: 'none', reasons: [] };
 
   const reasons: string[] = [];
@@ -234,7 +243,7 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
   if (a.mediumCanon && b.mediumCanon && a.mediumCanon === b.mediumCanon) { bonus += 0.02; }
 
   // sports/science entity agreement — the identity of a game-used object
-  {
+  if (SIM_FLAGS.entityBonus) {
     // normalized identity (same canon as the hard gate) — raw string equality
     // missed 'Buzz Aldrin Signed' vs 'Buzz Aldrin', making admission depend on
     // title affixes.
@@ -348,5 +357,11 @@ export class CandidateIndex {
 
 /** Attach precomputed token vectors for a batch scoring pass. */
 export function buildVectors<T extends AuctionLot>(lots: T[], tbl: IdfTable): (T & { _v: Record<string, number> })[] {
-  return lots.map(l => Object.assign(l, { _v: tokenVector(l.titleTokens, tbl) }));
+  // _vn: cached ‖v‖ — cosine() recomputed both norms on every pair, doubling
+  // the cost of the hottest loop in the engine (O(pool²) backtest scoring).
+  return lots.map(l => {
+    const v = tokenVector(l.titleTokens, tbl);
+    let n = 0; for (const t in v) n += v[t] * v[t];
+    return Object.assign(l, { _v: v, _vn: Math.sqrt(n) });
+  });
 }

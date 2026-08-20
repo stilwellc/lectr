@@ -25,6 +25,12 @@ const HONORIFICS = new Set([
   'pres', 'pres.', 'king', 'queen', 'saint', 'st', 'st.', 'prof', 'prof.', 'lt', 'lt.',
 ]);
 
+/** Bump when parseSignerName's grammar meaningfully changes — normalize
+ *  re-stamps parser-derived entities from older versions (and clears them if
+ *  the new parser abstains). Crawler-supplied entities are never touched.
+ *  v2 = Christie's catalog + RR leading-name shapes (Aug 2026). */
+export const SIGNER_PARSER_VERSION = 2;
+
 export function signerSlug(s: string | null | undefined): string {
   return (s || '')
     .toLowerCase()

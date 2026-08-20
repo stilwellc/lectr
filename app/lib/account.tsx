@@ -236,7 +236,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     // save (survives the OAuth full-page redirect via localStorage) so it
     // completes automatically once they're signed in — the click isn't lost.
     if (!user) {
-      if (lot) { try { localStorage.setItem('lectr-pending-save', JSON.stringify(entryFromLot(lotId, lot))); } catch { /* private mode */ } }
+      // persist the intent even from bare-id call sites — the click must
+      // survive the OAuth full-page redirect either way
+      try { localStorage.setItem('lectr-pending-save', JSON.stringify(entryFromLot(lotId, lot))); } catch { /* private mode */ }
       setLoginOpen(true);
       return;
     }

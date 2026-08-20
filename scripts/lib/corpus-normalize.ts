@@ -6,7 +6,7 @@ import { classifyForm, objectClassOf, cleanGoldinTitle } from '../../app/lib/com
 import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
-import { parseSignerName } from './autograph-signer';
+import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -670,15 +670,29 @@ export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: numbe
 // overwrite an existing entity, and we require a canonical autograph format so
 // relics ("a fence rail cane") are skipped.
 export function recoverAutographSigners(lots: Lot[]): { stamped: number; candidates: number } {
+  const src = `sig-p${SIGNER_PARSER_VERSION}`;
   let stamped = 0, candidates = 0;
   for (const l of lots) {
-    const w = l as Lot & { entity?: string | null; playerSlug?: string | null; medium?: string | null };
+    const w = l as Lot & { entity?: string | null; entitySrc?: string | null; playerSlug?: string | null; medium?: string | null };
     if (!AUTOGRAPH_SLUGS.has(l.artist)) continue;
-    if (w.entity || w.playerSlug) continue; // already identified — never overwrite
+    if (w.playerSlug) continue; // structured identity — never touch
+    // Versioned stamps: crawler-supplied entities (no sig-p source) are never
+    // touched, but a PARSER-derived stamp from an older grammar is re-derived —
+    // a v1 mis-stamp must not be frozen into the corpus forever. If the current
+    // parser abstains where the old one stamped, the stamp is cleared (the
+    // honest read beats a stale guess).
+    if (w.entity) {
+      const parsed = typeof w.entitySrc === 'string' && w.entitySrc.startsWith('sig-p');
+      if (!parsed || w.entitySrc === src) continue;
+      const name = parseSignerName({ title: l.title, medium: w.medium });
+      if (name) { w.entity = name; w.entitySrc = src; stamped++; }
+      else { delete (w as { entity?: unknown }).entity; w.entitySrc = null; }
+      continue;
+    }
     if (!autographFormatOf(l.title)) continue; // must be an actual signed item
     candidates++;
     const name = parseSignerName({ title: l.title, medium: w.medium });
-    if (name) { w.entity = name; stamped++; }
+    if (name) { w.entity = name; w.entitySrc = src; stamped++; }
   }
   return { stamped, candidates };
 }

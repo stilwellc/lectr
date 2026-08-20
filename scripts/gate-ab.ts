@@ -12,7 +12,8 @@ import * as zlib from 'zlib';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
-import { buildIdf, buildVectors } from '../app/lib/similarity';
+import { buildIdf, buildVectors, SIM_FLAGS } from '../app/lib/similarity';
+import { AUTOGRAPH_SLUGS } from '../app/lib/identity';
 import { resolveComps, estimateValue, COMP_GATE } from '../app/lib/value';
 
 const CORPUS = path.join(process.cwd(), 'data', 'corpus');
@@ -45,8 +46,15 @@ const byArtist = new Map<string, L[]>();
 for (const s of sold) (byArtist.get(s.artist) || byArtist.set(s.artist, []).get(s.artist)!).push(s);
 byArtist.forEach(g => g.sort((a, b) => (a.saleDate < b.saleDate ? -1 : 1)));
 
-// the held-out targets: sold lots that carried a usable estimate
-const targets = sold.filter(l => (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 && (l.estLowUsd! + l.estHighUsd!) / 2 > 0);
+// the held-out targets: sold lots that carried a usable estimate.
+// Optional scoping (for focused A/Bs): RAY_TARGET_AUTOGRAPHS=1 restricts
+// targets to the autograph slugs; RAY_TARGET_SINCE=YYYY-MM-DD restricts to
+// recent sales. Comps always come from the FULL prior history either way.
+const onlyAutographs = process.env.RAY_TARGET_AUTOGRAPHS === '1';
+const since = process.env.RAY_TARGET_SINCE || '';
+const targets = sold.filter(l => (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 && (l.estLowUsd! + l.estHighUsd!) / 2 > 0
+  && (!onlyAutographs || AUTOGRAPH_SLUGS.has(l.artist))
+  && (!since || (l.saleDate || '') >= since));
 console.log(`[gate-ab] ${all.length} lots · ${sold.length} priced sold · ${targets.length} sold-with-estimate targets`);
 
 type Bucket = { perfs: number[]; beat: number; n: number };
@@ -99,8 +107,15 @@ function run(label: string, gate: { cosFloor: number; minScore: number }) {
 // this harness can never leave the engine's gate mutated for a later in-process
 // caller (build-market/build-backtest import the same module).
 const gate0 = { ...COMP_GATE };
-const base = run('BASELINE raw-cosine', { cosFloor: 0.65, minScore: 0 });
-const wide = run('BROADENED cos-floor+score', { cosFloor: 0.50, minScore: 65 });
+// RAY_AB_ENTITY_BONUS=1: hold the PRODUCTION gate fixed and A/B the same-entity
+// bonus on/off instead — measures the admission shift the corpus-wide signer
+// stamping introduced (Aug 2026), on identical targets.
+const base = process.env.RAY_AB_ENTITY_BONUS === '1'
+  ? (SIM_FLAGS.entityBonus = false, run('ENTITY BONUS OFF (production gate)', { cosFloor: gate0.cosFloor, minScore: gate0.minScore }))
+  : run('BASELINE raw-cosine', { cosFloor: 0.65, minScore: 0 });
+const wide = process.env.RAY_AB_ENTITY_BONUS === '1'
+  ? (SIM_FLAGS.entityBonus = true, run('ENTITY BONUS ON  (production gate)', { cosFloor: gate0.cosFloor, minScore: gate0.minScore }))
+  : run('BROADENED cos-floor+score', { cosFloor: 0.50, minScore: 65 });
 COMP_GATE.cosFloor = gate0.cosFloor;
 COMP_GATE.minScore = gate0.minScore;
 

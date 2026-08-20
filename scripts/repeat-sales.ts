@@ -195,7 +195,7 @@ function extractPairs(
     const sales = salesRaw.slice().sort((a, b) => a.date.localeCompare(b.date));
     const distinctDates = new Set(sales.map((s) => s.date));
     if (sales.length < 2 || distinctDates.size < 2) continue;
-    nObjects++;
+    let pushedForKey = 0;
     for (let i = 1; i < sales.length; i++) {
       const a = sales[i - 1], b = sales[i];
       totalConsecutive++;
@@ -206,7 +206,11 @@ function extractPairs(
       if (Math.abs(r) > maxLogRelative) continue;
       if (b.ord === a.ord) continue;
       pairs.push({ q1: a.period, q2: b.period, ord1: a.ord, ord2: b.ord, r, gap: b.ord - a.ord, key });
+      pushedForKey++;
     }
+    // the honesty floor counts objects that CONTRIBUTE — an object whose pairs
+    // were all dropped (same-period / >20x) inflated "over N linked objects"
+    if (pushedForKey > 0) nObjects++;
   }
   return { pairs, nObjects, totalConsecutive };
 }
@@ -367,10 +371,15 @@ export function buildRepeatSaleIndex(
     };
   });
 
-  // distinct-object + pair counts per horizon endpoint (for gating)
+  // distinct-object + pair counts per horizon endpoint (for gating).
+  // Count only pairs actually IN the fit (both endpoints indexable): a pair
+  // into a pooled thin quarter contributes nothing to β, and counting it let
+  // an endpoint pass horizonMinPairs while the estimate rested on far fewer.
+  const fittedQ = new Set(fit.quarters);
   const endpointStats = (q: string): { pairs: number; objects: number } => {
     let pc = 0; const objs = new Set<string>();
     for (const p of pairs) {
+      if (!fittedQ.has(p.q1) || !fittedQ.has(p.q2)) continue;
       if (p.q1 === q || p.q2 === q) { pc++; objs.add(p.key); }
     }
     return { pairs: pc, objects: objs.size };

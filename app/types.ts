@@ -174,6 +174,9 @@ export interface AuctionLot {
       lots in the sports/science set (via extractSportsTags in comps.ts), else
       undefined. Short keys to keep the sold-archive footprint minimal. */
   entity?: string;
+  /** provenance of a parser-derived entity stamp ('sig-p2'); absent on
+   *  crawler-supplied entities — normalize may re-derive versioned stamps */
+  entitySrc?: string | null;
   objectType?: ObjectType;
   eventKey?: string;
   sportYear?: number;
