@@ -2,7 +2,7 @@
  * emit-value-book.ts — lectr's value book for Starling (the buy-side sibling).
  *
  * Emits ONE row per high-confidence identity key per vertical:
- *   { k, v, med, lo, hi, n, lastSale, trend, conf }
+ *   { k, v, med, lo, hi, n, n12, lastSale, trend, conf }
  * gzipped → PRIVATE R2 (lectr-data/latest/value-book.json.gz). Starling reads it
  * with a scoped read token; the book is never published publicly (it's the moat).
  *
@@ -173,7 +173,7 @@ const CLASS_CANON: [string, RegExp][] = [
 interface ContextRow {
   k: string; v: Vertical | 'sports' | 'science';
   kind: 'signer' | 'player-object' | 'class' | 'artist';
-  med: number; lo: number; hi: number; n: number; lastSale: string;
+  med: number; lo: number; hi: number; n: number; n12: number; lastSale: string;
 }
 function contextKeysForLot(l: AuctionLot): { key: string; v: ContextRow['v']; kind: ContextRow['kind'] }[] {
   const out: { key: string; v: ContextRow['v']; kind: ContextRow['kind'] }[] = [];
@@ -203,6 +203,10 @@ interface ValueBookRow {
   lo: number;
   hi: number;
   n: number;
+  /** sales in the trailing 12 months — the LIVING-evidence count. Starling
+   *  gates and ranks on this (Aug 20 2026: all-time n let pools whose whole
+   *  history is years old read as high-confidence and price dead markets). */
+  n12: number;
   lastSale: string;
   trend: number | null;
   conf: 'high' | 'medium' | 'thin';
@@ -301,7 +305,7 @@ function main() {
     const trend =
       t12.length && p12.length ? Number((quantile(t12, 0.5) / quantile(p12, 0.5) - 1).toFixed(3)) : null;
 
-    rows.push({ k, v: p.v, med, lo, hi, n, lastSale: p.last, trend, conf });
+    rows.push({ k, v: p.v, med, lo, hi, n, n12: t12.length, lastSale: p.last, trend, conf });
   }
 
   rows.sort((a, b) => (a.v < b.v ? -1 : a.v > b.v ? 1 : b.med - a.med));
@@ -320,7 +324,7 @@ function main() {
       med,
       lo: Math.min(Math.round(lerpQuantile(vals, 0.15)), med),
       hi: Math.max(Math.round(lerpQuantile(vals, 0.85)), med),
-      n, lastSale: p.last,
+      n, n12: p.prices.filter(([, ms]: [number, number]) => REF_MS - ms <= YEAR_MS).length, lastSale: p.last,
     });
   }
   context.sort((a, b) => (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : b.n - a.n));
