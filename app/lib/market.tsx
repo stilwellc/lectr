@@ -35,6 +35,7 @@ const PATH_MARKET: Record<string, Market> = {
   '/watches': 'watches',
   '/science': 'science',
   '/sports': 'sports',
+  '/tcg': 'tcg',
   '/culture': 'culture',
 };
 
