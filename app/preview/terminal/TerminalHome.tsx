@@ -427,12 +427,11 @@ export default function TerminalHomePage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
-  // THE RAIL'S MICRO-READS — the strongest honest read per cell: a real
-  // demand % where one exists (art/design/watches), the live-lot count
-  // everywhere. The anchor adds the aggregate index's last move. Never a
-  // fabricated figure — markets without an estimate basis print counts.
+  // THE RAIL'S MICRO-READS — one standardized read per cell: live lots on
+  // the block (Collin, Aug 22 2026: no % in the rail — one grammar, eight
+  // cells). The anchor carries the total.
   const railReads = useMemo(() => {
-    const out: Partial<Record<Market, { demandPct?: number | null; liveCount?: number | null }>> = {};
+    const out: Partial<Record<Market, number>> = {};
     let total = 0;
     for (const m of MARKETS) {
       if (m.key === 'all') continue;
@@ -440,20 +439,11 @@ export default function TerminalHomePage() {
       let live = 0;
       for (const a of Array.from(set)) live += upcomingCounts[a] || 0;
       total += live;
-      const series = demand?.[m.key];
-      const pct = series?.length ? series[series.length - 1].value : null;
-      out[m.key] = { demandPct: pct, liveCount: live };
+      out[m.key] = live;
     }
-    out.all = { liveCount: total };
+    out.all = total;
     return out;
-  }, [upcomingCounts, demand]);
-  const railIndexMove = useMemo(() => {
-    const idx = marketData?.markets?.all?.index;
-    if (!idx || idx.length < 2) return null;
-    const a = idx[idx.length - 2]?.value, b = idx[idx.length - 1]?.value;
-    if (!(a > 0) || !(b > 0)) return null;
-    return (b / a - 1) * 100;
-  }, [marketData]);
+  }, [upcomingCounts]);
 
   // The pulse board's "closing next" line: each house's NEAREST close in the
   // scoped live book, soonest first. n = lots that settle that day.
@@ -740,7 +730,7 @@ export default function TerminalHomePage() {
 
       {/* THE EXCHANGE RAIL — the door; re-scopes the WHOLE page in place */}
       <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
-        <MarketSwitch lit open={!fromCache} reads={railReads} indexMove={railIndexMove} />
+        <MarketSwitch lit open={!fromCache} reads={railReads} />
       </div>
 
       {error ? (

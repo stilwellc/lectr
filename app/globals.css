@@ -2272,8 +2272,6 @@ body {
   color: var(--color-text-faint);
   white-space: pre;
 }
-.ray-rail-read[data-tone=up] { color: var(--color-up); }
-.ray-rail-read[data-tone=down] { color: var(--color-down-text); }
 .ray-rail-cell:hover { background: rgba(255, 255, 255, 0.03); }
 .ray-rail-cell:hover .ray-rail-name { color: var(--color-fg); }
 .ray-rail-cell:hover .ray-rail-top { color: var(--color-text-muted); }
@@ -2368,9 +2366,6 @@ body {
     white-space: nowrap;
     overflow: hidden;
   }
-  .ray-rail-flap span[data-tone=up] { color: var(--color-up); }
-  .ray-rail-flap span[data-tone=down] { color: var(--color-down-text); }
-  .ray-rail-flap span[data-tone=name] { color: var(--color-text-muted); }
   .ray-rail-flap-dot { color: var(--color-text-faint); margin: 0 7px; }
   .ray-rail[data-variant=compact] .ray-rail-cell { height: 48px; }
 }

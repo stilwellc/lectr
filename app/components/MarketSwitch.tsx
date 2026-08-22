@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
 import { MARKETS, type Market } from '../constants';
 import { useMarket } from '../lib/market';
-import { formatDemand } from '../lib/demand';
 import MarketIcon from './MarketIcon';
 
 /**
@@ -12,14 +11,15 @@ import MarketIcon from './MarketIcon';
  *
  * Not a row of floating pills: one hairline-framed band, eight markets as
  * fused CELLS on shared hairlines — the index rail of a trading floor. Every
- * cell carries a live micro-read (a real demand % where one exists, an honest
- * live-lot count where it doesn't), so the floor hums before you choose. The
- * active cell is the room's one lamp: a 2px butter filament on its top edge,
- * the --glow-lit halo when this switch is the view's lit element.
+ * cell carries ONE standardized micro-read — the live-lot count (Collin,
+ * Aug 22 2026: no % in the rail; one grammar, eight cells) — so the floor
+ * hums before you choose. The active cell is the room's one lamp: a 2px
+ * butter filament on its top edge, the --glow-lit halo when this switch is
+ * the view's lit element.
  *
  * Total market is the ANCHOR — first cell, wider, sealed off by a double-
  * hairline spine: everything left of the spine is the index, everything right
- * its components. It carries the index last-move plus the total live count.
+ * its components. Its read is the total live count.
  *
  * ≤899px this is NOT a squeezed rail — it becomes THE KEYPAD: a 2×4 board of
  * keys (short labels) over THE FLAP LINE, a split-flap readout printing the
@@ -30,16 +30,6 @@ import MarketIcon from './MarketIcon';
  * element is its own — the marquee rule).
  */
 
-export interface RailRead {
-  /** last value of a REAL demand-%-vs-estimate series — art/design/watches
-   *  only; never fabricated for realized/bid-basis markets */
-  demandPct?: number | null;
-  /** live lots on the block — the universal honest read */
-  liveCount?: number | null;
-}
-
-const READ_MARKETS = new Set<Market>(['art', 'design', 'watches']);
-
 function fmtCount(n: number): string {
   return n.toLocaleString('en-US');
 }
@@ -49,7 +39,6 @@ export default function MarketSwitch({
   lit = false,
   open = false,
   reads,
-  indexMove,
 }: {
   /** inner-page variant: the rail dimmed to navigation duty — no reads, no
    *  flap, no halo. Home omits it and gets the full door. */
@@ -59,11 +48,9 @@ export default function MarketSwitch({
   lit?: boolean;
   /** arms the once-per-session "board energizes" entrance (motion-gated). */
   open?: boolean;
-  /** per-market micro-reads (door only) — demand % where real, live counts
-   *  everywhere. Missing key → the cell simply prints no read. */
-  reads?: Partial<Record<Market, RailRead>>;
-  /** the aggregate index's last move, % (market.json) — the anchor's read. */
-  indexMove?: number | null;
+  /** per-market live-lot counts (door only) — the one standardized read.
+   *  Missing key → the cell simply prints no read. */
+  reads?: Partial<Record<Market, number>>;
 }) {
   const { market, setMarket } = useMarket();
   const railRef = useRef<HTMLDivElement>(null);
@@ -105,43 +92,20 @@ export default function MarketSwitch({
   const door = !compact;
   const active = MARKETS.find(m => m.key === market) ?? MARKETS[0];
 
-  /** the cell's micro-read: [text, tone] — or null (no data, print nothing) */
-  const readOf = (key: Market): { text: string; tone?: 'up' | 'down' } | null => {
+  /** the cell's micro-read — one grammar for all eight: "N live" */
+  const readOf = (key: Market): string | null => {
     if (!door) return null;
-    if (key === 'all') {
-      const parts: string[] = [];
-      if (indexMove != null) parts.push(formatDemand(indexMove));
-      const total = reads?.all?.liveCount;
-      if (total != null) parts.push(`${fmtCount(total)} live`);
-      if (!parts.length) return null;
-      return { text: parts.join('  '), tone: indexMove != null ? (indexMove >= 0 ? 'up' : 'down') : undefined };
-    }
-    const r = reads?.[key];
-    if (READ_MARKETS.has(key) && r?.demandPct != null) {
-      return { text: formatDemand(r.demandPct), tone: r.demandPct >= 0 ? 'up' : 'down' };
-    }
-    if (r?.liveCount != null) return { text: `${fmtCount(r.liveCount)} live` };
-    return null;
+    const n = reads?.[key];
+    return n != null ? `${fmtCount(n)} live` : null;
   };
 
   // THE FLAP LINE (mobile door) — the split-flap destination row for the
-  // active market. Uppercase mono tokens; % toned, everything else quiet.
+  // active market. Uppercase mono tokens, one quiet register.
   const flap = (() => {
     if (!door) return null;
-    const tokens: { t: string; tone?: 'up' | 'down' | 'name' }[] = [
-      { t: active.label.toUpperCase(), tone: 'name' },
-    ];
-    if (active.key === 'all') {
-      if (indexMove != null) tokens.push({ t: `INDEX ${formatDemand(indexMove)}`, tone: indexMove >= 0 ? 'up' : 'down' });
-      const total = reads?.all?.liveCount;
-      if (total != null) tokens.push({ t: `${fmtCount(total)} LIVE` });
-    } else {
-      const r = reads?.[active.key];
-      if (READ_MARKETS.has(active.key) && r?.demandPct != null) {
-        tokens.push({ t: `DEMAND ${formatDemand(r.demandPct)}`, tone: r.demandPct >= 0 ? 'up' : 'down' });
-      }
-      if (r?.liveCount != null) tokens.push({ t: `${fmtCount(r.liveCount)} LIVE` });
-    }
+    const tokens: string[] = [active.label.toUpperCase()];
+    const n = reads?.[active.key];
+    if (n != null) tokens.push(`${fmtCount(n)} LIVE ${n === 1 ? 'LOT' : 'LOTS'}`);
     return tokens;
   })();
 
@@ -155,7 +119,7 @@ export default function MarketSwitch({
       aria-label="Markets"
     >
       {MARKETS.map((m, i) => {
-        const read = readOf(m.key);
+        const readText = readOf(m.key);
         const isActive = market === m.key;
         return (
           <button
@@ -167,7 +131,7 @@ export default function MarketSwitch({
             data-market={m.key}
             data-active={isActive}
             style={{ '--cell-i': i } as CSSProperties}
-            aria-label={read ? `${m.label} — ${read.text}` : m.label}
+            aria-label={readText ? `${m.label} — ${readText}` : m.label}
             onClick={() => setMarket(m.key)}
             onKeyDown={e => onKeys(e, i)}
           >
@@ -178,9 +142,9 @@ export default function MarketSwitch({
                 <span className="ray-rail-name-short">{m.short}</span>
               </span>
             </span>
-            {read && (
-              <span className="ray-rail-read" data-tone={read.tone} aria-hidden="true">
-                {read.text}
+            {readText && (
+              <span className="ray-rail-read" aria-hidden="true">
+                {readText}
               </span>
             )}
           </button>
@@ -189,9 +153,9 @@ export default function MarketSwitch({
       {flap && (
         <div className="ray-rail-flap" aria-live="polite">
           {flap.map((tok, i) => (
-            <span key={i} data-tone={tok.tone}>
+            <span key={i}>
               {i > 0 && <span className="ray-rail-flap-dot" aria-hidden="true">·</span>}
-              {tok.t}
+              {tok}
             </span>
           ))}
         </div>
