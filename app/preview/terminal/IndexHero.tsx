@@ -4,10 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
-import type { Market } from '../../constants';
+import { MARKETS, type Market } from '../../constants';
 import type { HeroPoint } from './HeroChart';
 import { MarketTape, SubTape, TapeMonument, pickLead } from './MarketTape';
 import { fmtInt, useReducedMotion } from './hooks';
+
+// The masthead kicker's vertical count derives from MARKETS so a new market
+// (TCG, Aug 2026) can never leave the copy lying about the shelf below it.
+const N_VERTICALS = MARKETS.filter((mk) => mk.live && mk.key !== 'all').length;
+const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'] as const;
+const VERTICAL_COUNT_WORD = COUNT_WORDS[N_VERTICALS] ?? String(N_VERTICALS);
 import styles from './style.module.css';
 
 /* RAIL MARKS — the constructed-mark language on the "Right now" metrics:
@@ -375,7 +381,7 @@ export default function IndexHero({
         <m.div className={styles.mtMasthead} {...rise(0.04)}>
           <span className={styles.sectionKicker}>{hero.kicker}</span>
           <span className={styles.mtMastheadNote}>
-            {activeKey === 'all' ? 'six verticals · the strongest honest read each' : 'the sub-markets · strongest honest read each'}
+            {activeKey === 'all' ? `${VERTICAL_COUNT_WORD} verticals · the strongest honest read each` : 'the sub-markets · strongest honest read each'}
           </span>
           {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
         </m.div>
