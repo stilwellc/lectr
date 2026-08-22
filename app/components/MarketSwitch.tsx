@@ -93,10 +93,10 @@ export default function MarketSwitch({
   const active = MARKETS.find(m => m.key === market) ?? MARKETS[0];
 
   /** the cell's micro-read — one grammar for all eight: "N live" */
-  const readOf = (key: Market): string | null => {
+  const readOf = (key: Market): number | null => {
     if (!door) return null;
     const n = reads?.[key];
-    return n != null ? `${fmtCount(n)} live` : null;
+    return n ?? null;
   };
 
   // THE FLAP LINE (mobile door) — the split-flap destination row for the
@@ -119,7 +119,7 @@ export default function MarketSwitch({
       aria-label="Markets"
     >
       {MARKETS.map((m, i) => {
-        const readText = readOf(m.key);
+        const readCount = readOf(m.key);
         const isActive = market === m.key;
         return (
           <button
@@ -131,7 +131,7 @@ export default function MarketSwitch({
             data-market={m.key}
             data-active={isActive}
             style={{ '--cell-i': i } as CSSProperties}
-            aria-label={readText ? `${m.label} — ${readText}` : m.label}
+            aria-label={readCount != null ? `${m.label} — ${fmtCount(readCount)} live` : m.label}
             onClick={() => setMarket(m.key)}
             onKeyDown={e => onKeys(e, i)}
           >
@@ -142,9 +142,9 @@ export default function MarketSwitch({
                 <span className="ray-rail-name-short">{m.short}</span>
               </span>
             </span>
-            {readText && (
+            {readCount != null && (
               <span className="ray-rail-read" aria-hidden="true">
-                {readText}
+                <b>{fmtCount(readCount)}</b> live
               </span>
             )}
           </button>

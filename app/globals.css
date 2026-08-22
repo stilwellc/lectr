@@ -2219,25 +2219,28 @@ body {
   display: flex;
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.015);
+  /* a quiet vertical fall of light gives the band body without breaking the
+     flat doctrine — one surface, faint top sheen */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
 }
 .ray-rail-cell {
   position: relative;
   flex: 1 1 0;
   min-width: 108px;
-  height: 56px;
+  height: 74px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   gap: 0;
-  padding: 10px 14px 9px;
+  padding: 10px 8px 9px;
   border: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   background: transparent;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   font-family: var(--font-sans), sans-serif;
   transition: background 140ms var(--ease-signature), filter 90ms var(--ease-signature);
 }
@@ -2249,11 +2252,18 @@ body {
   border-right: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow: 1px 0 0 #08090a;
 }
-.ray-rail-top { display: flex; align-items: center; gap: 7px; color: var(--color-text-faint); }
-.ray-rail-top svg { flex: none; }
+.ray-rail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  transition: color 140ms var(--ease-signature);
+}
+.ray-rail-top svg { flex: none; width: 16px; height: 16px; }
 .ray-rail-name {
-  font-size: 12.5px;
-  font-weight: 510;
+  font-size: 13px;
+  font-weight: 560;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--color-text-muted);
@@ -2262,7 +2272,7 @@ body {
 }
 .ray-rail-name-short { display: none; }
 .ray-rail-read {
-  margin-top: 4px;
+  margin-top: 5px;
   font-family: var(--font-mono), monospace;
   font-size: 10.5px;
   font-weight: 500;
@@ -2272,9 +2282,11 @@ body {
   color: var(--color-text-faint);
   white-space: pre;
 }
-.ray-rail-cell:hover { background: rgba(255, 255, 255, 0.03); }
+/* the figure carries one more step of ink than its unit word */
+.ray-rail-read b { font-weight: 500; color: var(--color-text-muted); }
+.ray-rail-cell:hover { background: rgba(255, 255, 255, 0.045); }
 .ray-rail-cell:hover .ray-rail-name { color: var(--color-fg); }
-.ray-rail-cell:hover .ray-rail-top { color: var(--color-text-muted); }
+.ray-rail-cell:hover .ray-rail-top { color: var(--color-text-secondary); }
 .ray-rail-cell:active { filter: brightness(0.92); }
 /* the filament — the departure-board row lamp */
 .ray-rail-cell::before {
@@ -2287,12 +2299,15 @@ body {
   transform-origin: left center;
 }
 .ray-rail-cell[data-active=true] {
-  background: rgba(232, 218, 182, 0.04);
+  /* the lamp CASTS — butter light falling from the filament into the cell */
+  background: linear-gradient(180deg, rgba(232, 218, 182, 0.11), rgba(232, 218, 182, 0.028) 52%, transparent 90%);
   z-index: 1;
 }
 .ray-rail-cell[data-active=true]::before { transform: scaleX(1); }
-.ray-rail-cell[data-active=true] .ray-rail-name { color: var(--color-fg); font-weight: 590; }
+.ray-rail-cell[data-active=true] .ray-rail-name { color: var(--color-fg); font-weight: 620; }
 .ray-rail-cell[data-active=true] .ray-rail-top { color: var(--color-butter); }
+.ray-rail-cell[data-active=true] .ray-rail-read { color: var(--color-text-muted); }
+.ray-rail-cell[data-active=true] .ray-rail-read b { color: var(--color-text-secondary); }
 /* the marquee rule: only where the switch IS the view's lit element */
 .ray-rail[data-lit=true] .ray-rail-cell[data-active=true] { box-shadow: var(--glow-lit); }
 .ray-rail-cell:focus-visible {
@@ -2303,12 +2318,15 @@ body {
 /* the flap line — hidden until the keypad form needs it */
 .ray-rail-flap { display: none; }
 
-/* compact (inner pages): the rail dimmed to navigation duty */
-.ray-rail[data-variant=compact] { border-color: rgba(255, 255, 255, 0.06); background: transparent; }
+/* compact (inner pages): the rail dimmed to navigation duty — one centered row */
+.ray-rail[data-variant=compact] { border-color: rgba(255, 255, 255, 0.06); background: transparent; box-shadow: none; }
 .ray-rail[data-variant=compact] .ray-rail-cell,
-.ray-rail[data-variant=compact] .ray-rail-anchor { height: 40px; padding: 0 14px; min-width: 0; }
+.ray-rail[data-variant=compact] .ray-rail-anchor { height: 42px; padding: 0 12px; min-width: 0; }
 .ray-rail[data-variant=compact] .ray-rail-anchor { flex: 1 1 0; border-right: 0; box-shadow: none; }
 .ray-rail[data-variant=compact] .ray-rail-read { display: none; }
+.ray-rail[data-variant=compact] .ray-rail-top { flex-direction: row; gap: 7px; }
+.ray-rail[data-variant=compact] .ray-rail-top svg { width: 14px; height: 14px; }
+.ray-rail[data-variant=compact] .ray-rail-name { font-size: 12.5px; font-weight: 520; }
 
 /* 900–1080: the squeeze — tighter cells, the anchor holds as components
    scroll under the spine; the right edge admits the clip honestly */
@@ -2343,12 +2361,17 @@ body {
   .ray-rail-cell:nth-child(5) { border-left: 0; }
   .ray-rail-cell:nth-child(n+5) { border-top: 1px solid rgba(255, 255, 255, 0.06); }
   .ray-rail-top { flex-direction: column; gap: 5px; }
-  .ray-rail-name { font-size: 11px; font-weight: 520; }
+  .ray-rail-top svg { width: 15px; height: 15px; }
+  .ray-rail-name { font-size: 11.5px; font-weight: 560; }
   .ray-rail-name-full { display: none; }
   .ray-rail-name-short { display: inline; }
   .ray-rail-read { display: none; }
-  /* the filament drops to the bottom edge — pointing at the flap it feeds */
+  /* the filament drops to the bottom edge — pointing at the flap it feeds —
+     and the lamp-cast rises from it */
   .ray-rail-cell::before { inset: auto 0 0 0; }
+  .ray-rail-cell[data-active=true] {
+    background: linear-gradient(0deg, rgba(232, 218, 182, 0.11), rgba(232, 218, 182, 0.028) 52%, transparent 90%);
+  }
   .ray-rail[data-variant=door] .ray-rail-flap {
     display: flex;
     grid-column: 1 / -1;
