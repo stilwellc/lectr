@@ -23,6 +23,7 @@ export const MARKET_PATH: Record<Market, string> = {
   watches: '/watches',
   science: '/science',
   sports: '/sports',
+  tcg: '/tcg',
   culture: '/culture',
 };
 
@@ -85,6 +86,7 @@ const MARKET_TITLE: Record<Market, string> = {
   watches: 'Watches — lectr',
   science: 'Science — lectr',
   sports: 'Sports — lectr',
+  tcg: 'TCG — lectr',
   culture: 'Pop Culture — lectr',
 };
 

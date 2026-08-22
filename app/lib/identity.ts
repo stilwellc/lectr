@@ -19,11 +19,12 @@ import { ARTISTS } from '../constants';
 
 export const WATCH_SLUGS = new Set<string>(ARTISTS.filter(a => a.market === 'watches').map(a => a.slug));
 
-/** Autograph-format verticals: science + culture (not pokémon — cards) + the
- *  sports autographs slug. An ALS and a signed photo of the same person are
- *  different markets; format mismatch is a comp gate here. */
+/** Autograph-format verticals: science + culture + the sports autographs
+ *  slug. (Pokémon moved to its own 'tcg' market Aug 21 2026, so the old
+ *  not-pokémon carve-out is structural now.) An ALS and a signed photo of the
+ *  same person are different markets; format mismatch is a comp gate here. */
 export const AUTOGRAPH_SLUGS = new Set<string>([
-  ...ARTISTS.filter(a => (a.market === 'science' || a.market === 'culture') && a.slug !== 'pokemon').map(a => a.slug),
+  ...ARTISTS.filter(a => a.market === 'science' || a.market === 'culture').map(a => a.slug),
   'autographs',
 ]);
 

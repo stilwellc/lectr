@@ -212,6 +212,7 @@ function curate(md: MarketData, scope: string): Curated | null {
   switch (scope) {
     case 'all': return eraChart(md, true);
     case 'sports': return eraChart(md, false);
+    case 'tcg': return null; // long-horizon panel earns its place once pokemon-era drills accrue
     case 'culture': return cultureChart(md);
     case 'watches': return demandChart(md, 'watches', 4, 60, 'model-family demand · % vs estimate, trailing year');
     case 'art': return demandChart(md, 'art', 4, 40, 'kind demand · % vs estimate, trailing year');

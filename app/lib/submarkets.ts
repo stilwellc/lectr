@@ -45,6 +45,8 @@ export function drillSlugFor(l: Pick<AuctionLot, 'artist' | 'subCat' | 'drill'>)
   if (!vert || !l.subCat) return null;
   if (vert === 'sports') return l.drill ? { vertical: 'sports', slug: `${l.subCat}:${l.drill}` } : null;
   if (vert === 'watches') return l.drill ? { vertical: 'watches', slug: `${l.artist}:${l.drill}` } : null;
+  if (vert === 'tcg') return l.drill ? { vertical: 'tcg', slug: `pokemon-era:${l.drill}` }
+    : l.subCat !== 'other' ? { vertical: 'tcg', slug: `tcg:${l.subCat}` } : null;
   if (vert === 'culture') return l.drill ? { vertical: 'culture', slug: `culture:${l.drill}` }
     : l.subCat !== 'other' ? { vertical: 'culture', slug: `culture-kind:${l.subCat}` } : null;
   if (vert === 'science') return l.drill ? { vertical: 'science', slug: `${l.subCat}:${l.drill}` } : null;

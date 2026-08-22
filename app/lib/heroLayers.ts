@@ -43,6 +43,7 @@ const MAIN: Record<string, LayerRef[]> = {
     { key: 'watches', label: 'Watches', source: 'markets', slug: 'watches', kind: 'index' },
     { key: 'science', label: 'Science', source: 'markets', slug: 'science', kind: 'index' },
     { key: 'sports', label: 'Sports', source: 'markets', slug: 'sports', kind: 'index' },
+    { key: 'tcg', label: 'TCG', source: 'markets', slug: 'tcg', kind: 'index' },
     { key: 'culture', label: 'Pop culture', source: 'markets', slug: 'culture', kind: 'index' },
   ],
   watches: [
@@ -80,6 +81,11 @@ const SUB: Record<string, LayerRef[]> = {
     { key: 'v-space', label: 'Space', source: 'subs', vertical: 'science', slug: 'space-exploration', kind: 'volume' },
     { key: 'v-meteorites', label: 'Meteorites', source: 'subs', vertical: 'science', slug: 'meteorites', kind: 'volume' },
     { key: 'v-fossils', label: 'Fossils', source: 'subs', vertical: 'science', slug: 'fossils', kind: 'volume' },
+  ],
+  tcg: [
+    { key: 'era-vintage', label: "Vintage ≤'02", source: 'drills', vertical: 'tcg', slug: 'pokemon-era:vintage', kind: 'volume' },
+    { key: 'era-classic', label: "Classic '03–16", source: 'drills', vertical: 'tcg', slug: 'pokemon-era:classic', kind: 'volume' },
+    { key: 'v-sealed', label: 'Sealed', source: 'drills', vertical: 'tcg', slug: 'tcg:pokemon-sealed', kind: 'volume' },
   ],
   culture: [
     { key: 'v-music', label: 'Music', source: 'drills', vertical: 'culture', slug: 'culture:music', kind: 'volume' },

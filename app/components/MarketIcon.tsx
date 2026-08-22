@@ -13,6 +13,7 @@ import type { Market } from '../constants';
  *   watches  a dial — concentric rim, cardinal ticks, one hand
  *   sports   a medal on its ribbon
  *   science  an orbit — nucleus, ellipse, one electron
+ *   tcg      a trading card with an energy bolt — the game piece as asset
  *   culture  a constructed five-point star (the walk-of-fame mark)
  */
 export const MARKET_GLYPHS: Record<Market, React.ReactNode> = {
@@ -67,7 +68,15 @@ export const MARKET_GLYPHS: Record<Market, React.ReactNode> = {
       <circle cx="19.4" cy="9" r="1.3" fill="currentColor" stroke="none" />
     </>
   ),
-  // the constructed five-point star — the walk-of-fame mark
+
+  // a trading card, portrait — the energy bolt inside (the game piece as asset)
+  tcg: (
+    <>
+      <rect x="6.2" y="4" width="11.6" height="16" rx="1.7" />
+      <path d="M12.9 8l-2.6 4h2.2l-1.4 4 3.9-5h-2.3l1.6-3z" fill="currentColor" stroke="none" />
+    </>
+  ),
+ // the constructed five-point star — the walk-of-fame mark
   culture: (
     <>
       <path d="M12 4.5 13.76 9.57 19.13 9.68 14.85 12.93 16.41 18.07 12 15 7.59 18.07 9.15 12.93 4.87 9.68 10.24 9.57Z" />

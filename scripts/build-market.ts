@@ -1029,7 +1029,7 @@ export function runMarketBuild() {
   // and art editions. Only verticals where at least one horizon certifies are
   // emitted — an all-abstain block would be dead weight.
   const repeatSale: Record<string, ReturnType<typeof buildVerticalRepeatSale>> = {};
-  for (const v of ['watches', 'art', 'sports', 'culture']) {
+  for (const v of ['watches', 'art', 'sports', 'tcg']) {
     try {
       const vLots = all.filter(l => (MARKETS[v] || []).includes(l.artist) && l.status === 'sold' && (l.priceUsd || 0) > 0);
       const r = buildVerticalRepeatSale(vLots, v);

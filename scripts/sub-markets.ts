@@ -346,13 +346,12 @@ export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): V
   } else if (vertical === 'sports') {
     pool = sold.filter(l => cardKey(l) != null); key = cardKey;
     basis = 'same card, same grade, resold'; scope = 'cards';
-  } else if (vertical === 'culture') {
-    // culture's ONE strong identity: graded Pokémon (year|set|no|edition|grade).
-    // Autograph/title-proxy identity stays uncertifiable — this pool is
-    // pokémon-only by construction.
+  } else if (vertical === 'tcg') {
+    // tcg's strong identity: graded Pokémon (year|set|no|edition|grade).
+    // (Moved out of culture Aug 21 2026 — TCG is its own market now.)
     pool = sold.filter(l => pokemonKey(l) != null); key = pokemonKey;
     basis = 'same card, same grade, resold'; scope = 'pokémon';
-  } else return null; // science: title-proxy identity is too weak to certify.
+  } else return null; // science/culture: title-proxy identity is too weak to certify.
   if (pool.length < 400) return null;
   const rs = buildRepeatSaleIndex(pool, key);
   const horizons: VerticalRepeatSale['horizons'] = {};
@@ -478,6 +477,15 @@ export function buildDrillRows(all: AuctionLot[]): Record<string, DrillRead[]> {
       if (era) add(`spe|${era}`, `cards-era:${era}`, subCatLabel(`era-${era}`), 'sports', 'cards', l);
     } else if (vert === 'watches' && l.drill) {
       add(`w|${l.artist}|${l.drill}`, `${l.artist}:${l.drill}`, `${subCatLabel(l.drill)} · ${ARTISTS_LABEL[l.artist] || l.artist}`, 'watches', l.artist, l);
+    } else if (vert === 'tcg') {
+      // product form (singles vs sealed) + the era axis off the leading year
+      if (l.subCat !== 'other') add(`t|${l.subCat}`, `tcg:${l.subCat}`, subCatLabel(l.subCat), 'tcg', 'tcg', l);
+      // pokémon's own era cuts (leading-year buckets ≤02 / 03–16 / 17+) — the
+      // sports era labels ("pre-'80") would lie here, so label inline
+      if (l.drill) {
+        const eraLabel = l.drill === 'vintage' ? "Vintage ≤'02" : l.drill === 'classic' ? "Classic '03–'16" : "Modern '17+";
+        add(`te|${l.drill}`, `pokemon-era:${l.drill}`, eraLabel, 'tcg', 'pokemon-cards', l);
+      }
     } else if (vert === 'culture') {
       if (l.drill) add(`c|${l.drill}`, `culture:${l.drill}`, subCatLabel(l.drill), 'culture', 'culture', l);
       if (l.subCat !== 'other') add(`ck|${l.subCat}`, `culture-kind:${l.subCat}`, subCatLabel(l.subCat), 'culture', 'kind', l);

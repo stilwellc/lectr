@@ -13,7 +13,7 @@ import React from 'react';
 import type { MarketData } from '../../hooks/useRayData';
 import { toneOf, fmtSignedPct } from '../../utils';
 
-const LIVE_MARKETS = ['art', 'design', 'watches', 'sports', 'science', 'culture'];
+const LIVE_MARKETS = ['art', 'design', 'watches', 'sports', 'tcg', 'science', 'culture'];
 const MIN_N = 40; // statistical floor — matches the pipeline's houseCal gate
 
 const fmtN = (n: number) =>

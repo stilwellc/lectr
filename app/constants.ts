@@ -6,7 +6,7 @@
  * announced before it trades. 'all' is the whole collectibles market — the
  * lander's default until a vertical is chosen.
  */
-export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science' | 'culture';
+export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'tcg' | 'science' | 'culture';
 
 export const MARKETS: { key: Market; label: string; live: boolean; tagline: string }[] = [
   { key: 'all', label: 'Total market', live: true, tagline: 'every vertical, one tape' },
@@ -14,6 +14,7 @@ export const MARKETS: { key: Market; label: string; live: boolean; tagline: stri
   { key: 'design', label: 'Design', live: true, tagline: 'the furniture & objects market' },
   { key: 'watches', label: 'Watches', live: true, tagline: 'the reference market' },
   { key: 'sports', label: 'Sports', live: true, tagline: 'cards, game-worn, trophies & tickets' },
+  { key: 'tcg', label: 'TCG', live: true, tagline: 'pokémon & the trading-card game market' },
   { key: 'science', label: 'Science', live: true, tagline: 'tech, fossils, space & instruments' },
   { key: 'culture', label: 'Pop Culture', live: true, tagline: 'screen-worn, stage-played & the unrepeatable' },
 ];
@@ -88,7 +89,7 @@ export const ARTISTS = [
   // cards, sealed boxes/packs, sets. Lives in culture, firewalled from every
   // sports surface by vertical membership; bulk sold history rides the same
   // engine-exclusion + corpus-only sampling as sports-cards.
-  { slug: 'pokemon', label: 'Pokémon', market: 'culture' },
+  { slug: 'pokemon', label: 'Pokémon', market: 'tcg' },
   { slug: 'pop-memorabilia', label: 'Pop Memorabilia', market: 'culture' },
 ] as const;
 
@@ -114,6 +115,7 @@ export function rosterNoun(market: Market, n = 2): string {
     case 'watches': return plural ? 'makers' : 'maker';
     case 'science': return plural ? 'collections' : 'collection';
     case 'sports': return plural ? 'categories' : 'category';
+    case 'tcg': return plural ? 'games' : 'game';
     case 'culture': return plural ? 'categories' : 'category';
     default: return 'tracked';
   }

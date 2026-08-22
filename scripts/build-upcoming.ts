@@ -405,6 +405,12 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       slug: 'entertainment-memorabilia',
       band: [100, 2000],
     }),
+    // tcg: Goldin publishes no estimates (same as sports) — the realized
+    // cohort on the pokémon slug is the honest typical-price line.
+    tcg: realizedCohortSeries(lots as unknown as AuctionLot[], {
+      slug: 'pokemon',
+      band: [50, 2000],
+    }),
   };
 
   // bidComp['sports'] — the honest CARDS demand read. Goldin publishes no

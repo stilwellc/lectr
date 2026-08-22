@@ -233,7 +233,7 @@ const pad = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + '…' :
 const hr = (c = '─') => c.repeat(78);
 const h1 = (s: string) => `\n${hr('═')}\n${s}\n${hr('═')}`;
 
-const MARKETS_ORDER: Market[] = ['art', 'design', 'watches', 'sports', 'science', 'culture'];
+const MARKETS_ORDER: Market[] = ['art', 'design', 'watches', 'sports', 'tcg', 'science', 'culture'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN.
