@@ -190,11 +190,6 @@ const tagFor = (read: TapeRowData['read']): string => {
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
-/** direction of a value series — last vs first — for coloring a descriptive
-    (price) sparkline green/red the way demand reads already sign. */
-const seriesDir = (s: { value: number }[]): 'up' | 'down' | undefined =>
-  s.length >= 2 ? (s[s.length - 1].value >= s[0].value ? 'up' : 'down') : undefined;
-
 /** the lead read — the row the monument enthrones. Certified beats measured
     beats descriptive, so as more verticals clear the CI bar the monument
     upgrades itself; today it is Art's certified 5Y. Scoped, it is that
@@ -314,8 +309,10 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
                 dir={r.read.changePct >= 0 ? 'up' : 'down'} play={play} delay={i * 0.08} />
             )}
             {r.read.kind === 'demand' && r.read.series.length >= 2 && <DemandLine mini series={r.read.series} dir={r.read.now >= 0 ? 'up' : 'down'} />}
+            {/* descriptive series draw NEUTRAL — delta ink is for certified/
+                measured reads; a typical-$ drift earns no green/red */}
             {r.read.kind === 'descriptive' && (r.read.series.length >= 2
-              ? <DemandLine mini series={r.read.series} dir={seriesDir(r.read.series)} />
+              ? <DemandLine mini series={r.read.series} />
               : <span className={styles.mtAbstain}>—</span>)}
           </span>
           <span className={styles.mtRight}>

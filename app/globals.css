@@ -930,8 +930,10 @@ h1 {
 }
 .ray-nav-link:hover { color: var(--color-fg); }
 .ray-nav-link[data-active=true] {
-  color: var(--color-accent-gold-text);
-  background: color-mix(in srgb, var(--color-accent-gold) 10%, transparent);
+  /* quiet Linear active chip — the gold pill retired Aug 22 (dead layer that
+     was one cascade slip from resurfacing) */
+  color: var(--color-fg);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1073,6 +1075,9 @@ h1 {
   --color-bg: #08090a;
   --color-bg-deep: #060708;
   --color-bg-elevated: #1c1c1f;
+  /* the nav joins the cool ground (Aug 22 — it was the last warm glass
+     surface on the view; a brown-cast band atop a #08090a page) */
+  --color-nav-bg: rgba(8, 9, 10, 0.85);
   --color-surface: #1c1c1f;
   --panel: #17171a;
   --panel-mat: #17171a;
@@ -1811,7 +1816,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }
 /* Value link lights butter when active — green is reserved for direction */
-.ray-nav-link-value[data-active=true] { color: var(--color-butter-text) !important; }
+.ray-nav-link-value[data-active=true] { color: var(--color-fg) !important; } /* the page body carries the butter, never the nav */
 
 /* ── command palette ── */
 /* the ⌘K badge inside the Find-a-maker pill — teaches the shortcut that the

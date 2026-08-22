@@ -235,9 +235,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           top: 0;
           z-index: 40;
           background: var(--color-nav-bg);
-          backdrop-filter: blur(30px);
-          -webkit-backdrop-filter: blur(30px);
-          border-bottom: 1px solid var(--color-border);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border-bottom: 1px solid var(--hairline);
           padding-block: 8px;
         }
         .ray-artist-nav-inner {
@@ -265,7 +265,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-mark-r { display: block; height: 26px; width: auto; }
         .ray-mark-r.lectr-on { animation: lectrSwitchOn 480ms var(--ease-signature) 1 both; }
         .ray-wordmark:hover,
-        .ray-wordmark:focus-visible { opacity: 0.68; }
+        .ray-wordmark:focus-visible { opacity: 0.85; }
         .ray-artist-select-wrap {
           position: relative;
           flex: 1;
@@ -391,6 +391,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             margin-left: auto;
             padding: 8px 8px;
             min-height: 44px;
+            min-width: 44px;
             background: none;
             border: none;
             color: var(--color-fg);
@@ -424,7 +425,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           position: fixed;
           inset: 0;
           z-index: 300;
-          background: rgba(15, 14, 10, 0.62);
+          background: rgba(8, 9, 10, 0.6);
           -webkit-backdrop-filter: blur(6px);
           backdrop-filter: blur(6px);
           animation: rayScrimIn 160ms var(--ease-signature) both;
@@ -528,10 +529,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-maker-sheet-sub {
           padding: 18px 20px 4px;
           font-family: var(--font-sans), sans-serif;
-          font-size: 11.5px;
+          font-size: 12px;
           font-weight: 600;
-          letter-spacing: 0.16em;
-          text-transform: uppercase;
+          letter-spacing: 0.02em;
           color: var(--color-text-faint);
         }
       `}</style>
@@ -554,10 +554,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
               {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
               {unseenAlerts > 0 && (
-                // butter marker: the nightly crawl left unread search matches
+                // mint marker: "something new happened" is a verb, not the
+                // view's lamp — butter stays with the rail's active cell
                 <span aria-label={`${unseenAlerts} new matches`} style={{
                   display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
-                  background: 'var(--color-butter)', marginLeft: 6, verticalAlign: '2px',
+                  background: 'var(--color-up)', marginLeft: 6, verticalAlign: '2px',
                 }} />
               )}
             </button>
@@ -592,7 +593,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           aria-label="Search"
           onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
@@ -607,7 +608,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           aria-expanded={open}
           onClick={() => setOpen(o => !o)}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
           <span>Menu</span>
@@ -646,7 +647,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     {s.path === '/profile' && unseenAlerts > 0 && (
                       <span aria-label={`${unseenAlerts} new matches`} style={{
                         display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
-                        background: 'var(--color-butter)', marginLeft: 7, verticalAlign: '2px',
+                        background: 'var(--color-up)', marginLeft: 7, verticalAlign: '2px',
                       }} />
                     )}
                   </button>

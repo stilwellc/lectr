@@ -106,51 +106,6 @@
   display: flex;
   flex-direction: column;
 }
-.railRow,
-.railBtn {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 10px 2px 9px;
-  border-top: 2px dotted var(--tt-hair);
-}
-.railRow:first-child { border-top: none; }
-.railBtn {
-  width: 100%;
-  border-left: none; border-right: none; border-bottom: none;
-  background: none;
-  cursor: pointer;
-  transition: background 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
-}
-.railBtn:hover { background: rgba(232, 218, 182, 0.04); }
-.railBtn:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
-.railLabel {
-  font-family: var(--font-inter), sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--tt-faint);
-  white-space: nowrap;
-}
-.railVal {
-  font-family: var(--font-inter), sans-serif;
-  font-size: 19px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--tt-fg);
-  font-variant-numeric: tabular-nums;
-}
-.railVal[data-dir='up'] { color: var(--color-up); }
-.railVal[data-dir='down'] { color: var(--color-down); }
-.railVal[data-accent='true'] { color: var(--tt-butter); }
-.railGo {
-  font-style: normal;
-  font-size: 12.5px;
-  margin-left: 7px;
-  color: var(--tt-butter);
-  opacity: 0.85;
-}
 /* ══ THE PULSE BOARD ══ "Right now" as the lander's heartbeat — a bento of
    live blocks (Block's geometry), ticker-settling numerals + a breathing LIVE
    dot (Robinhood's data-as-protagonist), hairline surfaces and staggered
@@ -159,27 +114,27 @@
 .pulse { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .pulseHead { display: flex; align-items: center; padding: 0 2px; }
 /* the leader — the ledger's dotted rule carries the title to the edge */
-.pulseRule { flex: 1; margin-left: 12px; border: none; border-top: 2px dotted var(--tt-hair); transform: translateY(0.5px); }
+.pulseRule { flex: 1; margin-left: 12px; border: none; border-top: 1px solid var(--tt-hair); }
 .pulseTitle {
-  font-family: var(--font-inter), sans-serif; font-size: 11px; font-weight: 600;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-muted);
+  font-family: var(--font-inter), sans-serif; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-muted);
 }
 /* slim rows, one grammar: words left, instrument right — no dead space */
-.pulseGrid { display: flex; flex-direction: column; gap: 7px; }
+.pulseGrid { display: flex; flex-direction: column; gap: 8px; }
 .pulseBlock {
   position: relative; display: flex; flex-direction: row; align-items: center;
   justify-content: space-between; gap: 12px;
-  min-width: 0; padding: 12px 13px; overflow: hidden;
+  min-width: 0; padding: 12px; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px;
   background: rgba(255, 255, 255, 0.028);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease);
+  transition: border-color 140ms var(--ease-signature, ease), background 140ms var(--ease-signature, ease);
 }
 .pulseBlock:hover { border-color: rgba(255, 255, 255, 0.12); }
-.pulseCellText { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pulseCellText { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* the lead cell hosts the paddle — same quiet stock as its siblings; the
    OBJECT carries the warmth (one-accent discipline) */
-.pulseBlock[data-lead='true'] { padding: 12px 13px; }
+.pulseBlock[data-lead='true'] { padding: 12px; }
 .pulseLabel {
   display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--font-inter), sans-serif; font-size: 10px;
@@ -188,9 +143,9 @@
 }
 .pulseValLead {
   font-family: var(--font-inter), sans-serif;
-  font-size: clamp(24px, 1.9vw, 30px); font-weight: 600;
-  letter-spacing: -0.03em; line-height: 1; color: #f7f8f8;
-  font-variant-numeric: tabular-nums; /* crisp — the numeral is foreground, never lit */
+  font-size: clamp(18px, 1.5vw, 22px); font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1; color: #f7f8f8;
+  font-variant-numeric: tabular-nums; /* the room count YIELDS to the certified read (Robinhood: the market figure wins) */
 }
 /* ── THE PADDLE ── the room's population worn as a raised bidder number,
    built as an OBJECT, not a tile: a solid head with a machined bevel (top
@@ -203,10 +158,8 @@
   display: flex; flex-direction: column; align-items: center;
   width: max-content; flex: none;
   margin: 2px 0 -14px;
-  transform: rotate(2.5deg);
-  transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+  /* flat pass Aug 22: the tilt + hover sway retired — signage sits square */
 }
-.pulseBlock:hover .pulsePaddle { transform: rotate(1deg) translateY(-1px); }
 .pulsePaddleHead {
   position: relative;
   display: flex; align-items: center; justify-content: center;
@@ -215,9 +168,7 @@
   /* signage, not a button: one flat body, one quiet rim, the numeral IS
      the design. */
   background: #1d2023;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 6px 16px -12px rgba(0, 0, 0, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 /* the printed keyline — the one drawn detail the card keeps (Collin's call);
    hairline-thin so it reads as ink, not a frame */
@@ -237,12 +188,11 @@
   animation: paddleRaise 0.9s 0.55s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
 }
 @keyframes paddleRaise {
-  from { opacity: 0; transform: rotate(11deg) translateY(16px); }
-  to { opacity: 1; transform: rotate(2.5deg) translateY(0); }
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .pulse[data-play='true'] .pulsePaddle { animation: none; }
-  .pulseBlock:hover .pulsePaddle { transform: rotate(2.5deg); }
 }
 .pulseVal {
   display: flex; align-items: baseline; gap: 6px;
@@ -290,10 +240,7 @@
   /* a printed ticket: dark stock, butter as INK — the rule, the hole's ring,
      the numeral. No warm body, no inner light. */
   background: #17181b;
-  box-shadow: 0 6px 16px -12px rgba(0, 0, 0, 0.8);
-  transition: transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
-.pulseAction:hover .pulseTag { transform: translateY(-1px); }
 /* the ghost — blank tag stock, waiting to be hung: dashed rule, no body */
 .pulseTagGhost {
   border-style: dashed; border-color: rgba(232, 218, 182, 0.24);
@@ -319,21 +266,21 @@
   animation: tagSwing 0.9s 0.65s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
 }
 @keyframes tagSwing {
-  from { opacity: 0; transform: rotate(-7deg) translateY(12px); }
-  to { opacity: 1; transform: rotate(0deg) translateY(0); }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* closing next — the departures line under the board (label above, chips
    flowing left — both shells) */
 .pulseTicker {
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-  padding: 10px 2px 0; border-top: 2px dotted var(--tt-hair);
+  padding: 10px 2px 0; border-top: 1px solid var(--tt-hair);
 }
 .pulseTickerLabel {
-  font-family: var(--font-inter), sans-serif; font-size: 9.5px;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--tt-faint); white-space: nowrap;
+  font-family: var(--font-inter), sans-serif; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-faint); white-space: nowrap;
 }
-.pulseTickerChips { display: flex; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.pulseTickerChips { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .pulseChip {
   display: inline-flex; align-items: baseline; gap: 6px;
   font-family: var(--font-inter), sans-serif; font-size: 11px; color: var(--tt-fg);
@@ -345,8 +292,8 @@
   font-style: normal; font-family: var(--font-mono-data), monospace;
   font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-muted);
 }
-.pulseChip[data-tonight='true'] { border-color: rgba(232, 218, 182, 0.35); }
-.pulseChip[data-tonight='true'] em { color: var(--tt-butter); }
+.pulseChip[data-tonight='true'] { border-color: rgba(255, 255, 255, 0.16); }
+.pulseChip[data-tonight='true'] em { color: var(--tt-secondary); }
 /* desktop rail: the ticker rides between the board and the search */
 .heroRail .pulseTicker { margin-top: 10px; }
 /* ── PHONE SHELL ── the pair is ON THE BLOCK (left) + BELOW MARKET (right);
@@ -399,22 +346,13 @@
   font-family: var(--font-mono-data), monospace !important;
   letter-spacing: -0.01em;
 }
-.railFlagLine {
-  font-family: var(--font-inter), sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.05em;
-  color: #d8a24a;
-  text-align: right;
-  padding: 0 2px 10px;
-  margin-top: -6px;
-}
 /* the ⌘K row closes the rail — same ledger grammar, butter on hover */
 .railCmd {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 2px 2px;
-  border-top: 2px dotted var(--tt-hair);
+  padding: 12px 4px 2px;
+  border-top: 1px solid var(--tt-hair);
   border-left: none; border-right: none; border-bottom: none;
   background: none;
   cursor: pointer;
@@ -487,7 +425,7 @@
   padding: 12px 16px;
   border-radius: 12px;
   border: 1px solid var(--tt-hair-2);
-  background: linear-gradient(180deg, rgba(232, 218, 182, 0.04), rgba(232, 218, 182, 0.01));
+  background: rgba(255, 255, 255, 0.05);
   color: var(--tt-secondary);
   font-family: var(--font-inter), system-ui, sans-serif;
   font-size: 14px;
@@ -498,9 +436,8 @@
     transform 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .cmdPillFull:hover {
-  border-color: rgba(232, 218, 182, 0.34);
-  background: linear-gradient(180deg, rgba(232, 218, 182, 0.07), rgba(232, 218, 182, 0.02));
-  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
 }
 .cmdPillFull:focus-visible {
   outline: 2px solid rgba(232, 218, 182, 0.7);
@@ -518,7 +455,7 @@
   border-bottom-color: rgba(0, 0, 0, 0.5);
   background: rgba(255, 255, 255, 0.06);
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  font-family: var(--font-ibm-plex-mono), monospace;
+  font-family: var(--font-mono-data), monospace;
   font-size: 11px;
   color: var(--tt-secondary);
 }
@@ -569,26 +506,9 @@
    inline, the CHART as the hero visual. NOT the desktop slab.
    ══════════════════════════════════════════════════════════════ */
 .mHero { display: flex; flex-direction: column; gap: 14px; padding: 12px 0 6px; }
-.mHeroCard {
-  border: 1px solid var(--tt-hair-2);
-  border-radius: 18px;
-  background: linear-gradient(180deg, var(--tt-panel), rgba(20, 17, 13, 0.35));
-  box-shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(232, 218, 182, 0.03);
-  padding: var(--card-pad);
-}
 .mHeroHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.mHeroLabel {
-  font-family: var(--font-inter), sans-serif;
-  font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--tt-muted);
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 
 
-.mHeroNumRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
-.mHeroNum {
-  font-family: var(--font-inter), sans-serif; font-weight: 500;
-  font-size: clamp(40px, 13.5vw, 58px); line-height: 0.9; letter-spacing: -0.02em; color: var(--tt-fg);
-}
 
 
 .mHeroChart { margin: 0 -4px; }
@@ -599,20 +519,13 @@
 /* ── THE MOBILE "RIGHT NOW" PANEL — the desktop pulse card, phone-native:
    a contained Linear card holding the 3-up metric tiles and the search. ── */
 .mRightNow {
+  /* blocks are the surface — wrapper shell retired Aug 22 */
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background:
-    radial-gradient(120% 60% at 50% 0%, rgba(255, 255, 255, 0.022), transparent 60%),
-    rgba(255, 255, 255, 0.018);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 2px 0 0;
 }
-.mRightNow .railHead { padding: 0 2px 0; }
 
-.mHeroStats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .mStat {
   /* Linear matte tile: flat cool surface, one fine border, near-white figure */
   display: flex; flex-direction: column; gap: 6px; min-width: 0; text-align: left;
@@ -637,47 +550,21 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   text-transform: uppercase; color: var(--tt-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* mobile search — THE COMMAND BAR. It must never read as the action bar's
-   sibling: butter belongs to below-market; the search is the brightest
-   surface on the card, and a Linear glint — a light streak sweeping the bar
-   every few seconds — marks it as the instrument you can TYPE into. */
+   sibling: butter belongs to below-market. FLAT (Aug 22): matte fill, one
+   hairline — the glint/glow jewelry retired with the desktop bar's. */
 .mHero .cmdPillFull {
   position: relative;
-  overflow: hidden;
-  isolation: isolate;
   width: 100%;
   justify-content: center;
   gap: 10px;
   padding: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.055));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 12px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 6px 18px -10px rgba(0, 0, 0, 0.75),
-    0 0 22px -12px rgba(255, 255, 255, 0.35);
+  box-shadow: none;
   color: var(--tt-fg);
 }
 .mHero .cmdPillFull .railMark { color: var(--tt-muted); }
-/* the glint — one diagonal streak, a long idle between passes */
-.mHero .cmdPillFull::after {
-  content: '';
-  position: absolute;
-  inset: -40% auto -40% -60%;
-  width: 42%;
-  transform: skewX(-18deg) translateX(0);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09) 45%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.09) 55%, transparent);
-  animation: cmdGlint 5.6s cubic-bezier(0.23, 1, 0.32, 1) 1.6s infinite;
-  pointer-events: none;
-  z-index: -1;
-}
-@keyframes cmdGlint {
-  0% { transform: skewX(-18deg) translateX(0); }
-  22% { transform: skewX(-18deg) translateX(420%); }
-  100% { transform: skewX(-18deg) translateX(420%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mHero .cmdPillFull::after { animation: none; opacity: 0; }
-}
 .mHero .cmdPillFull .cmdLabel { color: var(--tt-fg); font-weight: 500; }
 .mHero .cmdPillFull .cmdArrow {
   margin-left: auto;
@@ -687,14 +574,11 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   border-radius: 5px;
   padding: 1px 6px;
 }
-.mHero .cmdPillFull:active { transform: scale(0.99); }
-/* the phone ledger sits under a centred lamp: hairlines brightest mid-row */
+.mHero .cmdPillFull:active { background: rgba(255, 255, 255, 0.05); }
+/* the phone ledger rules cool, like every other hairline on the view */
 @media (max-width: 700px) {
-  .mHero .mtRow, .mtStage .mtRow {
-    border-bottom: 1px solid transparent;
-    border-image: linear-gradient(90deg, rgba(232, 218, 182, 0.04), rgba(232, 218, 182, 0.13) 50%, rgba(232, 218, 182, 0.04)) 1;
-  }
-  .mHero .mtRow:last-child, .mtStage .mtRow:last-child { border-image: none; border-bottom: 0; }
+  .mHero .mtRow, .mtStage .mtRow { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+  .mHero .mtRow:last-child, .mtStage .mtRow:last-child { border-bottom: 0; }
 }
 
 /* ── RETURN HERO — ROI number coloring + the horizon toggle ── */
@@ -720,8 +604,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   text-transform: uppercase; color: var(--tt-faint); padding-bottom: 8px;
 }
 .mHero .tfToggle { margin: 2px 0 12px; }
-.mHeroStats .mStatVal[data-dir='up'] { color: var(--color-up); }
-.mHeroStats .mStatVal[data-dir='down'] { color: var(--color-down); }
 
 /* desktop return head */
 .heroTopRow { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
@@ -765,14 +647,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
      contained cards then added their own padding on top (content landed at
      ~31–34px, narrower than the 16px feed). Full-bleed the cards to the screen
      edge so their inner content sits at the same 16px as everything else. */
-  .mHeroCard {
-    margin-inline: calc(-1 * var(--gutter)) !important;
-    border-radius: 0 !important;
-    border-left: 0 !important;
-    border-right: 0 !important;
-  }
-  .mHeroCard { padding-inline: var(--gutter); }
-  /* the ledger's inner wrapper carries an inline clamp(18px…30px) pad — pull it
+      /* the ledger's inner wrapper carries an inline clamp(18px…30px) pad — pull it
      back to the standard gutter so its content lines up with the feed. */
   
   .root :global(.ray-recordband) {
@@ -943,7 +818,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 /* plate index — 01–05 mono jewelry, echoing the masthead's inventory tag */
 .wallIdx {
-  font-family: var(--font-ibm-plex-mono), monospace;
+  font-family: var(--font-mono-data), monospace;
   font-size: 9px;
   line-height: 12px;
   letter-spacing: 0.18em;
@@ -1267,27 +1142,16 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .heroReturnPer,
 .railLabel,
 .stageMeta,
-.mHeroLabel,
-.mHeroTag,
-.mHeroReturnPer,
-.mStatLabel {
-  letter-spacing: 0;
-  text-transform: none;
-  font-weight: 600;
-}
 .sectionKicker { font-size: 13px; color: var(--tt-muted); margin-bottom: 10px; }
 .heroExplainLine { font-size: 14px; font-weight: 500; color: var(--tt-muted); }
 .heroReturnPer { font-size: 13px; font-weight: 500; color: var(--tt-faint); }
 .railLabel { font-size: 12.5px; color: var(--tt-muted); }
-.railVal { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .stageMeta { font-size: 12.5px; font-weight: 500; color: var(--tt-faint); }
-.mHeroLabel { font-size: 13px; color: var(--tt-muted); }
 .mStatLabel { font-size: 12px; color: var(--tt-muted); }
 .mStatVal { font-variant-numeric: tabular-nums; }
 
 
 .heroNumber { font-variant-numeric: tabular-nums; letter-spacing: -0.035em; font-weight: 650; }
-.mHeroNum { font-variant-numeric: tabular-nums; letter-spacing: -0.03em; font-weight: 650; }
 .tfChip { letter-spacing: 0.02em; }
 
 
@@ -1320,8 +1184,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 /* the 3-up stat chips regained a third tile (Yearly ROI) — the label fit
    math from the type audit assumed weight 500; the de-caps grammar bumped
    it to 600 and "Below market ↗" clips again. Restore the fit. */
-.mHeroStats .mStatLabel { font-weight: 500; }
-.mHeroStats .mStat { padding: 11px 9px; }
 
 /* ════ THE POSTER GRAMMAR — every room announces itself on the center
    axis at display scale, the Robinhood statement rhythm in lectr's
@@ -1704,8 +1566,10 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    at its top and bottom edges; below this line, the gallery begins. */
 .wallSeparator {
   position: relative;
-  margin-top: clamp(48px, 6vw, 96px);
-  padding-top: clamp(44px, 5.5vw, 84px);
+  /* tightened Aug 22 — the old clamp was sized against the masthead-era
+     hero; with the board opening directly the seam reads at half depth */
+  margin-top: clamp(28px, 3.2vw, 48px);
+  padding-top: clamp(26px, 3vw, 44px);
 }
 .wallSeparator::before {
   content: '';
@@ -2299,11 +2163,15 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .mtTag {
-  font-size: 10px; font-weight: 700;
+  font-size: 10px; font-weight: 600;
   letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--tt-faint);
+  /* a kicker is ONE line — wrapped microcaps read scrappy; tight widths
+     truncate honestly instead */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; display: block;
 }
-.mtInstrument { width: 100px; }
+.mtInstrument { width: 104px; }
 /* the paper instruments ship fixed widths (beamMini/demandLineMini: 160px) —
    wider than this cell, so sparks ran into the figures. The cell is the law. */
 .mtInstrument > * { width: 100% !important; }
@@ -2391,58 +2259,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    whole market. Masthead line, then two columns: the tape reading down the
    left like a departures board; the signature instrument enthroned top-right
    at display scale with the functional rail beneath it. ══ */
-.mtHero { padding: clamp(22px, 2.6vw, 38px) 0 clamp(12px, 1.4vw, 18px); }
-.mtMasthead {
-  position: relative;
-  display: flex; align-items: baseline; gap: 16px;
-  padding-bottom: clamp(10px, 1.2vw, 14px);
-  /* THE ENGRAVED GROOVE — not a border but an incision in the plate: a
-     shadow lip above a catch-light lip, both fading at the ends because the
-     lamp is centered. The same score line closes the hero at the seam. */
-  background:
-    linear-gradient(90deg, transparent, rgba(4, 3, 2, 0.65) 12%, rgba(4, 3, 2, 0.65) 88%, transparent) left calc(100% - 1px) / 100% 1px no-repeat,
-    linear-gradient(90deg, transparent, rgba(242, 238, 227, 0.09) 12%, rgba(242, 238, 227, 0.09) 88%, transparent) left bottom / 100% 1px no-repeat;
-}
-/* the glint — a 110px light runs the groove once as the board lands,
-   arriving at the serial as it stamps in. Paint-only, gated on data-play. */
-.mtMasthead::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(242, 238, 227, 0.5) 50%, transparent) no-repeat;
-  background-size: 110px 1px;
-  background-position: -120px 0;
-  opacity: 0;
-  pointer-events: none;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .mtHero[data-play='true'] .mtMasthead::after {
-    animation: mtRuleSweep 1000ms cubic-bezier(0.33, 0, 0.35, 1) 140ms 1 both;
-  }
-}
-@keyframes mtRuleSweep {
-  0% { opacity: 0; background-position: -120px 0; }
-  12% { opacity: 1; }
-  88% { opacity: 1; }
-  100% { opacity: 0; background-position: calc(100% + 120px) 0; }
-}
-.mtMasthead .sectionKicker { margin-bottom: 0; font-size: 14px; color: var(--tt-fg); }
-.mtMastheadNote { font-size: 12.5px; color: var(--tt-faint); font-weight: 500; }
-.mtSerial {
-  margin-left: auto;
-  font-family: var(--font-ibm-plex-mono), monospace;
-  font-size: 11px; letter-spacing: 0.16em; color: var(--tt-faint);
-  /* bare mono stamp — pills are for clickable things only */
-}
-@media (prefers-reduced-motion: no-preference) {
-  .mtHero[data-play='true'] .mtSerial {
-    opacity: 0;
-    animation: mtRowIn 450ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) 480ms forwards;
-  }
-}
+.mtHero { padding: 16px 0 clamp(12px, 1.4vw, 18px); }
+/* (the masthead line + engraved groove + serial retired Aug 22 2026 — the
+   Exchange Rail above is the orientation; the board opens directly) */
 .mtBoard {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 372px);
@@ -2450,7 +2269,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   /* stretch: the board fills the monument column's height, rows sharing it
      equally — a departures board fills its frame */
   align-items: stretch;
-  padding-top: clamp(6px, 0.8vw, 10px);
 }
 .mtBoardMain { min-width: 0; display: grid; }
 .mtBoardMain .mtTape { height: 100%; grid-auto-rows: 1fr; align-items: center; }
@@ -2461,7 +2279,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    lamp's light falls off. */
 .mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr); column-gap: 24px; }
 .mtHero .mtLabel { font-size: 16px; line-height: 20px; font-weight: 570; letter-spacing: -0.011em; color: rgba(237, 230, 218, 0.87); }
-.mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 650; letter-spacing: 0.13em; }
+.mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0.12em; }
 .mtHero .mtLabelBlock { gap: 4px; }
 .mtHero .mtFigure { font-size: 17px; line-height: 20px; font-weight: 620; color: #F2EDE3; }
 .mtHero .mtFigure[data-dir='up'] { color: var(--color-up); }
@@ -2477,7 +2295,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   min-width: 36px;
   margin-left: 8px;
   text-align: right;
-  font-family: var(--font-ibm-plex-mono), monospace;
+  font-family: var(--font-mono-data), monospace;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -2485,9 +2303,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   vertical-align: 1px;
 }
 /* falling light: the board's hairlines dim toward its base */
-.mtBoardMain .mtRow { border-bottom-color: rgba(232, 218, 182, 0.105); }
-.mtBoardMain .mtRow:nth-child(n+3) { border-bottom-color: rgba(232, 218, 182, 0.085); }
-.mtBoardMain .mtRow:nth-child(n+5) { border-bottom-color: rgba(232, 218, 182, 0.065); }
+.mtBoardMain .mtRow { border-bottom-color: rgba(255, 255, 255, 0.10); }
+.mtBoardMain .mtRow:nth-child(n+3) { border-bottom-color: rgba(255, 255, 255, 0.08); }
+.mtBoardMain .mtRow:nth-child(n+5) { border-bottom-color: rgba(255, 255, 255, 0.06); }
 /* hover answers with light, not paint: a wash that decays from the pen-tick
    spine at the left margin. Data rows never squash — only glass gels. */
 .mtHero .mtRow:hover {
@@ -2530,12 +2348,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    centred between hairlines, like the departures-board rows opposite; the
    search pill keeps its natural height at the bottom. Scoped-market views
    stay packed under the monument. */
-.mtSide .heroRail:not([data-under-monument='true']) .railRow,
-.mtSide .heroRail:not([data-under-monument='true']) .railBtn {
-  flex: 1 1 0;
-  min-height: 0;
-  align-items: center;
-}
 
 /* the monument — the strongest honest read as the focal object. Unboxed,
    like everything on the desk; the beam IS the composition. */
@@ -2544,14 +2356,14 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   background: none; border: 0; padding: 0; margin: 0;
   font: inherit; color: inherit; cursor: pointer; width: 100%;
 }
-.mtMon:hover .mtMonMarket { color: var(--tt-butter); }
+.mtMon:hover .mtMonMarket { color: var(--tt-fg); }
 .mtMonKicker {
   display: flex; align-items: center; width: 100%;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--tt-faint);
 }
-/* the certificate leader — same dotted rule the pulse board's header wears */
-.mtMonLead { flex: 1; margin: 0 10px; border: none; border-top: 2px dotted var(--tt-hair); transform: translateY(0.5px); }
+/* the certificate leader — the same solid hairline the pulse header wears */
+.mtMonLead { flex: 1; margin: 0 10px; border: none; border-top: 1px solid var(--tt-hair); }
 .mtMonHorizon {
   font-style: normal; font-family: var(--font-mono-data), monospace;
   font-size: 10px; letter-spacing: 0.14em; color: var(--tt-muted);
@@ -2564,14 +2376,14 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   transition: color 0.15s ease;
 }
 .mtMonFigure {
-  font-size: clamp(24px, 2.2vw, 32px); font-weight: 650;
+  font-size: clamp(30px, 2.8vw, 40px); font-weight: 650;
   letter-spacing: -0.02em; line-height: 1;
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
 }
 .mtMonFigure[data-dir='up'] { color: var(--color-up); }
 .mtMonFigure[data-dir='down'] { color: var(--color-down); }
-.mtMonBeam { width: 100%; max-width: 300px; margin-top: 6px; }
+.mtMonBeam { width: 100%; margin-top: 6px; }
 /* the demand line (design/culture/science monuments) must fill the card like
    the CI beam does — the global mobile cap min(260px,80vw) left it stopping
    short of the right edge, which read as a broken chart */
@@ -2582,20 +2394,14 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtMonMeta {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   width: 100%; margin-top: 8px; padding-top: 8px;
-  border-top: 2px dotted var(--tt-hair);
+  border-top: 1px solid var(--tt-hair);
   font-family: var(--font-inter), sans-serif;
-  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--tt-faint); font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .mtMonMeta > span:last-child { color: var(--tt-muted); overflow: hidden; text-overflow: ellipsis; }
 
-/* mobile masthead: kicker left, serial right, above the monument card */
-.mtMastheadM {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  padding: 2px 2px 10px;
-}
-.mtMastheadM .sectionKicker { margin-bottom: 0; font-size: 14px; color: var(--tt-fg); }
 @media (max-width: 700px) {
   .mtMon { justify-items: start; }
   .mtMonMarket { font-size: 30px; }
@@ -2636,30 +2442,16 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 
 /* rows RESPOND like the monument — the label answers in butter */
-.mtRow:hover .mtLabel { color: var(--tt-butter); }
+.mtRow:hover .mtLabel { color: var(--tt-fg); }
 .mtRow[data-static='true']:hover .mtLabel { color: var(--tt-fg); }
 
 /* ONE rule language: the rail under the monument was still drawing the old
    hero's dotted hairlines beside the board's solid ones */
-.mtSide .heroRail .railRow,
-.mtSide .heroRail .railBtn,
-.mtSide .heroRail .railCmd { border-top-style: solid; border-bottom-style: solid; border-color: var(--tt-hair); }
 /* the ledger's hairlines obey the lamp — this column is lit from its left
    (toward page centre), so each score line decays rightward */
-.mtSide .heroRail .railRow,
-.mtSide .heroRail .railBtn {
-  border-top: 1px solid transparent;
-  border-image: linear-gradient(90deg, rgba(232, 218, 182, 0.13), rgba(232, 218, 182, 0.04)) 1;
-}
 /* rail hover speaks the tape's language: the pen-tick spine + decaying wash */
-.mtSide .railBtn:hover {
-  background: linear-gradient(90deg, rgba(232, 218, 182, 0.05), rgba(232, 218, 182, 0.015));
-  box-shadow: inset 2px 0 0 rgba(232, 218, 182, 0.3);
-}
 .railGo { display: inline-block; transition: transform 180ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)); }
-.railBtn:hover .railGo { transform: translate(2px, -2px); }
 /* a butter figure is a sign, not a lamp — only the pill emits */
-.mtSide .railVal[data-accent='true'] { text-shadow: none; }
 /* the ledger settles beneath the monument's final beat — opacity only,
    layout occupied from paint */
 @media (prefers-reduced-motion: no-preference) {
@@ -2670,8 +2462,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   .mtHero[data-play='true'] .heroRail > *:nth-child(1) { animation-delay: 0.68s; }
   .mtHero[data-play='true'] .heroRail > *:nth-child(2) { animation-delay: 0.75s; }
   .mtHero[data-play='true'] .heroRail > *:nth-child(3) { animation-delay: 0.82s; }
-  .mtHero[data-play='true'] .heroRail > *:nth-child(4) { animation-delay: 0.89s; }
-  .mtHero[data-play='true'] .heroRail > *:nth-child(5) { animation-delay: 0.96s; }
   .mtHero[data-play='true'] .heroRail .railCmd { animation-delay: 1.02s; }
 }
 
@@ -2686,18 +2476,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 
 /* rows wear their market's illustration like the switcher pills do */
 .mtRow { position: relative; overflow: hidden; isolation: isolate; }
-.mtRowGhost {
-  position: absolute; top: 50%; left: 24%; width: 30%; height: 170%;
-  transform: translateY(-50%);
-  z-index: -1; color: var(--tt-butter); opacity: 0.05;
-  transition: opacity 200ms var(--ease-signature, ease), transform 200ms var(--ease-signature, ease);
-  pointer-events: none;
-}
-.mtRowGhost svg { width: 100%; height: 100%; }
 
-/* figures carry directional light — the hero-numeral whisper, row-sized */
-.mtFigure[data-dir='up'] { text-shadow: 0 0 22px rgba(47, 191, 113, 0.28); }
-.mtFigure[data-dir='down'] { text-shadow: 0 0 22px rgba(229, 84, 75, 0.26); }
+/* matte law: delta figures print, they don't radiate (glows retired Aug 22) */
 
 /* THE MONUMENT PLATE — the view's single lit object. Warm mat ground, the
    standard plate lift, one quiet gold pool, the market's ghost bleeding off
@@ -2713,24 +2493,14 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05), 0 18px 44px -18px rgba(8, 6, 3, 0.55);
   transition: border-color 180ms var(--ease-signature, ease), transform 180ms var(--ease-signature, ease);
 }
-.mtMon:hover { border-color: rgba(232, 218, 182, 0.24); transform: translateY(-2px); }
-.mtMonGhost {
-  position: absolute; top: 50%; right: -4%; width: 58%; height: 150%;
-  transform: translateY(-50%);
-  z-index: -1; color: var(--tt-butter); opacity: 0.07;
-  pointer-events: none;
-}
-.mtMonGhost svg { width: 100%; height: 100%; }
-.mtMon[data-dir='up'] .mtMonFigure { text-shadow: 0 0 34px rgba(47, 191, 113, 0.30); }
-.mtMon[data-dir='down'] .mtMonFigure { text-shadow: 0 0 34px rgba(229, 84, 75, 0.28); }
-.mtMon .mtMonKicker { color: var(--tt-butter); opacity: 0.85; }
+.mtMon:hover { border-color: rgba(255, 255, 255, 0.14); }
+.mtMon .mtMonKicker { color: var(--tt-faint); }
 
 /* the rail joins the plate ground so the side column reads as one furniture
    piece: plate above, ledger below, one seam */
 .mtSide .heroRail[data-under-monument='true'] {
   border-top: none; padding-top: 0; margin-top: clamp(2px, 0.4vw, 6px);
 }
-.mtSide .heroRail .railRow, .mtSide .heroRail .railBtn { padding-top: 7px; padding-bottom: 7px; }
 .mtSide .heroRail .railCmd { margin-top: 7px; }
 
 /* mobile: the plate treatment carries — the monument is the scene's opener,
@@ -2738,7 +2508,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 @media (max-width: 700px) {
   .mtMonWrapM { padding: 6px 0 8px; border-bottom: none; }
   .mtMonGhost { width: 64%; right: -8%; }
-  .mtMastheadM { padding: 0 2px 6px; }
   .mtMon { position: relative; padding: 12px 14px; gap: 2px; }
   .mtMonMarket { font-size: 21px; }
   .mtMonFigure { font-size: 26px; }
@@ -2802,25 +2571,21 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    a bordered glass box it crowded the left, right and bottom edges. A real
    input insets its content evenly. */
 .mtSide .railCmd {
-  /* the primary action — an elevated command bar that lifts off the panel:
-     brighter surface, a real drop shadow for depth, a crisp top-highlight,
-     and the same Linear glint the phone's bar carries (one system). */
-  position: relative; overflow: hidden; isolation: isolate;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045));
+  /* the primary action — a FLAT Linear command bar: matte fill, one hairline,
+     no gloss, no glint, no lift (the jewelry retired Aug 22; the rail's lamp
+     is the view's only light). Butter answers focus only. */
+  position: relative;
+  background: rgba(255, 255, 255, 0.06);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 11px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 6px 18px -10px rgba(0, 0, 0, 0.75);
+  box-shadow: none;
   padding: 13px 14px;
   color: var(--tt-fg);
   transition:
-    background 160ms var(--ease-signature, ease),
-    border-color 160ms var(--ease-signature, ease),
-    box-shadow 160ms var(--ease-signature, ease),
-    transform 160ms var(--ease-signature, ease);
+    background 140ms var(--ease-signature, ease),
+    border-color 140ms var(--ease-signature, ease);
 }
 .mtSide .railCmd .cmdLabel { color: var(--tt-fg); font-weight: 500; font-size: 14px; }
 /* the return key reads as a real key — neutral, matching the ⌘/K keycaps */
@@ -2835,31 +2600,12 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   line-height: 1.4;
   box-shadow: none;
 }
-/* hover: the bar lifts and lights butter — the one place warmth answers a reach */
+/* hover: flat brighten, nothing moves, nothing warms */
 .mtSide .railCmd:hover {
-  transform: translateY(-1px);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06));
-  border-color: rgba(232, 218, 182, 0.5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 10px 26px -10px rgba(0, 0, 0, 0.8),
-    0 0 26px -8px rgba(232, 218, 182, 0.32);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
 }
-.mtSide .railCmd::after {
-  content: '';
-  position: absolute;
-  inset: -40% auto -40% -60%;
-  width: 42%;
-  transform: skewX(-18deg) translateX(0);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08) 45%, rgba(255, 255, 255, 0.14) 50%, rgba(255, 255, 255, 0.08) 55%, transparent);
-  animation: cmdGlint 5.6s cubic-bezier(0.23, 1, 0.32, 1) 2.2s infinite;
-  pointer-events: none;
-  z-index: -1;
-}
-.mtSide .railCmd:active { transform: scale(0.99); }
-@media (prefers-reduced-motion: reduce) {
-  .mtSide .railCmd::after { animation: none; opacity: 0; }
-}
+.mtSide .railCmd:active { background: rgba(255, 255, 255, 0.05); }
 .mtSide .railCmd:focus-visible {
   outline: none;
   border-color: rgba(232, 218, 182, 0.6);
@@ -2895,29 +2641,19 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    above (the full liquid-glass rebuild). This block carries the rest of the
    Linear hero pass: rail hairlines and type contrast on the cool ramp. */
 
-/* — the rail: receipt-style 2px dotted rules → Linear's precise 1px solid
-   hairlines, resolved on the cool neutral border tone. */
-.railRow,
-.railBtn,
+/* — the search row rules solid on the cool neutral border tone */
 .railCmd {
   border-top-width: 1px;
   border-top-style: solid;
   border-top-color: var(--tt-hair-2);
 }
-.railRow:first-child { border-top: none; }
 
 /* — type contrast: Linear runs a sharp split — near-white primaries against
    cool-grey secondaries. Values ride at text-primary, labels at text-tertiary. */
 .mtHero .mtLabel { color: #f7f8f8; }
-.railVal { color: #f7f8f8; }
-.railVal[data-dir='up'] { color: var(--color-up); }
-.railVal[data-dir='down'] { color: var(--color-down); }
-.railVal[data-accent='true'] { color: var(--tt-butter); }
-.railLabel { color: var(--tt-muted); }
 .mtSub { color: var(--tt-muted); }
 
 /* — the masthead title: crisp near-white, tight — Linear's heading voice */
-.mtMasthead .sectionKicker { color: #f7f8f8; letter-spacing: -0.008em; }
 
 /* ══ THE NAV — Linear top bar (scoped to the lander: the nav sits INSIDE the
    terminal .root here, so these never touch the nav on other pages). Grey
@@ -2974,78 +2710,24 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    numbers, better instrument.
    ══════════════════════════════════════════════════════════════════════ */
 .mtSide .heroRail:not([data-under-monument='true']) {
+  /* the blocks ARE the surface — the wrapper card retired Aug 22 (card-in-
+     card double borders + a radial wash against the flat law) */
   align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 16px 16px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background:
-    radial-gradient(120% 60% at 50% 0%, rgba(255, 255, 255, 0.022), transparent 60%),
-    rgba(255, 255, 255, 0.018);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 0;
 }
 
-/* — the header: a live pulse + "Right now", a status eyebrow */
-.railHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 2px 12px;
-}
-.railHeadLabel {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--tt-secondary);
-}
-.railHeadTick {
-  margin-left: auto;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-up);
-}
-/* the metric marks — a quiet leading glyph on each rail label, and a loupe
-   on the search bar. They ride the label's own muted tone. */
-.railLabel { display: inline-flex; align-items: center; gap: 6px; }
+/* the loupe on the search bar rides the muted tone */
 .railMark { flex: none; opacity: 0.8; }
 .mtSide .railCmd .railMark { color: var(--tt-muted); opacity: 1; margin-right: 2px; }
 
 /* — the metric cells: a BIG constructed mark flush-left, the label + number
    stacked to its right (the Robinhood stat-row form). Each cell breathes to
    fill the panel; hairlines seam them. */
-.mtSide .heroRail:not([data-under-monument='true']) .railRow,
-.mtSide .heroRail:not([data-under-monument='true']) .railBtn {
-  flex: 1 1 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  padding: 14px 2px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  text-align: left;
-}
 /* the mark as a design element — large, left, quiet secondary tone (metric
    rows only; the search loupe in .railCmd keeps its small size) */
-.mtSide .heroRail:not([data-under-monument='true']) .railRow > .railMark,
-.mtSide .heroRail:not([data-under-monument='true']) .railBtn > .railMark {
-  width: 34px;
-  height: 34px;
-  flex: none;
-  opacity: 1;
-  color: var(--tt-secondary);
-}
-.mtSide .heroRail:not([data-under-monument='true']) .railStack {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
 
 /* — SCOPED-MARKET rail (under the monument): keep it a compact ledger row —
    a small leading mark, then label and value on one baseline. */
@@ -3073,22 +2755,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   gap: 10px;
   min-width: 0;
 }
-.mtSide .heroRail:not([data-under-monument='true']) .railRow:first-of-type,
-.mtSide .heroRail:not([data-under-monument='true']) .railHead + .railRow {
-  border-top: none;
-}
-.mtSide .heroRail:not([data-under-monument='true']) .railLabel {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--tt-muted);
-}
-.mtSide .heroRail:not([data-under-monument='true']) .railVal {
-  font-size: clamp(26px, 2.5vw, 32px);
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: #f7f8f8;
-}
 /* the one actionable read — butter number, a Linear row-hover affordance, the
    ↗ riding up beside the figure. It IS a button; make it feel like one. */
 .mtSide .heroRail:not([data-under-monument='true']) button.railBtn {
@@ -3104,13 +2770,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtSide .heroRail:not([data-under-monument='true']) button.railBtn:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.5);
-}
-.mtSide .heroRail:not([data-under-monument='true']) .railVal[data-accent='true'] { color: var(--tt-butter); }
-.mtSide .heroRail:not([data-under-monument='true']) .railGo {
-  font-size: 0.5em;
-  vertical-align: 0.35em;
-  margin-left: 4px;
-  opacity: 1;
 }
 
 /* — the search: the panel's footer action, pinned to the base */
