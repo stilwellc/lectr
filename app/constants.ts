@@ -8,15 +8,15 @@
  */
 export type Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'tcg' | 'science' | 'culture';
 
-export const MARKETS: { key: Market; label: string; live: boolean; tagline: string }[] = [
-  { key: 'all', label: 'Total market', live: true, tagline: 'every vertical, one tape' },
-  { key: 'art', label: 'Art', live: true, tagline: 'paintings, editions, photography & sculpture' },
-  { key: 'design', label: 'Design', live: true, tagline: 'the furniture & objects market' },
-  { key: 'watches', label: 'Watches', live: true, tagline: 'the reference market' },
-  { key: 'sports', label: 'Sports', live: true, tagline: 'cards, game-worn, trophies & tickets' },
-  { key: 'tcg', label: 'TCG', live: true, tagline: 'pokémon & the trading-card game market' },
-  { key: 'science', label: 'Science', live: true, tagline: 'tech, fossils, space & instruments' },
-  { key: 'culture', label: 'Pop Culture', live: true, tagline: 'screen-worn, stage-played & the unrepeatable' },
+export const MARKETS: { key: Market; label: string; short: string; live: boolean; tagline: string }[] = [
+  { key: 'all', label: 'Total market', short: 'Total', live: true, tagline: 'every vertical, one tape' },
+  { key: 'art', label: 'Art', short: 'Art', live: true, tagline: 'paintings, editions, photography & sculpture' },
+  { key: 'design', label: 'Design', short: 'Design', live: true, tagline: 'the furniture & objects market' },
+  { key: 'watches', label: 'Watches', short: 'Watches', live: true, tagline: 'the reference market' },
+  { key: 'sports', label: 'Sports', short: 'Sports', live: true, tagline: 'cards, game-worn, trophies & tickets' },
+  { key: 'tcg', label: 'TCG', short: 'TCG', live: true, tagline: 'pokémon & the trading-card game market' },
+  { key: 'science', label: 'Science', short: 'Science', live: true, tagline: 'tech, fossils, space & instruments' },
+  { key: 'culture', label: 'Pop Culture', short: 'Culture', live: true, tagline: 'screen-worn, stage-played & the unrepeatable' },
 ];
 
 export const ARTISTS = [

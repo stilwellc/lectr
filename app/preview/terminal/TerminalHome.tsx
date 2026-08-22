@@ -19,7 +19,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTIST_LABEL, MARKETS, marketArtists } from '../../constants';
+import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
@@ -427,6 +427,34 @@ export default function TerminalHomePage() {
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
+  // THE RAIL'S MICRO-READS — the strongest honest read per cell: a real
+  // demand % where one exists (art/design/watches), the live-lot count
+  // everywhere. The anchor adds the aggregate index's last move. Never a
+  // fabricated figure — markets without an estimate basis print counts.
+  const railReads = useMemo(() => {
+    const out: Partial<Record<Market, { demandPct?: number | null; liveCount?: number | null }>> = {};
+    let total = 0;
+    for (const m of MARKETS) {
+      if (m.key === 'all') continue;
+      const set = marketArtists(m.key);
+      let live = 0;
+      for (const a of Array.from(set)) live += upcomingCounts[a] || 0;
+      total += live;
+      const series = demand?.[m.key];
+      const pct = series?.length ? series[series.length - 1].value : null;
+      out[m.key] = { demandPct: pct, liveCount: live };
+    }
+    out.all = { liveCount: total };
+    return out;
+  }, [upcomingCounts, demand]);
+  const railIndexMove = useMemo(() => {
+    const idx = marketData?.markets?.all?.index;
+    if (!idx || idx.length < 2) return null;
+    const a = idx[idx.length - 2]?.value, b = idx[idx.length - 1]?.value;
+    if (!(a > 0) || !(b > 0)) return null;
+    return (b / a - 1) * 100;
+  }, [marketData]);
+
   // The pulse board's "closing next" line: each house's NEAREST close in the
   // scoped live book, soonest first. n = lots that settle that day.
   const closingNext = useMemo(() => {
@@ -710,9 +738,9 @@ export default function TerminalHomePage() {
       {/* REAL CHROME — ArtistNav mounts CommandK (⌘K search, alerts, mobile sheet) */}
       <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {/* the 7-market switch — re-scopes the WHOLE page in place */}
+      {/* THE EXCHANGE RAIL — the door; re-scopes the WHOLE page in place */}
       <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
-        <MarketSwitch compact lit open={!fromCache} emblems />
+        <MarketSwitch lit open={!fromCache} reads={railReads} indexMove={railIndexMove} />
       </div>
 
       {error ? (

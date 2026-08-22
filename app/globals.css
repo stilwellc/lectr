@@ -2205,99 +2205,201 @@ body {
   background: linear-gradient(180deg, rgba(23, 21, 15, 0.92), rgba(15, 14, 10, 0.88));
 }
 
-/* ── the verticals: market tabs on the lander ── */
-.ray-markets {
+/* ══════════════════════════════════════════════════════════════════════
+   THE EXCHANGE RAIL — the door to the app (Aug 2026 redesign).
+   One hairline-framed band; eight markets as fused cells on shared
+   hairlines, each carrying a live micro-read. The active cell is the
+   view's one lamp: a 2px butter filament + (on home) the --glow-lit halo.
+   Total market is the anchor cell, sealed by a double-hairline spine.
+   ≤899px: THE KEYPAD — a 2×4 board over the flap line (the split-flap
+   readout for the active market). `compact` = the same chassis dimmed to
+   navigation duty on inner pages.
+   ══════════════════════════════════════════════════════════════════════ */
+.ray-rail {
   display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding: 2px 0;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.015);
+  overflow: hidden;
 }
-.ray-markets::-webkit-scrollbar { display: none; }
-.ray-market-tab {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 7px;
-  border: none;
+.ray-rail-cell {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 108px;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0;
+  padding: 10px 14px 9px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
   cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans), sans-serif;
+  transition: background 140ms var(--ease-signature), filter 90ms var(--ease-signature);
+}
+.ray-rail-cell:first-child { border-left: 0; }
+/* the anchor — the index block; its right wall is the board's spine */
+.ray-rail-anchor {
+  flex: 1.35 1 0;
+  min-width: 148px;
+  border-right: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 1px 0 0 #08090a;
+}
+.ray-rail-top { display: flex; align-items: center; gap: 7px; color: var(--color-text-faint); }
+.ray-rail-top svg { flex: none; }
+.ray-rail-name {
+  font-size: 12.5px;
+  font-weight: 510;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--color-text-muted);
   white-space: nowrap;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--color-text-muted);
-  background: var(--color-bg-elevated);
-  border-radius: 100px;
-  padding: 9px 18px;
-  transition:
-    color var(--duration-fast) var(--ease-signature),
-    background var(--duration-fast) var(--ease-signature),
-    transform 120ms var(--ease-signature);
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.04);
+  transition: color 140ms var(--ease-signature);
 }
-.ray-market-tab:hover { color: var(--color-fg); }
-.ray-market-tab:active { transform: scale(0.96); }
-.ray-market-tab[data-active=true] {
-  /* the active market is the butter-lit pill — solid block, no gradient */
+.ray-rail-name-short { display: none; }
+.ray-rail-read {
+  margin-top: 4px;
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-faint);
+  white-space: pre;
+}
+.ray-rail-read[data-tone=up] { color: var(--color-up); }
+.ray-rail-read[data-tone=down] { color: var(--color-down-text); }
+.ray-rail-cell:hover { background: rgba(255, 255, 255, 0.03); }
+.ray-rail-cell:hover .ray-rail-name { color: var(--color-fg); }
+.ray-rail-cell:hover .ray-rail-top { color: var(--color-text-muted); }
+.ray-rail-cell:active { filter: brightness(0.92); }
+/* the filament — the departure-board row lamp */
+.ray-rail-cell::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
   background: var(--color-butter);
-  color: var(--color-butter-ink);
-  box-shadow: 0 4px 14px rgba(8, 6, 3, 0.35);
+  transform: scaleX(0);
+  transform-origin: left center;
 }
-.ray-market-tab[data-live=false] { color: var(--color-text-faint); }
-.ray-market-tab[data-live=false][data-active=true] { color: var(--color-butter-ink); }
-.ray-market-soon {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--color-text-muted);
+.ray-rail-cell[data-active=true] {
+  background: rgba(232, 218, 182, 0.04);
+  z-index: 1;
 }
-.ray-market-tab[data-active=true] .ray-market-soon { color: rgba(15, 14, 10, 0.7); }
-/* desktop: the one pill row centers under the nav (the ≤900 grid overrides this) */
-.ray-markets-compact { justify-content: center; }
-.ray-markets-compact .ray-market-tab { font-size: 12.5px; padding: 6px 13px; align-items: center; }
-.ray-markets-compact .ray-market-tab svg { opacity: 0.85; flex: none; }
-/* one sign lit: with the photographic tiles dead, the active pill is
-   the lit element on home — border ink + the halo, nothing gold */
-.ray-markets-compact .ray-market-tab[aria-selected=true],
-.ray-markets-compact .ray-market-tab[data-active=true] {
-  border: 1px solid rgba(232, 218, 182, 0.85);
-  padding: 5px 12px; /* absorbs the 1px border; the row never shifts */
-  box-shadow: var(--glow-lit), inset 0 1px 0 rgba(242, 238, 227, 0.9);
+.ray-rail-cell[data-active=true]::before { transform: scaleX(1); }
+.ray-rail-cell[data-active=true] .ray-rail-name { color: var(--color-fg); font-weight: 590; }
+.ray-rail-cell[data-active=true] .ray-rail-top { color: var(--color-butter); }
+/* the marquee rule: only where the switch IS the view's lit element */
+.ray-rail[data-lit=true] .ray-rail-cell[data-active=true] { box-shadow: var(--glow-lit); }
+.ray-rail-cell:focus-visible {
+  outline: 1.5px solid rgba(232, 218, 182, 0.6);
+  outline-offset: -4px;
+  z-index: 2;
+}
+/* the flap line — hidden until the keypad form needs it */
+.ray-rail-flap { display: none; }
+
+/* compact (inner pages): the rail dimmed to navigation duty */
+.ray-rail[data-variant=compact] { border-color: rgba(255, 255, 255, 0.06); background: transparent; }
+.ray-rail[data-variant=compact] .ray-rail-cell,
+.ray-rail[data-variant=compact] .ray-rail-anchor { height: 40px; padding: 0 14px; min-width: 0; }
+.ray-rail[data-variant=compact] .ray-rail-anchor { flex: 1 1 0; border-right: 0; box-shadow: none; }
+.ray-rail[data-variant=compact] .ray-rail-read { display: none; }
+
+/* 900–1080: the squeeze — tighter cells, the anchor holds as components
+   scroll under the spine; the right edge admits the clip honestly */
+@media (min-width: 900px) and (max-width: 1080px) {
+  .ray-rail[data-variant=door] {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
+    mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
+  }
+  .ray-rail[data-variant=door]::-webkit-scrollbar { display: none; }
+  .ray-rail[data-variant=door] .ray-rail-cell { padding: 10px 11px 9px; }
+  .ray-rail[data-variant=door] .ray-rail-anchor {
+    position: sticky; left: 0; background: #0b0c0d; z-index: 2;
+  }
 }
 
-/* MARKET OPEN — one sign lit. As the hero lands (~T900), the pills ripple-
-   ignite in a 60ms stagger (each brightens with the switch-on dip, then
-   settles), leaving only the active pill on .lit. Pure enhancement layered
-   over the resting row: the active pill's halo above is present from paint,
-   so a skipped/degraded ripple still shows exactly one lit sign, never a
-   stranded dim row. The animation touches brightness only — it never clears
-   the halo. */
+/* ≤899: THE KEYPAD + THE FLAP LINE */
+@media (max-width: 899px) {
+  .ray-rail { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .ray-rail-cell,
+  .ray-rail-anchor {
+    min-width: 0;
+    height: 56px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    border-right: 0;
+    box-shadow: none;
+  }
+  .ray-rail-cell:nth-child(5) { border-left: 0; }
+  .ray-rail-cell:nth-child(n+5) { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+  .ray-rail-top { flex-direction: column; gap: 5px; }
+  .ray-rail-name { font-size: 11px; font-weight: 520; }
+  .ray-rail-name-full { display: none; }
+  .ray-rail-name-short { display: inline; }
+  .ray-rail-read { display: none; }
+  /* the filament drops to the bottom edge — pointing at the flap it feeds */
+  .ray-rail-cell::before { inset: auto 0 0 0; }
+  .ray-rail[data-variant=door] .ray-rail-flap {
+    display: flex;
+    grid-column: 1 / -1;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    font-family: var(--font-mono), monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .ray-rail-flap span[data-tone=up] { color: var(--color-up); }
+  .ray-rail-flap span[data-tone=down] { color: var(--color-down-text); }
+  .ray-rail-flap span[data-tone=name] { color: var(--color-text-muted); }
+  .ray-rail-flap-dot { color: var(--color-text-faint); margin: 0 7px; }
+  .ray-rail[data-variant=compact] .ray-rail-cell { height: 48px; }
+}
+
+/* MOTION — the board energizes (once per session), the lamp strikes.
+   Everything layers over a correct resting state; reduced motion and cached
+   paints get the settled rail with its one lamp from the first frame. */
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes lectrPillIgnite {
-    0%   { filter: brightness(1); }
-    35%  { filter: brightness(1.28); }
-    55%  { filter: brightness(0.94); }
-    100% { filter: brightness(1); }
+  .ray-rail-cell::before { transition: transform 200ms var(--ease-signature); }
+  .ray-rail.is-open { animation: railChassis 300ms var(--ease-signature) both; }
+  .ray-rail.is-open .ray-rail-top,
+  .ray-rail.is-open .ray-rail-read {
+    animation: railPrint 240ms var(--ease-signature) both;
+    animation-delay: calc(180ms + var(--cell-i, 0) * 40ms);
   }
-  .ray-mkt-open .ray-market-tab {
-    /* the band OPENS with the toggle: T+150, then index × 60ms down the row
-       (was T+900 — stranded after the hero had already landed) */
-    animation: lectrPillIgnite 420ms var(--ease-signature) both;
-    animation-delay: calc(150ms + var(--ripple-i, 0) * 60ms);
+  .ray-rail.is-open .ray-rail-cell[data-active=true] {
+    animation: railStrike 320ms var(--ease-signature) 600ms both;
   }
-  /* mobile keypad: tighter pitch — seven keys light in under half a second */
-  @media (max-width: 899px) {
-    .ray-mkt-open .ray-market-tab {
-      animation-delay: calc(150ms + var(--ripple-i, 0) * 45ms);
-    }
-  }
+  .ray-rail.is-open .ray-rail-flap { animation: railPrint 240ms var(--ease-signature) 750ms both; }
 }
-/* keyboard-native focus for the market keys */
-.ray-markets-compact .ray-market-tab:focus-visible {
-  outline: 1.5px solid rgba(232, 218, 182, 0.6);
-  outline-offset: 3px;
+@keyframes railChassis { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes railPrint { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@keyframes railStrike {
+  0% { filter: brightness(1); }
+  35% { filter: brightness(1.25); }
+  60% { filter: brightness(0.94); }
+  100% { filter: brightness(1); }
 }
+
 
 /* the pill row never clips invisibly — the right edge admits there's more */
 .ray-markets-fade {
@@ -2315,118 +2417,7 @@ body {
     mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
   }
 }
-/* center-oriented pill rail (the lander): drop the scroll fade and center the
-   pills when they fit; fall back to a left-aligned scroll on narrow phones. */
 
-/* ── the verticals as a shelf: each market is a card with its own pulse ── */
-.ray-mkt-cards {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-.ray-mkt-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  text-align: left;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  border-radius: 16px;
-  padding: 15px 16px 14px;
-  background: linear-gradient(180deg, var(--color-bg-elevated), var(--panel));
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
-  color: var(--color-text-muted);
-  transition:
-    background var(--duration-fast) var(--ease-signature),
-    box-shadow var(--duration-fast) var(--ease-signature),
-    transform 160ms var(--ease-signature);
-}
-.ray-mkt-card:hover {
-  transform: translateY(-2px);
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.08), 0 10px 28px rgba(8, 6, 3, 0.35);
-}
-.ray-mkt-card:active { transform: scale(0.97); }
-.ray-mkt-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 22px;
-  margin-bottom: 7px;
-}
-.ray-mkt-ic { display: inline-flex; color: var(--color-text-secondary); }
-.ray-mkt-card-label {
-  font-size: 15.5px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--color-fg);
-}
-.ray-mkt-card-stat {
-  font-size: 12.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.ray-mkt-card-stat span { color: var(--color-text-faint); font-weight: 600; }
-.ray-mkt-card[data-tone=up] .ray-mkt-card-stat,
-.ray-mkt-card[data-tone=up] .ray-mkt-spark { color: var(--color-up); }
-.ray-mkt-card[data-tone=down] .ray-mkt-card-stat,
-.ray-mkt-card[data-tone=down] .ray-mkt-spark { color: var(--color-down-text); }
-.ray-mkt-card-tag {
-  font-size: 11.5px;
-  line-height: 1.35;
-  color: var(--color-text-faint);
-}
-.ray-mkt-card[data-live=false] .ray-mkt-ic { color: var(--color-text-faint); }
-
-/* the chosen market goes to butter — Ray's active signature, solid block */
-.ray-mkt-card[data-active=true] {
-  background: var(--color-butter);
-  box-shadow: 0 12px 34px rgba(8, 6, 3, 0.45);
-}
-.ray-mkt-card[data-active=true] .ray-mkt-card-label { color: var(--color-butter-ink); }
-.ray-mkt-card[data-active=true] .ray-mkt-ic { color: var(--color-butter-ink); }
-.ray-mkt-card[data-active=true] .ray-mkt-card-tag { color: var(--paper-muted); }
-.ray-mkt-card[data-active=true] .ray-mkt-card-stat span { color: var(--paper-muted); }
-.ray-mkt-card[data-active=true] .ray-market-soon { color: rgba(15, 14, 10, 0.7); }
-
-/* mobile: the shelf becomes pillars — every market visible, one thin row each */
-@media (max-width: 900px) {
-  .ray-mkt-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .ray-mkt-card {
-    flex-direction: row;
-    align-items: center;
-    gap: 11px;
-    min-width: 0;
-    padding: 10px 14px;
-    border-radius: 13px;
-  }
-  .ray-mkt-card:hover { transform: none; }
-  .ray-mkt-card-top { display: contents; }
-  .ray-mkt-ic svg { width: 17px; height: 17px; }
-  .ray-mkt-card-label { font-size: 14px; }
-  .ray-mkt-spark { order: 1; margin-left: auto; flex: none; }
-  .ray-mkt-card-stat { order: 2; font-size: 13.5px; min-width: 44px; text-align: right; }
-  .ray-mkt-card-stat span { display: none; }
-  .ray-mkt-card-tag {
-    order: 1;
-    margin-left: auto;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    text-align: right;
-  }
-  .ray-market-soon { order: 2; flex: none; }
-}
-
-/* coming-soon market state */
 
 /* ════════════════════════════════════════════════════════════════════
    THE RESTRUCTURE — home is one route with one job: the board and the
@@ -2754,81 +2745,6 @@ body {
   .ray-deckcall { padding: 14px 16px; }
   /* feed header tighter */
   #on-the-block h2 { font-size: 22px; margin: 12px 0 4px; }
-}
-
-/* ── the categories POP: identity inks on the compact pills ─────────────
-   The photographic tiles' approved per-market hues live on as pill inks —
-   vertical materials, not brand (gold stays dead; red/green stay signals).
-   Inactive pills wear their market's ink; the active pill stays the one
-   white lit element of the view. */
-.ray-markets-compact .ray-market-tab {
-  font-size: 13.5px;
-  font-weight: 650;
-  color: var(--color-fg);
-  padding: 8px 15px;
-  border: 1px solid var(--pill-ink, var(--hairline));
-  background:
-    linear-gradient(180deg, var(--pill-ink, transparent), transparent 78%),
-    var(--color-bg-elevated);
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05);
-}
-.ray-markets-compact .ray-market-tab svg { opacity: 1; color: var(--pill-glyph, var(--color-text-secondary)); }
-.ray-markets-compact .ray-market-tab:hover { border-color: var(--pill-glyph, var(--color-text-secondary)); }
-/* Airbnb grammar: uniform quiet pills, the OBJECT carries the color — a
-   dimensional emoji render per market (crisper at this size than any photo
-   cutout). Micro-motion on hover/selection gives the pop; the active pill
-   stays the view's one lit white element. */
-.ray-pill-obj {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  margin-right: 6px;
-  vertical-align: middle;
-  opacity: 0.62;
-  transform-origin: 50% 80%;
-  transition: transform 180ms var(--ease-signature), opacity 180ms var(--ease-ui);
-}
-.ray-markets-compact .ray-market-tab[data-active=true] .ray-pill-obj,
-.ray-markets-compact .ray-market-tab:hover .ray-pill-obj { opacity: 1; }
-.ray-markets-compact .ray-market-tab:hover .ray-pill-obj { transform: scale(1.22) rotate(-6deg); }
-.ray-markets-compact .ray-market-tab[data-active=true] .ray-pill-obj { animation: lectrObjPop 340ms var(--ease-signature); }
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes lectrObjPop {
-    0% { transform: scale(0.7); }
-    55% { transform: scale(1.28) rotate(-5deg); }
-    100% { transform: scale(1); }
-  }
-}
-/* active is the butter-lit pill — solid block, ink yields to warm light */
-.ray-markets-compact .ray-market-tab[data-active=true] {
-  background: var(--color-butter);
-  border-color: color-mix(in srgb, var(--color-butter) 80%, transparent);
-  color: var(--color-butter-ink);
-}
-.ray-markets-compact .ray-market-tab[data-active=true] svg { color: var(--color-butter-ink); }
-
-/* mobile: no scroll — the total market spans the full top row, the six
-   verticals sit as two rows of three beneath it */
-@media (max-width: 899px) {
-  .ray-markets-fade { mask-image: none; -webkit-mask-image: none; overflow: visible; }
-  /* three lines: all-collectibles across the top, then the six verticals as
-     two rows of three */
-  .ray-markets-compact {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-  .ray-markets-compact .ray-market-tab {
-    justify-content: center;
-    padding: 10px 8px;
-    font-size: 12.5px;
-    min-width: 0;
-  }
-  /* the whole market ('all') takes the entire top row as one wide pill */
-  .ray-markets-compact .ray-market-tab[data-market="all"] {
-    grid-column: 1 / -1;
-  }
 }
 
 /* ── THE GREETING — the sign writes itself once per session ───────────── */

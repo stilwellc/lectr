@@ -925,10 +925,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 /* ── ROI × demand divergence flag on the hero stat tile ── */
 
 
-/* the pills carry glass optics as pseudo layers (rim ring + specular sweep) —
-   they need a positioned, clipped, isolated box. The ghost watermark that
-   once lived here is gone (Aug 8 — Collin: tacky). */
-.root :global(.ray-market-tab) { position: relative; overflow: hidden; isolation: isolate; }
+/* (the pill glass-optics isolation box retired with the Exchange Rail,
+   Aug 2026 — the rail styles itself in globals.css) */
 
 /* ── sub-market board "show more" ── */
 
@@ -2770,43 +2768,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 /* no local light pool: the page's fixed bgField supplies the atmosphere the
    frost refracts. A hero-scoped gradient box painted a visible seam. */
 
-/* THE PILLS — LINEAR SEGMENTED CHIPS (Aug 2026 rebuild). The liquid-glass
-   dome/rim/specular is gone; each inactive chip is a flat matte surface with a
-   single fine hairline border and cool-grey text — linear.app's exact chip
-   grammar. No blur, no drop shadow, no gel bounce. The one lit chip (butter)
-   carries all the warmth; everything else is quiet, precise, understated. */
-.switchStrip :global(.ray-market-tab) {
-  flex: none;   /* never shrink-clip a label — the strip scrolls instead */
-  padding: 7px 15px !important;
-  border-radius: 9px !important;   /* Linear rounds controls ~8px, not full pills */
-  background: rgba(255, 255, 255, 0.04) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: none !important;
-  color: #8a8f98 !important;   /* Linear text-tertiary at rest */
-  transition:
-    background 140ms var(--ease-signature, ease),
-    border-color 140ms var(--ease-signature, ease),
-    color 140ms var(--ease-signature, ease),
-    transform 90ms var(--ease-signature, ease);
-}
-.switchStrip :global(.ray-market-tab)::before { content: none !important; }
-/* hover: a crisp, fast surface + text brighten — flat, no lift, no swell */
-.switchStrip :global(.ray-market-tab:hover) {
-  transform: none;
-  background: rgba(255, 255, 255, 0.07) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  color: #f7f8f8 !important;
-  box-shadow: none !important;
-}
-.switchStrip :global(.ray-market-tab:hover)::before { content: none !important; }
-/* press: a small, tight tap — no gel overshoot */
-.switchStrip :global(.ray-market-tab:active) {
-  transform: scale(0.98);
-}
 /* the lamp spills: a whisper of butter light pooling from the switch onto
-   the masthead plate below — far too faint to compete with the lit plate */
+   the masthead plate below — survives the rail redesign; it flatters the
+   frame the same way it flattered the chips. */
 .switchStrip { position: relative; }
 .switchStrip::after {
   content: '';
@@ -2819,66 +2783,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   background: radial-gradient(52% 100% at 50% 0%, rgba(232, 218, 182, 0.045), transparent 72%);
   pointer-events: none;
   z-index: -1;
-}
-/* the active pill: the glossy butter plate — real depth, still the one light.
-   Light enters the top face, the mass shades toward the base, the halo rides
-   in the shadow stack. Its rim flips warm: bright crown, dark base — the
-   plate sits IN the row, not printed on it. */
-.switchStrip :global(.ray-market-tab[data-active='true']),
-.switchStrip :global(.ray-market-tab[aria-selected='true']) {
-  /* the ONE lit chip — a clean, flat butter fill (Linear restraint: solid
-     surface, crisp edge, ink text), lit by a single tight halo rather than a
-     glossy dome. It is unmistakably the active element without shouting. */
-  background: var(--color-butter, #E8DAB6) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  color: #08090a !important;
-  border: 1px solid rgba(255, 246, 224, 0.5) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 0 0 0.5px rgba(232, 218, 182, 0.4),
-    0 2px 10px -3px rgba(232, 218, 182, 0.28),
-    0 0 22px -6px rgba(232, 218, 182, 0.22) !important;
-}
-.switchStrip :global(.ray-market-tab[data-active='true'])::before,
-.switchStrip :global(.ray-market-tab[aria-selected='true'])::before {
-  content: none !important;
-}
-/* the specular sweep — one pass of light across the plate as it takes the
-   switch. Fires on activation (and once at load on the resting active pill,
-   folding into the switch-on). Momentary, then the face is calm glass. */
-.switchStrip :global(.ray-market-tab)::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 42%;
-  z-index: 2;
-  background: linear-gradient(105deg,
-    transparent,
-    rgba(255, 255, 255, 0.32) 50%,
-    transparent);
-  transform: translateX(-140%) skewX(-18deg);
-  opacity: 0;
-  pointer-events: none;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .switchStrip :global(.ray-market-tab[data-active='true'])::after {
-    animation: glassSweep 720ms var(--ease-signature, ease) 90ms 1 both;
-  }
-  /* THE HANDOFF: on the once-per-session open, the ignite ripple runs the
-     row and visibly STRIKES the active plate — its sweep fires at its own
-     ignite peak (150ms ripple base + i×60ms pitch + 210ms = the 35% frame
-     of the 420ms ignite). On-click switches keep the 90ms rule above. */
-  .switchStrip :global(.ray-mkt-open .ray-market-tab[data-active='true'])::after {
-    animation-delay: calc(150ms + var(--ripple-i, 0) * 60ms + 210ms);
-  }
-}
-@keyframes glassSweep {
-  0%   { opacity: 0; transform: translateX(-140%) skewX(-18deg); }
-  16%  { opacity: 1; }
-  100% { opacity: 0; transform: translateX(380%) skewX(-18deg); }
 }
 
 /* the monument plate: the same pane, one register brighter */
@@ -2965,18 +2869,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 
 
-/* mobile: the grid cells — 44px touch targets, and the frost halved (seven
-   blurred keys on the tightest paint path; the lighter blur is invisible at
-   phone scale and funds the rest of the band) */
-@media (max-width: 899px) {
-  .switchStrip :global(.ray-market-tab) {
-    padding: 12px 10px !important;
-    /* keypad keys, concentric with the 14px monument card below */
-    border-radius: 14px;
-    -webkit-backdrop-filter: blur(14px) saturate(1.5) brightness(1.05);
-    backdrop-filter: blur(14px) saturate(1.5) brightness(1.05);
-  }
-}
 
 /* ══════════════════════════════════════════════════════════════════════
    LINEAR DARK PASS (Aug 2026) — the non-beige canvas re-tuned toward

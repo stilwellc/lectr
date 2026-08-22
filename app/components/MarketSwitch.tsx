@@ -1,157 +1,201 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { CSSProperties } from 'react';
-import { MARKETS } from '../constants';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
+import { MARKETS, type Market } from '../constants';
 import { useMarket } from '../lib/market';
-import { formatDemand, DemandPoint } from '../lib/demand';
+import { formatDemand } from '../lib/demand';
 import MarketIcon from './MarketIcon';
-import TerminalEmblem from '../preview/terminal/emblems';
-import Flick from './Flick';
 
 /**
- * MarketSwitch — the verticals as the lander's focal shelf. Each market is a
- * card: its glyph, its name, and for live markets its own demand reading with
- * a micro-sparkline (the same TTM series the hero draws). Coming markets show
- * their tagline under a muted "soon" chip. The compact variant is THE one
- * market switcher on the INNER pages — a pill row with glyphs. The choice
- * persists across every page.
+ * MarketSwitch — THE EXCHANGE RAIL (Aug 2026 redesign; "the door to the app").
  *
- * The `lander` variant replaces home's six-pill row with a category dropdown:
- * on the total market a single lit "Choose a category" control opens a compact
- * certificate-styled menu of the verticals; with a category chosen the row
- * collapses to a butter-lit chip + a quiet "Change category" ghost, ceding the
- * visual lead to the feed toolbar's filters. Picking an option calls the same
- * setMarket the pills used — the pushState tape-print switch is untouched.
+ * Not a row of floating pills: one hairline-framed band, eight markets as
+ * fused CELLS on shared hairlines — the index rail of a trading floor. Every
+ * cell carries a live micro-read (a real demand % where one exists, an honest
+ * live-lot count where it doesn't), so the floor hums before you choose. The
+ * active cell is the room's one lamp: a 2px butter filament on its top edge,
+ * the --glow-lit halo when this switch is the view's lit element.
+ *
+ * Total market is the ANCHOR — first cell, wider, sealed off by a double-
+ * hairline spine: everything left of the spine is the index, everything right
+ * its components. It carries the index last-move plus the total live count.
+ *
+ * ≤899px this is NOT a squeezed rail — it becomes THE KEYPAD: a 2×4 board of
+ * keys (short labels) over THE FLAP LINE, a split-flap readout printing the
+ * active market's read. Pick a key, the line flips.
+ *
+ * `compact` (inner pages) is the same chassis with the data stripped: one
+ * 40px row, no reads, no flap, filament-only active (each inner view's lit
+ * element is its own — the marquee rule).
  */
 
-function Spark({ series }: { series: DemandPoint[] }) {
-  const pts = series.slice(-14);
-  if (pts.length < 2) return null;
-  const vals = pts.map(p => p.value);
-  const min = Math.min(...vals);
-  const span = Math.max(...vals) - min || 1;
-  const W = 58;
-  const H = 20;
-  const d = pts
-    .map((p, i) => `${((i / (pts.length - 1)) * W).toFixed(1)},${(H - 2 - ((p.value - min) / span) * (H - 4)).toFixed(1)}`)
-    .join(' ');
-  return (
-    <svg className="ray-mkt-spark" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none" aria-hidden="true">
-      <polyline points={d} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+export interface RailRead {
+  /** last value of a REAL demand-%-vs-estimate series — art/design/watches
+   *  only; never fabricated for realized/bid-basis markets */
+  demandPct?: number | null;
+  /** live lots on the block — the universal honest read */
+  liveCount?: number | null;
+}
+
+const READ_MARKETS = new Set<Market>(['art', 'design', 'watches']);
+
+function fmtCount(n: number): string {
+  return n.toLocaleString('en-US');
 }
 
 export default function MarketSwitch({
   compact = false,
   lit = false,
-  demand,
   open = false,
-  emblems = false,
+  reads,
+  indexMove,
 }: {
+  /** inner-page variant: the rail dimmed to navigation duty — no reads, no
+   *  flap, no halo. Home omits it and gets the full door. */
   compact?: boolean;
-  /** the active pill wears the view's single lit treatment — ONLY pass true
-      where the switch is that view's lit element. /value's lit element
-      is the call plate; two lit per view violates the marquee rule. */
+  /** the active cell wears the view's single lit treatment — ONLY pass true
+   *  where the switch is that view's lit element (home). */
   lit?: boolean;
-  /** home's variant: category dropdown / chip + "Change category" — the
-      lit control replaces the six-pill row. Inner pages keep `compact`. */
-  demand?: Record<string, DemandPoint[]>;
-  /** MARKET OPEN — on the entrance's first non-cached paint the pills ripple-
-      ignite in sequence, then settle dim except the active .lit pill (one sign
-      lit). Session-gated (lectr-marketopen) so it never wears thin on revisits;
-      reduced-motion / cached readers get the settled row at once. */
+  /** arms the once-per-session "board energizes" entrance (motion-gated). */
   open?: boolean;
-  /** TERMINAL-ONLY: swap the plain MarketIcon glyph for the richer
-      TerminalEmblem line-illustrations (a framed painting, a chair, a
-      wristwatch…). Opt-in so /home and the other inner pages keep the
-      original glyph — only the Terminal passes this. */
-  emblems?: boolean;
+  /** per-market micro-reads (door only) — demand % where real, live counts
+   *  everywhere. Missing key → the cell simply prints no read. */
+  reads?: Partial<Record<Market, RailRead>>;
+  /** the aggregate index's last move, % (market.json) — the anchor's read. */
+  indexMove?: number | null;
 }) {
   const { market, setMarket } = useMarket();
+  const railRef = useRef<HTMLDivElement>(null);
 
-  // The ripple is a pure enhancement layered over the already-correct row.
-  // Armed once, after mount, only when: open, motion allowed, and this session
-  // hasn't seen it. Never blocks the lit pill — that treatment is CSS on
-  // [data-active], present from the first paint regardless.
-  const [ripple, setRipple] = useState(false);
+  // The energize beat is a pure enhancement over the already-correct resting
+  // rail. Armed once per session (same key the pill ripple used), motion
+  // allowed, first non-cached paint only. The filament + halo are CSS on
+  // [data-active] from first paint — a skipped beat still shows one lamp.
+  const [energize, setEnergize] = useState(false);
   useEffect(() => {
-    if (!open || !compact) return;
+    if (!open) return;
     try {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       if (sessionStorage.getItem('lectr-marketopen')) return;
       sessionStorage.setItem('lectr-marketopen', '1');
-    } catch { return; }
-    setRipple(true);
-    // drop the class once the whole ripple has finished (T900 + up to 5×60ms
-    // stagger + 420ms ignite ≈ 1620ms) so a later re-render can't restart it.
-    // The keyframe rests at brightness(1) === the un-animated state, so this
-    // removal is invisible.
-    const t = setTimeout(() => setRipple(false), 1750);
+    } catch {
+      return;
+    }
+    setEnergize(true);
+    const t = setTimeout(() => setEnergize(false), 1900);
     return () => clearTimeout(t);
     // decided once at mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (compact) {
-    return (
-      <div className={`ray-markets ray-markets-compact${ripple ? ' ray-mkt-open' : ''}`} role="tablist" aria-label="Markets">
-        {MARKETS.map((m, i) => (
-          <button
-            key={m.key}
-            role="tab"
-            aria-selected={market === m.key}
-            className={`ray-market-tab${market === m.key && lit ? ' lit' : ''}`}
-            data-market={m.key}
-            data-active={market === m.key}
-            data-live={m.live}
-            style={ripple ? ({ '--ripple-i': i } as CSSProperties) : undefined}
-            onClick={() => setMarket(m.key)}
-          >
-            <span className={`ray-pill-obj${emblems ? ' ray-pill-emblem' : ''}`} aria-hidden="true">
-              {emblems ? <TerminalEmblem market={m.key} size={15} /> : <MarketIcon market={m.key} size={15} />}
-            </span>
-            {m.label}
-            {!m.live && <span className="ray-market-soon">soon</span>}
-          </button>
-        ))}
-      </div>
-    );
-  }
+  // Roving tabindex — a tablist owes arrow keys. Arrows move focus (manual
+  // activation: Enter/Space press the button natively).
+  const onKeys = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const delta =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 :
+      e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!delta) return;
+    e.preventDefault();
+    const cells = railRef.current?.querySelectorAll<HTMLButtonElement>('.ray-rail-cell');
+    if (!cells?.length) return;
+    cells[(i + delta + cells.length) % cells.length].focus();
+  };
+
+  const door = !compact;
+  const active = MARKETS.find(m => m.key === market) ?? MARKETS[0];
+
+  /** the cell's micro-read: [text, tone] — or null (no data, print nothing) */
+  const readOf = (key: Market): { text: string; tone?: 'up' | 'down' } | null => {
+    if (!door) return null;
+    if (key === 'all') {
+      const parts: string[] = [];
+      if (indexMove != null) parts.push(formatDemand(indexMove));
+      const total = reads?.all?.liveCount;
+      if (total != null) parts.push(`${fmtCount(total)} live`);
+      if (!parts.length) return null;
+      return { text: parts.join('  '), tone: indexMove != null ? (indexMove >= 0 ? 'up' : 'down') : undefined };
+    }
+    const r = reads?.[key];
+    if (READ_MARKETS.has(key) && r?.demandPct != null) {
+      return { text: formatDemand(r.demandPct), tone: r.demandPct >= 0 ? 'up' : 'down' };
+    }
+    if (r?.liveCount != null) return { text: `${fmtCount(r.liveCount)} live` };
+    return null;
+  };
+
+  // THE FLAP LINE (mobile door) — the split-flap destination row for the
+  // active market. Uppercase mono tokens; % toned, everything else quiet.
+  const flap = (() => {
+    if (!door) return null;
+    const tokens: { t: string; tone?: 'up' | 'down' | 'name' }[] = [
+      { t: active.label.toUpperCase(), tone: 'name' },
+    ];
+    if (active.key === 'all') {
+      if (indexMove != null) tokens.push({ t: `INDEX ${formatDemand(indexMove)}`, tone: indexMove >= 0 ? 'up' : 'down' });
+      const total = reads?.all?.liveCount;
+      if (total != null) tokens.push({ t: `${fmtCount(total)} LIVE` });
+    } else {
+      const r = reads?.[active.key];
+      if (READ_MARKETS.has(active.key) && r?.demandPct != null) {
+        tokens.push({ t: `DEMAND ${formatDemand(r.demandPct)}`, tone: r.demandPct >= 0 ? 'up' : 'down' });
+      }
+      if (r?.liveCount != null) tokens.push({ t: `${fmtCount(r.liveCount)} LIVE` });
+    }
+    return tokens;
+  })();
 
   return (
-    <div className="ray-mkt-cards" role="tablist" aria-label="Markets">
-      {MARKETS.map(m => {
-        const series = demand?.[m.key] || [];
-        const now = m.live && series.length ? series[series.length - 1].value : null;
-        const tone = now == null ? undefined : now >= 0 ? 'up' : 'down';
+    <div
+      ref={railRef}
+      className={`ray-rail${energize ? ' is-open' : ''}`}
+      data-variant={door ? 'door' : 'compact'}
+      data-lit={door && lit ? 'true' : undefined}
+      role="tablist"
+      aria-label="Markets"
+    >
+      {MARKETS.map((m, i) => {
+        const read = readOf(m.key);
+        const isActive = market === m.key;
         return (
           <button
             key={m.key}
             role="tab"
-            aria-selected={market === m.key}
-            className="ray-mkt-card"
-            data-active={market === m.key}
-            data-live={m.live}
-            data-tone={tone}
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            className={`ray-rail-cell${m.key === 'all' ? ' ray-rail-anchor' : ''}`}
+            data-market={m.key}
+            data-active={isActive}
+            style={{ '--cell-i': i } as CSSProperties}
+            aria-label={read ? `${m.label} — ${read.text}` : m.label}
             onClick={() => setMarket(m.key)}
+            onKeyDown={e => onKeys(e, i)}
           >
-            <div className="ray-mkt-card-top">
-              <span className="ray-mkt-ic"><MarketIcon market={m.key} /></span>
-              {now != null ? <Spark series={series} /> : !m.live && <span className="ray-market-soon">soon</span>}
-            </div>
-            <div className="ray-mkt-card-label">{m.label}</div>
-            {now != null ? (
-              <div className="ray-mkt-card-stat">
-                {formatDemand(now)} <span>demand</span>
-              </div>
-            ) : (
-              <div className="ray-mkt-card-tag">{m.tagline}</div>
+            <span className="ray-rail-top" aria-hidden="true">
+              <MarketIcon market={m.key} size={14} />
+              <span className="ray-rail-name">
+                <span className="ray-rail-name-full">{m.label}</span>
+                <span className="ray-rail-name-short">{m.short}</span>
+              </span>
+            </span>
+            {read && (
+              <span className="ray-rail-read" data-tone={read.tone} aria-hidden="true">
+                {read.text}
+              </span>
             )}
           </button>
         );
       })}
+      {flap && (
+        <div className="ray-rail-flap" aria-live="polite">
+          {flap.map((tok, i) => (
+            <span key={i} data-tone={tok.tone}>
+              {i > 0 && <span className="ray-rail-flap-dot" aria-hidden="true">·</span>}
+              {tok.t}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
