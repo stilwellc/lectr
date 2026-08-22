@@ -22,7 +22,7 @@ export function generateMetadata({ params }: { params: { market: string } }) {
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
   return {
     title: `${label} makers`,
-    description: `Every maker lectr tracks in the ${label.toLowerCase()} market — sparklines, record sales, and where the market is heading.`,
+    description: `Every maker lectr tracks in the ${params.market === 'tcg' ? 'TCG' : label.toLowerCase()} market — sparklines, record sales, and where the market is heading.`,
     alternates: { canonical: `/makers/m/${params.market}` },
   };
 }

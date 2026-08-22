@@ -41,7 +41,8 @@ export default function ValuePage() {
   const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, deepValue } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
-  const activeLabel = activeKey === 'all' ? 'collectible' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
+  // labels lowercase into prose ("the design market") — initialisms keep case
+  const activeLabel = activeKey === 'all' ? 'collectible' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const { savedIds, toggle, isSaved } = useSavedLots();

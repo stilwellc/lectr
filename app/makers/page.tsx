@@ -39,7 +39,8 @@ export default function MakersPage() {
   const { allLots, statsByArtist, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData, demand } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
-  const activeLabel = activeKey === 'all' ? 'full' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
+  // initialisms keep their case in prose ("the TCG market")
+  const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
   const rosterCount = useMemo(() => ARTISTS.filter(a => mktSet.has(a.slug)).length, [mktSet]);

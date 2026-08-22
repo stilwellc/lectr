@@ -43,7 +43,7 @@ function statsFor(slug: string): MakerStatsRow | null {
 }
 
 const MARKET_LABEL: Record<string, string> = {};
-for (const m of MARKETS) MARKET_LABEL[m.key] = m.label.toLowerCase();
+for (const m of MARKETS) MARKET_LABEL[m.key] = m.key === 'tcg' ? 'TCG' : m.label.toLowerCase();
 
 // Sharing /makers/kaws shows KAWS's own line and numbers — the share IS the
 // product. The cards are pre-rendered to public/og/<slug>.png by

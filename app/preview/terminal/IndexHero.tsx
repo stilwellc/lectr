@@ -14,6 +14,11 @@ import { fmtInt, useReducedMotion } from './hooks';
 const N_VERTICALS = MARKETS.filter((mk) => mk.live && mk.key !== 'all').length;
 const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'] as const;
 const VERTICAL_COUNT_WORD = COUNT_WORDS[N_VERTICALS] ?? String(N_VERTICALS);
+
+/** Market keys read naturally lowercase in the kicker ("the design market") —
+ *  except initialisms, which keep their case ("the TCG market"). */
+const KICKER_NAME: Partial<Record<Market, string>> = { tcg: 'TCG' };
+const kickerName = (k: Market): string => KICKER_NAME[k] ?? k;
 import styles from './style.module.css';
 
 /* RAIL MARKS — the constructed-mark language on the "Right now" metrics:
@@ -170,7 +175,7 @@ function useHeroSeries(
       const idx: IndexPoint[] = demand.map((p) => ({ period: p.date, value: p.value, n: p.n }));
       return {
         idx,
-        kicker: activeKey === 'all' ? 'The collectibles market' : `The ${activeKey} market`,
+        kicker: activeKey === 'all' ? 'The collectibles market' : `The ${kickerName(activeKey)} market`,
         // NOT "hammer": the series is the raw published sold price vs estimate,
         // and for most houses that price already includes their buyer's premium.
         // Saying "sell" keeps the sentence true to the number underneath it.
@@ -184,12 +189,12 @@ function useHeroSeries(
       const idx: IndexPoint[] = rz.map((p) => ({ period: p.date, value: p.value, n: p.n }));
       return {
         idx,
-        kicker: `The ${activeKey} market`,
+        kicker: `The ${kickerName(activeKey)} market`,
         explain: 'Typical price paid at hammer',
         unit: 'realized' as const,
       };
     }
-    return { idx: [] as IndexPoint[], kicker: `The ${activeKey} market`, explain: '', unit: 'demand' as const };
+    return { idx: [] as IndexPoint[], kicker: `The ${kickerName(activeKey)} market`, explain: '', unit: 'demand' as const };
   }, [activeKey, demand, realized]);
 }
 
