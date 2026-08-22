@@ -43,6 +43,7 @@ export const SUBCAT_LABELS: Record<string, string> = {
   'navigation': 'Navigation', 'medical': 'Medical', 'precision-clocks': 'Precision clocks',
   // card eras
   'era-vintage': 'Vintage cards (pre-1980)', 'era-classic': 'Classic cards (1980–99)', 'era-modern': 'Modern cards (2000+)',
+  'pokemon-cards': 'Pokémon singles', 'pokemon-sealed': 'Sealed wax',
   // art
   'prints': 'Prints & multiples', 'originals': 'Original works', 'sculpture': 'Sculpture & ceramics',
   'photographs': 'Photographs', 'books': 'Books',
