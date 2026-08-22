@@ -4,16 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
-import { MARKETS, type Market } from '../../constants';
+import type { Market } from '../../constants';
 import type { HeroPoint } from './HeroChart';
 import { MarketTape, SubTape, TapeMonument, pickLead } from './MarketTape';
 import { fmtInt, useReducedMotion } from './hooks';
 
-// The masthead kicker's vertical count derives from MARKETS so a new market
-// (TCG, Aug 2026) can never leave the copy lying about the shelf below it.
-const N_VERTICALS = MARKETS.filter((mk) => mk.live && mk.key !== 'all').length;
-const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'] as const;
-const VERTICAL_COUNT_WORD = COUNT_WORDS[N_VERTICALS] ?? String(N_VERTICALS);
 
 /** Market keys read naturally lowercase in the kicker ("the design market") —
  *  except initialisms, which keep their case ("the TCG market"). */
@@ -219,7 +214,6 @@ export default function IndexHero({
   const reduce = useReducedMotion();
   const hero = useHeroSeries(activeKey, demand, realized);
   const lead = useMemo(() => pickLead(market, demandAll, realized, activeKey), [market, demandAll, realized, activeKey]);
-  const serialNo = serial ? `NO. ${String(serial).slice(0, 10).replace(/-/g, '')}` : null;
   const showMonument = activeKey !== 'all' && !!lead;   // never on Total market
 
   // ── BID-COMPETITION read (sports/cards). Goldin publishes no estimate, so the
@@ -341,11 +335,7 @@ export default function IndexHero({
     return (
       <LazyMotion features={domAnimation} strict>
         <section className={styles.mHero}>
-          <m.div className={styles.mtMastheadM} {...rise(0.03)}>
-            <span className={styles.sectionKicker}>{hero.kicker}</span>
-            {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
-          </m.div>
-
+          {/* masthead retired — the keypad above is the orientation */}
           {showMonument && (
             <m.div className={styles.mtMonWrapM} {...rise(0.07)}>
               <TapeMonument row={lead!} play={play} />
@@ -383,14 +373,8 @@ export default function IndexHero({
       {/* data-play gates the CSS choreography (masthead glint, serial stamp,
           rail settle) on the same fresh-arrival contract as the framer rises */}
       <section className={styles.mtHero} data-play={play ? 'true' : undefined}>
-        <m.div className={styles.mtMasthead} {...rise(0.04)}>
-          <span className={styles.sectionKicker}>{hero.kicker}</span>
-          <span className={styles.mtMastheadNote}>
-            {activeKey === 'all' ? `${VERTICAL_COUNT_WORD} verticals · the strongest honest read each` : 'the sub-markets · strongest honest read each'}
-          </span>
-          {serialNo && <span className={styles.mtSerial}>{serialNo}</span>}
-        </m.div>
-
+        {/* the masthead line retired Aug 22 2026 (Collin) — the Exchange Rail
+            above IS the orientation; a second title row was saying it twice. */}
         <div className={styles.mtBoard}>
           <m.div className={styles.mtBoardMain} {...rise(0.1)}>
             {activeKey === 'all'
