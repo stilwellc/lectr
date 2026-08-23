@@ -199,10 +199,11 @@ function StageChart({ idx, unit, play }: { idx: IndexPoint[]; unit: 'demand' | '
   return (
     <div className={styles.mtLand} data-dir={dir} data-play={play ? 'true' : undefined} aria-hidden>
       <div className={styles.mtLandStage}>
+        <div className={styles.mtLandPlot}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className={styles.mtLandSvg}>
           <defs>
             <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="currentColor" stopOpacity="0.15" />
+              <stop offset="0" stopColor="currentColor" stopOpacity="0.22" />
               <stop offset="1" stopColor="currentColor" stopOpacity="0" />
             </linearGradient>
           </defs>
@@ -217,7 +218,8 @@ function StageChart({ idx, unit, play }: { idx: IndexPoint[]; unit: 'demand' | '
         </svg>
         {/* the live end of the line — HTML so the stretched SVG can't warp it */}
         <i className={styles.mtLandDot} style={{ left: `${g.endX}%`, top: `${g.endY}%` }} aria-hidden />
-        {/* gridline values ride the right edge as HTML so they never distort */}
+        </div>
+        {/* gridline values live in the price-scale gutter */}
         {g.grid.map((ln) => (
           <span key={ln.v} className={styles.mtLandTick} style={{ top: `${ln.y}%` }}>{fmtV(ln.v)}</span>
         ))}
@@ -509,23 +511,23 @@ export default function IndexHero({
                 {stmt.horizon && <em className={styles.mtQuoteHz}>{stmt.horizon}</em>}
               </span>
               <span className={styles.mtQuoteName}>{stmt.name}</span>
-            </div>
-            <div className={styles.mtQuoteRead}>
-              {stmt.fig && (
-                <span className={`${styles.mtQuoteFig} ${styles.pctData}`} data-dir={stmt.dir}>{stmt.fig}</span>
-              )}
               <span className={styles.mtQuoteMeta}>
                 <span>{stmt.metaL}</span>
                 <i aria-hidden />
                 <span>{stmt.metaR}</span>
               </span>
             </div>
-            {stmt.beam && (
-              <div className={styles.mtQuoteBeam} data-dir={stmt.dir} aria-hidden>
-                <CIBeam lo={stmt.beam.lo} hi={stmt.beam.hi} point={stmt.beam.pt}
-                  dir={stmt.dir} play={play} large />
-              </div>
-            )}
+            <div className={styles.mtQuoteRead}>
+              {stmt.fig && (
+                <span className={styles.mtQuoteFig} data-dir={stmt.dir}>{stmt.fig}</span>
+              )}
+              {stmt.beam && (
+                <div className={styles.mtQuoteBeam} data-dir={stmt.dir} aria-hidden>
+                  <CIBeam lo={stmt.beam.lo} hi={stmt.beam.hi} point={stmt.beam.pt}
+                    dir={stmt.dir} play={play} large />
+                </div>
+              )}
+            </div>
           </div>
           {hero.idx.length >= 4 && (
             <StageChart idx={hero.idx} unit={hero.unit} play={play} />
