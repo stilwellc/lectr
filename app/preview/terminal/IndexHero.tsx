@@ -251,7 +251,7 @@ export default function IndexHero({
   const closes = (closingNext || []).slice(0, 3);
   const pulseBoard = (
     <div className={styles.pulse} data-play={play ? 'true' : undefined}>
-      <div className={styles.pulseHead} aria-hidden>
+      <div className={styles.pulseHead} data-live="true" aria-hidden>
         <span className={styles.pulseTitle}>Right now</span>
         <i className={styles.pulseRule} />
       </div>

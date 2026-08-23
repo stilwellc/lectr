@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useId, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
@@ -241,6 +241,7 @@ export function CIBeam({ lo, hi, point, dir, mini = false, play = true, large = 
 
 /* ── the demand line — the real quarterly series over its median. */
 export function DemandLine({ series, mini = false, dir }: { series: { period: string; value: number }[]; mini?: boolean; dir?: 'up' | 'down' }) {
+  const gid = useId();
   const pts = useMemo(() => {
     // decimate to ≤48 points
     const step = Math.max(1, Math.ceil(series.length / 48));
@@ -265,6 +266,16 @@ export function DemandLine({ series, mini = false, dir }: { series: { period: st
   return (
     <div className={mini ? styles.demandLineMini : styles.demandLine} data-dir={dir} aria-hidden>
       <svg viewBox="0 0 100 72" preserveAspectRatio="none" className={styles.demandSvg}>
+        {/* the area under the line — Robinhood's gradient wash. Stops ride
+            currentColor at falling opacity, so it only appears on surfaces
+            that set a color on the svg (the hero); paper boards stay ink. */}
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="currentColor" stopOpacity="0.16" />
+            <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={`${pts.d} L 100 72 L 0 72 Z`} fill={`url(#${gid})`} stroke="none" className={styles.demandFill} />
         <line x1="0" y1={pts.medianY} x2="100" y2={pts.medianY} className={styles.demandBase} vectorEffect="non-scaling-stroke" />
         <path d={pts.d} className={styles.demandPath} fill="none" vectorEffect="non-scaling-stroke" />
         <circle cx="100" cy={pts.endY} r="2.6" className={styles.demandDot} />

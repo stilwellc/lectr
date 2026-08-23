@@ -2723,3 +2723,122 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtSide .heroRail:not([data-under-monument='true']) .railCmd {
   margin-top: 14px;
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   THE DISPLAY PASS (Aug 2026) — the lander lifted to the Linear/Robinhood/
+   Block bar. The layout holds; four levers move: SCALE (a true display
+   moment — the monument figure at quote scale, board figures a register
+   louder), ATMOSPHERE (one controlled light at the top, a direction-tinted
+   aura inside the monument), DEPTH (gradient washes under every sparkline,
+   fading hairlines, a lifted pane), LIFE (the live pulse dot, a glowing
+   point estimate). Sits last; overrides by source order.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── ATMOSPHERE: the room's one overhead light, worth noticing now ── */
+.switchStrip::after {
+  width: min(820px, 86vw);
+  height: 130px;
+  background: radial-gradient(52% 100% at 50% 0%, rgba(232, 218, 182, 0.075), transparent 70%);
+}
+
+/* ── THE MONUMENT AT QUOTE SCALE — Robinhood's protagonist numeral ── */
+.mtSide .mtMon {
+  gap: 6px;
+  padding: clamp(16px, 1.6vw, 22px) clamp(16px, 1.7vw, 22px) clamp(14px, 1.5vw, 18px);
+  /* a lifted pane, not a flat tile: vertical luminance, top light, real drop */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 24px 56px -28px rgba(0, 0, 0, 0.65);
+}
+.mtSide .mtMon:hover { border-color: rgba(255, 255, 255, 0.15); }
+/* the aura — the read's direction cast as light inside the pane */
+.mtSide .mtMon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.mtSide .mtMon[data-dir='up']::after {
+  background: radial-gradient(95% 75% at 72% -14%, rgba(87, 190, 135, 0.11), transparent 58%);
+}
+.mtSide .mtMon[data-dir='down']::after {
+  background: radial-gradient(95% 75% at 72% -14%, rgba(204, 106, 92, 0.11), transparent 58%);
+}
+.mtSide .mtMonMarket { font-size: clamp(24px, 2vw, 31px); }
+.mtSide .mtMonFigure {
+  font-size: clamp(46px, 4.2vw, 64px);
+  font-weight: 640;
+  letter-spacing: -0.035em;
+  margin-top: 4px;
+}
+.mtSide .mtMonBeam { margin-top: 10px; }
+.mtSide .mtMon .beamLarge .beamStage { height: 22px; }
+.mtSide .mtMon .beamLarge .beamRule { stroke-width: 1.5; }
+/* the point estimate glows — the one lit particle on the instrument */
+.mtSide .mtMon[data-dir='up'] .beamLarge .beamDiamond { filter: drop-shadow(0 0 7px rgba(87, 190, 135, 0.6)); }
+.mtSide .mtMon[data-dir='down'] .beamLarge .beamDiamond { filter: drop-shadow(0 0 7px rgba(204, 106, 92, 0.6)); }
+.mtSide .mtMonMeta { margin-top: 12px; }
+
+/* ── THE BOARD, A REGISTER LOUDER — figures lead, labels serve ── */
+.mtHero .mtRow { min-height: clamp(54px, 6.5vh, 68px); }
+.mtHero .mtLabel { font-size: 17px; line-height: 22px; }
+.mtHero .mtFigure { font-size: 20px; line-height: 24px; letter-spacing: -0.015em; }
+.mtHero .mtSub { font-size: 12px; }
+.mtHero .mtInstrument .beamRule { stroke-width: 1.25; }
+/* hairlines that FADE at their ends — Linear's rule, not a full-bleed border */
+.mtBoardMain .mtRow {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.115) 12%,
+    rgba(255, 255, 255, 0.115) 82%,
+    rgba(255, 255, 255, 0.02)) 1;
+}
+.mtBoardMain .mtRow:nth-child(n+3) {
+  border-image: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.015),
+    rgba(255, 255, 255, 0.09) 12%,
+    rgba(255, 255, 255, 0.09) 82%,
+    rgba(255, 255, 255, 0.015)) 1;
+}
+.mtBoardMain .mtRow:nth-child(n+5) {
+  border-image: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.01),
+    rgba(255, 255, 255, 0.065) 12%,
+    rgba(255, 255, 255, 0.065) 82%,
+    rgba(255, 255, 255, 0.01)) 1;
+}
+.mtBoardMain .mtRow:last-child { border-image: none; border-bottom: 0; }
+
+/* ── DEPTH UNDER EVERY LINE — the sparkline washes turn on (currentColor
+   gates the gradient; paper boards never set a color, so they stay ink) ── */
+.demandSvg { color: transparent; }
+.mtHero .demandSvg, .mHero .demandSvg { color: rgba(237, 230, 218, 0.75); }
+.mtHero [data-dir='up'] .demandSvg, .mHero [data-dir='up'] .demandSvg,
+.mtMon[data-dir='up'] .demandSvg { color: #57BE87; }
+.mtHero [data-dir='down'] .demandSvg, .mHero [data-dir='down'] .demandSvg,
+.mtMon[data-dir='down'] .demandSvg { color: #CC6A5C; }
+/* row sparks get a lighter wash than the monument's — enough to read depth,
+   never a slab under a flat-high series */
+.mtHero .mtInstrument .demandFill, .mHero .mtInstrument .demandFill { opacity: 0.5; }
+
+/* ── LIFE: the live pulse — a breathing dot on the Right-now head ── */
+.pulseHead[data-live='true'] .pulseTitle { display: inline-flex; align-items: center; gap: 7px; }
+.pulseHead[data-live='true'] .pulseTitle::before {
+  content: '';
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--color-up, #57be87);
+  box-shadow: 0 0 6px rgba(87, 190, 135, 0.7);
+  animation: lectrLiveBreath 2.6s ease-in-out infinite;
+}
+@keyframes lectrLiveBreath {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulseHead[data-live='true'] .pulseTitle::before { animation: none; }
+}
