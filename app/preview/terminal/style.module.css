@@ -2259,7 +2259,19 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    whole market. Masthead line, then two columns: the tape reading down the
    left like a departures board; the signature instrument enthroned top-right
    at display scale with the functional rail beneath it. ══ */
-.mtHero { padding: 16px 0 clamp(12px, 1.4vw, 18px); }
+.mtHero {
+  padding: 16px 0 clamp(12px, 1.4vw, 18px);
+  /* THE FIRST SCREEN IS THE BOARD (Collin, Aug 22): the hero fills the
+     viewport below nav+rail so Tonight's wall always starts under the fold —
+     the departures-board rows are built to stretch evenly into their frame,
+     so the slack becomes row breathing, not void. Capped for tall monitors. */
+  display: flex;
+  flex-direction: column;
+  min-height: min(calc(100vh - 185px), 860px);
+  min-height: min(calc(100dvh - 185px), 860px);
+}
+.mtHero > * { flex: none; }
+.mtHero .mtBoard { flex: 1; }
 /* (the masthead line + engraved groove + serial retired Aug 22 2026 — the
    Exchange Rail above is the orientation; the board opens directly) */
 .mtBoard {
