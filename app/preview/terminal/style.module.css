@@ -2842,3 +2842,17 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 @media (prefers-reduced-motion: reduce) {
   .pulseHead[data-live='true'] .pulseTitle::before { animation: none; }
 }
+
+/* the command bar wears its shortcut — a real keycap, right edge, Linear's
+   signature affordance on the primary command surface */
+.mtSide .railCmd { position: relative; }
+.cmdKbd {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-family: var(--font-inter), sans-serif; font-size: 11px; line-height: 1.4;
+  color: var(--tt-muted);
+  padding: 1px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+}
+@media (max-width: 899px) { .cmdKbd { display: none; } }

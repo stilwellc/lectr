@@ -400,6 +400,7 @@ export default function IndexHero({
               <button type="button" className={styles.railCmd} onClick={onCommand}>
                 <RailMark k="search" />
                 <span className={styles.cmdLabel}>Search {fmtInt(totalLots)} lots</span>
+                <kbd className={styles.cmdKbd} aria-hidden>⌘K</kbd>
               </button>
               {tickerEl}
             </div>
