@@ -183,7 +183,9 @@ const tagFor = (read: TapeRowData['read']): string => {
   if (read.kind === 'index') {
     const m = read.method === 'repeat-sale' ? 'Repeat-sale index'
       : read.method === 'composite' ? 'Hedonic composite' : 'Hedonic index';
-    return `${m} · 95% CI${read.scope ? ` · ${read.scope}` : ''}`;
+    // the '95% CI' suffix retired in the unification pass — the CI range
+    // already prints in full under the figure; the kicker names the method.
+    return `${m}${read.scope ? ` · ${read.scope}` : ''}`;
   }
   return read.kind === 'demand' ? 'Demand read' : 'Descriptive';
 };
@@ -224,7 +226,7 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
         <span>
           {r.kind === 'index'
             ? (r.method === 'repeat-sale' ? 'Certified · repeat-sale' : r.method === 'composite' ? 'Certified · composite' : 'Certified · hedonic')
-            : r.kind === 'demand' ? 'The strongest read' : 'The read'}
+            : r.kind === 'demand' ? 'Measured · demand' : 'Descriptive · typical'}
         </span>
         <i className={styles.mtMonLead} aria-hidden />
         {r.kind === 'index' && <em className={styles.mtMonHorizon}>{r.horizon}</em>}
@@ -241,7 +243,7 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
           <span className={styles.mtMonMeta}>
             <span>
               {r.method === 'repeat-sale'
-                ? `same ${row.key === 'sports' ? 'card' : row.key === 'watches' ? 'reference' : 'edition'} resold`
+                ? `same ${row.key === 'sports' || row.key === 'tcg' ? 'card' : row.key === 'watches' ? 'reference' : 'edition'} resold`
                 : r.method === 'composite' ? 'hedonic composite' : 'hedonic index'}
             </span>
             <span>

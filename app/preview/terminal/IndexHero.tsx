@@ -262,13 +262,10 @@ export default function IndexHero({
         <div className={styles.pulseBlock} data-lead="true">
           <span className={styles.pulseCellText}>
             <span className={styles.pulseLabel}>On the block</span>
-            <span className={styles.pulseSub}>lots open across the room</span>
+            <span className={styles.pulseSub}>{onBlock === 0 ? 'the room is quiet right now' : 'lots open across the room'}</span>
           </span>
-          <span className={styles.pulsePaddle}>
-            <span className={styles.pulsePaddleHead}>
-              <span className={styles.pulseValLead}>{fmtInt(onBlockShown)}</span>
-            </span>
-            <span className={styles.pulsePaddleStem} aria-hidden />
+          <span className={styles.pulseValLead} data-zero={onBlock === 0 ? 'true' : undefined}>
+            {fmtInt(onBlockShown)}
           </span>
         </div>
 
@@ -319,7 +316,10 @@ export default function IndexHero({
   // the phone (the shell decides; the element is one and the same)
   const tickerEl = closes.length > 0 ? (
     <div className={styles.pulseTicker} aria-label="Auctions closing next">
-      <span className={styles.pulseTickerLabel}>Closing next</span>
+      <div className={styles.pulseHead} aria-hidden>
+        <span className={styles.pulseTitle}>Closing next</span>
+        <i className={styles.pulseRule} />
+      </div>
       <span className={styles.pulseTickerChips}>
         {closes.map((c) => (
           <span key={c.house} className={styles.pulseChip} data-tonight={relDay(c.when) === 'tonight' ? 'true' : undefined}>

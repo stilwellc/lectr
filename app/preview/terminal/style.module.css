@@ -142,61 +142,18 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pulseValLead {
+  flex: none;
   font-family: var(--font-inter), sans-serif;
-  font-size: clamp(18px, 1.5vw, 22px); font-weight: 600;
+  font-size: 24px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: #f7f8f8;
   font-variant-numeric: tabular-nums; /* the room count YIELDS to the certified read (Robinhood: the market figure wins) */
 }
-/* ── THE PADDLE ── the room's population worn as a raised bidder number,
-   built as an OBJECT, not a tile: a solid head with a machined bevel (top
-   light, bottom shade, edge vignette), the printed card-frame real bid
-   paddles carry (a butter hairline inset), one specular glare across the
-   upper face, a butter ferrule collaring the handle joint, and a shaded
-   cylindrical handle with a grip cap. Rides the RIGHT edge of the lead
-   cell; the handle tucks behind the cell's bottom. */
-.pulsePaddle {
-  display: flex; flex-direction: column; align-items: center;
-  width: max-content; flex: none;
-  margin: 2px 0 -14px;
-  /* flat pass Aug 22: the tilt + hover sway retired — signage sits square */
-}
-.pulsePaddleHead {
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
-  min-width: 72px; padding: 10px 15px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 11px;
-  /* signage, not a button: one flat body, one quiet rim, the numeral IS
-     the design. */
-  background: #1d2023;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-/* the printed keyline — the one drawn detail the card keeps (Collin's call);
-   hairline-thin so it reads as ink, not a frame */
-.pulsePaddleHead::before {
-  content: ''; position: absolute; inset: 4px; border-radius: 7px;
-  border: 0.5px solid rgba(232, 218, 182, 0.22);
-  pointer-events: none;
-}
-.pulsePaddleStem {
-  width: 7px; height: 15px; margin-top: -1px;
-  border-radius: 0 0 2px 2px;
-  /* a stick, drawn flat — no border, no band, no tongue */
-  background: #26292d;
-}
-/* the raise: the paddle comes up from the lap on fresh arrival */
-.pulse[data-play='true'] .pulsePaddle {
-  animation: paddleRaise 0.9s 0.55s var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) backwards;
-}
-@keyframes paddleRaise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pulse[data-play='true'] .pulsePaddle { animation: none; }
-}
+/* (the paddle object retired in the unification pass — one numeral grammar
+   across the column: plain, tabular, hierarchy by size and ink alone) */
+.pulseValLead[data-zero='true'] { color: var(--tt-faint); }
 .pulseVal {
   display: flex; align-items: baseline; gap: 6px;
-  font-family: var(--font-inter), sans-serif; font-size: 21px; font-weight: 600;
+  font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: #f7f8f8;
   font-variant-numeric: tabular-nums;
 }
@@ -215,7 +172,7 @@
    letterpressed count, a tilt mirroring the paddle's. */
 .pulseAction {
   position: relative; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 12px 13px; cursor: pointer; overflow: hidden;
+  gap: 12px; padding: 12px; cursor: pointer; overflow: hidden;
   border: 1px solid rgba(232, 218, 182, 0.18); border-radius: 12px;
   background: rgba(255, 255, 255, 0.028);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -228,38 +185,14 @@
 .pulseAction:active .pulseTag { transform: translateY(0) scale(0.98); }
 .pulseAction:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
 .pulseAction .pulseLabel { color: rgba(232, 218, 182, 0.72); }
-.pulseTag {
-  position: relative; flex: none;
-  display: flex; align-items: center;
-  margin: 2px 0;
-  /* the strung end runs long — hole, a stretch of blank stock, THEN the
-     printed number, like a real swing tag */
-  padding: 8px 13px 7px 36px;
-  border: 1px solid rgba(232, 218, 182, 0.40);
-  border-radius: 5px 9px 9px 5px; /* a ticket, not a pill — crisper corners */
-  /* a printed ticket: dark stock, butter as INK — the rule, the hole's ring,
-     the numeral. No warm body, no inner light. */
-  background: #17181b;
-}
-/* the ghost — blank tag stock, waiting to be hung: dashed rule, no body */
-.pulseTagGhost {
-  border-style: dashed; border-color: rgba(232, 218, 182, 0.24);
-  background: none; box-shadow: none;
-}
-.pulseTagGhost::before { border-color: rgba(232, 218, 182, 0.28); background: none; }
-.pulseTagGhost .pulseTagVal { color: rgba(232, 218, 182, 0.38); text-shadow: none; }
-/* the punched eyelet — one crisp ring, a flat hole; no string (at this
-   scale it read as noise — the eyelet and the long strung end say "tag") */
-.pulseTag::before {
-  content: ''; position: absolute; left: 8px; top: 50%; margin-top: -3.5px;
-  width: 7px; height: 7px; border-radius: 50%;
-  border: 1px solid rgba(232, 218, 182, 0.5);
-  background: #0c0d0e;
-}
+/* (the ticket object retired with the paddle — the action speaks through
+   butter INK on the same plain numeral, and the cell's butter hairline) */
+.pulseTag { flex: none; display: flex; align-items: center; }
+.pulseTagGhost .pulseTagVal { color: rgba(232, 218, 182, 0.35); }
 .pulseTagVal {
-  font-family: var(--font-inter), sans-serif; font-size: 20px; font-weight: 600;
+  font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: var(--tt-butter);
-  font-variant-numeric: tabular-nums; white-space: nowrap; /* crisp foreground */
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 /* the tag swings in as the paddle raises — mirrored entrances */
 .pulse[data-play='true'] .pulseTag {
@@ -273,20 +206,17 @@
 /* closing next — the departures line under the board (label above, chips
    flowing left — both shells) */
 .pulseTicker {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-  padding: 10px 2px 0; border-top: 1px solid var(--tt-hair);
+  display: flex; flex-direction: column; align-items: stretch; gap: 10px;
+  padding: 2px 0 0;
 }
-.pulseTickerLabel {
-  font-family: var(--font-inter), sans-serif; font-size: 10px; font-weight: 600;
-  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-faint); white-space: nowrap;
-}
+.pulseTicker .pulseHead { padding: 0 2px; }
 .pulseTickerChips { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .pulseChip {
   display: inline-flex; align-items: baseline; gap: 6px;
   font-family: var(--font-inter), sans-serif; font-size: 11px; color: var(--tt-fg);
-  padding: 4px 10px; white-space: nowrap;
-  border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 100px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 11px; white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px;
+  background: rgba(255, 255, 255, 0.028);
 }
 .pulseChip em {
   font-style: normal; font-family: var(--font-mono-data), monospace;
@@ -317,12 +247,7 @@
 .mRightNow .pulseBlock[data-lead='true'] .pulseSub,
 .mRightNow .pulseGrid > [data-below='true'] .pulseSub { display: none; }
 .mRightNow .pulseValLead { font-size: 22px; }
-.mRightNow .pulsePaddleHead { min-width: 60px; padding: 8px 12px 7px; border-radius: 13px; }
-.mRightNow .pulsePaddleStem { width: 8px; height: 12px; }
-.mRightNow .pulsePaddle { align-self: flex-end; margin: 0 0 -13px; }
-/* the tag trims to thumb scale, mirroring the paddle */
-.mRightNow .pulseGrid > [data-below='true'] .pulseTagVal { font-size: 17px; }
-.mRightNow .pulseGrid > [data-below='true'] .pulseTag { padding: 7px 11px 6px 30px; }
+.mRightNow .pulseGrid > [data-below='true'] .pulseTagVal { font-size: 22px; }
 .mRightNow .pulseGrid > [data-below='true'] .pulseVal { font-size: 24px; flex: none; }
 
 /* entrance choreography — the blocks settle in sequence on fresh arrival */
@@ -2283,13 +2208,13 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   align-items: stretch;
 }
 .mtBoardMain { min-width: 0; display: grid; }
-.mtBoardMain .mtTape { height: 100%; grid-auto-rows: 1fr; align-items: center; }
+.mtBoardMain .mtTape { height: 100%; grid-auto-rows: 1fr; align-items: stretch; }
 /* board rows: taller, figures louder — this is the show now. THE MACHINED
    BOARD pass: type on shared 4px-rhythm baselines, the luminance split
    (figures are the lit facts, labels are furniture), the instrument cell
    equal to its grid column, and hairlines that dim down the board as the
    lamp's light falls off. */
-.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr); column-gap: 24px; }
+.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1.3fr) 116px minmax(0, 1fr); column-gap: 24px; }
 .mtHero .mtLabel { font-size: 16px; line-height: 20px; font-weight: 570; letter-spacing: -0.011em; color: rgba(237, 230, 218, 0.87); }
 .mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0.12em; }
 .mtHero .mtLabelBlock { gap: 4px; }
@@ -2626,6 +2551,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px; /* the column's one tile radius */
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 .mtMon:hover { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.045); }
@@ -2643,7 +2569,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 11px;
+  border-radius: 12px;
   box-shadow: none;
   padding: 13px 14px;
   color: var(--tt-fg);
@@ -2792,49 +2718,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    fill the panel; hairlines seam them. */
 /* the mark as a design element — large, left, quiet secondary tone (metric
    rows only; the search loupe in .railCmd keeps its small size) */
-
-/* — SCOPED-MARKET rail (under the monument): keep it a compact ledger row —
-   a small leading mark, then label and value on one baseline. */
-.mtSide .heroRail[data-under-monument='true'] .railRow,
-.mtSide .heroRail[data-under-monument='true'] .railBtn {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 11px;
-}
-.mtSide .heroRail[data-under-monument='true'] .railRow > .railMark,
-.mtSide .heroRail[data-under-monument='true'] .railBtn > .railMark {
-  width: 17px;
-  height: 17px;
-  flex: none;
-  opacity: 0.85;
-  color: var(--tt-muted);
-}
-.mtSide .heroRail[data-under-monument='true'] .railStack {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  justify-content: space-between;
-  flex: 1;
-  gap: 10px;
-  min-width: 0;
-}
-/* the one actionable read — butter number, a Linear row-hover affordance, the
-   ↗ riding up beside the figure. It IS a button; make it feel like one. */
-.mtSide .heroRail:not([data-under-monument='true']) button.railBtn {
-  cursor: pointer;
-  border-radius: 10px;
-  margin: 0 -6px;
-  padding-inline: 8px;
-  transition: background 140ms var(--ease-signature, ease);
-}
-.mtSide .heroRail:not([data-under-monument='true']) button.railBtn:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-.mtSide .heroRail:not([data-under-monument='true']) button.railBtn:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 1px rgba(232, 218, 182, 0.5);
-}
 
 /* — the search: the panel's footer action, pinned to the base */
 .mtSide .heroRail:not([data-under-monument='true']) .railCmd {
