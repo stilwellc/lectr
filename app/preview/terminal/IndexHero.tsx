@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
-import { MARKETS, type Market } from '../../constants';
+import type { Market } from '../../constants';
 import type { HeroPoint } from './HeroChart';
 import { MarketTape, SubTape, TapeMonument, pickLead } from './MarketTape';
-import { fmtMoneyCompact } from './hooks';
-import { fmtPct } from './verified';
 import { fmtInt, useReducedMotion } from './hooks';
 
 
@@ -16,6 +14,8 @@ import { fmtInt, useReducedMotion } from './hooks';
  *  except initialisms, which keep their case ("the TCG market"). */
 const KICKER_NAME: Partial<Record<Market, string>> = { tcg: 'TCG' };
 const kickerName = (k: Market): string => KICKER_NAME[k] ?? k;
+/** the conduit tag — what the selector is feeding the instrument column */
+const feedName = (k: Market): string => (k === 'all' ? 'Total market' : kickerName(k));
 import styles from './style.module.css';
 
 /* RAIL MARKS — the constructed-mark language on the "Right now" metrics:
@@ -66,8 +66,6 @@ function RailMark({ k }: { k: 'onBlock' | 'trend' | 'bids' | 'below' | 'search' 
    ============================================================ */
 
 const EASE = [0.23, 1, 0.32, 1] as const;
-const MARKET_COUNT = MARKETS.filter((m) => m.key !== 'all').length;
-const fmtCIq = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
 /* ── THE PULSE BOARD PRIMITIVES ─────────────────────────────────────────────
    The "Right now" panel is the lander's heartbeat: a bento of live blocks
@@ -151,69 +149,6 @@ interface Props {
   /** the live book's nearest closes, per house (soonest first) — the pulse
       board's "closing next" ticker */
   closingNext?: ClosingHouse[];
-}
-
-/* ══ THE LANDSCAPE (Aug 2026) ══ the hero's opening beat: the scoped
-   market's real series drawn at full page width — the chart IS the page,
-   not a postage stamp in a table cell. ONE measure per landscape, labelled
-   with its own unit (demand %-over-estimate in direction ink; realized-$
-   cohort medians NEUTRAL — delta ink is for measured reads only). */
-function StageChart({ idx, unit, play }: { idx: IndexPoint[]; unit: 'demand' | 'realized'; play: boolean }) {
-  const gid = useId();
-  const g = useMemo(() => {
-    if (idx.length < 4) return null;
-    const step = Math.max(1, Math.ceil(idx.length / 72));
-    const pts = idx.filter((_, i) => i % step === 0 || i === idx.length - 1);
-    const vals = pts.map((p) => p.value);
-    let lo = Math.min(...vals);
-    let hi = Math.max(...vals);
-    if (unit === 'demand') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
-    const span = (hi - lo) || 1;
-    lo -= span * 0.1; hi += span * 0.08;
-    const X = (i: number) => (i / (pts.length - 1)) * 100;
-    const Y = (v: number) => ((hi - v) / (hi - lo)) * 100;
-    const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${X(i).toFixed(2)} ${Y(p.value).toFixed(2)}`).join(' ');
-    return {
-      d,
-      endX: 100, endY: Y(vals[vals.length - 1]),
-      zeroY: unit === 'demand' && lo < 0 ? Y(0) : null,
-      first: pts[0].period, last: pts[pts.length - 1].period,
-      now: vals[vals.length - 1],
-    };
-  }, [idx, unit]);
-  if (!g) return null;
-  const dir = unit === 'demand' ? (g.now >= 0 ? 'up' : 'down') : undefined;
-  const fmtV = (v: number) => unit === 'demand' ? `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}%` : fmtMoneyCompact(v);
-  return (
-    <div className={styles.mtLand} data-dir={dir} data-play={play ? 'true' : undefined} aria-hidden>
-      <div className={styles.mtLandStage}>
-        <div className={styles.mtLandPlot}>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className={styles.mtLandSvg}>
-          <defs>
-            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="currentColor" stopOpacity="0.22" />
-              <stop offset="1" stopColor="currentColor" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {g.zeroY != null && (
-            <line x1="0" x2="100" y1={g.zeroY} y2={g.zeroY} className={styles.mtLandZero} vectorEffect="non-scaling-stroke" />
-          )}
-          <path d={`${g.d} L 100 100 L 0 100 Z`} fill={`url(#${gid})`} stroke="none" className={styles.mtLandFill} />
-          <path d={g.d} className={styles.mtLandPath} fill="none" vectorEffect="non-scaling-stroke" pathLength={1} />
-        </svg>
-        {/* the live end of the line — HTML so the stretched SVG can't warp it */}
-        <i className={styles.mtLandDot} style={{ left: `${g.endX}%`, top: `${g.endY}%` }} aria-hidden />
-        </div>
-        {/* one figure in the gutter: where the line stands now */}
-        <span className={styles.mtLandTick} style={{ top: `${g.endY}%` }}>{fmtV(g.now)}</span>
-      </div>
-      <div className={styles.mtLandEnds}>
-        <span>{g.first}</span>
-        <span>{unit === 'demand' ? 'sold over estimate · by quarter' : 'typical $ at hammer · by quarter'}</span>
-        <span>{g.last}</span>
-      </div>
-    </div>
-  );
 }
 
 const median = (a: number[]): number => {
@@ -327,7 +262,7 @@ export default function IndexHero({
         <div className={styles.pulseBlock} data-lead="true">
           <span className={styles.pulseCellText}>
             <span className={styles.pulseLabel}>On the block</span>
-            {onBlock === 0 && <span className={styles.pulseSub}>the room is quiet right now</span>}
+            <span className={styles.pulseSub}>{onBlock === 0 ? 'the room is quiet right now' : 'lots open across the room'}</span>
           </span>
           <span className={styles.pulseValLead} data-zero={onBlock === 0 ? 'true' : undefined}>
             {fmtInt(onBlockShown)}
@@ -430,54 +365,11 @@ export default function IndexHero({
     );
   }
 
-  // ── DESKTOP: "the quote and the board" (Aug 2026 — Robinhood's asset-page
-  // anatomy). The first screen opens with THE STATEMENT (the market's
-  // strongest honest read at quote scale) over THE LANDSCAPE (the market's
-  // real series at full page width, its own label, its own unit), then the
-  // board: the tape reading down the left, the functional rail on the right.
-  // The monument card retired into the statement — one enthronement, not two.
-  const stmt = (() => {
-    if (activeKey === 'all') {
-      const now = hero.idx.length ? hero.idx[hero.idx.length - 1].value : null;
-      return {
-        kicker: 'Measured · demand', name: 'The collectibles market',
-        fig: now != null ? fmtPct(now) : null, dir: now != null ? (now >= 0 ? 'up' as const : 'down' as const) : undefined,
-        beam: null as null | { lo: number; hi: number; pt: number },
-        metaL: hero.explain, metaR: `${fmtInt(totalLots)} lots · ${MARKET_COUNT} markets`,
-        horizon: null as string | null,
-      };
-    }
-    const r = lead?.read;
-    if (r?.kind === 'index') {
-      return {
-        kicker: r.method === 'repeat-sale' ? 'Certified · repeat-sale' : r.method === 'composite' ? 'Certified · composite' : 'Certified · hedonic',
-        name: marketLabel,
-        fig: fmtPct(r.changePct), dir: r.changePct >= 0 ? 'up' as const : 'down' as const,
-        beam: { lo: r.ciLo, hi: r.ciHi, pt: r.changePct },
-        metaL: r.method === 'repeat-sale'
-          ? `same ${activeKey === 'sports' || activeKey === 'tcg' ? 'card' : activeKey === 'watches' ? 'reference' : 'edition'} resold${r.scope ? ` · ${r.scope}` : ''}`
-          : r.method === 'composite' ? 'hedonic composite' : 'hedonic index',
-        metaR: r.method === 'repeat-sale' ? `${fmtInt(r.n)} pairs` : `${fmtInt(lead!.lots)} lots`,
-        horizon: r.horizon,
-      };
-    }
-    if (r?.kind === 'demand') {
-      return {
-        kicker: 'Measured · demand', name: marketLabel,
-        fig: fmtPct(r.now), dir: r.now >= 0 ? 'up' as const : 'down' as const, beam: null,
-        metaL: 'demand · sold over estimate', metaR: `${fmtInt(lead!.lots)} lots`, horizon: null,
-      };
-    }
-    if (r?.kind === 'descriptive') {
-      return {
-        kicker: 'Descriptive · typical', name: marketLabel,
-        fig: fmtMoneyCompact(r.typicalUsd), dir: undefined, beam: null,
-        metaL: 'typical at hammer', metaR: `${fmtInt(lead!.lots)} lots`, horizon: null,
-      };
-    }
-    return { kicker: 'The read', name: marketLabel, fig: null, dir: undefined, beam: null, metaL: '', metaR: `${fmtInt(totalLots)} lots`, horizon: null };
-  })();
-
+  // ── DESKTOP: "the board and the monument". No numeral wearing the whole
+  // market — the masthead is a line, the focal object is the signature
+  // instrument at display scale (the strongest honest read, certified where
+  // one certifies), and the tape reads down the left like a departures board.
+  // The functional rail sits under the monument: glance the state, act.
   return (
     <LazyMotion features={domAnimation} strict>
       {/* data-play gates the CSS choreography (masthead glint, serial stamp,
@@ -485,47 +377,25 @@ export default function IndexHero({
       <section className={styles.mtHero} data-play={play ? 'true' : undefined}>
         {/* the masthead line retired Aug 22 2026 (Collin) — the Exchange Rail
             above IS the orientation; a second title row was saying it twice. */}
-        {/* THE STATEMENT + THE LANDSCAPE — the opening beat, full width */}
-        <m.div className={styles.mtQuoteWrap} data-dir={stmt.dir} {...rise(0.05)}>
-          <div className={styles.mtQuote}>
-            <div className={styles.mtQuoteLead}>
-              <span className={styles.mtQuoteKicker}>
-                {stmt.kicker}
-                {stmt.horizon && <em className={styles.mtQuoteHz}>{stmt.horizon}</em>}
-              </span>
-              <span className={styles.mtQuoteName}>{stmt.name}</span>
-              <span className={styles.mtQuoteMeta}>
-                <span>{stmt.metaL}</span>
-                <i aria-hidden />
-                <span>{stmt.metaR}</span>
-                {stmt.beam && (
-                  <>
-                    <i aria-hidden />
-                    <span>CI {fmtCIq(stmt.beam.lo)} to {fmtCIq(stmt.beam.hi)}</span>
-                  </>
-                )}
-              </span>
-            </div>
-            <div className={styles.mtQuoteRead}>
-              {stmt.fig && (
-                <span className={styles.mtQuoteFig} data-dir={stmt.dir}>{stmt.fig}</span>
-              )}
-            </div>
-          </div>
-          {hero.idx.length >= 4 && (
-            <StageChart idx={hero.idx} unit={hero.unit} play={play} />
-          )}
-        </m.div>
-
         <div className={styles.mtBoard}>
-          <m.div className={styles.mtBoardMain} {...rise(0.14)}>
+          <m.div className={styles.mtBoardMain} {...rise(0.1)}>
             {activeKey === 'all'
               ? <MarketTape market={market} demandAll={demandAll} realized={realized} play={play} />
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
-          <m.aside className={styles.mtSide} {...rise(0.2)}>
-            <div className={styles.heroRail}>
+          <m.aside className={styles.mtSide} {...rise(0.16)}>
+            {/* THE FEED CONDUIT (Aug 2026): the instrument column centers
+                against the tape, and the slack becomes circuitry — a hairline
+                drops from under the market rail, tagged with the market
+                feeding it, into the board; below, the line grounds out. */}
+            <div className={`${styles.mtConduit} ${styles.mtConduitTop}`} aria-hidden="true">
+              <i className={styles.mtConduitNode} />
+              <span className={styles.mtConduitTag}>{feedName(activeKey)} · feed</span>
+              <i className={styles.mtConduitLine} />
+            </div>
+            {showMonument && <TapeMonument row={lead!} play={play} />}
+            <div className={styles.heroRail} data-under-monument={showMonument ? 'true' : undefined}>
               {pulseBoard}
               <button type="button" className={styles.railCmd} onClick={onCommand}>
                 <RailMark k="search" />
@@ -533,6 +403,11 @@ export default function IndexHero({
                 <kbd className={styles.cmdKbd} aria-hidden>⌘K</kbd>
               </button>
               {tickerEl}
+            </div>
+            <div className={`${styles.mtConduit} ${styles.mtConduitBottom}`} aria-hidden="true">
+              <i className={styles.mtConduitLine} />
+              <i className={styles.mtConduitNode} />
+              <span className={styles.mtConduitTag}>read nightly</span>
             </div>
           </m.aside>
         </div>
