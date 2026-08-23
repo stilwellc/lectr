@@ -7,7 +7,6 @@ import type { RealizedPoint, BidCompetitionPoint } from '../../types';
 import { MARKETS, type Market } from '../../constants';
 import type { HeroPoint } from './HeroChart';
 import { MarketTape, SubTape, TapeMonument, pickLead } from './MarketTape';
-import { CIBeam } from './SubMarketBoard';
 import { fmtMoneyCompact } from './hooks';
 import { fmtPct } from './verified';
 import { fmtInt, useReducedMotion } from './hooks';
@@ -17,8 +16,6 @@ import { fmtInt, useReducedMotion } from './hooks';
  *  except initialisms, which keep their case ("the TCG market"). */
 const KICKER_NAME: Partial<Record<Market, string>> = { tcg: 'TCG' };
 const kickerName = (k: Market): string => KICKER_NAME[k] ?? k;
-/** the conduit tag — what the selector is feeding the instrument column */
-const feedName = (k: Market): string => (k === 'all' ? 'Total market' : kickerName(k));
 import styles from './style.module.css';
 
 /* RAIL MARKS — the constructed-mark language on the "Right now" metrics:
@@ -70,6 +67,7 @@ function RailMark({ k }: { k: 'onBlock' | 'trend' | 'bids' | 'below' | 'search' 
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 const MARKET_COUNT = MARKETS.filter((m) => m.key !== 'all').length;
+const fmtCIq = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
 /* ── THE PULSE BOARD PRIMITIVES ─────────────────────────────────────────────
    The "Right now" panel is the lander's heartbeat: a bento of live blocks
@@ -175,18 +173,8 @@ function StageChart({ idx, unit, play }: { idx: IndexPoint[]; unit: 'demand' | '
     const X = (i: number) => (i / (pts.length - 1)) * 100;
     const Y = (v: number) => ((hi - v) / (hi - lo)) * 100;
     const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${X(i).toFixed(2)} ${Y(p.value).toFixed(2)}`).join(' ');
-    // three round-valued gridlines inside the domain
-    const rawStep = (hi - lo) / 4;
-    const mag = Math.pow(10, Math.floor(Math.log10(Math.abs(rawStep) || 1)));
-    const nice = [1, 2, 2.5, 5, 10].map((m) => m * mag).reduce((a, b) =>
-      Math.abs(b - rawStep) < Math.abs(a - rawStep) ? b : a);
-    const grid: { y: number; v: number }[] = [];
-    for (let v = Math.ceil(lo / nice) * nice; v < hi; v += nice) {
-      if (grid.length >= 4) break;
-      grid.push({ y: Y(v), v });
-    }
     return {
-      d, grid,
+      d,
       endX: 100, endY: Y(vals[vals.length - 1]),
       zeroY: unit === 'demand' && lo < 0 ? Y(0) : null,
       first: pts[0].period, last: pts[pts.length - 1].period,
@@ -207,9 +195,6 @@ function StageChart({ idx, unit, play }: { idx: IndexPoint[]; unit: 'demand' | '
               <stop offset="1" stopColor="currentColor" stopOpacity="0" />
             </linearGradient>
           </defs>
-          {g.grid.map((ln) => (
-            <line key={ln.v} x1="0" x2="100" y1={ln.y} y2={ln.y} className={styles.mtLandGrid} vectorEffect="non-scaling-stroke" />
-          ))}
           {g.zeroY != null && (
             <line x1="0" x2="100" y1={g.zeroY} y2={g.zeroY} className={styles.mtLandZero} vectorEffect="non-scaling-stroke" />
           )}
@@ -219,10 +204,8 @@ function StageChart({ idx, unit, play }: { idx: IndexPoint[]; unit: 'demand' | '
         {/* the live end of the line — HTML so the stretched SVG can't warp it */}
         <i className={styles.mtLandDot} style={{ left: `${g.endX}%`, top: `${g.endY}%` }} aria-hidden />
         </div>
-        {/* gridline values live in the price-scale gutter */}
-        {g.grid.map((ln) => (
-          <span key={ln.v} className={styles.mtLandTick} style={{ top: `${ln.y}%` }}>{fmtV(ln.v)}</span>
-        ))}
+        {/* one figure in the gutter: where the line stands now */}
+        <span className={styles.mtLandTick} style={{ top: `${g.endY}%` }}>{fmtV(g.now)}</span>
       </div>
       <div className={styles.mtLandEnds}>
         <span>{g.first}</span>
@@ -344,7 +327,7 @@ export default function IndexHero({
         <div className={styles.pulseBlock} data-lead="true">
           <span className={styles.pulseCellText}>
             <span className={styles.pulseLabel}>On the block</span>
-            <span className={styles.pulseSub}>{onBlock === 0 ? 'the room is quiet right now' : 'lots open across the room'}</span>
+            {onBlock === 0 && <span className={styles.pulseSub}>the room is quiet right now</span>}
           </span>
           <span className={styles.pulseValLead} data-zero={onBlock === 0 ? 'true' : undefined}>
             {fmtInt(onBlockShown)}
@@ -515,17 +498,17 @@ export default function IndexHero({
                 <span>{stmt.metaL}</span>
                 <i aria-hidden />
                 <span>{stmt.metaR}</span>
+                {stmt.beam && (
+                  <>
+                    <i aria-hidden />
+                    <span>CI {fmtCIq(stmt.beam.lo)} to {fmtCIq(stmt.beam.hi)}</span>
+                  </>
+                )}
               </span>
             </div>
             <div className={styles.mtQuoteRead}>
               {stmt.fig && (
                 <span className={styles.mtQuoteFig} data-dir={stmt.dir}>{stmt.fig}</span>
-              )}
-              {stmt.beam && (
-                <div className={styles.mtQuoteBeam} data-dir={stmt.dir} aria-hidden>
-                  <CIBeam lo={stmt.beam.lo} hi={stmt.beam.hi} point={stmt.beam.pt}
-                    dir={stmt.dir} play={play} large />
-                </div>
               )}
             </div>
           </div>
@@ -542,13 +525,6 @@ export default function IndexHero({
           </m.div>
 
           <m.aside className={styles.mtSide} {...rise(0.2)}>
-            {/* THE FEED CONDUIT: the hairline from the selector grounds the
-                functional rail; the statement above owns the enthronement. */}
-            <div className={`${styles.mtConduit} ${styles.mtConduitTop}`} aria-hidden="true">
-              <i className={styles.mtConduitNode} />
-              <span className={styles.mtConduitTag}>{feedName(activeKey)} · feed</span>
-              <i className={styles.mtConduitLine} />
-            </div>
             <div className={styles.heroRail}>
               {pulseBoard}
               <button type="button" className={styles.railCmd} onClick={onCommand}>
@@ -557,11 +533,6 @@ export default function IndexHero({
                 <kbd className={styles.cmdKbd} aria-hidden>⌘K</kbd>
               </button>
               {tickerEl}
-            </div>
-            <div className={`${styles.mtConduit} ${styles.mtConduitBottom}`} aria-hidden="true">
-              <i className={styles.mtConduitLine} />
-              <i className={styles.mtConduitNode} />
-              <span className={styles.mtConduitTag}>read nightly</span>
             </div>
           </m.aside>
         </div>

@@ -23,8 +23,10 @@
   --tt-faint: #62666d;                   /* Linear text-quaternary */
   --tt-hair: rgba(255, 255, 255, 0.06);  /* Linear border-primary, as alpha */
   --tt-hair-2: rgba(255, 255, 255, 0.10);/* Linear border-secondary, as alpha */
-  --color-up: var(--color-up, #57be87);
-  --color-down: var(--color-down, #cc6a5c);
+  /* literal, never var(--self) — a custom property referencing itself is a
+     cycle and computes INVALID, silently bleaching every up/down figure */
+  --color-up: #57be87;
+  --color-down: #cc6a5c;
 
   position: relative;
   min-height: 100vh;
@@ -2267,48 +2269,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .mtSide > * { flex: none; }
 
-/* ── THE FEED CONDUIT — the wire from the selector to the instrument ── */
-.mtConduit {
-  flex: 1 1 0;
-  min-height: 28px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-}
-.mtConduitLine {
-  width: 1px;
-  flex: 1 1 0;
-  min-height: 8px;
-}
-.mtConduitTop .mtConduitLine {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.10));
-}
-.mtConduitBottom .mtConduitLine {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-}
-.mtConduitNode {
-  flex: none;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--tt-faint);
-}
-.mtConduitTag {
-  flex: none;
-  margin: 7px 0;
-  font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--tt-faint);
-  white-space: nowrap;
-}
-/* the phone scene has its own rhythm — conduits are a desktop instrument */
-@media (max-width: 899px) {
-  .mtConduit { display: none; }
-}
 /* the 02 board's .beam ships width:min(440px,82vw) — wider than this column —
    and .heroRail still carries grid-area:rail from the old hero grid, which
    detonates auto-placement inside this one. Neutralise both locally. */
@@ -2870,8 +2830,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: clamp(10px, 1.2vh, 16px);
-  padding: clamp(10px, 1.4vh, 18px) 0 clamp(14px, 1.8vh, 22px);
+  gap: clamp(14px, 1.8vh, 22px);
+  padding: clamp(14px, 1.8vh, 22px) 0 clamp(22px, 2.8vh, 34px);
 }
 /* the read's direction cast as the page's light — one large, very quiet pool */
 .mtQuoteWrap::before {
@@ -2934,20 +2894,6 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .mtQuoteMeta i { width: 3px; height: 3px; border-radius: 50%; background: var(--tt-faint); align-self: center; }
-/* the CI instrument sits under the figure, right-aligned */
-.mtQuoteBeam { width: clamp(200px, 18vw, 280px); }
-.mtQuoteBeam .beam, .mtQuoteBeam .beamLarge { width: 100%; margin-top: 0; }
-.mtQuoteBeam .beamLabel { display: none; }
-.mtQuoteBeam .beamStage { height: 20px; }
-.mtQuoteBeam .beamRule { stroke: rgba(237, 230, 218, 0.7); stroke-width: 1.5; }
-.mtQuoteBeam[data-dir='up'] .beamRule { stroke: rgba(87, 190, 135, 0.9); }
-.mtQuoteBeam[data-dir='down'] .beamRule { stroke: rgba(204, 106, 92, 0.9); }
-.mtQuoteBeam .beamDiamond::before { background: var(--tt-butter); }
-.mtQuoteBeam[data-dir='up'] .beamDiamond::before { background: #57BE87; }
-.mtQuoteBeam[data-dir='down'] .beamDiamond::before { background: #CC6A5C; }
-.mtQuoteBeam[data-dir='up'] .beamDiamond { filter: drop-shadow(0 0 7px rgba(87, 190, 135, 0.6)); }
-.mtQuoteBeam[data-dir='down'] .beamDiamond { filter: drop-shadow(0 0 7px rgba(204, 106, 92, 0.6)); }
-.mtQuoteBeam .beamEnds { margin-top: 6px; font-size: 11.5px; color: var(--tt-muted); }
 
 /* ── the landscape: the series at page width ── */
 .mtLand { display: grid; gap: 8px; }
@@ -3004,5 +2950,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 
 /* the board compresses under the landscape — the quote owns the height now */
 .mtHero .mtRow { min-height: clamp(44px, 5vh, 54px); }
+/* the figure is signed and inked — a triangle on top of that is noise */
+.mtHero .tri { display: none; }
 .mtHero .mtLabel { font-size: 16px; line-height: 21px; }
 .mtHero .mtFigure { font-size: 18px; line-height: 22px; }
