@@ -1377,102 +1377,146 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
    The footer is the identity's one display-scale moment: the sign writes
    itself in its own light over the provenance the product stands on. */
 .ray-close {
+  /* THE MAKER'S PLATE (Aug 2026) — one engraved object at the foot of the
+     instrument. Flat deepened ground: the warm radial pool is gone; the
+     footer carries no lamp (butter appears once, on the Starling channel). */
   margin-top: 48px;
-  border-top: 1px solid var(--hairline);
-  background:
-    radial-gradient(ellipse 640px 300px at 50% 120px, rgba(242, 238, 227, 0.045), transparent 70%),
-    var(--color-bg-deep);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, #08090a, #060708 220px);
   overflow: hidden;
 }
-.ray-close-in { padding-block: 52px 26px; }
-.ray-close-sign { display: flex; justify-content: center; }
-.ray-close-mark {
-  height: 118px;
-  width: auto;
-  /* the write-on: clipped until the reader arrives, then the pen writes */
-  clip-path: inset(0 100% 0 0);
-  filter: drop-shadow(0 0 24px rgba(242, 238, 227, 0.12));
-}
-.ray-close-on .ray-close-mark { animation: lectrCloseWrite 1.5s var(--ease-draw) 200ms forwards; }
-@keyframes lectrCloseWrite { to { clip-path: inset(0 0 0 0); } }
-@media (prefers-reduced-motion: reduce) {
-  .ray-close-mark { clip-path: none; }
-  .ray-close-on .ray-close-mark { animation: none; }
-}
+.ray-close-in { padding-block: 112px 44px; }
+
+/* the monument — the ONE earned Fraunces display moment */
 .ray-close-thesis {
-  text-align: center;
-  margin: 20px 0 0;
-  font-size: 15.5px;
-  letter-spacing: -0.01em;
-  color: var(--color-text-secondary);
+  margin: 0;
+  text-align: left;
+  font-family: var(--font-serif-display), Georgia, serif;
+  font-size: clamp(36px, 3.4vw + 24px, 64px);
+  font-weight: 440;
+  font-variation-settings: 'SOFT' 0, 'WONK' 0;
+  line-height: 1.06;
+  letter-spacing: -0.015em;
+  color: #d0d6e0;
+  max-width: 16ch;
 }
 
-.ray-close-map {
+/* the engraved spec line — figures one ink step above their words */
+.ray-close-spec {
+  margin: 28px 0 0;
+  font-family: var(--font-mono-data), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: #62666d;
+}
+.ray-close-spec b { font-weight: 500; color: #d0d6e0; }
+.ray-close-spec b.up { color: var(--color-up, #57be87); }
+.ray-close-spec span + span::before { content: '·'; margin: 0 10px; color: #62666d; }
+.ray-close-spec a { color: inherit; text-decoration: none; transition: color 160ms var(--ease-signature); }
+.ray-close-spec a:hover {
+  color: #d0d6e0;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-color: rgba(255, 255, 255, 0.28);
+}
+
+/* the machined channels — labeled engraved lines, never columns */
+.ray-close-lines { margin-top: 88px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.ray-close-line {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.6fr;
-  gap: 48px;
-  max-width: 760px;
-  margin: 34px auto 0;
-  padding-top: 26px;
-  border-top: 1px solid var(--hairline-soft, rgba(242, 238, 227, 0.065));
+  grid-template-columns: 128px 1fr;
+  align-items: center;
+  min-height: 56px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.ray-close-k {
-  display: block;
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--color-text-muted);
-  margin-bottom: 12px;
-}
-.ray-close-col a {
-  display: block;
-  font-size: 13.5px;
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  padding: 3px 0;
-  width: fit-content;
-}
-.ray-close-col a:hover { color: var(--color-fg); }
-.ray-close-record p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--color-text-secondary); }
-.ray-close-record b.up { color: var(--color-up); font-weight: 700; }
-/* the buy-side call — a second CTA in the record column, pointing to Starling.
-   Butter (the one outbound/product link), sits just under "See the record". */
-.ray-close-partner-k {
-  display: block;
-  margin-top: 16px;
-  font-size: 10.5px;
+.ray-close-line:last-child { border-bottom-color: rgba(255, 255, 255, 0.10); }
+.ray-close-line-k {
+  font-family: var(--font-mono-data), monospace;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-text-faint);
+  color: #62666d;
 }
-.ray-close-buyside-cta {
-  display: block;
-  width: fit-content;
-  margin-top: 3px;
-  font-weight: 600;
-  color: var(--color-butter-text, var(--color-butter)) !important;
+.ray-close-line-links { display: flex; flex-wrap: wrap; column-gap: 28px; }
+.ray-close-line-links a {
+  display: inline-flex;
+  align-items: center;
+  padding: 15px 0; /* 44px+ touch on quiet type */
+  font-size: 13px;
+  font-weight: 460;
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: transparent;
+  transition: color 160ms var(--ease-signature), text-decoration-color 160ms var(--ease-signature);
 }
-.ray-close-buyside-cta span { display: inline-block; transition: transform 200ms var(--ease-signature, ease); }
-.ray-close-buyside-cta:hover span { transform: translate(2px, -2px); }
-.ray-close-cta { margin-top: 10px; font-weight: 600; color: var(--color-fg) !important; }
+.ray-close-line-links a:hover { color: var(--color-fg); text-decoration-color: rgba(255, 255, 255, 0.28); }
+.ray-close-line-links a:focus-visible { outline: 1.5px solid rgba(255, 255, 255, 0.35); outline-offset: 2px; }
+/* the one lit line — butter never brightens, the arrow answers the reach */
+.ray-close-starling { color: var(--color-butter, #e8dab6) !important; font-weight: 520; }
+.ray-close-starling:hover { text-decoration-color: rgba(232, 218, 182, 0.4) !important; }
+.ray-close-starling span { display: inline-block; transition: transform 200ms var(--ease-signature); }
+.ray-close-starling:hover span { transform: translate(2px, -2px); }
 
+/* the imprint — the maker signs last, small, after the work */
 .ray-close-base {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 24px;
-  margin-top: 34px;
-  padding-top: 16px;
-  border-top: 1px solid var(--hairline-soft, rgba(242, 238, 227, 0.065));
+  padding-top: 22px;
   font-size: 11.5px;
-  color: var(--color-text-faint);
+  color: #62666d;
 }
-@media (max-width: 899px) {
-  .ray-close-in { padding-block: 44px 88px; }
-  .ray-close-mark { height: 84px; }
+.ray-close-stamp { display: inline-flex; align-items: center; gap: 14px; }
+.ray-close-mark {
+  height: 28px;
+  width: auto;
+  opacity: 0.92;
+  clip-path: inset(0 100% 0 0);
+}
+.ray-close-method { display: inline-flex; gap: 20px; text-align: right; }
 
-  .ray-close-map { grid-template-columns: 1fr 1fr; gap: 32px; }
-  .ray-close-record { grid-column: 1 / -1; }
-  .ray-close-base { flex-direction: column; gap: 6px; }
+/* MOTION — the plate machines itself: thesis settles, the facts are CUT
+   (the write-on at engraving scale), the channels print, the maker signs
+   last. All layered over a correct resting state. */
+@media (prefers-reduced-motion: no-preference) {
+  .ray-close-spec { clip-path: inset(0 100% 0 0); }
+  .ray-close-on .ray-close-thesis { animation: platePrint 600ms var(--ease-signature) both; }
+  .ray-close-on .ray-close-spec { animation: lectrCloseWrite 900ms var(--ease-draw) 250ms both; }
+  .ray-close-on .ray-close-line {
+    animation: plateFade 400ms var(--ease-signature) both;
+    animation-delay: calc(450ms + var(--row-i, 0) * 60ms);
+  }
+  .ray-close-on .ray-close-base { animation: plateFade 400ms var(--ease-signature) 700ms both; }
+  .ray-close-on .ray-close-mark { animation: lectrCloseWrite 650ms var(--ease-draw) 1000ms both; }
+}
+@keyframes platePrint { from { opacity: 0; transform: translateY(8px); } }
+@keyframes plateFade { from { opacity: 0; } }
+@keyframes lectrCloseWrite { to { clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .ray-close-spec, .ray-close-mark { clip-path: none; }
+  .ray-close-on .ray-close-thesis, .ray-close-on .ray-close-spec,
+  .ray-close-on .ray-close-line, .ray-close-on .ray-close-base,
+  .ray-close-on .ray-close-mark { animation: none; }
+}
+
+@media (max-width: 899px) {
+  .ray-close-in { padding-block: 72px 96px; }
+  .ray-close-thesis { max-width: 12ch; }
+  .ray-close-spec { margin-top: 20px; line-height: 2.1; }
+  .ray-close-lines { margin-top: 56px; }
+  .ray-close-line { grid-template-columns: 1fr; min-height: 0; padding: 4px 0 8px; }
+  .ray-close-line-k { padding: 14px 0 0; }
+  .ray-close-line-links { column-gap: 24px; }
+  .ray-close-line-links a { padding: 13px 0; }
+  .ray-close-base { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .ray-close-method { flex-direction: column; gap: 6px; text-align: left; }
 }
 
 /* seam-draw + panel entrance choreography */

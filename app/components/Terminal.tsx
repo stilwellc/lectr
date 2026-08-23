@@ -370,86 +370,146 @@ export function CallPlate({
  * light when the reader arrives, over the provenance the whole product
  * stands on. One gesture, then quiet.
  */
-export function Colophon({ record }: {
-  // lotCount/houseCount are legacy contract — the slim colophon never prints
-  // them; optional so call sites can drop their stale meta.json imports.
+/** meta.json is tiny (~2KB) — the colophon self-serves its provenance so the
+ *  facts print on EVERY page, not only the ones that thread props. Module-
+ *  cached: one fetch per session. */
+let colophonMetaCache: { lots: number; lastCrawl: string } | null = null;
+function useColophonMeta(): { lots: number; lastCrawl: string } | null {
+  const [meta, setMeta] = useState(colophonMetaCache);
+  useEffect(() => {
+    if (colophonMetaCache) return;
+    let dead = false;
+    fetch('/data/ray/meta.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (!j || dead) return;
+        colophonMetaCache = { lots: j.totalLots || 0, lastCrawl: j.lastCrawl || '' };
+        setMeta(colophonMetaCache);
+      })
+      .catch(() => { /* the spec line simply prints fewer segments */ });
+    return () => { dead = true; };
+  }, []);
+  return meta;
+}
+
+const SPEC_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+function specDate(iso: string): string | null {
+  const t = new Date(iso);
+  if (isNaN(t.getTime())) return null;
+  return `${SPEC_MONTHS[t.getUTCMonth()]} ${t.getUTCDate()}`;
+}
+
+/**
+ * Colophon — THE MAKER'S PLATE (Aug 2026 redesign; "HIGH HIGH end").
+ *
+ * The footer as one engraved object: the thesis set once at monument scale
+ * (the site's ONE earned Fraunces display moment), the provenance CUT beneath
+ * it as an engraved mono spec line — the corpus facts finally printed, with
+ * the record as the line's own citation — then the links flattened into
+ * labeled machined channels, and the signature reduced from billboard to
+ * maker's stamp: small, bottom-left, signed after the work. Chosen from a
+ * three-concept exploration (plate / floor-closes / colophon-page); the
+ * tape's figure-over-word ink and the earned mint delta grafted in.
+ *
+ * Butter appears exactly once — the Starling channel (the one outbound
+ * product link). The footer carries no lamp.
+ */
+export function Colophon({ lotCount, houseCount, record }: {
+  /** corpus facts — optional; the colophon self-serves meta.json when absent */
   lotCount?: number;
   houseCount?: number;
-  /** the backtest's flagged record — rendered only when passed; pages with a
-      proofstrip/settlement pass null and get the slim "See the record" line */
+  /** the backtest's flagged record — the spec line prints it when passed;
+      otherwise the line ends in a quiet SEE THE RECORD citation */
   record?: { n: number; medianPerfPct: number } | null;
 }) {
   const [inView, setInView] = useState(false);
   const ref = useRef<HTMLElement | null>(null);
+  const meta = useColophonMeta();
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return; }
     const io = new IntersectionObserver(
       entries => { if (entries.some(e => e.isIntersecting)) { setInView(true); io.disconnect(); } },
-      { threshold: 0.25 }
+      { threshold: 0.2 }
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
+  const lots = lotCount || meta?.lots || null;
+  const read = meta?.lastCrawl ? specDate(meta.lastCrawl) : null;
+
   return (
     <footer className={`ray-close${inView ? ' ray-close-on' : ''}`} ref={ref}>
       <div className="rail ray-close-in">
-        {/* the sign, lit over the closed floor */}
-        <div className="ray-close-sign">
-          <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />
-        </div>
+        {/* the monument — the argument, set once, at the close */}
         <p className="ray-close-thesis">Every estimate, read against every hammer.</p>
 
-        {/* the map of the house */}
-        <div className="ray-close-map">
-          <div className="ray-close-col">
-            <span className="ray-close-k">Markets</span>
-            <Link href="/">Total market</Link>
-            <Link href="/art">Art</Link>
-            <Link href="/design">Design</Link>
-            <Link href="/watches">Watches</Link>
-            <Link href="/sports">Sports</Link>
-            <Link href="/tcg">TCG</Link>
-            <Link href="/science">Science</Link>
-            <Link href="/culture">Pop Culture</Link>
+        {/* the engraved spec line — provenance printed, the record cited */}
+        <p className="ray-close-spec">
+          {lots && <span><b>{lots.toLocaleString()}</b> lots</span>}
+          {houseCount ? <span><b>{houseCount}</b> houses</span> : null}
+          {read && <span>last read <b>{read}</b></span>}
+          {record && record.n > 500 ? (
+            <span>
+              flagged <Link href="/value"><b className="up">{fmtSignedPct(record.medianPerfPct)}</b> median over <b>{record.n.toLocaleString()}</b> replays</Link>
+            </span>
+          ) : (
+            <span><Link href="/value">see the record</Link></span>
+          )}
+        </p>
+
+        {/* the machined channels — the map as engraved lines, never columns */}
+        <div className="ray-close-lines">
+          <div className="ray-close-line" style={{ '--row-i': 0 } as React.CSSProperties}>
+            <span className="ray-close-line-k">Markets</span>
+            <span className="ray-close-line-links">
+              <Link href="/">Total market</Link>
+              <Link href="/art">Art</Link>
+              <Link href="/design">Design</Link>
+              <Link href="/watches">Watches</Link>
+              <Link href="/sports">Sports</Link>
+              <Link href="/tcg">TCG</Link>
+              <Link href="/science">Science</Link>
+              <Link href="/culture">Pop Culture</Link>
+            </span>
           </div>
-          <div className="ray-close-col">
-            <span className="ray-close-k">The desk</span>
-            <Link href="/value">Value</Link>
-            <Link href="/makers">Makers</Link>
-            <Link href="/analytics">Analytics</Link>
-            <Link href="/profile">My profile</Link>
-            <Link href="/about">How it works</Link>
-            <Link href="/blog">Notes from the desk</Link>
+          <div className="ray-close-line" style={{ '--row-i': 1 } as React.CSSProperties}>
+            <span className="ray-close-line-k">The desk</span>
+            <span className="ray-close-line-links">
+              <Link href="/value">Value</Link>
+              <Link href="/makers">Makers</Link>
+              <Link href="/analytics">Analytics</Link>
+              <Link href="/profile">My profile</Link>
+              <Link href="/about">How it works</Link>
+              <Link href="/blog">Notes from the desk</Link>
+            </span>
           </div>
-          <div className="ray-close-col ray-close-record">
-            <span className="ray-close-k">The record</span>
-            {/* the sentence renders only WHEN PASSED — pages that already show
-                the settlement/proofstrip pass record={null} and get one line */}
-            {record && record.n > 500 && (
-              <p>
-                Flagged calls hammered <b className="up">{fmtSignedPct(record.medianPerfPct)} median</b> over their estimates across {record.n.toLocaleString()} replayed sales.
-              </p>
-            )}
-            <Link href="/value" className="ray-close-cta">See the record <Flick size={12} /></Link>
-            <span className="ray-close-partner-k">Partner site</span>
-            <a
-              href="https://starling-6s1.pages.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ray-close-cta ray-close-buyside-cta"
-            >
-              Starling — the same book on eBay <span aria-hidden="true">↗</span>
-            </a>
+          <div className="ray-close-line" style={{ '--row-i': 2 } as React.CSSProperties}>
+            <span className="ray-close-line-k">Partner site</span>
+            <span className="ray-close-line-links">
+              <a
+                href="https://starling-6s1.pages.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ray-close-starling"
+              >
+                Starling — the same book on eBay <span aria-hidden="true">↗</span>
+              </a>
+            </span>
           </div>
         </div>
 
-        {/* baseline */}
+        {/* the imprint — the maker signs last, small, next to the edition line */}
         <div className="ray-close-base">
-          <span suppressHydrationWarning>© {new Date().getFullYear()} lectr · auction intelligence</span>
-          <span>Comps: same maker, same form, size-banded — medians, never means.</span>
-          <span>Data from public auction results.</span>
+          <span className="ray-close-stamp">
+            <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />
+            <span suppressHydrationWarning>© {new Date().getFullYear()} lectr · auction intelligence</span>
+          </span>
+          <span className="ray-close-method">
+            <span>Comps: same maker, same form, size-banded — medians, never means.</span>
+            <span>Data from public auction results.</span>
+          </span>
         </div>
       </div>
     </footer>
