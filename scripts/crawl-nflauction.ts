@@ -18,6 +18,17 @@
 //
 // Run: RAY_SKIP_MAIN=1 npx tsx scripts/crawl-nflauction.ts --live [--write]
 //      [--closed-pages 30] [--delay 150]
+//
+// --idwalk: the DEEP archive. The listing API windows at ~1 year, but ENDED
+// lot pages live on individually (any slug; FinalStatus=Y; the final bid is
+// SERVER-rendered). scripts/data/nflauction-wayback-ids.csv holds every real
+// lot id recoverable from the Wayback CDX index (31k ids, 2013→today) with
+// its first-capture date; the walk fetches each unknown id on the LIVE site
+// and keeps finalized game-used lots. saleDate for pre-window lots is the
+// first-capture month (day 15) — the same month-grade approximation the
+// corpus already accepts from seasonToDate ("2018 Spring" catalogs); ids the
+// windowed backfill already settled (exact closeTime) are skipped, so exact
+// dates always win.
 import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
 import {
@@ -27,6 +38,8 @@ import {
   REAL_UA, mapPool,
 } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const HOST = 'https://nflauction.nfl.com';
 const SID = '1100783';
@@ -183,6 +196,59 @@ async function main() {
     try { const lot = toLot(it, ident, 'sold'); if (lot) lots.push(lot); else miss++; } catch { miss++; }
   });
   console.log(`[NFLAuction] parsed ${lots.length} new sold game-used lots (${miss} skipped)`);
+
+  // ── IDWALK — the deep archive: every wayback-recovered id vs the live site ──
+  if (process.argv.includes('--idwalk')) {
+    const manifest = path.join(process.cwd(), 'scripts', 'data', 'nflauction-wayback-ids.csv');
+    const rows = fs.readFileSync(manifest, 'utf8').trim().split('\n').slice(1)
+      .map(l => { const [id, ts] = l.split(','); return { id: Number(id), ts }; })
+      .filter(r => r.id > 0 && !haveSold.has(`nflauction-${r.id}`));
+    console.log(`[NFLAuction] idwalk: ${rows.length} unknown historical ids`);
+    let walked = 0, kept = 0;
+    await mapPool(rows, conc, async (r) => {
+      const html = await getHtml(`${HOST}/x/isynmv1/aucd/${r.id}`);
+      await new Promise(res => setTimeout(res, delayMs));
+      walked++;
+      if (walked % 2000 === 0) console.log(`[NFLAuction] idwalk ${walked}/${rows.length} (${kept} kept)`);
+      if (!html) return;
+      const t = html.match(/<meta property="og:title" content="([^"]*)"/i);
+      const title = t ? decodeHtml(t[1]).replace(/\s*\|.*$/, '').trim() : '';
+      if (!title || /official auction site/i.test(title) || !GAME_USED_RE.test(title)) return;
+      // the SUBJECT lot's finalized flag is the first FinalStatus on the page
+      const fin = html.match(/FinalStatus">([YN])/);
+      if (!fin || fin[1] !== 'Y') return; // not finalized → not a settled sale
+      const txt = html.replace(/<[^>]+>/g, ' ');
+      const bidM = txt.match(/Current Bid\s*:?\s*\$\s*([\d,\.]+)/);
+      const bid = bidM ? parseFloat(bidM[1].replace(/,/g, '')) : null;
+      if (!bid || bid <= 0) return; // no verified final price → never a sale
+      const d = html.match(/<meta (?:property="og:description"|name="description") content="([^"]*)"/i);
+      const cat = classifySports('', title);
+      const auth = readAuth(cat, title, d ? decodeHtml(d[1]) : '');
+      // first-capture month, day 15 — month-grade honesty, exact dates win via haveSold
+      const saleDate = `${r.ts.slice(0, 4)}-${r.ts.slice(4, 6)}-15`;
+      if (saleDate > TODAY) return;
+      const lot = {
+        id: `nflauction-${r.id}`,
+        artist: pseudoArtist(cat), title,
+        category: 'object' as LotCategory,
+        auctionHouse: 'NFL Auction' as AuctionLot['auctionHouse'],
+        saleName: 'NFL Auction', saleDate,
+        sport: 'Football', subCat: cat,
+        imageUrl: null,
+        url: `${HOST}/iSynApp/auctionDisplay.action?sid=${SID}&auctionId=${r.id}`,
+        gradeLabel: auth.grade, authCert: auth.cert, authConfidence: auth.confidence,
+        status: 'sold',
+        ...stampRealizedUsd(bid, saleDate),
+      } as unknown as AuctionLot;
+      lots.push(lot); kept++;
+      // INCREMENTAL: the walk is long — persist every 500 keeps
+      if (process.argv.includes('--write') && kept % 500 === 0) {
+        const { good } = settledOnly(lots);
+        if (good.length) writeMergedSegment('nflauction', good);
+      }
+    });
+    console.log(`[NFLAuction] idwalk done: ${kept} finalized game-used sales recovered from ${walked} ids`);
+  }
 
   // ── LIVE — tonight's open game-used snapshot ──
   let liveLots: AuctionLot[] = [];
