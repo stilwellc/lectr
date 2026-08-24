@@ -1045,6 +1045,8 @@ export interface ReferenceBand {
   q1: number;
   q3: number;
   n: number;
+  /** what the pool covers, for the label — e.g. 'originals', 'sculptures' */
+  scope?: string;
 }
 
 // ── science identities (curated, from the measured reference tier) ──
@@ -1147,6 +1149,44 @@ export function scienceReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Re
   const em = est.low && est.high ? (est.low + est.high) / 2 : null;
   if (em && (med > em * 5 || med < em / 5)) return null;
   return { kind: 'reference', confidence: 'low', med, q1, q3, n: pool.length };
+}
+
+/** MAKER REFERENCE BAND — unique works (paintings, works on paper,
+ *  sculpture) have no edition pool, so the point appraiser abstains and an
+ *  owned piece reads dead flat. The maker's own sold record for the same
+ *  form class is honest CONTEXT: "his originals trade $q1–$q3 at auction".
+ *  A labeled RANGE at low confidence — never a value, never enters a total.
+ *  Prefers the trailing 5 years; falls back to all-time when thin. Wide
+ *  dispersion is tolerated (unique works vary by size and importance) but
+ *  a near-information-free band (IQR > 6× median) abstains. */
+const MAKER_BAND_FORMS: Record<string, string> = {
+  painting: 'paintings',
+  'work-on-paper': 'works on paper',
+  'original-2d': 'originals',
+  sculpture: 'sculptures',
+};
+export function makerReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): ReferenceBand | null {
+  if (!lot.artist) return null;
+  // science/culture domains have their own measured reference tiers
+  if (SPORTS_SCIENCE_SLUGS.has(lot.artist) || CULTURE_SLUGS_ENGINE.has(lot.artist)) return null;
+  const form = formOf(lot);
+  const scope = MAKER_BAND_FORMS[form];
+  if (!scope) return null;
+  const all = allLots.filter(l =>
+    l.id !== lot.id && l.artist === lot.artist && l.status === 'sold'
+    && (l.priceUsd || 0) > 0 && formOf(l) === form);
+  if (all.length < 5) return null;
+  const cutoff = new Date(Date.now() - 5 * 365.25 * 86_400_000).toISOString().slice(0, 10);
+  const recent = all.filter(l => (l.saleDate || '') >= cutoff);
+  const pool = (recent.length >= 5 ? recent : all)
+    .sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''))
+    .slice(0, 60);
+  const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
+  const med = median(prices);
+  const q1 = prices[Math.floor(prices.length * 0.25)];
+  const q3 = prices[Math.floor(prices.length * 0.75)];
+  if (!(med > 0) || (q3 - q1) / med > 6) return null;
+  return { kind: 'reference', confidence: 'low', med, q1, q3, n: pool.length, scope };
 }
 
 /** Culture reference band — Goldin edition-like tier (same normalized title,

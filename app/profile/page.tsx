@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate } from '../components/LotCard';
-import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
 import HeroChart from '../preview/terminal/HeroChart';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -418,9 +418,16 @@ export default function SavedPage() {
         let refRange: string | null = null;
         if (appraised == null && fullLoaded) {
           const mkt = ARTIST_MARKET[l.artist];
-          const rb = mkt === 'science' ? scienceReferenceBand(l, allLots)
-            : mkt === 'culture' ? cultureReferenceBand(l, allLots) : null;
-          if (rb) refRange = `reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`;
+          // domain reference tiers first; then the maker band — a unique work
+          // reads against the maker's own sold record for the same form
+          const rb = (mkt === 'science' ? scienceReferenceBand(l, allLots)
+            : mkt === 'culture' ? cultureReferenceBand(l, allLots) : null)
+            ?? makerReferenceBand(l, allLots);
+          if (rb) {
+            refRange = rb.scope
+              ? `${ARTIST_LABEL[l.artist] || l.artist} ${rb.scope} reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`
+              : `reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`;
+          }
         }
         const deltaPct = paid && appraised ? Math.round((appraised / paid - 1) * 100) : null;
         const drill = drillRowFor(l, marketData);
@@ -533,6 +540,84 @@ export default function SavedPage() {
   }, [upcoming, metaFor, signalById]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+
+  /* ── THE READS — the desk's insight layer: hot vs quiet vs landing vs
+     underpriced, each with its measured evidence. Facts only. ── */
+  const reads = useMemo(() => {
+    type Read = { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' };
+    const rows: Read[] = [];
+    const hot = upcoming
+      .filter(l => l.bidVelocity && l.bidVelocity.delta > 0)
+      .sort((a, b) => (b.bidVelocity!.delta) - (a.bidVelocity!.delta))
+      .slice(0, 2);
+    for (const l of hot) {
+      const v = l.bidVelocity!;
+      rows.push({
+        key: `hot-${l.id}`, tag: 'Most bids', lot: l, tone: 'hot',
+        fact: <>+{v.delta} {v.delta === 1 ? 'bid' : 'bids'} in {Math.round(v.hours)}h{v.pctile != null && <> · faster than {v.pctile}% of live lots</>}</>,
+      });
+    }
+    // the sleeper read: bid-platform lots landing THIS WEEK with a published
+    // near-zero count — absent bidCount is absent data, never "no interest"
+    const quiet = upcoming
+      .filter(l => typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= 3)
+      .filter(l => !hot.includes(l))
+      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 7; })
+      .sort((a, b) => (a.bidCount ?? 0) - (b.bidCount ?? 0) || daysUntil(a.saleDate) - daysUntil(b.saleDate))
+      .slice(0, 2);
+    for (const l of quiet) {
+      const d = daysUntil(l.saleDate);
+      rows.push({
+        key: `q-${l.id}`, tag: 'Quietest', lot: l,
+        fact: <>{(l.bidCount ?? 0) === 0 ? 'no bids yet' : `only ${l.bidCount} ${l.bidCount === 1 ? 'bid' : 'bids'}`} · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{(l.currentBid || 0) > 0 ? <> · at {formatPrice(l.currentBid!)}</> : null}</>,
+      });
+    }
+    const soon = upcoming
+      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 2; })
+      .slice(0, 3);
+    for (const l of soon) {
+      const d = daysUntil(l.saleDate);
+      rows.push({
+        key: `soon-${l.id}`, tag: 'Lands soon', lot: l, tone: 'hot',
+        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
+      });
+    }
+    if (fullLoaded) {
+      let found = 0;
+      for (const l of upcoming) {
+        if (l.cardComps && l.cardComps.n > 0 && l.cardComps.med != null) {
+          rows.push({
+            key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
+            fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {formatPrice(l.cardComps.med)} median</>,
+          });
+          found++;
+        } else {
+          const a = appraiseLot(l, allLots);
+          if (a && a.kind === 'edition' && a.n >= 3) {
+            rows.push({
+              key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
+              fact: <>{a.n} same-edition comps · {formatPrice(a.value)} median</>,
+            });
+            found++;
+          }
+        }
+        if (found >= 2) break;
+      }
+    }
+    // deepest below-market — dealScore, THE one flagged ranking
+    const under = upcoming
+      .map(l => ({ l, sig: signalById.get(l.id) }))
+      .filter((x): x is { l: AuctionLot; sig: LiveSignal } => !!x.sig && x.sig.label === 'Below Market')
+      .sort((a, b) => dealScore(b.l, b.sig.pct) - dealScore(a.l, a.sig.pct))
+      .slice(0, 2);
+    for (const { l, sig } of under) {
+      rows.push({
+        key: `bm-${l.id}`, tag: 'Below market', lot: l, tone: 'up',
+        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{(l.currentBid || 0) > 0 ? <> · {formatPrice(l.currentBid!)} bid</> : null}</>,
+      });
+    }
+    return rows;
+  }, [upcoming, allLots, fullLoaded, signalById]);
 
   /* ── THE ROOM — the watching ledger with the brief fused in: every row
      carries its reason tag and the ledger sorts action-first. ── */
@@ -858,6 +943,23 @@ export default function SavedPage() {
                     <span className="ck-gauge-s">nightly matches to your searches</span>
                   </a>
                 )}
+              </div>
+            )}
+            {/* ── 2b · THE READS — hot vs quiet vs landing vs underpriced,
+                each with its measured evidence ── */}
+            {reads.length > 0 && (
+              <div className="ck-reads ray-enter" role="list" aria-label="Today's reads">
+                <div className="ck-reads-head" aria-hidden>
+                  <span className="kicker">Today&rsquo;s reads</span>
+                  <i className="ck-reads-rule" />
+                </div>
+                {reads.map(r => (
+                  <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem">
+                    <span className="ck-tag" data-tone={r.tone === 'up' ? 'up' : r.tone === 'hot' ? 'hot' : undefined}>{r.tag}</span>
+                    <span className="ck-read-title">{craftTitle(r.lot.title)}</span>
+                    <span className="ck-read-fact">{ARTIST_LABEL[r.lot.artist] || r.lot.artist} · {r.fact}</span>
+                  </Link>
+                ))}
               </div>
             )}
           </section>

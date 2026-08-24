@@ -3169,6 +3169,35 @@ body {
   text-decoration: underline; text-underline-offset: 3px;
 }
 
+/* ── THE READS — the insight strip: tag + work + measured fact ── */
+.ck-reads { margin-top: 22px; }
+.ck-reads-head { display: flex; align-items: center; gap: 12px; padding: 0 2px 4px; }
+.ck-reads-rule { flex: 1; border: none; border-top: 1px solid var(--hairline); }
+.ck-read {
+  display: flex; align-items: baseline; gap: 14px;
+  padding: 10px 2px; min-height: 44px;
+  border-bottom: 1px solid var(--hairline);
+  text-decoration: none; color: inherit;
+  transition: background var(--duration-fast) var(--ease-signature);
+}
+.ck-read:last-child { border-bottom: none; }
+.ck-read:hover { background: var(--color-hover-item); }
+.ck-read .ck-tag { flex: none; width: 96px; text-align: left; }
+.ck-read-title {
+  flex: none; max-width: 34%; min-width: 90px;
+  font-size: 13px; font-weight: 600; color: var(--color-fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ck-read-fact {
+  min-width: 0; font-size: 12.5px; color: var(--color-text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .ck-read { flex-wrap: wrap; gap: 4px 10px; }
+  .ck-read .ck-tag { width: auto; }
+  .ck-read-title { max-width: 100%; flex: 1 1 100%; }
+}
+
 /* ── the room: reason tags fused into the watching ledger ── */
 .ray-saved-cols {
   display: grid;
