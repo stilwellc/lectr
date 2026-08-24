@@ -492,10 +492,23 @@ export function triggerFullLoad() {
 
 /** Re-attempt the phase-2 archive fetch after a fullError (no-op while a
     fetch is already inflight or once the archive has loaded). A retry implies
-    the surface still wants the corpus, so it keeps the request latched. */
+    the surface still wants the corpus, so it keeps the request latched.
+    FALLBACK PATH (no upcoming.json): loadRayData never assigns retryFull, so
+    a fullError there previously left this a dead button — now it resets the
+    cached payload and re-runs the load from the top. */
 export function retryFullLoad() {
   fullRequested = true;
-  if (retryFull && !inflightFull && !cached?.fullLoaded) retryFull();
+  if (retryFull && !inflightFull && !cached?.fullLoaded) { retryFull(); return; }
+  if (!retryFull && !inflight && !inflightFull && (!cached || cached.fullError)) {
+    cached = null;
+    loadRayData().then(p => notify(p)).catch(() => { /* surfaces keep their error state */ });
+  }
+}
+
+/** Re-attempt the sold-outcomes ledger after a failure (loadSoldLedger clears
+    its own error state on entry and is guarded against double-fires). */
+export function retrySoldLedger() {
+  loadSoldLedger();
 }
 
 // ── phase 3: the Goldin sold-archive tier. Mirrors loadFull (3-try backoff,

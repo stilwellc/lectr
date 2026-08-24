@@ -17,9 +17,39 @@ import { craftTitle } from '../utils';
 
 const STORAGE_KEY = 'ray-saved-lots';
 
+/** SIGNED SIGNAL CONVENTION (Aug 24 2026): signalPct saved on/after this date
+ *  carries the signal's DIRECTION in its sign — positive = Below Market (comps
+ *  sit pct% above the ask; the app-wide signalMagnitude convention), negative =
+ *  Above Market. Entries saved BEFORE this date stored the raw label-less
+ *  magnitude (always positive, direction lost) — readers MUST treat those as
+ *  direction-unknown. Use signalCallOf() to interpret; never read the sign of
+ *  a legacy value as a direction. */
+// The cutover carries a THREE-DAY BUFFER past the deploy: a tab still running
+// the pre-rebuild bundle writes the old unsigned magnitude, and a date-only
+// gate would misread its Above-Market saves as 'below'. Values written in the
+// buffer window are treated as direction-unknown (bounded data loss, zero
+// misreads). The durable fix is a sig_v column on saved_lots — until then the
+// date is the only marker we can ship without DDL.
+export const SIGNED_SIGNAL_SINCE = '2026-08-27';
+
+export type SignalCall =
+  | { dir: 'below' | 'above'; pct: number }   // pct = positive magnitude
+  | { dir: 'unknown'; pct: number };          // legacy save — direction lost
+
+/** Interpret a SavedMeta's signal-at-save under the signed convention. */
+export function signalCallOf(meta: { savedAt: string; signalPct: number | null } | undefined): SignalCall | null {
+  if (!meta || meta.signalPct == null) return null;
+  const legacy = (meta.savedAt || '').slice(0, 10) < SIGNED_SIGNAL_SINCE;
+  if (legacy) return { dir: 'unknown', pct: Math.abs(meta.signalPct) };
+  return meta.signalPct >= 0
+    ? { dir: 'below', pct: meta.signalPct }
+    : { dir: 'above', pct: -meta.signalPct };
+}
+
 export interface SavedMeta {
   savedAt: string;
   estMid: number | null;
+  /** signed under SIGNED_SIGNAL_SINCE — see signalCallOf() */
   signalPct: number | null;
   bidCount: number | null;
   /** the user marked this past lot as one they OWN — it joins their collection */
@@ -38,7 +68,11 @@ function entryFromLot(id: string, lot?: AuctionLot): SavedEntry {
     id,
     savedAt: new Date().toISOString(),
     estMid: lo || hi ? (lo + hi) / 2 : null,
-    signalPct: lot?.signal?.pct ?? null,
+    // signed convention: Below Market keeps its positive magnitude, Above
+    // Market is stored negative — direction survives the save
+    signalPct: lot?.signal
+      ? (lot.signal.label === 'Above Market' ? -Math.abs(lot.signal.pct) : Math.abs(lot.signal.pct))
+      : null,
     bidCount: lot?.bidCount ?? null,
     owned: false,
     title: lot?.title ? craftTitle(lot.title) : null,
@@ -143,6 +177,11 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [savedReady, setSavedReady] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const migratedRef = useRef(false);
+  // ── auth-race guard: while the sign-in select() is in flight, every toggle
+  // is recorded here; the snapshot merge replays them so a save (or unsave)
+  // made in that window is never clobbered by the pre-write snapshot.
+  const fetchInFlight = useRef(false);
+  const mutationLog = useRef<Map<string, SavedEntry | 'DELETED'>>(new Map());
   // mirror of entries for reads inside stable callbacks (toggle) without making
   // the callback depend on entries (which would rebind every save button constantly)
   const entriesRef = useRef<SavedEntry[]>([]);
@@ -177,6 +216,8 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     if (!user) { setEntries([]); setSavedReady(true); return; }
     setSavedReady(false); // a fresh session's saves are in flight
     let cancelled = false;
+    fetchInFlight.current = true;
+    mutationLog.current.clear();
     (async () => {
       // one-time: lift any localStorage saves into the account, then clear them.
       // Only clear localStorage AFTER a clean upsert — a failed upload followed by
@@ -195,9 +236,28 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       // whatever is already in state and let the next run retry.
       // the fetch RESOLVED either way — even on error the gate must open, or
       // a failed query would hold /saved on the loading state forever
-      if (error) { console.error('[account] load saved lots failed:', error.message); if (!cancelled) setSavedReady(true); return; }
+      if (error) {
+        console.error('[account] load saved lots failed:', error.message);
+        // only the effect that OWNS the fetch may close the race window — a
+        // stale effect's late error must not strip the successor's protection
+        if (!cancelled) { fetchInFlight.current = false; setSavedReady(true); }
+        return;
+      }
       if (cancelled) return;
-      const loaded = (data || []).map(rowToEntry);
+      let loaded = (data || []).map(rowToEntry);
+      // replay toggles that raced the select: the snapshot predates their
+      // writes, so apply them over it instead of letting it clobber them
+      if (mutationLog.current.size) {
+        const log = new Map(mutationLog.current);
+        loaded = loaded.filter(e => log.get(e.id) !== 'DELETED');
+        log.forEach((v, id) => {
+          if (v === 'DELETED') return;
+          const i = loaded.findIndex(e => e.id === id);
+          if (i >= 0) loaded[i] = v; else loaded.push(v);
+        });
+      }
+      fetchInFlight.current = false;
+      mutationLog.current.clear();
       setEntries(loaded);
       setSavedReady(true);
       // Replay a save the user queued before signing in (they clicked the star
@@ -251,17 +311,29 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     const exists = entriesRef.current.some(e => e.id === lotId);
     if (exists) {
       const removed = entriesRef.current.find(e => e.id === lotId);
+      if (fetchInFlight.current) mutationLog.current.set(lotId, 'DELETED');
       setEntries(prev => prev.filter(e => e.id !== lotId));
       supabase.from('saved_lots').delete().eq('user_id', user.id).eq('lot_id', lotId)
         .then(({ error }) => {
-          if (error) { console.error('[account] unsave failed:', error.message); if (removed) setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, removed])); flash("Couldn't update your watchlist — try again."); }
+          if (error) {
+            console.error('[account] unsave failed:', error.message);
+            if (mutationLog.current.get(lotId) === 'DELETED') mutationLog.current.delete(lotId);
+            if (removed) setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, removed]));
+            flash("Couldn't update your watchlist — try again.");
+          }
         });
     } else {
       const e = entryFromLot(lotId, lot);
+      if (fetchInFlight.current) mutationLog.current.set(lotId, e);
       setEntries(prev => (prev.some(p => p.id === lotId) ? prev : [...prev, e]));
       upsertSaved(user.id, [e], { onConflict: 'user_id,lot_id' })
         .then(({ error }) => {
-          if (error) { console.error('[account] save failed:', error.message); setEntries(prev => prev.filter(p => p.id !== lotId)); flash("Couldn't save the lot — try again."); }
+          if (error) {
+            console.error('[account] save failed:', error.message);
+            if (mutationLog.current.get(lotId) === e) mutationLog.current.delete(lotId);
+            setEntries(prev => prev.filter(p => p.id !== lotId));
+            flash("Couldn't save the lot — try again.");
+          }
         });
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
     }
@@ -282,6 +354,8 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     const cur = entriesRef.current.find(e => e.id === lotId);
     if (!cur) return;
     const next = !cur.owned;
+    const updated = { ...cur, owned: next };
+    if (fetchInFlight.current) mutationLog.current.set(lotId, updated);
     setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, owned: next } : e)));
     if (!supabase) {
       const updated = entriesRef.current.map(e => (e.id === lotId ? { ...e, owned: next } : e));
@@ -293,6 +367,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       .then(({ error }) => {
         if (error) {
           console.error('[account] toggleOwned failed:', error.message);
+          if (mutationLog.current.get(lotId) === updated) mutationLog.current.delete(lotId);
           setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, owned: !next } : e)));
           flash("Couldn't update your collection — try again.");
         }
@@ -314,12 +389,17 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   // Only meaningful in auth mode — never blow away the localStorage-mode list.
   const signOut = useCallback(async () => { if (!supabase) return; await supabase.auth.signOut(); setEntries([]); migratedRef.current = false; }, []);
 
-  const value: AccountValue = {
+  const openLogin = useCallback(() => setLoginOpen(true), []);
+  const closeLogin = useCallback(() => setLoginOpen(false), []);
+  // memoized: a toast flash or unrelated provider render must not re-render
+  // every save button and page consuming the account context
+  const value = useMemo<AccountValue>(() => ({
     authEnabled, user, authReady, savedReady,
     signInWithEmail, signInWithGoogle, signOut,
     savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned,
-    loginOpen, openLogin: () => setLoginOpen(true), closeLogin: () => setLoginOpen(false),
-  };
+    loginOpen, openLogin, closeLogin,
+  }), [user, authReady, savedReady, signInWithEmail, signInWithGoogle, signOut,
+    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, loginOpen, openLogin, closeLogin]);
 
   return (
     <Ctx.Provider value={value}>

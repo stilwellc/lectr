@@ -3,14 +3,16 @@
 import React, { useMemo, useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { retryFullLoad, useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
+import { retryFullLoad, retrySoldLedger, useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
+import { signalCallOf } from '../lib/account';
 import { useAuth } from '../lib/account';
+import { useAlerts } from '../lib/alerts';
 import { supabase } from '../lib/supabase';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate } from '../components/LotCard';
-import { appraiseLot, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
 import HeroChart from '../preview/terminal/HeroChart';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -22,16 +24,33 @@ import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, l
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 
 /* ============================================================
-   MY PROFILE — the collector's data center. Three ledgers, one
-   desk: WATCHING (live saved lots, tracked to the hammer),
-   SETTLED (what happened to the lots you watched — your track
-   record, measured), and COLLECTION (the lots you own — engine-
-   appraised, charted over time, placed in their sub-markets).
+   MY PROFILE — THE COCKPIT (Aug 24 2026 rebuild). The page is
+   organized around the collector's three questions, in order:
+
+     1. WHAT HAPPENED WHILE I WAS AWAY — the away strip: settled
+        outcomes since the last visit, unseen alert matches,
+        wins awaiting "I won it".
+     2. WHAT NEEDS ME NOW — the gauge line, then the WATCHING
+        ledger with the old desk-brief DISSOLVED INTO IT: each
+        row carries its reason tag (lands soon / below market /
+        most bids / quiet) and the ledger sorts action-first.
+     3. HOW AM I DOING — THE RECORD, the page's receipt, at
+        display scale; then the collection (the paper band — the
+        certificate for what you own), then SETTLED as the
+        line-item receipts.
 
    Honesty rules hold everywhere: green/red only on measured
-   deltas; reference bands render as labeled ranges and never
-   enter a total; a market read on your holdings is the MARKET's
-   move, labeled as such — never dressed as your appreciation.
+   deltas; reference bands are labeled ranges that never enter a
+   total; a market read on holdings is the MARKET's move, labeled
+   as such; abstention prints its reason (a failed fetch is never
+   dressed as a fact about a lot).
+
+   SIGNAL SIGN LAW (see account.tsx SIGNED_SIGNAL_SINCE): the
+   at-save signal is interpreted through signalCallOf() — legacy
+   saves lost their direction and render unsigned + neutral,
+   never green/red. Live signals print the app-wide convention:
+   Below Market = +pct mint (comps sit above the ask), Above
+   Market = −pct coral.
    ============================================================ */
 
 function daysUntil(dateStr: string): number {
@@ -54,60 +73,209 @@ function median(a: number[]): number | null {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** What changed on a watched lot since the save (card view). */
-function SavedDelta({ lot, meta, allLots }: { lot: AuctionLot; meta?: SavedMeta; allLots: AuctionLot[] }) {
-  const cur = lotSignal(lot, allLots);
-  const signalMoved =
-    meta?.signalPct != null && cur !== null && Math.round(cur.pct) !== Math.round(meta.signalPct);
-  const newBids =
-    meta?.bidCount != null && (lot.bidCount || 0) > meta.bidCount
-      ? (lot.bidCount || 0) - meta.bidCount
-      : 0;
-  if (!signalMoved && newBids === 0) return null;
+type LiveSignal = NonNullable<ReturnType<typeof lotSignal>>;
+/** live-signal ink + text — the app-wide signalMagnitude convention */
+const sigInk = (label: LiveSignal['label']) =>
+  label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down-text)';
+const sigText = (sig: LiveSignal) =>
+  `${sig.label === 'Above Market' ? '−' : '+'}${Math.abs(Math.round(sig.pct))}%`;
+
+/** the at-save call rendered honestly: legacy saves lost direction → neutral */
+function CallCell({ meta }: { meta: SavedMeta | undefined }) {
+  const call = signalCallOf(meta);
+  if (!call) return <span className="num" style={{ color: 'var(--color-text-faint)' }}>—</span>;
+  if (call.dir === 'unknown') {
+    return (
+      <span className="num" style={{ color: 'var(--color-text-muted)' }}
+        title="Saved before signals recorded their direction — magnitude only.">
+        ±{Math.round(call.pct)}%
+      </span>
+    );
+  }
   return (
-    <p className="ray-saved-delta">
-      {signalMoved && cur && meta && (
-        <span>
-          signal {fmtSignedPct(meta.signalPct!)} <Flick size={10} style={{ marginLeft: 0 }} />{' '}
-          <b style={{ color: cur.pct > meta.signalPct! ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700 }}>
-            {fmtSignedPct(cur.pct)}
-          </b>{' '}
-          since you saved
-        </span>
-      )}
-      {signalMoved && newBids > 0 && ' · '}
-      {newBids > 0 && <span>{newBids} new {newBids === 1 ? 'bid' : 'bids'}</span>}
-    </p>
+    <span className="num" style={{ color: call.dir === 'below' ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 600 }}>
+      {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}%
+    </span>
   );
 }
 
-type SavedView = 'ledger' | 'cards';
-const SAVEDVIEW_KEY = 'ray-savedview';
+/** What changed on a watched lot since the save (cards view caption). */
+function SavedDelta({ lot, meta, sig }: { lot: AuctionLot; meta?: SavedMeta; sig: LiveSignal | null }) {
+  const call = signalCallOf(meta);
+  const bits: React.ReactNode[] = [];
+  if (call && sig) {
+    const sameAxis = (call.dir === 'below' && sig.label === 'Below Market') || (call.dir === 'above' && sig.label === 'Above Market');
+    if (call.dir === 'unknown') {
+      bits.push(<span key="s">signal now <b style={{ color: sigInk(sig.label) }}>{sigText(sig)}</b></span>);
+    } else if (!sameAxis) {
+      bits.push(<span key="s">signal flipped since you saved · now <b style={{ color: sigInk(sig.label) }}>{sigText(sig)}</b></span>);
+    } else if (Math.round(sig.pct) !== Math.round(call.pct)) {
+      bits.push(
+        <span key="s">
+          signal {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}% <span aria-hidden>↝</span>{' '}
+          <b style={{ color: sigInk(sig.label) }}>{sigText(sig)}</b> since you saved
+        </span>
+      );
+    }
+  }
+  if (meta?.bidCount != null && (lot.bidCount || 0) > meta.bidCount) {
+    const n = (lot.bidCount || 0) - meta.bidCount;
+    bits.push(<span key="b">+{n} {n === 1 ? 'bid' : 'bids'} since you saved</span>);
+  }
+  if (!bits.length) return null;
+  return (
+    <div className="ray-saved-delta">
+      {bits.map((b, i) => <React.Fragment key={i}>{i > 0 && ' · '}{b}</React.Fragment>)}
+    </div>
+  );
+}
 
-interface Snapshot { d: string; paid: number; appraised: number; pieces: number }
-
-// Loads the on-demand sold-outcomes ledger (24-mo id→[price,date]) and lifts it
-// to the page. Rendered ONLY when there are orphan saved lots, so a user with
-// no orphans never pays the fetch.
-function LedgerGate({ onLedger }: { onLedger: (m: Map<string, LedgerEntry>) => void }) {
-  const { ledger } = useSoldLedger();
-  useEffect(() => { onLedger(ledger); }, [ledger, onLedger]);
+/** Mount-triggered sold-ledger fetch — lifts data AND load/error state, so a
+    network failure is never rendered as a fact about a lot. */
+function LedgerGate({ onState }: { onState: (s: { ledger: Map<string, LedgerEntry>; loaded: boolean; error: boolean }) => void }) {
+  const { ledger, ledgerLoaded, ledgerError } = useSoldLedger();
+  useEffect(() => { onState({ ledger, loaded: ledgerLoaded, error: ledgerError }); }, [ledger, ledgerLoaded, ledgerError, onState]);
   return null;
 }
 
+interface Snapshot { d: string; paid: number; appraised: number; pieces: number }
+type SavedView = 'ledger' | 'cards';
+const SAVEDVIEW_KEY = 'lectr-savedview';
+
+/* ── SETTLED — one row implementation for both shells ── */
+type SettledRowData =
+  | { kind: 'lot'; lot: AuctionLot; date: string }
+  | { kind: 'ledger'; o: { id: string; priceUsd: number; saleDate: string; provisional: boolean }; date: string };
+
+function SettledRowView({ row, meta, owned, onOwn, onRemove, mobile }: {
+  row: SettledRowData;
+  meta: SavedMeta | undefined;
+  owned: boolean;
+  onOwn: () => void;
+  onRemove: () => void;
+  mobile: boolean;
+}) {
+  if (row.kind === 'ledger') {
+    const o = row.o;
+    // the save's own estimate (frozen at save time) can still judge an
+    // archive outcome — labeled as such, never dressed as a house estimate
+    const vsSaveEst = meta?.estMid && o.priceUsd && !o.provisional
+      ? Math.round((o.priceUsd / meta.estMid - 1) * 100) : null;
+    const name = meta?.title || 'Archived lot';
+    const price = o.provisional
+      ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }} title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
+      : formatPrice(o.priceUsd);
+    if (mobile) {
+      return (
+        <div className="ray-settled-mrow">
+          <div className="ck-mtitle">{name}</div>
+          <div className="ck-mline">
+            <span className="ck-msub">
+              {meta?.artist ? (ARTIST_LABEL[meta.artist] || meta.artist) : 'archive'}
+              {meta?.estMid != null && <> · est. {formatPrice(meta.estMid)} at save</>}
+            </span>
+            <span className="ck-mnum">
+              {price}
+              {vsSaveEst != null && (
+                <b style={{ marginLeft: 6, color: vsSaveEst > 0 ? 'var(--color-up)' : vsSaveEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)' }}>
+                  {fmtSignedPct(vsSaveEst)}
+                </b>
+              )}
+            </span>
+          </div>
+          <div style={{ marginTop: 6 }}><button className="ray-own-btn" onClick={onRemove}>Remove</button></div>
+        </div>
+      );
+    }
+    return (
+      <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
+        <span className="maker">{meta?.artist ? (ARTIST_LABEL[meta.artist] || meta.artist) : '—'}</span>
+        <span className="work">{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
+        <span className="num" style={{ color: meta?.estMid != null ? undefined : 'var(--color-text-faint)' }}
+          title={meta?.estMid != null ? 'The estimate as it stood when you saved the lot' : 'No estimate published'}>
+          {meta?.estMid != null ? <>{formatPrice(meta.estMid)}<span className="sub">at save</span></> : '—'}
+        </span>
+        <CallCell meta={meta} />
+        <span className="num" style={{ fontWeight: 600 }}>{price}</span>
+        <span className="num" style={vsSaveEst != null ? { color: vsSaveEst > 0 ? 'var(--color-up)' : vsSaveEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
+          title={vsSaveEst != null ? 'vs the estimate at save — all-in price against the estimate midpoint' : 'No estimate on file — outside the vs-est median'}>
+          {vsSaveEst != null ? <>{fmtSignedPct(vsSaveEst)}<span className="sub">vs est at save</span></> : '—'}
+        </span>
+        <span style={{ textAlign: 'right' }}><button className="ray-own-btn" onClick={onRemove}>Remove</button></span>
+      </div>
+    );
+  }
+
+  const lot = row.lot;
+  const pct = overEstimatePct(lot);
+  const pending = !lot.priceUsd;
+  if (mobile) {
+    return (
+      <div className="ray-settled-mrow">
+        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+          <div className="ck-mtitle">{craftTitle(lot.title)}</div>
+        </Link>
+        <div className="ck-mline">
+          <span className="ck-msub">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+          <span className="ck-mnum">
+            {pending ? <span style={{ color: 'var(--color-text-faint)' }}>pending</span> : (
+              <>
+                <b>{formatPrice(lot.priceUsd!)}</b>
+                {pct != null && (
+                  <b style={{ marginLeft: 6, color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)' }}>{fmtSignedPct(Math.round(pct))}</b>
+                )}
+              </>
+            )}
+          </span>
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={onOwn}>
+            {owned ? 'Owned' : 'I won it'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
+      <span className="maker">
+        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+          {ARTIST_LABEL[lot.artist] || lot.artist}
+        </Link>
+      </span>
+      <span className="work">
+        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+          {craftTitle(lot.title)}
+        </Link>
+      </span>
+      <span className="num">{formatEstimate(lot) || '—'}</span>
+      <CallCell meta={meta} />
+      <span className="num" style={{ fontWeight: 600 }}>
+        {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : formatPrice(lot.priceUsd!)}
+      </span>
+      <span className="num" style={pct != null ? { color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
+        {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
+      </span>
+      <span style={{ textAlign: 'right' }}>
+        <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={onOwn}>
+          {owned ? 'Owned' : 'I won it'}
+        </button>
+      </span>
+    </div>
+  );
+}
+
 export default function SavedPage() {
-  // useFullLots: saved lots may have rolled off upcoming into the corpus, and
-  // the collection valuation gates on fullLoaded — trigger phase 2. market
-  // carries the drills (sub-market reads) for the exposure block.
   const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
+  const { unseen: unseenAlerts } = useAlerts();
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const v = localStorage.getItem(SAVEDVIEW_KEY);
+      const v = localStorage.getItem(SAVEDVIEW_KEY) ?? localStorage.getItem('ray-savedview');
       if (v === 'cards' || v === 'ledger') setSavedView(v);
     } catch { /* private mode */ }
   }, []);
@@ -115,14 +283,19 @@ export default function SavedPage() {
     setSavedView(v);
     try { localStorage.setItem(SAVEDVIEW_KEY, v); } catch { /* private mode */ }
   };
+  // cards are a desktop opt-in; SSR + first client render agree on ledger-only
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 900px)');
+    const on = () => setIsDesktop(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
 
-  // Saved ids can go stale while the LOT lives on: the upcoming→sold resolve
-  // rewrites `id~` → id, and the Wright-family mirror dedupe keeps ONE copy of
-  // a lot the platform serves on three domains (wright/rago/lama share numeric
-  // platform ids). Resolve through those aliases BEFORE declaring an orphan —
-  // otherwise a settled watch falls off the corpus, lands in the archive strip
-  // with price-only data, and silently drops OUT of the track-record math
-  // (selection bias in "your record" — the exact bad practice to avoid).
+  /* ── resolve saved ids through the alias map (id~ flips, Wright-family
+     mirrors) BEFORE declaring an orphan — a settled watch must never
+     silently drop out of the record (selection bias). ── */
   const { savedLots, savedIdByLotId, orphanIds } = useMemo(() => {
     const byId = new Map(allLots.map(l => [l.id, l]));
     const resolve = (id: string): AuctionLot | undefined => {
@@ -148,7 +321,7 @@ export default function SavedPage() {
     for (const id of savedIds) {
       const l = resolve(id);
       if (l) {
-        if (seen.has(l.id)) continue; // two saved mirror copies → one row
+        if (seen.has(l.id)) continue;
         seen.add(l.id);
         lots.push(l);
         if (l.id !== id) idMap.set(l.id, id);
@@ -164,23 +337,32 @@ export default function SavedPage() {
     (rowId: string) => savedMeta[savedIdByLotId.get(rowId) ?? rowId],
     [savedMeta, savedIdByLotId],
   );
+  /** the OWNED flag lives on the saved id too — write through the alias, or
+      "I won it" silently no-ops on any alias-resolved row. */
+  const savedIdOf = useCallback(
+    (rowId: string) => savedIdByLotId.get(rowId) ?? rowId,
+    [savedIdByLotId],
+  );
+  const ownedLotIds = useMemo(() => {
+    const ownedSet = new Set(ownedIds);
+    return new Set(savedLots.filter(l => ownedSet.has(savedIdByLotId.get(l.id) ?? l.id)).map(l => l.id));
+  }, [ownedIds, savedLots, savedIdByLotId]);
 
-  // Resolve orphans against the sold-outcomes ledger (loaded on-demand by
-  // LedgerGate below): a Goldin lot that sold into the archive / corpus-only
-  // tier isn't shipped as a full row, but its hammer result is in the ledger.
-  // Split into genuinely-sold (show price + date) vs truly gone (withdrawn).
-  const [ledger, setLedger] = useState<Map<string, LedgerEntry>>(new Map());
+  // sold-outcomes ledger — data + state lifted together (a fetch failure must
+  // never be printed as "withdrawn by the house")
+  const [ledgerState, setLedgerState] = useState<{ ledger: Map<string, LedgerEntry>; loaded: boolean; error: boolean }>({ ledger: new Map(), loaded: false, error: false });
   const { soldOrphans, goneOrphans } = useMemo(() => {
     const soldO: { id: string; priceUsd: number; saleDate: string; provisional: boolean }[] = [];
     const goneO: string[] = [];
+    if (!ledgerState.loaded) return { soldOrphans: soldO, goneOrphans: goneO };
     for (const id of orphanIds) {
-      const hit = ledger.get(id);
+      const hit = ledgerState.ledger.get(id);
       if (hit) soldO.push({ id, priceUsd: hit[0], saleDate: hit[1], provisional: hit.length > 2 });
       else goneO.push(id);
     }
     soldO.sort((a, b) => (a.saleDate < b.saleDate ? 1 : -1));
     return { soldOrphans: soldO, goneOrphans: goneO };
-  }, [orphanIds, ledger]);
+  }, [orphanIds, ledgerState]);
 
   const badgeCount = fullLoaded ? savedLots.length : savedIds.length;
 
@@ -193,14 +375,12 @@ export default function SavedPage() {
       .sort((a, b) => new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime()),
     [savedLots]
   );
-
   const sold = useMemo(() =>
     savedLots
       .filter(l => l.status === 'sold' || isPastPending(l))
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
     [savedLots]
   );
-
   const other = useMemo(() =>
     savedLots
       .filter(l => l.status !== 'upcoming' && l.status !== 'sold')
@@ -208,15 +388,16 @@ export default function SavedPage() {
     [savedLots]
   );
 
-  /* ── SETTLED, ONE SURFACE — full rows and archive-resolved results in one
-     date-sorted ledger. Archive rows (Goldin: a no-reserve house that publishes
-     NO estimates) can never be judged vs estimate — they render first-class
-     with an honest '—' basis, never a second-class strip. ── */
-  type SettledRow =
-    | { kind: 'lot'; lot: AuctionLot; date: string }
-    | { kind: 'ledger'; o: { id: string; priceUsd: number; saleDate: string; provisional: boolean }; date: string };
-  const settledRows = useMemo<SettledRow[]>(() => {
-    const rows: SettledRow[] = [
+  /** live signals computed ONCE per data change — never in a render body
+      (a corpus-resolved row without a stamped signal is an O(corpus) scan) */
+  const signalById = useMemo(() => {
+    const m = new Map<string, LiveSignal | null>();
+    for (const l of upcoming) m.set(l.id, lotSignal(l, allLots));
+    return m;
+  }, [upcoming, allLots]);
+
+  const settledRows = useMemo<SettledRowData[]>(() => {
+    const rows: SettledRowData[] = [
       ...sold.map(lot => ({ kind: 'lot' as const, lot, date: lot.saleDate || '' })),
       ...soldOrphans.map(o => ({ kind: 'ledger' as const, o, date: o.saleDate || '' })),
     ];
@@ -224,21 +405,16 @@ export default function SavedPage() {
     return rows;
   }, [sold, soldOrphans]);
 
-  /* ── COLLECTION — engine-appraised, with reference-band context where the
-     engine abstains. A reference RANGE is context only: it NEVER enters the
-     total (un-appraisable pieces carry at their bought price). ── */
+  /* ── COLLECTION — engine-appraised; a reference RANGE is context only ── */
   const collection = useMemo(() => {
-    const ownedSet = new Set(ownedIds);
     const rows = savedLots
-      .filter(l => ownedSet.has(l.id))
+      .filter(l => ownedLotIds.has(l.id))
       .map(l => {
         const paid = l.priceUsd || null;
         const appr = appraiseLot(l, allLots);
         const band = !appr && isSportsScienceObject(l) ? soldCompBand(l, allLots) : null;
         const appraised = appr?.value ?? band?.median ?? null;
-        let basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
-        // reference-band context for science/culture pieces the engine won't
-        // point-value — a labeled RANGE, never a number in the total
+        const basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
         let refRange: string | null = null;
         if (appraised == null && fullLoaded) {
           const mkt = ARTIST_MARKET[l.artist];
@@ -254,18 +430,12 @@ export default function SavedPage() {
       .sort((a, b) => (b.appraised ?? b.paid ?? 0) - (a.appraised ?? a.paid ?? 0));
     const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
     const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
-    // the headline % compares like with like: only pieces WITH a bought price
-    // count toward it (appraised, or carried at bought). A piece with no
-    // recorded price still shows in the appraisal total, but it can never
-    // claim appreciation over a bought sum it isn't part of.
     const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
     const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
     return { rows, totalPaid, totalAppraised, deltaPct };
-  }, [savedLots, ownedIds, allLots, fullLoaded, marketData]);
+  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData]);
 
-  /* ── SUB-MARKET EXPOSURE — where the collection trades. Each row is the
-     MARKET's read (index/demand), labeled as the market's move — never the
-     pieces' own appreciation. ── */
+  /* ── sub-market exposure — the MARKET's read, labeled as such ── */
   const exposure = useMemo(() => {
     const by = new Map<string, { row: DrillRow; n: number; held: number }>();
     for (const r of collection.rows) {
@@ -278,15 +448,11 @@ export default function SavedPage() {
     return Array.from(by.values()).sort((a, b) => b.held - a.held);
   }, [collection]);
 
-  /* ── COLLECTION HISTORY — write one snapshot per day (existing behavior),
-     and READ the trail back for the over-time chart. ── */
+  /* ── collection history — one snapshot per LOCAL day; read the trail back ── */
   useEffect(() => {
     if (!supabase || !user || !fullLoaded || collection.rows.length === 0) return;
-    const day = new Date().toISOString().slice(0, 10);
+    const day = localToday(); // local day — the page's whole clock runs local
     const guardKey = `lectr-snap-${user.id.slice(0, 8)}`;
-    // guard on day+totals, not the bare day: 'I won it' changes the collection
-    // intra-session, and the day's snapshot row must follow (upsert is keyed
-    // on user+date, so this rewrites the same row, never duplicates).
     const guardVal = `${day}:${Math.round(collection.totalPaid)}:${Math.round(collection.totalAppraised)}:${collection.rows.length}`;
     try { if (localStorage.getItem(guardKey) === guardVal) return; } catch { /* private mode */ }
     supabase.from('collection_snapshots').upsert({
@@ -297,8 +463,6 @@ export default function SavedPage() {
     }, { onConflict: 'user_id,snap_date' }).then(({ error }) => {
       if (!error) { try { localStorage.setItem(guardKey, guardVal); } catch { /* ignore */ } }
     });
-    // user?.id, not the user object: Supabase mints a fresh user object on
-    // every auth event — an object dep re-fires the write chain needlessly
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, fullLoaded, collection]);
 
@@ -306,20 +470,22 @@ export default function SavedPage() {
   useEffect(() => {
     if (!supabase || !user) { setSnaps([]); return; }
     let dead = false;
+    // MOST RECENT 180 days — ascending+limit returned the OLDEST 180, which
+    // would freeze the chart in the past once a user out-lives the window
     supabase.from('collection_snapshots')
       .select('snap_date,total_paid,total_appraised,pieces')
       .eq('user_id', user.id)
-      .order('snap_date', { ascending: true })
+      .order('snap_date', { ascending: false })
       .limit(180)
       .then(({ data, error }) => {
         if (dead || error || !data) return;
-        setSnaps(data.map(r => ({ d: r.snap_date as string, paid: r.total_paid as number, appraised: r.total_appraised as number, pieces: r.pieces as number })));
+        const rows = data.map(r => ({ d: r.snap_date as string, paid: r.total_paid as number, appraised: r.total_appraised as number, pieces: r.pieces as number }));
+        rows.reverse(); // chart reads oldest → newest
+        setSnaps(rows);
       });
     return () => { dead = true; };
-    // user?.id, not the user object — see the snapshot write above
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
-  // the chart needs a real trail — 3+ days of snapshots, else nothing renders
   const collectionChart = useMemo(() => {
     if (snaps.length < 3) return null;
     return {
@@ -328,7 +494,7 @@ export default function SavedPage() {
         points: snaps.map(s => ({ period: s.d, value: s.appraised, n: s.pieces })),
       },
       layers: [{
-        key: 'paid', label: 'Bought', color: 'var(--chart-line-2, #8F9BA8)', unit: 'money' as const,
+        key: 'paid', label: 'Bought', color: 'var(--chart-line-2)', unit: 'money' as const,
         points: snaps.map(s => ({ period: s.d, value: s.paid, n: s.pieces })),
       }],
     };
@@ -342,14 +508,12 @@ export default function SavedPage() {
       const hi = l.estimateHigh || l.estimateLow || 0;
       return s + (lo + hi) / 2;
     }, 0);
-    const flagged = upcoming.filter(l => {
-      const sig = lotSignal(l, allLots);
-      return sig && sig.label === 'Below Market';
-    }).length;
+    const flagged = upcoming.filter(l => signalById.get(l.id)?.label === 'Below Market').length;
     const todayIso = localToday();
     const next = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= todayIso) || null;
-    return { totalEst, flagged, next };
-  }, [upcoming, allLots]);
+    const closesToday = upcoming.filter(l => daysUntil(l.saleDate) === 0).length;
+    return { totalEst, flagged, next, closesToday };
+  }, [upcoming, signalById]);
 
   const changes = useMemo(() => {
     let moved = 0;
@@ -357,128 +521,78 @@ export default function SavedPage() {
     for (const lot of upcoming) {
       const m = metaFor(lot.id);
       if (!m) continue;
-      const cur = lotSignal(lot, allLots);
-      if (m.signalPct != null && cur !== null && Math.round(cur.pct) !== Math.round(m.signalPct)) moved++;
+      const cur = signalById.get(lot.id);
+      const call = signalCallOf(m);
+      if (call && cur) {
+        const flipped = (call.dir === 'below' && cur.label !== 'Below Market') || (call.dir === 'above' && cur.label !== 'Above Market');
+        if (flipped || Math.round(cur.pct) !== Math.round(call.pct)) moved++;
+      }
       if (m.bidCount != null && (lot.bidCount || 0) > m.bidCount) newBids += (lot.bidCount || 0) - m.bidCount;
     }
     return { moved, newBids };
-  }, [upcoming, metaFor, allLots]);
+  }, [upcoming, metaFor, signalById]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
-  /* ── THE BRIEF — the desk's TLDR. Four reads over the watching ledger, each row
-     rendered only when its data genuinely exists: hottest day-over-day
-     bidding (crawl-measured velocity), lots landing within 48h, lots with
-     DIRECT comps (same card & grade, or same edition), and the deepest
-     below-market signals. Facts only — nothing is ranked by opinion. ── */
-  const brief = useMemo(() => {
-    type Row = { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' };
-    const rows: Row[] = [];
-    // hottest bidding — day-over-day bids added, velocity-measured
-    const hot = upcoming
-      .filter(l => l.bidVelocity && l.bidVelocity.delta > 0)
-      .sort((a, b) => (b.bidVelocity!.delta) - (a.bidVelocity!.delta))
-      .slice(0, 2);
-    for (const l of hot) {
-      const v = l.bidVelocity!;
-      rows.push({
-        key: `hot-${l.id}`, tag: 'Most bids', lot: l,
-        fact: <>+{v.delta} {v.delta === 1 ? 'bid' : 'bids'} in {Math.round(v.hours)}h{v.pctile != null && <> · faster than {v.pctile}% of live lots</>}</>,
-      });
-    }
-    // quietest — the sleeper read, the opposite of most bids: landing THIS
-    // WEEK with a PUBLISHED bid count near zero (bid platforms close weekly,
-    // so a 72h window would sit empty most days). Only bid-platform lots
-    // qualify — an absent bidCount is absent data, never "no interest".
-    const quiet = upcoming
-      .filter(l => typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= 3)
-      .filter(l => !hot.includes(l))
-      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 7; })
-      .sort((a, b) => (a.bidCount ?? 0) - (b.bidCount ?? 0) || daysUntil(a.saleDate) - daysUntil(b.saleDate))
-      .slice(0, 2);
-    for (const l of quiet) {
+  /* ── THE ROOM — the watching ledger with the brief fused in: every row
+     carries its reason tag and the ledger sorts action-first. ── */
+  const room = useMemo(() => {
+    type Reason = { tag: string; rank: number };
+    const reasonOf = (l: AuctionLot): Reason | null => {
       const d = daysUntil(l.saleDate);
-      rows.push({
-        key: `q-${l.id}`, tag: 'Quietest', lot: l,
-        fact: <>{(l.bidCount ?? 0) === 0 ? 'no bids yet' : `only ${l.bidCount} ${l.bidCount === 1 ? 'bid' : 'bids'}`} · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{(l.currentBid || 0) > 0 ? <> · at {formatPrice(l.currentBid!)}</> : null}</>,
-      });
-    }
-    // lands soon — hammering within 48h
-    const soon = upcoming
-      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 2; })
-      .slice(0, 3);
-    for (const l of soon) {
-      const d = daysUntil(l.saleDate);
-      rows.push({
-        key: `soon-${l.id}`, tag: 'Lands soon', lot: l,
-        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
-      });
-    }
-    // direct comps — exact card & grade first, then same-edition pools
-    if (fullLoaded) {
-      const direct: Row[] = [];
-      for (const l of upcoming) {
-        if (l.cardComps && l.cardComps.n > 0 && l.cardComps.med != null) {
-          direct.push({
-            key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
-            fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {formatPrice(l.cardComps.med)} median</>,
-          });
-        } else {
-          const a = appraiseLot(l, allLots);
-          if (a && a.kind === 'edition' && a.n >= 3) {
-            direct.push({
-              key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
-              fact: <>{a.n} same-edition comps · {formatPrice(a.value)} median</>,
-            });
-          }
-        }
-        if (direct.length >= 2) break;
+      const sig = signalById.get(l.id);
+      if (d >= 0 && d <= 2) return { tag: 'Lands soon', rank: 0 };
+      if (sig?.label === 'Below Market') return { tag: 'Below market', rank: 1 };
+      if (l.bidVelocity && l.bidVelocity.delta > 0) return { tag: 'Most bids', rank: 2 };
+      if (typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= 3 && d >= 0 && d <= 7) {
+        return { tag: 'Quiet', rank: 3 };
       }
-      rows.push(...direct);
-    }
-    // deepest below-market signals
-    const under = upcoming
-      .map(l => ({ l, sig: lotSignal(l, allLots) }))
-      .filter((x): x is { l: AuctionLot; sig: NonNullable<ReturnType<typeof lotSignal>> } => !!x.sig && x.sig.label === 'Below Market')
-      .sort((a, b) => a.sig.pct - b.sig.pct)
-      .slice(0, 2);
-    for (const { l, sig } of under) {
-      rows.push({
-        key: `bm-${l.id}`, tag: 'Below market', lot: l, tone: 'up',
-        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>{fmtSignedPct(sig.pct)}</b> vs comps{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}</>,
-      });
-    }
+      return null;
+    };
+    const rows = upcoming.map(l => ({ l, reason: reasonOf(l) }));
+    rows.sort((a, b) => {
+      const ra = a.reason?.rank ?? 9;
+      const rb = b.reason?.rank ?? 9;
+      if (ra !== rb) return ra - rb;
+      if (ra === 0) return daysUntil(a.l.saleDate) - daysUntil(b.l.saleDate);
+      if (ra === 1) {
+        const sa = signalById.get(a.l.id);
+        const sb = signalById.get(b.l.id);
+        // the ONE flagged ranking — dealScore, never raw pct
+        return dealScore(b.l, sb?.pct ?? 0) - dealScore(a.l, sa?.pct ?? 0);
+      }
+      if (ra === 2) return (b.l.bidVelocity?.delta ?? 0) - (a.l.bidVelocity?.delta ?? 0);
+      return new Date(a.l.saleDate).getTime() - new Date(b.l.saleDate).getTime();
+    });
     return rows;
-  }, [upcoming, allLots, fullLoaded]);
+  }, [upcoming, signalById]);
 
-  /* ── THE TRACK RECORD — how your eye did, measured. Hammer basis via
-     overEstimatePct (realized is premium-inclusive; estimates are hammer).
-     The flagged/unflagged split publishes only past an n-gate of 3 each. ── */
+  /* ── THE RECORD — measured, receipts attached ── */
   const record = useMemo(() => {
     const judged = sold
       .map(l => ({ l, pct: overEstimatePct(l) }))
       .filter((x): x is { l: AuctionLot; pct: number } => x.pct != null);
     if (!judged.length) return null;
-    // priceUsd is premium-inclusive — this sum is REALIZED money, never call it hammer
     const realized = judged.reduce((s, x) => s + (x.l.priceUsd || 0), 0);
     const med = median(judged.map(x => x.pct));
-    const flaggedAtSave = judged.filter(x => (metaFor(x.l.id)?.signalPct ?? 0) <= -10);
-    const restAtSave = judged.filter(x => (metaFor(x.l.id)?.signalPct ?? 0) > -10 && metaFor(x.l.id)?.signalPct != null);
+    // the flagged-vs-rest split reads DIRECTIONS, which only post-convention
+    // saves carry; legacy direction-unknown saves stay in the blended median
+    // but never claim a side of the split.
+    const flaggedAtSave = judged.filter(x => signalCallOf(metaFor(x.l.id))?.dir === 'below');
+    const restAtSave = judged.filter(x => {
+      const c = signalCallOf(metaFor(x.l.id));
+      return c != null && c.dir !== 'below' && c.dir !== 'unknown';
+    });
     const split = flaggedAtSave.length >= 3 && restAtSave.length >= 3
       ? { flagged: median(flaggedAtSave.map(x => x.pct)), flaggedN: flaggedAtSave.length, rest: median(restAtSave.map(x => x.pct)), restN: restAtSave.length }
       : null;
     return { n: judged.length, realized, med, split };
   }, [sold, metaFor]);
 
-  // #56 · SINCE YOUR LAST VISIT — capture the prior visit timestamp once (then
-  // stamp now), and diff which watched lots settled in the interim. State (not
-  // a ref) so the memo recomputes once the localStorage read lands.
+  /* ── since your last visit ── */
   const [prevVisit, setPrevVisit] = useState<string | null | undefined>(undefined);
   const capturedVisit = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    // capture ONCE: read the prior stamp, then write now. A ref guards the
-    // read-then-write against StrictMode's dev double-invoke (run 2 would
-    // otherwise read the just-written 'now' and the diff would go empty).
     if (capturedVisit.current !== undefined) return;
     try {
       capturedVisit.current = localStorage.getItem('lectr-lastvisit');
@@ -487,7 +601,7 @@ export default function SavedPage() {
     } catch { capturedVisit.current = null; setPrevVisit(null); }
   }, []);
   const sinceLast = useMemo(() => {
-    if (!fullLoaded || !prevVisit) return null;      // first-ever visit → nothing to diff
+    if (!fullLoaded || !prevVisit) return null;
     const prevDay = prevVisit.slice(0, 10);
     const fresh = sold.filter(l => (l.saleDate || '').slice(0, 10) > prevDay);
     if (!fresh.length) return null;
@@ -495,190 +609,90 @@ export default function SavedPage() {
     return { n: fresh.length, med: pcts.length ? median(pcts) : null };
   }, [fullLoaded, prevVisit, sold]);
 
+  /* ── personalization — whose desk this is, what they watch, since when ── */
+  const givenName = useMemo(() => {
+    const md = (user?.user_metadata ?? {}) as Record<string, unknown>;
+    const raw = (typeof md.given_name === 'string' && md.given_name)
+      || (typeof md.full_name === 'string' && md.full_name.split(' ')[0])
+      || (typeof md.name === 'string' && md.name.split(' ')[0])
+      || null;
+    return raw && raw.length <= 20 ? raw : null;
+  }, [user]);
+  const taste = useMemo(() => {
+    // present tense earns present data: only LIVE watches shape "you watch X"
+    const counts = new Map<string, number>();
+    for (const l of upcoming) {
+      const d = drillRowFor(l, marketData);
+      if (d?.label) counts.set(d.label, (counts.get(d.label) || 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([label]) => label);
+  }, [upcoming, marketData]);
+  const tenure = useMemo(() => {
+    let min: string | null = null;
+    for (const id of savedIds) {
+      const at = savedMeta[id]?.savedAt;
+      if (at && (!min || at < min)) min = at;
+    }
+    if (!min) return null;
+    const days = (Date.now() - Date.parse(min)) / 86_400_000;
+    if (!(days > 30)) return null;
+    return new Date(min).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }, [savedIds, savedMeta]);
+
+  // the away strip's own-it prompts: settled wins not yet in the collection
+  const unclaimedWins = useMemo(
+    () => sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id)).length,
+    [sold, ownedLotIds],
+  );
+
+  // cards view (desktop opt-in) needs the lot back from its id
+  const lotById = useMemo(() => new Map(upcoming.concat(other).map(l => [l.id, l])), [upcoming, other]);
+  const onCardToggle = useCallback((id: string) => {
+    toggle(savedIdOf(id), lotById.get(id));
+  }, [toggle, savedIdOf, lotById]);
+
+  // phase-2 failed but SOME saves resolved eagerly — never silently thin the desk
+  const partialLoadFailed = fullError && !fullLoaded && savedIds.length > 0;
+
+  const deskKicker = givenName ? `${givenName}’s desk` : 'My desk';
+
   const emptyState = (
     <>
-      <section className="ray-hero2 rail ray-enter">
-        <p className="ray-hero2-label">My profile</p>
-        <h1 className="ray-hero2-value" style={{ color: 'var(--color-text-faint)' }}>0</h1>
-        <p className="ray-hero2-delta">
-          <span className="ctx">
-            Every collector starts by watching. Bookmark a lot and lectr tracks its hammer,
-            its comps, your record once it concludes — and your collection when you win.
-          </span>
-        </p>
+      <section className="rail ray-enter" style={{ paddingTop: 24 }}>
+        <Masthead
+          kicker={deskKicker}
+          serial={lastCrawl || undefined}
+          title={<>Your desk at <Accent>the auction</Accent>.</>}
+          sub="Bookmark a lot anywhere on lectr and it tracks here to the hammer — comps, signals, your record once it settles, your collection when you win."
+        />
+        {/* the ghost desk — what this page becomes, before it has data */}
+        <div className="ck-ghost ray-enter" aria-hidden>
+          <div className="ck-ghost-row"><span className="kicker">Watching</span><span>your live lots · signals + bids tracked to the hammer</span></div>
+          <div className="ck-ghost-row"><span className="kicker">Your record</span><span>every settled watch judged vs its estimate — your eye, measured</span></div>
+          <div className="ck-ghost-row"><span className="kicker">Collection</span><span>the pieces you own, appraised against the live market nightly</span></div>
+        </div>
+        <div className="ray-enter" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '26px 0 64px' }}>
+          <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+            Start with today&rsquo;s below-market lots
+          </Link>
+          <Link href="/" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none', display: 'inline-block' }}>
+            Browse the markets
+          </Link>
+        </div>
       </section>
-      <div className="ray-enter" style={{ textAlign: 'center', padding: '48px 20px 120px' }}>
-        <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
-          Start with today&rsquo;s below-market lots
-        </Link>
-      </div>
+      <AlertsInbox />
     </>
   );
 
   return (
-    <div className="terminal-shell" style={{
-      minHeight: '100vh',
-      fontFamily: 'var(--font-sans), sans-serif',
-    }}>
-      {/* __html, not a text child: '>' combinators entity-escape in SSR text
-          while raw-text <style> never decodes — hydration mismatch otherwise */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .ray-saved-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-          gap: 30px 20px;
-        }
-        .ray-saved-grid > * { min-width: 0; }
-        .ray-saved-section { padding-block: 40px 48px; }
-        .ray-saved-delta { margin: 8px 2px 0; font-size: 12.5px; color: var(--color-text-muted); }
-        .ray-saved-orphan {
-          display: flex; align-items: center; justify-content: space-between; gap: 14px;
-          padding: 14px 16px; border-bottom: 1px solid var(--color-border);
-          font-size: 13px; color: var(--color-text-muted);
-        }
-        .ray-saved-orphan:last-child { border-bottom: none; }
-        /* ── THE BRIEF — the desk TLDR under the masthead ── */
-        .ray-since {
-          display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
-          margin-top: 20px; padding: 12px 18px;
-          border: 2px dotted var(--hairline);
-          border-radius: 18px;
-        }
-        .ray-since-k { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-faint); }
-        .ray-since-v { font-size: 13.5px; color: var(--color-fg); }
-        .ray-since-go { margin-left: auto; font-size: 12px; color: var(--color-text-muted); text-decoration: none; white-space: nowrap; }
-        .ray-since-go:hover { color: var(--color-fg); }
-        .ray-brief {
-          border: 2px dotted var(--hairline);
-          border-radius: 20px; padding: 6px 18px; margin-top: 22px;
-        }
-        .ray-brief-row {
-          display: flex; align-items: baseline; gap: 12px;
-          padding: 10px 0; text-decoration: none; color: inherit;
-          border-top: 2px dotted var(--hairline);
-        }
-        .ray-brief-row:first-of-type { border-top: none; }
-        .ray-brief-row:hover .ray-brief-title { color: var(--color-fg); }
-        .ray-brief-tag {
-          flex: none; width: 96px; font-size: 10px; letter-spacing: 0.07em;
-          text-transform: uppercase; color: var(--color-text-faint); white-space: nowrap;
-        }
-        .ray-brief-title {
-          font-size: 13px; font-weight: 600; color: var(--color-text-secondary);
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          max-width: 34%; min-width: 90px; flex: none;
-          transition: color var(--duration-fast) var(--ease-signature);
-        }
-        .ray-brief-fact { font-size: 12.5px; color: var(--color-text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (max-width: 640px) {
-          .ray-brief { padding: 4px 14px; }
-          .ray-brief-row { flex-wrap: wrap; gap: 4px 10px; padding: 9px 0; }
-          .ray-brief-tag { width: auto; }
-          .ray-brief-title { max-width: 100%; flex: 1 1 100%; }
-        }
-        /* ── the DESK STRIP — the profile's stat rail under the masthead ── */
-        .ray-desk-strip {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-          gap: 14px; margin-top: 22px;
-        }
-        .ray-desk-cell {
-          border: 2px dotted var(--hairline);
-          border-radius: 18px; padding: 14px 16px 12px;
-        }
-        .ray-desk-cell .k { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-faint); }
-        .ray-desk-cell .v { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 3px; }
-        .ray-desk-cell .s { font-size: 11.5px; color: var(--color-text-muted); margin-top: 2px; }
-        /* ── ledgers ── */
-        .ray-savedview-toggle { display: none; }
-        .ray-saved-ledger { display: none; }
-        @media (min-width: 900px) {
-          .ray-savedview-toggle { display: inline-flex; gap: 5px; }
-          .ray-saved-section[data-view=ledger] .ray-saved-ledger { display: block; }
-          .ray-saved-section[data-view=ledger] .ray-saved-grid { display: none; }
-        }
-        .ray-savedview-btn {
-          font-family: var(--font-sans), sans-serif;
-          font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em;
-          padding: 5px 14px; border-radius: 100px;
-          border: 1px solid var(--color-border);
-          background: transparent; color: var(--color-text-muted); cursor: pointer;
-          transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
-        }
-        .ray-savedview-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
-        .ray-savedview-btn[data-active=true] { background: var(--color-butter); border-color: var(--color-butter); color: var(--color-butter-ink); }
-        .ray-saved-cols {
-          display: grid;
-          grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) 110px 96px 104px 104px;
-          gap: 0 16px; align-items: baseline;
-        }
-        .ray-saved-ledger-head { padding: 0 2px 8px; }
-        .ray-savedrow {
-          padding: 11px 2px; border-top: 1px solid var(--hairline);
-          text-decoration: none; color: inherit;
-          transition: background var(--duration-fast) var(--ease-signature);
-        }
-        .ray-savedrow:hover { background: var(--color-hover-item); }
-        .ray-savedrow .maker { font-size: 13px; font-weight: 600; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-        .ray-savedrow .work { font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-        .ray-savedrow .num {
-          font-family: var(--font-mono), monospace; font-size: 12px;
-          font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--color-fg);
-        }
-        .ray-savedrow .num .sub { display: block; font-size: 10px; color: var(--color-text-faint); letter-spacing: 0.02em; }
-        .ray-saved-ledger .kicker.r { text-align: right; }
-        /* ── SETTLED ledger (own-toggle column) ── */
-        .ray-settled-cols {
-          display: grid;
-          grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 100px 88px 100px 88px 86px;
-          gap: 0 14px; align-items: baseline;
-        }
-        .ray-own-btn {
-          font-family: var(--font-sans), sans-serif; font-size: 10.5px; font-weight: 600;
-          padding: 3px 10px; border-radius: 100px; cursor: pointer;
-          border: 1px solid var(--color-border); background: transparent; color: var(--color-text-muted);
-          transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature);
-        }
-        .ray-own-btn:hover { border-color: var(--color-border-mid); color: var(--color-fg); }
-        @media (max-width: 899px) {
-          /* the settled ledger's primary controls meet the 44px touch floor */
-          .ray-own-btn, .ray-call-btn-quiet { min-height: 44px; }
-        }
-        .ray-own-btn[data-on=true] { background: var(--color-butter); border-color: var(--color-butter); color: var(--color-butter-ink); }
-        .ray-settled-mobile { display: none; }
-        @media (max-width: 899px) {
-          .ray-settled-desk { display: none; }
-          .ray-settled-mobile { display: block; }
-        }
-        .ray-settled-mrow { padding: 12px 0; border-top: 1px solid var(--hairline); }
-        /* ── collection ── */
-        .ray-coll-exposure-row {
-          display: flex; align-items: baseline; gap: 12px; padding: 9px 0;
-          border-top: 1px solid var(--hairline); text-decoration: none; color: inherit;
-        }
-        .ray-coll-exposure-row:hover { background: var(--color-hover-item); }
-        .ray-coll-chip {
-          font-size: 10.5px; color: var(--color-text-muted); text-decoration: none;
-          border: 1px solid var(--color-border); border-radius: 100px; padding: 1px 8px; white-space: nowrap;
-        }
-        .ray-coll-chip:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
-        @media (max-width: 768px) {
-          /* chips are real links — meet the touch floor without inflating the visual pill */
-          .ray-coll-chip { position: relative; }
-          .ray-coll-chip::before { content: ""; position: absolute; inset: -14px 0; }
-        }
-        @media (max-width: 768px) {
-          .ray-saved-grid { grid-template-columns: 1fr; gap: 26px; }
-          .ray-saved-section { padding-block: 32px 32px; }
-        }
-      ` }} />
-
+    <div className="terminal-shell" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {authEnabled && authReady && user && (
         <div className="rail" style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 14 }}>
           <button
             className="ray-call-btn ray-call-btn-quiet"
-            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 12.5, padding: '4px 0' }}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 12.5, padding: '4px 0', minHeight: 44 }}
             onClick={() => signOut()}
           >
             {user.email || 'account'} · Sign out
@@ -688,15 +702,12 @@ export default function SavedPage() {
 
       {authEnabled && authReady && !user ? (
         <RayEntrance animate>
-          <section className="ray-hero2 rail ray-enter" style={{ paddingBottom: 8 }}>
-            <p className="ray-hero2-label">My profile</p>
-            <h1 className="ray-hero2-value">Your desk at the auction</h1>
-            <p className="ray-hero2-delta">
-              <span style={{ maxWidth: 460 }}>
-                Watch lots to the hammer, keep your track record, and hold your collection
-                against the engine&rsquo;s live appraisal. Private to you, synced everywhere.
-              </span>
-            </p>
+          <section className="rail ray-enter" style={{ paddingTop: 24 }}>
+            <Masthead
+              kicker="My desk"
+              title={<>Your desk at <Accent>the auction</Accent>.</>}
+              sub="Watch lots to the hammer, keep your track record, and hold your collection against the engine’s live appraisal. Private to you, synced everywhere."
+            />
           </section>
           <div className="rail ray-enter" style={{ paddingBlock: '26px 72px' }}>
             <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
@@ -710,7 +721,6 @@ export default function SavedPage() {
       ) : loading || !authReady || !savedReady ? (
         <RayLoading />
       ) : savedLots.length === 0 && !fullLoaded && fullError ? (
-        /* phase-2 corpus failed — never hold the skeleton forever; say so and retry */
         <RayEntrance animate={false}>
           <section className="rail" style={{ paddingBlock: 48, textAlign: 'center' }}>
             <p style={{ color: 'var(--color-text-muted)', marginBottom: 14 }}>
@@ -720,10 +730,6 @@ export default function SavedPage() {
           </section>
         </RayEntrance>
       ) : savedLots.length === 0 && !fullLoaded ? (
-        /* saves exist but may all be CONCLUDED — pre-phase-2 the eager slice
-           can't see them; hold the loader instead of flashing the false
-           "0 — every collector starts by watching" hero (audit-lifecycle #5).
-           A genuinely empty account (no savedIds) falls through instantly. */
         savedIds.length === 0 ? (
           <RayEntrance animate={!fromCache}>{emptyState}</RayEntrance>
         ) : (
@@ -735,7 +741,7 @@ export default function SavedPage() {
         <RayEntrance animate={!fromCache}>
           <section className="rail ray-enter" style={{ paddingTop: 24 }}>
             <Masthead
-              kicker="My profile"
+              kicker={deskKicker}
               serial={lastCrawl || undefined}
               title={summary.totalEst > 0
                 ? <>
@@ -749,13 +755,15 @@ export default function SavedPage() {
                   </>
                 : collection.rows.length > 0
                   ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {sold.length + soldOrphans.length} settled.</>
+                  : upcoming.length === 0 && savedLots.length === 0 && orphanIds.length > 0
+                  ? <>Your desk: <Accent>{orphanIds.length} settled {orphanIds.length === 1 ? 'watch' : 'watches'}</Accent>, resolving results.</>
                   : <>
                       Watching <Accent>{upcoming.length || savedLots.length} {(upcoming.length || savedLots.length) === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
                     </>}
               sub={
                 <>
                   {summary.next && <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))} · </>}
-                  watching {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
+                  {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
                   {summary.flagged > 0 && (
                     <>
                       {' '}·{' '}
@@ -771,135 +779,148 @@ export default function SavedPage() {
                       {changes.newBids > 0 && <> · {changes.newBids} new {changes.newBids === 1 ? 'bid' : 'bids'}</>}
                     </>
                   )}
+                  {taste.length > 0 && <> · you watch {taste.join(' · ')}</>}
+                  {tenure && <> · since {tenure}</>}
                 </>
               }
             />
 
-            {/* #56 · SINCE YOUR LAST VISIT — the outcome moment, in-product */}
-            {sinceLast && (
-              <div className="ray-since ray-enter" role="status">
-                <span className="ray-since-k">Since your last visit</span>
-                <span className="ray-since-v">
-                  {sinceLast.n} watched {sinceLast.n === 1 ? 'lot' : 'lots'} settled
-                  {sinceLast.med != null && (
-                    <> · your {sinceLast.n === 1 ? 'call went' : 'calls went'}{' '}
-                      <b style={{ color: sinceLast.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtSignedPct(Math.round(sinceLast.med))}
-                      </b>{' '}
-                      vs estimate, median
+            {/* partial phase-2 failure — say so where the data would be */}
+            {partialLoadFailed && (
+              <div className="ck-warn ray-enter" role="status">
+                Couldn&apos;t load the archive that resolves your concluded lots — settled results and appraisals are incomplete.{' '}
+                <button className="ck-warn-btn" onClick={() => retryFullLoad()}>Try again</button>
+              </div>
+            )}
+
+            {/* ── 1 · WHILE YOU WERE AWAY ── */}
+            {(sinceLast || unseenAlerts > 0 || summary.closesToday > 0 || unclaimedWins > 0) && (
+              <div className="ck-away ray-enter" role="status">
+                <span className="kicker">While you were away</span>
+                <span className="ck-away-line">
+                  {sinceLast && (
+                    <>
+                      {sinceLast.n} watched {sinceLast.n === 1 ? 'lot' : 'lots'} settled
+                      {sinceLast.med != null && (
+                        <> · your {sinceLast.n === 1 ? 'call went' : 'calls went'}{' '}
+                          <b style={{ color: sinceLast.med > 0 ? 'var(--color-up)' : sinceLast.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtSignedPct(Math.round(sinceLast.med))}
+                          </b>{' '}
+                          vs estimate
+                        </>
+                      )}
                     </>
                   )}
+                  {unseenAlerts > 0 && (
+                    <>{sinceLast ? ' · ' : ''}<a href="#inbox" className="ck-away-link">{unseenAlerts} new {unseenAlerts === 1 ? 'match' : 'matches'} in your inbox</a></>
+                  )}
+                  {summary.closesToday > 0 && (
+                    <>{(sinceLast || unseenAlerts > 0) ? ' · ' : ''}{summary.closesToday} {summary.closesToday === 1 ? 'lot closes' : 'lots close'} today</>
+                  )}
+                  {unclaimedWins > 0 && (
+                    <>{(sinceLast || unseenAlerts > 0 || summary.closesToday > 0) ? ' · ' : ''}<a href="#settled" className="ck-away-link">{unclaimedWins} settled {unclaimedWins === 1 ? 'win' : 'wins'} unclaimed — won any?</a></>
+                  )}
                 </span>
-                <a href="#settled" className="ray-since-go">See what happened <Flick size={9} /></a>
+                {sinceLast && <a href="#settled" className="ck-away-go">See what happened <Flick size={9} /></a>}
               </div>
             )}
 
-            {/* THE BRIEF — the desk's TLDR: act-on-today reads, facts only */}
-            {brief.length > 0 && (
-              <div className="ray-brief ray-enter" role="list" aria-label="Today's brief">
-                {brief.map(r => (
-                  <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ray-brief-row" role="listitem">
-                    <span className="ray-brief-tag">{r.tag}</span>
-                    <span className="ray-brief-title">{craftTitle(r.lot.title)}</span>
-                    <span className="ray-brief-fact">{ARTIST_LABEL[r.lot.artist] || r.lot.artist} · {r.fact}</span>
-                  </Link>
-                ))}
+            {/* ── 2 · THE GAUGE LINE — one fused band, no boxes ── */}
+            {(collection.rows.length > 0 || record || unseenAlerts > 0) && (
+              <div className="ck-gauge ray-enter">
+                {collection.rows.length > 0 && (
+                  <a href="#collection" className="ck-gauge-cell">
+                    <span className="kicker">Collection</span>
+                    <span className="ck-gauge-v">
+                      {formatPrice(collection.totalAppraised)}
+                      {collection.deltaPct != null && collection.deltaPct !== 0 && (
+                        <em style={{ color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                          {fmtSignedPct(collection.deltaPct)}
+                        </em>
+                      )}
+                    </span>
+                    <span className="ck-gauge-s">{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · appraised vs bought</span>
+                  </a>
+                )}
+                {record && record.med != null && (
+                  <a href="#record" className="ck-gauge-cell">
+                    <span className="kicker">Your record</span>
+                    <span className="ck-gauge-v" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
+                      {fmtSignedPct(Math.round(record.med))}
+                    </span>
+                    <span className="ck-gauge-s">{record.n} judged · vs estimate, median</span>
+                  </a>
+                )}
+                {unseenAlerts > 0 && (
+                  <a href="#inbox" className="ck-gauge-cell">
+                    <span className="kicker">Inbox</span>
+                    <span className="ck-gauge-v">{unseenAlerts}<em style={{ color: 'var(--color-up)' }}>new</em></span>
+                    <span className="ck-gauge-s">nightly matches to your searches</span>
+                  </a>
+                )}
               </div>
             )}
-
-            {/* THE DESK STRIP — one cell per ledger, only where data exists */}
-            <div className="ray-desk-strip ray-enter">
-              <div className="ray-desk-cell">
-                <div className="k">Watching</div>
-                <div className="v">{summary.totalEst > 0 ? formatPrice(summary.totalEst) : upcoming.length}</div>
-                <div className="s">
-                  {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
-                  {summary.flagged > 0 && <> · {summary.flagged} below market</>}
-                </div>
-              </div>
-              {collection.rows.length > 0 && (
-                <div className="ray-desk-cell">
-                  <div className="k">Collection</div>
-                  <div className="v">
-                    {formatPrice(collection.totalAppraised)}
-                    {collection.deltaPct != null && collection.deltaPct !== 0 && (
-                      <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                        {fmtSignedPct(collection.deltaPct)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="s">
-                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'}
-                    {collection.totalPaid > 0 && <> · bought {formatPrice(collection.totalPaid)}</>}
-                  </div>
-                </div>
-              )}
-              {record && (
-                <div className="ray-desk-cell">
-                  <div className="k">Your record</div>
-                  <div className="v">
-                    {record.med != null ? (
-                      <span style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>{fmtSignedPct(Math.round(record.med))}</span>
-                    ) : '—'}
-                  </div>
-                  <div className="s">{record.n} settled · vs estimate, median · {formatPrice(record.realized)} realized</div>
-                </div>
-              )}
-            </div>
           </section>
 
-          {/* ══ LEDGER 1 · WATCHING ══ */}
+          {/* ══ 3 · WATCHING — the room, action-first, brief fused in ══ */}
           {upcoming.length > 0 && (
             <section className="ray-saved-section rail" data-view={savedView}>
-              <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 18 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}>
-                  Watching · on the block
-                </h2>
+              <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 16 }}>
+                <h2 className="ray-h2" style={{ margin: 0 }}>Watching · on the block</h2>
                 <div className="ray-savedview-toggle" role="group" aria-label="Watching view">
                   <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
                   <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
                 </div>
               </div>
 
+              {/* desktop ledger */}
               <div className="ray-saved-ledger ray-enter">
                 <div className="ray-saved-cols ray-saved-ledger-head" aria-hidden>
-                  <span className="kicker">Maker</span>
+                  <span className="kicker">Why now</span>
                   <span className="kicker">Work</span>
                   <span className="kicker r">Est</span>
                   <span className="kicker r">Signal now</span>
                   <span className="kicker r">Δ saved</span>
                   <span className="kicker r">Hammers</span>
                 </div>
-                {upcoming.map(lot => {
-                  const sig = lotSignal(lot, allLots);
+                {room.map(({ l: lot, reason }) => {
+                  const sig = signalById.get(lot.id) ?? null;
                   const m = metaFor(lot.id);
-                  const dPP = m?.signalPct != null && sig !== null
-                    ? Math.round(sig.pct) - Math.round(m.signalPct)
-                    : null;
+                  const call = signalCallOf(m);
+                  const sameAxis = call && sig && call.dir !== 'unknown' &&
+                    ((call.dir === 'below') === (sig.label === 'Below Market'));
+                  const dPP = sameAxis && sig ? Math.round(sig.pct) - Math.round(call!.pct) : null;
+                  const flipped = call && sig && call.dir !== 'unknown' && !sameAxis;
                   const newBids = m?.bidCount != null && (lot.bidCount || 0) > m.bidCount
-                    ? (lot.bidCount || 0) - m.bidCount
-                    : 0;
+                    ? (lot.bidCount || 0) - m.bidCount : 0;
                   const days = daysUntil(lot.saleDate);
-                  // bid velocity (crawl-measured) supersedes the since-saved
-                  // bid count when present — a fresher read of the same fact
                   const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
+                  // Δ ink: on the below axis deeper (+) is the deal deepening;
+                  // on the above axis deeper (+) is it worsening
+                  const dInk = dPP == null || dPP === 0 ? 'var(--color-text-faint)'
+                    : (call!.dir === 'below' ? dPP > 0 : dPP < 0) ? 'var(--color-up)' : 'var(--color-down-text)';
                   return (
                     <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ray-saved-cols ray-savedrow">
-                      <span className="maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
-                      <span className="work">{craftTitle(lot.title)}</span>
-                      <span className="num">{formatEstimate(lot) || '—'}</span>
-                      <span className="num" style={sig ? { color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
-                        {sig ? fmtSignedPct(sig.pct) : '—'}
+                      <span className="ck-why">
+                        {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                       </span>
-                      <span className="num" style={{ color: dPP == null || dPP === 0 ? 'var(--color-text-faint)' : dPP > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                        {dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
+                      <span className="work">
+                        <span className="ck-workmaker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+                        {craftTitle(lot.title)}
+                      </span>
+                      <span className="num">{formatEstimate(lot) || '—'}</span>
+                      <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
+                        {sig ? sigText(sig) : '—'}
+                      </span>
+                      <span className="num" style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
+                        {flipped ? 'flipped' : dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
                         {vel ? (
                           <span className="sub">+{vel.delta} bids/{Math.round(vel.hours)}h</span>
                         ) : newBids > 0 ? (
                           <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
                         ) : null}
                       </span>
-                      <span style={{ textAlign: 'right', fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                      <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
                         {hammerWord(days)}
                       </span>
                     </Link>
@@ -907,43 +928,96 @@ export default function SavedPage() {
                 })}
               </div>
 
-              <div className="ray-saved-grid">
-                {upcoming.map((lot, i) => (
-                  <div
-                    key={lot.id}
-                    className="ray-enter-card"
-                    style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}
-                  >
-                    <LotCard
-                      lot={lot}
-                      showArtist
-                      allLots={allLots}
-                      saved={isSaved(lot.id)}
-                      onToggleSave={id => toggle(savedIdByLotId.get(id) ?? id, lot)}
-                    />
-                    <SavedDelta lot={lot} meta={metaFor(lot.id)} allLots={allLots} />
+              {/* mobile: the glance rows — same facts, thumb scale */}
+              <div className="ck-mledger ray-enter">
+                {room.map(({ l: lot, reason }) => {
+                  const sig = signalById.get(lot.id) ?? null;
+                  const days = daysUntil(lot.saleDate);
+                  return (
+                    <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-mrow">
+                      <span className="ck-mrow-main">
+                        <span className="ck-mtitle">{craftTitle(lot.title)}</span>
+                        <span className="ck-msub">
+                          {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
+                          {ARTIST_LABEL[lot.artist] || lot.artist}
+                          {formatEstimate(lot) ? <> · {formatEstimate(lot)}</> : null}
+                        </span>
+                      </span>
+                      <span className="ck-mrow-right">
+                        {sig && <b style={{ color: sigInk(sig.label) }}>{sigText(sig)}</b>}
+                        <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>{hammerWord(days)}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/* cards — desktop opt-in only; mounted only when shown */}
+              {savedView === 'cards' && isDesktop === true && (
+                <div className="ray-saved-grid">
+                  {room.map(({ l: lot }, i) => (
+                    <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
+                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} />
+                      <SavedDelta lot={lot} meta={metaFor(lot.id)} sig={signalById.get(lot.id) ?? null} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* the inbox rides directly under the room — new matches are watch-adjacent */}
+          <div id="inbox"><AlertsInbox /></div>
+
+          {/* ══ 4 · THE RECORD — the receipt, at display scale ══ */}
+          {record && record.med != null && (
+            <section id="record" className="rail ray-enter" style={{ paddingBlock: '38px 10px' }}>
+              <div className="ck-record">
+                <div className="ck-record-lead">
+                  <span className="kicker">Your record</span>
+                  <span className="ck-record-fig" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
+                    {fmtSignedPct(Math.round(record.med))}
+                  </span>
+                  <span className="ck-record-s">
+                    {record.n} {record.n === 1 ? 'watch' : 'watches'} judged vs estimate · median, all-in · {formatPrice(record.realized)} realized ·{' '}
+                    <a href="#settled" className="ck-away-link">receipts below</a>
+                  </span>
+                </div>
+                {record.split ? (
+                  <div className="ck-record-split">
+                    <span className="kicker">Flagged vs the rest</span>
+                    <span className="ck-record-splitline">
+                      saved while flagged below market{' '}
+                      <b style={{ color: (record.split.flagged ?? 0) > 0 ? 'var(--color-up)' : (record.split.flagged ?? 0) < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>{fmtSignedPct(Math.round(record.split.flagged ?? 0))}</b>{' '}
+                      ({record.split.flaggedN}) · saved while showing above market{' '}
+                      <b style={{ color: (record.split.rest ?? 0) > 0 ? 'var(--color-up)' : (record.split.rest ?? 0) < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>{fmtSignedPct(Math.round(record.split.rest ?? 0))}</b>{' '}
+                      ({record.split.restN}) — vs estimate, all-in
+                    </span>
                   </div>
-                ))}
+                ) : (
+                  <div className="ck-record-split">
+                    <span className="kicker">Flagged vs the rest</span>
+                    <span className="ck-record-splitline" style={{ color: 'var(--color-text-muted)' }}>
+                      publishes once 3 watches saved while flagged below market and 3 saved while showing above settle — saves with no live signal at save time count toward neither; direction recorded since Aug&nbsp;2026
+                    </span>
+                  </div>
+                )}
               </div>
             </section>
           )}
 
-          {/* ══ LEDGER 2 · COLLECTION — the pieces you own ══ */}
+          {/* ══ 5 · COLLECTION — the certificate for what you own ══ */}
           {collection.rows.length > 0 && (
-            <div className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
+            <div id="collection" className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
               <section className="rail" aria-label="Your collection">
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 6 }}>
                   <h2 className="ray-h2" style={{ margin: 0 }}>Your collection</h2>
                   <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
                     {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'}
                     {collection.totalPaid > 0 && (
-                      <>
-                        {' '}· bought{' '}
-                        <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalPaid)}</b>
-                      </>
+                      <>{' '}· bought <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalPaid)}</b></>
                     )}
-                    {' '}· lectr appraisal{' '}
-                    <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAppraised)}</b>
+                    {' '}· lectr appraisal <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAppraised)}</b>
                     {collection.deltaPct != null && collection.deltaPct !== 0 && (
                       <b style={{ color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
                         {' '}· {fmtSignedPct(collection.deltaPct)}
@@ -952,8 +1026,6 @@ export default function SavedPage() {
                   </span>
                 </div>
 
-                {/* the collection over time — appraisal vs bought, real daily
-                    snapshots (renders only once a 3-day trail exists) */}
                 {collectionChart && (
                   <div style={{ margin: '18px 0 8px' }}>
                     <div className="kicker" style={{ marginBottom: 4, color: 'var(--paper-muted, var(--color-text-muted))' }}>
@@ -963,8 +1035,6 @@ export default function SavedPage() {
                   </div>
                 )}
 
-                {/* WHERE IT TRADES — the collection's sub-market exposure.
-                    Each row is the MARKET's read, labeled as such. */}
                 {exposure.length > 0 && (
                   <div style={{ margin: '18px 0 4px' }}>
                     <div className="kicker" style={{ padding: '0 0 2px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
@@ -972,9 +1042,9 @@ export default function SavedPage() {
                     </div>
                     {exposure.map(({ row, n, held }) => {
                       const read = row.readType === 'index' && row.index
-                        ? { txt: `${fmtSignedPct(Math.round(row.index.changePct))} ${row.index.horizon} verified`, dir: row.index.changePct >= 0 }
+                        ? { txt: `${fmtSignedPct(Math.round(row.index.changePct))} ${row.index.horizon} verified`, dir: row.index.changePct > 0 ? 'up' : row.index.changePct < 0 ? 'down' : 'flat' }
                         : row.readType === 'demand' && row.demandNow != null
-                          ? { txt: `${fmtSignedPct(Math.round(row.demandNow))} vs estimate`, dir: row.demandNow >= 0 }
+                          ? { txt: `${fmtSignedPct(Math.round(row.demandNow))} vs estimate`, dir: row.demandNow > 0 ? 'up' : row.demandNow < 0 ? 'down' : 'flat' }
                           : null;
                       return (
                         <Link key={row.slug} href={`/sub/${row.slug.replace(':', '/')}`} className="ray-coll-exposure-row">
@@ -984,7 +1054,7 @@ export default function SavedPage() {
                           <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                             {n} {n === 1 ? 'piece' : 'pieces'} · {formatPrice(held)} held
                           </span>
-                          <span style={{ width: 150, textAlign: 'right', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontFamily: read ? 'var(--font-mono), monospace' : undefined, color: read ? (read.dir ? 'var(--color-up)' : 'var(--color-down-text)') : 'var(--color-text-faint)' }}>
+                          <span style={{ width: 150, textAlign: 'right', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontFamily: read ? 'var(--font-mono), monospace' : undefined, color: read ? (read.dir === 'up' ? 'var(--color-up)' : read.dir === 'down' ? 'var(--color-down-text)' : 'var(--color-fg)') : 'var(--color-text-faint)' }}>
                             {read ? read.txt : `${row.lots.toLocaleString()} lots tracked`}
                           </span>
                         </Link>
@@ -993,14 +1063,13 @@ export default function SavedPage() {
                   </div>
                 )}
 
-                {/* the pieces */}
                 <div className="kicker" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
                   <div style={{ flex: 1 }}>Piece</div>
                   <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
                   <div style={{ width: 128, textAlign: 'right' }}>lectr appraisal</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {collection.rows.map(({ lot, paid, appraised, basis, refOnly, deltaPct, drill, drillSlug }) => (
+                  {collection.rows.map(({ lot, paid, appraised, basis, deltaPct, drill, drillSlug }) => (
                     <div key={lot.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0', borderTop: '1px solid var(--hairline)' }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -1025,7 +1094,9 @@ export default function SavedPage() {
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{basis ?? (fullLoaded ? 'no comps yet' : 'appraising…')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                          {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : 'appraising…')}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1033,49 +1104,29 @@ export default function SavedPage() {
                 <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
                   The lectr appraisal is the median its comparable sales currently trade at — our read from the data,
                   not a formal appraisal. Pieces without a usable comp pool carry at their bought price in the total;
-                  a reference range is context only and never enters a number.
+                  a reference range is context only and never enters a number. The headline &plusmn;% compares
+                  only pieces with a recorded bought price.
                 </p>
               </section>
             </div>
           )}
 
-          {/* ══ LEDGER 3 · SETTLED — what happened to the lots you watched ══ */}
+          {/* ══ 6 · SETTLED — the line-item receipts ══ */}
           {(sold.length > 0 || soldOrphans.length > 0) && (
             <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}>Settled · your track record</h2>
-                {record && record.med != null && (
-                  <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {sold.length + soldOrphans.length} settled · {record.n} judged · your picks went{' '}
-                    <b style={{ color: record.med >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtSignedPct(Math.round(record.med))}
-                    </b>{' '}
-                    vs estimate, median
-                  </span>
-                )}
+                <h2 className="ray-h2" style={{ margin: 0 }}>Settled</h2>
+                <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                  {sold.length + soldOrphans.length} settled {sold.length + soldOrphans.length === 1 ? 'watch' : 'watches'}
+                  {record && <> · {record.n} judged vs estimate</>}
+                </span>
               </div>
-              {record?.split && (
-                <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
-                  Lots you saved while flagged below market went{' '}
-                  <b style={{ color: (record.split.flagged ?? 0) >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtSignedPct(Math.round(record.split.flagged ?? 0))}
-                  </b>{' '}
-                  ({record.split.flaggedN}) · the rest{' '}
-                  <b style={{ color: (record.split.rest ?? 0) >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtSignedPct(Math.round(record.split.rest ?? 0))}
-                  </b>{' '}
-                  ({record.split.restN}) — vs estimate, hammer basis
-                </p>
-              )}
-              {/* #57 · OWN-IT PROMPT — asks, never presumes a win; shown only
-                  while settled watched lots aren't yet in the collection */}
-              {sold.some(l => l.status === 'sold' && !ownedIds.includes(l.id)) && (
+              {unclaimedWins > 0 && (
                 <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
                   Won any of these? Mark it <b style={{ color: 'var(--color-fg)' }}>I won it</b> and the piece joins your collection, appraised against the live market.
                 </p>
               )}
 
-              {/* desktop settled ledger */}
               <div className="ray-settled-desk" style={{ marginTop: 12 }}>
                 <div className="ray-settled-cols kicker" aria-hidden style={{ padding: '0 2px 8px' }}>
                   <span>Maker</span>
@@ -1087,128 +1138,38 @@ export default function SavedPage() {
                   <span style={{ textAlign: 'right' }}>Own it</span>
                 </div>
                 {settledRows.map(row => {
-                  if (row.kind === 'ledger') {
-                    const o = row.o;
-                    const m = savedMeta[o.id];
-                    return (
-                      <div key={o.id} className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-                        <span className="maker">{m?.artist ? (ARTIST_LABEL[m.artist] || m.artist) : '—'}</span>
-                        <span className="work">
-                          {m?.title || o.id}
-                          <span style={{ color: 'var(--color-text-faint)' }}> · archive</span>
-                        </span>
-                        <span className="num" style={{ color: 'var(--color-text-faint)' }} title="No estimate published — Goldin runs no-reserve sales">—</span>
-                        <span className="num">{m?.signalPct != null ? fmtSignedPct(Math.round(m.signalPct)) : '—'}</span>
-                        <span className="num" style={{ fontWeight: 600 }}>
-                          {o.provisional
-                            ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }} title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
-                            : formatPrice(o.priceUsd)}
-                        </span>
-                        <span className="num" style={{ color: 'var(--color-text-faint)' }} title="No estimate on file — outside the vs-est median">—</span>
-                        <span style={{ textAlign: 'right' }}>
-                          <button className="ray-own-btn" onClick={() => toggle(o.id)}>Remove</button>
-                        </span>
-                      </div>
-                    );
-                  }
-                  const lot = row.lot;
-                  const m = metaFor(lot.id);
-                  const pct = overEstimatePct(lot);
-                  const pending = !lot.priceUsd;
-                  const owned = ownedIds.includes(lot.id);
+                  const key = row.kind === 'lot' ? row.lot.id : row.o.id;
+                  const meta = row.kind === 'lot' ? metaFor(row.lot.id) : savedMeta[row.o.id];
                   return (
-                    <div key={lot.id} className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-                      <span className="maker">
-                        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {ARTIST_LABEL[lot.artist] || lot.artist}
-                        </Link>
-                      </span>
-                      <span className="work">
-                        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {craftTitle(lot.title)}
-                        </Link>
-                      </span>
-                      <span className="num">{formatEstimate(lot) || '—'}</span>
-                      <span className="num" style={m?.signalPct != null ? { color: m.signalPct <= -10 ? 'var(--color-up)' : 'var(--color-text-secondary)' } : { color: 'var(--color-text-faint)' }}>
-                        {m?.signalPct != null ? fmtSignedPct(Math.round(m.signalPct)) : '—'}
-                      </span>
-                      <span className="num" style={{ fontWeight: 600 }}>
-                        {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : formatPrice(lot.priceUsd!)}
-                      </span>
-                      <span className="num" style={pct != null ? { color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
-                        {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
-                      </span>
-                      <span style={{ textAlign: 'right' }}>
-                        <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => toggleOwned(lot.id)}>
-                          {owned ? 'Owned ✓' : 'I won it'}
-                        </button>
-                      </span>
-                    </div>
+                    <SettledRowView
+                      key={key}
+                      row={row}
+                      meta={meta}
+                      owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : false}
+                      onOwn={() => row.kind === 'lot' && toggleOwned(savedIdOf(row.lot.id))}
+                      onRemove={() => toggle(row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id)}
+                      mobile={false}
+                    />
                   );
                 })}
               </div>
-
-              {/* mobile settled rows */}
               <div className="ray-settled-mobile">
                 {settledRows.map(row => {
-                  if (row.kind === 'ledger') {
-                    const o = row.o;
-                    const m = savedMeta[o.id];
-                    return (
-                      <div key={o.id} className="ray-settled-mrow">
-                        <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m?.title || o.id}</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
-                          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                            {m?.artist ? (ARTIST_LABEL[m.artist] || m.artist) : '—'}
-                            {m?.signalPct != null && <> · your call {fmtSignedPct(Math.round(m.signalPct))}</>}
-                            <span style={{ color: 'var(--color-text-faint)' }}> · archive</span>
-                          </span>
-                          <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                            {o.provisional ? <span style={{ color: 'var(--color-text-faint)' }}>settling…</span> : <b>{formatPrice(o.priceUsd)}</b>}
-                          </span>
-                        </div>
-                        <div style={{ marginTop: 6 }}>
-                          <button className="ray-own-btn" onClick={() => toggle(o.id)}>Remove</button>
-                        </div>
-                      </div>
-                    );
-                  }
-                  const lot = row.lot;
-                  const m = metaFor(lot.id);
-                  const pct = overEstimatePct(lot);
-                  const pending = !lot.priceUsd;
-                  const owned = ownedIds.includes(lot.id);
+                  const key = row.kind === 'lot' ? row.lot.id : row.o.id;
+                  const meta = row.kind === 'lot' ? metaFor(row.lot.id) : savedMeta[row.o.id];
                   return (
-                    <div key={lot.id} className="ray-settled-mrow">
-                      <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
-                      </Link>
-                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
-                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                          {ARTIST_LABEL[lot.artist] || lot.artist}
-                          {m?.signalPct != null && <> · your call {fmtSignedPct(Math.round(m.signalPct))}</>}
-                        </span>
-                        <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                          {pending ? <span style={{ color: 'var(--color-text-faint)' }}>pending</span> : (
-                            <>
-                              <b>{formatPrice(lot.priceUsd!)}</b>
-                              {pct != null && (
-                                <b style={{ marginLeft: 6, color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>{fmtSignedPct(Math.round(pct))}</b>
-                              )}
-                            </>
-                          )}
-                        </span>
-                      </div>
-                      <div style={{ marginTop: 6 }}>
-                        <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => toggleOwned(lot.id)}>
-                          {owned ? 'Owned ✓' : 'I won it'}
-                        </button>
-                      </div>
-                    </div>
+                    <SettledRowView
+                      key={key}
+                      row={row}
+                      meta={meta}
+                      owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : false}
+                      onOwn={() => row.kind === 'lot' && toggleOwned(savedIdOf(row.lot.id))}
+                      onRemove={() => toggle(row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id)}
+                      mobile
+                    />
                   );
                 })}
               </div>
-
             </section>
           )}
 
@@ -1218,20 +1179,10 @@ export default function SavedPage() {
               <p className="ray-enter" style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 18px' }}>
                 Saved lots that closed without a published hammer, were bought in, or are awaiting results.
               </p>
-              <div className="ray-saved-grid">
+              <div className="ray-saved-grid" style={{ display: 'grid' }}>
                 {other.map((lot, i) => (
-                  <div
-                    key={lot.id}
-                    className="ray-enter-card"
-                    style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}
-                  >
-                    <LotCard
-                      lot={lot}
-                      showArtist
-                      allLots={allLots}
-                      saved={isSaved(lot.id)}
-                      onToggleSave={id => toggle(savedIdByLotId.get(id) ?? id, lot)}
-                    />
+                  <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
+                    <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} />
                   </div>
                 ))}
               </div>
@@ -1239,9 +1190,25 @@ export default function SavedPage() {
           )}
 
           {/* on-demand: only fetch the ledger when there are orphans to resolve */}
-          {orphanIds.length > 0 && <LedgerGate onLedger={setLedger} />}
+          {orphanIds.length > 0 && <LedgerGate onState={setLedgerState} />}
 
-
+          {/* orphans render ONLY once the outcomes ledger has loaded — a fetch
+              in flight (or failed) is never printed as "withdrawn" */}
+          {orphanIds.length > 0 && !ledgerState.loaded && !ledgerState.error && (
+            <section className="rail ray-enter" style={{ paddingBlock: '20px 8px' }}>
+              <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: 0 }}>
+                Resolving results for {orphanIds.length} settled {orphanIds.length === 1 ? 'watch' : 'watches'}&hellip;
+              </p>
+            </section>
+          )}
+          {orphanIds.length > 0 && ledgerState.error && !ledgerState.loaded && (
+            <section className="rail ray-enter" style={{ paddingBlock: '30px 40px' }}>
+              <div className="ck-warn" role="status">
+                Couldn&apos;t check outcomes for {orphanIds.length} saved {orphanIds.length === 1 ? 'lot' : 'lots'} — the results ledger didn&apos;t load.{' '}
+                <button className="ck-warn-btn" onClick={() => retrySoldLedger()}>Try again</button>
+              </div>
+            </section>
+          )}
           {goneOrphans.length > 0 && (
             <section className="rail ray-enter" style={{ paddingBlock: '34px 64px' }}>
               <h2 className="ray-h2" style={{ marginBottom: 6 }}>No longer on the block</h2>
@@ -1277,11 +1244,7 @@ export default function SavedPage() {
                           </>
                         )}
                       </span>
-                      <button
-                        className="ray-call-btn ray-call-btn-quiet"
-                        style={{ flexShrink: 0 }}
-                        onClick={() => toggle(id)}
-                      >
+                      <button className="ray-call-btn ray-call-btn-quiet" style={{ flexShrink: 0 }} onClick={() => toggle(id)}>
                         Remove
                       </button>
                     </div>
@@ -1290,8 +1253,6 @@ export default function SavedPage() {
               </div>
             </section>
           )}
-
-          <AlertsInbox />
         </RayEntrance>
       )}
       <Colophon record={null} />

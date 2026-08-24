@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
+import { signalCallOf } from '../../lib/account';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
@@ -662,11 +663,14 @@ export default function TerminalHomePage() {
           }
           return undefined;
         })();
-      if (!m || m.signalPct == null) continue;
+      // signalCallOf is the single interpreter of at-save signals — legacy
+      // saves lost their direction and never claim a measured move
+      const call = signalCallOf(m);
+      if (!call || call.dir !== 'below') continue;
       const s = lotSignal(l, allLots);
-      if (!s || s.label !== 'Below Market') continue;
-      const delta = s.pct - m.signalPct;
-      if (delta > 0 && (!bestMove || delta > bestMove.to - bestMove.from)) bestMove = { from: m.signalPct, to: s.pct };
+      if (!s || s.label !== 'Below Market') continue; // same axis only
+      const delta = s.pct - call.pct;
+      if (delta > 0 && (!bestMove || delta > bestMove.to - bestMove.from)) bestMove = { from: call.pct, to: s.pct };
     }
     const future = live.filter(l => trueSaleDay(l) >= today);
     return { count: mine.length, next: future[0] || null, bestMove };

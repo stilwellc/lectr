@@ -24,7 +24,7 @@ const CSS = `
 .lectr-inbox-row {
   display: flex; align-items: center; gap: 12px;
   padding: 9px 0; text-decoration: none;
-  border-bottom: 2px dotted color-mix(in srgb, var(--color-fg) 8%, transparent);
+  border-bottom: 1px solid var(--hairline);
 }
 .lectr-inbox-row:last-child { border-bottom: none; }
 .lectr-inbox-thumb {
@@ -42,7 +42,7 @@ const CSS = `
 }
 .lectr-inbox-dot {
   width: 6px; height: 6px; border-radius: 50%; flex: none;
-  background: var(--color-butter);
+  background: var(--color-up); /* new = a verb — mint, like the nav's alert dots */
 }
 .lectr-inbox-search {
   display: flex; align-items: baseline; gap: 10px;
