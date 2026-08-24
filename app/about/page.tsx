@@ -1096,7 +1096,6 @@ const DECK_CSS = `
   .dk-mark {
     display: block; width: clamp(150px, 20vw, 240px); height: auto;
     margin: 0 0 clamp(18px, 2.4vw, 30px);
-    filter: drop-shadow(0 0 18px rgba(232,218,182,.12));
   }
   .dk-h1 {
     font-family: var(--font-serif), Georgia, serif;
@@ -1232,7 +1231,6 @@ const DECK_CSS = `
     font-size: var(--d-figure); font-weight: 800;
     letter-spacing: -0.05em; line-height: 0.92;
     color: var(--color-butter);
-    text-shadow: 0 0 34px rgba(232,218,182,.16);
     margin-bottom: clamp(18px, 2.2vw, 30px);
     font-variant-numeric: tabular-nums;
   }
@@ -1535,7 +1533,7 @@ const DECK_CSS = `
     width: 9px; height: 9px; border-radius: 50%;
     background: var(--color-text-faint);
   }
-  .chain-node:first-child::before { background: var(--color-butter); box-shadow: 0 0 10px rgba(232,218,182,.25); }
+  .chain-node:first-child::before { background: var(--color-butter); }
   .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
   a.chain-k {
     width: fit-content; text-decoration: none;

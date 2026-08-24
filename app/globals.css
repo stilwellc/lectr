@@ -1001,7 +1001,10 @@ h1 {
   --color-accent-wine-text: var(--color-butter-text);
   --color-accent-coral: var(--color-butter);
   --color-lit: var(--color-butter);
-  --glow-lit: 0 0 2px rgba(232, 218, 182, 0.45), 0 0 16px rgba(232, 218, 182, 0.14);
+  /* glow retired site-wide (Collin, Aug 24 2026: "incredibly tacky") — the
+     var stays so per-view 'lit' selectors keep working, but it casts nothing.
+     Lit elements identify by border/filament/ink, never by halo. */
+  --glow-lit: none;
 
   /* ── DIRECTION — up/down ONLY, never decorative ─────────────────────
      up 8.10/7.30 (AA any size) · down 5.24/4.72 (≥14px-bold numerals) ·
@@ -2145,11 +2148,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   object-fit: contain;
   transition: filter 150ms var(--ease-signature);
 }
-/* the sign warming when touched — the only interactive glow in the chrome */
-.ray-wordmark:hover .ray-mark-r,
-.ray-wordmark:focus-visible .ray-mark-r {
-  filter: drop-shadow(0 0 10px rgba(242, 238, 227, 0.3));
-}
+/* (the touch-glow retired with every other glow — flat chrome) */
 
 /* the switch-on ritual — once per session, the mark warms with one dip */
 @media (prefers-reduced-motion: no-preference) {
@@ -2195,19 +2194,7 @@ body {
 /* no aurora — the deepened ground replaces ambience with darkness */
 .ray-hero2 { position: relative; }
 
-/* the line glows — the Robinhood signature */
-.ray-hero2-chart .recharts-area-curve {
-  filter: drop-shadow(0 0 7px color-mix(in srgb, currentColor 0%, transparent));
-}
-.ray-hero2[data-tone='up'] .ray-hero2-chart .recharts-area-curve {
-  filter: drop-shadow(0 0 8px rgba(47, 191, 113, 0.55));
-}
-.ray-hero2[data-tone='down'] .ray-hero2-chart .recharts-area-curve {
-  filter: drop-shadow(0 0 8px rgba(229, 84, 75, 0.5));
-}
-/* the numeral carries a whisper of its own light */
-.ray-hero2[data-tone='up'] .ray-hero2-value { text-shadow: 0 0 34px rgba(47, 191, 113, 0.25); }
-.ray-hero2[data-tone='down'] .ray-hero2-value { text-shadow: 0 0 34px rgba(229, 84, 75, 0.22); }
+/* matte law: lines and numerals print, they never radiate (glows retired) */
 
 /* buttons & chips with presence */
 .ray-call-btn-primary {
@@ -2348,8 +2335,8 @@ body {
   transform-origin: left center;
 }
 .ray-rail-cell[data-active=true] {
-  /* the lamp CASTS — butter light falling from the filament into the cell */
-  background: linear-gradient(180deg, rgba(232, 218, 182, 0.11), rgba(232, 218, 182, 0.028) 52%, transparent 90%);
+  /* flat: the filament identifies the active cell; nothing casts light */
+  background: rgba(255, 255, 255, 0.03);
   z-index: 1;
 }
 .ray-rail-cell[data-active=true]::before { transform: scaleX(1); }
@@ -2419,7 +2406,7 @@ body {
      and the lamp-cast rises from it */
   .ray-rail-cell::before { inset: auto 0 0 0; }
   .ray-rail-cell[data-active=true] {
-    background: linear-gradient(0deg, rgba(232, 218, 182, 0.11), rgba(232, 218, 182, 0.028) 52%, transparent 90%);
+    background: rgba(255, 255, 255, 0.03);
   }
   .ray-rail[data-variant=door] .ray-rail-flap {
     display: flex;
@@ -2670,37 +2657,15 @@ body {
    reads it below market, red = it reads rich. The image itself stays crisp
    (self-clipped, above the glow); the light spills past its edges. */
 .ray-feedrow-thumb[data-tone] { overflow: visible; }
-/* the crisp verdict: a fine tinted ring hugging the photo's rounded edge —
-   the pool behind stays as ambience, the ring does the identifying. Desktop
-   gets the RING ONLY (table thumbs + grid card images), no pool. */
-/* desktop table thumb — 2px solid ring + a soft same-color bloom so it reads
-   over any thumbnail */
-.ray-feedtable .thumb-plate[data-tone='up'] { box-shadow: 0 0 0 2px rgba(87, 190, 135, 1), 0 0 9px 1px rgba(87, 190, 135, 0.45); border-color: rgba(87, 190, 135, 0.9); }
-.ray-feedtable .thumb-plate[data-tone='down'] { box-shadow: 0 0 0 2px rgba(204, 106, 92, 1), 0 0 9px 1px rgba(204, 106, 92, 0.42); border-color: rgba(204, 106, 92, 0.9); }
-/* desktop grid card — 2.5px inset ring on the photo + an outer bloom on the frame */
-.ray-lot-img[data-tone] { box-shadow: 0 0 14px 1px transparent; }
-.ray-lot-img[data-tone='up'] { box-shadow: 0 0 16px 1px rgba(87, 190, 135, 0.4); }
-.ray-lot-img[data-tone='down'] { box-shadow: 0 0 16px 1px rgba(204, 106, 92, 0.36); }
+/* the crisp verdict: a fine tinted ring hugging the photo's edge — the ring
+   does ALL the identifying; blooms and light pools retired with every glow */
+.ray-feedtable .thumb-plate[data-tone='up'] { box-shadow: 0 0 0 2px rgba(87, 190, 135, 1); border-color: rgba(87, 190, 135, 0.9); }
+.ray-feedtable .thumb-plate[data-tone='down'] { box-shadow: 0 0 0 2px rgba(204, 106, 92, 1); border-color: rgba(204, 106, 92, 0.9); }
 .ray-lot-img[data-tone]::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .ray-lot-img[data-tone='up']::after { box-shadow: inset 0 0 0 2.5px rgba(87, 190, 135, 0.95); }
 .ray-lot-img[data-tone='down']::after { box-shadow: inset 0 0 0 2.5px rgba(204, 106, 92, 0.92); }
-/* mobile row thumb — 2px solid ring (the ::before pool below is the ambience) */
 .ray-feedrow-thumb[data-tone='up'] { box-shadow: 0 0 0 2px rgba(87, 190, 135, 1); }
 .ray-feedrow-thumb[data-tone='down'] { box-shadow: 0 0 0 2px rgba(204, 106, 92, 1); }
-.ray-feedrow-thumb[data-tone]::before {
-  content: '';
-  position: absolute;
-  inset: -14px;
-  border-radius: 22px;
-  z-index: 0;
-  pointer-events: none;
-}
-.ray-feedrow-thumb[data-tone='up']::before {
-  background: radial-gradient(closest-side, rgba(87, 190, 135, 0.85), rgba(87, 190, 135, 0.42) 55%, transparent 95%);
-}
-.ray-feedrow-thumb[data-tone='down']::before {
-  background: radial-gradient(closest-side, rgba(204, 106, 92, 0.80), rgba(204, 106, 92, 0.38) 55%, transparent 95%);
-}
 .ray-feedrow-thumb[data-tone] img {
   border-radius: 10px;   /* self-clip — the parent no longer clips */
   z-index: 1;
@@ -2836,7 +2801,6 @@ body {
   width: auto;
   clip-path: inset(0 100% 0 0);
   animation: lectrCloseWrite 1.4s var(--ease-draw) 150ms forwards;
-  filter: drop-shadow(0 0 26px rgba(242, 238, 227, 0.14));
 }
 @media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }
 
