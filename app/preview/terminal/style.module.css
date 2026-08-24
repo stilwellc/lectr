@@ -119,7 +119,7 @@
 .pulseRule { flex: 1; margin-left: 12px; border: none; border-top: 1px solid var(--tt-hair); }
 .pulseTitle {
   font-family: var(--font-inter), sans-serif; font-size: 10px; font-weight: 600;
-  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-muted);
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-secondary);
 }
 /* slim rows, one grammar: words left, instrument right — no dead space */
 .pulseGrid { display: flex; flex-direction: column; gap: 8px; }
@@ -140,14 +140,14 @@
 .pulseLabel {
   display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--font-inter), sans-serif; font-size: 10px;
-  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-faint);
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pulseValLead {
   flex: none;
   font-family: var(--font-inter), sans-serif;
   font-size: 24px; font-weight: 600;
-  letter-spacing: -0.02em; line-height: 1; color: #f7f8f8;
+  letter-spacing: -0.02em; line-height: 1; color: #ffffff;
   font-variant-numeric: tabular-nums; /* the room count YIELDS to the certified read (Robinhood: the market figure wins) */
 }
 /* (the paddle object retired in the unification pass — one numeral grammar
@@ -156,7 +156,7 @@
 .pulseVal {
   display: flex; align-items: baseline; gap: 6px;
   font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 600;
-  letter-spacing: -0.02em; line-height: 1; color: #f7f8f8;
+  letter-spacing: -0.02em; line-height: 1; color: #ffffff;
   font-variant-numeric: tabular-nums;
 }
 .pulseUnit {
@@ -215,7 +215,7 @@
 .pulseTickerChips { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .pulseChip {
   display: inline-flex; align-items: baseline; gap: 6px;
-  font-family: var(--font-inter), sans-serif; font-size: 11px; color: var(--tt-fg);
+  font-family: var(--font-inter), sans-serif; font-size: 11px; color: #ffffff;
   padding: 6px 11px; white-space: nowrap;
   border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px;
   background: rgba(255, 255, 255, 0.028);
@@ -2345,7 +2345,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   background: none; border: 0; padding: 0; margin: 0;
   font: inherit; color: inherit; cursor: pointer; width: 100%;
 }
-.mtMon:hover .mtMonMarket { color: var(--tt-fg); }
+.mtMon:hover .mtMonMarket { color: #ffffff; }
 .mtMonKicker {
   display: flex; align-items: center; width: 100%;
   font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
@@ -2361,7 +2361,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-family: var(--font-serif-display), serif;
   font-weight: 400; letter-spacing: -0.015em; line-height: 1;
   font-size: clamp(22px, 1.9vw, 28px);
-  color: var(--tt-fg);
+  color: #ffffff;
   transition: color 0.15s ease;
 }
 .mtMonFigure {
@@ -2561,7 +2561,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
     background 140ms var(--ease-signature, ease),
     border-color 140ms var(--ease-signature, ease);
 }
-.mtSide .railCmd .cmdLabel { color: var(--tt-fg); font-weight: 500; font-size: 14px; }
+.mtSide .railCmd .cmdLabel { color: #ffffff; font-weight: 500; font-size: 14px; }
 /* the return key reads as a real key — neutral, matching the ⌘/K keycaps */
 .mtSide .railCmd .cmdArrow {
   color: var(--tt-secondary);

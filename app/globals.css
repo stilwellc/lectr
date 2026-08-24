@@ -2302,7 +2302,7 @@ body {
   font-weight: 560;
   line-height: 1;
   letter-spacing: -0.01em;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   white-space: nowrap;
   transition: color 140ms var(--ease-signature);
 }
@@ -2319,9 +2319,9 @@ body {
   white-space: pre;
 }
 /* the figure carries one more step of ink than its unit word */
-.ray-rail-read b { font-weight: 500; color: var(--color-text-muted); }
+.ray-rail-read b { font-weight: 500; color: var(--color-text-secondary); }
 .ray-rail-cell:hover { background: rgba(255, 255, 255, 0.045); }
-.ray-rail-cell:hover .ray-rail-name { color: var(--color-fg); }
+.ray-rail-cell:hover .ray-rail-name { color: #ffffff; }
 .ray-rail-cell:hover .ray-rail-top { color: var(--color-text-secondary); }
 .ray-rail-cell:active { filter: brightness(0.92); }
 /* the filament — the departure-board row lamp */
@@ -2340,10 +2340,10 @@ body {
   z-index: 1;
 }
 .ray-rail-cell[data-active=true]::before { transform: scaleX(1); }
-.ray-rail-cell[data-active=true] .ray-rail-name { color: var(--color-fg); font-weight: 620; }
+.ray-rail-cell[data-active=true] .ray-rail-name { color: #ffffff; font-weight: 620; }
 .ray-rail-cell[data-active=true] .ray-rail-top { color: var(--color-butter); }
 .ray-rail-cell[data-active=true] .ray-rail-read { color: var(--color-text-muted); }
-.ray-rail-cell[data-active=true] .ray-rail-read b { color: var(--color-text-secondary); }
+.ray-rail-cell[data-active=true] .ray-rail-read b { color: #f7f8f8; }
 /* the marquee rule: only where the switch IS the view's lit element */
 .ray-rail[data-lit=true] .ray-rail-cell[data-active=true] { box-shadow: var(--glow-lit); }
 .ray-rail-cell:focus-visible {
