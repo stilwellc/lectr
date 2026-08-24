@@ -1042,9 +1042,9 @@ export default function SavedPage() {
                     </div>
                     {exposure.map(({ row, n, held }) => {
                       const read = row.readType === 'index' && row.index
-                        ? { txt: `${fmtSignedPct(Math.round(row.index.changePct))} ${row.index.horizon} verified`, dir: row.index.changePct > 0 ? 'up' : row.index.changePct < 0 ? 'down' : 'flat' }
+                        ? (() => { const r = Math.round(row.index!.changePct); return { txt: `${fmtSignedPct(r)} ${row.index!.horizon} verified`, dir: r > 0 ? 'up' : r < 0 ? 'down' : 'flat' }; })()
                         : row.readType === 'demand' && row.demandNow != null
-                          ? { txt: `${fmtSignedPct(Math.round(row.demandNow))} vs estimate`, dir: row.demandNow > 0 ? 'up' : row.demandNow < 0 ? 'down' : 'flat' }
+                          ? (() => { const r = Math.round(row.demandNow!); return { txt: `${fmtSignedPct(r)} vs estimate`, dir: r > 0 ? 'up' : r < 0 ? 'down' : 'flat' }; })()
                           : null;
                       return (
                         <Link key={row.slug} href={`/sub/${row.slug.replace(':', '/')}`} className="ray-coll-exposure-row">
