@@ -87,7 +87,7 @@ jobs:
         # lelands/memorylane/lotg = the CreateAuction trio — HEADLESS legs (same
         # Cloudflare-clearing Playwright pattern as rrauction; one crawler, three
         # houses). rea/hugginsscott/scp = curl legs. All additive to sports/pop.
-        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, lelands, memorylane, lotg]
+        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, lelands, memorylane, lotg, nflauction]
     runs-on: ubuntu-latest
     # RAISED 60→90 (Aug 4 2026): christies measured 43.9min (Aug 3) / 34.6min
     # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
@@ -124,7 +124,7 @@ jobs:
       # every fetch-based house crawls via the monolith; RR runs its headless
       # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
-        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","lelands","memorylane","lotg"]'), matrix.house) }}
+        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","lelands","memorylane","lotg","nflauction"]'), matrix.house) }}
         run: npx tsx scripts/ray-crawl.ts
       - name: Crawl rrauction (headless)
         if: matrix.house == 'rrauction'
@@ -148,6 +148,11 @@ jobs:
         if: matrix.house == 'scp'
         # past sweep is ALSO the sold-resolve for closed live sales (same ids)
         run: npx tsx scripts/crawl-scp.ts --auctions 3 --cap 600 --delay 150 --live --write
+      - name: Crawl NFL Auction
+        if: matrix.house == 'nflauction'
+        # GAME-USED only (league charity house; iSynApp JSON api, plain curl).
+        # closed sweep is the sold-resolve — final bid IS all-in (no premium)
+        run: npx tsx scripts/crawl-nflauction.ts --closed-pages 30 --delay 150 --live --write
       # CreateAuction trio — HEADLESS (Playwright clears Cloudflare, same as
       # rrauction). --live reads the current sale off /Lots/Gallery (one nav,
       # bids inline) + per-lot resolve of closed upcoming ids.
@@ -216,7 +221,7 @@ jobs:
         run: |
           mkdir -p data/corpus/segments
           pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp lelands memorylane lotg; do
+          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp lelands memorylane lotg nflauction; do
             if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
               echo "segment $h fresh from artifact — skipping R2"
             else

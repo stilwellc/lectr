@@ -41,6 +41,7 @@ const HOUSE_TO_SEGMENT: Record<string, SegmentName> = {
   // to 'other' via the fallback until each is verified and added to the assemble
   // list; the standalone crawlers write their named segment directly.
   'REA': 'rea' as SegmentName, 'Huggins & Scott': 'hugginsscott' as SegmentName,
+  'NFL Auction': 'nflauction' as SegmentName,
   'SCP': 'scp' as SegmentName, 'Lelands': 'lelands' as SegmentName,
   'Memory Lane': 'memorylane' as SegmentName, 'Love of the Game': 'lotg' as SegmentName,
   "Julien's": 'juliens' as SegmentName, "Hake's": 'hakes' as SegmentName,
