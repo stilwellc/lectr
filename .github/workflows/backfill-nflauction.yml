@@ -1,0 +1,34 @@
+# One-off (re-runnable) NFL Auction back-crawl: sweeps the ENTIRE closed
+# archive the platform still serves (~a year of retention), decides game-used
+# on full lot-page titles, and unions into the nflauction segment on R2 —
+# tonight's assemble picks it up via the segment fallback. Dispatch-only.
+name: Backfill NFL Auction (closed archive)
+on:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: 'max closed pages per sweep (100 rows each)'
+        default: '200'
+concurrency:
+  group: backfill-nflauction
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull last-good segment
+        run: bash scripts/data-store.sh pull-segment nflauction || echo "no prior segment (first run)"
+      - name: Back-crawl closed archive
+        run: RAY_SKIP_MAIN=1 npx tsx scripts/crawl-nflauction.ts --backfill --closed-pages ${{ inputs.pages || 200 }} --delay 150 --write
+      - name: Push segment
+        run: bash scripts/data-store.sh push-segment nflauction

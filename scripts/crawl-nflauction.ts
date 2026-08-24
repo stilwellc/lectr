@@ -154,10 +154,21 @@ async function main() {
   const haveSold = new Set(existing.filter(l => l.status === 'sold').map(l => l.id));
   const prevTitles = new Map(existing.map(l => [l.id, { title: l.title, desc: '' }]));
 
-  // ── SOLD — the closed archive, nominated by query, decided on full title ──
+  // ── SOLD — the closed archive, nominated by query, decided on full title.
+  // --backfill ALSO sweeps the NO-QUERY archive to exhaustion (the platform
+  // retains ~a year; query mode caps around 2-3k rows) with a cheap 'game'
+  // prefilter on the truncated title — the union of both sources is
+  // near-complete (a 'Game …' phrase hidden past the ~48ch truncation is
+  // still caught by the server queries, which search full titles). ──
+  const backfill = process.argv.includes('--backfill');
   const closedRaw = new Map<number, ApiItem>();
   for (const q of QUERIES) {
     for (const it of await pageThrough('closed', q, closedPages, delayMs)) closedRaw.set(it.id, it);
+  }
+  if (backfill) {
+    const all = await pageThrough('closed', '', Math.max(closedPages, 200), delayMs);
+    console.log(`[NFLAuction] backfill: ${all.length} closed rows swept (no query)`);
+    for (const it of all) if (/game/i.test(it.title || '')) closedRaw.set(it.id, it);
   }
   console.log(`[NFLAuction] closed candidates: ${closedRaw.size}`);
   const soldCands = Array.from(closedRaw.values())
