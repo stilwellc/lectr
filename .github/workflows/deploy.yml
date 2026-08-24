@@ -29,6 +29,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Serialization (the deploy-collectr group) queues runs but a queued run
+      # still holds the commit from RUN CREATION — it could deploy a checkout
+      # that a later push (or a bot commit) has already superseded, silently
+      # reverting prod. Always deploy origin/main as of NOW. (nightly.yml's
+      # deploy leg has carried this step since the same race bit a hotfix.)
+      - name: Fast-forward to origin/main (never deploy a stale checkout)
+        run: |
+          git fetch --depth=1 origin main
+          git checkout --force origin/main
+          echo "deploying $(git rev-parse --short HEAD)"
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
