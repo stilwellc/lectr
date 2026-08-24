@@ -33,7 +33,7 @@ echo "ship: origin/main == $SHA ✓"
 echo "ship: dispatching deploy…"
 gh workflow run deploy.yml -R "$REPO"
 
-echo "ship: resolving the run for $SHA…"
+echo "ship: resolving the run for ${SHA}…"
 RID=""
 for _ in $(seq 1 15); do
   sleep 8
@@ -45,7 +45,7 @@ if [ -z "$RID" ]; then
   echo "ship: FAILED — no deploy run appeared for $SHA (check Actions)." >&2
   exit 1
 fi
-echo "ship: watching run $RID…"
+echo "ship: watching run ${RID}…"
 if gh run watch "$RID" -R "$REPO" --exit-status > /dev/null 2>&1; then
   echo "ship: deploy-success ($SHA via run $RID)"
 else
