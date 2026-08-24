@@ -456,6 +456,8 @@ jobs:
         run: npx tsx scripts/sync-lots-db.ts || echo "sync-lots failed (non-fatal)"
       - name: Match saved-search alerts
         run: npx tsx scripts/match-alerts.ts || echo "match-alerts failed (non-fatal)"
+      - name: Match signal alerts (watchlist flips + your-markets flags)
+        run: npx tsx scripts/match-signal-alerts.ts || echo "signal-alerts failed (non-fatal)"
       - name: Send alert digests
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

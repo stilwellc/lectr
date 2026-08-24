@@ -9,6 +9,7 @@ import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { lotFitsMarket, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
 import Flick from './Flick';
+import CloseClock from './CloseClock';
 
 /**
  * Ray Terminal — what survived the restructure: the call the product stands
@@ -246,7 +247,10 @@ export function CallPlate({
           </LeaderRow>
           <LeaderRow k={closingWord ? 'Closing' : 'Hammers'} sub={lot.auctionHouse}>
             {closingWord
-              ? <span style={{ color: 'var(--color-up)' }}>{closingWord}</span>
+              ? <span style={{ color: 'var(--color-up)' }}>
+                  {closingWord}
+                  {lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}
+                </span>
               : `${formatDate(saleDay)} · ${daysWord(saleDay)}`}
           </LeaderRow>
         </div>
@@ -452,10 +456,10 @@ export function Colophon({ lotCount, houseCount, record }: {
           {read && <span>last read <b>{read}</b></span>}
           {record && record.n > 500 ? (
             <span>
-              flagged <Link href="/value"><b className="up">{fmtSignedPct(record.medianPerfPct)}</b> median over <b>{record.n.toLocaleString()}</b> replays</Link>
+              flagged <Link href="/receipts"><b className="up">{fmtSignedPct(record.medianPerfPct)}</b> median over <b>{record.n.toLocaleString()}</b> replays</Link>
             </span>
           ) : (
-            <span><Link href="/value">see the record</Link></span>
+            <span><Link href="/receipts">see the record</Link></span>
           )}
         </p>
 
@@ -478,6 +482,7 @@ export function Colophon({ lotCount, houseCount, record }: {
             <span className="ray-close-line-k">The desk</span>
             <span className="ray-close-line-links">
               <Link href="/value">Value</Link>
+              <Link href="/receipts">The record</Link>
               <Link href="/makers">Makers</Link>
               <Link href="/analytics">Analytics</Link>
               <Link href="/profile">My profile</Link>

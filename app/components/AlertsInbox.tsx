@@ -55,6 +55,11 @@ const CSS = `
   font-size: 12.5px; color: var(--color-text-faint); line-height: 1;
 }
 .lectr-inbox-del:hover { color: var(--color-down-text); }
+.lectr-inbox-auto {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--color-text-faint); border: 1px solid var(--color-border);
+  border-radius: 5px; padding: 1px 6px;
+}
 `;
 
 /**
@@ -114,11 +119,18 @@ export default function AlertsInbox() {
 
       {searches.map(s => {
         const rows = bySearch.get(s.id) || [];
+        // synthetic signal feeds (query._signal) are standing sections the
+        // nightly maintains — no delete (it would re-create tomorrow)
+        const auto = !!(s.query as { _signal?: string } | null)?._signal;
         return (
           <div key={s.id}>
             <div className="lectr-inbox-search">
               <span>{s.name}</span>
-              <button className="lectr-inbox-del" title="Delete this saved search" aria-label={`Delete saved search: ${s.name}`} onClick={() => remove(s.id)}>×</button>
+              {auto ? (
+                <span className="lectr-inbox-auto" title="A standing feed the engine maintains from your watchlist">auto</span>
+              ) : (
+                <button className="lectr-inbox-del" title="Delete this saved search" aria-label={`Delete saved search: ${s.name}`} onClick={() => remove(s.id)}>×</button>
+              )}
             </div>
             {rows.length === 0 ? (
               <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', padding: '7px 0' }}>

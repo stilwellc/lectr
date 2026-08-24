@@ -1066,6 +1066,12 @@ export function runMarketBuild() {
     const rec = gradeCalls(soldById);
     (markets.all.analytics as unknown as Record<string, unknown>).callsRecord = rec;
     console.log(`[market] calls record — card: ${rec.card.graded}/${rec.card.n} graded medRatio=${rec.card.medRatio} within30=${rec.card.within30Pct}% · vsbid: ${rec.vsbid.graded}/${rec.vsbid.n} medRatio=${rec.vsbid.medRatio} belowHit=${rec.vsbid.belowHit}%`);
+    // the receipts tape — graded rows with lot identity, served to /receipts
+    const { emitReceipts } = require('./lib/calls-ledger');
+    const lotIdent = new Map<string, { title?: string; artist?: string; auctionHouse?: string }>();
+    for (const l of all) lotIdent.set(String(l.id), { title: l.title, artist: l.artist, auctionHouse: l.auctionHouse });
+    const nR = emitReceipts(path.join(SERVED, 'receipts.json'), lotIdent, rec);
+    console.log(`[market] receipts tape — ${nR} graded rows served`);
   }
   // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit) — how much of final hammer
   // arrives in the last days, fitted from Goldin's own nightly bidHistory on

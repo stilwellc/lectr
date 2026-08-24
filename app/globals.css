@@ -3314,3 +3314,53 @@ body {
   --chart-line-2: var(--paper-faint, #8d8578);
   --chart-cursor: rgba(28, 23, 18, 0.30);
 }
+
+
+/* ══ /receipts — THE RECORD: the forward tape + the replayed record ══ */
+.rcp-block { margin-top: 34px; }
+.rcp-head { display: flex; align-items: center; gap: 12px; padding: 0 2px 10px; }
+.rcp-rule { flex: 1; border: none; border-top: 1px solid var(--hairline); }
+.rcp-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.rcp-tile {
+  display: grid; gap: 5px; align-content: start;
+  padding: 16px 18px 15px;
+  border-left: 1px solid var(--hairline);
+}
+.rcp-tile:first-child { border-left: none; padding-left: 2px; }
+.rcp-fig {
+  font-family: var(--font-mono), monospace;
+  font-size: clamp(30px, 3vw, 40px); font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1;
+  font-variant-numeric: tabular-nums; color: #ffffff;
+}
+.rcp-dim { color: var(--color-text-muted); }
+.rcp-sub { font-size: 12px; color: var(--color-text-muted); line-height: 1.5; }
+.rcp-note { font-size: 12.5px; color: var(--color-text-muted); margin: 12px 0 0; max-width: 62ch; line-height: 1.55; }
+.rcp-link { color: var(--color-fg); text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
+.rcp-tape { margin-top: 14px; }
+.rcp-cols {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 120px 110px 84px;
+  gap: 0 14px; align-items: baseline;
+}
+.rcp-cols.kicker { padding: 0 2px 8px; }
+.rcp-row {
+  padding: 10px 2px; min-height: 44px;
+  border-top: 1px solid var(--hairline);
+  text-decoration: none; color: inherit;
+  transition: background var(--duration-fast) var(--ease-signature);
+}
+.rcp-row:hover { background: var(--color-hover-item); }
+.rcp-date { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rcp-work { font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rcp-work b { color: var(--color-fg); font-weight: 600; margin-right: 6px; }
+.rcp-num {
+  font-family: var(--font-mono), monospace; font-size: 12.5px;
+  font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--color-fg);
+}
+.rcp-kind { display: block; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-faint); }
+@media (max-width: 720px) {
+  .rcp-cols { grid-template-columns: minmax(0, 1fr) 96px 84px; }
+  .rcp-cols > :nth-child(1), .rcp-cols > :nth-child(3) { display: none; }
+  .rcp-cols.kicker > :nth-child(1), .rcp-cols.kicker > :nth-child(3) { display: none; }
+}

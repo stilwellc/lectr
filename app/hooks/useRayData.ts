@@ -413,11 +413,16 @@ function loadRayData(): Promise<RayPayload> {
               // corpus shards) — re-attach it or the shard version overwrites it
               // and LotPage's bid-velocity row never appears after phase 2.
               const bidVels = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).bidVelocity]));
+              // saleDateTime is stripped from the shards (STRIP) but rides the
+              // eager upcoming lots — re-attach or every countdown dies the
+              // moment phase 2 lands (same class as the bidVelocity loss)
+              const closeTimes = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).saleDateTime]));
               const merged = full.map(l => {
                 let x = l;
                 if (signals.get(l.id) != null) x = { ...x, signal: signals.get(l.id) };
                 if (soldComps.get(l.id) != null) x = { ...x, soldComp: soldComps.get(l.id) };
                 if (bidVels.get(l.id) != null) x = { ...x, bidVelocity: bidVels.get(l.id) };
+                if (closeTimes.get(l.id) != null) x = { ...x, saleDateTime: closeTimes.get(l.id) };
                 return x;
               });
               notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });

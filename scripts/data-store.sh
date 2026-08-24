@@ -255,6 +255,12 @@ push() {
   # one so the served payload always carries a backtest (one cycle behind, and
   # the record barely moves night to night).
   test -f public/data/ray/backtest.json && obj_put "latest/backtest.json" "public/data/ray/backtest.json"
+  # standalone calls ledger — the forward-call record MUST persist across
+  # nights (assemble rebuilds data/corpus from segments, never from the
+  # corpus tar, so anything only inside corpus.tar is reborn empty — the
+  # ledger silently reset nightly from Aug 14–24 2026 because of exactly
+  # this; grading always saw zero rows).
+  test -f data/corpus/calls-ledger.json.gz && obj_put "latest/calls-ledger.json.gz" "data/corpus/calls-ledger.json.gz" || echo "[data-store] no calls ledger to push"
   # dated corpus snapshot — the rollback ladder (replaces git history for data)
   day=$(stamp_of public/data/ray/meta.json | cut -c1-10 | tr -d '-')
   [ -n "$day" ] || day=$(date -u +%Y%m%d)
@@ -365,6 +371,7 @@ case "${1:-}" in
     mkdir -p public/data/ray data/corpus
     obj_get_clean "latest/backtest.json" "public/data/ray/backtest.json" "[data-store] no prior backtest.json yet (first run)"
     obj_get_clean "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" "[data-store] no prior backtest state yet (incremental will full-build)"
+    obj_get_clean "latest/calls-ledger.json.gz" "data/corpus/calls-ledger.json.gz" "[data-store] no prior calls ledger yet (accrual starts tonight)"
     ;;
   push-backtest)
     test -f public/data/ray/backtest.json && obj_put "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no backtest.json to push"

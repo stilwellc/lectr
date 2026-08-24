@@ -20,6 +20,7 @@ import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
+import CloseClock from '../components/CloseClock';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 
@@ -847,7 +848,12 @@ export default function SavedPage() {
                     </>}
               sub={
                 <>
-                  {summary.next && <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))} · </>}
+                  {summary.next && (
+                    <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))}
+                      {summary.next.saleDateTime && <> · <CloseClock iso={summary.next.saleDateTime} windowHours={24} /></>}
+                      {' '}·{' '}
+                    </>
+                  )}
                   {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
                   {summary.flagged > 0 && (
                     <>
@@ -1023,7 +1029,9 @@ export default function SavedPage() {
                         ) : null}
                       </span>
                       <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
-                        {hammerWord(days)}
+                        {days === 0 && lot.saleDateTime
+                          ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
+                          : hammerWord(days)}
                       </span>
                     </Link>
                   );
@@ -1047,7 +1055,11 @@ export default function SavedPage() {
                       </span>
                       <span className="ck-mrow-right">
                         {sig && <b style={{ color: sigInk(sig.label) }}>{sigText(sig)}</b>}
-                        <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>{hammerWord(days)}</span>
+                        <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
+                          {days === 0 && lot.saleDateTime
+                            ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
+                            : hammerWord(days)}
+                        </span>
                       </span>
                     </Link>
                   );

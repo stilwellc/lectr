@@ -777,7 +777,7 @@ export default function AboutPage() {
 
           <p style={caption}>
             Bought-in lots are scored as outcomes rather than dropped, so a flag on something that
-            then failed to sell counts against the record. <Link href="/value" className="deck-more">See the full record <Flick size={11} /></Link>
+            then failed to sell counts against the record. <Link href="/receipts" className="deck-more">See the full record <Flick size={11} /></Link>
           </p>
         </Sec>
 

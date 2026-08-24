@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import Link from 'next/link';
+import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg } from '../utils';
@@ -314,7 +315,7 @@ function LotCard({
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : ` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}</>}
         </div>
       </div>
       <div style={{ flexShrink: 0, textAlign: 'right', zIndex: 'auto' }}>
@@ -523,7 +524,7 @@ function LotCard({
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : ` · ${isUpcoming ? 'hammers ' : ''}${formatDate(lot.saleDate)}`}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}</>}
         </div>
         <div style={{ marginTop: 'auto' }}>
           {/* The intelligence leads — the number IS the card's rank. */}

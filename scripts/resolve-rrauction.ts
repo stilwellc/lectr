@@ -45,6 +45,8 @@ interface RawLot {
   imageUrl: string | null; estLow: number | null; estHigh: number | null;
   realized: number | null; currentBid: number | null; bidCount: number | null;
   status: 'upcoming' | 'sold'; endsMMDD: string | null;
+  /** "7:00 PM" when the gallery countdown printed a clock (US Eastern) */
+  endsClock?: string | null;
 }
 
 const money = (s: string | null | undefined): number | null => {
@@ -113,6 +115,9 @@ async function extractPage(page: Page): Promise<RawLot[]> {
     const bidM = r.valTxt.match(/\((\d+)\s*bids?\)/i);
     const lotNumber = r.lotNumRaw && /^\d+$/.test(r.lotNumRaw) ? parseInt(r.lotNumRaw, 10) : null;
     const endM = r.endTxt.match(/(\d{1,2})\/(\d{1,2})/);
+    // the countdown sometimes prints a clock ("... 7:00 PM") — keep it when
+    // present; RR runs on US Eastern
+    const timeM = r.endTxt.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
     return {
       lotId: r.lotId, lotNumber, title: r.title,
       url: r.href.startsWith('http') ? r.href : BASE + r.href,
@@ -124,6 +129,7 @@ async function extractPage(page: Page): Promise<RawLot[]> {
       bidCount: bidM ? parseInt(bidM[1], 10) : null,
       status: sold ? 'sold' : 'upcoming',
       endsMMDD: endM ? `${endM[1].padStart(2, '0')}/${endM[2].padStart(2, '0')}` : null,
+      endsClock: timeM ? `${timeM[1]}:${timeM[2]} ${timeM[3].toUpperCase()}` : null,
     };
   }));
 }
@@ -277,6 +283,20 @@ function toLot(r: RawLot, slug: string, saleId: string, saleName: string, arch?:
     if (cand.getTime() < now.getTime() - 180 * 86400000) y += 1; // rolled into next year
     saleDate = `${y}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
   }
+  // close TIMESTAMP when the countdown printed a clock — RR is US Eastern;
+  // DST by month (Mar–Oct ≈ EDT −04:00, else EST −05:00) is within a minute
+  // of truth for countdown purposes and never claims more than it knows
+  let saleDateTime: string | null = null;
+  if (!arch && r.endsClock && saleDate) {
+    const cm = r.endsClock.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (cm) {
+      let h = Number(cm[1]) % 12;
+      if (/pm/i.test(cm[3])) h += 12;
+      const mo = Number(saleDate.slice(5, 7));
+      const off = mo >= 3 && mo <= 10 ? '-04:00' : '-05:00';
+      saleDateTime = `${saleDate}T${String(h).padStart(2, '0')}:${cm[2]}:00${off}`;
+    }
+  }
   return {
     id: `rrauction-${saleId}-${r.lotId}`,
     artist: slug,
@@ -287,6 +307,7 @@ function toLot(r: RawLot, slug: string, saleId: string, saleName: string, arch?:
     auctionHouse: 'RR Auction',
     saleName,
     saleDate,
+    ...(saleDateTime ? { saleDateTime } : {}),
     lotNumber: r.lotNumber,
     // v2 money — USD native
     nativeCurrency: 'USD', fxRate: 1, fxAsOf: saleDate,

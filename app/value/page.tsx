@@ -25,6 +25,7 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
+import CloseClock from '../components/CloseClock';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, overEstimatePct, toneOf } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
@@ -723,7 +724,10 @@ export default function ValuePage() {
                               const dU = daysUntil(day);
                               if (!past && dU != null && dU <= 0) {
                                 const tonight = !!d.lot.saleDateTime && new Date(d.lot.saleDateTime).getHours() >= 17;
-                                return <> · <span style={{ color: 'var(--color-up)', fontWeight: 600 }}>{tonight ? 'closes tonight' : 'closes today'}</span></>;
+                                return <> · <span style={{ color: 'var(--color-up)', fontWeight: 600 }}>
+                                  {tonight ? 'closes tonight' : 'closes today'}
+                                  {d.lot.saleDateTime && <> · <CloseClock iso={d.lot.saleDateTime} windowHours={24} /></>}
+                                </span></>;
                               }
                               return <>{' '}· {past ? 'hammered' : 'hammers'} {formatDate(day)}</>;
                             })()}

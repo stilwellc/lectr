@@ -47,6 +47,33 @@ export function appendCalls(fresh: Call[]): { total: number; added: number } {
   return { total: rows.length, added };
 }
 
+/** The served receipts tape — graded calls, newest hammer first, with the
+ *  lot identity joined at emit time so the page never needs the corpus.
+ *  Every row is a claim made BEFORE the hammer, printed with its outcome. */
+export function emitReceipts(
+  outPath: string,
+  lotById: Map<string, { title?: string; artist?: string; auctionHouse?: string; url?: string }>,
+  record: CallsRecord,
+  cap = 500,
+): number {
+  const rows = readCalls()
+    .filter(c => typeof c.r === 'number' && c.r! > 0 && c.p > 0)
+    .sort((a, b) => String(b.sd || '').localeCompare(String(a.sd || '')))
+    .slice(0, cap)
+    .map(c => {
+      const l = lotById.get(c.id) || {};
+      return {
+        id: c.id, k: c.k, d: c.d, sd: c.sd,
+        p: Math.round(c.p), r: Math.round(c.r!),
+        f: typeof c.f === 'number' ? Math.round(c.f) : undefined,
+        m: c.m,
+        t: l.title || null, a: l.artist || null, h: l.auctionHouse || null,
+      };
+    });
+  fs.writeFileSync(outPath, JSON.stringify({ record, rows, generatedAt: new Date().toISOString().slice(0, 10) }));
+  return rows.length;
+}
+
 export type CallsRecord = {
   card: { n: number; graded: number; medRatio: number | null; within30Pct: number | null };
   vsbid: { n: number; graded: number; medRatio: number | null; belowHit: number | null };
