@@ -185,7 +185,9 @@ const tagFor = (read: TapeRowData['read']): string => {
       : read.method === 'composite' ? 'Hedonic composite' : 'Hedonic index';
     // the '95% CI' suffix retired in the unification pass — the CI range
     // already prints in full under the figure; the kicker names the method.
-    return `${m}${read.scope ? ` · ${read.scope}` : ''}`;
+    // the separator BINDS to the scope (\u00A0) so a wrap reads '· pokémon'
+    // on line two — never a dangling middot at a line end
+    return `${m}${read.scope ? ` ·\u00A0${read.scope}` : ''}`;
   }
   return read.kind === 'demand' ? 'Demand read' : 'Descriptive';
 };
@@ -197,7 +199,9 @@ const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 const tagShortFor = (read: TapeRowData['read']): string => {
   if (read.kind === 'index') {
     const m = read.method === 'repeat-sale' ? 'Repeat-sale' : read.method === 'composite' ? 'Composite' : 'Hedonic';
-    return `${m}${read.scope ? ` · ${read.scope}` : ''}`;
+    // the separator BINDS to the scope (\u00A0) so a wrap reads '· pokémon'
+    // on line two — never a dangling middot at a line end
+    return `${m}${read.scope ? ` ·\u00A0${read.scope}` : ''}`;
   }
   return read.kind === 'demand' ? 'Demand read' : 'Descriptive';
 };
