@@ -192,6 +192,16 @@ const tagFor = (read: TapeRowData['read']): string => {
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
+/** the phone tag — same claim, fewer letters (the two-line tracker gives the
+    tag ~120px; 'REPEAT-SALE INDEX · POKÉMON' clipped at any honest size) */
+const tagShortFor = (read: TapeRowData['read']): string => {
+  if (read.kind === 'index') {
+    const m = read.method === 'repeat-sale' ? 'Repeat-sale' : read.method === 'composite' ? 'Composite' : 'Hedonic';
+    return `${m}${read.scope ? ` · ${read.scope}` : ''}`;
+  }
+  return read.kind === 'demand' ? 'Demand read' : 'Descriptive';
+};
+
 /** the lead read — the row the monument enthrones. Certified beats measured
     beats descriptive, so as more verticals clear the CI bar the monument
     upgrades itself; today it is Art's certified 5Y. Scoped, it is that
@@ -303,7 +313,10 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
         >
           <span className={styles.mtLabelBlock}>
             <span className={styles.mtLabel}>{r.label}</span>
-            <span className={styles.mtTag}>{tagFor(r.read)}</span>
+            <span className={styles.mtTag}>
+              <span className={styles.mtTagFull}>{tagFor(r.read)}</span>
+              <span className={styles.mtTagShort}>{tagShortFor(r.read)}</span>
+            </span>
           </span>
           <span className={styles.mtInstrument} aria-hidden>
             {r.read.kind === 'index' && (
@@ -371,6 +384,9 @@ function subHref(r: SubMarketRead): string {
 const subTag = (r: SubMarketRead): string =>
   r.readType === 'index' ? (r.indexMethod === 'repeat-sale' ? 'Repeat-sale index' : 'Hedonic index')
   : r.readType === 'demand' ? 'Demand read' : 'Descriptive';
+const subTagShort = (r: SubMarketRead): string =>
+  r.readType === 'index' ? (r.indexMethod === 'repeat-sale' ? 'Repeat-sale' : 'Hedonic')
+  : r.readType === 'demand' ? 'Demand read' : 'Descriptive';
 
 export function SubTape({ market, activeKey, play }: {
   market: MarketData | null;
@@ -406,7 +422,10 @@ export function SubTape({ market, activeKey, play }: {
           <Link key={r.slug} href={subHref(r)} role="listitem" className={styles.mtRow}>
             <span className={styles.mtLabelBlock}>
               <span className={styles.mtLabel}>{r.label}</span>
-              <span className={styles.mtTag}>{subTag(r)}</span>
+              <span className={styles.mtTag}>
+                <span className={styles.mtTagFull}>{subTag(r)}</span>
+                <span className={styles.mtTagShort}>{subTagShort(r)}</span>
+              </span>
             </span>
             <span className={styles.mtInstrument} aria-hidden>
               {idx && idx.changePct != null && (

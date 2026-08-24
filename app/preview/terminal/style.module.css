@@ -2267,6 +2267,10 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .mtSide > * { flex: none; }
 
+/* tag variants: full on desktop, short on the phone's two-line tracker */
+.mtTagShort { display: none; }
+.mtTagFull { display: inline; }
+
 /* ── THE FEED CONDUIT — the wire from the selector to the instrument ── */
 .mtConduit {
   flex: 1 1 0;
@@ -2509,11 +2513,37 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   .mtMon .beamLarge .beamStage { height: 14px; }
   .mtMon .beamLarge .beamEnds { margin-top: 4px; font-size: 10.5px; }
   .mtStage { margin-top: 6px; }
-  .mtRow { min-height: 46px; padding: 7px 2px; }
-  .mtLabel { font-size: 14.5px; }
-  .mtFigure { font-size: 15px; }
-  .mtSub { font-size: 11px; }
-  .mtTag { font-size: 9px; }
+  /* ── THE TWO-LINE TRACKER (Collin, Aug 24): one squeezed line truncated
+     every kicker ("REPEAT-SALE INDEX…") and read congested at 390px. Each
+     market now breathes on two lines — name and figure lead, then method ·
+     spark · read below with real room. display:contents dissolves the two
+     wrapper blocks so the grid can place all five leaves itself. ── */
+  .mtRow {
+    min-height: 0;
+    padding: 12px 2px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px auto;
+    grid-template-areas:
+      'label label fig'
+      'tag   inst  sub';
+    row-gap: 6px;
+    column-gap: 12px;
+    align-items: baseline;
+  }
+  .mtLabelBlock, .mtRight { display: contents; }
+  .mtLabel { grid-area: label; font-size: 15px; }
+  .mtFigure { grid-area: fig; justify-self: end; font-size: 16px; }
+  /* the scope suffix (· POKÉMON) is an honesty claim — it WRAPS, never clips */
+  .mtTag { grid-area: tag; font-size: 9.5px; align-self: center; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.4; }
+  .mtTagFull { display: none; }
+  .mtTagShort { display: inline; }
+  .mtInstrument { grid-area: inst; width: 72px; align-self: center; }
+  .mtRight { text-align: right; }
+  .mtSub { grid-area: sub; justify-self: end; font-size: 11px; }
+  /* the figure is signed and inked — the triangle is noise at this scale */
+  .mtStage .tri, .mHero .tri { display: none; }
+  /* horizon chip hugs the figure tighter on the narrow line */
+  .mtHz { min-width: 0; margin-left: 6px; }
 }
 
 /* ══ FROSTED LIQUID GLASS (Aug 6, the Robinhood pass) ══
