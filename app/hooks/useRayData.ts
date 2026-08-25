@@ -65,6 +65,10 @@ interface RayData {
   deepValue: DeepValueByMarket;
   backtest: Backtest | null;
   market: MarketData | null;
+  /** the forward calls ledger's public accrual meter (receipts.json, 1KB,
+      eager): counts + graded only — medians publish at 20 graded, and the
+      served file carries none until then. Never blended with the replay. */
+  receipts: ReceiptsData | null;
   lastCrawl: string;
   sources: string[];
   /** honest full-corpus counts from meta.json (incl. the Goldin sold-archive
@@ -200,8 +204,18 @@ export interface MarketSeriesJson {
   houseAccuracy: { period: string; value: number; n: number }[];
   analytics?: import('../types').MarketAnalytics;
 }
+export interface ReceiptsData {
+  record: {
+    card: { n: number; graded: number; medRatio: number | null; within30Pct: number | null };
+    vsbid: { n: number; graded: number; medRatio: number | null; belowHit: number | null };
+    asOf: string;
+  };
+  rows: { id: string; k: string; d: string; sd: string; p: number; r: number; f: number; m: string; t: string; a: string; h: string }[];
+}
+
 interface RayPayload {
   market: MarketData | null;
+  receipts: ReceiptsData | null;
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeByMarket;
@@ -298,15 +312,17 @@ function loadRayData(): Promise<RayPayload> {
 
   inflight = (async () => {
     // ── phase 1: the small eager payload — stats + meta + upcoming (w/ signals)
-    const [statsR, metaR, upR, btR, mkR, cbR] = await Promise.allSettled([
+    const [statsR, metaR, upR, btR, mkR, cbR, rcR] = await Promise.allSettled([
       fetchJson('/data/ray/stats.json'),
       fetchJson('/data/ray/meta.json'),
       fetchJson('/data/ray/upcoming.json'),
       fetchJson('/data/ray/backtest.json'),
       fetchJson('/data/ray/market.json'),
       fetchJson('/data/ray/close-board.json'),
+      fetchJson('/data/ray/receipts.json'),
     ]);
     const market = mkR.status === 'fulfilled' ? (mkR.value as MarketData) : null;
+    const receipts = rcR.status === 'fulfilled' ? (rcR.value as ReceiptsData) : null;
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
     const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[]; totalLots?: number; totalSold?: number };
     const backtest = btR.status === 'fulfilled' ? (btR.value as Backtest) : null;
@@ -362,6 +378,7 @@ function loadRayData(): Promise<RayPayload> {
         deepValue: up.deepValue || {},
         backtest,
         market,
+        receipts,
         lastCrawl: metaData.lastCrawl || '',
         sources: metaData.sources || [],
         totalLots: metaData.totalLots,
@@ -419,7 +436,11 @@ function loadRayData(): Promise<RayPayload> {
               const closeTimes = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).saleDateTime]));
               const merged = full.map(l => {
                 let x = l;
-                if (signals.get(l.id) != null) x = { ...x, signal: signals.get(l.id) };
+                // has() + !== undefined: the build stamps signal:null ON
+                // PURPOSE (a x5-sanity-killed flag must stay killed — an
+                // undefined signal lets lotSignal client-recompute and could
+                // resurrect it). Attach explicit nulls; skip only true absence.
+                if (signals.has(l.id) && signals.get(l.id) !== undefined) x = { ...x, signal: signals.get(l.id) };
                 if (soldComps.get(l.id) != null) x = { ...x, soldComp: soldComps.get(l.id) };
                 if (bidVels.get(l.id) != null) x = { ...x, bidVelocity: bidVels.get(l.id) };
                 if (closeTimes.get(l.id) != null) x = { ...x, saleDateTime: closeTimes.get(l.id) };
@@ -470,6 +491,7 @@ function loadRayData(): Promise<RayPayload> {
       recentSold: {},
       deepValue: {},
       market: null,
+      receipts: null,
       backtest,
       lastCrawl: metaData.lastCrawl || '',
       sources: metaData.sources || [],
@@ -663,6 +685,7 @@ export function useRayData(): RayData {
     deepValue: data?.deepValue || {},
     backtest: data?.backtest || null,
     market: data?.market || null,
+    receipts: data?.receipts || null,
     lastCrawl: data?.lastCrawl || '',
     sources: data?.sources || [],
     totalLots: data?.totalLots,
