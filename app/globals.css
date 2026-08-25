@@ -643,20 +643,19 @@ h1 {
    ink 12.67 · secondary 8.28 · muted 5.51 · faint 4.53 (now AA all sizes) ·
    up 3.81 / down 4.22 (LARGE numerals only) · up-text 5.41 / down-text 5.85 ── */
 :root {
-  /* THE TAN IS GONE (Collin, Aug 25 2026). The 'paper' band is now a dark
-     ELEVATED band — one register above the ground — and the token names
-     survive so every historic var(--paper-*) consumer keeps working. */
-  --paper: #0e0f12;              /* the band — one step off the #08090a ground */
-  --paper-ink: #f7f8f8;
-  --paper-secondary: #d0d6e0;
-  --paper-muted: #8a8f98;
-  --paper-faint: #878d97;
-  --paper-line: rgba(255, 255, 255, 0.08);
-  --paper-edge: rgba(255, 255, 255, 0.12);
-  --paper-up: #57be87;
-  --paper-down: #cc6a5c;
-  --paper-up-text: #57be87;
-  --paper-down-text: #cc6a5c;
+  /* Collin (Aug 25 2026): the cream bands STAY — they break up the scroll.
+     (Briefly re-pointed dark in the de-slop sweep, restored same day.) */
+  --paper: #E2D9C4;              /* the banner block itself — chords with butter, seam vs ground 13.75:1 */
+  --paper-ink: #1C1712;          /* primary ink on paper — matches the warm-black family */
+  --paper-secondary: #3D3830;    /* secondary ink on paper */
+  --paper-muted: #5A5240;        /* muted ink on paper (AA on --paper at small sizes) */
+  --paper-faint: #665F4B;        /* faint ink on paper — 4.53:1, AA all sizes */
+  --paper-line: rgba(28, 23, 18, 0.16);
+  --paper-edge: rgba(28, 23, 18, 0.25);   /* .ray-band border-block */
+  --paper-up: #1B7A48;           /* print-density green — LARGE numerals only (3:1) */
+  --paper-down: #B23A31;         /* print-density red — LARGE numerals only (3:1) */
+  --paper-up-text: #14603A;      /* green deep enough for small text (4.5:1) */
+  --paper-down-text: #8F2C25;    /* red deep enough for small text (4.5:1) */
 }
 .ray-band, .ray-paper {
   /* TOKEN FLIP: everything inside inherits the paper ramp — inline var()
@@ -670,11 +669,15 @@ h1 {
   --color-up: var(--paper-up-text);
   --color-down: var(--paper-down-text);
   --color-down-text: var(--paper-down-text);
-  /* the band is dark now — butter inherits from the shell unchanged */
+  /* butter NEVER sits on paper (1.01:1) — butter roles flip to ink */
+  --color-butter: var(--paper-ink);
+  --color-butter-text: var(--paper-ink);
+  --color-butter-deep: var(--paper-ink);
+  --color-butter-subtle: rgba(28, 23, 18, 0.09);
   --color-border: var(--paper-line);
   --hairline: var(--paper-line);
   --hairline-soft: var(--paper-line);
-  --color-bg-elevated: rgba(255, 255, 255, 0.03);
+  --color-bg-elevated: transparent;
   background: var(--paper);
   color: var(--paper-ink);
 }
@@ -2982,15 +2985,15 @@ body {
   gap: 10px 14px;
   margin: 20px auto 0;
   padding-top: 16px;
-  border-top: 2px dotted rgba(247, 248, 248, 0.25);
+  border-top: 2px dotted rgba(28, 23, 18, 0.25);
   max-width: 720px;
   font-size: 13px;
   color: var(--paper-muted, #5A5240);
   font-variant-numeric: tabular-nums;
 }
 .ray-engine-stats b { color: var(--paper-ink, #1C1712); font-weight: 650; }
-.ray-engine-stats b.up { color: #57be87; }
-.ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(247, 248, 248, 0.3); align-self: center; }
+.ray-engine-stats b.up { color: #1e7a4d; }
+.ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(28, 23, 18, 0.3); align-self: center; }
 .ray-engine-cta {
   display: inline-block;
   margin-top: 22px;
@@ -3002,7 +3005,7 @@ body {
   border-radius: 999px;
   text-decoration: none;
 }
-.ray-engine-cta:hover { background: #ffffff; }
+.ray-engine-cta:hover { background: #000; }
 @media (max-width: 640px) {
   .ray-engine-card { border-radius: 20px; }
   .ray-engine-stats { flex-direction: column; gap: 8px; }
@@ -3289,12 +3292,12 @@ body {
 }
 .ck-ghost-row .kicker { flex: none; width: 110px; }
 
-/* band chart tokens — the dark ramp (the beige-era values retired) */
+/* band chart tokens — ink on paper */
 .ray-band {
-  --chart-grid: rgba(255, 255, 255, 0.06);
-  --chart-tick: #8a8f98;
-  --chart-line-2: #878d97;
-  --chart-cursor: rgba(255, 255, 255, 0.25);
+  --chart-grid: var(--paper-line, rgba(28, 23, 18, 0.12));
+  --chart-tick: var(--paper-muted, #6b6154);
+  --chart-line-2: var(--paper-faint, #8d8578);
+  --chart-cursor: rgba(28, 23, 18, 0.30);
 }
 
 
