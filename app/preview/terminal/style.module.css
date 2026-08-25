@@ -1413,7 +1413,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .slipRoom {
   position: relative;
   z-index: 1;
-  padding-block: clamp(20px, 2.4vw, 32px);
+  padding-block: clamp(14px, 1.8vw, 24px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1435,7 +1435,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 
 /* ── Room B mobile ── */
 @media (max-width: 900px) {
-  .slipRoom { padding-block: 24px 32px; }
+  .slipRoom { padding-block: 18px 22px; }
 }
 
 /* THE SECOND SCORE LINE — the same engraved groove that opens the hero under
@@ -1999,13 +1999,13 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    child while pending, so `.slipRoom:empty` still collapses when a market
    genuinely resolves to nothing. */
 .slipHold {
-  min-height: 287px;
+  min-height: 279px; /* measured: the settled 390px slip (wrap = band, no margin) */
 }
-/* 218px measured on the settled desktop slip (1440×900). An over-reservation
+/* 210px measured on the settled desktop slip (1440×900). An over-reservation
    is not free: the room shrinks to the real height when the slip mounts, which
    is itself a shift — 236px here cost a measurable 0.085. */
 @media (min-width: 900px) {
-  .slipHold { min-height: 218px; }
+  .slipHold { min-height: 210px; }
 }
 
 /* ══ THE MARKET TAPE — the hero's stage in the 02 board's grammar,

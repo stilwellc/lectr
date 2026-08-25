@@ -26,7 +26,7 @@ export default function SettlementSlip({
   serial: string; // YYYYMMDD from lastCrawl
 }) {
   return (
-    <div className="ray-band" style={{ marginTop: 34, paddingBlock: '22px 16px' }}>
+    <div className="ray-band" style={{ paddingBlock: '16px 14px' }}>
       <section className="rail">
         <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
         <div style={{ borderTop: '2px dotted var(--paper-line)', marginBottom: 10 }} />
@@ -36,7 +36,7 @@ export default function SettlementSlip({
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px 40px', justifyContent: 'space-between' }}>
-          <div style={{ flex: '1 1 340px', maxWidth: 560 }}>
+          <div style={{ flex: '1 1 340px', maxWidth: 720 }}>
             {lines.map(line => (
               <div key={line.k} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 0', fontSize: 13.5 }}>
                 <span style={{ color: 'var(--paper-muted)' }}>{line.k}</span>
@@ -69,7 +69,7 @@ export default function SettlementSlip({
 
         <div className="kicker" style={{ borderTop: '2px dotted var(--paper-line)', marginTop: 8, paddingTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--paper-muted)' }}>
           <span>settled nightly, every hammer on the book</span>
-          <span>no. {serial}</span>
+          <span style={{ whiteSpace: 'nowrap' }}>no.&nbsp;{serial}</span>
         </div>
       </section>
     </div>
