@@ -634,7 +634,7 @@ const CARD_BRAND_LEAD = /^\s*(upper deck|panini|topps|bowman|donruss|fleer|leaf)
 // they dilute the signal and block publish for a parser that hasn't actually
 // drifted. Raising these houses' own identity coverage is a separate, tracked
 // improvement (extend recoverPlayerSlug to their formats), not a publish gate.
-const CANARY_EXCLUDE_HOUSES = new Set(['REA', 'Huggins & Scott', 'SCP', 'Lelands', 'Memory Lane', 'Love of the Game', 'NFL Auction']);
+const CANARY_EXCLUDE_HOUSES = new Set(['REA', 'Huggins & Scott', 'SCP', 'Lelands', 'Memory Lane', 'Love of the Game', 'NFL Auction', 'MLB Auctions']);
 
 export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: number; coverage: number } {
   let stamped = 0, total = 0, covered = 0;

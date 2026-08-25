@@ -63,6 +63,7 @@ const HOUSE_ID_SLUGS: Record<AuctionHouse, string[]> = {
   "Hake's": ['hakes'],
   Propstore: ['propstore'],
   'NFL Auction': ['nflauction'],
+  'MLB Auctions': ['mlbauction'],
 };
 
 const SALE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

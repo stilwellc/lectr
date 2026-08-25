@@ -87,7 +87,7 @@ jobs:
         # lelands/memorylane/lotg = the CreateAuction trio — HEADLESS legs (same
         # Cloudflare-clearing Playwright pattern as rrauction; one crawler, three
         # houses). rea/hugginsscott/scp = curl legs. All additive to sports/pop.
-        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, lelands, memorylane, lotg, nflauction]
+        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, lelands, memorylane, lotg, nflauction, mlbauction]
     runs-on: ubuntu-latest
     # RAISED 60→90 (Aug 4 2026): christies measured 43.9min (Aug 3) / 34.6min
     # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
@@ -124,7 +124,7 @@ jobs:
       # every fetch-based house crawls via the monolith; RR runs its headless
       # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
-        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","lelands","memorylane","lotg","nflauction"]'), matrix.house) }}
+        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","lelands","memorylane","lotg","nflauction","mlbauction"]'), matrix.house) }}
         run: npx tsx scripts/ray-crawl.ts
       - name: Crawl rrauction (headless)
         if: matrix.house == 'rrauction'
@@ -153,6 +153,11 @@ jobs:
         # GAME-USED only (league charity house; iSynApp JSON api, plain curl).
         # closed sweep is the sold-resolve — final bid IS all-in (no premium)
         run: npx tsx scripts/crawl-nflauction.ts --closed-pages 30 --delay 150 --live --write
+      - name: Crawl MLB Auctions
+        if: matrix.house == 'mlbauction'
+        # GAME-USED only (same iSynApp platform, sid 1101001; winning-bid page
+        # render is the sold gate — the MLB config exposes no reserveAmt)
+        run: npx tsx scripts/crawl-mlbauction.ts --closed-pages 30 --delay 400 --live --write
       # CreateAuction trio — HEADLESS (Playwright clears Cloudflare, same as
       # rrauction). --live reads the current sale off /Lots/Gallery (one nav,
       # bids inline) + per-lot resolve of closed upcoming ids.
@@ -221,7 +226,7 @@ jobs:
         run: |
           mkdir -p data/corpus/segments
           pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp lelands memorylane lotg nflauction; do
+          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp lelands memorylane lotg nflauction mlbauction; do
             if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
               echo "segment $h fresh from artifact — skipping R2"
             else

@@ -2,7 +2,7 @@ export type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 
   // sports + pop-culture expansion (Aug 2026 — built isolated, wired in per house
   // as each clears verification; see scripts/crawl-<house>.ts + their segments)
   | 'REA' | 'Huggins & Scott' | 'SCP' | 'Lelands' | 'Memory Lane' | 'Love of the Game'
-  | "Julien's" | "Hake's" | 'Propstore' | 'NFL Auction';
+  | "Julien's" | "Hake's" | 'Propstore' | 'NFL Auction' | 'MLB Auctions';
 /** 'withdrawn'/'unknown-result' are actively used post-migration for vanished
     or unreconciled non-Goldin lots (see §1d + W11). */
 export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn' | 'unknown-result';
