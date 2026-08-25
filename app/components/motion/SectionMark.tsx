@@ -17,6 +17,13 @@ export type SectionMarkProps = {
  * and real content must sit above it (position: relative or z-index).
  */
 export default function SectionMark({ n, align = 'left', style }: SectionMarkProps) {
+  // RETIRED (Aug 25 2026): the ghost '01/02/03' ordinal is the zero-padded
+  // section-number tell. Props accepted so no caller breaks; nothing renders.
+  void n; void align; void style;
+  return null;
+}
+
+function SectionMarkRetired({ n, align = 'left', style }: SectionMarkProps) {
   return (
     <span
       aria-hidden="true"

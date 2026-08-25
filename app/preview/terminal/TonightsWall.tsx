@@ -116,7 +116,7 @@ export default function TonightsWall({
     >
       <div className={styles.wallHead}>
         <div>
-          <h2 className={styles.roomTitle}>Tonight&rsquo;s <em>wall</em></h2>
+          <h2 className={styles.roomTitle}>Tonight&rsquo;s wall</h2>
           <p className={styles.roomSub}>{evening
             ? 'The room tonight — closing soonest first, priced under where their comparables sell.'
             : 'Today\u2019s call and the strongest flagged lots on the block — priced under where their comparables sell.'}</p>
@@ -148,7 +148,6 @@ export default function TonightsWall({
               />
             </span>
             <span className={styles.wallMeta}>
-              <span className={styles.wallIdx} aria-hidden>{String(i + 1).padStart(2, '0')}</span>
               <span className={styles.wallMaker}>{ARTIST_LABEL[it.lot.artist] || it.lot.artist}</span>
               <span className={styles.wallEst}>
                 {estLine(it.lot)}

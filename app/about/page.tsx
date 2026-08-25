@@ -192,8 +192,8 @@ const TAPE = (() => {
 })();
 
 const CHAPTERS = [
-  ['01', 'Corpus'], ['02', 'Engine'], ['03', 'Record'], ['04', 'Proof'],
-  ['05', 'Restraint'], ['06', 'Graph'], ['07', 'Stakes'],
+  ['1', 'Corpus'], ['2', 'Engine'], ['3', 'Record'], ['4', 'Proof'],
+  ['5', 'Restraint'], ['6', 'Graph'], ['7', 'Stakes'],
 ] as const;
 
 /* ── presentation primitives ─────────────────────────────────────────────── */
@@ -571,8 +571,7 @@ function Sec({ ord, label, title, children }: {
   return (
     <section className="deck-slide" id={`ch-${ord}`} data-ch={ord}>
       <div className="rail dk-s" style={{ position: 'relative' }}>
-        <span className="dk-ord" aria-hidden>{ord}</span>
-        <span className="kicker dk-kick">{ord} · {label}</span>
+        <span className="kicker dk-kick">{label}</span>
         <h2 className="deck-h">{title}</h2>
         {children}
       </div>
@@ -616,7 +615,7 @@ export default function AboutPage() {
       <nav className="dk-rail" aria-label="Chapters">
         {CHAPTERS.map(([ord, lb]) => (
           <a key={ord} href={`#ch-${ord}`} data-for={ord}>
-            <i /><span className="dk-rail-ord">{ord}</span><span className="dk-rail-lb">{lb}</span>
+            <i /><span className="dk-rail-lb">{lb}</span>
           </a>
         ))}
       </nav>
@@ -693,7 +692,7 @@ export default function AboutPage() {
 
         {/* "It took 35 years to build" overclaimed — lectr didn't spend the
             years, the record spans them. Same swagger, honest verb. */}
-        <Sec ord="01" label="The corpus" title={<>Depth is the moat. {ARCHIVE_YEARS} years of results, one schema.</>}>
+        <Sec ord="1" label="The corpus" title={<>Depth is the moat. {ARCHIVE_YEARS} years of results, one schema.</>}>
           <p style={p}>
             Comparable-sales pricing is only as good as the pool behind it, and auction results are
             scattered across houses that publish in different shapes, purge lots when a sale closes,
@@ -714,20 +713,20 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="02" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
+        <Sec ord="2" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
           <p style={p}>
             The engine does not forecast taste. It answers a narrower question with evidence: given
             everything that has actually sold, where should this lot clear — and does the house&rsquo;s
             estimate agree?
           </p>
           <div className="dk-s" style={{ margin: '20px 0 0' }}>
-            <Step n="01" title="Resolve the object"
+            <Step n="1" title="Resolve the object"
               body={<>Every lot is parsed into a structured identity — maker, form, model line, reference, edition, dimensions, year, materials — not just a title string. Two lots match on what they <em>are</em>, never on how a cataloguer chose to describe them.</>} />
-            <Step n="02" title="Build the comparable pool"
+            <Step n="2" title="Build the comparable pool"
               body={<>Candidates are scored on title similarity <em>and</em> structural agreement, then put through hard gates: a sofa never comps a chair, a Daytona never comps a Datejust. Pools that don&rsquo;t clear the bar are discarded rather than loosened.</>} />
-            <Step n="03" title="Price it, with dispersion"
+            <Step n="3" title="Price it, with dispersion"
               body={<>A recency-weighted median over the surviving pool, with a dispersion guard that widens or withdraws the read when comparable sales disagree with each other.</>} />
-            <Step n="04" title="Call the direction, and rate the confidence"
+            <Step n="4" title="Call the direction, and rate the confidence"
               body={<>The output is a directional read — trading below or above where comparables clear — carried with a confidence tier calibrated against{calN ? <> {fmt(calN)} scored observations</> : ' the replay'}, and a band showing how tightly reads at that tier have historically landed.</>} />
           </div>
           <p style={caption}>
@@ -738,7 +737,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="03" label="The record" title={<>The whole thesis, replayed against history.</>}>
+        <Sec ord="3" label="The record" title={<>The whole thesis, replayed against history.</>}>
           <p style={p}>
             {fmt(F.n)} flagged calls and {fmt(U.n)} unflagged controls, each scored on what the lot
             actually did next. Two bases are published side by side, because they answer different
@@ -796,7 +795,7 @@ export default function AboutPage() {
           </div>
         </section>
 
-        <Sec ord="04" label="The proof" title={<>We said what it was worth. The room paid less.</>}>
+        <Sec ord="4" label="The proof" title={<>We said what it was worth. The room paid less.</>}>
           <p style={p}>
             The record above is an aggregate. This is what it looks like as individual lots: the
             engine priced each object from comparable sold evidence, and the hammer came in under
@@ -822,7 +821,7 @@ export default function AboutPage() {
 
         <HeroLot c={proof.cases.find((x) => (x as { hero?: boolean }).hero) ?? proof.cases[0]} />
 
-        <Sec ord="05" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
+        <Sec ord="5" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
           <p style={p}>
             lectr runs an explicit ladder: a confidence-interval
             index where the data resolves the sign, a measured demand read where coverage allows, and
@@ -855,7 +854,7 @@ export default function AboutPage() {
           </div>
         </Sec>
 
-        <Sec ord="06" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
+        <Sec ord="6" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
           <p style={p}>
             A price is not an answer on its own. Every lot resolves into a chain you can walk — and
             every step of it is a page, not a footnote. The links below open real ones.
@@ -897,7 +896,7 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="07" label="What it changes" title={<>For the person holding the paddle.</>}>
+        <Sec ord="7" label="What it changes" title={<>For the person holding the paddle.</>}>
           <p style={p}>
             A price is only useful if it changes what someone does. Four people ask the same question
             — what does this actually clear at, and how sure can you be — and get four different days
@@ -1083,7 +1082,7 @@ const DECK_CSS = `
   .dk-cover::before {
     content: ""; position: absolute; inset: -20% -10% auto;
     height: 90%;
-    background: radial-gradient(ellipse 60% 50% at 32% 30%, rgba(232,218,182,.06), transparent 70%);
+    background: none;
     pointer-events: none;
   }
   .dk-cover-rail { position: relative; }
@@ -1099,14 +1098,14 @@ const DECK_CSS = `
   }
   .dk-h1 {
     font-family: var(--font-serif), Georgia, serif;
-    font-size: var(--d-cover); font-weight: 400;
-    letter-spacing: -0.02em; line-height: 1.04;
+    font-size: var(--d-cover); font-weight: 620;
+    letter-spacing: -0.025em; line-height: 1.08;
     color: var(--color-fg);
     margin: 0 0 clamp(18px, 2.2vw, 28px);
     max-width: 15ch; text-wrap: balance;
   }
   .dk-h1-line2 { display: block; }
-  .dk-h1 b { font-weight: 400; font-variant-numeric: tabular-nums; }
+  .dk-h1 b { font-weight: 620; font-variant-numeric: tabular-nums; }
   .dk-u { position: relative; white-space: nowrap; }
   .dk-u::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0.02em; height: 3px;
@@ -1199,7 +1198,7 @@ const DECK_CSS = `
 
   /* ── slides ─────────────────────────────────────────────────────── */
   .deck-slide { padding: clamp(64px, 8vw, 120px) 0 clamp(20px, 2.6vw, 36px); scroll-margin-top: 76px; }
-  .dk-kick { display: block; margin: 0 0 14px; color: var(--color-butter-text); }
+  .dk-kick { display: none; } /* eyebrow above headline — retired */
   .dk-ord {
     position: absolute; right: var(--gutter, 24px); top: clamp(-30px, -3vw, -14px);
     font-family: var(--font-serif), Georgia, serif;
@@ -1209,8 +1208,8 @@ const DECK_CSS = `
   }
   .deck-h {
     font-family: var(--font-serif), Georgia, serif;
-    font-size: var(--d-h); font-weight: 400;
-    letter-spacing: -0.015em; line-height: 1.1;
+    font-size: var(--d-h); font-weight: 620;
+    letter-spacing: -0.025em; line-height: 1.12;
     color: var(--color-fg);
     margin: 0 0 16px; max-width: 22ch; text-wrap: balance;
     position: relative; z-index: 1;
@@ -1225,7 +1224,7 @@ const DECK_CSS = `
     border-block: 1px solid var(--hairline);
     margin-block: clamp(24px, 3vw, 44px);
     background:
-      radial-gradient(ellipse 50% 60% at 50% 45%, rgba(232,218,182,.045), transparent 70%);
+      none;
   }
   .statement-fig {
     font-size: var(--d-figure); font-weight: 800;
@@ -1336,8 +1335,8 @@ const DECK_CSS = `
   }
   .close-line {
     font-family: var(--font-serif), Georgia, serif;
-    font-size: var(--d-close); font-weight: 400;
-    letter-spacing: -0.015em; line-height: 1.08;
+    font-size: var(--d-close); font-weight: 620;
+    letter-spacing: -0.025em; line-height: 1.1;
     color: var(--color-fg);
     margin: 0 0 18px; max-width: 20ch; text-wrap: balance;
   }

@@ -62,7 +62,7 @@ export default function CorrectionsRegister() {
         <article style={wrap}>
           <div style={{ borderTop: '2px solid var(--color-fg)', paddingTop: 20 }}>
             <p className="kicker" style={{ margin: '0 0 10px' }}>{fmtLong(SWEPT)}</p>
-            <h2 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 24, fontWeight: 400, letterSpacing: '-0.015em', margin: '0 0 14px', lineHeight: 1.2 }}>
+            <h2 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 24, fontWeight: 620, letterSpacing: '-0.02em', margin: '0 0 14px', lineHeight: 1.2 }}>
               Reconciled the editorial figures to the live build
             </h2>
             <p style={p}>

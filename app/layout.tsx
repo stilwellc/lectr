@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Inter, Fraunces, IBM_Plex_Mono } from 'next/font/google';
+import { Inter, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
@@ -21,11 +21,13 @@ const inter = Inter({
 // = an editorial "museum voice" display serif (optical sizing, high contrast) for
 // headline authority; IBM Plex Mono = terminal-grade tabular figures for all data.
 // Exposed as --font-serif-display / --font-mono-data; Inter stays the neutral UI sans.
-const fraunces = Fraunces({
+const serifDisplay = Inter({
+  // the display serif is RETIRED (Collin, Aug 25 2026: 'that very specific
+  // serif font'). The variable stays so every var(--font-serif-display)
+  // consumer resolves to Inter — display surfaces carry weight/tracking
+  // overrides in the de-slop block at the end of globals.css.
   subsets: ['latin'],
   variable: '--font-serif-display',
-  display: 'swap',
-  axes: ['opsz', 'SOFT', 'WONK'],
 });
 const plexMono = IBM_Plex_Mono({
   subsets: ['latin'],
@@ -64,7 +66,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable} ${plexMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${serifDisplay.variable} ${plexMono.variable}`}>
       <head>
         {/* Phase-1 data preloads: useRayData fetches these eagerly (no ?v=)
             after hydration — preloading starts the ~1 MB br transfer at t=0.

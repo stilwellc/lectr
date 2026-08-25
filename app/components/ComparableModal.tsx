@@ -973,7 +973,7 @@ export default function ComparableModal({
               <h2 style={{
                 fontFamily: "var(--font-serif), serif",
                 fontSize: 22,
-                fontWeight: 400,
+                fontWeight: 600,
                 lineHeight: 1.25,
                 marginBottom: 4,
               }}>
@@ -1255,13 +1255,13 @@ export default function ComparableModal({
                         borderRadius: 8,
                         overflow: 'hidden',
                         flexShrink: 0,
-                        background: 'radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-butter) 8%, transparent), transparent 72%), var(--color-bg-elevated)',
+                        background: 'var(--color-bg-elevated)',
                         border: '1px solid color-mix(in srgb, var(--color-butter) 13%, transparent)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}>
-                        <span style={{ fontFamily: 'var(--font-serif), serif', fontStyle: 'italic', fontWeight: 300, fontSize: 20, lineHeight: 1, color: 'color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))' }}>
+                        <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontWeight: 600, fontSize: 20, lineHeight: 1, color: 'color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))' }}>
                           {(craftTitle(comp.title) || '?').charAt(0)}
                         </span>
                         {comp.imageUrl && (

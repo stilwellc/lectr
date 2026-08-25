@@ -184,8 +184,8 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
           position: 'relative',
           fontFamily: 'var(--font-serif), serif',
           fontSize: 24,
-          fontWeight: 400,
-          letterSpacing: '-0.015em',
+          fontWeight: 620,
+          letterSpacing: '-0.02em',
           padding: '16px 0 12px',
         }}>
           Price <span style={{ fontStyle: 'normal' }}>history</span>

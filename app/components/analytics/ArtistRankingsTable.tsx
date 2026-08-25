@@ -573,7 +573,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
             ? (expanded ? sortedBid : sortedBid.slice(0, COLLAPSED_ROWS)).map((row, i) => {
                 const inner = (
                   <>
-                    <span className="ray-rankings-card-rank">{row.pinLast ? '—' : String(i + 1).padStart(2, '0')}</span>
+                    <span className="ray-rankings-card-rank">{row.pinLast ? '—' : String(i + 1)}</span>
                     <span className="ray-rankings-card-name" style={row.pinLast ? { color: 'var(--color-text-muted)' } : undefined}>
                       {row.href && <ArtistAvatar label={row.label} size={24} />}
                       {row.label}
@@ -597,7 +597,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               })
             : (expanded ? sorted : sorted.slice(0, COLLAPSED_ROWS)).map((row, i) => (
                 <Link key={row.slug} href={`/makers/${row.slug}`} className="ray-rankings-card">
-                  <span className="ray-rankings-card-rank">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="ray-rankings-card-rank">{String(i + 1)}</span>
                   <span className="ray-rankings-card-name">
                     <ArtistAvatar label={row.label} size={24} />
                     {row.label}

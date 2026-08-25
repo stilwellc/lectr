@@ -817,7 +817,7 @@ export default function TerminalHomePage() {
                     padding: '10px 0 18px',
                   }}
                 >
-                  <h2 className={styles.feedTitle}>On the <em>block</em></h2>
+                  <h2 className={styles.feedTitle}>On the block</h2>
                   {nextHammer && (
                     <span style={{ fontSize: 13.5, color: 'var(--tt-muted)' }}>
                       Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}

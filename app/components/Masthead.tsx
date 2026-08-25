@@ -47,7 +47,7 @@ export default function Masthead({
   sub?: React.ReactNode;
   style?: React.CSSProperties;
 }) {
-  const no = (serial || new Date().toISOString()).slice(0, 10).replace(/-/g, '');
+  void kicker; void serial; void datum; // accepted, no longer rendered
   return (
     <header className="ray-masthead" style={style}>
       <style>{`
@@ -57,39 +57,20 @@ export default function Masthead({
         }
       `}</style>
 
-      {/* certificate kicker row: butter microcap + dated serial, ruled under */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          flexWrap: 'wrap',
-          gap: '2px 18px',
-          paddingBottom: 8,
-          borderBottom: '1px solid var(--hairline, var(--color-border))',
-        }}
-      >
-        <span className="kicker" style={{ color: 'var(--color-butter-text)' }}>{kicker}</span>
-        <span
-          className="kicker"
-          style={{
-            fontVariantNumeric: 'tabular-nums',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {datum ?? `No. ${no}`}
-        </span>
-      </div>
+      {/* the eyebrow row (kicker + serial) retired Aug 25 2026 — 'small text
+          description above every headline' is out; the headline opens the
+          page. kicker/serial props are accepted and ignored so no caller
+          breaks. */}
 
       {/* the statement */}
       <h1
         className="ray-masthead-h1"
         style={{
-          margin: '10px 0 0',
-          fontFamily: 'var(--font-serif), serif',
-          fontWeight: 400,
-          letterSpacing: '-0.015em',
-          lineHeight: 1.16,
+          margin: '0 0 0',
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontWeight: 640,
+          letterSpacing: '-0.025em',
+          lineHeight: 1.12,
           color: 'var(--color-fg)',
           maxWidth: 760,
         }}

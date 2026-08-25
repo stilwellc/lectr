@@ -696,9 +696,9 @@ export default function ValuePage() {
                           on a hotlink-block the plate shows through, never a gap */}
                       <span className="ray-value-row-thumb" aria-hidden="true" style={{
                         position: 'relative',
-                        background: 'radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent-gold) 8%, transparent), transparent 72%), var(--color-bg-elevated)',
+                        background: 'var(--color-bg-elevated)',
                       }}>
-                        <span style={{ fontFamily: 'var(--font-serif), serif', fontStyle: 'italic', fontWeight: 300, fontSize: 18, lineHeight: 1, color: 'color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint))' }}>
+                        <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontWeight: 600, fontSize: 18, lineHeight: 1, color: 'color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint))' }}>
                           {(ARTIST_LABEL[d.lot.artist] || d.lot.artist).charAt(0)}
                         </span>
                         {d.lot.imageUrl && (
@@ -861,11 +861,7 @@ export default function ValuePage() {
               backtest's own. ── */}
           <section className="rail ray-enter" style={{ paddingBlock: '18px 8px' }}>
             <div className="ray-engine-card">
-              <div className="ray-engine-eyebrow">
-                <img src="/brand/lectr-ink.png" alt="" aria-hidden />
-                <span>The value engine</span>
-              </div>
-              <h2 className="ray-engine-head">Every flag here <em>earned its ink</em>.</h2>
+              <h2 className="ray-engine-head">Every flag here earned its ink.</h2>
               <p className="ray-engine-body">
                 A read is comps, not opinion: same maker, same form, size-banded —
                 medians, never means. Each vertical carries its own gate (a jersey

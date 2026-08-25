@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 };
 
 const wrap: React.CSSProperties = { maxWidth: 648, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 22, fontWeight: 400, letterSpacing: '-0.015em', margin: '46px 0 10px' };
+const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 22, fontWeight: 620, letterSpacing: '-0.02em', margin: '46px 0 10px' };
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.72, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '6px 0 20px', fontSize: 14 };
@@ -65,7 +65,7 @@ export default function PricingEnginePost() {
           <p className="kicker" style={{ margin: '0 0 14px' }}>
             <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · July 24, 2026 · technical
           </p>
-          <h1 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 400, letterSpacing: '-0.015em', lineHeight: 1.15, margin: '0 0 14px' }}>
+          <h1 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 620, letterSpacing: '-0.025em', lineHeight: 1.15, margin: '0 0 14px' }}>
             How we built the price-movement engine
           </h1>
           <p style={{ ...p, fontSize: 16.5 }}>

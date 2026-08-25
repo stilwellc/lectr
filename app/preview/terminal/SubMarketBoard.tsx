@@ -405,6 +405,7 @@ const CHAPTER_GLYPHS: Record<string, React.ReactNode> = {
 
 /* ── a chapter marker — "01 · The engine", hairlines either side ── */
 function Chapter({ no, label }: { no: string; label: string }) {
+  void no; // ordinal retired — chapters introduce themselves by name alone
   const glyph = CHAPTER_GLYPHS[label.toLowerCase()];
   return (
     <div className={styles.chapter}>
@@ -414,7 +415,7 @@ function Chapter({ no, label }: { no: string; label: string }) {
           {glyph}
         </svg>
       )}
-      <b>{no}</b> · {label}
+      {label}
     </div>
   );
 }
@@ -681,11 +682,7 @@ export default function SubMarketBoard({
         <div className={styles.roomA} ref={ref}>
           {/* the altar — centered on the page axis */}
           <div className={styles.altar}>
-            <div className={styles.eyebrow}>
-              <img src="/brand/lectr-ink.png" alt="" className={styles.eyebrowMark} aria-hidden />
-              <span>The value engine</span>
-            </div>
-            <h2 className={styles.altarHead}>We find what the room <em>misprices</em>.</h2>
+            <h2 className={styles.altarHead}>We find what the room misprices.</h2>
             <p className={styles.altarSub}>
               Live lots flagged under their comparables, the market indices behind them,
               and the replayed record that keeps us honest.

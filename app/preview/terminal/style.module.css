@@ -20,7 +20,7 @@
   --tt-butter: #e8dab6;                  /* the accent — unchanged */
   --tt-secondary: #d0d6e0;               /* Linear text-secondary */
   --tt-muted: #8a8f98;                   /* Linear text-tertiary — the signature grey */
-  --tt-faint: #62666d;                   /* Linear text-quaternary */
+  --tt-faint: #878d97;                   /* lifted from #62666d — tiny text must READ (Aug 25) */
   --tt-hair: rgba(255, 255, 255, 0.06);  /* Linear border-primary, as alpha */
   --tt-hair-2: rgba(255, 255, 255, 0.10);/* Linear border-secondary, as alpha */
   /* literal, never var(--self) — a custom property referencing itself is a
@@ -44,9 +44,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(120% 80% at 78% -10%, rgba(232, 218, 182, 0.06), transparent 60%),
-    radial-gradient(90% 60% at 8% 108%, rgba(232, 218, 182, 0.03), transparent 55%);
+  background: none; /* ground blobs retired */
 }
 .grain {
   position: fixed;
@@ -122,17 +120,17 @@
   letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-secondary);
 }
 /* slim rows, one grammar: words left, instrument right — no dead space */
-.pulseGrid { display: flex; flex-direction: column; gap: 8px; }
+.pulseGrid { display: flex; flex-direction: column; gap: 0; }
 .pulseBlock {
+  /* de-bento (Aug 25): a ROW on a hairline, not a boxed tile */
   position: relative; display: flex; flex-direction: row; align-items: center;
   justify-content: space-between; gap: 12px;
-  min-width: 0; padding: 12px; overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px;
-  background: rgba(255, 255, 255, 0.028);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  transition: border-color 140ms var(--ease-signature, ease), background 140ms var(--ease-signature, ease);
+  min-width: 0; padding: 12px 2px; overflow: hidden;
+  border: 0; border-bottom: 1px solid var(--tt-hair);
+  background: none;
+  transition: background 140ms var(--ease-signature, ease);
 }
-.pulseBlock:hover { border-color: rgba(255, 255, 255, 0.12); }
+.pulseBlock:hover { background: rgba(255, 255, 255, 0.03); }
 .pulseCellText { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* the lead cell hosts the paddle — same quiet stock as its siblings; the
    OBJECT carries the warmth (one-accent discipline) */
@@ -161,9 +159,9 @@
 }
 .pulseUnit {
   font-style: normal; font-family: var(--font-inter), sans-serif;
-  font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tt-muted, #8a8f98);
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tt-muted, #8a8f98);
 }
-.pulseDir { font-style: normal; font-size: 9px; }
+.pulseDir { font-style: normal; font-size: 10px; }
 .pulseDir[data-dir='up'] { color: var(--color-up, #57be87); }
 .pulseDir[data-dir='down'] { color: var(--color-down, #cc6a5c); }
 .pulseSub { font-family: var(--font-inter), sans-serif; font-size: 10.5px; letter-spacing: 0.02em; color: var(--tt-muted, #8a8f98); }
@@ -174,15 +172,14 @@
    letterpressed count, a tilt mirroring the paddle's. */
 .pulseAction {
   position: relative; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 12px; cursor: pointer; overflow: hidden;
-  border: 1px solid rgba(232, 218, 182, 0.18); border-radius: 12px;
-  background: rgba(255, 255, 255, 0.028);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  gap: 12px; padding: 12px 2px; cursor: pointer; overflow: hidden;
+  border: 0; border-bottom: 1px solid rgba(232, 218, 182, 0.28);
+  background: none;
   transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease);
 }
 .pulseAction:hover {
-  border-color: rgba(232, 218, 182, 0.42);
-  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: rgba(232, 218, 182, 0.5);
+  background: rgba(255, 255, 255, 0.03);
 }
 .pulseAction:active .pulseTag { transform: translateY(0) scale(0.98); }
 .pulseAction:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
@@ -222,7 +219,7 @@
 }
 .pulseChip em {
   font-style: normal; font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-muted);
+  font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-muted);
 }
 .pulseChip[data-tonight='true'] { border-color: rgba(255, 255, 255, 0.16); }
 .pulseChip[data-tonight='true'] em { color: var(--tt-secondary); }
@@ -232,18 +229,18 @@
    value trend is a desktop read (hidden here). Compact cells: label top,
    instrument tucked low — no dead space. The departures line closes the card
    AFTER the search. */
-.mRightNow .pulseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mRightNow .pulseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .mRightNow .pulseGrid > * { grid-column: 1 / -1; order: 3; }
 .mRightNow .pulseBlock[data-lead='true'] { grid-column: auto; order: 1; }
 .mRightNow .pulseGrid > [data-below='true'] { grid-column: auto; order: 2; }
 .mRightNow .pulseBlock[data-lead='true'],
 .mRightNow .pulseGrid > [data-below='true'] {
   flex-direction: row; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 10px 12px;
+  gap: 8px; padding: 10px 2px;
 }
 .mRightNow .pulseBlock[data-lead='true'] .pulseLabel,
 .mRightNow .pulseGrid > [data-below='true'] .pulseLabel {
-  font-size: 9px; letter-spacing: 0.05em; white-space: normal; line-height: 1.35;
+  font-size: 10px; letter-spacing: 0.05em; white-space: normal; line-height: 1.35;
 }
 /* the labels already say it — captions are dead weight at thumb scale */
 .mRightNow .pulseBlock[data-lead='true'] .pulseSub,
@@ -407,10 +404,10 @@
 .feedSection { margin-top: clamp(44px, 6vw, calc(var(--sect-t) + var(--sect-b) - var(--space-4))); }
 .feedTitle {
   font-family: var(--font-serif-display), serif;
-  font-weight: 400;
-  font-size: clamp(24px, 3vw, 36px);
-  line-height: 1.05;
-  letter-spacing: -0.015em;
+  font-weight: 620;
+  font-size: clamp(22px, 2.6vw, 32px);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   color: var(--tt-fg);
   margin: 0;
 }
@@ -458,7 +455,7 @@
   display: flex; flex-direction: column; gap: 6px; min-width: 0; text-align: left;
   border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 12px 11px;
   background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: none;
 }
 button.mStat { cursor: pointer; font: inherit; transition: background 140ms var(--ease-signature, ease), border-color 140ms var(--ease-signature, ease); }
 button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.6); outline-offset: 2px; }
@@ -746,7 +743,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 /* plate index — 01–05 mono jewelry, echoing the masthead's inventory tag */
 .wallIdx {
   font-family: var(--font-mono-data), monospace;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 12px;
   letter-spacing: 0.18em;
   color: var(--tt-faint);
@@ -783,12 +780,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   padding: 14px;
   border-radius: 6px;
   overflow: hidden;
-  background: linear-gradient(180deg, #211E17 0%, #1C1A14 55%, #171510 100%);
-  border: 1px solid rgba(232, 218, 182, 0.1);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 252, 240, 0.05),
-    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
-    0 10px 24px -14px rgba(8, 6, 3, 0.65);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
   transform-origin: 50% 100%;
   transition:
     transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)),
@@ -813,70 +807,31 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   max-height: 100%;
   object-fit: contain; /* never crop artwork */
   display: block;
-  filter: drop-shadow(0 6px 10px rgba(8, 6, 3, 0.55));
-  transition: filter 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 /* frame-lift: the visitor takes the frame off the wall — the mat rises, its
    shadow deepens, the object's contact shadow stretches. The label stays. */
 .wallPlate:hover .wallMat {
-  transform: translateY(-4px) scale(1.015);
-  border-color: rgba(232, 218, 182, 0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 252, 240, 0.08),
-    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.5),
-    0 22px 34px -16px rgba(8, 6, 3, 0.75);
+  border-color: rgba(232, 218, 182, 0.28);
 }
-.wallPlate:hover .wallMat img { filter: drop-shadow(0 10px 14px rgba(8, 6, 3, 0.6)); }
-.wallPlate:active .wallMat { transform: translateY(-1px) scale(0.995); }
 .wallPlate:hover .wallMaker { color: var(--tt-butter); }
 /* the verdict ring — quieter than it was, still LIGHT: a 1.5px filament and
    one tight skirt. Green stays a real below-market flag; five plates must
    never read as five lamps. */
 .wallPlate[data-tone='up'] .wallMat {
-  border-color: rgba(87, 190, 135, 0.45);
-  box-shadow:
-    inset 0 0 0 1.5px rgba(87, 190, 135, 0.85),
-    inset 0 1px 0 rgba(255, 252, 240, 0.05),
-    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
-    0 0 12px 0 rgba(87, 190, 135, 0.22),
-    0 10px 24px -14px rgba(8, 6, 3, 0.65);
+  border-color: rgba(87, 190, 135, 0.6);
+  box-shadow: none;
 }
 .wallPlate[data-tone='up']:hover .wallMat {
-  box-shadow:
-    inset 0 0 0 1.5px rgba(87, 190, 135, 0.95),
-    inset 0 1px 0 rgba(255, 252, 240, 0.08),
-    inset 0 -12px 18px -12px rgba(8, 6, 3, 0.5),
-    0 0 14px 0 rgba(87, 190, 135, 0.28),
-    0 22px 34px -16px rgba(8, 6, 3, 0.75);
+  border-color: rgba(87, 190, 135, 0.85);
+  box-shadow: none;
 }
 /* the ignite — a filament striking: overshoot at 60%, settling to the exact
    static ring. (This keyframe was referenced for months and never defined —
    the mobile rings had never actually animated.) */
 @keyframes ttRingIgnite {
-  0% {
-    box-shadow:
-      inset 0 0 0 1.5px rgba(87, 190, 135, 0),
-      inset 0 1px 0 rgba(255, 252, 240, 0.05),
-      inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
-      0 0 12px 0 rgba(87, 190, 135, 0),
-      0 10px 24px -14px rgba(8, 6, 3, 0.65);
-  }
-  60% {
-    box-shadow:
-      inset 0 0 0 2px rgba(87, 190, 135, 1),
-      inset 0 1px 0 rgba(255, 252, 240, 0.05),
-      inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
-      0 0 18px 1px rgba(87, 190, 135, 0.34),
-      0 10px 24px -14px rgba(8, 6, 3, 0.65);
-  }
-  100% {
-    box-shadow:
-      inset 0 0 0 1.5px rgba(87, 190, 135, 0.85),
-      inset 0 1px 0 rgba(255, 252, 240, 0.05),
-      inset 0 -12px 18px -12px rgba(8, 6, 3, 0.55),
-      0 0 12px 0 rgba(87, 190, 135, 0.22),
-      0 10px 24px -14px rgba(8, 6, 3, 0.65);
-  }
+  0% { border-color: rgba(87, 190, 135, 0); }
+  60% { border-color: rgba(87, 190, 135, 1); }
+  100% { border-color: rgba(87, 190, 135, 0.6); }
 }
 /* desktop: rings ignite after their plates land */
 @media (prefers-reduced-motion: no-preference) {
@@ -997,14 +952,11 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .feedTitle {
   font-size: clamp(30px, 3.2vw, 42px);
 }
-.feedTitle em {
-  font-style: italic;
-  color: var(--tt-butter);
-}
+.feedTitle em { font-style: normal; color: inherit; }
 
 /* the On-the-block serif head — one italic butter word (kept) */
 .feedTitle { font-size: clamp(30px, 3.2vw, 42px); }
-.feedTitle em { font-style: italic; color: var(--tt-butter); }
+.feedTitle em { font-style: normal; color: inherit; }
 
 /* ═══════════════ THE FIVE-ROOM SYSTEM (home redesign) ═══════════════
    Material logic: DARK = the live market · PAPER = certified proof.
@@ -1038,13 +990,13 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    Fraunces title (the "On the block" keeper format) + one purpose line */
 .roomTitle {
   font-family: var(--font-serif-display), serif;
-  font-weight: 400;
-  font-size: clamp(30px, 3.2vw, 42px);
-  line-height: 1.05;
-  letter-spacing: -0.015em;
+  font-weight: 620;
+  font-size: clamp(26px, 2.8vw, 36px);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   margin: 0 0 6px;
 }
-.roomTitle em { font-style: italic; color: var(--tt-butter); }
+.roomTitle em { font-style: normal; color: inherit; }
 .roomPaper .roomTitle { color: var(--paper-ink, #1C1712); }
 .roomPaper .roomTitle em { color: var(--paper-ink, #1C1712); }
 .roomSub {
@@ -1155,14 +1107,14 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .eyebrowMark { height: 22px; width: auto; opacity: 0.92; }
 .altarHead {
   font-family: var(--font-serif-display), serif;
-  font-weight: 400;
-  font-size: clamp(32px, 4vw, 58px);
-  line-height: 1.08;
-  letter-spacing: -0.012em;
+  font-weight: 620;
+  font-size: clamp(28px, 3.4vw, 48px);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   color: var(--paper-ink, #1C1712);
   margin: 14px 0 0;
 }
-.altarHead em { font-style: italic; color: #8A7440; }
+.altarHead em { font-style: normal; color: inherit; }
 .altarSub {
   font-size: clamp(14px, 1.1vw, 16px);
   line-height: 1.5;
@@ -1178,10 +1130,11 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .monFigureRow { display: flex; align-items: baseline; gap: 20px; }
 .monFigure {
   font-family: var(--font-serif-display), serif;
-  font-weight: 400;
-  font-size: clamp(72px, 9vw, 128px);
+  font-weight: 620;
+  font-size: clamp(64px, 8vw, 112px);
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
   color: var(--paper-ink, #1C1712);
   font-variant-numeric: lining-nums;
 }
@@ -1194,7 +1147,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .monRecordLine { font-size: clamp(16px, 1.7vw, 24px); color: var(--paper-muted, #5A5240); margin-top: 12px; }
 .monChip {
   margin-top: 20px;
-  border: 1px solid rgba(28, 23, 18, 0.25);
+  border: 1px solid rgba(247, 248, 248, 0.25);
   border-radius: 999px;
   padding: 5px 14px;
   font-size: 12px;
@@ -1218,15 +1171,15 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .beamStage { position: relative; height: 24px; }
 .beamSvg { width: 100%; height: 100%; display: block; overflow: visible; }
-.beamRule { stroke: rgba(28, 23, 18, 0.8); stroke-width: 1; }
-.beamZero { stroke: rgba(28, 23, 18, 0.3); stroke-width: 1; stroke-dasharray: 2 5; }
+.beamRule { stroke: rgba(247, 248, 248, 0.8); stroke-width: 1; }
+.beamZero { stroke: rgba(247, 248, 248, 0.3); stroke-width: 1; stroke-dasharray: 2 5; }
 .beamDiamond { position: absolute; top: 50%; }
 .beamDiamond::before {
   content: '';
   position: absolute;
   inset: 0;
   transform: rotate(45deg);
-  background: #1C1712;
+  background: var(--paper-ink, #f7f8f8);
 }
 .beamEnds {
   display: flex;
@@ -1244,19 +1197,19 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .beamLarge .beamLabel { font-size: 12px; margin-bottom: 12px; }
 .beamLarge .beamEnds { margin-top: 12px; font-size: clamp(22px, 2.4vw, 34px); font-weight: 500; color: var(--paper-ink, #1C1712); }
 .beamLarge .beamRule { stroke-width: 1.5; }
-.beamLarge[data-dir='up'] .beamEnds { color: #1e7a4d; }
-.beamLarge[data-dir='down'] .beamEnds { color: #a03d2e; }
+.beamLarge[data-dir='up'] .beamEnds { color: #57be87; }
+.beamLarge[data-dir='down'] .beamEnds { color: #cc6a5c; }
 .beamLarge .beamDiamond::before { background: currentColor; }
-.beamLarge[data-dir='up'] { color: #1e7a4d; }
-.beamLarge[data-dir='down'] { color: #a03d2e; }
+.beamLarge[data-dir='up'] { color: #57be87; }
+.beamLarge[data-dir='down'] { color: #cc6a5c; }
 .beamMini .beamStage { height: 36px; }
 
 /* ── the demand line — the real series over its median ── */
 .demandLine { width: min(440px, 82vw); margin-top: 30px; }
 .demandSvg { width: 100%; height: 72px; display: block; overflow: visible; }
-.demandPath { stroke: #1C1712; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.demandPath { stroke: var(--paper-ink, #f7f8f8); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .demandBase { stroke: rgba(90, 82, 64, 0.55); stroke-width: 1; stroke-dasharray: 2 6; }
-.demandDot { fill: #1C1712; }
+.demandDot { fill: var(--paper-ink, #f7f8f8); }
 .demandEnds {
   display: flex;
   justify-content: space-between;
@@ -1280,10 +1233,10 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .tapeCol {
   align-self: start;
-  border: 1px solid rgba(28, 23, 18, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   overflow: hidden;
-  background: #E7DFCC;
+  background: rgba(255, 255, 255, 0.02);
 }
 .tapeCol .tapeRow:last-child { border-bottom: 0; }
 .colHead {
@@ -1293,8 +1246,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
-  background: rgba(28, 23, 18, 0.05);
-  border-bottom: 2px dotted rgba(28, 23, 18, 0.25);
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .tapeMore { grid-column: 1 / -1; }
 .tapeRow {
@@ -1310,22 +1263,21 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   min-height: 84px;
   padding: 0 18px;
   border: 0;
-  border-bottom: 2px dotted rgba(28, 23, 18, 0.22);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  background: #E7DFCC;
+  background: transparent;
   color: var(--paper-ink, #1C1712);
   cursor: pointer;
   text-align: left;
   font-family: inherit;
   transition: background 0.16s ease-out;
 }
-.tapeRow:nth-of-type(even) { background: #DCD2BB; }
-.tapeRow:hover { background: #D5CBB2; }
+.tapeRow:hover { background: rgba(255, 255, 255, 0.04); }
 .tapeRow:hover .tapeChevron { opacity: 1; }
 .tapeRow:hover .tapeLabel { transform: translateX(4px); }
-.brassRule { position: absolute; left: 0; top: -1px; bottom: -1px; width: 3px; background: #8A7440; }
+.brassRule { position: absolute; left: 0; top: -1px; bottom: -1px; width: 3px; background: var(--color-butter, #e8dab6); }
 .tapeRow[data-scoped] .tapeLabel,
-.tapeRow[data-scoped] .tapeFigure { color: #8A7440; }
+.tapeRow[data-scoped] .tapeFigure { color: var(--color-butter, #e8dab6); }
 .tapeLabelBlock { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .tapeLabel {
   font-size: clamp(15px, 1.2vw, 17px);
@@ -1355,8 +1307,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .tapeAbstain { font-size: 28px; color: var(--paper-muted, #5A5240); }
 .tapeRight { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0; text-align: right; }
 .tapeFigure { font-size: clamp(15px, 1.4vw, 20px); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tapeFigure[data-dir='up'] { color: #1e7a4d; }
-.tapeFigure[data-dir='down'] { color: #a03d2e; }
+.tapeFigure[data-dir='up'] { color: #57be87; }
+.tapeFigure[data-dir='down'] { color: #cc6a5c; }
 .tapeFigureDesc { font-size: clamp(14px, 1.2vw, 17px); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tapeSub { font-size: 12.5px; color: var(--paper-muted, #5A5240); font-variant-numeric: tabular-nums; }
 .tri {
@@ -1394,18 +1346,18 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   height: auto;
   display: block;
   transform: rotate(-8deg);
-  stroke: rgba(28, 23, 18, 0.6);
+  stroke: rgba(247, 248, 248, 0.6);
   stroke-width: 1;
   fill: none;
 }
-.sealTick { stroke: rgba(28, 23, 18, 0.6); stroke-width: 1; }
+.sealTick { stroke: rgba(247, 248, 248, 0.6); stroke-width: 1; }
 
 
 .roomPill {
   display: inline-block;
   margin-top: 40px;
-  background: var(--paper-ink, #1C1712);
-  color: #E2D9C4;
+  background: #f7f8f8;
+  color: #0a0a0c;
   font-size: 15px;
   font-weight: 500;
   padding: 14px 28px;
@@ -1539,9 +1491,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
-.chapter b { color: #8A7440; font-weight: 700; }
+.chapter b { color: var(--tt-muted, #8a8f98); font-weight: 700; }
 /* the chapter's constructed section glyph — sits in the gold accent, quiet */
-.chapterGlyph { flex: none; color: #8A7440; opacity: 0.85; }
+.chapterGlyph { flex: none; color: var(--tt-muted, #8a8f98); opacity: 0.85; }
 /* the sub-market row's parent-market tag — a quiet leading glyph on the label */
 .tapeGlyph {
   display: inline-flex;
@@ -1555,7 +1507,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .chapter::after {
   content: '';
   width: min(110px, 12vw);
-  border-top: 2px dotted rgba(28, 23, 18, 0.32);
+  border-top: 2px dotted rgba(247, 248, 248, 0.32);
   margin: 0 10px;
 }
 
@@ -1565,30 +1517,13 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .rcpt {
   position: relative;
   width: min(400px, 88vw);
-  background: #FAF5E8;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   padding: 26px 24px 24px;
   font-family: var(--font-mono-data), monospace;
-  color: #1C1712;
-  transform: rotate(-0.6deg);
-  box-shadow: 0 18px 34px -20px rgba(28, 23, 18, 0.5);
+  color: var(--paper-ink, #f7f8f8);
 }
-/* perforated tear edges */
-.rcpt::before,
-.rcpt::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 10px;
-  background-image:
-    linear-gradient(-45deg, transparent 7px, #FAF5E8 0),
-    linear-gradient(45deg, transparent 7px, #FAF5E8 0);
-  background-position: left bottom;
-  background-repeat: repeat-x;
-  background-size: 14px 10px;
-}
-.rcpt::before { top: -9px; }
-.rcpt::after { bottom: -9px; transform: scaleY(-1); }
 .rcptHead {
   text-align: center;
   font-size: 13.5px;
@@ -1600,10 +1535,10 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   text-align: center;
   font-size: 10px;
   letter-spacing: 0.05em;
-  color: rgba(28, 23, 18, 0.6);
+  color: rgba(247, 248, 248, 0.6);
   margin-top: 5px;
 }
-.rcptRule { border-top: 1px dashed rgba(28, 23, 18, 0.35); margin: 12px 0; }
+.rcptRule { border-top: 1px dashed rgba(247, 248, 248, 0.35); margin: 12px 0; }
 .rcptRow {
   display: flex;
   align-items: baseline;
@@ -1614,34 +1549,24 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
-.rcptDots { flex: 1; border-bottom: 2px dotted rgba(28, 23, 18, 0.4); transform: translateY(-3px); }
-.rcptUp { color: #1e7a4d; font-weight: 700; }
-.rcptDown { color: #a03d2e; font-weight: 700; }
+.rcptDots { flex: 1; border-bottom: 2px dotted rgba(247, 248, 248, 0.4); transform: translateY(-3px); }
+.rcptUp { color: #57be87; font-weight: 700; }
+.rcptDown { color: #cc6a5c; font-weight: 700; }
 .rcptTotal { font-weight: 700; font-size: 13px; }
 .rcptMeta {
   text-align: center;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(28, 23, 18, 0.55);
+  color: rgba(247, 248, 248, 0.55);
   margin-top: 4px;
 }
-.rcptBarcode {
-  height: 34px;
-  margin: 12px 18px 4px;
-  background: repeating-linear-gradient(
-    90deg,
-    #1C1712 0 2px, transparent 2px 5px,
-    #1C1712 5px 6px, transparent 6px 9px,
-    #1C1712 9px 12px, transparent 12px 14px
-  );
-  opacity: 0.85;
-}
+.rcptBarcode { display: none; }
 .rcptNo {
   text-align: center;
   font-size: 10px;
   letter-spacing: 0.25em;
-  color: rgba(28, 23, 18, 0.6);
+  color: rgba(247, 248, 248, 0.6);
 }
 .rcptLink {
   display: block;
@@ -1650,23 +1575,15 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-size: 11.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #1C1712;
+  color: var(--paper-ink, #f7f8f8);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 /* the seal, pressed as a red ink stamp over the totals */
-.rcptStamp {
-  position: absolute;
-  left: 10px;
-  bottom: 58px;
-  width: 92px;
-  transform: rotate(-14deg);
-  opacity: 0.5;
-  pointer-events: none;
-}
+.rcptStamp { display: none; }
 .rcptStamp .seal { width: 92px; }
-.rcptStamp .seal svg { stroke: #a03d2e; transform: none; }
-.rcptStamp .sealTick { stroke: #a03d2e; }
+.rcptStamp .seal svg { stroke: #cc6a5c; transform: none; }
+.rcptStamp .sealTick { stroke: #cc6a5c; }
 
 @media (max-width: 900px) {
   
@@ -1693,8 +1610,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   max-width: 960px;
   margin: 0 auto;
   padding: clamp(14px, 1.8vw, 22px);
-  background: #EBE3D0;
-  border: 1px solid rgba(28, 23, 18, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   color: var(--paper-ink, #1C1712);
   text-align: left;
@@ -1702,11 +1619,11 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-family: inherit;
   transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s;
 }
-.engineHero:hover { transform: translateY(-3px); border-color: rgba(28, 23, 18, 0.36); }
+.engineHero:hover { border-color: rgba(255, 255, 255, 0.16); }
 .ehImg {
   position: relative;
   border-radius: 10px;
-  background: #F4EFE0;
+  background: rgba(255, 255, 255, 0.03);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1717,8 +1634,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 /* the monogram under the photograph — visible only when the image dies */
 .ehMonogram {
   font-family: var(--font-serif-display), serif;
+  font-weight: 600;
   font-size: 64px;
-  color: rgba(28, 23, 18, 0.22);
+  color: rgba(247, 248, 248, 0.22);
   user-select: none;
 }
 .ehRead { display: flex; flex-direction: column; min-width: 0; padding: 6px 4px 2px 0; }
@@ -1738,10 +1656,10 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .ehWhen { font-size: 11.5px; color: var(--paper-muted, #5A5240); white-space: nowrap; }
 .ehTitle {
   font-family: var(--font-serif-display), serif;
-  font-weight: 400;
-  font-size: clamp(19px, 1.9vw, 26px);
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  font-size: clamp(18px, 1.8vw, 24px);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
   margin-top: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1757,11 +1675,12 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .ehRatio {
   font-family: var(--font-serif-display), serif;
-  font-weight: 400;
-  font-size: clamp(46px, 4.6vw, 68px);
+  font-weight: 620;
+  font-size: clamp(42px, 4.2vw, 60px);
   line-height: 0.95;
-  letter-spacing: -0.02em;
-  color: #1e7a4d;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: #57be87;
 }
 .ehVerdictCap {
   font-size: 12.5px;
@@ -1769,7 +1688,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   color: var(--paper-muted, #5A5240);
   max-width: 200px;
 }
-.ehRows { margin-top: clamp(12px, 1.6vw, 18px); border-top: 2px dotted rgba(28, 23, 18, 0.3); padding-top: 6px; }
+.ehRows { margin-top: clamp(12px, 1.6vw, 18px); border-top: 2px dotted rgba(247, 248, 248, 0.3); padding-top: 6px; }
 .ehRow {
   display: flex;
   align-items: baseline;
@@ -1780,13 +1699,13 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .ehRow > span:first-child { color: var(--paper-muted, #5A5240); }
 .ehRow > span:last-child { font-weight: 600; }
-.ehDots { flex: 1; border-bottom: 2px dotted rgba(28, 23, 18, 0.35); transform: translateY(-3px); }
-.ehConfDots { letter-spacing: 2px; font-weight: 400; color: #8A7440; }
+.ehDots { flex: 1; border-bottom: 2px dotted rgba(247, 248, 248, 0.35); transform: translateY(-3px); }
+.ehConfDots { letter-spacing: 2px; font-weight: 400; color: #8a8f98; }
 .ehFine {
   margin-top: 10px;
   font-size: 11px;
   line-height: 1.5;
-  color: rgba(28, 23, 18, 0.5);
+  color: rgba(247, 248, 248, 0.5);
 }
 .ehCta {
   margin-top: auto;
@@ -1839,10 +1758,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .readPopCard {
   position: relative;
   width: min(560px, 94vw);
-  background:
-    linear-gradient(178deg, rgba(255, 251, 241, 0.6), rgba(255, 251, 241, 0) 40%),
-    #E9E1CE;
-  border: 1px solid rgba(28, 23, 18, 0.25);
+  background: #15161a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   padding: 22px 26px 30px;
   color: var(--paper-ink, #1C1712);
@@ -1858,7 +1775,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .readPopTitle { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
 .readPopClose {
   border: 0;
-  background: rgba(28, 23, 18, 0.08);
+  background: rgba(247, 248, 248, 0.08);
   border-radius: 999px;
   width: 30px;
   height: 30px;
@@ -1867,7 +1784,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   color: var(--paper-ink, #1C1712);
   cursor: pointer;
 }
-.readPopClose:hover { background: rgba(28, 23, 18, 0.16); }
+.readPopClose:hover { background: rgba(247, 248, 248, 0.16); }
 /* the monument, scaled to the card */
 .readPopCard .monBody { align-items: center; text-align: center; }
 .readPopCard .monFigure { font-size: clamp(56px, 9vw, 84px); }
@@ -1887,11 +1804,11 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   width: 32px;
   height: 12px;
   vertical-align: -1.5px;
-  stroke: rgba(28, 23, 18, 0.6);
+  stroke: rgba(247, 248, 248, 0.6);
   stroke-width: 1.2;
   margin: 0 1px;
 }
-.legendFill { fill: rgba(28, 23, 18, 0.6); stroke: none; }
+.legendFill { fill: rgba(247, 248, 248, 0.6); stroke: none; }
 
 /* ════ THE MARKET CHART, redrawn — the hero's instrument ════ */
 
@@ -2302,7 +2219,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   flex: none;
   margin: 7px 0;
   font-family: var(--font-mono-data), monospace;
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -2363,7 +2280,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 .mtMonMarket {
   font-family: var(--font-serif-display), serif;
-  font-weight: 400; letter-spacing: -0.015em; line-height: 1;
+  font-weight: 620; letter-spacing: -0.025em; line-height: 1;
   font-size: clamp(22px, 1.9vw, 28px);
   color: #ffffff;
   transition: color 0.15s ease;
@@ -2481,7 +2398,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   border: 1px solid rgba(232, 218, 182, 0.09);
   border-radius: 14px;
   padding: clamp(12px, 1.2vw, 16px) clamp(14px, 1.5vw, 18px) clamp(12px, 1.2vw, 16px);
-  box-shadow: inset 0 1px 0 rgba(242, 238, 227, 0.05), 0 18px 44px -18px rgba(8, 6, 3, 0.55);
+  box-shadow: none;
   transition: border-color 180ms var(--ease-signature, ease), transform 180ms var(--ease-signature, ease);
 }
 .mtMon:hover { border-color: rgba(255, 255, 255, 0.14); }
@@ -2507,7 +2424,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
      the card from the top-left */
   .mtMonKicker {
     position: absolute; top: 13px; right: 14px;
-    font-size: 9px; max-width: 48%; text-align: right; line-height: 1.3;
+    font-size: 10px; max-width: 48%; text-align: right; line-height: 1.3;
   }
   .mtMonBeam { margin-top: 4px; }
   .mtMon .beamLarge .beamStage { height: 14px; }
@@ -2541,7 +2458,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   /* the scope suffix (· POKÉMON) is an honesty claim — it WRAPS, never clips */
   .mtTag {
     grid-area: tag; align-self: center;
-    font-size: 9.5px; line-height: 1.35;
+    font-size: 10.5px; line-height: 1.35;
     white-space: normal; overflow: visible; text-overflow: clip;
   }
   .mtTagFull { display: none; }
@@ -2559,7 +2476,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   /* THE NUMERAL SPINE holds on the phone too: the horizon rides a fixed
      slot (empty on demand rows) so every figure's last digit shares one
      vertical datum down the board */
-  .mtHz { min-width: 17px; margin-left: 6px; font-size: 9px; }
+  .mtHz { min-width: 17px; margin-left: 6px; font-size: 10px; }
   /* the RIGHT NOW pair: equal-height tiles, labels lock to two centered
      lines max, numerals share the baseline */
   .mRightNow .pulseBlock[data-lead='true'],
@@ -2589,7 +2506,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   backdrop-filter: none;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px; /* the column's one tile radius */
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: none;
 }
 .mtMon:hover { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.045); }
 
@@ -2636,9 +2553,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtSide .railCmd:focus-visible {
   outline: none;
   border-color: rgba(232, 218, 182, 0.6);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 0 0 3px rgba(232, 218, 182, 0.18);
+  box-shadow: 0 0 0 3px rgba(232, 218, 182, 0.18); /* focus ring only */
 }
 
 
@@ -2658,10 +2573,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
    restrained luminance at the top. A whisper of butter keeps the brand's warmth
    present without muddying the darks; a faint cool crown sharpens the crest. */
 .bgField {
-  background:
-    radial-gradient(70% 38% at 50% -6%, rgba(208, 214, 224, 0.03), transparent 60%),
-    radial-gradient(120% 70% at 72% -12%, rgba(232, 218, 182, 0.035), transparent 55%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 16%);
+  background: none;
 }
 
 /* The inactive-pill matte-chip look now lives in the core .switchStrip block
@@ -2780,9 +2692,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   /* a lifted pane, not a flat tile: vertical luminance, top light, real drop */
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
   border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 24px 56px -28px rgba(0, 0, 0, 0.65);
+  box-shadow: none;
 }
 .mtSide .mtMon:hover { border-color: rgba(255, 255, 255, 0.15); }
 .mtSide .mtMonMarket { font-size: clamp(24px, 2vw, 31px); }

@@ -92,7 +92,7 @@ const BLOG_CSS = `
   .ray-blog-lead .ray-blog-date{display:none}
   .ray-blog-lead-kicker{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
   .ray-blog-lead-kicker .no{letter-spacing:0.08em;color:var(--color-text-faint)}
-  .ray-blog-lead .ray-blog-title{font-family:var(--font-serif),serif;font-size:clamp(30px,3.6vw,40px);font-weight:420;letter-spacing:-0.015em;line-height:1.12;margin:0 0 12px;max-width:24ch}
+  .ray-blog-lead .ray-blog-title{font-family:var(--font-serif),serif;font-size:clamp(30px,3.6vw,40px);font-weight:620;letter-spacing:-0.025em;line-height:1.12;margin:0 0 12px;max-width:24ch}
   .ray-blog-lead:hover .ray-blog-title{color:var(--color-accent-gold,var(--color-fg))}
   .ray-blog-lead .ray-blog-dek{font-size:15.5px;line-height:1.6;max-width:62ch}
   /* the ledger — the rest of the file as dated rows */
@@ -102,7 +102,7 @@ const BLOG_CSS = `
   .ray-blog-entry{display:grid;grid-template-columns:118px 1fr auto;gap:2px 22px;align-items:baseline;border:none;border-radius:0;background:none;padding:16px 2px;border-top:1px solid var(--hairline);transition:background var(--duration-fast) var(--ease-signature)}
   .ray-blog-entry:hover{border-color:var(--hairline);transform:none;background:var(--color-hover-item)}
   .ray-blog-entry .ray-blog-date{grid-row:1 / span 2;margin:0;align-self:baseline}
-  .ray-blog-entry .ray-blog-title{font-family:var(--font-serif),serif;font-size:19px;font-weight:460;letter-spacing:-0.01em;line-height:1.25;margin:0}
+  .ray-blog-entry .ray-blog-title{font-family:var(--font-serif),serif;font-size:19px;font-weight:600;letter-spacing:-0.015em;line-height:1.25;margin:0}
   .ray-blog-entry:hover .ray-blog-title{color:var(--color-accent-gold,var(--color-fg))}
   .ray-blog-entry .ray-blog-dek{grid-column:2;font-size:13px;line-height:1.5;color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ray-blog-entry .ray-blog-read{display:none}

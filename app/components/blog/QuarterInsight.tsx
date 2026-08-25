@@ -94,7 +94,7 @@ export default function QuarterInsight({
                 />
                 <span aria-hidden style={{
                   position: 'absolute', inset: 0, pointerEvents: 'none',
-                  background: 'radial-gradient(120% 90% at 50% 6%, rgba(232,218,182,0.05), transparent 60%)',
+                  background: 'none',
                   boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 -46px 60px -34px rgba(6,7,8,0.6), inset 0 34px 44px -38px rgba(6,7,8,0.4)',
                 }} />
               </div>
