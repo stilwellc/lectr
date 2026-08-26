@@ -23,7 +23,8 @@ import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app
 import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { appendCalls, type Call } from './lib/calls-ledger';
-import { hasConditionFlag } from './lib/condition';
+import { hasConditionFlag } from '../app/lib/condition';
+import { gapRead, sleeperRead } from '../app/lib/lanes';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -251,6 +252,18 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
         }
         const cc = (l as { cardComps?: { med?: number | null; n?: number } }).cardComps;
         if (cc?.med && (cc.n || 0) >= 3) freshCalls.push({ id: String(l.id), d: todayCall, k: 'card', p: cc.med, m: marketOf(l.artist) });
+        // THE GAP + THE SLEEPERS (multi-lane engine, Aug 25): both lanes log
+        // the night a lot first enters their board — the SAME readers the
+        // /value page renders from (app/lib/lanes), so a lot can never show
+        // one number and log another. Both stamps (bidProj, cardComps, value)
+        // are already on `emitted` at this point in the map.
+        {
+          const withStamps = { ...l, ...emitted } as unknown as import('../app/types').AuctionLot;
+          const g = gapRead(withStamps, Date.now());
+          if (g) freshCalls.push({ id: String(l.id), d: todayCall, k: 'gap', s: g.shelf === 'wire' ? 'w' : 'f', p: g.allIn, f: g.floor, m: marketOf(l.artist) });
+          const q = sleeperRead(withStamps, Date.now());
+          if (q) freshCalls.push({ id: String(l.id), d: todayCall, k: 'quiet', s: q.anchor === 'fair-est' ? 'e' : 'v', p: q.cvu, ...(q.entry != null ? { f: q.entry } : {}), m: marketOf(l.artist) });
+        }
       }
       // W5 · precompute soldComp for upcoming sports/science lots, analogous to
       // signal — so a card/modal can paint the realized band before the archive

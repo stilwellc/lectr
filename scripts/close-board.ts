@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { marketOf } from '../app/constants';
-import { hasConditionFlag } from './lib/condition';
+import { hasConditionFlag } from '../app/lib/condition';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const GOLDIN_API = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';

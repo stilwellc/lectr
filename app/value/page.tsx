@@ -45,6 +45,7 @@ import CloseClock from '../components/CloseClock';
 import CountUp from '../components/CountUp';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, overEstimatePct, toneOf } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
+import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 
 const ROWS_PAGE = 12;
 
@@ -188,57 +189,144 @@ function MarketPulse({ ray, activeKey, activeLabel, play }: {
   );
 }
 
-/* ── ROOM 2c · THE PROJECTION DESK — the bid-house read, restyled into the
-   ledger grammar. A PROJECTION product: depth prints in NEUTRAL ink (a
-   projection is not a measured outcome — mint/coral are for outcomes), and
-   its receipt accrues in public: counts + the gate, never a median. ── */
-function ProjectionAnnex({ rows, allLots, receipts }: {
-  rows: { id: string; depth: number; allIn: number; floor: number; closes: string }[];
-  allLots: AuctionLot[];
-  receipts: { record: { vsbid: { n: number; graded: number } } } | null;
+/* ── ROOM 2c · THE GAP — "the bidding is behind the value" on no-estimate
+   lots: the growth-projected close vs the value floor. Two shelves — AT THE
+   WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, depth ≥40%, a harder bar
+   against unmodeled earliness; 8d is the curve's last fitted edge). A
+   PROJECTION product: depth prints in NEUTRAL ink, every shelf entry logs to
+   the forward tape the night it appears, nothing publishes before 20 graded. ── */
+function GapAnnex({ rows, receipts, activeKey }: {
+  rows: { lot: AuctionLot; g: GapRead }[];
+  receipts: { record: { gap?: { n: number; graded: number } } } | null;
+  activeKey: string;
 }) {
-  const byId = useMemo(() => new Map(allLots.map(l => [String(l.id), l])), [allLots]);
-  const shown = rows.slice(0, 6).map(r => ({ r, lot: byId.get(r.id) })).filter(x => x.lot);
-  if (!shown.length) return null;
+  const [showForming, setShowForming] = useState(false);
+  const wire = rows.filter(r => r.g.shelf === 'wire').sort((a, b) => b.g.depth - a.g.depth).slice(0, 6);
+  const forming = rows.filter(r => r.g.shelf === 'forming').sort((a, b) => b.g.depth - a.g.depth).slice(0, 6);
+  if (!wire.length && !forming.length) return null;
+  const gapRec = receipts?.record?.gap;
+  const row = ({ lot, g }: { lot: AuctionLot; g: GapRead }) => (
+    <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-annex-row">
+      <span className="ray-value-row-thumb vd-annex-thumb" aria-hidden>
+        <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
+        {lot.imageUrl && (
+          <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => e.currentTarget.remove()} />
+        )}
+      </span>
+      <span className="vd-annex-main">
+        <span className="vd-annex-maker">{ARTIST_LABEL[lot.artist] || lot.artist}{g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}</span>
+        <span className="vd-annex-title">{craftTitle(lot.title)}</span>
+      </span>
+      <span className="vd-annex-cells">
+        <span className="vd-annex-depth">−{Math.round(g.depth * 100)}% under floor</span>
+        <span className="vd-annex-proj" title={`floor from ${g.floorSrc === 'value.low' ? 'the appraisal band' : 'card comps ×0.85'}`}>
+          proj {formatPrice(g.allIn)} vs floor {formatPrice(g.floor)}
+        </span>
+        {lot.value?.vsBid?.pct != null && lot.value.vsBid.pct < 0 && (
+          <span className="vd-annex-proj">bid now {Math.round(lot.value.vsBid.pct)}% vs comps</span>
+        )}
+        <span className="vd-annex-close">
+          closes {formatDate(lot.saleDate)}
+          {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
+            ? <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>
+            : null}
+        </span>
+      </span>
+    </Link>
+  );
   return (
     <section className="rail ray-enter vd-annex" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
       <div className="vd-sect-head">
-        <span className="kicker">Projection desk · closing soon</span>
+        <span className="kicker">The Gap · projected close vs floor</span>
         <span className="vd-pulse-rule" aria-hidden />
-        <span className="vd-sect-cap">projected closes, not comps · record accruing</span>
+        <span className="vd-sect-cap">projected closes, not comps · board refreshes ~4h · record accruing</span>
       </div>
-      <div>
-        {shown.map(({ r, lot }) => (
-          <Link key={r.id} href={`/lot/${r.id}`} className="vd-annex-row">
-            <span className="ray-value-row-thumb vd-annex-thumb" aria-hidden>
-              <span className="vd-thumb-letter">{(ARTIST_LABEL[lot!.artist] || lot!.artist).charAt(0)}</span>
-              {lot!.imageUrl && (
-                <img src={httpsImg(lot!.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={e => e.currentTarget.remove()} />
-              )}
-            </span>
-            <span className="vd-annex-main">
-              <span className="vd-annex-maker">{ARTIST_LABEL[lot!.artist] || lot!.artist}</span>
-              <span className="vd-annex-title">{craftTitle(lot!.title)}</span>
-            </span>
-            <span className="vd-annex-cells">
-              <span className="vd-annex-depth">−{Math.round(r.depth * 100)}% under floor</span>
-              <span className="vd-annex-proj">proj {formatPrice(r.allIn)} vs floor {formatPrice(r.floor)}</span>
-              <span className="vd-annex-close">
-                closes {formatDate(r.closes)}
-                {lot!.saleDateTime && (Date.parse(lot!.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot!.saleDateTime) > Date.now())
-                  ? <> · <CloseClock iso={lot!.saleDateTime} windowHours={24} /></>
-                  : null}
-              </span>
-            </span>
-          </Link>
-        ))}
-      </div>
+      <div>{wire.map(row)}</div>
+      {forming.length > 0 && (
+        <>
+          <button type="button" className="vd-forming-toggle" onClick={() => setShowForming(v => !v)} aria-expanded={showForming}>
+            {showForming ? 'hide' : 'show'} {forming.length} forming · 3.5–8d out · early — the projection tightens as the close nears
+          </button>
+          {showForming && <div>{forming.map(row)}</div>}
+        </>
+      )}
       <div className="vd-annex-meter">
-        {receipts?.record?.vsbid
-          ? <>forward tape: {receipts.record.vsbid.n.toLocaleString()} calls logged · {receipts.record.vsbid.graded} graded · medians publish at 20 graded</>
-          : <>forward tape: — · medians publish at 20 graded</>}
+        {gapRec
+          ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded} graded · publishes at 20 graded</>
+          : <>forward tape: — · publishes at 20 graded</>}
+      </div>
+      <div className="vd-annex-meter" style={{ borderTop: 'none', paddingTop: 2 }}>
+        curve fitted from goldin bid histories · estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: projection only — no comp basis yet</> : null}
+      </div>
+    </section>
+  );
+}
+
+/* ── ROOM 2d · THE SLEEPERS — "the price is right and nobody's looking":
+   verified-fair lots (the engine's own appraisal inside the at-market band —
+   never inferred from a null signal) with a DEAD room (0 bids on an exposed
+   book), closing ≤7 days. Neutral ink; both bases named; receipts accrue as
+   'quiet' calls. The lane is BURSTY (RR's final week) — when empty it prints
+   its calendar instead of vanishing. ── */
+function SleepersAnnex({ rows, queued, receipts, activeLabel }: {
+  rows: { lot: AuctionLot; q: SleeperRead }[];
+  queued: number;
+  receipts: { record: { quiet?: { n: number; graded: number } } } | null;
+  activeLabel: string;
+}) {
+  if (!rows.length && !queued) return null;
+  const rec = receipts?.record?.quiet;
+  return (
+    <section className="rail ray-enter vd-annex" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
+      <div className="vd-sect-head">
+        <span className="kicker">The Sleepers · fair-priced, no bids, closing</span>
+        <span className="vd-pulse-rule" aria-hidden />
+        <span className="vd-sect-cap">verified-fair lots with a dead room · record accruing</span>
+      </div>
+      {rows.length ? (
+        <div>
+          {rows.slice(0, 6).map(({ lot, q }) => (
+            <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-annex-row">
+              <span className="ray-value-row-thumb vd-annex-thumb" aria-hidden>
+                <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
+                {lot.imageUrl && (
+                  <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={e => e.currentTarget.remove()} />
+                )}
+              </span>
+              <span className="vd-annex-main">
+                <span className="vd-annex-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+                <span className="vd-annex-title">{craftTitle(lot.title)}</span>
+              </span>
+              <span className="vd-annex-cells">
+                <span className="vd-annex-depth">
+                  {q.estMid ? <>est {formatPrice(q.estMid)} (hammer)</> : <>appraised {formatPrice(q.cvu)} (all-in)</>}
+                </span>
+                <span className="vd-annex-proj">
+                  {q.estMid ? <>appraised {formatPrice(q.cvu)} (all-in) · </> : null}0 bids{q.entry != null ? <> · opens {formatPrice(q.entry)}</> : null}
+                </span>
+                <span className="vd-annex-close">
+                  closes {formatDate(q.closes)}
+                  {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
+                    ? <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>
+                    : null}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '2px 0 0' }}>
+          0 in the 7-day window · {queued.toLocaleString()} dead-room {activeLabel} lots queued further out — the lane fills as their final week opens.
+        </p>
+      )}
+      <div className="vd-annex-meter">
+        {rec
+          ? <>forward tape: {rec.n.toLocaleString()} logged · {rec.graded} graded · publishes at 20 graded · graded vs appraisal, both all-in</>
+          : <>forward tape: — · publishes at 20 graded · graded vs appraisal, both all-in</>}
       </div>
     </section>
   );
@@ -433,7 +521,7 @@ export default function ValuePage() {
   // useRayData + sentinel: the cockpit/board/record all paint from phase 1;
   // the corpus loads only on approach to the settled tape or on modal open.
   const ray = useRayData();
-  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, deepValue, receipts } = ray;
+  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, receipts } = ray;
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -532,6 +620,38 @@ export default function ValuePage() {
     const today = localToday();
     return marketLots.filter(l => isLiveUpcoming(l, today));
   }, [marketLots]);
+
+  // ── THE GAP + THE SLEEPERS: the two uncertified lanes, computed from the
+  // SAME readers the nightly ledger logs from (app/lib/lanes) — one lot,
+  // one statistic. The close-board overlay refreshes currentBid/bidProj
+  // every ~4h, so these client reads inherit that freshness for free.
+  const gapRows = useMemo(() => {
+    const now = Date.now();
+    return liveLots
+      .map(lot => ({ lot, g: gapRead(lot, now) }))
+      .filter((x): x is { lot: AuctionLot; g: GapRead } => !!x.g);
+  }, [liveLots]);
+  const sleeperRows = useMemo(() => {
+    const now = Date.now();
+    return liveLots
+      .map(lot => ({ lot, q: sleeperRead(lot, now) }))
+      .filter((x): x is { lot: AuctionLot; q: SleeperRead } => !!x.q)
+      .sort((a, b) => (a.q.closes || '').localeCompare(b.q.closes || ''));
+  }, [liveLots]);
+  // the sleeper QUEUE: dead-room lots further out than the 7-day window —
+  // the empty-state calendar's honest denominator
+  const sleeperQueue = useMemo(() => {
+    const now = Date.now();
+    return liveLots.filter(l => {
+      if (typeof l.bidCount !== 'number' || l.bidCount !== 0) return false;
+      const cvu = l.value?.compValueUsd;
+      if (!cvu || cvu <= 0) return false;
+      const iso = l.saleDateTime || (l.saleDate ? `${l.saleDate}T23:59:59Z` : null);
+      if (!iso) return false;
+      const ms = Date.parse(iso);
+      return !isNaN(ms) && (ms - now) / 86400000 > 7;
+    }).length;
+  }, [liveLots]);
 
   // NEXT HAMMER — book-wide (survives a zero-flag scope): the soonest close
   // still strictly ahead (the results-pending grace window must never print
@@ -678,6 +798,17 @@ export default function ValuePage() {
         sub: hasFlags ? 'comps med over ask' : 'no flags in scope',
       },
     ];
+    {
+      const gw = gapRows.filter(r => r.g.shelf === 'wire').length;
+      const gf = gapRows.length - gw;
+      if (gw + gf > 0 || sleeperRows.length > 0 || sleeperQueue > 0) {
+        out.push({
+          k: 'The gap · sleepers',
+          v: <span style={{ fontSize: 21 }}>{gw + gf} · {sleeperRows.length}</span>,
+          sub: <>{gw} at the wire{gf > 0 ? <> · {gf} forming</> : null} · {sleeperRows.length > 0 ? <>{sleeperRows.length} asleep ≤7d</> : <>{sleeperQueue} queued</>}</>,
+        });
+      }
+    }
     if (nextHammer) {
       const day = trueSaleDay(nextHammer);
       const dU = daysUntil(day);
@@ -726,7 +857,7 @@ export default function ValuePage() {
       });
     }
     return out;
-  }, [deals.length, hasFlags, liveLots.length, summary.medianGap, nextHammer, backtest, coverage, activeKey, activeLabel, fromCache]);
+  }, [deals.length, hasFlags, liveLots.length, summary.medianGap, nextHammer, backtest, coverage, activeKey, activeLabel, fromCache, gapRows, sleeperRows.length, sleeperQueue]);
 
   return (
     <div className="ray-mobnav-pad terminal-shell" style={{
@@ -1063,6 +1194,23 @@ export default function ValuePage() {
         .vd-annex-depth { display: block; font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 600; color: var(--color-fg); }
         .vd-annex-proj { display: block; font-size: 11.5px; color: var(--color-text-muted); }
         .vd-annex-close { display: block; font-size: 11.5px; color: var(--color-text-faint); }
+        .vd-lane-tag {
+          display: inline-block; margin-left: 8px; padding: 1px 7px;
+          font-family: var(--font-mono), monospace; font-size: 10px;
+          letter-spacing: 0.06em; color: var(--color-text-muted);
+          border: 1px solid var(--color-border); border-radius: 100px;
+          vertical-align: 1px;
+        }
+        .vd-forming-toggle {
+          display: block; width: 100%; text-align: left;
+          background: none; border: none; cursor: pointer;
+          padding: 10px 2px; min-height: 40px;
+          border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06));
+          font-family: var(--font-mono), monospace; font-size: 11.5px;
+          letter-spacing: 0.02em; color: var(--color-text-muted);
+          transition: color var(--duration-fast) var(--ease-signature);
+        }
+        .vd-forming-toggle:hover { color: var(--color-fg); }
         .vd-annex-meter {
           margin-top: 10px;
           padding-top: 9px;
@@ -1234,9 +1382,9 @@ export default function ValuePage() {
 
           <section className="ray-value-section rail">
             <div className="vd-sect-head ray-enter">
-              <h2 className="ray-h2" style={{ marginBottom: 0 }}>Every flag, ranked.</h2>
+              <h2 className="ray-h2" style={{ marginBottom: 0 }}>The Flags · every one, ranked.</h2>
               <span className="vd-pulse-rule" aria-hidden />
-              <span className="vd-sect-cap">{sortMode === 'odds' ? 'calibrated odds first · the deepest gap breaks ties' : 'soonest hammer first'}</span>
+              <span className="vd-sect-cap">{sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}</span>
               <span className="vd-sort" role="tablist" aria-label="Board order">
                 <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
                 <button type="button" role="tab" aria-selected={sortMode === 'closing'} data-on={sortMode === 'closing' || undefined} onClick={() => setSortMode('closing')}>Closing next</button>
@@ -1404,10 +1552,11 @@ export default function ValuePage() {
             )}
           </section>
 
-          {/* ── ROOM 2c · the projection desk (bid-house read) ── */}
-          {(deepValue?.[activeKey]?.length ?? 0) > 0 && (
-            <ProjectionAnnex rows={deepValue[activeKey]} allLots={allLots} receipts={receipts} />
-          )}
+          {/* ── ROOM 2c · THE GAP ── */}
+          <GapAnnex rows={gapRows} receipts={receipts} activeKey={activeKey} />
+
+          {/* ── ROOM 2d · THE SLEEPERS ── */}
+          <SleepersAnnex rows={sleeperRows} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} />
 
           {/* ════ ROOM 3 · THE RECORD (paper certificate) ════ */}
           {backtest && backtest.flagged.n >= 100 && (

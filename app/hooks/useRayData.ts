@@ -208,6 +208,8 @@ export interface ReceiptsData {
   record: {
     card: { n: number; graded: number; medRatio: number | null; within30Pct: number | null };
     vsbid: { n: number; graded: number; medRatio: number | null; belowHit: number | null };
+    gap?: { n: number; graded: number; medRatio: number | null; floorHit: number | null };
+    quiet?: { n: number; graded: number; medRatio: number | null; underPct: number | null };
     asOf: string;
   };
   rows: { id: string; k: string; d: string; sd: string; p: number; r: number; f: number; m: string; t: string; a: string; h: string }[];

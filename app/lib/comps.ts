@@ -447,7 +447,7 @@ export function areComparable(lot: AuctionLot, candidate: AuctionLot): boolean {
    back to the old ones — so the ratio is correct BEFORE and AFTER migration and
    a Bonhams GBP lot stops dividing a USD price by a native-GBP estimate. The
    old fields become aliases of the *Usd fields at migration, so both agree. */
-function estUsdBand(lot: AuctionLot): { low: number | null; high: number | null } {
+export function estUsdBand(lot: AuctionLot): { low: number | null; high: number | null } {
   // Single-point fallback (the SIXTH sighting of the both-bounds bug — RR
   // publishes estimateLow only; demand.ts:43 learned this first): a house
   // that posts one bound still posted an estimate. low||high mirrors it.

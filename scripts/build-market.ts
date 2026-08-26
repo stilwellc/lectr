@@ -12,7 +12,7 @@
  * Run: npx tsx scripts/build-market.ts   (after a crawl / migrate)
  */
 import * as fs from 'fs';
-import { hasConditionFlag } from './lib/condition';
+import { hasConditionFlag } from '../app/lib/condition';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';

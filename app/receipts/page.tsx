@@ -34,13 +34,17 @@ import type { AuctionLot } from '../types';
    ============================================================ */
 
 interface ReceiptRow {
-  id: string; k: 'card' | 'vsbid'; d: string; sd?: string;
+  id: string; k: 'card' | 'vsbid' | 'gap' | 'quiet'; d: string; sd?: string;
   p: number; r: number; f?: number; m?: string;
   t: string | null; a: string | null; h: string | null;
 }
 interface CallsRecord {
   card: { n: number; graded: number; medRatio: number | null; within30Pct: number | null };
   vsbid: { n: number; graded: number; medRatio: number | null; belowHit: number | null };
+  /** THE GAP + THE SLEEPERS (multi-lane engine, Aug 25) — optional so an
+      older cached receipts.json renders the two original tiles unharmed */
+  gap?: { n: number; graded: number; medRatio: number | null; floorHit: number | null };
+  quiet?: { n: number; graded: number; medRatio: number | null; underPct: number | null };
   asOf: string;
 }
 interface ReceiptsFile { record: CallsRecord; rows: ReceiptRow[]; generatedAt: string }
@@ -85,7 +89,7 @@ export default function ReceiptsPage() {
   const F = backtest?.flagged;
   const U = backtest?.unflagged;
 
-  const pending = record && record.card.graded + record.vsbid.graded === 0;
+  const pending = record && record.card.graded + record.vsbid.graded + (record.gap?.graded || 0) + (record.quiet?.graded || 0) === 0;
 
   return (
     <div className="terminal-shell" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
@@ -144,6 +148,36 @@ export default function ReceiptsPage() {
                         : <>{record.vsbid.n} calls on the tape · {record.vsbid.graded} settled · the hit-rate publishes at 20 graded</>}
                     </span>
                   </div>
+                  {record.gap && (
+                    <div className="rcp-tile">
+                      <span className="kicker">The Gap · shelf calls</span>
+                      <span className="rcp-fig">
+                        {record.gap.floorHit != null
+                          ? <>{record.gap.floorHit}%</>
+                          : <span className="rcp-dim">{record.gap.graded}/{record.gap.n}</span>}
+                      </span>
+                      <span className="rcp-sub">
+                        {record.gap.floorHit != null
+                          ? <>of claimed floors held at the hammer · {record.gap.graded} graded</>
+                          : <>{record.gap.n} calls on the tape · {record.gap.graded} settled · publishes at 20 graded</>}
+                      </span>
+                    </div>
+                  )}
+                  {record.quiet && (
+                    <div className="rcp-tile">
+                      <span className="kicker">The Sleepers · fair &amp; quiet</span>
+                      <span className="rcp-fig">
+                        {record.quiet.medRatio != null
+                          ? <>{fmtSignedPct(Math.round((record.quiet.medRatio - 1) * 100))}</>
+                          : <span className="rcp-dim">{record.quiet.graded}/{record.quiet.n}</span>}
+                      </span>
+                      <span className="rcp-sub">
+                        {record.quiet.medRatio != null
+                          ? <>hammer vs appraisal, median, both all-in · {record.quiet.underPct}% cleared at/below · {record.quiet.graded} graded</>
+                          : <>{record.quiet.n} calls on the tape · {record.quiet.graded} settled · publishes at 20 graded · graded vs appraisal, both all-in</>}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="rcp-note">The forward ledger opened Aug&nbsp;2026 — its first graded summary lands with the next nightly build.</p>
@@ -173,8 +207,12 @@ export default function ReceiptsPage() {
                         <span className="rcp-work">
                           <b>{r.a ? (ARTIST_LABEL[r.a] || r.a) : '—'}</b> {r.t ? craftTitle(r.t) : r.id}
                         </span>
-                        <span className="rcp-num" title={r.k === 'card' ? `Card-comp read, logged ${r.d}` : `Bid projection, logged ${r.d}${r.f ? ` · floor ${formatPrice(r.f)}` : ''}`}>
-                          {formatPrice(r.p)}<span className="rcp-kind">{r.k === 'card' ? 'comps' : 'proj'}</span>
+                        <span className="rcp-num" title={
+                          r.k === 'card' ? `Card-comp read, logged ${r.d}`
+                          : r.k === 'gap' ? `Gap shelf call, logged ${r.d}${r.f ? ` · floor ${formatPrice(r.f)}` : ''}`
+                          : r.k === 'quiet' ? `Sleeper appraisal, logged ${r.d}${r.f ? ` · opened ${formatPrice(r.f)}` : ''}`
+                          : `Bid projection, logged ${r.d}${r.f ? ` · floor ${formatPrice(r.f)}` : ''}`}>
+                          {formatPrice(r.p)}<span className="rcp-kind">{({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as const)[r.k] || r.k}</span>
                         </span>
                         <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(r.r)}</span>
                         <span className="rcp-num" style={{ color: delta > 0 ? 'var(--color-up)' : delta < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 }}>

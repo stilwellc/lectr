@@ -17,10 +17,16 @@ import { CORPUS_DIR, gzipNdjson, readGzRows } from '../corpus-io';
 export type Call = {
   id: string;
   d: string;            // call date (YYYY-MM-DD)
-  k: 'card' | 'vsbid';  // which product made the claim
-  p: number;            // predicted all-in USD (card med / projected close)
-  f?: number;           // the floor the 'below' claim was made against
+  /** which product made the claim: card-comp value · bid projection ·
+      THE GAP (shelf call, multi-lane engine Aug 25) · THE SLEEPERS */
+  k: 'card' | 'vsbid' | 'gap' | 'quiet';
+  p: number;            // predicted all-in USD (card med / projected close / appraisal)
+  f?: number;           // the floor ('gap'/'vsbid') or opening ask ('quiet')
   m?: string;           // market at call time
+  /** lane marker: gap shelf 'w'|'f' (wire/forming) · quiet anchor 'e'|'v'
+      (fair-est/appraised). First call wins, so a lot first seen forming
+      grades on its forming-day projection — earlier claims are harder. */
+  s?: string;
   // grading (filled once the lot sells)
   r?: number;           // realized USD
   sd?: string;          // sale date
@@ -77,6 +83,13 @@ export function emitReceipts(
 export type CallsRecord = {
   card: { n: number; graded: number; medRatio: number | null; within30Pct: number | null };
   vsbid: { n: number; graded: number; medRatio: number | null; belowHit: number | null };
+  /** THE GAP: medRatio = realized/projected close · floorHit = % of graded
+      floor-carrying rows where realized ≥ floor (the claimed floor held).
+      Per-shelf splits publish only at ≥20 graded PER SHELF. */
+  gap: { n: number; graded: number; medRatio: number | null; floorHit: number | null };
+  /** THE SLEEPERS: medRatio = realized/appraisal (both all-in) — was "fair"
+      fair · underPct = % graded realizing at/below the appraisal. */
+  quiet: { n: number; graded: number; medRatio: number | null; underPct: number | null };
   asOf: string;
 };
 
@@ -100,7 +113,10 @@ export function gradeCalls(soldById: Map<string, { realizedUsd: number; saleDate
   };
   const card = summarize('card');
   const vsbid = summarize('vsbid');
+  const gap = summarize('gap');
+  const quiet = summarize('quiet');
   const belowG = vsbid.g.filter(c => typeof c.f === 'number');
+  const gapFloorG = gap.g.filter(c => typeof c.f === 'number');
   return {
     card: {
       n: card.all.length, graded: card.g.length,
@@ -115,6 +131,18 @@ export function gradeCalls(soldById: Map<string, { realizedUsd: number; saleDate
       // (i.e. the flagged price was genuinely under the market)?
       belowHit: belowG.length >= 20
         ? Math.round(100 * belowG.filter(c => c.r! >= c.f!).length / belowG.length) : null,
+    },
+    gap: {
+      n: gap.all.length, graded: gap.g.length,
+      medRatio: gap.med !== null ? Math.round(gap.med * 1000) / 1000 : null,
+      floorHit: gapFloorG.length >= 20
+        ? Math.round(100 * gapFloorG.filter(c => c.r! >= c.f!).length / gapFloorG.length) : null,
+    },
+    quiet: {
+      n: quiet.all.length, graded: quiet.g.length,
+      medRatio: quiet.med !== null ? Math.round(quiet.med * 1000) / 1000 : null,
+      underPct: quiet.ratios.length >= 20
+        ? Math.round(100 * quiet.ratios.filter(x => x <= 1).length / quiet.ratios.length) : null,
     },
     asOf: new Date().toISOString().slice(0, 10),
   };
