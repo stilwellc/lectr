@@ -436,6 +436,17 @@ function loadRayData(): Promise<RayPayload> {
               // eager upcoming lots — re-attach or every countdown dies the
               // moment phase 2 lands (same class as the bidVelocity loss)
               const closeTimes = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).saleDateTime]));
+              // THE BID STATE (Aug 25 2026, "the Gap says zero"): bidProj is
+              // ALSO stripped from the shards, and currentBid/bidCount on a
+              // shard are nightly-stale versus the eager lots (the close-board
+              // overlay refreshed them in place ~4-hourly). Without this
+              // re-attach the whole Gap lane — and every Bid-now cell — died
+              // the moment the corpus landed: 10 wire calls at first paint,
+              // zero after one scroll past the sentinel.
+              const bidStates = new Map((up.lots || []).map(l => {
+                const w = l as AuctionLot;
+                return [l.id, { bidProj: w.bidProj, currentBid: w.currentBid, bidCount: w.bidCount }] as const;
+              }));
               const merged = full.map(l => {
                 let x = l;
                 // has() + !== undefined: the build stamps signal:null ON
@@ -446,6 +457,12 @@ function loadRayData(): Promise<RayPayload> {
                 if (soldComps.get(l.id) != null) x = { ...x, soldComp: soldComps.get(l.id) };
                 if (bidVels.get(l.id) != null) x = { ...x, bidVelocity: bidVels.get(l.id) };
                 if (closeTimes.get(l.id) != null) x = { ...x, saleDateTime: closeTimes.get(l.id) };
+                const bs = bidStates.get(l.id);
+                if (bs) {
+                  if (bs.bidProj != null) x = { ...x, bidProj: bs.bidProj };
+                  if (bs.currentBid != null) x = { ...x, currentBid: bs.currentBid };
+                  if (bs.bidCount != null) x = { ...x, bidCount: bs.bidCount };
+                }
                 return x;
               });
               notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });
