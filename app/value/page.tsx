@@ -23,10 +23,6 @@ const RecordByYear = dynamic(() => import('../components/RecordByYear'), {
   // ~48 + glass panel ~302) — a 300px reserve shifted the paper room ~75px
   loading: () => <div style={{ height: 380, borderRadius: 12, opacity: 0.4 }} aria-hidden />,
 });
-const CalibrationCurve = dynamic(() => import('../components/analytics/CalibrationCurve'), {
-  ssr: false,
-  loading: () => <div style={{ height: 295, borderRadius: 12, background: 'var(--color-bg-elevated)', opacity: 0.5 }} aria-hidden />,
-});
 // The market-pulse index line rides the lander's hand-rolled instrument —
 // ssr:false because it measures its container with a ResizeObserver.
 const HeroChart = dynamic(() => import('../preview/terminal/HeroChart'), {
@@ -44,8 +40,8 @@ import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import CountUp from '../components/CountUp';
 import {
-  FlagsMark, GapMark, SleeperMark, PulseMark, RecordMark, OddsMark,
-  DistMark, ConditionsMark, TapeMark, EngineMark, CallMark,
+  FlagsMark, GapMark, SleeperMark, PulseMark, RecordMark,
+  DistMark, TapeMark, EngineMark, CallMark,
 } from '../components/marks';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, overEstimatePct, toneOf } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
@@ -682,143 +678,7 @@ function OutcomeDistribution({ backtest }: { backtest: Backtest }) {
   );
 }
 
-/* ── ROOM 4½ · THE CONDITIONS — where and when value appears. Left: per-
-   house estimate calibration (median realized vs estimate AT THE HAMMER —
-   positive = estimates run cold = where flags come from). Right: the
-   closing-month calendar. Both n-gated, both measured outcomes. ── */
-function ConditionsRoom({ market, activeKey, activeLabel }: {
-  market: NonNullable<ReturnType<typeof useRayData>['market']>;
-  activeKey: string;
-  activeLabel: string;
-}) {
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const houses = useMemo(() => {
-    const hc = market.houseCal || {};
-    return Object.entries(hc)
-      .map(([house, cells]) => ({ house, cell: cells[activeKey] }))
-      .filter((x): x is { house: string; cell: { n: number; hammerMedPct: number; allInMedPct: number } } => !!x.cell && x.cell.n >= 40)
-      .sort((a, b) => b.cell.hammerMedPct - a.cell.hammerMedPct);
-  }, [market.houseCal, activeKey]);
-  const season = market.seasonality?.[activeKey];
-  const nowMonth = new Date().getMonth();
-  if (!houses.length && !season?.length) return null;
-  const hMax = Math.max(8, ...houses.map(h => Math.abs(h.cell.hammerMedPct)));
-  const sMax = season?.length ? Math.max(8, ...season.map(m => (m.n >= 30 ? Math.abs(m.allInMedPct) : 0))) : 0;
-  return (
-    <section id="conditions" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
-      <div className="vd-sect-head">
-        <span className="vd-sect-mark" aria-hidden><ConditionsMark size={16} /></span>
-        <span className="kicker">The conditions</span>
-        <span className="vd-pulse-rule" aria-hidden />
-        <span className="vd-sect-cap">where and when {activeLabel === 'collectible' ? 'the' : `the ${activeLabel}`} market misprices</span>
-      </div>
-      <div className="vd-cond">
-        {houses.length > 0 && (
-          <div>
-            <div className="vd-cond-head kicker">Estimates vs the hammer</div>
-            <p className="vd-cond-cap">median realized vs estimate at the hammer, by house — positive means the room beats the catalogue; negative means the catalogue runs hot</p>
-            {houses.map(h => {
-              const v = h.cell.hammerMedPct;
-              const w = Math.round((Math.abs(v) / hMax) * 50);
-              return (
-                <div key={h.house} className="vd-house-row">
-                  <span className="vd-house-name">{h.house}</span>
-                  <span className="vd-house-track" aria-hidden>
-                    <span className="vd-house-zero" />
-                    <span className={`vd-house-bar ${v >= 0 ? 'up' : 'down'}`} style={v >= 0 ? { left: '50%', width: `${w}%` } : { right: '50%', width: `${w}%` }} />
-                  </span>
-                  <span className="vd-house-fig" data-tone={toneOf(v)}>{fmtSignedPct(v)}</span>
-                  <span className="vd-house-n">n {h.cell.n.toLocaleString()}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {season && season.length === 12 && (
-          <div>
-            <div className="vd-cond-head kicker">The calendar</div>
-            <p className="vd-cond-cap">median realized vs estimate, all-in, by closing month · months under n 30 abstain</p>
-            <div className="vd-season" aria-label="Seasonality by closing month">
-              {season.map((m, i) => {
-                const gated = m.n < 30;
-                const v = m.allInMedPct;
-                const h = gated ? 0 : Math.round((Math.abs(v) / sMax) * 34);
-                return (
-                  <div key={i} className="vd-season-col" data-now={i === nowMonth || undefined}>
-                    <span className="vd-season-fig" data-tone={gated ? undefined : toneOf(v)}>{gated ? '—' : fmtSignedPct(v)}</span>
-                    <span className="vd-season-stage" aria-hidden>
-                      <span className={`vd-season-bar ${v >= 0 ? 'up' : 'down'}`} style={{ height: h, [v >= 0 ? 'bottom' : 'top']: '50%' } as React.CSSProperties} />
-                      <span className="vd-season-zero" />
-                    </span>
-                    <span className="vd-season-m">{MONTHS[i]}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
 
-/* ── ROOM 4a right column · the bucket ledger + what a confidence tier
-   promises. Beams hand-rolled on ONE shared log-x scale (a shared witness
-   at 1.0× is only honest if every row shares the domain). ── */
-const BUCKET_ROWS: { label: string; idx: number }[] = [
-  { label: '<0.6×', idx: 0 }, { label: '0.6–0.9×', idx: 1 }, { label: '0.9–1.3×', idx: 2 },
-  { label: '1.3–2×', idx: 3 }, { label: '2–10×', idx: 4 }, { label: '>10×', idx: 5 },
-];
-function OddsLadderSide({ backtest }: { backtest: Backtest }) {
-  const beat = backtest.calibration?.beatRate?.global;
-  const band = backtest.calibration?.band as Record<string, { lo: number; hi: number }> | undefined;
-  const n = (backtest.calibration as { n?: number } | undefined)?.n;
-  if (!beat || beat.length !== 6) return null;
-  // shared log domain across the three tier bands, padded
-  const tiers = (['high', 'medium', 'low'] as const).filter(t => band?.[t]?.lo && band?.[t]?.hi);
-  const lows = tiers.map(t => band![t].lo), his = tiers.map(t => band![t].hi);
-  const dLo = Math.min(0.9, ...lows) * 0.92, dHi = Math.max(1.1, ...his) * 1.08;
-  const lx = (v: number) => ((Math.log(v) - Math.log(dLo)) / (Math.log(dHi) - Math.log(dLo))) * 100;
-  return (
-    <div className="vd-odds-side">
-      <div className="vd-bucket-head">
-        <span className="kicker">Ratio</span>
-        <span className="kicker" style={{ textAlign: 'right' }}>Beat rate</span>
-      </div>
-      {BUCKET_ROWS.map(b => (
-        <div key={b.label} className="vd-bucket-row" data-subject={b.label === '1.3–2×' || undefined}>
-          <span className="vd-bucket-l">{b.label}</span>
-          <span className="vd-bucket-v">{beat[b.idx]}%</span>
-        </div>
-      ))}
-      <div className="vd-bucket-foot">n = {n ? n.toLocaleString() : '—'} · recency-weighted, 3y half-life</div>
-      <p className="vd-odds-cap">0.9–1.3× is mostly buyer&rsquo;s premium, not edge — that band never flags.</p>
-
-      {tiers.length > 0 && (
-        <div className="vd-bands">
-          <div className="vd-bands-head kicker">What a confidence tier promises</div>
-          {tiers.map(t => (
-            <div key={t} className="vd-band-row">
-              <span className="vd-band-l">{t}</span>
-              <span className="vd-band-beam" aria-hidden>
-                <svg viewBox="0 0 100 20" preserveAspectRatio="none">
-                  {/* shared 1.0× witness behind every row */}
-                  <line x1={lx(1)} y1="0" x2={lx(1)} y2="20" className="vd-band-witness" vectorEffect="non-scaling-stroke" />
-                  <line x1={lx(band![t].lo)} y1="10" x2={lx(band![t].hi)} y2="10" className="vd-band-rule" vectorEffect="non-scaling-stroke" />
-                  <line x1={lx(band![t].lo)} y1="5" x2={lx(band![t].lo)} y2="15" className="vd-band-rule" vectorEffect="non-scaling-stroke" />
-                  <line x1={lx(band![t].hi)} y1="5" x2={lx(band![t].hi)} y2="15" className="vd-band-rule" vectorEffect="non-scaling-stroke" />
-                  <rect x={lx(1) - 1.1} y="8" width="2.2" height="4" className="vd-band-diamond" transform={`rotate(45 ${lx(1)} 10)`} />
-                </svg>
-              </span>
-              <span className="vd-band-ends">{band![t].lo.toFixed(2)}× – {band![t].hi.toFixed(2)}×</span>
-            </div>
-          ))}
-          <div className="vd-bands-sub">realized ÷ appraisal, 15th–85th percentile · the witness stands at 1.0×</div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * Value — THE DESK. The first viewport is a five-dial cockpit read of the
@@ -1193,14 +1053,6 @@ export default function ValuePage() {
     if (gapRows.length) r.push({ id: 'gap', label: 'The Gap', n: gapRows.length, mark: <GapMark size={15} /> });
     if (sleeperRows.length || sleeperQueue) r.push({ id: 'sleepers', label: 'The Sleepers', n: sleeperRows.length, mark: <SleeperMark size={15} /> });
     if (backtest && backtest.flagged.n >= 100) r.push({ id: 'record', label: 'The record', mark: <RecordMark size={15} /> });
-    if (backtest?.calibration?.beatRate?.global) r.push({ id: 'odds', label: 'The odds ladder', mark: <OddsMark size={15} /> });
-    // mirror ConditionsRoom's own null-gate exactly — a spine button must
-    // never point at a room that isn't on the page
-    const condLive = !!ray.market && (
-      Object.values(ray.market.houseCal || {}).some(cells => ((cells as Record<string, { n?: number }>)[activeKey]?.n ?? 0) >= 40)
-      || (ray.market.seasonality?.[activeKey]?.length ?? 0) > 0
-    );
-    if (condLive) r.push({ id: 'conditions', label: 'The conditions', mark: <ConditionsMark size={15} /> });
     r.push({ id: 'tape', label: 'Settled calls', mark: <TapeMark size={15} /> });
     r.push({ id: 'engine', label: 'The engine', mark: <EngineMark size={15} /> });
     return r;
@@ -1551,41 +1403,6 @@ export default function ValuePage() {
           .vd-dist-label { font-size: 10px; }
         }
 
-        /* ── ROOM 4½ the conditions ── */
-        .vd-cond { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px 40px; }
-        @media (min-width: 900px) { .vd-cond { grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); align-items: start; } }
-        .vd-cond-head { font-size: 10px; letter-spacing: 0.14em; padding-bottom: 7px; border-bottom: 1px solid var(--color-border); }
-        .vd-cond-cap { font-size: 12px; color: var(--color-text-faint); margin: 8px 0 10px; }
-        .vd-house-row {
-          display: grid; grid-template-columns: 92px minmax(0, 1fr) 56px 64px; gap: 12px;
-          align-items: center; padding: 7px 0; min-height: 34px;
-          border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06));
-        }
-        .vd-house-name { font-size: 12.5px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .vd-house-track { position: relative; height: 8px; }
-        .vd-house-zero { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgba(255, 255, 255, 0.18); }
-        .vd-house-bar { position: absolute; top: 0; bottom: 0; }
-        .vd-house-bar.up { background: var(--color-up); opacity: 0.75; }
-        .vd-house-bar.down { background: var(--color-down); opacity: 0.75; }
-        .vd-house-fig { font-family: var(--font-mono), monospace; font-size: 12.5px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-fg); }
-        .vd-house-fig[data-tone="up"] { color: var(--color-up); }
-        .vd-house-fig[data-tone="down"] { color: var(--color-down-text); }
-        .vd-house-n { font-family: var(--font-mono), monospace; font-size: 10.5px; color: var(--color-text-faint); text-align: right; font-variant-numeric: tabular-nums; }
-        .vd-season { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
-        .vd-season-col { display: grid; gap: 5px; justify-items: center; padding: 6px 0 4px; border-radius: 6px; }
-        .vd-season-col[data-now] { background: rgba(232, 218, 182, 0.07); }
-        .vd-season-fig { font-family: var(--font-mono), monospace; font-size: 10px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
-        .vd-season-fig[data-tone="up"] { color: var(--color-up); }
-        .vd-season-fig[data-tone="down"] { color: var(--color-down-text); }
-        .vd-season-stage { position: relative; width: 100%; height: 72px; }
-        .vd-season-zero { position: absolute; left: 15%; right: 15%; top: 50%; height: 1px; background: rgba(255, 255, 255, 0.14); }
-        .vd-season-bar { position: absolute; left: 50%; transform: translateX(-50%); width: min(14px, 60%); }
-        .vd-season-bar.up { background: var(--color-up); opacity: 0.8; }
-        .vd-season-bar.down { background: var(--color-down); opacity: 0.8; }
-        .vd-season-m { font-size: 10px; color: var(--color-text-faint); }
-        @media (max-width: 700px) {
-          .vd-season { grid-template-columns: repeat(6, 1fr); gap: 8px 4px; }
-        }
 
         /* ── ROOM 2 zero-flag frame — the instrument keeps its chrome ── */
         .vd-empty {
@@ -1744,45 +1561,6 @@ export default function ValuePage() {
         .vd-honesty-fill { flex: 1; border-bottom: 2px dotted var(--paper-line); transform: translateY(-3px); min-width: 16px; }
         .vd-honesty-up { color: var(--paper-up-text); font-weight: 700; }
         .vd-honesty-down { color: var(--paper-down-text); font-weight: 700; }
-
-        /* ── ROOM 4 odds ladder ── */
-        .vd-odds { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px 32px; }
-        @media (min-width: 900px) {
-          .vd-odds { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: start; }
-        }
-        .vd-odds-side { padding-top: 2px; }
-        .vd-bucket-head, .vd-bucket-row {
-          display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 12px;
-          align-items: baseline;
-        }
-        .vd-bucket-head { padding: 0 2px 7px; border-bottom: 1px solid var(--color-border); }
-        .vd-bucket-head .kicker { font-size: 10px; letter-spacing: 0.14em; }
-        .vd-bucket-row { padding: 7px 2px; border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06)); }
-        .vd-bucket-l { font-family: var(--font-mono), monospace; font-size: 12.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
-        .vd-bucket-v { font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 600; color: var(--color-fg); text-align: right; font-variant-numeric: tabular-nums; }
-        .vd-bucket-row[data-subject] { border-left: 2px solid var(--color-butter-deep, #b9a26b); padding-left: 8px; }
-        .vd-bucket-row[data-subject] .vd-bucket-l { color: var(--color-fg); font-weight: 600; }
-        .vd-bucket-foot { padding: 7px 2px 0; font-family: var(--font-mono), monospace; font-size: 10.5px; color: var(--color-text-faint); }
-        .vd-odds-cap { font-size: 12.5px; color: var(--color-text-muted); margin: 12px 0 0; max-width: 420px; }
-        .vd-bands { margin-top: 22px; }
-        .vd-bands-head { font-size: 10px; letter-spacing: 0.14em; padding-bottom: 7px; border-bottom: 1px solid var(--color-border); }
-        .vd-band-row {
-          display: grid; grid-template-columns: 64px minmax(0, 1fr) 110px; gap: 12px;
-          align-items: center; padding: 8px 2px;
-          border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06));
-        }
-        .vd-band-l { font-size: 12px; color: var(--color-text-secondary); }
-        .vd-band-beam svg { display: block; width: 100%; height: 20px; overflow: visible; }
-        .vd-band-rule { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1; }
-        .vd-band-witness { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; stroke-dasharray: 2 4; }
-        .vd-band-diamond { fill: var(--color-fg); }
-        .vd-band-ends { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--color-text-muted); text-align: right; font-variant-numeric: tabular-nums; }
-        .vd-bands-sub { padding-top: 8px; font-size: 11px; color: var(--color-text-faint); }
-        .vd-odds-law {
-          margin-top: 18px; padding-top: 12px;
-          border-top: 1px solid var(--color-border);
-          font-size: 13px; color: var(--color-text-secondary);
-        }
 
         /* ── ROOM 4b settled tape ── */
         .vd-tape-row {
@@ -2387,30 +2165,12 @@ export default function ValuePage() {
             </div>
           )}
 
-          {/* ════ ROOM 4 · THE ODDS LADDER & THE SETTLED TAPE ════ */}
-          {backtest?.calibration?.beatRate?.global && (
-            <section id="odds" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--sect-t) - 6px)' }}>
-              <div className="vd-sect-head">
-                <span className="vd-sect-mark" aria-hidden><OddsMark size={16} /></span>
-                <span className="kicker">The odds ladder</span>
-                <span className="vd-pulse-rule" aria-hidden />
-              </div>
-              <p style={{ fontSize: 15, color: 'var(--color-text-secondary)', margin: '0 0 18px', maxWidth: 620 }}>
-                Comp-ratio in, beat-rate out — the calibrated odds that rank everything on this board.
-              </p>
-              <div className="vd-odds">
-                <div>
-                  <CalibrationCurve backtest={backtest} bare flagThreshold />
-                  <p className="vd-odds-law">
-                    Every ranked surface uses these odds first; the raw gap only breaks ties, capped at 400%.
-                  </p>
-                </div>
-                <OddsLadderSide backtest={backtest} />
-              </div>
-            </section>
-          )}
-
-          {ray.market && <ConditionsRoom market={ray.market} activeKey={activeKey} activeLabel={activeLabel} />}
+          {/* ════ ROOM 4 · THE SETTLED TAPE ════
+              (REDUCE AUDIT Aug 25 2026, Collin's call: /value is ONLY the
+              value engine's metrics and data. The odds-ladder room and the
+              conditions room were cut here — the calibration curve renders
+              on /analytics under "The engine's record", and house
+              calibration + the calendar are /analytics rooms outright.) */}
 
           {/* the corpus loads as the reader approaches the tape */}
           <Phase2Sentinel />
