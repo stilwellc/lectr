@@ -1730,6 +1730,18 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   margin: 0;
 }
 
+/* ── the mark system (components/marks.tsx) — a room head's constructed
+   monoline glyph. Inline beside kickers/titles; inherits muted ink. ── */
+.ray-sect-mark {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--color-text-muted);
+  vertical-align: -3px;
+  margin-right: 10px;
+}
+.ray-sect-mark svg { display: block; }
+
 /* ── liveness: everything pressable answers the finger ── */
 .ray-range-btn, .ray-seg-btn, .ray-toolbar-pill, .ray-lot-remind,
 .ray-nav-link, .ray-sort-pill, .ray-toolbar-reset {

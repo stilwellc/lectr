@@ -24,6 +24,7 @@ import React, { useMemo } from 'react';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import HeroChart, { HeroLine } from '../../preview/terminal/HeroChart';
 import { LAYER_PALETTE } from '../../lib/heroLayers';
+import { HorizonMark } from '../marks';
 
 type DrillRow = SubMarketRead & { parent: string };
 
@@ -234,7 +235,7 @@ export default function LongHorizon({ marketData, scope }: {
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
-        <span className="ray-vm-title">Long horizon</span>
+        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><HorizonMark size={16} /></span>Long horizon</span>
         <span className="ray-vm-method">{curated.method}</span>
       </div>
       <div className="ray-lh-chart">

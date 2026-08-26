@@ -13,6 +13,7 @@
  */
 import React from 'react';
 import type { MarketData } from '../../hooks/useRayData';
+import { GradeMark } from '../marks';
 
 const BAR_MAX = 72; // px — tallest bar (log scale)
 const BAR_MIN = 5;  // px — floor so the smallest rung still registers
@@ -60,7 +61,7 @@ export default function GradeLadderPanel({ marketData }: { marketData: MarketDat
     <div className="ray-gl ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
-        <span className="ray-vm-title">The grade curve, measured</span>
+        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><GradeMark size={16} /></span>The grade curve, measured</span>
         <span className="ray-vm-method">card value multiple by grade · base {ladder.base} = 1.00 · log scale</span>
       </div>
       <div className="ray-gl-strip" style={{ gridTemplateColumns: `repeat(${rungs.length}, 1fr)` }}>

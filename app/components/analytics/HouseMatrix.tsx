@@ -12,6 +12,7 @@
 import React from 'react';
 import type { MarketData } from '../../hooks/useRayData';
 import { toneOf, fmtSignedPct } from '../../utils';
+import { CalibrationMark } from '../marks';
 
 const LIVE_MARKETS = ['art', 'design', 'watches', 'sports', 'tcg', 'science', 'culture'];
 const MIN_N = 40; // statistical floor — matches the pipeline's houseCal gate
@@ -56,7 +57,7 @@ export default function HouseMatrix({ marketData, scope }: {
     <div className="ray-hm ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
-        <span className="ray-vm-title">House calibration</span>
+        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><CalibrationMark size={16} /></span>House calibration</span>
         <span className="ray-vm-method">median hammer vs the house&rsquo;s own estimate · hammer basis · n≥40 cells only</span>
       </div>
       <div className="ray-hm-scroll">

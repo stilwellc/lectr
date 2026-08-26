@@ -16,6 +16,7 @@ import React, { useMemo, useState } from 'react';
 import HeroChart, { type HeroLine } from '../../preview/terminal/HeroChart';
 import { resolveHeroLayers, type HeroLayer } from '../../lib/heroLayers';
 import type { MarketData } from '../../hooks/useRayData';
+import { IndexLabMark } from '../marks';
 
 const CSS = `
 .ray-il-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -76,7 +77,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
     return (
       <div className="ray-vm ray-vm-card glass glass-quiet">
         <div className="ray-vm-head">
-          <span className="ray-vm-title">The index laboratory</span>
+          <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><IndexLabMark size={16} /></span>The index laboratory</span>
         </div>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '10px 0 4px' }}>
           Not enough settled history to chart an index for this market yet — it lights up as quarters accrue.
@@ -102,7 +103,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head ray-il-head">
-        <span className="ray-vm-title">The index laboratory</span>
+        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><IndexLabMark size={16} /></span>The index laboratory</span>
         <span className="ray-il-tf" role="tablist" aria-label="Window">
           {WINDOWS.map(w => (
             <button key={w.key} type="button" role="tab" className="ray-il-tfbtn" data-on={tf === w.key}

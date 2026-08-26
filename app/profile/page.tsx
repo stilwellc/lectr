@@ -21,6 +21,7 @@ import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
+import { AwayMark, PulseMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark } from '../components/marks';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 
@@ -887,7 +888,7 @@ export default function SavedPage() {
             {/* ── 1 · WHILE YOU WERE AWAY ── */}
             {(sinceLast || unseenAlerts > 0 || summary.closesToday > 0 || unclaimedWins > 0) && (
               <div className="ck-away ray-enter" role="status">
-                <span className="kicker">While you were away</span>
+                <span className="kicker"><span className="ray-sect-mark" aria-hidden><AwayMark size={14} /></span>While you were away</span>
                 <span className="ck-away-line">
                   {sinceLast && (
                     <>
@@ -956,7 +957,7 @@ export default function SavedPage() {
             {reads.length > 0 && (
               <div className="ck-reads ray-enter" role="list" aria-label="Today's reads">
                 <div className="ck-reads-head" aria-hidden>
-                  <span className="kicker">Today&rsquo;s reads</span>
+                  <span className="kicker"><span className="ray-sect-mark" aria-hidden><PulseMark size={14} /></span>Today&rsquo;s reads</span>
                   <i className="ck-reads-rule" />
                 </div>
                 {reads.map(r => (
@@ -974,7 +975,7 @@ export default function SavedPage() {
           {upcoming.length > 0 && (
             <section className="ray-saved-section rail" data-view={savedView}>
               <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 16 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}>Watching · on the block</h2>
+                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><WatchMark size={17} /></span>Watching · on the block</h2>
                 <div className="ray-savedview-toggle" role="group" aria-label="Watching view">
                   <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
                   <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
@@ -1088,7 +1089,7 @@ export default function SavedPage() {
             <section id="record" className="rail ray-enter" style={{ paddingBlock: '38px 10px' }}>
               <div className="ck-record">
                 <div className="ck-record-lead">
-                  <span className="kicker">Your record</span>
+                  <span className="kicker"><span className="ray-sect-mark" aria-hidden><RecordMark size={14} /></span>Your record</span>
                   <span className="ck-record-fig" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
                     {fmtSignedPct(Math.round(record.med))}
                   </span>
@@ -1125,7 +1126,7 @@ export default function SavedPage() {
             <div id="collection" className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
               <section className="rail" aria-label="Your collection">
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 6 }}>
-                  <h2 className="ray-h2" style={{ margin: 0 }}>Your collection</h2>
+                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><CollectionMark size={17} /></span>Your collection</h2>
                   <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
                     {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'}
                     {collection.totalPaid > 0 && (
@@ -1229,7 +1230,7 @@ export default function SavedPage() {
           {(sold.length > 0 || soldOrphans.length > 0) && (
             <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}>Settled</h2>
+                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><TapeMark size={17} /></span>Settled</h2>
                 <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
                   {sold.length + soldOrphans.length} settled {sold.length + soldOrphans.length === 1 ? 'watch' : 'watches'}
                   {record && <> · {record.n} judged vs estimate</>}
@@ -1289,7 +1290,7 @@ export default function SavedPage() {
 
           {other.length > 0 && (
             <section className="ray-saved-section rail">
-              <h2 className="ray-h2 ray-enter" style={{ marginBottom: 6 }}>Concluded &amp; other</h2>
+              <h2 className="ray-h2 ray-enter" style={{ marginBottom: 6 }}><span className="ray-sect-mark" aria-hidden><ArchiveMark size={17} /></span>Concluded &amp; other</h2>
               <p className="ray-enter" style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 18px' }}>
                 Saved lots that closed without a published hammer, were bought in, or are awaiting results.
               </p>

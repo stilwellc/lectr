@@ -12,6 +12,7 @@ import React, { useMemo } from 'react';
 import Link from 'next/link';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { LAYER_PALETTE } from '../../lib/heroLayers';
+import { StrengthMark } from '../marks';
 
 type DrillRow = SubMarketRead & { parent: string };
 interface Ranked { row: DrillRow; value: number; rank: number }
@@ -147,7 +148,7 @@ export default function RelativeStrength({ marketData, scope }: {
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
-        <span className="ray-vm-title">Relative strength</span>
+        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><StrengthMark size={16} /></span>Relative strength</span>
         <span className="ray-vm-method">CI-verified indexes first, measured demand second · descriptive markets excluded</span>
       </div>
       <p className="ray-rs-spread">

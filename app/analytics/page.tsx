@@ -14,6 +14,7 @@ import { formatDate, getUpcomingCounts, fmtSignedPct } from '../utils';
 import Masthead, { Underscore } from '../components/Masthead';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import DeskNote from '../components/analytics/DeskNote';
+import { RecordMark } from '../components/marks';
 import VerifiedMovers from '../components/analytics/VerifiedMovers';
 import SubMarketDrills from '../components/analytics/SubMarketDrills';
 import IndexLab from '../components/analytics/IndexLab';
@@ -97,7 +98,7 @@ export default function AnalyticsPage() {
         {backtest && (
           <div className="ray-vm ray-vm-card glass glass-quiet" style={{ marginBottom: 14 }}>
             <div className="ray-vm-head">
-              <span className="ray-vm-title">The engine&rsquo;s record</span>
+              <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><RecordMark size={16} /></span>The engine&rsquo;s record</span>
               <span className="ray-vm-method">point-in-time replay of the live engine · dual basis</span>
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--color-text-muted)', lineHeight: 1.65 }}>
@@ -238,6 +239,8 @@ function DeepPools({ activeKey, mktSet, marketStats }: {
   return (
     <div ref={ref} style={{ minHeight: armed ? undefined : 400 }}>
       <div className="rail" style={{ paddingTop: 26 }}>
+        {/* no mark here — BookMark belongs to "The full book" head below;
+            one glyph, one room (the mark system's premise) */}
         <div className="kicker" style={{ color: 'var(--color-text-faint)' }}>The deep pools · every lot on the book</div>
       </div>
       {armed ? <DeepPoolsBody activeKey={activeKey} mktSet={mktSet} marketStats={marketStats} /> : (

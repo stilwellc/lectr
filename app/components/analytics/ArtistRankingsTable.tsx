@@ -8,6 +8,7 @@ import { demandSeries, formatDemand } from '../../lib/demand';
 import ArtistAvatar from '../ArtistAvatar';
 import Flick from '../Flick';
 import { ARTISTS, marketArtists, Market } from '../../constants';
+import { RankMark } from '../marks';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -392,7 +393,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Maker <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>rankings</span>
+          <span className="ray-sect-mark" aria-hidden><RankMark size={17} /></span>Maker <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>rankings</span>
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           {isBid && (

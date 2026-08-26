@@ -11,6 +11,7 @@
 import React from 'react';
 import type { MarketData } from '../../hooks/useRayData';
 import { toneOf, fmtSignedPct } from '../../utils';
+import { ConditionsMark } from '../marks';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MIN_N = 30;          // per-month floor — matches the pipeline's gate
@@ -62,7 +63,7 @@ export default function SeasonalityStrip({ marketData, scope }: {
     <div className="ray-ss ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
-        <span className="ray-vm-title">The calendar</span>
+        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><ConditionsMark size={16} /></span>The calendar</span>
         <span className="ray-vm-method">hammer vs estimate by calendar month · trailing full-history · {totalN.toLocaleString()} sales</span>
       </div>
       <div className="ray-ss-grid">

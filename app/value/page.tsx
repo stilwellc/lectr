@@ -43,6 +43,10 @@ import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import CountUp from '../components/CountUp';
+import {
+  FlagsMark, GapMark, SleeperMark, PulseMark, RecordMark, OddsMark,
+  DistMark, ConditionsMark, TapeMark, EngineMark, CallMark,
+} from '../components/marks';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, overEstimatePct, toneOf } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
@@ -161,6 +165,7 @@ function MarketPulse({ ray, activeKey, activeLabel, play }: {
   return (
     <div className="vd-pulse">
       <div className="vd-pulse-head">
+        <span className="vd-sect-mark" aria-hidden><PulseMark size={15} /></span>
         <span className="kicker">Market pulse</span>
         <span className="vd-pulse-rule" aria-hidden />
       </div>
@@ -189,58 +194,131 @@ function MarketPulse({ ray, activeKey, activeLabel, play }: {
   );
 }
 
-/* ── THE LANE MARKS — each lane's constructed monoline glyph: the name and
-   its analytics fused into one small instrument (the CHAPTER_GLYPHS lineage).
-   currentColor only; stroke 1.7; never a second lamp. ── */
-function FlagsMark() {
+/* ── THE GLOSSARY — the desk explains its own vocabulary. A Term renders a
+   dotted-underlined word whose definition surfaces on hover/focus. Tips are
+   positioned tooltips, so Terms must live OUTSIDE overflow-clipped panels
+   (captions, meters, help strips) — never inside a ledger. ── */
+const GLOSSARY: Record<string, string> = {
+  'all-in': 'Hammer price plus buyer’s premium — the price a buyer actually pays. Every graded figure on this desk is all-in unless it says hammer.',
+  'comps': 'Recent sold results for the same maker, form and size band — medians, never means. Auction results only; asking prices never enter the pool.',
+  'odds': 'The share of historical calls at this comp-ratio that beat the high estimate — read from the calibration curve, refit nightly.',
+  'floor': 'The engine’s conservative lower bound: the appraisal low at medium-or-better confidence, else 0.85× the card-comps median at three-plus sales.',
+  'forming': '3.5–8 days from the close — the projection is still tightening, so the bar is 15 points harder than at the wire.',
+  'wire': 'Closing inside 3.5 days — near enough that the close-curve projection has its full accuracy.',
+  'graded': 'A call grades when its lot hammers: the realized price is measured against the number the engine put on the tape before the outcome was known.',
+  'verified fair': 'The engine’s own appraisal sits within 0.75–1.3× the estimate midpoint — fairness is measured, never inferred from a missing signal.',
+  'forward tape': 'The append-only ledger of calls stamped before their outcomes. Each lane publishes its record only after 20 graded calls.',
+};
+function Term({ k, children }: { k: string; children: React.ReactNode }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {/* the pole; the pennant is a rising bar chart */}
-      <path d="M5.5 21V3.5" />
-      <path d="M5.5 11.5H16.5" />
-      <path d="M9 11.5V8.5" />
-      <path d="M12.5 11.5V6.5" />
-      <path d="M16 11.5V4.5" />
-    </svg>
-  );
-}
-function GapMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {/* two price rails; the caliper beam measures the distance between */}
-      <path d="M4 5.5H20" />
-      <path d="M4 18.5H20" />
-      <path d="M12 8.5V15.5" />
-      <path d="M9.5 8.5H14.5" />
-      <path d="M9.5 15.5H14.5" />
-    </svg>
-  );
-}
-function SleeperMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {/* a flat pulse running into the clock */}
-      <path d="M2.5 12H9" />
-      <circle cx="15.5" cy="12" r="5.5" />
-      <path d="M15.5 9.5V12L17.5 13.5" />
-    </svg>
+    <span className="vd-term" tabIndex={0}>
+      {children}
+      <span className="vd-term-tip" role="tooltip">{GLOSSARY[k]}</span>
+    </span>
   );
 }
 
-/* ── the shared lane head: mark + name + live count + tagline + rule ── */
-function LaneHead({ mark, name, count, tag, right }: {
+/* ── the shared lane head: mark + name + live count + tagline + rule.
+   `help` arms the "?" chip — a one-tap how-to-read strip under the head. ── */
+function LaneHead({ mark, name, count, tag, right, help, play }: {
   mark: React.ReactNode; name: string; count?: number | null;
-  tag: React.ReactNode; right?: React.ReactNode;
+  tag: React.ReactNode; right?: React.ReactNode; help?: React.ReactNode;
+  play?: boolean;
 }) {
+  const [showHelp, setShowHelp] = useState(false);
   return (
-    <div className="vd-lane-head">
-      <span className="vd-lane-mark" aria-hidden>{mark}</span>
-      <h2 className="vd-lane-name">{name}</h2>
-      {count != null && count > 0 && <span className="vd-lane-count">{count}</span>}
-      <span className="vd-pulse-rule" aria-hidden />
-      <span className="vd-sect-cap">{tag}</span>
-      {right}
-    </div>
+    <>
+      <div className="vd-lane-head">
+        <span className="vd-lane-mark" aria-hidden>{mark}</span>
+        <h2 className="vd-lane-name">{name}</h2>
+        {count != null && count > 0 && (
+          <span className="vd-lane-count">
+            <CountUp to={count} format={v => Math.round(v).toLocaleString()} animate={!!play} duration={900} />
+          </span>
+        )}
+        {help && (
+          <button
+            type="button" className="vd-lane-helpbtn" aria-expanded={showHelp}
+            aria-label={`How to read ${name}`}
+            onClick={() => setShowHelp(v => !v)}
+          >?</button>
+        )}
+        <span className="vd-pulse-rule" aria-hidden />
+        <span className="vd-sect-cap">{tag}</span>
+        {right}
+      </div>
+      {help && showHelp && <div className="vd-lane-help">{help}</div>}
+    </>
+  );
+}
+
+/* ── THE SPINE — the desk's fixed room index (≥1280px). The page stops
+   being one long scroll the moment its rooms are addressable: the spine
+   tracks where you are, jumps on click, and stamps the hash so a room can
+   be linked to directly (/value#gap). ── */
+function DeskSpine({ rooms }: { rooms: { id: string; label: string; mark: React.ReactNode; n?: number }[] }) {
+  const [active, setActive] = useState(rooms[0]?.id);
+  const reduce = useReducedMotion();
+  const key = rooms.map(r => r.id).join('|');
+  useEffect(() => {
+    let t = 0;
+    const read = () => {
+      t = 0;
+      const yBar = window.innerHeight * 0.42;
+      let cur = rooms[0]?.id;
+      for (const r of rooms) {
+        const el = document.getElementById(r.id);
+        if (el && el.getBoundingClientRect().top <= yBar) cur = r.id;
+      }
+      setActive(cur);
+    };
+    const onScroll = () => { if (!t) t = requestAnimationFrame(read); };
+    read();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (t) cancelAnimationFrame(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return (
+    <nav className="vd-spine" aria-label="Rooms on this desk">
+      {rooms.map(r => (
+        <button
+          key={r.id} type="button" data-on={active === r.id || undefined}
+          aria-label={r.label} aria-current={active === r.id ? 'true' : undefined}
+          onClick={() => {
+            const el = document.getElementById(r.id);
+            if (!el) return;
+            el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+            try { window.history.replaceState(window.history.state, '', `#${r.id}`); } catch { /* ignore */ }
+          }}
+        >
+          <span className="vd-spine-mark" aria-hidden>{r.mark}</span>
+          <span className="vd-spine-tip" aria-hidden>{r.label}{r.n != null ? ` · ${r.n}` : ''}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/* ── cell micro-instruments: a 2px fill track (share-of-cap) and a witness
+   track (a dot on a bounded window with a 1.0 center mark). Purely
+   presentational — the number stays the statement, the track is the shape. ── */
+function CellTrack({ pct, tone }: { pct: number; tone?: 'up' }) {
+  return (
+    <span className={`vd-cell-track${tone === 'up' ? ' vd-track-up' : ''}`} aria-hidden>
+      <span style={{ width: `${Math.max(3, Math.min(100, Math.round(pct)))}%` }} />
+    </span>
+  );
+}
+function WitnessTrack({ at }: { at: number }) {
+  return (
+    <span className="vd-cell-track vd-track-witness" aria-hidden>
+      <span className="vd-track-dot" style={{ left: `${Math.max(0, Math.min(100, at))}%` }} />
+    </span>
   );
 }
 
@@ -249,12 +327,16 @@ function LaneHead({ mark, name, count, tag, right }: {
    WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, ≥40%). A PROJECTION product:
    neutral ink, every entry logs to the forward tape, publishes at 20 graded.
    Same ledger grammar as the Flags board — sibling boards, one language. ── */
-function GapAnnex({ rows, receipts, activeKey }: {
+function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
   rows: { lot: AuctionLot; g: GapRead }[];
   receipts: { record: { gap?: { n: number; graded: number } } } | null;
   activeKey: string;
+  play: boolean;
+  isSaved: (id: string) => boolean;
+  onToggleSave: (id: string, lot?: AuctionLot) => void;
 }) {
   const [showForming, setShowForming] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   // display caps only — the head pill counts the TRUE lane, and a cut is
   // said out loud (no silent caps: a capped board must not read as complete)
   const wireAll = rows.filter(r => r.g.shelf === 'wire').sort((a, b) => b.g.depth - a.g.depth);
@@ -264,48 +346,121 @@ function GapAnnex({ rows, receipts, activeKey }: {
   const wireCut = wireAll.length - wire.length;
   if (!wire.length && !forming.length) return null;
   const gapRec = receipts?.record?.gap;
-  const row = ({ lot, g }: { lot: AuctionLot; g: GapRead }) => (
-    <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-lane-row vd-gap-grid">
-      <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
-        <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
-        {lot.imageUrl && (
-          <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={e => e.currentTarget.remove()} />
-        )}
-      </span>
-      <span style={{ minWidth: 0 }}>
-        <span className="ray-value-row-maker" style={{ display: 'block' }}>
-          {ARTIST_LABEL[lot.artist] || lot.artist}
-          {g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}
-        </span>
-        <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
-      </span>
-      <span className="vd-cell vd-cell-strong">−{Math.round(g.depth * 100)}%</span>
-      <span className="vd-cell" title={`floor from ${g.floorSrc === 'value.low' ? 'the appraisal band' : 'card comps ×0.85'}`}>
-        {formatPrice(g.allIn)} → {formatPrice(g.floor)}
-      </span>
-      <span className="vd-cell">{(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'no bids'}</span>
-      <span className="vd-cell">
-        {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
-          ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
-          : formatDate(lot.saleDate)}
-      </span>
-      {/* mobile stack */}
-      <span className="vd-lane-mob">
-        <span className="vd-cell-strong" style={{ display: 'block' }}>−{Math.round(g.depth * 100)}% under floor</span>
-        <span style={{ display: 'block' }}>{formatPrice(g.allIn)} proj → floor {formatPrice(g.floor)}</span>
-        <span style={{ display: 'block' }}>closes {formatDate(lot.saleDate)}</span>
-      </span>
-    </Link>
-  );
+  const row = ({ lot, g }: { lot: AuctionLot; g: GapRead }) => {
+    const isOpen = open === lot.id;
+    return (
+      <div key={lot.id} className="vd-lane-item" data-open={isOpen || undefined}>
+        <div
+          role="button" tabIndex={0} data-nav-row
+          className="vd-lane-row vd-gap-grid"
+          aria-expanded={isOpen}
+          onClick={() => setOpen(o => (o === lot.id ? null : lot.id))}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => (o === lot.id ? null : lot.id)); } }}
+        >
+          <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
+            <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
+            {lot.imageUrl && (
+              <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => e.currentTarget.remove()} />
+            )}
+          </span>
+          <span style={{ minWidth: 0 }}>
+            <span className="ray-value-row-maker" style={{ display: 'block' }}>
+              {ARTIST_LABEL[lot.artist] || lot.artist}
+              {g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}
+            </span>
+            <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+          </span>
+          <span className="vd-cell vd-cell-strong">
+            −{Math.round(g.depth * 100)}%
+            <CellTrack pct={g.depth * 100} />
+          </span>
+          <span className="vd-cell">
+            {formatPrice(g.allIn)} → {formatPrice(g.floor)}
+          </span>
+          <span className="vd-cell">{(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'no bids'}</span>
+          <span className="vd-cell">
+            {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
+              ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
+              : formatDate(lot.saleDate)}
+          </span>
+          {/* mobile stack */}
+          <span className="vd-lane-mob">
+            <span className="vd-cell-strong" style={{ display: 'block' }}>−{Math.round(g.depth * 100)}% under floor</span>
+            <span style={{ display: 'block' }}>{formatPrice(g.allIn)} proj → floor {formatPrice(g.floor)}</span>
+            <span style={{ display: 'block' }}>closes {formatDate(lot.saleDate)}</span>
+          </span>
+        </div>
+        {/* THE EVIDENCE — the row's whole case, interrogated in place */}
+        <div className="vd-lane-detail">
+          <div className="vd-lane-detail-in">
+            <p className="vd-detail-lead">
+              The room projects <b>{formatPrice(g.allIn)}</b> all-in at the close — <b>{Math.round(g.depth * 100)}%</b> under
+              the <b>{formatPrice(g.floor)}</b> floor.
+            </p>
+            <div className="vd-detail-grid">
+              <div>
+                <span className="kicker">The floor</span>
+                <p>{g.floorSrc === 'value.low'
+                  ? 'the engine’s appraisal low — confidence medium or better'
+                  : '0.85 × the card-comps median — three or more sales'}</p>
+              </div>
+              <div>
+                <span className="kicker">The projection</span>
+                <p>close-day growth curve fitted from Goldin bid histories · current bid {(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'none'}</p>
+              </div>
+              <div>
+                <span className="kicker">The tape</span>
+                <p>logged as a gap call · grades at the hammer · publishes at 20 graded</p>
+              </div>
+            </div>
+            {/* the close on the curve's 8-day fitted window */}
+            <div className="vd-curve" aria-label={`Closes in ${g.daysOut.toFixed(1)} days — the curve is fitted to 8`}>
+              <span className="vd-curve-rail" aria-hidden>
+                <span className="vd-curve-wire" style={{ width: `${(3.5 / 8) * 100}%` }} />
+                <span className="vd-curve-dot" style={{ left: `${Math.min(100, (g.daysOut / 8) * 100)}%` }} />
+              </span>
+              <span className="vd-curve-labels" aria-hidden>
+                <span>now</span>
+                <span style={{ position: 'absolute', left: `${(3.5 / 8) * 100}%`, transform: 'translateX(-50%)' }}>wire ≤3.5d</span>
+                <span>8d · curve edge</span>
+              </span>
+              <span className="vd-curve-read">closes in {g.daysOut < 1 ? `${Math.round(g.daysOut * 24)}h` : `${g.daysOut.toFixed(1)}d`} · {g.shelf === 'wire' ? 'at the wire' : 'forming'}</span>
+            </div>
+            <div className="vd-detail-actions">
+              <Link href={`/lot/${lot.id}`} className="link-action" style={{ color: 'var(--color-fg)' }} onClick={e => e.stopPropagation()}>
+                Open the lot <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+              </Link>
+              <button
+                type="button" className="vd-detail-save" data-save-btn
+                aria-pressed={isSaved(lot.id)}
+                onClick={e => { e.stopPropagation(); onToggleSave(lot.id, lot); }}
+              >
+                {isSaved(lot.id) ? 'Saved to your desk' : 'Save to your desk'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
   return (
-    <section className="rail ray-enter vd-annex" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+    <section id="gap" className="rail ray-enter vd-annex vd-room" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
       <LaneHead
         mark={<GapMark />}
         name="The Gap"
         count={wireAll.length + formingAll.length}
+        play={play}
         tag={<>projected close vs floor · no-estimate books · record accruing</>}
+        help={
+          <>These lots post no estimate, so the engine projects the close from Goldin bid-history
+          curves instead. A lot prints when the projection sits at least 25% under
+          its <Term k="floor">floor</Term> — at the <Term k="wire">wire</Term> inside
+          3.5 days, or <Term k="forming">forming</Term> at a harder bar. Every entry logs to
+          the <Term k="forward tape">forward tape</Term> and is <Term k="graded">graded</Term> at
+          the hammer. Click a row for its whole case.</>
+        }
       />
       <div className="glass glass-quiet vd-lane-panel">
         <div className="vd-lane-cols vd-gap-grid" aria-hidden>
@@ -333,8 +488,8 @@ function GapAnnex({ rows, receipts, activeKey }: {
       </div>
       <div className="vd-annex-meter">
         {gapRec
-          ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded} graded · publishes at 20 graded</>
-          : <>forward tape: — · publishes at 20 graded</>}
+          ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded} <Term k="graded">graded</Term> · publishes at 20 graded</>
+          : <>forward tape: — · publishes at 20 <Term k="graded">graded</Term></>}
         {' '}· curve fitted from goldin bid histories · estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: no comp basis yet</> : null}
       </div>
     </section>
@@ -344,21 +499,33 @@ function GapAnnex({ rows, receipts, activeKey }: {
 /* ── ROOM 2d · THE SLEEPERS — "the price is right and nobody's looking":
    verified-fair lots with a dead room, closing ≤7 days. Bursty by
    construction — when empty it prints its calendar, never vanishes. ── */
-function SleepersAnnex({ rows, queued, receipts, activeLabel }: {
+function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onToggleSave }: {
   rows: { lot: AuctionLot; q: SleeperRead }[];
   queued: number;
   receipts: { record: { quiet?: { n: number; graded: number } } } | null;
   activeLabel: string;
+  play: boolean;
+  isSaved: (id: string) => boolean;
+  onToggleSave: (id: string, lot?: AuctionLot) => void;
 }) {
+  const [open, setOpen] = useState<string | null>(null);
   if (!rows.length && !queued) return null;
   const rec = receipts?.record?.quiet;
   return (
-    <section className="rail ray-enter vd-annex" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
+    <section id="sleepers" className="rail ray-enter vd-annex vd-room" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
       <LaneHead
         mark={<SleeperMark />}
         name="The Sleepers"
         count={rows.length}
+        play={play}
         tag={<>verified fair · zero bids · closing ≤7d · record accruing</>}
+        help={
+          <><Term k="verified fair">Verified-fair</Term> lots nobody has bid on, closing inside 7
+          days. Fairness is measured against the engine&rsquo;s own appraisal — never inferred from a
+          missing signal. The median live estimate lot carries 4 bids; zero is a dead room. Each
+          entry logs to the <Term k="forward tape">forward tape</Term> and
+          is <Term k="graded">graded</Term> against the appraisal, both <Term k="all-in">all-in</Term>.</>
+        }
       />
       {rows.length ? (
         <div className="glass glass-quiet vd-lane-panel">
@@ -370,35 +537,87 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel }: {
             <span className="kicker" style={{ textAlign: 'right' }}>The room</span>
             <span className="kicker" style={{ textAlign: 'right' }}>Closes</span>
           </div>
-          {rows.slice(0, 6).map(({ lot, q }) => (
-            <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-lane-row vd-slp-grid">
-              <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
-                <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
-                {lot.imageUrl && (
-                  <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={e => e.currentTarget.remove()} />
-                )}
-              </span>
-              <span style={{ minWidth: 0 }}>
-                <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
-                <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
-              </span>
-              <span className="vd-cell">{q.estMid ? formatPrice(q.estMid) : '—'}</span>
-              <span className="vd-cell vd-cell-strong">{formatPrice(q.cvu)}</span>
-              <span className="vd-cell">0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
-              <span className="vd-cell">
-                {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
-                  ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
-                  : formatDate(q.closes)}
-              </span>
-              <span className="vd-lane-mob">
-                <span className="vd-cell-strong" style={{ display: 'block' }}>appraised {formatPrice(q.cvu)}</span>
-                <span style={{ display: 'block' }}>{q.estMid ? `est ${formatPrice(q.estMid)} · ` : ''}0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
-                <span style={{ display: 'block' }}>closes {formatDate(q.closes)}</span>
-              </span>
-            </Link>
-          ))}
+          {rows.slice(0, 6).map(({ lot, q }) => {
+            const isOpen = open === lot.id;
+            const ratio = q.estMid ? q.cvu / q.estMid : null;
+            return (
+              <div key={lot.id} className="vd-lane-item" data-open={isOpen || undefined}>
+                <div
+                  role="button" tabIndex={0} data-nav-row
+                  className="vd-lane-row vd-slp-grid"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(o => (o === lot.id ? null : lot.id))}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => (o === lot.id ? null : lot.id)); } }}
+                >
+                  <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
+                    <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
+                    {lot.imageUrl && (
+                      <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => e.currentTarget.remove()} />
+                    )}
+                  </span>
+                  <span style={{ minWidth: 0 }}>
+                    <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+                    <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+                  </span>
+                  <span className="vd-cell">{q.estMid ? formatPrice(q.estMid) : '—'}</span>
+                  <span className="vd-cell vd-cell-strong">
+                    {formatPrice(q.cvu)}
+                    {ratio != null && <WitnessTrack at={((ratio - 0.75) / (1.3 - 0.75)) * 100} />}
+                  </span>
+                  <span className="vd-cell">0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
+                  <span className="vd-cell">
+                    {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
+                      ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
+                      : formatDate(q.closes)}
+                  </span>
+                  <span className="vd-lane-mob">
+                    <span className="vd-cell-strong" style={{ display: 'block' }}>appraised {formatPrice(q.cvu)}</span>
+                    <span style={{ display: 'block' }}>{q.estMid ? `est ${formatPrice(q.estMid)} · ` : ''}0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
+                    <span style={{ display: 'block' }}>closes {formatDate(q.closes)}</span>
+                  </span>
+                </div>
+                <div className="vd-lane-detail">
+                  <div className="vd-lane-detail-in">
+                    <p className="vd-detail-lead">
+                      {q.anchor === 'fair-est'
+                        ? <>Appraised <b>{formatPrice(q.cvu)}</b> against a <b>{formatPrice(q.estMid!)}</b> estimate
+                            midpoint — <b>{ratio!.toFixed(2)}×</b>, inside the 0.75–1.3× at-market window.</>
+                        : <>No estimate posted — the lane stands on the engine&rsquo;s <b>{formatPrice(q.cvu)}</b> appraisal
+                            at high or medium confidence.</>}
+                    </p>
+                    <div className="vd-detail-grid">
+                      <div>
+                        <span className="kicker">The room</span>
+                        <p>0 bids on the book{q.entry != null ? <> · opens at {formatPrice(q.entry)} — under the appraisal</> : null} · the median live estimate lot carries 4</p>
+                      </div>
+                      <div>
+                        <span className="kicker">The window</span>
+                        <p>closes {formatDate(q.closes)} — attention only means something near the hammer</p>
+                      </div>
+                      <div>
+                        <span className="kicker">The tape</span>
+                        <p>logged as a quiet call · grades vs the appraisal, both all-in · publishes at 20 graded</p>
+                      </div>
+                    </div>
+                    <div className="vd-detail-actions">
+                      <Link href={`/lot/${lot.id}`} className="link-action" style={{ color: 'var(--color-fg)' }} onClick={e => e.stopPropagation()}>
+                        Open the lot <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+                      </Link>
+                      <button
+                        type="button" className="vd-detail-save" data-save-btn
+                        aria-pressed={isSaved(lot.id)}
+                        onClick={e => { e.stopPropagation(); onToggleSave(lot.id, lot); }}
+                      >
+                        {isSaved(lot.id) ? 'Saved to your desk' : 'Save to your desk'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
           {rows.length > 6 && (
             <div className="vd-forming-toggle" style={{ cursor: 'default' }}>
               {rows.length - 6} more in the window — the 6 closing soonest print here
@@ -435,6 +654,7 @@ function OutcomeDistribution({ backtest }: { backtest: Backtest }) {
   return (
     <section className="rail ray-enter" style={{ paddingTop: 26 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+        <span className="vd-sect-mark" style={{ color: 'var(--paper-muted)', alignSelf: 'center' }} aria-hidden><DistMark size={17} /></span>
         <h2 className="ray-h2" style={{ margin: 0 }}>Where they landed</h2>
         <span style={{ fontSize: 13.5, color: 'var(--paper-muted)' }}>
           share of each cohort by realized vs estimate, all-in — the flagged mass sits to the right
@@ -485,8 +705,9 @@ function ConditionsRoom({ market, activeKey, activeLabel }: {
   const hMax = Math.max(8, ...houses.map(h => Math.abs(h.cell.hammerMedPct)));
   const sMax = season?.length ? Math.max(8, ...season.map(m => (m.n >= 30 ? Math.abs(m.allInMedPct) : 0))) : 0;
   return (
-    <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
+    <section id="conditions" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
       <div className="vd-sect-head">
+        <span className="vd-sect-mark" aria-hidden><ConditionsMark size={16} /></span>
         <span className="kicker">The conditions</span>
         <span className="vd-pulse-rule" aria-hidden />
         <span className="vd-sect-cap">where and when {activeLabel === 'collectible' ? 'the' : `the ${activeLabel}`} market misprices</span>
@@ -672,6 +893,55 @@ export default function ValuePage() {
   const [shown, setShown] = useState(ROWS_PAGE);
   // the board's two orderings: the engine's odds (default) or hammer time
   const [sortMode, setSortMode] = useState<'odds' | 'closing'>('odds');
+
+  // ── INPUT CRAFT — j/k walks every board row on the page, enter opens
+  // (native on the flags <button>, handled on the lane rows), s saves.
+  // Typing surfaces and the modal keep their own keys.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (modalLot) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      // any open overlay owns the keyboard — the ⌘K palette's results are
+      // focusable buttons that pass the tagName check, and walking board
+      // rows underneath a palette scrolls the page under it
+      if (t?.closest('[role="dialog"],[role="listbox"],[role="menu"]')) return;
+      if (document.querySelector('.ray-ck-overlay, .ray-maker-sheet')) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== 'j' && e.key !== 'k' && e.key !== 's') return;
+      const rowEls = Array.from(document.querySelectorAll<HTMLElement>('[data-nav-row]'));
+      if (!rowEls.length) return;
+      const cur = rowEls.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 's') {
+        if (cur < 0) return;
+        e.preventDefault();
+        rowEls[cur].closest('.ray-value-rowwrap, .vd-lane-item')
+          ?.querySelector<HTMLElement>('[data-save-btn]')?.click();
+        return;
+      }
+      e.preventDefault();
+      const next = cur < 0
+        ? 0
+        : e.key === 'j' ? Math.min(rowEls.length - 1, cur + 1) : Math.max(0, cur - 1);
+      const el = rowEls[next];
+      el.focus({ preventScroll: true });
+      el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [modalLot]);
+
+  // deep link: /value#gap etc. — land on the room once the desk has painted
+  useEffect(() => {
+    if (loading) return;
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      // 'instant', not 'auto' — html carries scroll-behavior:smooth, and a
+      // deep link should LAND on its room, not tour the whole desk first
+      document.getElementById(id)?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'start' });
+    }));
+  }, [loading]);
 
   const deals = useMemo(() => {
     const today = localToday();
@@ -870,6 +1140,71 @@ export default function ValuePage() {
 
   const hasFlags = deals.length > 0;
   const coverage = ray.market?.markets?.[activeKey]?.n;
+
+  // ── FLIP — a sort flip re-RANKS the same rows, so they should visibly
+  // travel, not teleport. Animate only when the id set is unchanged (pure
+  // reorder); data swaps, pagination and market flips stay instant.
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const flipPos = useRef<Map<string, number>>(new Map());
+  const flipTimers = useRef<number[]>([]);
+  const flipKey = gridDeals.slice(0, shown).map(d => d.lot.id).join('|');
+  React.useLayoutEffect(() => {
+    const board = boardRef.current;
+    if (!board) { flipPos.current = new Map(); return; }
+    // BOARD-relative tops, never viewport-relative — the previous measurement
+    // can be an arbitrary scroll distance (and any layout shift above the
+    // board) away, and a viewport delta would lurch the whole ledger by it
+    const boardTop = board.getBoundingClientRect().top;
+    const prev = flipPos.current;
+    const next = new Map<string, number>();
+    board.querySelectorAll<HTMLElement>('[data-flip-id]').forEach(el => {
+      next.set(el.dataset.flipId!, el.getBoundingClientRect().top - boardTop);
+    });
+    // a re-sort inside the settle window must not let run 1's cleanup strip
+    // run 2's transition mid-flight
+    flipTimers.current.forEach(t => window.clearTimeout(t));
+    flipTimers.current = [];
+    const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce && prev.size > 0 && next.size === prev.size && Array.from(next.keys()).every(k => prev.has(k))) {
+      board.querySelectorAll<HTMLElement>('[data-flip-id]').forEach(el => {
+        const delta = (prev.get(el.dataset.flipId!) ?? 0) - (next.get(el.dataset.flipId!) ?? 0);
+        if (Math.abs(delta) > 2) {
+          el.style.transform = `translateY(${delta}px)`;
+          el.style.transition = 'none';
+          requestAnimationFrame(() => {
+            el.style.transform = '';
+            el.style.transition = 'transform 380ms var(--ease-signature)';
+          });
+          flipTimers.current.push(window.setTimeout(() => { el.style.transition = ''; }, 440));
+        }
+      });
+    }
+    flipPos.current = next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flipKey]);
+
+  // ── THE SPINE's room registry — only rooms that actually render tonight
+  const spineRooms = useMemo(() => {
+    const r: { id: string; label: string; mark: React.ReactNode; n?: number }[] = [
+      { id: 'desk', label: 'The desk', mark: <PulseMark size={15} /> },
+    ];
+    if (call) r.push({ id: 'call', label: 'Today’s call', mark: <CallMark size={15} /> });
+    r.push({ id: 'flags', label: 'The Flags', n: deals.length, mark: <FlagsMark size={15} /> });
+    if (gapRows.length) r.push({ id: 'gap', label: 'The Gap', n: gapRows.length, mark: <GapMark size={15} /> });
+    if (sleeperRows.length || sleeperQueue) r.push({ id: 'sleepers', label: 'The Sleepers', n: sleeperRows.length, mark: <SleeperMark size={15} /> });
+    if (backtest && backtest.flagged.n >= 100) r.push({ id: 'record', label: 'The record', mark: <RecordMark size={15} /> });
+    if (backtest?.calibration?.beatRate?.global) r.push({ id: 'odds', label: 'The odds ladder', mark: <OddsMark size={15} /> });
+    // mirror ConditionsRoom's own null-gate exactly — a spine button must
+    // never point at a room that isn't on the page
+    const condLive = !!ray.market && (
+      Object.values(ray.market.houseCal || {}).some(cells => ((cells as Record<string, { n?: number }>)[activeKey]?.n ?? 0) >= 40)
+      || (ray.market.seasonality?.[activeKey]?.length ?? 0) > 0
+    );
+    if (condLive) r.push({ id: 'conditions', label: 'The conditions', mark: <ConditionsMark size={15} /> });
+    r.push({ id: 'tape', label: 'Settled calls', mark: <TapeMark size={15} /> });
+    r.push({ id: 'engine', label: 'The engine', mark: <EngineMark size={15} /> });
+    return r;
+  }, [call, deals.length, gapRows.length, sleeperRows.length, sleeperQueue, backtest, ray.market]);
 
   // the five dials — three of them (hammer, record, coverage) are corpus/
   // record-backed and survive a zero-flag night at full strength
@@ -1314,8 +1649,10 @@ export default function ValuePage() {
           .vd-lane-head .vd-sect-cap { flex-basis: 100%; white-space: normal; }
         }
 
-        /* ── the lane ledger panel: the Flags board's grammar, shared ── */
-        .vd-lane-panel { overflow: hidden; }
+        /* ── the lane ledger panel: the Flags board's grammar, shared ──
+           overflow: clip, not hidden — clip keeps the radius crop without
+           becoming a scroll container, so the sticky column heads can stick */
+        .vd-lane-panel { overflow: clip; }
         .vd-lane-cols {
           display: none;
           align-items: baseline;
@@ -1472,6 +1809,224 @@ export default function ValuePage() {
           .vd-tape-row { grid-template-columns: minmax(0, 1fr); }
           .vd-tape-cells { text-align: left; }
         }
+
+        /* ════ THE DESIGNED-APP LAYER (Aug 2026) ════ */
+
+        /* ── rooms are addressable — anchors land under the sticky nav ── */
+        .vd-room { scroll-margin-top: 76px; }
+
+        /* ── THE SPINE — the desk's fixed room index (wide screens only) ── */
+        .vd-spine {
+          position: fixed; left: 14px; top: 50%;
+          transform: translateY(-50%);
+          z-index: 25;
+          display: none; flex-direction: column; gap: 4px;
+        }
+        /* 1160 = the narrowest window where the 34px strip clears the rail's
+           left gutter (rail max 1200 + gutter ≥56 leaves ≥8px of air) */
+        @media (min-width: 1160px) { .vd-spine { display: flex; } }
+        .vd-spine button {
+          position: relative;
+          display: flex; align-items: center; justify-content: center;
+          width: 34px; height: 34px;
+          background: none; border: 1px solid transparent; border-radius: 9px;
+          color: var(--color-text-faint); cursor: pointer; padding: 0;
+          transition: color var(--duration-fast) var(--ease-signature),
+                      background var(--duration-fast) var(--ease-signature),
+                      border-color var(--duration-fast) var(--ease-signature);
+        }
+        .vd-spine button:hover { color: var(--color-text-secondary); }
+        .vd-spine button[data-on] {
+          color: var(--color-fg);
+          background: var(--color-bg-elevated);
+          border-color: var(--color-border);
+        }
+        .vd-spine-mark { display: inline-flex; }
+        .vd-spine-tip {
+          position: absolute; left: calc(100% + 10px); top: 50%;
+          transform: translateY(-50%);
+          font-family: var(--font-mono), monospace; font-size: 10.5px;
+          letter-spacing: 0.04em; white-space: nowrap;
+          color: var(--color-text-secondary);
+          background: #101214; border: 1px solid var(--color-border-mid);
+          border-radius: 8px; padding: 5px 9px;
+          opacity: 0; pointer-events: none;
+          transition: opacity var(--duration-fast) var(--ease-signature);
+        }
+        .vd-spine button:hover .vd-spine-tip,
+        .vd-spine button:focus-visible .vd-spine-tip { opacity: 1; }
+
+        /* ── sub-room head marks (bare glyph beside the kicker) ── */
+        .vd-sect-mark { display: inline-flex; align-items: center; color: var(--color-text-muted); flex: none; }
+
+        /* ── STICKY COLUMN HEADS — the ledger keeps its map while you read ── */
+        @media (min-width: 900px) {
+          .ray-value-head, .vd-lane-cols {
+            position: sticky; top: 54px; z-index: 20;
+            background: color-mix(in srgb, #0b0c0e 90%, transparent);
+            backdrop-filter: blur(14px);
+          }
+        }
+
+        /* ── INPUT CRAFT — a real focus ring on every walked row ── */
+        .ray-value-row:focus-visible, .vd-lane-row:focus-visible {
+          outline: 1.5px solid color-mix(in srgb, var(--color-fg) 70%, transparent);
+          outline-offset: -1.5px;
+          background: var(--color-hover-item);
+        }
+        .vd-lane-row { cursor: pointer; }
+
+        /* ── cell micro-instruments — the number is the statement, the
+           track is its shape (2px, neutral ink; mint only where the cell
+           itself is already a signed outcome) ── */
+        .vd-cell-track {
+          display: block; height: 2px; margin-top: 5px;
+          background: rgba(255,255,255,0.08); border-radius: 2px;
+          position: relative; overflow: visible;
+        }
+        .vd-cell-track > span:not(.vd-track-dot) {
+          display: block; height: 100%; border-radius: 2px;
+          background: rgba(255,255,255,0.45);
+          margin-left: auto; /* right-aligned cells fill from the right */
+        }
+        .vd-track-up > span:not(.vd-track-dot) { background: var(--color-up); opacity: 0.7; }
+        .vd-track-witness::before {
+          content: ''; position: absolute; top: -3px; bottom: -3px;
+          left: 45.45%; width: 1px; background: rgba(255,255,255,0.28);
+        }
+        .vd-track-dot {
+          position: absolute; top: 50%; width: 5px; height: 5px;
+          border-radius: 100px; background: var(--color-fg);
+          transform: translate(-50%, -50%);
+        }
+
+        /* ── INLINE INTERROGATION — the row's whole case, opened in place ── */
+        .vd-lane-item { border-bottom: 1px solid var(--color-border); }
+        .vd-lane-item:last-child { border-bottom: none; }
+        .vd-lane-item .vd-lane-row { border-bottom: none; }
+        .vd-lane-item[data-open] > .vd-lane-row { background: var(--color-hover-item); }
+        .vd-lane-detail {
+          display: grid; grid-template-rows: 0fr;
+          transition: grid-template-rows 340ms var(--ease-signature);
+        }
+        .vd-lane-item[data-open] .vd-lane-detail { grid-template-rows: 1fr; }
+        /* visibility keeps the collapsed detail's link/save OUT of the tab
+           order and away from screen readers; the 340ms delay lets the
+           collapse animation finish before the content vanishes */
+        .vd-lane-detail-in { overflow: hidden; min-height: 0; visibility: hidden; transition: visibility 0s 340ms; }
+        .vd-lane-item[data-open] .vd-lane-detail-in { visibility: visible; transition: visibility 0s; }
+        .vd-lane-item[data-open] .vd-lane-detail-in {
+          border-top: 1px solid var(--color-hair, rgba(255,255,255,0.06));
+        }
+        .vd-detail-lead {
+          margin: 0; padding: 14px 16px 0;
+          font-size: 13px; color: var(--color-text-secondary);
+        }
+        .vd-detail-lead b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .vd-detail-grid {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+          gap: 12px 26px; padding: 12px 16px 0;
+        }
+        .vd-detail-grid .kicker { font-size: 10px; letter-spacing: 0.14em; }
+        .vd-detail-grid p { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); line-height: 1.5; }
+        .vd-curve { position: relative; padding: 16px 16px 0; }
+        .vd-curve-rail {
+          display: block; position: relative; height: 2px;
+          background: rgba(255,255,255,0.10); border-radius: 2px;
+        }
+        .vd-curve-wire {
+          position: absolute; left: 0; top: 0; bottom: 0;
+          background: rgba(255,255,255,0.26); border-radius: 2px;
+        }
+        .vd-curve-dot {
+          position: absolute; top: 50%; width: 7px; height: 7px;
+          border-radius: 100px; background: var(--color-fg);
+          transform: translate(-50%, -50%);
+          box-shadow: 0 0 0 3px rgba(255,255,255,0.08);
+        }
+        .vd-curve-labels {
+          position: relative; display: flex; justify-content: space-between;
+          margin-top: 6px;
+          font-family: var(--font-mono), monospace; font-size: 10px;
+          letter-spacing: 0.04em; color: var(--color-text-faint);
+        }
+        .vd-curve-read {
+          display: block; margin-top: 8px;
+          font-family: var(--font-mono), monospace; font-size: 11px;
+          color: var(--color-text-secondary); font-variant-numeric: tabular-nums;
+        }
+        .vd-detail-actions {
+          display: flex; align-items: center; gap: 22px;
+          padding: 14px 16px 16px; flex-wrap: wrap;
+        }
+        .vd-detail-save {
+          font-family: var(--font-mono), monospace; font-size: 10.5px;
+          letter-spacing: 0.08em; padding: 7px 13px; min-height: 30px;
+          background: none; color: var(--color-text-muted);
+          border: 1px solid var(--color-border); border-radius: 100px;
+          cursor: pointer;
+          transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
+        }
+        .vd-detail-save:hover, .vd-detail-save[aria-pressed="true"] { color: var(--color-fg); border-color: var(--color-border-mid); }
+
+        /* ── THE GLOSSARY — dotted terms that explain themselves ── */
+        .vd-term {
+          position: relative;
+          border-bottom: 1px dotted var(--color-text-faint);
+          cursor: help; outline: none;
+        }
+        .vd-term-tip {
+          position: absolute; bottom: calc(100% + 9px); left: 50%;
+          transform: translateX(-50%);
+          width: max-content; max-width: 260px; white-space: normal;
+          background: #101214; border: 1px solid var(--color-border-mid);
+          border-radius: 10px; padding: 9px 12px;
+          font-family: var(--font-sans), sans-serif;
+          font-size: 11.5px; line-height: 1.55; letter-spacing: 0;
+          color: var(--color-text-secondary); text-align: left;
+          font-variant-numeric: normal;
+          opacity: 0; pointer-events: none; z-index: 30;
+          transition: opacity var(--duration-fast) var(--ease-signature);
+        }
+        .vd-term:hover .vd-term-tip, .vd-term:focus .vd-term-tip { opacity: 1; }
+
+        /* ── the lane help strip — the "?" chip's how-to-read ── */
+        .vd-lane-helpbtn {
+          width: 22px; height: 22px; flex: none;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-family: var(--font-mono), monospace; font-size: 11px;
+          color: var(--color-text-faint);
+          background: none; border: 1px solid var(--color-border); border-radius: 100px;
+          cursor: pointer; padding: 0;
+          transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
+        }
+        .vd-lane-helpbtn:hover, .vd-lane-helpbtn[aria-expanded="true"] { color: var(--color-fg); border-color: var(--color-border-mid); }
+        .vd-lane-help {
+          margin: -4px 0 14px; padding: 12px 16px;
+          border-left: 2px solid var(--color-border-mid);
+          font-size: 12.5px; line-height: 1.65; color: var(--color-text-muted);
+          max-width: 640px;
+        }
+
+        /* ── MOTION WITH INTENT (armed only when motion is welcome) ── */
+        @media (prefers-reduced-motion: no-preference) {
+          .vd-lane-mark svg :is(path, circle, rect),
+          .vd-sect-mark svg :is(path, circle, rect) {
+            stroke-dasharray: 1; stroke-dashoffset: 1;
+            animation: vdDraw 900ms var(--ease-signature) forwards;
+          }
+          .vd-lane-mark svg :is(path, circle, rect):nth-child(2),
+          .vd-sect-mark svg :is(path, circle, rect):nth-child(2) { animation-delay: 90ms; }
+          .vd-lane-mark svg :is(path, circle, rect):nth-child(3),
+          .vd-sect-mark svg :is(path, circle, rect):nth-child(3) { animation-delay: 180ms; }
+          .vd-lane-mark svg :is(path, circle, rect):nth-child(4),
+          .vd-sect-mark svg :is(path, circle, rect):nth-child(4) { animation-delay: 270ms; }
+          .vd-lane-mark svg :is(path, circle, rect):nth-child(5),
+          .vd-sect-mark svg :is(path, circle, rect):nth-child(5) { animation-delay: 360ms; }
+          .vd-breathe { animation: vdBreathe 2.6s ease-in-out infinite; }
+        }
+        @keyframes vdDraw { to { stroke-dashoffset: 0; } }
+        @keyframes vdBreathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.68; } }
       ` }} />
 
       <ArtistNav activeSlug="value" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
@@ -1486,8 +2041,10 @@ export default function ValuePage() {
         <RayEntrance animate={!fromCache}>
           <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}><MarketSwitch compact /></div>
 
+          <DeskSpine rooms={spineRooms} />
+
           {/* ════ ROOM 1 · THE COCKPIT ════ */}
-          <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
+          <section id="desk" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
             <div className="vd-cockpit">
               <div className="vd-cockpit-main">
                 <Masthead
@@ -1528,7 +2085,7 @@ export default function ValuePage() {
           )}
 
           {call && (
-            <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
+            <section id="call" className="rail ray-enter vd-room" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
               {/* ONE CALLPLATE — the page's single lit element. PriceBand
                   hydrates at fullLoaded; a fixed slot holds the room. */}
               <CallPlate
@@ -1552,13 +2109,20 @@ export default function ValuePage() {
             </section>
           )}
 
-          <section className="ray-value-section rail">
+          <section id="flags" className="ray-value-section rail vd-room">
             <div className="ray-enter">
               <LaneHead
                 mark={<FlagsMark />}
                 name="The Flags"
                 count={deals.length}
+                play={!fromCache}
                 tag={sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}
+                help={
+                  <>Each row is a live lot whose <Term k="comps">comps median</Term> clears its
+                  estimate by at least 1.3×. <Term k="odds">Odds</Term> rank the board — the share of
+                  historical calls at that ratio which beat the high estimate — and the deepest gap
+                  breaks ties. Click a row for the full comps case; j/k walk the rows, s saves.</>
+                }
                 right={
                   <span className="vd-sort" role="tablist" aria-label="Board order">
                     <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
@@ -1567,7 +2131,7 @@ export default function ValuePage() {
                 }
               />
             </div>
-            <div className="glass glass-quiet ray-enter" style={{ overflow: 'hidden' }}>
+            <div ref={boardRef} className="glass glass-quiet ray-enter" style={{ overflow: 'clip' }}>
               <div className="ray-value-head" aria-hidden="true">
                 <span />
                 <span className="kicker">Lot</span>
@@ -1611,11 +2175,12 @@ export default function ValuePage() {
                     return mid > 0 ? mid * (1 + d.signal!.pct / 100) : null;
                   })();
                   return (
-                  <div key={d.lot.id} className="ray-value-rowwrap ray-enter-card"
+                  <div key={d.lot.id} className="ray-value-rowwrap ray-enter-card" data-flip-id={d.lot.id}
                     style={{ '--enter-delay': `${Math.min(i, 8) * 40}ms` } as React.CSSProperties}>
                   <button
                     type="button"
                     className="ray-value-row"
+                    data-nav-row
                     onClick={() => setModalLot(d.lot)}
                     aria-label={`${ARTIST_LABEL[d.lot.artist] || d.lot.artist} — see the comps`}
                   >
@@ -1660,7 +2225,7 @@ export default function ValuePage() {
                         const iso = d.lot.saleDateTime;
                         const ms = iso ? Date.parse(iso) - Date.now() : null;
                         return ms != null && ms > 0 && ms < 24 * 3600e3
-                          ? <span style={{ color: 'var(--color-up)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
+                          ? <span className="vd-breathe" style={{ color: 'var(--color-up)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
                           : formatDate(trueSaleDay(d.lot) || d.lot.saleDate);
                       })()}
                     </span>
@@ -1677,6 +2242,7 @@ export default function ValuePage() {
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-gap">
                       {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
+                      <CellTrack pct={d.signal!.pct / 4} tone="up" />
                     </span>
                     {/* MOBILE stack — the audited-good phone composition */}
                     <span className="ray-value-mob" style={{ textAlign: 'right' }}>
@@ -1704,6 +2270,7 @@ export default function ValuePage() {
                   <button
                     type="button"
                     className="ray-value-save"
+                    data-save-btn
                     data-saved={isSaved(d.lot.id)}
                     onClick={() => toggle(d.lot.id, d.lot)}
                     aria-label={isSaved(d.lot.id) ? 'Remove from saved' : 'Save lot'}
@@ -1734,14 +2301,14 @@ export default function ValuePage() {
           </section>
 
           {/* ── ROOM 2c · THE GAP ── */}
-          <GapAnnex rows={gapRows} receipts={receipts} activeKey={activeKey} />
+          <GapAnnex rows={gapRows} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
           {/* ── ROOM 2d · THE SLEEPERS ── */}
-          <SleepersAnnex rows={sleeperRows} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} />
+          <SleepersAnnex rows={sleeperRows} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
           {/* ════ ROOM 3 · THE RECORD (paper certificate) ════ */}
           {backtest && backtest.flagged.n >= 100 && (
-            <div className="ray-band" style={{ marginTop: 34, paddingBlock: '28px 30px' }}>
+            <div id="record" className="ray-band vd-room" style={{ marginTop: 34, paddingBlock: '28px 30px' }}>
               <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 0 } as React.CSSProperties}>
                 {/* DUAL BASIS, premium-led: headline medians are all-in with
                     the hammer read as sub — EXCEPT beat-the-estimate, where
@@ -1822,8 +2389,9 @@ export default function ValuePage() {
 
           {/* ════ ROOM 4 · THE ODDS LADDER & THE SETTLED TAPE ════ */}
           {backtest?.calibration?.beatRate?.global && (
-            <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--sect-t) - 6px)' }}>
+            <section id="odds" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--sect-t) - 6px)' }}>
               <div className="vd-sect-head">
+                <span className="vd-sect-mark" aria-hidden><OddsMark size={16} /></span>
                 <span className="kicker">The odds ladder</span>
                 <span className="vd-pulse-rule" aria-hidden />
               </div>
@@ -1848,8 +2416,9 @@ export default function ValuePage() {
           <Phase2Sentinel />
 
           {/* settled tape — flags stamped before the hammer, then graded */}
-          <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
+          <section id="tape" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
               <div className="vd-sect-head">
+                <span className="vd-sect-mark" aria-hidden><TapeMark size={16} /></span>
                 <span className="kicker">Settled calls</span>
                 <span className="vd-pulse-rule" aria-hidden />
                 <span className="vd-sect-cap">flag stamped before the hammer — honest by construction</span>
@@ -1893,9 +2462,12 @@ export default function ValuePage() {
             </section>
 
           {/* ════ ROOM 5 · THE ENGINE CARD (paper #2, the closer) ════ */}
-          <section className="rail ray-enter" style={{ paddingBlock: '18px 8px' }}>
+          <section id="engine" className="rail ray-enter vd-room" style={{ paddingBlock: '18px 8px' }}>
             <div className="ray-engine-card">
-              <h2 className="ray-engine-head">Every flag here earned its ink.</h2>
+              <h2 className="ray-engine-head">
+                <span className="vd-sect-mark" style={{ verticalAlign: -3, marginRight: 10 }} aria-hidden><EngineMark size={19} /></span>
+                Every flag here earned its ink.
+              </h2>
               <p className="ray-engine-body">
                 A read is comps, not opinion: same maker, same form, size-banded —
                 medians, never means. Each vertical carries its own gate (a jersey

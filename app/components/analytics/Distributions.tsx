@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { AuctionLot, MarketStats } from '../../types';
 import type { Market } from '../../constants';
 import type { MarketSeriesJson } from '../../hooks/useRayData';
+import { DistMark } from '../marks';
 
 // These four distribution charts are recharts-backed and BELOW the fold (this
 // whole section lives well under the analytics hero) — and only ONE renders at
@@ -156,7 +157,7 @@ export default function Distributions({ allLots, statsByArtist, market, series }
             fontWeight: 700,
             letterSpacing: '-0.02em',
           }}>
-            Distri<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>butions</span>
+            <span className="ray-sect-mark" aria-hidden><DistMark size={17} /></span>Distri<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>butions</span>
           </h2>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>{active.sub}</p>
         </div>

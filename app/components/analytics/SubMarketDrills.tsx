@@ -11,6 +11,7 @@
 import React from 'react';
 import Link from 'next/link';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
+import { BookMark } from '../marks';
 
 type DrillRow = SubMarketRead & { parent: string };
 
@@ -97,7 +98,7 @@ export default function SubMarketDrills({ marketData, scope, parentFilter, title
     <div className="ray-dr ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
-        <span className="ray-vm-title">{title ?? 'Sub-markets'}</span>
+        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><BookMark size={16} /></span>{title ?? 'Sub-markets'}</span>
         <span className="ray-vm-method">{method ?? 'performance by sub-category'}</span>
       </div>
       <div className="ray-dr-rows">

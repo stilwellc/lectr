@@ -6,6 +6,7 @@ import { AuctionLot, TopSaleRow } from '../../types';
 import { formatDate, formatPrice, houseColors, craftTitle, overEstimatePct, toneOf, fmtSignedPct } from '../../utils';
 import { ARTIST_LABEL, Market } from '../../constants';
 import type { MarketSeriesJson } from '../../hooks/useRayData';
+import { SalesMark } from '../marks';
 
 interface Props {
   allLots: AuctionLot[];
@@ -118,7 +119,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           fontWeight: 700,
           letterSpacing: '-0.02em',
         }}>
-          Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
+          <span className="ray-sect-mark" aria-hidden><SalesMark size={17} /></span>Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
         </h2>
         <span style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
           top {topSales.length} · ranked over {fromCorpus ? 'the full corpus' : 'the loaded lots'} · % over est. on hammer basis — buyer&rsquo;s premium divided out

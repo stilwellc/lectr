@@ -15,7 +15,9 @@ permissions:
 jobs:
   replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # the full replay walks every graded call against the 1.1M-lot corpus —
+    # the first attempt died at 120m with nothing pushed; give it real room
+    timeout-minutes: 330
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

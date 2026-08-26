@@ -11,6 +11,7 @@
 import React from 'react';
 import HeroChart from '../../preview/terminal/HeroChart';
 import type { MarketData } from '../../hooks/useRayData';
+import { SellMark, DepthMark } from '../marks';
 
 function panel(
   title: string,
@@ -18,11 +19,12 @@ function panel(
   headline: React.ReactNode,
   sub: string,
   chart: React.ReactNode,
+  mark?: React.ReactNode,
 ) {
   return (
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <div className="ray-vm-head">
-        <span className="ray-vm-title">{title}</span>
+        <span className="ray-vm-title">{mark ? <span className="ray-sect-mark" aria-hidden>{mark}</span> : null}{title}</span>
         <span className="ray-vm-method">{method}</span>
       </div>
       <div style={{ margin: '10px 0 2px' }}>
@@ -51,6 +53,7 @@ export function SellThroughPanel({ marketData, scope }: { marketData: MarketData
       hideTickLabels
       play={false}
     />,
+    <SellMark size={16} />,
   );
 }
 
@@ -73,5 +76,6 @@ export function DepthPanel({ marketData, scope }: { marketData: MarketData | nul
       hideTickLabels
       play={false}
     />,
+    <DepthMark size={16} />,
   );
 }
