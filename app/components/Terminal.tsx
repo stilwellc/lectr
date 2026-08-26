@@ -105,6 +105,24 @@ const CALLPLATE_CSS = `
 .lectr-cp-compact .lectr-cp-v.up{color:var(--color-up)}
 .lectr-cp-compact .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
 .lectr-cp-compact .lectr-cp-dots{font-size:10px;letter-spacing:1px;color:var(--color-beige);margin-right:7px}
+/* the compact plate's photograph — an elevated mat beside the certificate.
+   Mobile: mat above the leaders; ≥900px: a right column. No image → the
+   grid collapses to the single text column (never a dominant empty frame). */
+.lectr-cpc-grid{display:flex;flex-direction:column}
+/* phone: the photograph leads, as on the full plate — head, mat, certificate */
+.lectr-cpc-fig{order:-1;margin:2px 0 16px}
+.lectr-cpc-mat{background:var(--color-bg-elevated);border:1px solid var(--hairline);border-radius:12px;padding:14px}
+.lectr-cpc-img{height:200px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:6px}
+.lectr-cpc-img img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.lectr-cpc-cap{margin-top:10px;border-top:2px dotted var(--hairline);padding-top:8px;font-size:11.5px;color:var(--color-text-muted)}
+@media (min-width:900px){
+  .lectr-cp-compact .lectr-cpc-grid{display:grid;grid-template-columns:minmax(0,1fr) 36%;column-gap:34px;align-items:stretch}
+  .lectr-cp-compact .lectr-cpc-grid.lectr-cpc-noimg{display:block}
+  .lectr-cpc-main{grid-column:1;grid-row:1;min-width:0}
+  .lectr-cpc-fig{grid-column:2;grid-row:1;margin:0;min-width:0;display:flex}
+  .lectr-cpc-mat{flex:1;display:flex;flex-direction:column}
+  .lectr-cpc-img{flex:1;height:auto;min-height:280px}
+}
 /* FULL density, image failed: never a dominant empty frame — the monogram
    plate shrinks to a modest square at every presentation. */
 .lectr-cp.lectr-cp-noimg .ray-plate-img{height:140px}
@@ -227,6 +245,9 @@ export function CallPlate({
   );
 
   // COMPACT — /value's call hero: same pickCall, same numbers, one component.
+  // The photograph rides an elevated mat beside the certificate (right column
+  // ≥900px, above the leaders on a phone); a hotlink-blocked house drops the
+  // mat and the plate reflows to the single text column — never an empty frame.
   if (density === 'compact') {
     return (
       <div className="glass lit lectr-cp lectr-cp-compact">
@@ -235,44 +256,67 @@ export function CallPlate({
           <span>Today&rsquo;s call · highest confidence, deepest gap</span>
           {saveBtn}
         </div>
-        <div className="ray-call-artist">{makerName}</div>
-        <div className="ray-call-title">{craftTitle(lot.title)}</div>
-        {band && <div className="lectr-cp-band">{band}</div>}
-        <div className="lectr-cp-leaders">
-          <LeaderRow k="Ask" v={formatEstimate(lot)} />
-          <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
-          <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
-          <LeaderRow k="Confidence">
-            <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
-          </LeaderRow>
-          <LeaderRow k={closingWord ? 'Closing' : 'Hammers'} sub={lot.auctionHouse}>
-            {closingWord
-              ? <span style={{ color: 'var(--color-up)' }}>
-                  {closingWord}
-                  {lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}
-                </span>
-              : `${formatDate(saleDay)} · ${daysWord(saleDay)}`}
-          </LeaderRow>
-        </div>
-        <div className="ray-call-ctas" style={{ marginTop: 16 }}>
-          {onSeeComps ? (
-            <button className="ray-call-btn ray-call-btn-primary" onClick={() => onSeeComps(lot)}>
-              See the comps
-            </button>
-          ) : (
-            <Link className="ray-call-btn ray-call-btn-primary" href="/value">See how we called it</Link>
-          )}
-          {/* the in-app certificate before the house exit — the app's transport
-              form (/lot self-canonicalizes to /lot/<id>), mirroring the modal */}
-          <Link className="ray-call-btn ray-call-btn-quiet" href={`/lot?id=${encodeURIComponent(lot.id)}`}>
-            Open the lot page <Flick size={10} style={{ marginLeft: 5 }} />
-          </Link>
-          {/* scheme-allowlisted (safe-href) — a faulted URL drops the house
-              exit; the lot-page CTA above still carries the journey */}
-          {safeHref(lot.url) && (
-            <a className="ray-call-btn ray-call-btn-quiet" href={safeHref(lot.url)} target="_blank" rel="noopener noreferrer">
-              View lot <Flick size={10} style={{ marginLeft: 5 }} />
-            </a>
+        <div className={`lectr-cpc-grid${imgOk ? '' : ' lectr-cpc-noimg'}`}>
+          <div className="lectr-cpc-main">
+            <div className="ray-call-artist">{makerName}</div>
+            <div className="ray-call-title">{craftTitle(lot.title)}</div>
+            {band && <div className="lectr-cp-band">{band}</div>}
+            <div className="lectr-cp-leaders">
+              <LeaderRow k="Ask" v={formatEstimate(lot)} />
+              <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
+              <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
+              <LeaderRow k="Confidence">
+                <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
+              </LeaderRow>
+              <LeaderRow k={closingWord ? 'Closing' : 'Hammers'} sub={lot.auctionHouse}>
+                {closingWord
+                  ? <span style={{ color: 'var(--color-up)' }}>
+                      {closingWord}
+                      {lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}
+                    </span>
+                  : `${formatDate(saleDay)} · ${daysWord(saleDay)}`}
+              </LeaderRow>
+            </div>
+            <div className="ray-call-ctas" style={{ marginTop: 16 }}>
+              {onSeeComps ? (
+                <button className="ray-call-btn ray-call-btn-primary" onClick={() => onSeeComps(lot)}>
+                  See the comps
+                </button>
+              ) : (
+                <Link className="ray-call-btn ray-call-btn-primary" href="/value">See how we called it</Link>
+              )}
+              {/* the in-app certificate before the house exit — the app's transport
+                  form (/lot self-canonicalizes to /lot/<id>), mirroring the modal */}
+              <Link className="ray-call-btn ray-call-btn-quiet" href={`/lot?id=${encodeURIComponent(lot.id)}`}>
+                Open the lot page <Flick size={10} style={{ marginLeft: 5 }} />
+              </Link>
+              {/* scheme-allowlisted (safe-href) — a faulted URL drops the house
+                  exit; the lot-page CTA above still carries the journey */}
+              {safeHref(lot.url) && (
+                <a className="ray-call-btn ray-call-btn-quiet" href={safeHref(lot.url)} target="_blank" rel="noopener noreferrer">
+                  View lot <Flick size={10} style={{ marginLeft: 5 }} />
+                </a>
+              )}
+            </div>
+          </div>
+          {imgOk && (
+            <div className="lectr-cpc-fig">
+              <div className="lectr-cpc-mat">
+                <div className="lectr-cpc-img">
+                  <img
+                    src={httpsImg(lot.imageUrl)}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedImgId(lot.id)}
+                    // cache hits never fire onError — complete with zero
+                    // naturalWidth at attach is a cached failure
+                    ref={el => { if (el && el.complete && el.naturalWidth === 0) setFailedImgId(lot.id); }}
+                  />
+                </div>
+                <div className="lectr-cpc-cap">{caption}</div>
+              </div>
+            </div>
           )}
         </div>
       </div>
