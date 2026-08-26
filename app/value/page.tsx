@@ -189,25 +189,84 @@ function MarketPulse({ ray, activeKey, activeLabel, play }: {
   );
 }
 
+/* ── THE LANE MARKS — each lane's constructed monoline glyph: the name and
+   its analytics fused into one small instrument (the CHAPTER_GLYPHS lineage).
+   currentColor only; stroke 1.7; never a second lamp. ── */
+function FlagsMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {/* the pole; the pennant is a rising bar chart */}
+      <path d="M5.5 21V3.5" />
+      <path d="M5.5 11.5H16.5" />
+      <path d="M9 11.5V8.5" />
+      <path d="M12.5 11.5V6.5" />
+      <path d="M16 11.5V4.5" />
+    </svg>
+  );
+}
+function GapMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {/* two price rails; the caliper beam measures the distance between */}
+      <path d="M4 5.5H20" />
+      <path d="M4 18.5H20" />
+      <path d="M12 8.5V15.5" />
+      <path d="M9.5 8.5H14.5" />
+      <path d="M9.5 15.5H14.5" />
+    </svg>
+  );
+}
+function SleeperMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {/* a flat pulse running into the clock */}
+      <path d="M2.5 12H9" />
+      <circle cx="15.5" cy="12" r="5.5" />
+      <path d="M15.5 9.5V12L17.5 13.5" />
+    </svg>
+  );
+}
+
+/* ── the shared lane head: mark + name + live count + tagline + rule ── */
+function LaneHead({ mark, name, count, tag, right }: {
+  mark: React.ReactNode; name: string; count?: number | null;
+  tag: React.ReactNode; right?: React.ReactNode;
+}) {
+  return (
+    <div className="vd-lane-head">
+      <span className="vd-lane-mark" aria-hidden>{mark}</span>
+      <h2 className="vd-lane-name">{name}</h2>
+      {count != null && count > 0 && <span className="vd-lane-count">{count}</span>}
+      <span className="vd-pulse-rule" aria-hidden />
+      <span className="vd-sect-cap">{tag}</span>
+      {right}
+    </div>
+  );
+}
+
 /* ── ROOM 2c · THE GAP — "the bidding is behind the value" on no-estimate
    lots: the growth-projected close vs the value floor. Two shelves — AT THE
-   WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, depth ≥40%, a harder bar
-   against unmodeled earliness; 8d is the curve's last fitted edge). A
-   PROJECTION product: depth prints in NEUTRAL ink, every shelf entry logs to
-   the forward tape the night it appears, nothing publishes before 20 graded. ── */
+   WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, ≥40%). A PROJECTION product:
+   neutral ink, every entry logs to the forward tape, publishes at 20 graded.
+   Same ledger grammar as the Flags board — sibling boards, one language. ── */
 function GapAnnex({ rows, receipts, activeKey }: {
   rows: { lot: AuctionLot; g: GapRead }[];
   receipts: { record: { gap?: { n: number; graded: number } } } | null;
   activeKey: string;
 }) {
   const [showForming, setShowForming] = useState(false);
-  const wire = rows.filter(r => r.g.shelf === 'wire').sort((a, b) => b.g.depth - a.g.depth).slice(0, 6);
-  const forming = rows.filter(r => r.g.shelf === 'forming').sort((a, b) => b.g.depth - a.g.depth).slice(0, 6);
+  // display caps only — the head pill counts the TRUE lane, and a cut is
+  // said out loud (no silent caps: a capped board must not read as complete)
+  const wireAll = rows.filter(r => r.g.shelf === 'wire').sort((a, b) => b.g.depth - a.g.depth);
+  const formingAll = rows.filter(r => r.g.shelf === 'forming').sort((a, b) => b.g.depth - a.g.depth);
+  const wire = wireAll.slice(0, 8);
+  const forming = formingAll.slice(0, 6);
+  const wireCut = wireAll.length - wire.length;
   if (!wire.length && !forming.length) return null;
   const gapRec = receipts?.record?.gap;
   const row = ({ lot, g }: { lot: AuctionLot; g: GapRead }) => (
-    <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-annex-row">
-      <span className="ray-value-row-thumb vd-annex-thumb" aria-hidden>
+    <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-lane-row vd-gap-grid">
+      <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
         <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
         {lot.imageUrl && (
           <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
@@ -215,61 +274,76 @@ function GapAnnex({ rows, receipts, activeKey }: {
             onError={e => e.currentTarget.remove()} />
         )}
       </span>
-      <span className="vd-annex-main">
-        <span className="vd-annex-maker">{ARTIST_LABEL[lot.artist] || lot.artist}{g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}</span>
-        <span className="vd-annex-title">{craftTitle(lot.title)}</span>
+      <span style={{ minWidth: 0 }}>
+        <span className="ray-value-row-maker" style={{ display: 'block' }}>
+          {ARTIST_LABEL[lot.artist] || lot.artist}
+          {g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}
+        </span>
+        <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
       </span>
-      <span className="vd-annex-cells">
-        <span className="vd-annex-depth">−{Math.round(g.depth * 100)}% under floor</span>
-        <span className="vd-annex-proj" title={`floor from ${g.floorSrc === 'value.low' ? 'the appraisal band' : 'card comps ×0.85'}`}>
-          proj {formatPrice(g.allIn)} vs floor {formatPrice(g.floor)}
-        </span>
-        {lot.value?.vsBid?.pct != null && lot.value.vsBid.pct < 0 && (
-          <span className="vd-annex-proj">bid now {Math.round(lot.value.vsBid.pct)}% vs comps</span>
-        )}
-        <span className="vd-annex-close">
-          closes {formatDate(lot.saleDate)}
-          {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
-            ? <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>
-            : null}
-        </span>
+      <span className="vd-cell vd-cell-strong">−{Math.round(g.depth * 100)}%</span>
+      <span className="vd-cell" title={`floor from ${g.floorSrc === 'value.low' ? 'the appraisal band' : 'card comps ×0.85'}`}>
+        {formatPrice(g.allIn)} → {formatPrice(g.floor)}
+      </span>
+      <span className="vd-cell">{(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'no bids'}</span>
+      <span className="vd-cell">
+        {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
+          ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
+          : formatDate(lot.saleDate)}
+      </span>
+      {/* mobile stack */}
+      <span className="vd-lane-mob">
+        <span className="vd-cell-strong" style={{ display: 'block' }}>−{Math.round(g.depth * 100)}% under floor</span>
+        <span style={{ display: 'block' }}>{formatPrice(g.allIn)} proj → floor {formatPrice(g.floor)}</span>
+        <span style={{ display: 'block' }}>closes {formatDate(lot.saleDate)}</span>
       </span>
     </Link>
   );
   return (
     <section className="rail ray-enter vd-annex" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
-      <div className="vd-sect-head">
-        <span className="kicker">The Gap · projected close vs floor</span>
-        <span className="vd-pulse-rule" aria-hidden />
-        <span className="vd-sect-cap">projected closes, not comps · board refreshes ~4h · record accruing</span>
+      <LaneHead
+        mark={<GapMark />}
+        name="The Gap"
+        count={wireAll.length + formingAll.length}
+        tag={<>projected close vs floor · no-estimate books · record accruing</>}
+      />
+      <div className="glass glass-quiet vd-lane-panel">
+        <div className="vd-lane-cols vd-gap-grid" aria-hidden>
+          <span />
+          <span className="kicker">Lot</span>
+          <span className="kicker" style={{ textAlign: 'right' }}>Under floor</span>
+          <span className="kicker" style={{ textAlign: 'right' }}>Proj → floor</span>
+          <span className="kicker" style={{ textAlign: 'right' }}>Bid now</span>
+          <span className="kicker" style={{ textAlign: 'right' }}>Closes</span>
+        </div>
+        {wire.map(row)}
+        {wireCut > 0 && (
+          <div className="vd-forming-toggle" style={{ cursor: 'default' }}>
+            {wireCut} more at the wire below the depth cut — the deepest {wire.length} print here
+          </div>
+        )}
+        {forming.length > 0 && (
+          <>
+            <button type="button" className="vd-forming-toggle" onClick={() => setShowForming(v => !v)} aria-expanded={showForming}>
+              {showForming ? 'hide' : 'show'} {forming.length} forming · 3.5–8d out · the projection tightens as the close nears
+            </button>
+            {showForming && forming.map(row)}
+          </>
+        )}
       </div>
-      <div>{wire.map(row)}</div>
-      {forming.length > 0 && (
-        <>
-          <button type="button" className="vd-forming-toggle" onClick={() => setShowForming(v => !v)} aria-expanded={showForming}>
-            {showForming ? 'hide' : 'show'} {forming.length} forming · 3.5–8d out · early — the projection tightens as the close nears
-          </button>
-          {showForming && <div>{forming.map(row)}</div>}
-        </>
-      )}
       <div className="vd-annex-meter">
         {gapRec
           ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded} graded · publishes at 20 graded</>
           : <>forward tape: — · publishes at 20 graded</>}
-      </div>
-      <div className="vd-annex-meter" style={{ borderTop: 'none', paddingTop: 2 }}>
-        curve fitted from goldin bid histories · estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: projection only — no comp basis yet</> : null}
+        {' '}· curve fitted from goldin bid histories · estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: no comp basis yet</> : null}
       </div>
     </section>
   );
 }
 
 /* ── ROOM 2d · THE SLEEPERS — "the price is right and nobody's looking":
-   verified-fair lots (the engine's own appraisal inside the at-market band —
-   never inferred from a null signal) with a DEAD room (0 bids on an exposed
-   book), closing ≤7 days. Neutral ink; both bases named; receipts accrue as
-   'quiet' calls. The lane is BURSTY (RR's final week) — when empty it prints
-   its calendar instead of vanishing. ── */
+   verified-fair lots with a dead room, closing ≤7 days. Bursty by
+   construction — when empty it prints its calendar, never vanishes. ── */
 function SleepersAnnex({ rows, queued, receipts, activeLabel }: {
   rows: { lot: AuctionLot; q: SleeperRead }[];
   queued: number;
@@ -280,16 +354,25 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel }: {
   const rec = receipts?.record?.quiet;
   return (
     <section className="rail ray-enter vd-annex" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
-      <div className="vd-sect-head">
-        <span className="kicker">The Sleepers · fair-priced, no bids, closing</span>
-        <span className="vd-pulse-rule" aria-hidden />
-        <span className="vd-sect-cap">verified-fair lots with a dead room · record accruing</span>
-      </div>
+      <LaneHead
+        mark={<SleeperMark />}
+        name="The Sleepers"
+        count={rows.length}
+        tag={<>verified fair · zero bids · closing ≤7d · record accruing</>}
+      />
       {rows.length ? (
-        <div>
+        <div className="glass glass-quiet vd-lane-panel">
+          <div className="vd-lane-cols vd-slp-grid" aria-hidden>
+            <span />
+            <span className="kicker">Lot</span>
+            <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
+            <span className="kicker" style={{ textAlign: 'right' }}>Appraised</span>
+            <span className="kicker" style={{ textAlign: 'right' }}>The room</span>
+            <span className="kicker" style={{ textAlign: 'right' }}>Closes</span>
+          </div>
           {rows.slice(0, 6).map(({ lot, q }) => (
-            <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-annex-row">
-              <span className="ray-value-row-thumb vd-annex-thumb" aria-hidden>
+            <Link key={lot.id} href={`/lot/${lot.id}`} className="vd-lane-row vd-slp-grid">
+              <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
                 <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
                 {lot.imageUrl && (
                   <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
@@ -297,31 +380,37 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel }: {
                     onError={e => e.currentTarget.remove()} />
                 )}
               </span>
-              <span className="vd-annex-main">
-                <span className="vd-annex-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
-                <span className="vd-annex-title">{craftTitle(lot.title)}</span>
+              <span style={{ minWidth: 0 }}>
+                <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+                <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
               </span>
-              <span className="vd-annex-cells">
-                <span className="vd-annex-depth">
-                  {q.estMid ? <>est {formatPrice(q.estMid)} (hammer)</> : <>appraised {formatPrice(q.cvu)} (all-in)</>}
-                </span>
-                <span className="vd-annex-proj">
-                  {q.estMid ? <>appraised {formatPrice(q.cvu)} (all-in) · </> : null}0 bids{q.entry != null ? <> · opens {formatPrice(q.entry)}</> : null}
-                </span>
-                <span className="vd-annex-close">
-                  closes {formatDate(q.closes)}
-                  {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
-                    ? <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>
-                    : null}
-                </span>
+              <span className="vd-cell">{q.estMid ? formatPrice(q.estMid) : '—'}</span>
+              <span className="vd-cell vd-cell-strong">{formatPrice(q.cvu)}</span>
+              <span className="vd-cell">0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
+              <span className="vd-cell">
+                {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
+                  ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
+                  : formatDate(q.closes)}
+              </span>
+              <span className="vd-lane-mob">
+                <span className="vd-cell-strong" style={{ display: 'block' }}>appraised {formatPrice(q.cvu)}</span>
+                <span style={{ display: 'block' }}>{q.estMid ? `est ${formatPrice(q.estMid)} · ` : ''}0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
+                <span style={{ display: 'block' }}>closes {formatDate(q.closes)}</span>
               </span>
             </Link>
           ))}
+          {rows.length > 6 && (
+            <div className="vd-forming-toggle" style={{ cursor: 'default' }}>
+              {rows.length - 6} more in the window — the 6 closing soonest print here
+            </div>
+          )}
         </div>
       ) : (
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '2px 0 0' }}>
-          0 in the 7-day window · {queued.toLocaleString()} dead-room {activeLabel} lots queued further out — the lane fills as their final week opens.
-        </p>
+        <div className="glass glass-quiet vd-lane-panel">
+          <p className="vd-lane-empty">
+            0 in the 7-day window · {queued.toLocaleString()} dead-room {activeLabel} lots queued further out — the lane fills as their final week opens.
+          </p>
+        </div>
       )}
       <div className="vd-annex-meter">
         {rec
@@ -522,7 +611,7 @@ export default function ValuePage() {
   // the corpus loads only on approach to the settled tape or on modal open.
   const ray = useRayData();
   const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, receipts } = ray;
-  const { market } = useMarket();
+  const { market, setMarket } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
@@ -1194,7 +1283,90 @@ export default function ValuePage() {
         .vd-annex-depth { display: block; font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 600; color: var(--color-fg); }
         .vd-annex-proj { display: block; font-size: 11.5px; color: var(--color-text-muted); }
         .vd-annex-close { display: block; font-size: 11.5px; color: var(--color-text-faint); }
-        .vd-lane-tag {
+        /* ── the lane head: constructed mark + name + live count + rule ── */
+        .vd-lane-head {
+          display: flex; align-items: center; gap: 12px;
+          margin-bottom: 14px;
+        }
+        .vd-lane-mark {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 36px; height: 36px; flex: none;
+          border: 1px solid var(--color-border); border-radius: 10px;
+          color: var(--color-text-secondary);
+          background: var(--color-bg-elevated);
+        }
+        .vd-lane-name {
+          font-size: 20px; font-weight: 650; letter-spacing: -0.02em;
+          margin: 0; white-space: nowrap;
+        }
+        .vd-lane-count {
+          font-family: var(--font-mono), monospace;
+          font-size: 12px; font-weight: 600;
+          font-variant-numeric: tabular-nums;
+          color: var(--color-text-secondary);
+          border: 1px solid var(--color-border); border-radius: 100px;
+          padding: 2px 9px; flex: none;
+        }
+        .vd-lane-head .vd-sect-cap { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        @media (max-width: 640px) {
+          .vd-lane-head { flex-wrap: wrap; gap: 10px 12px; }
+          .vd-lane-head .vd-pulse-rule { display: none; }
+          .vd-lane-head .vd-sect-cap { flex-basis: 100%; white-space: normal; }
+        }
+
+        /* ── the lane ledger panel: the Flags board's grammar, shared ── */
+        .vd-lane-panel { overflow: hidden; }
+        .vd-lane-cols {
+          display: none;
+          align-items: baseline;
+          padding: 12px 16px 9px;
+          border-bottom: 1px solid var(--color-border);
+        }
+        .vd-lane-cols .kicker { font-size: 10px; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vd-lane-row {
+          display: grid;
+          gap: 14px;
+          align-items: center;
+          width: 100%;
+          padding: 10px 16px;
+          border-bottom: 1px solid var(--color-border);
+          color: inherit; text-decoration: none;
+          min-height: 56px;
+          transition: background var(--duration-fast) var(--ease-signature);
+        }
+        .vd-lane-row:last-child { border-bottom: none; }
+        .vd-lane-row:hover { background: var(--color-hover-item); }
+        .vd-cell {
+          display: none;
+          font-family: var(--font-mono), monospace;
+          font-size: var(--text-data);
+          letter-spacing: -0.01em;
+          font-variant-numeric: tabular-nums;
+          color: var(--color-text-muted);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          text-align: right; min-width: 0;
+        }
+        .vd-cell-strong { color: var(--color-fg); font-weight: 700; }
+        .vd-lane-mob {
+          text-align: right; font-variant-numeric: tabular-nums;
+          font-size: 11.5px; color: var(--color-text-muted);
+          white-space: nowrap;
+        }
+        .vd-lane-mob .vd-cell-strong { font-family: var(--font-mono), monospace; font-size: 13px; }
+        .vd-gap-grid { grid-template-columns: 44px minmax(0, 1fr) auto; }
+        .vd-slp-grid { grid-template-columns: 44px minmax(0, 1fr) auto; }
+        @media (min-width: 900px) {
+          .vd-gap-grid { grid-template-columns: 56px minmax(0, 1fr) 96px 170px 90px 110px; gap: 16px; }
+          .vd-slp-grid { grid-template-columns: 56px minmax(0, 1fr) 100px 100px 150px 110px; gap: 16px; }
+          .vd-lane-cols { display: grid; }
+          .vd-cell { display: block; }
+          .vd-lane-mob { display: none; }
+        }
+        .vd-lane-empty { font-size: 13px; color: var(--color-text-muted); margin: 0; padding: 22px 16px; }
+
+        /* doubled selector outguns the global '.ray-value-row-maker span'
+           display:block descendant rule — the tag must stay an inline chip */
+        .vd-lane-tag.vd-lane-tag {
           display: inline-block; margin-left: 8px; padding: 1px 7px;
           font-family: var(--font-mono), monospace; font-size: 10px;
           letter-spacing: 0.06em; color: var(--color-text-muted);
@@ -1204,8 +1376,8 @@ export default function ValuePage() {
         .vd-forming-toggle {
           display: block; width: 100%; text-align: left;
           background: none; border: none; cursor: pointer;
-          padding: 10px 2px; min-height: 40px;
-          border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06));
+          padding: 10px 16px; min-height: 44px;
+          border-bottom: 1px solid var(--color-border);
           font-family: var(--font-mono), monospace; font-size: 11.5px;
           letter-spacing: 0.02em; color: var(--color-text-muted);
           transition: color var(--duration-fast) var(--ease-signature);
@@ -1381,14 +1553,19 @@ export default function ValuePage() {
           )}
 
           <section className="ray-value-section rail">
-            <div className="vd-sect-head ray-enter">
-              <h2 className="ray-h2" style={{ marginBottom: 0 }}>The Flags · every one, ranked.</h2>
-              <span className="vd-pulse-rule" aria-hidden />
-              <span className="vd-sect-cap">{sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}</span>
-              <span className="vd-sort" role="tablist" aria-label="Board order">
-                <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
-                <button type="button" role="tab" aria-selected={sortMode === 'closing'} data-on={sortMode === 'closing' || undefined} onClick={() => setSortMode('closing')}>Closing next</button>
-              </span>
+            <div className="ray-enter">
+              <LaneHead
+                mark={<FlagsMark />}
+                name="The Flags"
+                count={deals.length}
+                tag={sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}
+                right={
+                  <span className="vd-sort" role="tablist" aria-label="Board order">
+                    <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
+                    <button type="button" role="tab" aria-selected={sortMode === 'closing'} data-on={sortMode === 'closing' || undefined} onClick={() => setSortMode('closing')}>Closing next</button>
+                  </span>
+                }
+              />
             </div>
             <div className="glass glass-quiet ray-enter" style={{ overflow: 'hidden' }}>
               <div className="ray-value-head" aria-hidden="true">
@@ -1411,7 +1588,11 @@ export default function ValuePage() {
                   </p>
                   <div className="vd-empty-links">
                     {activeKey !== 'all' && (
-                      <Link href="/value" className="link-action" style={{ color: 'var(--color-fg)' }}>
+                      /* /value bare resolves to the STORED market, so a plain
+                         href is a no-op here — the switch must go through
+                         setMarket (pushStates the bare path, flips storage) */
+                      <Link href="/value" className="link-action" style={{ color: 'var(--color-fg)' }}
+                        onClick={e => { e.preventDefault(); setMarket('all'); }}>
                         Watch all markets · {allFlagCount} flags live <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
                       </Link>
                     )}
