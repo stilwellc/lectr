@@ -9,7 +9,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import { Colophon, pickCall, CallPlate, daysUntil } from '../components/Terminal';
-import { useFullLots, retryFullLoad } from '../hooks/useRayData';
+import { useRayData, triggerFullLoad, retryFullLoad } from '../hooks/useRayData';
 import type { Backtest } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
@@ -48,6 +48,42 @@ import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 
 const ROWS_PAGE = 12;
 
+/* ── PHASE-2 SENTINEL — /value no longer pulls the 28MB corpus eagerly.
+   Everything above the settled tape paints from phase 1 (signal stamps,
+   backtest, market.json) + the 540KB comp-evidence pool rows; the corpus
+   fires only as the reader approaches the tape (or opens the comps modal). */
+function Phase2Sentinel() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') { triggerFullLoad(); return; }
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) { triggerFullLoad(); io.disconnect(); }
+    }, { rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return <div ref={ref} aria-hidden />;
+}
+
+/* comp-evidence.json — the engine pool's actual rows for lots whose comps
+   live in the corpus-only tier (the modal's own fallback source). Module-
+   cached; one 540KB fetch serves the session. */
+type EvidenceMap = Record<string, { i: string; t: string; h: string; d: string; p: number }[]>;
+let evidenceCache: EvidenceMap | null = null;
+let evidenceInflight: Promise<EvidenceMap | null> | null = null;
+function loadEvidence(): Promise<EvidenceMap | null> {
+  if (evidenceCache) return Promise.resolve(evidenceCache);
+  if (!evidenceInflight) {
+    evidenceInflight = fetch('/data/ray/comp-evidence.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { evidenceCache = (j?.byLot as EvidenceMap) || null; return evidenceCache; })
+      .catch(() => { evidenceInflight = null; return null; });
+  }
+  return evidenceInflight;
+}
+
 /** "653878" → "653.9K" — coverage-dial compaction, one decimal max */
 function compactCount(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
@@ -85,7 +121,7 @@ type PulseRead =
   | { kind: 'plain'; text: React.ReactNode };
 
 function MarketPulse({ ray, activeKey, activeLabel, play }: {
-  ray: ReturnType<typeof useFullLots>;
+  ray: ReturnType<typeof useRayData>;
   activeKey: string;
   activeLabel: string;
   play: boolean;
@@ -139,7 +175,7 @@ function MarketPulse({ ray, activeKey, activeLabel, play }: {
                     <CIBeam lo={read.lo} hi={read.hi} point={read.changePct} dir={read.changePct >= 0 ? 'up' : 'down'} mini play={play && !reduce} />
                   </LazyMotion>
                 </span>
-                <span className="vd-pulse-sub" style={{ flex: 'none' }}>95% CI {Math.round(read.lo)}…{Math.round(read.hi)}</span>
+                <span className="vd-pulse-sub" style={{ flex: 'none' }}>95% CI {fmtSignedPct(Math.round(read.lo))} to {fmtSignedPct(Math.round(read.hi))}</span>
               </span>
               <span className="vd-pulse-sub" style={{ display: 'block', marginTop: 4, whiteSpace: 'normal' }}>{read.label}</span>
             </span>
@@ -203,6 +239,126 @@ function ProjectionAnnex({ rows, allLots, receipts }: {
         {receipts?.record?.vsbid
           ? <>forward tape: {receipts.record.vsbid.n.toLocaleString()} calls logged · {receipts.record.vsbid.graded} graded · medians publish at 20 graded</>
           : <>forward tape: — · medians publish at 20 graded</>}
+      </div>
+    </section>
+  );
+}
+
+/* ── ROOM 3b · WHERE THEY LANDED — the outcome distribution as paired
+   share bars, ink on paper. Each cohort normalized to its own n (38.7K vs
+   28.8K would lie as raw counts); square tops, no y-axis, counts on title. ── */
+function OutcomeDistribution({ backtest }: { backtest: Backtest }) {
+  const dist = (backtest as Backtest & { distribution?: { bins: { label: string; flagged: number; unflagged: number }[] } }).distribution;
+  if (!dist?.bins?.length) return null;
+  const fN = dist.bins.reduce((a, b) => a + b.flagged, 0);
+  const uN = dist.bins.reduce((a, b) => a + b.unflagged, 0);
+  if (fN < 500 || uN < 500) return null;
+  const rows = dist.bins.map(b => ({ label: b.label, f: b.flagged / fN, u: b.unflagged / uN }));
+  const max = Math.max(...rows.flatMap(r => [r.f, r.u]));
+  return (
+    <section className="rail ray-enter" style={{ paddingTop: 26 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+        <h2 className="ray-h2" style={{ margin: 0 }}>Where they landed</h2>
+        <span style={{ fontSize: 13.5, color: 'var(--paper-muted)' }}>
+          share of each cohort by realized vs estimate, all-in — the flagged mass sits to the right
+        </span>
+      </div>
+      <div className="vd-dist" aria-label="Outcome distribution: flagged vs unflagged share by result bucket">
+        {rows.map(r => (
+          <div key={r.label} className="vd-dist-col">
+            <div className="vd-dist-bars" aria-hidden>
+              <span className="vd-dist-bar vd-dist-bar-f" style={{ height: `${Math.round((r.f / max) * 100)}%` }} />
+              <span className="vd-dist-bar vd-dist-bar-u" style={{ height: `${Math.round((r.u / max) * 100)}%` }} />
+            </div>
+            <span className="vd-dist-pcts">
+              <b>{Math.round(r.f * 100)}%</b> · {Math.round(r.u * 100)}%
+            </span>
+            <span className="vd-dist-label">{r.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="vd-dist-legend">
+        <span><span className="vd-dist-key vd-dist-bar-f" /> flagged · n {fN.toLocaleString()}</span>
+        <span><span className="vd-dist-key vd-dist-bar-u" /> unflagged · n {uN.toLocaleString()}</span>
+      </div>
+    </section>
+  );
+}
+
+/* ── ROOM 4½ · THE CONDITIONS — where and when value appears. Left: per-
+   house estimate calibration (median realized vs estimate AT THE HAMMER —
+   positive = estimates run cold = where flags come from). Right: the
+   closing-month calendar. Both n-gated, both measured outcomes. ── */
+function ConditionsRoom({ market, activeKey, activeLabel }: {
+  market: NonNullable<ReturnType<typeof useRayData>['market']>;
+  activeKey: string;
+  activeLabel: string;
+}) {
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const houses = useMemo(() => {
+    const hc = market.houseCal || {};
+    return Object.entries(hc)
+      .map(([house, cells]) => ({ house, cell: cells[activeKey] }))
+      .filter((x): x is { house: string; cell: { n: number; hammerMedPct: number; allInMedPct: number } } => !!x.cell && x.cell.n >= 40)
+      .sort((a, b) => b.cell.hammerMedPct - a.cell.hammerMedPct);
+  }, [market.houseCal, activeKey]);
+  const season = market.seasonality?.[activeKey];
+  const nowMonth = new Date().getMonth();
+  if (!houses.length && !season?.length) return null;
+  const hMax = Math.max(8, ...houses.map(h => Math.abs(h.cell.hammerMedPct)));
+  const sMax = season?.length ? Math.max(8, ...season.map(m => (m.n >= 30 ? Math.abs(m.allInMedPct) : 0))) : 0;
+  return (
+    <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
+      <div className="vd-sect-head">
+        <span className="kicker">The conditions</span>
+        <span className="vd-pulse-rule" aria-hidden />
+        <span className="vd-sect-cap">where and when {activeLabel === 'collectible' ? 'the' : `the ${activeLabel}`} market misprices</span>
+      </div>
+      <div className="vd-cond">
+        {houses.length > 0 && (
+          <div>
+            <div className="vd-cond-head kicker">Estimates vs the hammer</div>
+            <p className="vd-cond-cap">median realized vs estimate at the hammer, by house — positive means the room beats the catalogue; negative means the catalogue runs hot</p>
+            {houses.map(h => {
+              const v = h.cell.hammerMedPct;
+              const w = Math.round((Math.abs(v) / hMax) * 50);
+              return (
+                <div key={h.house} className="vd-house-row">
+                  <span className="vd-house-name">{h.house}</span>
+                  <span className="vd-house-track" aria-hidden>
+                    <span className="vd-house-zero" />
+                    <span className={`vd-house-bar ${v >= 0 ? 'up' : 'down'}`} style={v >= 0 ? { left: '50%', width: `${w}%` } : { right: '50%', width: `${w}%` }} />
+                  </span>
+                  <span className="vd-house-fig" data-tone={toneOf(v)}>{fmtSignedPct(v)}</span>
+                  <span className="vd-house-n">n {h.cell.n.toLocaleString()}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {season && season.length === 12 && (
+          <div>
+            <div className="vd-cond-head kicker">The calendar</div>
+            <p className="vd-cond-cap">median realized vs estimate, all-in, by closing month · months under n 30 abstain</p>
+            <div className="vd-season" aria-label="Seasonality by closing month">
+              {season.map((m, i) => {
+                const gated = m.n < 30;
+                const v = m.allInMedPct;
+                const h = gated ? 0 : Math.round((Math.abs(v) / sMax) * 34);
+                return (
+                  <div key={i} className="vd-season-col" data-now={i === nowMonth || undefined}>
+                    <span className="vd-season-fig" data-tone={gated ? undefined : toneOf(v)}>{gated ? '—' : fmtSignedPct(v)}</span>
+                    <span className="vd-season-stage" aria-hidden>
+                      <span className={`vd-season-bar ${v >= 0 ? 'up' : 'down'}`} style={{ height: h, [v >= 0 ? 'bottom' : 'top']: '50%' } as React.CSSProperties} />
+                      <span className="vd-season-zero" />
+                    </span>
+                    <span className="vd-season-m">{MONTHS[i]}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -274,9 +430,9 @@ function OddsLadderSide({ backtest }: { backtest: Backtest }) {
  * settled tape, the engine's plate. Every figure names its basis.
  */
 export default function ValuePage() {
-  // useFullLots: the call plate's band (signalWithPool) reads the full corpus
-  // and crests the fold, so this route triggers phase 2 eagerly.
-  const ray = useFullLots();
+  // useRayData + sentinel: the cockpit/board/record all paint from phase 1;
+  // the corpus loads only on approach to the settled tape or on modal open.
+  const ray = useRayData();
   const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, deepValue, receipts } = ray;
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
@@ -298,6 +454,7 @@ export default function ValuePage() {
   const reopenedDuringBack = useRef(false); // reader reopened inside that window
   const setModalLot = useCallback((lot: AuctionLot | null) => {
     if (lot) {
+      triggerFullLoad(); // comps depth rides the corpus — start it now
       if (pendingBack.current) {
         // close→reopen race: our entry is mid-pop — mark it; onPop re-pushes
         reopenedDuringBack.current = true;
@@ -336,6 +493,8 @@ export default function ValuePage() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   const [shown, setShown] = useState(ROWS_PAGE);
+  // the board's two orderings: the engine's odds (default) or hammer time
+  const [sortMode, setSortMode] = useState<'odds' | 'closing'>('odds');
 
   const deals = useMemo(() => {
     const today = localToday();
@@ -434,15 +593,21 @@ export default function ValuePage() {
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   // A market flip starts the rows over at the first page.
-  useEffect(() => { setShown(ROWS_PAGE); }, [activeKey]);
+  useEffect(() => { setShown(ROWS_PAGE); setSortMode('odds'); }, [activeKey]);
 
   // Today's call: the strongest deal Ray can STAND BEHIND — highest
   // confidence tier first, never low (one thin comp is not a headline).
   const call = useMemo(() => pickCall(marketLots, marketLots, activeKey), [marketLots, activeKey]);
-  const gridDeals = useMemo(
-    () => (call ? deals.filter(d => d.lot.id !== call.lot.id) : deals),
-    [deals, call]
-  );
+  const gridDeals = useMemo(() => {
+    const base = call ? deals.filter(d => d.lot.id !== call.lot.id) : deals;
+    if (sortMode !== 'closing') return base;
+    // hammer time: exact close first, day-only after, ties by odds order
+    return [...base].sort((a, b) => {
+      const ka = a.lot.saleDateTime || `${trueSaleDay(a.lot)}T99`;
+      const kb = b.lot.saleDateTime || `${trueSaleDay(b.lot)}T99`;
+      return ka.localeCompare(kb);
+    });
+  }, [deals, call, sortMode]);
   // ONE LOT, ONE NUMBER: the band prefers the BUILD ENGINE's stamp
   // (value.compValueUsd + poolIds — the same numbers the plate sentence and
   // the modal print); the client signalWithPool runs only for unstamped
@@ -452,21 +617,47 @@ export default function ValuePage() {
     const ev = call?.lot.value as { compValueUsd?: number; poolIds?: string[] } | undefined | null;
     return ev?.compValueUsd && (ev.poolIds?.length ?? 0) >= 3 ? ev : null;
   }, [call]);
+  // evidence rows arrive from the 540KB sidecar well before the corpus
+  const [evidence, setEvidence] = useState<EvidenceMap | null>(evidenceCache);
+  useEffect(() => {
+    if (!call || evidence) return;
+    let on = true;
+    loadEvidence().then(ev => { if (on) setEvidence(ev); });
+    return () => { on = false; };
+  }, [call, evidence]);
   const callBand = useMemo(() => {
-    if (!call || !fullLoaded) return null;
+    if (!call) return null;
     if (callStamp) {
-      const byId = new Map(marketLots.map(l => [l.id, l]));
-      const prices = (callStamp.poolIds || [])
-        .map(id => byId.get(id))
-        .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd)
-        .map(l => l.priceUsd!)
-        .sort((a, b) => a - b);
-      return { prices, median: callStamp.compValueUsd! };
+      // 1) the shipped pool rows (phase-1-fast, the modal's own source)
+      const rows = evidence?.[String(call.lot.id)];
+      if (rows && rows.length >= 3) {
+        return { prices: rows.map(r => r.p).sort((a, b) => a - b), median: callStamp.compValueUsd! };
+      }
+      // 2) pool ids resolved against the corpus once it lands
+      if (fullLoaded) {
+        const byId = new Map(marketLots.map(l => [l.id, l]));
+        const prices = (callStamp.poolIds || [])
+          .map(id => byId.get(id))
+          .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd)
+          .map(l => l.priceUsd!)
+          .sort((a, b) => a - b);
+        return { prices, median: callStamp.compValueUsd! };
+      }
+      return null;
     }
+    // 3) signal-stamped call (no deep-engine pool): the evidence rows still
+    //    carry its comps — the median is the SIGNAL's own med (one number)
+    const sigMed = (call.lot.signal as { med?: number } | null | undefined)?.med;
+    const rows = evidence?.[String(call.lot.id)];
+    if (sigMed && rows && rows.length >= 3) {
+      return { prices: rows.map(r => r.p).sort((a, b) => a - b), median: sigMed };
+    }
+    // 4) last resort: the client engine over the corpus
+    if (!fullLoaded) return null;
     const pool = signalWithPool(call.lot, marketLots);
     if (!pool || pool.signal.med == null) return null;
     return { prices: pool.pool.map(l => l.priceUsd!).sort((a: number, b: number) => a - b), median: pool.signal.med };
-  }, [call, callStamp, marketLots, fullLoaded]);
+  }, [call, callStamp, evidence, marketLots, fullLoaded]);
 
   const hasFlags = deals.length > 0;
   const coverage = ray.market?.markets?.[activeKey]?.n;
@@ -503,7 +694,20 @@ export default function ValuePage() {
       });
     }
     if (backtest) {
-      out.push(backtest.flagged.n >= 100 ? {
+      // the SCOPED record when the replay has published this market's median
+      // (n≥50 gate lives in the build; medPct is null under it) — a sports
+      // user deserves the sports number, not the art-heavy global
+      const scoped = activeKey !== 'all'
+        ? (backtest as Backtest & { byMarket?: Record<string, { flagged: { n: number; medPct: number | null } }> }).byMarket?.[activeKey]?.flagged
+        : null;
+      if (scoped?.medPct != null && scoped.n >= 50) {
+        out.push({
+          k: 'The record',
+          v: fmtSignedPct(scoped.medPct),
+          tone: toneOf(scoped.medPct) === 'up' ? 'up' : undefined,
+          sub: <>{activeLabel} flags realized vs estimate, all-in · n&nbsp;{scoped.n.toLocaleString()}</>,
+        });
+      } else out.push(backtest.flagged.n >= 100 ? {
         k: 'The record',
         v: fmtSignedPct(backtest.flagged.medianPerfPct),
         tone: toneOf(backtest.flagged.medianPerfPct) === 'up' ? 'up' : undefined,
@@ -522,7 +726,7 @@ export default function ValuePage() {
       });
     }
     return out;
-  }, [deals.length, hasFlags, liveLots.length, summary.medianGap, nextHammer, backtest, coverage, activeLabel, fromCache]);
+  }, [deals.length, hasFlags, liveLots.length, summary.medianGap, nextHammer, backtest, coverage, activeKey, activeLabel, fromCache]);
 
   return (
     <div className="ray-mobnav-pad terminal-shell" style={{
@@ -561,7 +765,7 @@ export default function ValuePage() {
         }
         .vd-pulse-fig[data-tone="up"] { color: var(--color-up); }
         .vd-pulse-fig[data-tone="down"] { color: var(--color-down-text); }
-        .vd-pulse-beam { flex: 0 1 160px; min-width: 90px; }
+        .vd-pulse-beam { flex: 1 1 170px; min-width: 110px; max-width: 240px; }
         .vd-pulse-sub { font-size: 12px; color: var(--color-text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         /* ── the dial strip — one fused band, hairline splits, no boxes ── */
@@ -758,6 +962,75 @@ export default function ValuePage() {
         }
         .ray-value-leader b { color: var(--color-fg); font-weight: 600; }
         .ray-value-leader .up { color: var(--color-up); font-weight: 700; }
+
+        /* ── the board's order chips ── */
+        .vd-sort { display: inline-flex; gap: 6px; margin-left: 4px; }
+        .vd-sort button {
+          font-family: var(--font-mono), monospace;
+          font-size: 10.5px; letter-spacing: 0.08em;
+          padding: 6px 12px; min-height: 28px;
+          background: none; color: var(--color-text-muted);
+          border: 1px solid var(--color-border); border-radius: 100px;
+          cursor: pointer;
+          transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
+        }
+        .vd-sort button:hover { color: var(--color-fg); }
+        .vd-sort button[data-on] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+        @media (max-width: 640px) { .vd-sort { margin-left: 0; } .vd-sort button { min-height: 34px; } }
+
+        /* ── ROOM 3b outcome distribution (ink on paper) ── */
+        .vd-dist { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; align-items: end; }
+        .vd-dist-col { display: grid; gap: 6px; justify-items: center; min-width: 0; }
+        .vd-dist-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; width: 100%; justify-content: center; }
+        .vd-dist-bar { width: min(26px, 40%); min-height: 2px; }
+        .vd-dist-bar-f { background: var(--paper-up, #1B7A48); }
+        .vd-dist-bar-u { background: rgba(28, 23, 18, 0.28); }
+        .vd-dist-pcts { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--paper-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .vd-dist-pcts b { color: var(--paper-up-text); font-weight: 700; }
+        .vd-dist-label { font-size: 10.5px; color: var(--paper-muted); text-align: center; line-height: 1.25; }
+        .vd-dist-legend { display: flex; gap: 22px; margin-top: 12px; font-size: 12px; color: var(--paper-muted); }
+        .vd-dist-key { display: inline-block; width: 12px; height: 8px; margin-right: 6px; vertical-align: baseline; }
+        @media (max-width: 700px) {
+          .vd-dist { grid-auto-flow: row; grid-template-columns: repeat(4, 1fr); gap: 14px 8px; }
+          .vd-dist-bars { height: 72px; }
+          .vd-dist-label { font-size: 10px; }
+        }
+
+        /* ── ROOM 4½ the conditions ── */
+        .vd-cond { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px 40px; }
+        @media (min-width: 900px) { .vd-cond { grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); align-items: start; } }
+        .vd-cond-head { font-size: 10px; letter-spacing: 0.14em; padding-bottom: 7px; border-bottom: 1px solid var(--color-border); }
+        .vd-cond-cap { font-size: 12px; color: var(--color-text-faint); margin: 8px 0 10px; }
+        .vd-house-row {
+          display: grid; grid-template-columns: 92px minmax(0, 1fr) 56px 64px; gap: 12px;
+          align-items: center; padding: 7px 0; min-height: 34px;
+          border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06));
+        }
+        .vd-house-name { font-size: 12.5px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vd-house-track { position: relative; height: 8px; }
+        .vd-house-zero { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgba(255, 255, 255, 0.18); }
+        .vd-house-bar { position: absolute; top: 0; bottom: 0; }
+        .vd-house-bar.up { background: var(--color-up); opacity: 0.75; }
+        .vd-house-bar.down { background: var(--color-down); opacity: 0.75; }
+        .vd-house-fig { font-family: var(--font-mono), monospace; font-size: 12.5px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-fg); }
+        .vd-house-fig[data-tone="up"] { color: var(--color-up); }
+        .vd-house-fig[data-tone="down"] { color: var(--color-down-text); }
+        .vd-house-n { font-family: var(--font-mono), monospace; font-size: 10.5px; color: var(--color-text-faint); text-align: right; font-variant-numeric: tabular-nums; }
+        .vd-season { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+        .vd-season-col { display: grid; gap: 5px; justify-items: center; padding: 6px 0 4px; border-radius: 6px; }
+        .vd-season-col[data-now] { background: rgba(232, 218, 182, 0.07); }
+        .vd-season-fig { font-family: var(--font-mono), monospace; font-size: 10px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+        .vd-season-fig[data-tone="up"] { color: var(--color-up); }
+        .vd-season-fig[data-tone="down"] { color: var(--color-down-text); }
+        .vd-season-stage { position: relative; width: 100%; height: 72px; }
+        .vd-season-zero { position: absolute; left: 15%; right: 15%; top: 50%; height: 1px; background: rgba(255, 255, 255, 0.14); }
+        .vd-season-bar { position: absolute; left: 50%; transform: translateX(-50%); width: min(14px, 60%); }
+        .vd-season-bar.up { background: var(--color-up); opacity: 0.8; }
+        .vd-season-bar.down { background: var(--color-down); opacity: 0.8; }
+        .vd-season-m { font-size: 10px; color: var(--color-text-faint); }
+        @media (max-width: 700px) {
+          .vd-season { grid-template-columns: repeat(6, 1fr); gap: 8px 4px; }
+        }
 
         /* ── ROOM 2 zero-flag frame — the instrument keeps its chrome ── */
         .vd-empty {
@@ -963,7 +1236,11 @@ export default function ValuePage() {
             <div className="vd-sect-head ray-enter">
               <h2 className="ray-h2" style={{ marginBottom: 0 }}>Every flag, ranked.</h2>
               <span className="vd-pulse-rule" aria-hidden />
-              <span className="vd-sect-cap">calibrated odds first · the deepest gap breaks ties</span>
+              <span className="vd-sect-cap">{sortMode === 'odds' ? 'calibrated odds first · the deepest gap breaks ties' : 'soonest hammer first'}</span>
+              <span className="vd-sort" role="tablist" aria-label="Board order">
+                <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
+                <button type="button" role="tab" aria-selected={sortMode === 'closing'} data-on={sortMode === 'closing' || undefined} onClick={() => setSortMode('closing')}>Closing next</button>
+              </span>
             </div>
             <div className="glass glass-quiet ray-enter" style={{ overflow: 'hidden' }}>
               <div className="ray-value-head" aria-hidden="true">
@@ -1049,7 +1326,15 @@ export default function ValuePage() {
                       </span>
                     </span>
                     <span className="ray-value-cell">{d.lot.auctionHouse}</span>
-                    <span className="ray-value-cell">{formatDate(trueSaleDay(d.lot) || d.lot.saleDate)}</span>
+                    <span className="ray-value-cell">
+                      {(() => {
+                        const iso = d.lot.saleDateTime;
+                        const ms = iso ? Date.parse(iso) - Date.now() : null;
+                        return ms != null && ms > 0 && ms < 24 * 3600e3
+                          ? <span style={{ color: 'var(--color-up)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
+                          : formatDate(trueSaleDay(d.lot) || d.lot.saleDate);
+                      })()}
+                    </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{formatEstimate(d.lot).replace(/ est\.$/, '').replace(/ · \d+ bids?$/, '')}</span>
                     <span className="ray-value-cell ray-value-cell-num">
                       {rowMed ? formatPrice(rowMed) : '—'}
@@ -1176,6 +1461,8 @@ export default function ValuePage() {
 
               <RecordByYear backtest={backtest} />
 
+              <OutcomeDistribution backtest={backtest} />
+
               {/* the honesty ledger — the record's fine print, led by the low */}
               <section className="rail ray-enter vd-honesty" style={{ paddingTop: 0 }}>
                 {worstYear && (
@@ -1224,6 +1511,11 @@ export default function ValuePage() {
               </div>
             </section>
           )}
+
+          {ray.market && <ConditionsRoom market={ray.market} activeKey={activeKey} activeLabel={activeLabel} />}
+
+          {/* the corpus loads as the reader approaches the tape */}
+          <Phase2Sentinel />
 
           {/* settled tape — flags stamped before the hammer, then graded */}
           <section className="rail ray-enter" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>

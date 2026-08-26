@@ -53,6 +53,19 @@ function readState(): BacktestState | null {
     const st = JSON.parse(zlib.gunzipSync(fs.readFileSync(STATE_FILE)).toString('utf8')) as BacktestState;
     // shape guard — a truncated/legacy file must not silently zero the record
     if (!st || !Array.isArray(st.scoredIds) || !st.flagged || typeof st.nowMs !== 'number') return null;
+    // FIELD-DRIFT GUARD (Aug 25 2026): a state minted before a calObs field
+    // existed carries rows WITHOUT it forever — weekday appends only add the
+    // handful of newly-closed rows, so a derived summary (byMarket medians
+    // need `pf`) publishes zeros for weeks while looking healthy. If the
+    // carried rows lack a field the summarizer depends on, force the full
+    // rebuild (the same fallback a missing state takes). This is exactly how
+    // byMarket shipped n:0 for 12 days: the Sunday full-rebuild backstop that
+    // would have refreshed the state was a cancelled run.
+    if (Array.isArray(st.calObs) && st.calObs.length > 100 &&
+        st.calObs.filter(o => typeof (o as { pf?: number }).pf === 'number').length === 0) {
+      console.log('[backtest] incremental: state predates calObs.pf — forcing full rebuild');
+      return null;
+    }
     return st;
   } catch {
     return null;

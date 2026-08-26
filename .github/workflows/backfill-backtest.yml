@@ -1,0 +1,32 @@
+# One-off (re-runnable) FULL backtest replay: pulls the corpus + served
+# payloads from R2, re-scores every concluded-with-estimate lot from scratch
+# (rebuilding the sidecar accumulator with every current calObs field), and
+# pushes backtest.json + state. Exists because the weekly Sunday full-rebuild
+# backstop can be lost to a cancelled run — after which weekday incrementals
+# carry a stale-shaped state for weeks (byMarket shipped n:0 for 12 days).
+name: Backfill backtest (full replay)
+on:
+  workflow_dispatch:
+concurrency:
+  group: backfill-backtest
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull corpus + served payloads
+        run: bash scripts/data-store.sh pull
+      - name: Full replay
+        run: npx tsx scripts/build-backtest.ts
+      - name: Push backtest.json + accumulator state
+        run: bash scripts/data-store.sh push-backtest
