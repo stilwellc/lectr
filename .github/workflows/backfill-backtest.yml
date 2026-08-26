@@ -21,6 +21,10 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # every other corpus-scale workflow carries this; without it the replay
+      # ran on node's ~4GB default heap and GC-thrashed to a standstill at
+      # ~180K/273K (20K lots per 10min early → 20K per hour → 2.5h of silence)
+      NODE_OPTIONS: --max-old-space-size=12288
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
