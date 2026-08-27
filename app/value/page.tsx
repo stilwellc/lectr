@@ -1026,18 +1026,29 @@ export default function ValuePage() {
     flipTimers.current = [];
     const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduce && prev.size > 0 && next.size === prev.size && Array.from(next.keys()).every(k => prev.has(k))) {
+      const moved: HTMLElement[] = [];
       board.querySelectorAll<HTMLElement>('[data-flip-id]').forEach(el => {
         const delta = (prev.get(el.dataset.flipId!) ?? 0) - (next.get(el.dataset.flipId!) ?? 0);
         if (Math.abs(delta) > 2) {
           el.style.transform = `translateY(${delta}px)`;
           el.style.transition = 'none';
-          requestAnimationFrame(() => {
-            el.style.transform = '';
-            el.style.transition = 'transform 380ms var(--ease-signature)';
-          });
-          flipTimers.current.push(window.setTimeout(() => { el.style.transition = ''; }, 440));
+          moved.push(el);
         }
       });
+      // FORCE a style flush between offset and reset — a rAF scheduled from
+      // this commit runs BEFORE the first style recalc, so without the
+      // reflow the offset never lands and the transition has nothing to
+      // travel from (rows teleport; the makers review caught this)
+      if (moved.length) void board.offsetHeight;
+      requestAnimationFrame(() => {
+        for (const el of moved) {
+          el.style.transform = '';
+          el.style.transition = 'transform 380ms var(--ease-signature)';
+        }
+      });
+      flipTimers.current.push(window.setTimeout(() => {
+        for (const el of moved) el.style.transition = '';
+      }, 440));
     }
     flipPos.current = next;
     // eslint-disable-next-line react-hooks/exhaustive-deps
