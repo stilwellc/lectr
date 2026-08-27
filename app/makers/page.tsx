@@ -6,7 +6,7 @@ import { ARTISTS, MARKETS, marketArtists, rosterNoun, type Market } from '../con
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
-import { useRayData } from '../hooks/useRayData';
+import { useFullLots } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
 import { useAuth } from '../lib/account';
@@ -78,6 +78,8 @@ interface Row {
   slug: string; label: string; market: Market;
   discipline: string | null;
   stats: MarketStats | null;
+  /** a real photo of the maker's flagship lot — the category's face */
+  hero: string | null;
   spark: number[] | null;
   live: number;
   flags: number;
@@ -354,7 +356,13 @@ const MakerRowItem = React.memo(function MakerRowItem({
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleOpen(r.slug); }
         }}
       >
-        <span className="mk-mono" aria-hidden>{r.label.charAt(0)}</span>
+        <span className="mk-mono" aria-hidden>
+          <span className="mk-mono-letter">{r.label.charAt(0)}</span>
+          {r.hero && (
+            <img src={httpsImg(r.hero)} alt="" referrerPolicy="no-referrer" loading="lazy"
+              onError={e => e.currentTarget.remove()} />
+          )}
+        </span>
         <span className="mk-id">
           <span className="mk-name">{r.label}</span>
           <span className="mk-tags">
@@ -409,6 +417,13 @@ const MakerRowItem = React.memo(function MakerRowItem({
       {/* ── THE DOSSIER ── */}
       <div className="mkx">
         <div className="mkx-in">
+          {r.hero && (
+            <div className="mkx-hero" aria-hidden>
+              <img src={httpsImg(r.hero)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                onError={e => e.currentTarget.closest('.mkx-hero')?.remove()} />
+              <span className="mkx-hero-cap">{r.label}{r.discipline ? ` · ${r.discipline}` : ''}</span>
+            </div>
+          )}
           {r.stats?.priceHistory && r.stats.priceHistory.length >= 4 ? (
             <div className="mkx-chartwrap">
               <div className="mkx-chart-cap kicker">Quarterly median sale · full tracked history</div>
@@ -521,7 +536,12 @@ const MakerRowItem = React.memo(function MakerRowItem({
 });
 
 export default function MakersPage() {
-  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand } = useRayData();
+  // useFullLots triggers the corpus in the BACKGROUND: every figure still
+  // paints from phase 1 (stats/eager upcoming) instantly, but the maker
+  // photos — drawn from real lot images — fill in for makers with no live
+  // lot as the sold history lands. An image appearing is decorative
+  // progressive enhancement, never a figure that could mislead.
+  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand } = useFullLots();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -597,6 +617,22 @@ export default function MakersPage() {
     return m;
   }, [marketData]);
 
+  // ── THE FACE — a real photo per maker, drawn from their own lots: the
+  // single highest-value photographed work (its flagship, most likely the
+  // record). A real Rolex for Rolex, a real Basquiat for Basquiat — sourced
+  // from the auction inventory we already display, so it never breaks and is
+  // always genuinely that maker's work. ──
+  const heroBySlug = useMemo(() => {
+    const best = new Map<string, { url: string; val: number }>();
+    for (const l of allLots) {
+      if (!l.imageUrl) continue;
+      const val = l.priceUsd || l.currentBid || l.estimateHigh || l.estimateLow || 0;
+      const cur = best.get(l.artist);
+      if (!cur || val > cur.val) best.set(l.artist, { url: l.imageUrl, val });
+    }
+    return best;
+  }, [allLots]);
+
   // ── THE LIVE BOOK + THE ENGINE'S READ, one pass over the eager set ──
   const liveBySlug = useMemo(() => {
     const m = new Map<string, { lots: AuctionLot[]; flags: number }>();
@@ -631,6 +667,7 @@ export default function MakersPage() {
       slug: a.slug, label: a.label, market: a.market as Market,
       discipline: DISCIPLINE[a.slug] || null,
       stats: st,
+      hero: heroBySlug.get(a.slug)?.url || null,
       spark: sparkVals.length >= 4 ? sparkVals : null,
       live: liveE?.lots.length || 0,
       flags: liveE?.flags || 0,
@@ -645,7 +682,7 @@ export default function MakersPage() {
       recordFresh,
       liveLots: liveE?.lots || [],
     };
-  }), [statsByArtist, liveBySlug, verifiedBySlug]);
+  }), [statsByArtist, heroBySlug, liveBySlug, verifiedBySlug]);
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -1096,7 +1133,9 @@ const MAKERS_CSS = `
 .mk-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 14px;min-height:52px;color:inherit;text-decoration:none;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature)}
 .mk-row:hover{background:var(--color-hover-item)}
 .mk-row:focus-visible{outline:1.5px solid color-mix(in srgb,var(--color-fg) 70%,transparent);outline-offset:-1.5px;background:var(--color-hover-item)}
-.mk-mono{width:30px;height:30px;display:flex;align-items:center;justify-content:center;flex:none;border-radius:8px;background:var(--color-bg-elevated);border:1px solid var(--color-hair,rgba(255,255,255,0.06));font-size:13px;font-weight:650;color:var(--color-text-secondary)}
+.mk-mono{position:relative;width:30px;height:30px;flex:none;border-radius:8px;overflow:hidden;background:var(--color-bg-elevated);border:1px solid var(--color-hair,rgba(255,255,255,0.06))}
+.mk-mono-letter{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:650;color:var(--color-text-secondary)}
+.mk-mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .mk-id{min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .mk-name{font-size:13.5px;font-weight:600;color:var(--color-fg);white-space:nowrap}
 .mk-tags{display:inline-flex;gap:5px;flex-wrap:wrap}
@@ -1141,6 +1180,12 @@ const MAKERS_CSS = `
 .mk-item[data-open] .mkx{grid-template-rows:1fr}
 .mkx-in{overflow:hidden;min-height:0;visibility:hidden;transition:visibility 0s 340ms}
 .mk-item[data-open] .mkx-in{visibility:visible;transition:visibility 0s;border-top:1px solid var(--color-hair,rgba(255,255,255,0.06))}
+/* the dossier hero — the maker's flagship lot photo as a banner */
+.mkx-hero{position:relative;margin:14px 16px 0;height:150px;border-radius:12px;overflow:hidden;background:var(--color-bg-elevated)}
+.mkx-hero img{width:100%;height:100%;object-fit:cover;display:block}
+.mkx-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,color-mix(in srgb,#08090a 78%,transparent) 100%)}
+.mkx-hero-cap{position:absolute;left:14px;bottom:11px;z-index:1;font-size:12px;font-weight:600;letter-spacing:0.01em;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,0.6)}
+@media(min-width:940px){.mkx-hero{height:190px}}
 .mkx-chartwrap{padding:14px 16px 0}
 .mkx-chart-cap{font-size:10px;letter-spacing:0.14em;margin-bottom:8px}
 .mkx-chart{width:100%;height:150px;padding:4px 10px 18px 46px;box-sizing:border-box}
