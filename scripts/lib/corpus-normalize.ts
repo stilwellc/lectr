@@ -5,6 +5,7 @@ import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle } from '../../app/lib/comps';
 import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
+import { isMisattributed } from '../../app/lib/attribution';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
 import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 
@@ -363,9 +364,35 @@ export function dedupeWrightFamilyMirrors(lots: Lot[]): number {
   return drop.size;
 }
 
+/* MISATTRIBUTION DROP — the deep archive stamps a maker slug onto lots that
+   plainly are not theirs: car-auction lots swept into an ART search (a
+   "2.6-litre Alfa" under Peter Saul, a Ferrari under Clemente), and bare-
+   surname routes matching a DIFFERENT named artist ("José Clemente OROZCO"
+   → clemente, "Edward PRIESTLEY" → warhol). They inflate that maker's
+   record/median/sold and steal the maker's photo. Drop them from the corpus
+   entirely — they belong to no tracked maker — so every downstream figure
+   (stats, market, value engine) is computed from a clean pool. Same in-place
+   compaction as dedupeWrightFamilyMirrors so it bakes into the corpus gz. */
+function dropMisattributed(lots: Lot[]): number {
+  const drop = new Set<number>();
+  for (let i = 0; i < lots.length; i++) {
+    if (isMisattributed(String(lots[i].artist || ''), String(lots[i].title || ''))) drop.add(i);
+  }
+  if (!drop.size) return 0;
+  let w = 0;
+  for (let i = 0; i < lots.length; i++) if (!drop.has(i)) lots[w++] = lots[i];
+  lots.length = w;
+  return drop.size;
+}
+
 export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
   const mirrorDupes = dedupeWrightFamilyMirrors(ls);
+  // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
+  // isMisattributed reads the raw title (car marques / life-dates survive any
+  // title clean), and dropping early shrinks every pass that follows.
+  const misattr = dropMisattributed(ls);
+  if (misattr) console.log(`[normalize] dropped ${misattr} misattributed lots (cars in art pools, name collisions)`);
   // ENGINE SPEC v2 order: category flips (2c) run BEFORE identity work;
   // restampIdentityKeys (5) runs LAST so every flip re-derives its formKey.
   // healExpansionRows runs FIRST: it cleans titles (every parser below reads

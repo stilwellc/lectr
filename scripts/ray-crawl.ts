@@ -1519,7 +1519,9 @@ const ART_MAKER_ROUTES: [RegExp, string][] = [
   [/\bfutura\s?2000\b|\bfutura\b/, 'futura-2000'],
   [/\brobert crumb\b|\br\.?\s?crumb\b/, 'r-crumb'],
   [/\bfab(ulous)?\s5\sfreddy\b|\bfred(erick)? brathwaite\b/, 'fab-5-freddy'],
-  [/\bfrancesco clemente\b|\bclemente\b/, 'francesco-clemente'],
+  // full name only — bare "clemente" caught José Clemente OROZCO and Roberto
+  // Clemente (the surname is Orozco's middle name, not his surname)
+  [/\bfrancesco clemente\b/, 'francesco-clemente'],
   [/\beddie martinez\b/, 'eddie-martinez'],
   [/\bkenny scharf\b|\bscharf\b/, 'kenny-scharf'],
   // added Aug 2026 — blue-chip modern/contemporary. Distinctive surnames allowed;
