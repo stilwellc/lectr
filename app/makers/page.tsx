@@ -2,8 +2,9 @@
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTISTS, MARKETS, marketArtists, rosterNoun, type Market } from '../constants';
+import { ARTISTS, MARKETS, marketArtists, marketOf, rosterNoun, type Market } from '../constants';
 import { useMarket } from '../lib/market';
+import { classifyForm, formsForMarket } from '../lib/comps';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
 import { useFullLots } from '../hooks/useRayData';
@@ -73,6 +74,14 @@ const DISCIPLINE: Record<string, string> = {
   'science-tech': 'Technology',
 };
 const BID_MARKETS = new Set<Market>(['sports', 'tcg']);
+
+/** Car-auction lots are misattributed to painters in the deep archive — a
+ *  Bonhams "2.6-litre Alfa" tagged as a Peter Saul "original", a Ferrari
+ *  Barchetta under Clemente. They carry an art category so a form gate
+ *  can't catch them, but their titles use automotive vocabulary an artwork
+ *  never does. Only terms with ZERO overlap with art titles (no bare
+ *  "jaguar"/"mustang"/"spider" animals). Gated markets only. */
+const VEHICLE_RE = /\b(ferrari|alfa romeo|porsche|bugatti|maserati|lamborghini|aston martin|bentley|rolls-?royce|mercedes-?benz|lancia|delahaye|delage|duesenberg|hispano-suiza|bizzarrini|\d[.,]?\d?\s*-?\s*litre|litre engined|barchetta|berlinetta|monoposto|roadster|cabriolet|drophead|coachwork|chassis no|supercharged|grand prix)\b/;
 
 interface Row {
   slug: string; label: string; market: Market;
@@ -626,6 +635,22 @@ export default function MakersPage() {
     const best = new Map<string, { url: string; val: number }>();
     for (const l of allLots) {
       if (!l.imageUrl) continue;
+      // FORM GATE — the deep sold archive holds MISATTRIBUTED lots (a
+      // Ferrari tagged to a painter — Clemente's own "record" was a 166 MM
+      // Barchetta). Those cars carry no art category so they classify as
+      // 'unknown'. For a market with a form gate (art/design/watches/
+      // science), require a KNOWN in-market form — a real painting/print/
+      // watch/fossil, never 'unknown' — so a maker's face is genuinely
+      // their work. Ungated markets (sports/culture/tcg) accept their own
+      // broad inventory, which is correct — a card IS a card.
+      const forms = formsForMarket(marketOf(l.artist));
+      if (forms) {
+        const f = classifyForm(l);
+        if (f === 'unknown' || !forms.has(f)) continue;
+        // a miscategorized car classifies as art (cat 'original') — its
+        // title still gives it away
+        if (VEHICLE_RE.test((l.title || '').toLowerCase())) continue;
+      }
       const val = l.priceUsd || l.currentBid || l.estimateHigh || l.estimateLow || 0;
       const cur = best.get(l.artist);
       if (!cur || val > cur.val) best.set(l.artist, { url: l.imageUrl, val });
