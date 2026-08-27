@@ -8,34 +8,32 @@ import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
+import { useSavedSearches } from '../lib/alerts';
+import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import { formatDate, formatPrice, getUpcomingCounts } from '../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, localToday, isLiveUpcoming } from '../utils';
+import { formatEstimate } from '../components/LotCard';
 import { formatDemand } from '../lib/demand';
 import { verifiedMovers, type VerifiedMover } from '../preview/terminal/verified';
 import CountUp from '../components/CountUp';
+import CloseClock from '../components/CloseClock';
 import Masthead, { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
 import Flick from '../components/Flick';
-import type { MarketStats } from '../types';
+import type { AuctionLot, MarketStats } from '../types';
 
 /**
- * Makers — THE DIRECTORY, full instrument grade (Aug 2026, pass 2).
- * One filterable ledger of every tracked name, grouped by top-level
- * category — and every row now opens IN PLACE into its dossier: the
- * maker's full median curve on real axes, the record sale, the house
- * ledger, the CI-beamed verified read. The category cockpit up top jumps
- * the reader around the ledger; '/' focuses the filter, j/k walk the
- * rows, enter opens a dossier, sorts re-rank with visible travel.
- * ENTIRELY PHASE-1 — everything derives from stats.json + market.json +
- * the eager upcoming set. Nothing waits for the corpus, nothing painted
- * early ever changes.
+ * Makers — THE DIRECTORY, trading grade (Aug 2026, pass 3). The ledger of
+ * every tracked name is now a value surface: rows carry the engine's live
+ * flag count, dossiers carry the maker's closing-soonest live lots, compare
+ * mode overlays up to four makers' rebased curves, a Display menu chooses
+ * the columns, follows ride the saved-search plumbing, and ?open= deep-
+ * links a dossier. ENTIRELY PHASE-1 — nothing waits for the corpus.
  */
 
-/* ── THE LABEL SYSTEM — curated disciplines (facts, one per maker; no
-   entry → no chip, never a bare roster noun) + measured states. ── */
+/* ── THE LABEL SYSTEM — curated disciplines + measured states ── */
 const DISCIPLINE: Record<string, string> = {
-  // art
   'george-condo': 'Contemporary painting',
   'futura-2000': 'Street art',
   'kaws': 'Street & pop',
@@ -59,26 +57,21 @@ const DISCIPLINE: Record<string, string> = {
   'alexander-calder': 'Sculpture & mobiles',
   'rashid-johnson': 'Contemporary',
   'jeff-koons': 'Sculpture & editions',
-  // design
   'george-nakashima': 'Studio furniture',
   'charles-eames': 'Mid-century modern',
   'jean-prouve': 'Modernist metalwork',
   'pierre-jeanneret': 'Chandigarh modernism',
-  // watches
   'rolex': 'Watchmaker',
   'patek-philippe': 'Watchmaker',
   'audemars-piguet': 'Watchmaker',
   'omega': 'Watchmaker',
   'cartier': 'Watchmaker & jeweler',
-  // science
   'meteorites': 'Natural history',
   'fossils': 'Natural history',
   'space-exploration': 'Space history',
   'scientific-instruments': 'Instruments',
   'science-tech': 'Technology',
 };
-/** markets whose books post no estimates — their reads are realized-$.
-    Culture is NOT here: the build publishes a real demand index for it. */
 const BID_MARKETS = new Set<Market>(['sports', 'tcg']);
 
 interface Row {
@@ -87,21 +80,45 @@ interface Row {
   stats: MarketStats | null;
   spark: number[] | null;
   live: number;
+  flags: number;
   sold: number | null;
   median: number | null;
   revenue: number;
+  velocity: number;
+  record: number | null;
   verified: VerifiedMover | null;
   thin: boolean;
+  /** measured momentum: consecutive rising quarterly medians (≥3 prints) */
+  rising: number;
+  /** the record hammered inside the last 12 months */
+  recordFresh: string | null;
+  liveLots: AuctionLot[];
 }
 
-type SortKey = 'sold' | 'live' | 'median' | 'delta' | 'name';
+type SortKey = 'sold' | 'live' | 'flags' | 'median' | 'delta' | 'name';
 const SORTS: { k: SortKey; label: string }[] = [
   { k: 'sold', label: 'Sold' },
   { k: 'live', label: 'Live' },
+  { k: 'flags', label: 'Flags' },
   { k: 'median', label: 'Median' },
   { k: 'delta', label: 'Verified Δ' },
   { k: 'name', label: 'A–Z' },
 ];
+
+/* ── THE DISPLAY MENU — Linear's signature: choose the properties ── */
+type ColKey = 'curve' | 'median' | 'delta' | 'flags' | 'live' | 'sold' | 'record' | 'settled' | 'velocity';
+const COLS: { k: ColKey; label: string; width: string }[] = [
+  { k: 'curve', label: '12q curve', width: '96px' },
+  { k: 'median', label: 'Median · 12mo', width: '104px' },
+  { k: 'delta', label: 'Verified Δ', width: '84px' },
+  { k: 'flags', label: 'Flags', width: '56px' },
+  { k: 'live', label: 'Live', width: '60px' },
+  { k: 'sold', label: 'Sold', width: '84px' },
+  { k: 'record', label: 'Record', width: '84px' },
+  { k: 'settled', label: 'Settled $', width: '84px' },
+  { k: 'velocity', label: '12mo sold', width: '76px' },
+];
+const DEFAULT_COLS: ColKey[] = ['curve', 'median', 'delta', 'flags', 'live', 'sold'];
 
 const fmtUsd = (n: number) =>
   n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B`
@@ -109,7 +126,6 @@ const fmtUsd = (n: number) =>
   : n >= 1e4 ? `$${Math.round(n / 1e3)}K`
   : `$${Math.round(n).toLocaleString()}`;
 
-/* ── the row spark — monoline with an end dot ── */
 function Spark({ values }: { values: number[] }) {
   const w = 90, h = 22;
   const min = Math.min(...values), max = Math.max(...values);
@@ -117,24 +133,18 @@ function Spark({ values }: { values: number[] }) {
   const px = (i: number) => (i / (values.length - 1)) * (w - 6) + 2;
   const py = (v: number) => h - 3 - ((v - min) / span) * (h - 6);
   const pts = values.map((v, i) => `${px(i)},${py(v)}`).join(' ');
-  const last = values[values.length - 1];
   return (
     <svg width={w} height={h} aria-hidden>
       <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={px(values.length - 1)} cy={py(last)} r="2" fill="var(--color-fg)" />
+      <circle cx={px(values.length - 1)} cy={py(values[values.length - 1])} r="2" fill="var(--color-fg)" />
     </svg>
   );
 }
 
-/* ── THE DOSSIER CHART — the maker's full quarterly median curve on real
-   axes. Hand-rolled hairline instrument: 3 y-ticks, year x-ticks, end dot.
-   Height fixed so the expansion animation has a stable target. ── */
+/* ── THE DOSSIER CHART — line stretches; tick text is HTML, never distorts ── */
 function DossierChart({ hist }: { hist: MarketStats['priceHistory'] }) {
   const pts = hist.filter(p => (p.medianPrice || p.avgPrice) > 0);
   if (pts.length < 4) return null;
-  // the LINE stretches to the container (preserveAspectRatio none, hairlines
-  // held by vector-effect); the TICK TEXT is HTML positioned by %, so glyphs
-  // never distort no matter the container's aspect
   const vals = pts.map(p => p.medianPrice || p.avgPrice);
   const min = Math.min(...vals), max = Math.max(...vals);
   const span = max - min || 1;
@@ -170,7 +180,6 @@ function DossierChart({ hist }: { hist: MarketStats['priceHistory'] }) {
   );
 }
 
-/* ── the CI whisker — a verified read's honest width, hand-rolled ── */
 function CIWhisker({ v }: { v: VerifiedMover }) {
   const lo = v.ciLoPct, hi = v.ciHiPct, pt = v.changePct;
   const dLo = Math.min(lo, 0) - Math.abs(hi - lo) * 0.08;
@@ -187,6 +196,330 @@ function CIWhisker({ v }: { v: VerifiedMover }) {
   );
 }
 
+/* ── COMPARE — up to four makers' last-12q medians rebased onto one axis.
+   Monochrome differentiation by LINE STYLE (solid/dashed/dotted/dash-dot):
+   mint & coral stay reserved for each maker's own signed Δ. ── */
+const DASHES = ['', '7 5', '2 4', '9 3 2 3'];
+const STROKES = ['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.72)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.4)'];
+function CompareTray({ sel, rows, onRemove, onClear }: {
+  sel: string[];
+  rows: Row[];
+  onRemove: (slug: string) => void;
+  onClear: () => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const picked = sel.map(s => rows.find(r => r.slug === s)).filter((r): r is Row => !!r);
+  // shared date domain: the union of each maker's last-12q dates
+  const series = picked.map(r => {
+    const pts = (r.stats?.priceHistory || []).slice(-12)
+      .map(p => ({ d: String(p.date), v: p.medianPrice || p.avgPrice }))
+      .filter(p => p.v > 0);
+    const base = pts.length ? pts[0].v : 0;
+    return { r, pts: base > 0 ? pts.map(p => ({ d: p.d, v: (p.v / base - 1) * 100 })) : [] };
+  }).filter(s => s.pts.length >= 4);
+  // a picked maker with <4 quarters is dropped from `series` — so the bar
+  // chip's swatch MUST index by series position (via this map), not by
+  // picked position, or every maker after the dropped one gets a swatch
+  // that mismatches its plotted line.
+  const seriesIdx = new Map(series.map((s, i) => [s.r.slug, i]));
+  const dates = Array.from(new Set(series.flatMap(s => s.pts.map(p => p.d)))).sort();
+  const vals = series.flatMap(s => s.pts.map(p => p.v));
+  const min = Math.min(0, ...vals), max = Math.max(0, ...vals);
+  const span = max - min || 1;
+  const xPct = (d: string) => dates.length > 1 ? (dates.indexOf(d) / (dates.length - 1)) * 100 : 50;
+  const yPct = (v: number) => (1 - (v - min) / span) * 100;
+  return (
+    <div className="mkc" role="region" aria-label="Compare makers">
+      <div className="rail mkc-bar">
+        <span className="mkc-title">Compare</span>
+        {picked.map(r => {
+          const si = seriesIdx.get(r.slug);
+          return (
+            <span key={r.slug} className="mkc-chip" data-thin={si == null || undefined}>
+              <svg width="16" height="8" aria-hidden>
+                <line x1="1" y1="4" x2="15" y2="4" strokeWidth="1.6"
+                  stroke={si != null ? STROKES[si] : 'rgba(255,255,255,0.28)'}
+                  strokeDasharray={si != null ? (DASHES[si] || undefined) : '2 2'} />
+              </svg>
+              {r.label}
+              {si == null && <span className="mkc-chip-thin" title="not enough history to plot">thin</span>}
+              <button type="button" onClick={() => onRemove(r.slug)} aria-label={`Remove ${r.label} from compare`}>×</button>
+            </span>
+          );
+        })}
+        <span className="mkc-rule" aria-hidden />
+        <button type="button" className="mkc-btn" onClick={() => setExpanded(v => !v)} aria-expanded={expanded}>
+          {expanded ? 'Collapse' : 'Expand'}
+        </button>
+        <button type="button" className="mkc-btn" onClick={onClear}>Clear</button>
+      </div>
+      {expanded && (
+        <div className="rail mkc-body">
+          {series.length >= 2 ? (
+            <>
+              <div className="mkc-plotwrap">
+                <div className="mkc-plot">
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+                    <line x1="0" y1={yPct(0)} x2="100" y2={yPct(0)} stroke="rgba(255,255,255,0.16)" strokeWidth="1" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
+                    {series.map((s, i) => (
+                      <polyline key={s.r.slug}
+                        points={s.pts.map(p => `${xPct(p.d)},${yPct(p.v)}`).join(' ')}
+                        fill="none" stroke={STROKES[i]} strokeWidth="1.6"
+                        strokeDasharray={DASHES[i] || undefined}
+                        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                    ))}
+                  </svg>
+                  <span className="mkx-tick mkx-tick-y" style={{ top: `${yPct(max)}%` }}>{`${max >= 0 ? '+' : ''}${Math.round(max)}%`}</span>
+                  <span className="mkx-tick mkx-tick-y" style={{ top: `${yPct(0)}%` }}>0%</span>
+                  <span className="mkx-tick mkx-tick-y" style={{ top: `${yPct(min)}%` }}>{`${min >= 0 ? '+' : ''}${Math.round(min)}%`}</span>
+                </div>
+                <div className="mkc-cap kicker">Δ% from each maker&rsquo;s own 12-quarter start · quarterly medians</div>
+              </div>
+              <div className="mkc-legend">
+                {series.map((s, i) => {
+                  const end = s.pts[s.pts.length - 1].v;
+                  return (
+                    <div key={s.r.slug} className="mkc-leg">
+                      <svg width="18" height="8" aria-hidden><line x1="1" y1="4" x2="17" y2="4" stroke={STROKES[i]} strokeWidth="1.6" strokeDasharray={DASHES[i] || undefined} /></svg>
+                      <span className="mkc-leg-name">{s.r.label}</span>
+                      <b data-dir={end >= 0 ? 'up' : 'down'}>{end >= 0 ? '+' : '−'}{Math.abs(Math.round(end))}%</b>
+                      <span className="mkc-leg-sub">
+                        {s.r.median ? `med ${formatPrice(s.r.median)}` : ''}
+                        {s.r.record ? ` · rec ${fmtUsd(s.r.record)}` : ''}
+                        {s.r.sold != null ? ` · ${s.r.sold.toLocaleString()} sold` : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="mkc-note">Pick {2 - series.length} more maker{2 - series.length === 1 ? '' : 's'} with enough history — hover a row and hit the compare mark, or press <kbd>c</kbd> on a focused row.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── ONE ROW (memoized — 54 dossiers must not re-render per keystroke) ── */
+const MakerRowItem = React.memo(function MakerRowItem({
+  r, soldMax, isOpen, cols, isSel, isFollowed, authEnabled,
+  onToggleOpen, onToggleCompare, onToggleFollow,
+}: {
+  r: Row; soldMax: number; isOpen: boolean; cols: ColKey[];
+  isSel: boolean; isFollowed: boolean; authEnabled: boolean;
+  onToggleOpen: (slug: string) => void;
+  onToggleCompare: (slug: string) => void;
+  onToggleFollow: (slug: string, label: string) => void;
+}) {
+  const cell = (k: ColKey): React.ReactNode => {
+    switch (k) {
+      case 'curve': return <span key={k} className="mk-cell mk-spark" aria-hidden>{r.spark ? <Spark values={r.spark} /> : <span className="mk-sparkgap" />}</span>;
+      case 'median': return <span key={k} className="mk-cell">{r.median ? formatPrice(r.median) : '—'}</span>;
+      case 'delta': return (
+        <span key={k} className="mk-cell mk-delta" data-dir={r.verified ? r.verified.dir : undefined}>
+          {r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}%` : '—'}
+        </span>
+      );
+      case 'flags': return <span key={k} className="mk-cell mk-flags" data-hot={r.flags > 0 || undefined}>{r.flags > 0 ? r.flags.toLocaleString() : '—'}</span>;
+      case 'live': return <span key={k} className="mk-cell" data-live={r.live > 0 || undefined}>{r.live > 0 ? r.live.toLocaleString() : '—'}</span>;
+      case 'sold': return (
+        <span key={k} className="mk-cell mk-faint mk-soldcell">
+          {r.sold != null ? r.sold.toLocaleString() : '—'}
+          {r.sold != null && r.sold > 0 && (
+            <span className="mk-soldtrack" aria-hidden><span style={{ width: `${Math.max(3, Math.round((r.sold / soldMax) * 100))}%` }} /></span>
+          )}
+        </span>
+      );
+      case 'record': return <span key={k} className="mk-cell">{r.record ? fmtUsd(r.record) : '—'}</span>;
+      case 'settled': return <span key={k} className="mk-cell mk-faint">{r.revenue > 0 ? fmtUsd(r.revenue) : '—'}</span>;
+      case 'velocity': return <span key={k} className="mk-cell mk-faint">{r.velocity > 0 ? r.velocity.toLocaleString() : '—'}</span>;
+    }
+  };
+  return (
+    <div
+      className="mk-item" data-mk-flip={r.slug} data-open={isOpen || undefined} data-sel={isSel || undefined}
+      onKeyDown={e => {
+        if (e.key === 'Escape' && isOpen) { e.preventDefault(); onToggleOpen(r.slug); }
+      }}
+    >
+      <div
+        role="button" tabIndex={0} data-mk-row data-slug={r.slug}
+        className="mk-row"
+        aria-expanded={isOpen}
+        aria-label={`${r.label} — open the maker's read`}
+        onClick={() => onToggleOpen(r.slug)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleOpen(r.slug); }
+        }}
+      >
+        <span className="mk-mono" aria-hidden>{r.label.charAt(0)}</span>
+        <span className="mk-id">
+          <span className="mk-name">{r.label}</span>
+          <span className="mk-tags">
+            {r.discipline && <span className="mk-tag">{r.discipline}</span>}
+            {BID_MARKETS.has(r.market) && <span className="mk-tag">bid market</span>}
+            {r.verified && <span className="mk-tag mk-tag-verified" title={`CI-verified ${r.verified.horizon} move · 95% CI ${Math.round(r.verified.ciLoPct)}% to ${Math.round(r.verified.ciHiPct)}%`}>verified · {r.verified.horizon}</span>}
+            {r.recordFresh && <span className="mk-tag mk-tag-verified">record · {r.recordFresh}</span>}
+            {r.rising >= 3 && <span className="mk-tag" title={`${r.rising} consecutive quarters of rising median sale`}>{r.rising}q rising</span>}
+            {r.thin && <span className="mk-tag">thin history</span>}
+          </span>
+        </span>
+        {cols.map(cell)}
+        <span className="mk-go" aria-hidden data-open={isOpen || undefined}><Flick size={10} /></span>
+        <span className="mk-mob">
+          <span className="mk-mob-median">{r.median ? formatPrice(r.median) : r.live > 0 ? `${r.live} live` : '—'}</span>
+          <span className="mk-mob-sub" data-dir={r.verified ? r.verified.dir : undefined}>
+            {r.flags > 0 ? `${r.flags} flagged · ` : ''}
+            {r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}% · ${r.verified.horizon}` : r.sold != null ? `${r.sold.toLocaleString()} sold` : ''}
+          </span>
+        </span>
+      </div>
+
+      {/* hover actions — SIBLINGS of the row button (never nested interactive) */}
+      <span className="mk-acts">
+        {authEnabled && (
+          <button
+            type="button" className="mk-act" data-on={isFollowed || undefined}
+            aria-pressed={isFollowed} aria-label={isFollowed ? `Unfollow ${r.label}` : `Follow ${r.label}`}
+            title={isFollowed ? 'Following — alerts on every new lot' : 'Follow — alerts on every new lot'}
+            onClick={e => { e.stopPropagation(); onToggleFollow(r.slug, r.label); }}
+          >
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden>
+              {isFollowed
+                ? <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                : <path d="M7 1.5v11M1.5 7h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
+            </svg>
+          </button>
+        )}
+        <button
+          type="button" className="mk-act" data-on={isSel || undefined}
+          aria-pressed={isSel} aria-label={isSel ? `Remove ${r.label} from compare` : `Compare ${r.label}`}
+          title={isSel ? 'In compare — click to remove' : 'Add to compare (or press c on the row)'}
+          onClick={e => { e.stopPropagation(); onToggleCompare(r.slug); }}
+        >
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+            <path d="M1.5 12.5L6 6l3 3.5 3.5-6" />
+            <path d="M1.5 9L5 4.5" opacity="0.45" />
+          </svg>
+        </button>
+      </span>
+
+      {/* ── THE DOSSIER ── */}
+      <div className="mkx">
+        <div className="mkx-in">
+          {r.stats?.priceHistory && r.stats.priceHistory.length >= 4 ? (
+            <div className="mkx-chartwrap">
+              <div className="mkx-chart-cap kicker">Quarterly median sale · full tracked history</div>
+              <DossierChart hist={r.stats.priceHistory} />
+            </div>
+          ) : (
+            <p className="mkx-none">Not enough sold history for a curve yet — the ledger fills as {r.label} lots settle.</p>
+          )}
+          <div className="mkx-grid">
+            <div>
+              <span className="kicker">The record</span>
+              {r.stats?.recordPrice ? (
+                <p><b>{formatPrice(r.stats.recordPrice)}</b>{r.stats.recordTitle ? <> · {r.stats.recordTitle.length > 44 ? `${r.stats.recordTitle.slice(0, 44)}…` : r.stats.recordTitle}</> : null}{r.stats.recordHouse ? <> · {r.stats.recordHouse}</> : null}{r.stats.recordDate ? <> · {formatDate(r.stats.recordDate)}</> : null}</p>
+              ) : <p>—</p>}
+            </div>
+            <div>
+              <span className="kicker">The book</span>
+              <p>
+                {r.sold != null && <><b>{r.sold.toLocaleString()}</b> sold tracked</>}
+                {r.revenue > 0 && <> · <b>{fmtUsd(r.revenue)}</b> settled</>}
+                {r.velocity > 0 && <> · {r.velocity.toLocaleString()} in 12mo</>}
+              </p>
+            </div>
+            {(r.stats?.houseDistribution?.length ?? 0) > 0 && (
+              <div>
+                <span className="kicker">The houses</span>
+                <div className="mkx-houses">
+                  {(r.stats!.houseDistribution.slice().sort((a, b) => b.count - a.count).slice(0, 3)).map((h, _, arr) => (
+                    <div key={h.house} className="mkx-house">
+                      <span className="mkx-house-name">{h.house}</span>
+                      <span className="mkx-house-track" aria-hidden><span style={{ width: `${Math.round((h.count / Math.max(1, arr[0].count)) * 100)}%` }} /></span>
+                      <span className="mkx-house-n">{h.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {r.verified && (
+              <div>
+                <span className="kicker">Verified move · {r.verified.horizon}</span>
+                <div className="mkx-verified">
+                  <b data-dir={r.verified.dir}>{r.verified.changePct >= 0 ? '+' : '−'}{Math.abs(Math.round(r.verified.changePct))}%</b>
+                  <CIWhisker v={r.verified} />
+                  <span className="mkx-ci-ends">95% CI {Math.round(r.verified.ciLoPct)}% to {Math.round(r.verified.ciHiPct)}% · n {r.verified.n.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* THE LIVE BOOK — the maker's closing-soonest lots, in place */}
+          {r.liveLots.length > 0 && (
+            <div className="mkx-live">
+              <div className="mkx-live-head kicker">
+                On the block · {r.live.toLocaleString()} live{r.flags > 0 ? <> · <b className="mkx-live-flagn">{r.flags} flagged by the engine</b></> : null}
+              </div>
+              {r.liveLots.slice(0, 3).map(l => {
+                const closeSoon = l.saleDateTime && (Date.parse(l.saleDateTime) - Date.now()) < 24 * 3600e3 && Date.parse(l.saleDateTime) > Date.now();
+                return (
+                  <Link key={l.id} href={`/lot/${l.id}`} className="mkx-lot">
+                    <span className="mkx-lot-thumb" aria-hidden>
+                      <span className="mkx-lot-letter">{r.label.charAt(0)}</span>
+                      {l.imageUrl && (
+                        <img src={httpsImg(l.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                          onError={e => e.currentTarget.remove()} />
+                      )}
+                    </span>
+                    <span className="mkx-lot-main">
+                      <span className="mkx-lot-title">{craftTitle(l.title)}</span>
+                      <span className="mkx-lot-sub">
+                        {l.auctionHouse}
+                        {l.signal?.label === 'Below Market' && <span className="mkx-lot-flag"> · flagged below market</span>}
+                      </span>
+                    </span>
+                    <span className="mkx-lot-cells">
+                      <span className="mkx-lot-est">{formatEstimate(l)}</span>
+                      <span className="mkx-lot-close">
+                        {closeSoon
+                          ? <span style={{ color: 'var(--color-up)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
+                          : <>closes {formatDate(l.saleDate)}</>}
+                      </span>
+                    </span>
+                  </Link>
+                );
+              })}
+              {r.live > 3 && (
+                <Link href={`/makers/${r.slug}`} className="mkx-live-more">
+                  +{(r.live - 3).toLocaleString()} more on the block <Flick size={9} style={{ marginLeft: 4 }} />
+                </Link>
+              )}
+            </div>
+          )}
+
+          <div className="mkx-actions">
+            <Link href={`/makers/${r.slug}`} className="ray-call-btn ray-call-btn-primary">
+              Open the dossier
+            </Link>
+            <button type="button" className="mk-chip" data-on={isSel || undefined} onClick={() => onToggleCompare(r.slug)}>
+              {isSel ? 'In compare' : 'Add to compare'}
+            </button>
+            {authEnabled && (
+              <button type="button" className="mk-chip" data-on={isFollowed || undefined} onClick={() => onToggleFollow(r.slug, r.label)}>
+                {isFollowed ? 'Following' : 'Follow'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function MakersPage() {
   const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand } = useRayData();
   const { market } = useMarket();
@@ -198,34 +531,63 @@ export default function MakersPage() {
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
   const noun = activeKey === 'all' ? (rosterCount === 1 ? 'tracked name' : 'tracked names') : rosterNoun(activeKey, rosterCount);
 
-  // ── controls — restored from the URL so a filtered view is shareable ──
+  // follows ride the saved-search plumbing (FollowButton's exact semantics)
+  const { authEnabled, user, openLogin } = useAuth();
+  const { searches, save: saveSearch, remove: removeSearch } = useSavedSearches();
+  const followedSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const sr of searches) {
+      const p = (sr.query as { player?: string }).player;
+      if (p) s.add(p);
+    }
+    return s;
+  }, [searches]);
+
+  // ── controls — restored from the URL, written back (owned keys only) ──
   const [q, setQ] = useState('');
   const [fLive, setFLive] = useState(false);
   const [fVerified, setFVerified] = useState(false);
+  const [fFlagged, setFFlagged] = useState(false);
+  const [fFollowing, setFFollowing] = useState(false);
   const [sort, setSort] = useState<SortKey>('sold');
+  const [cols, setCols] = useState<ColKey[]>(DEFAULT_COLS);
   const [open, setOpen] = useState<string | null>(null);
+  const [compare, setCompare] = useState<string[]>([]);
+  const [showDisplay, setShowDisplay] = useState(false);
+  const deepLinked = useRef(false);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('q')) setQ(p.get('q')!);
     if (p.get('on') === '1') setFLive(true);
     if (p.get('vi') === '1') setFVerified(true);
+    if (p.get('fl') === '1') setFFlagged(true);
+    if (p.get('fw') === '1') setFFollowing(true);
     const s = p.get('sort') as SortKey | null;
     if (s && SORTS.some(x => x.k === s)) setSort(s);
+    const c = p.get('cols');
+    if (c) {
+      const parsed = c.split('.').filter((k): k is ColKey => COLS.some(x => x.k === k));
+      if (parsed.length) setCols(parsed);
+    }
+    const o = p.get('open');
+    if (o && ARTISTS.some(a => a.slug === o)) { setOpen(o); deepLinked.current = true; }
   }, []);
   useEffect(() => {
-    // seed from the CURRENT search — building from scratch erased foreign
-    // params (utm_*, anything app-level) and the hash on mount
     const p = new URLSearchParams(window.location.search);
-    ['q', 'on', 'vi', 'sort'].forEach(k => p.delete(k));
+    ['q', 'on', 'vi', 'fl', 'fw', 'sort', 'cols', 'open'].forEach(k => p.delete(k));
     if (q.trim()) p.set('q', q.trim());
     if (fLive) p.set('on', '1');
     if (fVerified) p.set('vi', '1');
+    if (fFlagged) p.set('fl', '1');
+    if (fFollowing) p.set('fw', '1');
     if (sort !== 'sold') p.set('sort', sort);
+    if (cols.join('.') !== DEFAULT_COLS.join('.')) p.set('cols', cols.join('.'));
+    if (open) p.set('open', open);
     const qs = p.toString();
     try {
       window.history.replaceState(window.history.state, '', `${qs ? `?${qs}` : window.location.pathname}${window.location.hash}`);
     } catch { /* ignore */ }
-  }, [q, fLive, fVerified, sort]);
+  }, [q, fLive, fVerified, fFlagged, fFollowing, sort, cols, open]);
 
   const searchRef = useRef<HTMLInputElement | null>(null);
 
@@ -235,30 +597,62 @@ export default function MakersPage() {
     return m;
   }, [marketData]);
 
+  // ── THE LIVE BOOK + THE ENGINE'S READ, one pass over the eager set ──
+  const liveBySlug = useMemo(() => {
+    const m = new Map<string, { lots: AuctionLot[]; flags: number }>();
+    const today = localToday();
+    for (const l of allLots) {
+      if (!isLiveUpcoming(l, today)) continue;
+      let e = m.get(l.artist);
+      if (!e) m.set(l.artist, e = { lots: [], flags: 0 });
+      e.lots.push(l);
+      if (l.signal?.label === 'Below Market') e.flags++;
+    }
+    m.forEach(e => {
+      e.lots.sort((a, b) => (a.saleDateTime || `${a.saleDate}T99`).localeCompare(b.saleDateTime || `${b.saleDate}T99`));
+    });
+    return m;
+  }, [allLots]);
+
   const rows = useMemo<Row[]>(() => ARTISTS.map(a => {
     const st = statsByArtist[a.slug] || null;
     const hist = st?.priceHistory || [];
     const sparkVals = hist.slice(-12).map(p => p.medianPrice || p.avgPrice).filter(v => v > 0);
     const sold = st?.totalSoldTracked ?? null;
+    const liveE = liveBySlug.get(a.slug);
+    // momentum: consecutive rising quarterly medians at the tail
+    let rising = 0;
+    const meds = hist.map(p => p.medianPrice || p.avgPrice).filter(v => v > 0);
+    for (let i = meds.length - 1; i > 0 && meds[i] > meds[i - 1]; i--) rising++;
+    const recDate = st?.recordDate ? Date.parse(String(st.recordDate)) : NaN;
+    const recordFresh = !isNaN(recDate) && (Date.now() - recDate) < 365 * 86400e3
+      ? String(st!.recordDate).slice(0, 4) : null;
     return {
       slug: a.slug, label: a.label, market: a.market as Market,
       discipline: DISCIPLINE[a.slug] || null,
       stats: st,
       spark: sparkVals.length >= 4 ? sparkVals : null,
-      live: upcomingCounts[a.slug] || 0,
+      live: liveE?.lots.length || 0,
+      flags: liveE?.flags || 0,
       sold,
       median: st?.medianPriceLast12Months || null,
       revenue: st?.totalAuctionRevenue || 0,
+      velocity: st ? st.priceHistory.slice(-4).reduce((s, p) => s + (p.totalSales || 0), 0) : 0,
+      record: st?.recordPrice || null,
       verified: verifiedBySlug.get(a.slug) || null,
       thin: sold != null && sold > 0 && sold < 50,
+      rising,
+      recordFresh,
+      liveLots: liveE?.lots || [],
     };
-  }), [statsByArtist, upcomingCounts, verifiedBySlug]);
+  }), [statsByArtist, liveBySlug, verifiedBySlug]);
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const cmp = (a: Row, b: Row): number => {
       switch (sort) {
         case 'live': return b.live - a.live || (b.sold ?? 0) - (a.sold ?? 0);
+        case 'flags': return b.flags - a.flags || b.live - a.live;
         case 'median': return (b.median ?? -1) - (a.median ?? -1);
         case 'delta': return (b.verified?.changePct ?? -Infinity) - (a.verified?.changePct ?? -Infinity);
         case 'name': return a.label.localeCompare(b.label);
@@ -270,28 +664,27 @@ export default function MakersPage() {
       .filter(r => !needle || r.label.toLowerCase().includes(needle) || (r.discipline ?? '').toLowerCase().includes(needle))
       .filter(r => !fLive || r.live > 0)
       .filter(r => !fVerified || !!r.verified)
+      .filter(r => !fFlagged || r.flags > 0)
+      .filter(r => !fFollowing || followedSet.has(r.slug))
       .sort(cmp);
-  }, [rows, mktSet, q, fLive, fVerified, sort]);
+  }, [rows, mktSet, q, fLive, fVerified, fFlagged, fFollowing, followedSet, sort]);
 
-  // ── grouped by top-level category, MARKETS order ──
   const groups = useMemo(() =>
     MARKETS
       .filter(m => m.key !== 'all' && (activeKey === 'all' || m.key === activeKey))
       .map(m => {
         const g = visible.filter(r => r.market === m.key);
         const live = g.reduce((s, r) => s + r.live, 0);
+        const flags = g.reduce((s, r) => s + r.flags, 0);
         const revenue = g.reduce((s, r) => s + r.revenue, 0);
-        // soldMax over the UNFILTERED market roster — a filter must never
-        // silently rescale the surviving rows' sold tracks
         const soldMax = Math.max(1, ...rows.filter(r => r.market === m.key).map(r => r.sold ?? 0));
         const ds = demand?.[m.key] || [];
         const demandNow = ds.length ? ds[ds.length - 1].value : null;
-        return { key: m.key as Market, label: m.label, rows: g, live, revenue, soldMax, demandNow };
+        return { key: m.key as Market, label: m.label, rows: g, live, flags, revenue, soldMax, demandNow };
       })
       .filter(g => g.rows.length > 0),
     [visible, rows, activeKey, demand]);
 
-  // ── the category cockpit — unfiltered reads (a map, not a result set) ──
   const cockpit = useMemo(() =>
     MARKETS
       .filter(m => m.key !== 'all' && (activeKey === 'all' || m.key === activeKey))
@@ -302,15 +695,42 @@ export default function MakersPage() {
           key: m.key as Market, label: m.label,
           makers: g.length,
           live: g.reduce((s, r) => s + r.live, 0),
+          flags: g.reduce((s, r) => s + r.flags, 0),
           demandNow: ds.length ? ds[ds.length - 1].value : null,
         };
       }),
     [rows, activeKey, demand]);
 
-  const totalLive = useMemo(() => ARTISTS.filter(a => mktSet.has(a.slug)).reduce((s, a) => s + (upcomingCounts[a.slug] || 0), 0), [mktSet, upcomingCounts]);
+  const totalLive = useMemo(() => rows.filter(r => mktSet.has(r.slug)).reduce((s, r) => s + r.live, 0), [rows, mktSet]);
+  const totalFlags = useMemo(() => rows.filter(r => mktSet.has(r.slug)).reduce((s, r) => s + r.flags, 0), [rows, mktSet]);
   const verifiedCount = useMemo(() => rows.filter(r => mktSet.has(r.slug) && r.verified).length, [rows, mktSet]);
 
-  // ── INPUT CRAFT — '/' focuses the filter, j/k walk rows, enter opens ──
+  // ── stable callbacks for the memoized rows ──
+  const onToggleOpen = useCallback((slug: string) => setOpen(o => (o === slug ? null : slug)), []);
+  const onToggleCompare = useCallback((slug: string) => {
+    setCompare(c => c.includes(slug) ? c.filter(s => s !== slug) : c.length >= 4 ? c : [...c, slug]);
+  }, []);
+  const onToggleFollow = useCallback((slug: string, label: string) => {
+    if (!user) { openLogin(); return; }
+    const existing = searches.find(s => (s.query as { player?: string }).player === slug);
+    if (existing) void removeSearch(existing.id);
+    else void saveSearch(`Following ${label}`, { player: slug, playerName: label });
+  }, [user, openLogin, searches, removeSearch, saveSearch]);
+
+  // deep link ?open= — land on the dossier once the ledger has painted.
+  // `open` is a dep too: on a WARM cache loading is already false at mount,
+  // so the restore effect's setOpen lands on a LATER render — without `open`
+  // in deps this never re-fires and the deep link silently never scrolls.
+  // The deepLinked ref makes it fire exactly once regardless.
+  useEffect(() => {
+    if (loading || !deepLinked.current || !open) return;
+    deepLinked.current = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelector(`[data-mk-flip="${open}"]`)?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
+    }));
+  }, [loading, open]);
+
+  // ── INPUT CRAFT — '/', j/k, c (compare), f (follow) ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -324,6 +744,18 @@ export default function MakersPage() {
       }
       if (typing) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'c' || e.key === 'f') {
+        const el = document.activeElement as HTMLElement | null;
+        const slug = el?.dataset?.slug;
+        if (!slug) return;
+        e.preventDefault();
+        if (e.key === 'c') onToggleCompare(slug);
+        else if (authEnabled) {
+          const a = ARTISTS.find(x => x.slug === slug);
+          if (a) onToggleFollow(slug, a.label);
+        }
+        return;
+      }
       if (e.key !== 'j' && e.key !== 'k') return;
       const rowEls = Array.from(document.querySelectorAll<HTMLElement>('[data-mk-row]'));
       if (!rowEls.length) return;
@@ -335,10 +767,9 @@ export default function MakersPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [onToggleCompare, onToggleFollow, authEnabled]);
 
-  // ── FLIP — a re-sort re-RANKS the same rows; they travel, never teleport.
-  // Board-relative tops (never viewport), same-id-set only. ──
+  // ── FLIP — board-relative, same-id-set only, forced reflow before reset ──
   const listRef = useRef<HTMLDivElement | null>(null);
   const flipPos = useRef<Map<string, number>>(new Map());
   const flipTimers = useRef<number[]>([]);
@@ -365,10 +796,8 @@ export default function MakersPage() {
           moved.push(el);
         }
       });
-      // FORCE a style flush between the offset write and the reset — a rAF
-      // scheduled from this commit runs BEFORE the first style recalc, so
-      // without this reflow the computed transform never lands and the CSS
-      // transition has nothing to travel from (rows teleport)
+      // force the style flush — a rAF from this commit runs before the first
+      // recalc; without the reflow the transition has no origin (teleports)
       if (moved.length) void board.offsetHeight;
       requestAnimationFrame(() => {
         for (const el of moved) {
@@ -383,9 +812,7 @@ export default function MakersPage() {
     flipPos.current = next;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flipKey]);
-  // a dossier opening/closing shifts every row below it WITHOUT changing
-  // flipKey — re-measure after the 340ms expansion settles, or the next
-  // sort's deltas carry the expansion height and the board lurches
+  // dossier open/close shifts rows without changing flipKey — re-measure
   useEffect(() => {
     const t = window.setTimeout(() => {
       const board = listRef.current;
@@ -404,137 +831,15 @@ export default function MakersPage() {
     document.getElementById(`mk-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  /* ── the dossier — a maker's whole phase-1 case, opened in place ── */
-  const dossier = (r: Row) => {
-    const st = r.stats;
-    const houses = (st?.houseDistribution || []).slice().sort((a, b) => b.count - a.count).slice(0, 3);
-    const houseMax = Math.max(1, ...houses.map(h => h.count));
-    const sold12 = st ? st.priceHistory.slice(-4).reduce((s, p) => s + (p.totalSales || 0), 0) : 0;
-    return (
-      <div className="mkx">
-        <div className="mkx-in">
-          {st?.priceHistory && st.priceHistory.length >= 4 ? (
-            <div className="mkx-chartwrap">
-              <div className="mkx-chart-cap kicker">Quarterly median sale · full tracked history</div>
-              <DossierChart hist={st.priceHistory} />
-            </div>
-          ) : (
-            <p className="mkx-none">Not enough sold history for a curve yet — the ledger fills as {r.label} lots settle.</p>
-          )}
-          <div className="mkx-grid">
-            <div>
-              <span className="kicker">The record</span>
-              {st?.recordPrice ? (
-                <p><b>{formatPrice(st.recordPrice)}</b>{st.recordTitle ? <> · {st.recordTitle.length > 44 ? `${st.recordTitle.slice(0, 44)}…` : st.recordTitle}</> : null}{st.recordHouse ? <> · {st.recordHouse}</> : null}{st.recordDate ? <> · {formatDate(st.recordDate)}</> : null}</p>
-              ) : <p>—</p>}
-            </div>
-            <div>
-              <span className="kicker">The book</span>
-              <p>
-                {r.sold != null && <><b>{r.sold.toLocaleString()}</b> sold tracked</>}
-                {r.revenue > 0 && <> · <b>{fmtUsd(r.revenue)}</b> settled</>}
-                {sold12 > 0 && <> · {sold12.toLocaleString()} in 12mo</>}
-                {r.live > 0 && <> · <b>{r.live.toLocaleString()}</b> on the block now</>}
-              </p>
-            </div>
-            {houses.length > 0 && (
-              <div>
-                <span className="kicker">The houses</span>
-                <div className="mkx-houses">
-                  {houses.map(h => (
-                    <div key={h.house} className="mkx-house">
-                      <span className="mkx-house-name">{h.house}</span>
-                      <span className="mkx-house-track" aria-hidden><span style={{ width: `${Math.round((h.count / houseMax) * 100)}%` }} /></span>
-                      <span className="mkx-house-n">{h.count.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {r.verified && (
-              <div>
-                <span className="kicker">Verified move · {r.verified.horizon}</span>
-                <div className="mkx-verified">
-                  <b data-dir={r.verified.dir}>{r.verified.changePct >= 0 ? '+' : '−'}{Math.abs(Math.round(r.verified.changePct))}%</b>
-                  <CIWhisker v={r.verified} />
-                  <span className="mkx-ci-ends">95% CI {Math.round(r.verified.ciLoPct)}% to {Math.round(r.verified.ciHiPct)}% · n {r.verified.n.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="mkx-actions">
-            <Link href={`/makers/${r.slug}`} className="ray-call-btn ray-call-btn-primary">
-              Open the dossier
-            </Link>
-            {r.live > 0 && (
-              <Link href={`/makers/${r.slug}`} className="link-action" style={{ color: 'var(--color-fg)' }}>
-                {r.live.toLocaleString()} on the block <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const row = (r: Row, soldMax: number) => {
-    const isOpen = open === r.slug;
-    return (
-      <div
-        key={r.slug} className="mk-item" data-mk-flip={r.slug} data-open={isOpen || undefined}
-        // Escape closes the dossier from ANYWHERE inside it (the row's own
-        // handler can't hear a keydown on the dossier's links)
-        onKeyDown={e => { if (e.key === 'Escape' && isOpen) { e.preventDefault(); setOpen(null); } }}
-      >
-        <div
-          role="button" tabIndex={0} data-mk-row
-          className="mk-row"
-          aria-expanded={isOpen}
-          aria-label={`${r.label} — open the maker's read`}
-          onClick={() => setOpen(o => (o === r.slug ? null : r.slug))}
-          onKeyDown={e => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => (o === r.slug ? null : r.slug)); }
-            if (e.key === 'Escape' && isOpen) { e.preventDefault(); setOpen(null); }
-          }}
-        >
-          <span className="mk-mono" aria-hidden>{r.label.charAt(0)}</span>
-          <span className="mk-id">
-            <span className="mk-name">{r.label}</span>
-            <span className="mk-tags">
-              {r.discipline && <span className="mk-tag">{r.discipline}</span>}
-              {BID_MARKETS.has(r.market) && <span className="mk-tag">bid market</span>}
-              {r.verified && <span className="mk-tag mk-tag-verified" title={`CI-verified ${r.verified.horizon} move · 95% CI ${Math.round(r.verified.ciLoPct)}% to ${Math.round(r.verified.ciHiPct)}%`}>verified · {r.verified.horizon}</span>}
-              {r.thin && <span className="mk-tag">thin history</span>}
-            </span>
-          </span>
-          <span className="mk-cell mk-spark" aria-hidden>{r.spark ? <Spark values={r.spark} /> : <span className="mk-sparkgap" />}</span>
-          <span className="mk-cell">{r.median ? formatPrice(r.median) : '—'}</span>
-          <span className="mk-cell mk-delta" data-dir={r.verified ? r.verified.dir : undefined}>
-            {r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}%` : '—'}
-          </span>
-          <span className="mk-cell" data-live={r.live > 0 || undefined}>{r.live > 0 ? r.live.toLocaleString() : '—'}</span>
-          <span className="mk-cell mk-faint mk-soldcell">
-            {r.sold != null ? r.sold.toLocaleString() : '—'}
-            {r.sold != null && r.sold > 0 && (
-              <span className="mk-soldtrack" aria-hidden><span style={{ width: `${Math.max(3, Math.round((r.sold / soldMax) * 100))}%` }} /></span>
-            )}
-          </span>
-          <span className="mk-go" aria-hidden data-open={isOpen || undefined}><Flick size={10} /></span>
-          <span className="mk-mob">
-            <span className="mk-mob-median">{r.median ? formatPrice(r.median) : r.live > 0 ? `${r.live} live` : '—'}</span>
-            <span className="mk-mob-sub" data-dir={r.verified ? r.verified.dir : undefined}>
-              {r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}% · ${r.verified.horizon}` : r.sold != null ? `${r.sold.toLocaleString()} sold` : ''}
-            </span>
-          </span>
-        </div>
-        {dossier(r)}
-      </div>
-    );
-  };
+  const gridTemplate = useMemo(() =>
+    `30px minmax(0,1fr) ${cols.map(k => COLS.find(c => c.k === k)!.width).join(' ')} 18px`,
+    [cols]);
 
   return (
     <div className="terminal-shell" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
       <style dangerouslySetInnerHTML={{ __html: MAKERS_CSS }} />
+      {/* the column set is dynamic — the grid template rides a CSS var */}
+      <style dangerouslySetInnerHTML={{ __html: `@media(min-width:940px){.mk-row,.mk-cols{grid-template-columns:${gridTemplate}}}` }} />
       <ArtistNav activeSlug="artists" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {loading ? (
@@ -550,15 +855,14 @@ export default function MakersPage() {
               sub={
                 <>
                   <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{totalLive.toLocaleString()} live lots</b> on the block
+                  {totalFlags > 0 && <> · <b style={{ color: 'var(--color-up)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{totalFlags}</b> flagged by the engine</>}
                   {verifiedCount > 0 && <> · {verifiedCount} CI-verified indexes</>}
-                  {' '}· medians, never means
                 </>
               }
             />
           </section>
 
-          {/* ── THE COCKPIT — the categories as one instrument strip; each
-              cell is a door (click jumps the ledger to its group) ── */}
+          {/* ── THE COCKPIT ── */}
           {activeKey === 'all' && (
             <section className="rail ray-enter" style={{ '--enter-delay': '30ms', paddingTop: 4, paddingBottom: 2 } as React.CSSProperties}>
               <div className="mk-cockpit" role="list">
@@ -571,6 +875,7 @@ export default function MakersPage() {
                     <span className="mk-cock-v">
                       <CountUp to={c.live} format={n => Math.round(n).toLocaleString()} duration={900} animate={!fromCache} />
                       <i>live</i>
+                      {c.flags > 0 && <em className="mk-cock-flag">{c.flags} flagged</em>}
                     </span>
                     <span className="mk-cock-s">
                       {c.makers} {rosterNoun(c.key, c.makers)}
@@ -582,7 +887,7 @@ export default function MakersPage() {
             </section>
           )}
 
-          {/* ── THE FILTER BAR — pinned under the nav ── */}
+          {/* ── THE FILTER BAR ── */}
           <div className="mk-bar-wrap">
             <div className="rail mk-bar">
               <label className="mk-search">
@@ -600,14 +905,50 @@ export default function MakersPage() {
                   <kbd className="mk-kbd" aria-hidden>/</kbd>
                 )}
               </label>
+              <button type="button" className="mk-chip" data-on={fFlagged || undefined} onClick={() => setFFlagged(v => !v)} aria-pressed={fFlagged}>
+                Flagged
+              </button>
               <button type="button" className="mk-chip" data-on={fLive || undefined} onClick={() => setFLive(v => !v)} aria-pressed={fLive}>
                 On the block
               </button>
               <button type="button" className="mk-chip" data-on={fVerified || undefined} onClick={() => setFVerified(v => !v)} aria-pressed={fVerified}>
                 Verified index
               </button>
+              {authEnabled && (
+                <button type="button" className="mk-chip" data-on={fFollowing || undefined}
+                  onClick={() => { if (!user) { openLogin(); return; } setFFollowing(v => !v); }} aria-pressed={fFollowing}>
+                  Following
+                </button>
+              )}
               <span className="mk-bar-rule" aria-hidden />
               <span className="mk-count">{visible.length} of {rosterCount}</span>
+              <div className="mk-display">
+                <button type="button" className="mk-chip" data-on={showDisplay || undefined} onClick={() => setShowDisplay(v => !v)} aria-expanded={showDisplay}>
+                  Display
+                </button>
+                {showDisplay && (
+                  <>
+                    <button type="button" className="mk-display-veil" aria-label="Close display menu" onClick={() => setShowDisplay(false)} />
+                    <div className="mk-display-pop" role="menu" aria-label="Visible columns">
+                      <div className="mk-display-head kicker">Columns</div>
+                      {COLS.map(c => {
+                        const on = cols.includes(c.k);
+                        return (
+                          <button key={c.k} type="button" role="menuitemcheckbox" aria-checked={on} className="mk-display-item" data-on={on || undefined}
+                            onClick={() => setCols(prev => {
+                              const nx = on ? prev.filter(k => k !== c.k) : [...COLS.map(x => x.k).filter(k => prev.includes(k) || k === c.k)];
+                              return nx.length ? nx : prev; // never zero columns
+                            })}>
+                            <span className="mk-display-check" aria-hidden>{on ? '✓' : ''}</span>
+                            {c.label}
+                          </button>
+                        );
+                      })}
+                      <button type="button" className="mk-display-reset" onClick={() => setCols(DEFAULT_COLS)}>Reset</button>
+                    </div>
+                  </>
+                )}
+              </div>
               <div className="ray-seg mk-seg" role="tablist" aria-label="Sort the directory">
                 {SORTS.map(s => (
                   <button key={s.k} type="button" role="tab" className="ray-seg-btn" data-active={sort === s.k}
@@ -620,22 +961,20 @@ export default function MakersPage() {
           </div>
 
           {/* ── THE DIRECTORY ── */}
-          <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 6, paddingBottom: 30 } as React.CSSProperties}>
+          <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 6, paddingBottom: compare.length ? 120 : 30 } as React.CSSProperties}>
             <div className="mk-cols" aria-hidden>
               <span /><span className="kicker">Maker</span>
-              <span className="kicker" style={{ textAlign: 'right' }}>12q curve</span>
-              <span className="kicker" style={{ textAlign: 'right' }}>Median · 12mo</span>
-              <span className="kicker" style={{ textAlign: 'right' }}>Verified Δ</span>
-              <span className="kicker" style={{ textAlign: 'right' }}>Live</span>
-              <span className="kicker" style={{ textAlign: 'right' }}>Sold</span>
+              {cols.map(k => (
+                <span key={k} className="kicker" style={{ textAlign: 'right' }}>{COLS.find(c => c.k === k)!.label}</span>
+              ))}
               <span />
             </div>
 
             <div ref={listRef}>
               {groups.length === 0 ? (
                 <p className="mk-empty">
-                  No maker matches{q ? <> &ldquo;{q}&rdquo;</> : null}{fLive ? ' with lots on the block' : ''}{fVerified ? ' carrying a verified index' : ''} in the {activeLabel} market.
-                  {' '}<button type="button" className="mk-reset" onClick={() => { setQ(''); setFLive(false); setFVerified(false); }}>Clear the filters</button>
+                  No maker matches the current filters in the {activeLabel} market.
+                  {' '}<button type="button" className="mk-reset" onClick={() => { setQ(''); setFLive(false); setFVerified(false); setFFlagged(false); setFFollowing(false); }}>Clear the filters</button>
                 </p>
               ) : groups.map(g => (
                 <div key={g.key} id={`mk-${g.key}`} className="mk-group">
@@ -645,15 +984,23 @@ export default function MakersPage() {
                     <span className="mk-group-count">{g.rows.length}</span>
                     <span className="mk-group-rule" aria-hidden />
                     <span className="mk-group-read">
-                      {g.revenue > 0 && <>{fmtUsd(g.revenue)} settled</>}
-                      {g.live > 0 && <>{g.revenue > 0 ? ' · ' : ''}{g.live.toLocaleString()} on the block</>}
+                      {g.flags > 0 && <b className="mk-group-flags">{g.flags} flagged</b>}
+                      {g.revenue > 0 && <>{g.flags > 0 ? ' · ' : ''}{fmtUsd(g.revenue)} settled</>}
+                      {g.live > 0 && <>{(g.flags > 0 || g.revenue > 0) ? ' · ' : ''}{g.live.toLocaleString()} on the block</>}
                       {g.demandNow !== null && (
-                        <>{(g.revenue > 0 || g.live > 0) ? ' · ' : ''}demand <b data-dir={g.demandNow >= 0 ? 'up' : 'down'}>{formatDemand(g.demandNow)}</b></>
+                        <>{(g.flags > 0 || g.revenue > 0 || g.live > 0) ? ' · ' : ''}demand <b data-dir={g.demandNow >= 0 ? 'up' : 'down'}>{formatDemand(g.demandNow)}</b></>
                       )}
                     </span>
                   </div>
                   <div className="mk-list">
-                    {g.rows.map(r => row(r, g.soldMax))}
+                    {g.rows.map(r => (
+                      <MakerRowItem
+                        key={r.slug}
+                        r={r} soldMax={g.soldMax} isOpen={open === r.slug} cols={cols}
+                        isSel={compare.includes(r.slug)} isFollowed={followedSet.has(r.slug)} authEnabled={authEnabled}
+                        onToggleOpen={onToggleOpen} onToggleCompare={onToggleCompare} onToggleFollow={onToggleFollow}
+                      />
+                    ))}
                   </div>
                 </div>
               ))}
@@ -662,15 +1009,19 @@ export default function MakersPage() {
         </RayEntrance>
       )}
 
+      {compare.length > 0 && !loading && (
+        <CompareTray sel={compare} rows={rows} onRemove={s => onToggleCompare(s)} onClear={() => setCompare([])} />
+      )}
+
       <Colophon record={null} />
     </div>
   );
 }
 
 const MAKERS_CSS = `
-/* ════ THE MAKERS DIRECTORY — instrument grade (Aug 2026 pass 2) ════ */
+/* ════ THE MAKERS DIRECTORY — trading grade (Aug 2026 pass 3) ════ */
 
-/* ── THE COCKPIT — the categories as one fused strip of doors ── */
+/* ── THE COCKPIT ── */
 .mk-cockpit{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));border-top:1px solid var(--color-border);border-bottom:1px solid var(--color-border)}
 .mk-cock{display:grid;gap:3px;align-content:start;text-align:left;padding:14px 16px 12px;background:none;border:none;border-left:1px solid var(--color-hair,rgba(255,255,255,0.06));cursor:pointer;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
 .mk-cock:first-child{border-left:none}
@@ -679,18 +1030,19 @@ const MAKERS_CSS = `
 .mk-cock-head{display:flex;align-items:center;gap:7px;min-width:0}
 .mk-cock-icon{display:inline-flex;color:var(--color-text-muted);flex:none}
 .mk-cock-name{font-size:11px;font-weight:650;letter-spacing:0.02em;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mk-cock-v{font-family:var(--font-mono),monospace;font-size:21px;font-weight:500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.15}
-.mk-cock-v i{font-style:normal;font-size:10.5px;color:var(--color-text-faint);margin-left:5px;letter-spacing:0.06em}
+.mk-cock-v{font-family:var(--font-mono),monospace;font-size:21px;font-weight:500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.15;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px}
+.mk-cock-v i{font-style:normal;font-size:10.5px;color:var(--color-text-faint);letter-spacing:0.06em}
+.mk-cock-v em{font-style:normal;font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:700;color:var(--color-up);letter-spacing:0.02em}
 .mk-cock-s{font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .mk-cock-s b{font-weight:700;font-family:var(--font-mono),monospace}
 .mk-cock-s b[data-dir="up"]{color:var(--color-up)}
 .mk-cock-s b[data-dir="down"]{color:var(--color-down-text)}
 @media(max-width:700px){.mk-cockpit{grid-template-columns:repeat(2,1fr)}.mk-cock{border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}}
 
-/* ── the filter bar — pinned under the sticky nav ── */
+/* ── the filter bar ── */
 .mk-bar-wrap{position:sticky;top:54px;z-index:30;background:color-mix(in srgb,#0b0c0e 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
-.mk-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 240px;min-width:150px;padding:0 10px;height:30px;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-faint)}
+.mk-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 210px;min-width:140px;padding:0 10px;height:30px;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-faint)}
 .mk-search input{flex:1;min-width:0;background:none;border:none;outline:none;font-family:var(--font-sans),sans-serif;font-size:12.5px;color:var(--color-fg)}
 .mk-search input::placeholder{color:var(--color-text-faint)}
 .mk-search:focus-within{border-color:var(--color-border-mid)}
@@ -701,17 +1053,29 @@ const MAKERS_CSS = `
 .mk-chip[data-on]{background:var(--color-fg);color:var(--color-bg);border-color:var(--color-fg)}
 .mk-bar-rule{flex:1}
 .mk-count{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
-.mk-seg .ray-seg-btn{font-size:11.5px;padding:5px 11px}
-@media(max-width:700px){.mk-seg{order:5;flex-basis:100%;overflow-x:auto}.mk-bar-rule{display:none}}
+.mk-seg .ray-seg-btn{font-size:11.5px;padding:5px 10px}
+@media(max-width:700px){.mk-seg{order:9;flex-basis:100%;overflow-x:auto}.mk-bar-rule{display:none}}
 
-/* ── column kickers (desktop) ── */
+/* ── the Display menu ── */
+.mk-display{position:relative}
+.mk-display-veil{position:fixed;inset:0;z-index:39;background:none;border:none;cursor:default}
+.mk-display-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;min-width:180px;background:#101214;border:1px solid var(--color-border-mid);border-radius:12px;padding:8px;display:grid;gap:1px}
+.mk-display-head{font-size:10px;letter-spacing:0.14em;padding:4px 8px 7px}
+.mk-display-item{display:flex;align-items:center;gap:8px;padding:6px 8px;background:none;border:none;border-radius:7px;font-family:var(--font-sans),sans-serif;font-size:12px;color:var(--color-text-muted);cursor:pointer;text-align:left;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
+.mk-display-item:hover{background:var(--color-hover-item);color:var(--color-fg)}
+.mk-display-item[data-on]{color:var(--color-fg)}
+.mk-display-check{width:13px;flex:none;font-size:11px;color:var(--color-up)}
+.mk-display-reset{margin-top:5px;padding:6px 8px;background:none;border:none;border-top:1px solid var(--color-hair,rgba(255,255,255,0.06));font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.06em;color:var(--color-text-faint);cursor:pointer;text-align:left}
+.mk-display-reset:hover{color:var(--color-fg)}
+
+/* ── column kickers ── */
 .mk-cols{display:none}
 @media(min-width:940px){
-  .mk-cols{display:grid;grid-template-columns:30px minmax(0,1fr) 96px 104px 84px 64px 84px 18px;gap:14px;align-items:baseline;padding:12px 14px 8px}
+  .mk-cols{display:grid;gap:14px;align-items:baseline;padding:12px 14px 8px}
   .mk-cols .kicker{font-size:10px;letter-spacing:0.14em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
-/* ── group heads — sticky under the bar ── */
+/* ── group heads ── */
 .mk-group{margin-bottom:6px;scroll-margin-top:150px}
 .mk-group-head{position:sticky;top:103px;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,#08090a 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-group-mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-secondary);background:var(--color-bg-elevated)}
@@ -722,11 +1086,13 @@ const MAKERS_CSS = `
 .mk-group-read b{font-weight:700;font-family:var(--font-mono),monospace}
 .mk-group-read b[data-dir="up"]{color:var(--color-up)}
 .mk-group-read b[data-dir="down"]{color:var(--color-down-text)}
+.mk-group-flags{color:var(--color-up)}
 
 /* ── rows ── */
-.mk-item{border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06));background:transparent}
+.mk-item{position:relative;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06));background:transparent}
 .mk-list .mk-item:last-child{border-bottom:none}
 .mk-item[data-open]{background:var(--color-hover-item)}
+.mk-item[data-sel]{box-shadow:inset 2px 0 0 var(--color-fg)}
 .mk-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 14px;min-height:52px;color:inherit;text-decoration:none;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature)}
 .mk-row:hover{background:var(--color-hover-item)}
 .mk-row:focus-visible{outline:1.5px solid color-mix(in srgb,var(--color-fg) 70%,transparent);outline-offset:-1.5px;background:var(--color-hover-item)}
@@ -743,12 +1109,15 @@ const MAKERS_CSS = `
 .mk-mob-sub{display:block;font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
 .mk-mob-sub[data-dir="up"]{color:var(--color-up)}
 .mk-mob-sub[data-dir="down"]{color:var(--color-down-text)}
+.mk-acts{display:none}
 @media(min-width:940px){
-  .mk-row{grid-template-columns:30px minmax(0,1fr) 96px 104px 84px 64px 84px 18px;gap:14px}
+  .mk-row{gap:14px;padding-right:64px}
   .mk-mob{display:none}
   .mk-cell{display:block;font-family:var(--font-mono),monospace;font-size:12.5px;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);text-align:right;white-space:nowrap;overflow:hidden}
   .mk-faint{color:var(--color-text-faint)}
   .mk-cell[data-live]{font-weight:700}
+  .mk-flags{color:var(--color-text-faint)}
+  .mk-flags[data-hot]{color:var(--color-up);font-weight:700}
   .mk-delta{color:var(--color-text-faint)}
   .mk-delta[data-dir="up"]{color:var(--color-up);font-weight:700}
   .mk-delta[data-dir="down"]{color:var(--color-down-text);font-weight:700}
@@ -759,9 +1128,15 @@ const MAKERS_CSS = `
   .mk-soldcell{overflow:visible}
   .mk-soldtrack{display:block;height:2px;margin-top:4px;background:rgba(255,255,255,0.07);border-radius:2px}
   .mk-soldtrack>span{display:block;height:100%;border-radius:2px;background:rgba(255,255,255,0.4);margin-left:auto}
+  /* hover actions — absolute siblings of the row (valid interactive nesting) */
+  .mk-acts{display:flex;gap:4px;position:absolute;top:11px;right:30px;z-index:2;opacity:0;transition:opacity var(--duration-fast) var(--ease-signature)}
+  .mk-item:hover .mk-acts,.mk-item:focus-within .mk-acts,.mk-item[data-sel] .mk-acts{opacity:1}
+  .mk-act{width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:7px;color:var(--color-text-muted);cursor:pointer;padding:0;transition:color var(--duration-fast) var(--ease-signature),border-color var(--duration-fast) var(--ease-signature)}
+  .mk-act:hover{color:var(--color-fg);border-color:var(--color-border-mid)}
+  .mk-act[data-on]{color:var(--color-fg);border-color:var(--color-border-mid);background:var(--color-hover-item)}
 }
 
-/* ── THE DOSSIER — the maker's case, opened in place ── */
+/* ── THE DOSSIER ── */
 .mkx{display:grid;grid-template-rows:0fr;transition:grid-template-rows 340ms var(--ease-signature)}
 .mk-item[data-open] .mkx{grid-template-rows:1fr}
 .mkx-in{overflow:hidden;min-height:0;visibility:hidden;transition:visibility 0s 340ms}
@@ -792,7 +1167,56 @@ const MAKERS_CSS = `
 .mkx-verified b[data-dir="down"]{color:var(--color-down-text)}
 .mkx-ci{width:110px;height:16px;flex:none}
 .mkx-ci-ends{font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
-.mkx-actions{display:flex;align-items:center;gap:20px;padding:14px 16px 16px;flex-wrap:wrap}
+.mkx-actions{display:flex;align-items:center;gap:12px;padding:14px 16px 16px;flex-wrap:wrap}
+
+/* ── the live book inside the dossier ── */
+.mkx-live{margin:14px 16px 0;border:1px solid var(--color-hair,rgba(255,255,255,0.07));border-radius:12px;overflow:clip}
+.mkx-live-head{font-size:10px;letter-spacing:0.14em;padding:9px 12px 8px;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}
+.mkx-live-flagn{color:var(--color-up);font-weight:700;letter-spacing:0.06em}
+.mkx-lot{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;color:inherit;text-decoration:none;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.05));transition:background var(--duration-fast) var(--ease-signature)}
+.mkx-lot:last-of-type{border-bottom:none}
+.mkx-lot:hover{background:var(--color-hover-item)}
+.mkx-lot-thumb{position:relative;width:44px;height:34px;border-radius:6px;overflow:hidden;background:var(--color-bg-elevated);display:flex;align-items:center;justify-content:center;flex:none}
+.mkx-lot-letter{font-size:14px;font-weight:650;color:var(--color-text-faint)}
+.mkx-lot-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.mkx-lot-main{min-width:0}
+.mkx-lot-title{display:block;font-size:12px;font-weight:550;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mkx-lot-sub{display:block;font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mkx-lot-flag{color:var(--color-up);font-weight:600}
+.mkx-lot-cells{text-align:right;flex:none}
+.mkx-lot-est{display:block;font-family:var(--font-mono),monospace;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg)}
+.mkx-lot-close{display:block;font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
+.mkx-live-more{display:flex;align-items:center;justify-content:center;padding:8px 12px;font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.06em;color:var(--color-text-muted);text-decoration:none;border-top:1px solid var(--color-hair,rgba(255,255,255,0.05))}
+.mkx-live-more:hover{color:var(--color-fg)}
+
+/* ── THE COMPARE TRAY ── */
+.mkc{position:fixed;left:0;right:0;bottom:0;z-index:35;background:color-mix(in srgb,#0b0c0e 94%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--color-border-mid)}
+.mkc-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
+.mkc-title{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-text-muted)}
+.mkc-chip{display:inline-flex;align-items:center;gap:7px;padding:3px 6px 3px 9px;font-size:12px;font-weight:600;color:var(--color-fg);border:1px solid var(--color-border);border-radius:100px}
+.mkc-chip button{background:none;border:none;color:var(--color-text-faint);cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
+.mkc-chip button:hover{color:var(--color-fg)}
+.mkc-chip[data-thin]{color:var(--color-text-muted)}
+.mkc-chip-thin{font-family:var(--font-mono),monospace;font-size:9px;letter-spacing:0.06em;color:var(--color-text-faint);text-transform:uppercase}
+.mkc-rule{flex:1}
+.mkc-btn{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:5px 11px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer}
+.mkc-btn:hover{color:var(--color-fg)}
+.mkc-body{padding-bottom:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px 26px}
+@media(min-width:900px){.mkc-body{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:start}}
+.mkc-plotwrap{min-width:0}
+.mkc-plot{position:relative;height:150px;margin-left:44px;margin-right:8px}
+.mkc-plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.mkc-cap{font-size:10px;letter-spacing:0.1em;margin-top:8px}
+.mkc-legend{display:grid;gap:6px;align-content:start;padding-top:2px}
+.mkc-leg{display:flex;align-items:baseline;gap:8px;min-width:0}
+.mkc-leg svg{flex:none;align-self:center}
+.mkc-leg-name{font-size:12.5px;font-weight:600;color:var(--color-fg);white-space:nowrap}
+.mkc-leg b{font-family:var(--font-mono),monospace;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.mkc-leg b[data-dir="up"]{color:var(--color-up)}
+.mkc-leg b[data-dir="down"]{color:var(--color-down-text)}
+.mkc-leg-sub{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.mkc-note{margin:0;font-size:12.5px;color:var(--color-text-muted)}
+.mkc-note kbd{font-family:var(--font-mono),monospace;font-size:10.5px;border:1px solid var(--color-border);border-radius:5px;padding:1px 5px}
 
 /* ── empty state ── */
 .mk-empty{font-size:13.5px;color:var(--color-text-muted);padding:34px 14px;margin:0}
