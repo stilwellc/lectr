@@ -3452,3 +3452,13 @@ body {
    an auto scroll container would re-anchor the sticky head to itself
    and un-pin it from the viewport */
 .ray-settled-desk { overflow-x: clip; }
+
+/* the quiet unwatch × on settled rows — "Remove" under an "Own it" head
+   read as removing OWNERSHIP; the × says what it is (drop the watch) */
+.ray-own-x {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  margin-left: 10px; font-size: 14px; line-height: 1;
+  color: var(--color-text-faint); position: relative;
+}
+.ray-own-x::before { content: ""; position: absolute; inset: -12px -8px; }
+.ray-own-x:hover { color: var(--color-down-text); }

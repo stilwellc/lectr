@@ -346,7 +346,16 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
               )}
             </span>
           </div>
-          <div style={{ marginTop: 6 }}><button className="ray-own-btn" onClick={() => onRemove(savedId)}>Remove</button></div>
+          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
+            {o.provisional ? (
+              <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>price settling</span>
+            ) : (
+              <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
+                {owned ? 'Owned' : 'I won it'}
+              </button>
+            )}
+            <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${name}`} onClick={() => onRemove(savedId)}>×</button>
+          </div>
         </div>
       );
     }
@@ -364,7 +373,16 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           title={vsSaveEst != null ? 'vs the estimate at save — all-in price against the estimate midpoint' : 'No estimate on file — outside the vs-est median'}>
           {vsSaveEst != null ? <>{fmtSignedPct(vsSaveEst)}<span className="sub">vs est at save</span></> : '—'}
         </span>
-        <span style={{ textAlign: 'right' }}><button className="ray-own-btn" onClick={() => onRemove(savedId)}>Remove</button></span>
+        <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+          {o.provisional ? (
+            <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>—</span>
+          ) : (
+            <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
+              {owned ? 'Owned' : 'I won it'}
+            </button>
+          )}
+          <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${name}`} onClick={() => onRemove(savedId)}>×</button>
+        </span>
       </div>
     );
   }
@@ -391,7 +409,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
             )}
           </span>
         </div>
-        <div style={{ marginTop: 6 }}>
+        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
           {pending ? (
             // no price yet — claiming it now would enter a $null piece into
             // the collection; the button arrives with the result
@@ -401,6 +419,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
               {owned ? 'Owned' : 'I won it'}
             </button>
           )}
+          <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title)}`} onClick={() => onRemove(savedId)}>×</button>
         </div>
       </div>
     );
@@ -425,7 +444,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       <span className="num" style={pct != null ? { color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
         {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
       </span>
-      <span style={{ textAlign: 'right' }}>
+      <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
         {pending ? (
           <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>—</span>
         ) : (
@@ -433,6 +452,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
             {owned ? 'Owned' : 'I won it'}
           </button>
         )}
+        <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title)}`} onClick={() => onRemove(savedId)}>×</button>
       </span>
     </div>
   );
@@ -543,6 +563,9 @@ export default function SavedPage() {
     (rowId: string) => savedIdByLotId.get(rowId) ?? rowId,
     [savedIdByLotId],
   );
+  /** owned flags keyed by the RAW saved id — archive orphans never resolve
+      to a corpus row, so this set (not ownedLotIds) answers for them */
+  const ownedIdSet = useMemo(() => new Set(ownedIds), [ownedIds]);
   const ownedLotIds = useMemo(() => {
     const ownedSet = new Set(ownedIds);
     return new Set(savedLots.filter(l => ownedSet.has(savedIdByLotId.get(l.id) ?? l.id)).map(l => l.id));
@@ -653,12 +676,29 @@ export default function SavedPage() {
         return { lot: l, paid, appraised, basis: basis ?? refRange, refOnly: !basis && !!refRange, deltaPct, drill, drillSlug: drillRef?.slug ?? null };
       })
       .sort((a, b) => (b.appraised ?? b.paid ?? 0) - (a.appraised ?? a.paid ?? 0));
+    // owned ARCHIVE wins — the lot left the corpus, but the win is real:
+    // it joins at its realized price (carried, never engine-appraised; no
+    // comp pool exists for a row we no longer hold). Without this, claiming
+    // an archive row silently vanished from the collection.
+    for (const o of soldOrphans) {
+      if (o.provisional || !ownedIdSet.has(o.id)) continue;
+      const m = savedMeta[o.id];
+      const ghost = {
+        id: o.id, title: m?.title || 'Archived piece', artist: m?.artist || '',
+        auctionHouse: 'archive', saleDate: o.saleDate, priceUsd: o.priceUsd, status: 'sold',
+      } as unknown as AuctionLot;
+      rows.push({
+        lot: ghost, paid: o.priceUsd || null, appraised: null,
+        basis: 'archive record · carried at bought price', refOnly: false,
+        deltaPct: null, drill: null, drillSlug: null,
+      });
+    }
     const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
     const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
     const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
     const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
     return { rows, totalPaid, totalAppraised, deltaPct };
-  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData]);
+  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
   const exposure = useMemo(() => {
@@ -981,8 +1021,9 @@ export default function SavedPage() {
 
   // the away strip's own-it prompts: settled wins not yet in the collection
   const unclaimedWins = useMemo(
-    () => sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id)).length,
-    [sold, ownedLotIds],
+    () => sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id)).length
+      + soldOrphans.filter(o => !o.provisional && !ownedIdSet.has(o.id)).length,
+    [sold, ownedLotIds, soldOrphans, ownedIdSet],
   );
 
   // cards view (desktop opt-in) needs the lot back from its id
@@ -1487,7 +1528,7 @@ export default function SavedPage() {
                           <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
                         </Link>
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                          <span>{ARTIST_LABEL[lot.artist] || lot.artist} · {lot.auctionHouse}{lot.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}</span>
+                          <span>{[ARTIST_LABEL[lot.artist] || lot.artist, lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
                           {drill && drillSlug && (
                             <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drill.label}</Link>
                           )}
@@ -1556,7 +1597,7 @@ export default function SavedPage() {
                       key={key}
                       row={row}
                       meta={meta}
-                      owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : false}
+                      owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : ownedIdSet.has(row.o.id)}
                       savedId={row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id}
                       onOwn={onSettledOwn}
                       onRemove={onSettledRemove}
@@ -1574,7 +1615,7 @@ export default function SavedPage() {
                       key={key}
                       row={row}
                       meta={meta}
-                      owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : false}
+                      owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : ownedIdSet.has(row.o.id)}
                       savedId={row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id}
                       onOwn={onSettledOwn}
                       onRemove={onSettledRemove}
