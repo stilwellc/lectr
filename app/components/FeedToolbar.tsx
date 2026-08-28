@@ -9,7 +9,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 import Flick from './Flick';
 import SaveSearch from './SaveSearch';
 
-export type FeedSort = 'soonest' | 'gap-desc' | 'newest' | 'est-desc' | 'est-asc';
+export type FeedSort = 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
 
 export interface FeedFilters {
   query: string;
@@ -131,6 +131,12 @@ export default function FeedToolbar({
   // (and mid-migration types) simply don't carry the field.
   const hasFirstSeen = useMemo(
     () => lots.some(l => Boolean((l as AuctionLot & { firstSeen?: string }).firstSeen)),
+    [lots]
+  );
+  // "Most bids" earns a pill only when the pool actually carries bid state
+  // (fresh velocity or a live count) — same doctrine as hasFirstSeen
+  const hasBidState = useMemo(
+    () => lots.some(l => (l.bidVelocity && l.bidVelocity.delta > 0) || (typeof l.bidCount === 'number' && l.bidCount > 0)),
     [lots]
   );
 
@@ -297,6 +303,7 @@ export default function FeedToolbar({
                 {([
                   ['soonest', 'Soonest'],
                   ['gap-desc', 'Biggest gap'],
+                  ...(hasBidState ? ([['bids-desc', 'Most bids']] as [FeedSort, string][]) : []),
                   ...(hasFirstSeen ? ([['newest', 'Newest']] as [FeedSort, string][]) : []),
                 ] as [FeedSort, string][]).map(([key, label]) => (
                   <button
@@ -514,6 +521,7 @@ export default function FeedToolbar({
             {([
               ['soonest', 'Soonest'],
               ['gap-desc', 'Biggest gap'],
+              ...(hasBidState ? ([['bids-desc', 'Most bids']] as [FeedSort, string][]) : []),
               ...(hasFirstSeen ? ([['newest', 'Newest']] as [FeedSort, string][]) : []),
             ] as [FeedSort, string][]).map(([key, label]) => (
               <button

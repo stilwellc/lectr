@@ -15,6 +15,22 @@ import { safeHref } from '../lib/safe-href';
 // the buySignal useMemo and the memo() wrapper below.
 const EMPTY_LOTS: AuctionLot[] = [];
 
+/** "live · Nh ago" — rendered ONLY when the intraday close-board overlay
+    refreshed this lot's bid state recently (the bot runs ~4-hourly; past 6h
+    the stamp would be claiming a liveness we no longer have). Mint dot =
+    the nav's "new" verb grammar, not a signal ink. */
+export function LiveStamp({ iso }: { iso?: string }) {
+  if (!iso) return null;
+  const ageH = (Date.now() - Date.parse(iso)) / 3.6e6;
+  if (!(ageH >= 0) || ageH > 6) return null;
+  const label = ageH < 1 ? `${Math.max(1, Math.round(ageH * 60))}m` : `${Math.round(ageH)}h`;
+  return (
+    <span className="ray-live-stamp" title={`Bid state refreshed by the intraday close board ${label} ago`}>
+      <i aria-hidden />live · {label} ago
+    </span>
+  );
+}
+
 export function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
     if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -315,7 +331,7 @@ function LotCard({
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
         </div>
       </div>
       <div style={{ flexShrink: 0, textAlign: 'right', zIndex: 'auto' }}>
@@ -524,7 +540,7 @@ function LotCard({
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
         </div>
         <div style={{ marginTop: 'auto' }}>
           {/* The intelligence leads — the number IS the card's rank. */}

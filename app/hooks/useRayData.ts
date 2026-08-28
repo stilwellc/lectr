@@ -70,6 +70,9 @@ interface RayData {
       served file carries none until then. Never blended with the replay. */
   receipts: ReceiptsData | null;
   lastCrawl: string;
+  /** the close-board overlay's generatedAt, when one was applied — the
+      board's intraday freshness stamp (nightly-only sessions omit it) */
+  overlayAt?: string;
   sources: string[];
   /** honest full-corpus counts from meta.json (incl. the Goldin sold-archive
       the slim lots.json omits). page reads these before falling back to length. */
@@ -228,6 +231,7 @@ interface RayPayload {
   deepValue: DeepValueByMarket;
   backtest: Backtest | null;
   lastCrawl: string;
+  overlayAt?: string;
   sources: string[];
   // Full-corpus counts from meta.json — the honest aggregate incl. the Goldin
   // sold-archive that the slim lots.json omits. Falls back to allLots.length.
@@ -357,6 +361,10 @@ function loadRayData(): Promise<RayPayload> {
         if (o.b > 0) lw.currentBid = o.b;
         if (o.n > 0) lw.bidCount = o.n;
         if (o.proj) lw.bidProj = { g: lw.bidProj?.g ?? 1, allIn: o.proj, ...(o.floor ? { floor: o.floor, below: o.below } : {}) };
+        // the lot's bid state is now INTRADAY-fresh — stamp the overlay's
+        // generatedAt so surfaces can say "LIVE · refreshed Nh ago" instead
+        // of letting close-day bids read as last night's numbers
+        if (cb.generatedAt) lw.overlayAt = cb.generatedAt;
       }
       if (cb.deepValue?.length && up.deepValue) {
         const byM: Record<string, typeof cb.deepValue> = {};
@@ -382,6 +390,7 @@ function loadRayData(): Promise<RayPayload> {
         market,
         receipts,
         lastCrawl: metaData.lastCrawl || '',
+        overlayAt: cb?.generatedAt || undefined,
         sources: metaData.sources || [],
         totalLots: metaData.totalLots,
         totalSold: metaData.totalSold,
@@ -445,7 +454,7 @@ function loadRayData(): Promise<RayPayload> {
               // zero after one scroll past the sentinel.
               const bidStates = new Map((up.lots || []).map(l => {
                 const w = l as AuctionLot;
-                return [l.id, { bidProj: w.bidProj, currentBid: w.currentBid, bidCount: w.bidCount }] as const;
+                return [l.id, { bidProj: w.bidProj, currentBid: w.currentBid, bidCount: w.bidCount, overlayAt: w.overlayAt }] as const;
               }));
               const merged = full.map(l => {
                 let x = l;
@@ -462,6 +471,7 @@ function loadRayData(): Promise<RayPayload> {
                   if (bs.bidProj != null) x = { ...x, bidProj: bs.bidProj };
                   if (bs.currentBid != null) x = { ...x, currentBid: bs.currentBid };
                   if (bs.bidCount != null) x = { ...x, bidCount: bs.bidCount };
+                  if (bs.overlayAt != null) x = { ...x, overlayAt: bs.overlayAt };
                 }
                 return x;
               });
@@ -706,6 +716,7 @@ export function useRayData(): RayData {
     market: data?.market || null,
     receipts: data?.receipts || null,
     lastCrawl: data?.lastCrawl || '',
+    overlayAt: data?.overlayAt,
     sources: data?.sources || [],
     totalLots: data?.totalLots,
     totalSold: data?.totalSold,

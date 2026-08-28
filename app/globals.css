@@ -3462,3 +3462,55 @@ body {
 }
 .ray-own-x::before { content: ""; position: absolute; inset: -12px -8px; }
 .ray-own-x:hover { color: var(--color-down-text); }
+
+/* ── the record timeline — judged calls as a bar sequence around the
+   estimate line ── */
+.ck-rec-tl { display: grid; gap: 7px; min-width: 220px; flex: 1 1 280px; max-width: 520px; }
+.ck-rec-tl-band { position: relative; display: flex; align-items: stretch; gap: 2px; height: 108px; }
+.ck-rec-tl-band::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%;
+  border-top: 1px dashed var(--color-border-mid); pointer-events: none;
+}
+.ck-rec-tl-bar { position: relative; flex: 1 1 0; min-width: 2px; max-width: 12px; }
+.ck-rec-tl-bar i { position: absolute; left: 0; right: 0; border-radius: 1px; opacity: 0.82; transition: opacity var(--duration-fast) var(--ease-signature); }
+.ck-rec-tl-bar:hover i, .ck-rec-tl-bar:focus-visible i { opacity: 1; }
+.ck-rec-tl-cap { font-size: 11px; color: var(--color-text-muted); }
+
+/* ── the close-board live stamp — intraday-refreshed bid state ── */
+.ray-live-stamp {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono), monospace; font-size: 10.5px;
+  letter-spacing: 0.04em; color: var(--color-text-muted); white-space: nowrap;
+}
+.ray-live-stamp i {
+  width: 5px; height: 5px; border-radius: 50%; flex: none;
+  background: var(--color-up); /* the nav's "new"-verb mint dot, not signal ink */
+}
+
+/* ── collection piece editor (cost basis + private note) ── */
+.ck-piece-editbtn {
+  background: none; border: none; cursor: pointer; padding: 0;
+  font-size: 11px; font-weight: 600; color: var(--color-text-faint);
+  text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
+  position: relative;
+}
+.ck-piece-editbtn::before { content: ""; position: absolute; inset: -10px -6px; }
+.ck-piece-editbtn:hover, .ck-piece-editbtn[aria-expanded='true'] { color: var(--color-fg); }
+.ck-piece-note {
+  font-size: 12px; color: var(--paper-muted, var(--color-text-muted));
+  font-style: normal; margin-top: 3px; max-width: 560px;
+}
+.ck-piece-edit {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px;
+  padding: 4px 0 14px;
+}
+.ck-piece-edit label { display: grid; gap: 4px; }
+.ck-piece-edit input {
+  font-family: var(--font-sans), sans-serif; font-size: 13px;
+  color: var(--color-fg); background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border); border-radius: 8px;
+  padding: 7px 10px; min-width: 130px; outline: none;
+}
+.ck-piece-edit input:focus { border-color: var(--color-border-mid); }
+/* the paper band flips the ramp — keep inputs legible on beige */
+.ray-band .ck-piece-edit input { background: rgba(255,255,255,0.55); color: var(--paper-fg, #1c1a14); border-color: rgba(0,0,0,0.18); }

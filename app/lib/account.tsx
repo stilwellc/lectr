@@ -62,6 +62,11 @@ export interface SavedMeta {
    *  the lot) still says WHAT it was — additive; older saves simply lack it */
   title?: string | null;
   artist?: string | null;
+  /** user-entered cost basis — overrides the realized price in the
+   *  collection ("what YOU paid", private-sale/premium reality) */
+  paidUsd?: number | null;
+  /** user's private note on the piece */
+  note?: string | null;
 }
 interface SavedEntry extends SavedMeta { id: string; }
 
@@ -81,6 +86,8 @@ function entryFromLot(id: string, lot?: AuctionLot): SavedEntry {
     owned: false,
     title: lot?.title ? craftTitle(lot.title) : null,
     artist: lot?.artist ?? null,
+    paidUsd: null,
+    note: null,
   };
 }
 
@@ -106,6 +113,8 @@ function readStored(): SavedEntry[] {
         owned: e.owned === true,
         title: typeof e.title === 'string' ? e.title : null,
         artist: typeof e.artist === 'string' ? e.artist : null,
+        paidUsd: typeof e.paidUsd === 'number' ? e.paidUsd : null,
+        note: typeof e.note === 'string' ? e.note : null,
       });
     }
     return entries;
@@ -126,17 +135,19 @@ function rowToEntry(r: Record<string, unknown>): SavedEntry {
     // saved_title/saved_artist migration runs; older rows carry null
     title: typeof r.saved_title === 'string' ? r.saved_title : null,
     artist: typeof r.saved_artist === 'string' ? r.saved_artist : null,
+    paidUsd: typeof r.paid_usd === 'number' ? r.paid_usd : null,
+    note: typeof r.note === 'string' ? r.note : null,
   };
 }
 function entryToRow(userId: string, e: SavedEntry) {
-  return { user_id: userId, lot_id: e.id, saved_at: e.savedAt, est_mid: e.estMid, signal_pct: e.signalPct, bid_count: e.bidCount, owned: e.owned ?? false, saved_title: e.title ?? null, saved_artist: e.artist ?? null };
+  return { user_id: userId, lot_id: e.id, saved_at: e.savedAt, est_mid: e.estMid, signal_pct: e.signalPct, bid_count: e.bidCount, owned: e.owned ?? false, saved_title: e.title ?? null, saved_artist: e.artist ?? null, paid_usd: e.paidUsd ?? null, note: e.note ?? null };
 }
 // The saved_title/saved_artist columns are ADDITIVE — until the migration runs,
 // PostgREST rejects a write that names them. Detect that one failure mode and
 // retry the write without the new columns so saving never breaks pre-migration.
-const NEW_COLS = /saved_title|saved_artist/i;
+const NEW_COLS = /saved_title|saved_artist|paid_usd|note/i;
 function stripNewCols(row: ReturnType<typeof entryToRow>) {
-  const { saved_title: _t, saved_artist: _a, ...rest } = row;
+  const { saved_title: _t, saved_artist: _a, paid_usd: _p, note: _n, ...rest } = row;
   return rest;
 }
 async function upsertSaved(userId: string, list: SavedEntry[], opts: { onConflict: string; ignoreDuplicates?: boolean }) {
@@ -165,6 +176,7 @@ interface AccountValue {
   toggle: (id: string, lot?: AuctionLot) => void;
   /** ids of saved lots the user marked as OWNED (their collection) */
   ownedIds: string[];
+  setSavedFields: (lotId: string, patch: { paidUsd?: number | null; note?: string | null }) => void;
   toggleOwned: (id: string) => void;
   // login UI
   loginOpen: boolean;
@@ -367,7 +379,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const savedIds = useMemo(() => entries.map(e => e.id), [entries]);
   const savedMeta = useMemo<Record<string, SavedMeta>>(() => {
     const out: Record<string, SavedMeta> = {};
-    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned, title: e.title, artist: e.artist };
+    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned, title: e.title, artist: e.artist, paidUsd: e.paidUsd, note: e.note };
     return out;
   }, [entries]);
   const isSaved = useCallback((id: string) => entries.some(e => e.id === id), [entries]);
@@ -399,6 +411,41 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       });
   }, [user, flash]);
 
+  /** user-editable overrides (cost basis, note) — optimistic, id-keyed,
+      rolled back on error. Pre-migration (columns missing) the write
+      degrades to session-local state with a toast, never a hard failure. */
+  const setSavedFields = useCallback((lotId: string, patch: { paidUsd?: number | null; note?: string | null }) => {
+    const cur = entriesRef.current.find(e => e.id === lotId);
+    if (!cur) return;
+    const prevVals = { paidUsd: cur.paidUsd ?? null, note: cur.note ?? null };
+    const updated = { ...cur, ...patch };
+    if (fetchInFlight.current) mutationLog.current.set(lotId, updated);
+    setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, ...patch } : e)));
+    if (!supabase) {
+      writeStored(entriesRef.current.map(e => (e.id === lotId ? { ...e, ...patch } : e)));
+      return;
+    }
+    if (!user) return;
+    const row: Record<string, unknown> = {};
+    if ('paidUsd' in patch) row.paid_usd = patch.paidUsd ?? null;
+    if ('note' in patch) row.note = patch.note ?? null;
+    supabase.from('saved_lots').update(row).eq('user_id', user.id).eq('lot_id', lotId)
+      .then(({ error }) => {
+        if (error) {
+          if (NEW_COLS.test(error.message)) {
+            // columns not migrated yet — keep the optimistic value for the
+            // session but say it won't survive a reload
+            flash('Saved for this session — cost basis sync needs a database update.');
+            return;
+          }
+          console.error('[account] setSavedFields failed:', error.message);
+          if (mutationLog.current.get(lotId) === updated) mutationLog.current.delete(lotId);
+          setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, ...prevVals } : e)));
+          flash("Couldn't save — try again.");
+        }
+      });
+  }, [user, flash]);
+
   // Return the user to the page they were ON (not always /saved) so a save
   // started from the home feed or an artist page lands them back in context.
   const returnTo = () => (typeof window !== 'undefined' ? window.location.href : '/');
@@ -421,10 +468,10 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AccountValue>(() => ({
     authEnabled, user, authReady, savedReady,
     signInWithEmail, signInWithGoogle, signOut,
-    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned,
+    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields,
     loginOpen, openLogin, closeLogin,
   }), [user, authReady, savedReady, signInWithEmail, signInWithGoogle, signOut,
-    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, loginOpen, openLogin, closeLogin]);
+    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields, loginOpen, openLogin, closeLogin]);
 
   return (
     <Ctx.Provider value={value}>

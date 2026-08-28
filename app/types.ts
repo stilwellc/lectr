@@ -274,6 +274,9 @@ export interface AuctionLot {
       lot's percentile among live peers. DESCRIPTIVE demand primitive —
       never a price, never a %-change (no green/red). */
   bidVelocity?: { delta: number; hours: number; pctile: number | null };
+  /** stamped client-side when the intraday close-board overlay refreshed
+      this lot's bid state — its generatedAt ("LIVE · refreshed Nh ago") */
+  overlayAt?: string;
   /** cross-house live collisions: this exact cardKey live elsewhere NOW */
   crossLive?: { id: string; house: string; bid: number }[];
   /** projected close (bid × close-day growth curve, all-in) vs the value floor */

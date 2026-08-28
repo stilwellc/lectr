@@ -33,6 +33,7 @@ const MAX_VERTICAL_PER_USER = 5;
 
 const WATCH_NAME = 'Watchlist signals';
 const VERT_NAME = 'Below market in your markets';
+const HAMMER_NAME = 'Hammer day';
 
 async function rest(path: string, init: RequestInit = {}) {
   const res = await fetch(`${url}/rest/v1/${path}`, {
@@ -170,7 +171,36 @@ async function main() {
     }
   }
 
-  console.log(`[signal-alerts] watchlist=${watchWritten} markets=${vertWritten} across ${byUser.size} users (${freshBelow.length} fresh below-market lots)`);
+  // ── 3 · HAMMER DAY — watched lots that close within the next 24h land in
+  // the inbox the morning of. The alerts UNIQUE(search_id, lot_id) makes
+  // this once-per-lot by construction; saleDateTime when the house
+  // publishes a close time, saleDate day-window otherwise.
+  const closesWithin24h = (l: any): boolean => {
+    const sdt = l?.saleDateTime;
+    if (sdt) {
+      const t = Date.parse(String(sdt));
+      return Number.isFinite(t) && t > now && t - now < 24 * 3600 * 1000;
+    }
+    const day = String(l?.saleDate || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+    const dayEnd = Date.parse(`${day}T23:59:59Z`);
+    return Number.isFinite(dayEnd) && dayEnd > now && dayEnd - now < 36 * 3600 * 1000;
+  };
+  let hammerWritten = 0;
+  for (const [userId, rows] of Array.from(byUser.entries())) {
+    const hits: string[] = [];
+    for (const r of rows) {
+      const lot = resolve(String(r.lot_id));
+      if (!isLive(lot) || !closesWithin24h(lot)) continue;
+      hits.push(String(lot.id));
+    }
+    if (!hits.length) continue;
+    const searchId = await ensureSyntheticSearch(synthetic, userId, 'closing', HAMMER_NAME);
+    await insertAlerts(hits.map(lot_id => ({ user_id: userId, search_id: searchId, lot_id })));
+    hammerWritten += hits.length;
+  }
+
+  console.log(`[signal-alerts] watchlist=${watchWritten} markets=${vertWritten} hammer=${hammerWritten} across ${byUser.size} users (${freshBelow.length} fresh below-market lots)`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

@@ -297,6 +297,9 @@ export function makeAuctionIcs(lot: {
   title: string;
   auctionHouse: string;
   saleDate: string;
+  /** when the house publishes a close TIME, the event is timed (1h window
+      ending at the close) instead of an all-day block */
+  saleDateTime?: string | null;
   estimateLow: number | null;
   estimateHigh: number | null;
   currency: string;
@@ -325,6 +328,15 @@ export function makeAuctionIcs(lot: {
   const desc = esc(`${estLine}${lot.url}`);
   const summary = esc(`${lot.title} · ${lot.auctionHouse}`);
 
+  // timed close when the house publishes one — the event lands at the
+  // hammer, not as an all-day block (and the alarm tightens to 1h out)
+  const closeMs = lot.saleDateTime ? Date.parse(lot.saleDateTime) : NaN;
+  const timed = Number.isFinite(closeMs);
+  const utcStamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const dtLines = timed
+    ? [`DTSTART:${utcStamp(closeMs - 3_600_000)}`, `DTEND:${utcStamp(closeMs)}`]
+    : [`DTSTART;VALUE=DATE:${fmtDate(lot.saleDate)}`, `DTEND;VALUE=DATE:${fmtDate(nextDay.toISOString())}`];
+
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -333,15 +345,14 @@ export function makeAuctionIcs(lot: {
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:ray-${lot.id}@costil`,
-    `DTSTART;VALUE=DATE:${fmtDate(lot.saleDate)}`,
-    `DTEND;VALUE=DATE:${fmtDate(nextDay.toISOString())}`,
+    ...dtLines,
     `SUMMARY:${summary}`,
     `DESCRIPTION:${desc}`,
     `URL:${lot.url}`,
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
-    'DESCRIPTION:Auction today',
-    'TRIGGER:-PT8H',
+    `DESCRIPTION:${timed ? 'Auction closes within the hour' : 'Auction today'}`,
+    `TRIGGER:${timed ? '-PT1H' : '-PT8H'}`,
     'END:VALARM',
     'BEGIN:VALARM',
     'ACTION:DISPLAY',

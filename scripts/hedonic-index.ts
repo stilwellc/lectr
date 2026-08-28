@@ -857,6 +857,26 @@ function computeHorizon(
     return notPub(`CI too wide (±${halfWidthPct.toFixed(1)}% vs point ${changePct.toFixed(1)}%) — magnitude is noise`, nStart, nEnd);
   }
 
+  // ── gate 6f: PLAUSIBILITY CEILING (Aug 28 2026 — the Pokémon +1501%/3Y) ──
+  // Every gate above is RELATIVE, so a spurious estimate self-certifies: the
+  // CI-width gate allows a ±1500% interval around a +1501% point. Judge the
+  // ABSOLUTE implied compound rate instead. A whole maker's like-for-like
+  // price level doubling year over year for years is — in auction data with
+  // our controls — a composition artifact (uncontrolled grade/chase mix
+  // loading onto the time coefficient), not a measured price move. Ceiling
+  // tightens when the maker has no genuine reference-level control (exactly
+  // the makers whose mix can drift hardest).
+  const qi = (q: string) => { const m = q.match(/^(\d{4})-Q([1-4])$/); return m ? Number(m[1]) * 4 + Number(m[2]) : NaN; };
+  const yearsSpanned = Math.max(0.25, (qi(end) - qi(start)) / 4);
+  const impliedCagr = Math.exp(diff / yearsSpanned) - 1;
+  const cagrCeiling = mode === 'maker' && hasRefControl ? 0.75 : 0.50;
+  if (Number.isFinite(impliedCagr) && Math.abs(impliedCagr) > cagrCeiling) {
+    return notPub(
+      `implied ${(impliedCagr * 100).toFixed(0)}%/yr compound move over ${yearsSpanned.toFixed(1)}y exceeds the ±${Math.round(cagrCeiling * 100)}%/yr plausibility ceiling${mode === 'maker' && !hasRefControl ? ' (no reference-level control)' : ''} — reads as mix shift, not price`,
+      nStart, nEnd,
+    );
+  }
+
   return {
     changePct, ciLoPct: loPct, ciHiPct: hiPct,
     nStart, nEnd, publishable: true, reason: '',

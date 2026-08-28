@@ -13,7 +13,7 @@ import { useRayData, triggerFullLoad, retryFullLoad } from '../hooks/useRayData'
 import type { Backtest } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
-import { lotSignal, formatEstimate, confidenceMeter } from '../components/LotCard';
+import { lotSignal, formatEstimate, confidenceMeter, LiveStamp } from '../components/LotCard';
 import ComparableModal, { PriceBand } from '../components/ComparableModal';
 // The paper room's two recharts consumers stay OUT of the initial bundle
 // (dynamic, ssr:false, fixed-height fallbacks so the swap can never shift).
@@ -422,7 +422,7 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
                 <span style={{ position: 'absolute', left: `${(3.5 / 8) * 100}%`, transform: 'translateX(-50%)' }}>wire ≤3.5d</span>
                 <span>8d · curve edge</span>
               </span>
-              <span className="vd-curve-read">closes in {g.daysOut < 1 ? `${Math.round(g.daysOut * 24)}h` : `${g.daysOut.toFixed(1)}d`} · {g.shelf === 'wire' ? 'at the wire' : 'forming'}</span>
+              <span className="vd-curve-read">closes in {g.daysOut < 1 ? `${Math.round(g.daysOut * 24)}h` : `${g.daysOut.toFixed(1)}d`} · {g.shelf === 'wire' ? 'at the wire' : 'forming'}{lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</span>
             </div>
             <div className="vd-detail-actions">
               <Link href={`/lot/${lot.id}`} className="link-action" style={{ color: 'var(--color-fg)' }} onClick={e => e.stopPropagation()}>

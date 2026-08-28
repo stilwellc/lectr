@@ -452,6 +452,16 @@ function computeHorizon(
     return notPub(`CI too wide (±${halfWidth.toFixed(1)}% vs point ${changePct.toFixed(1)}%) — magnitude is noise`);
   }
 
+  // PLAUSIBILITY CEILING — the hedonic gate 6f mirrored (see hedonic-index):
+  // relative gates let an absurd estimate self-certify; judge the absolute
+  // implied compound rate. Repeat pairs are same-object (controls inherent),
+  // so the ceiling sits at the control-rich tier.
+  const yearsSpanned = Math.max(0.25, back / 4);
+  const impliedCagr = Math.exp(diff / yearsSpanned) - 1;
+  if (Number.isFinite(impliedCagr) && Math.abs(impliedCagr) > 0.75) {
+    return notPub(`implied ${(impliedCagr * 100).toFixed(0)}%/yr compound move over ${yearsSpanned.toFixed(1)}y exceeds the ±75%/yr plausibility ceiling — reads as pair-mix artifact, not price`);
+  }
+
   return { changePct, ciLoPct: loPct, ciHiPct: hiPct, publishable: true, reason: '' };
 }
 

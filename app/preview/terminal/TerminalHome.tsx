@@ -564,6 +564,11 @@ export default function TerminalHomePage() {
     } else if (f.sort === 'newest') {
       const seen = (l: AuctionLot) => l.firstSeen || '';
       arr = [...arr].sort((a, b) => (seen(a) < seen(b) ? 1 : seen(a) > seen(b) ? -1 : 0));
+    } else if (f.sort === 'bids-desc') {
+      // fresh momentum leads (bids added since the last crawl), then raw
+      // live counts; lots with no bid state at all sink to the end
+      const heat = (l: AuctionLot) => (l.bidVelocity && l.bidVelocity.delta > 0 ? 100_000 + l.bidVelocity.delta : 0) + (typeof l.bidCount === 'number' ? Math.min(l.bidCount, 99_999) : 0);
+      arr = [...arr].sort((a, b) => heat(b) - heat(a));
     } else {
       const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
       arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];

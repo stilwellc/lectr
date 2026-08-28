@@ -11,7 +11,7 @@ import { useAlerts } from '../lib/alerts';
 import { useCollectionSnapshots } from '../lib/snapshots';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon, daysUntil as daysUntilOrNull } from '../components/Terminal';
-import LotCard, { lotSignal, formatEstimate } from '../components/LotCard';
+import LotCard, { lotSignal, formatEstimate, LiveStamp } from '../components/LotCard';
 import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
 import HeroChart from '../preview/terminal/HeroChart';
@@ -214,6 +214,41 @@ function SavedDelta({ lot, meta, sig }: { lot: AuctionLot; meta?: SavedMeta; sig
   );
 }
 
+/** Inline cost-basis + note editor for a collection piece. Paid overrides
+    the hammer price in every collection figure; the note is private ink on
+    the row. Both persist per save (Enter or Save commits). */
+function PieceEditor({ paid, note, onSave, onClose }: {
+  paid: number | null; note: string | null;
+  onSave: (patch: { paidUsd: number | null; note: string | null }) => void;
+  onClose: () => void;
+}) {
+  const [paidStr, setPaidStr] = useState(paid != null ? String(paid) : '');
+  const [noteStr, setNoteStr] = useState(note || '');
+  const commit = () => {
+    const cleaned = paidStr.replace(/[$,\s]/g, '');
+    const n = cleaned === '' ? null : Number(cleaned);
+    onSave({ paidUsd: n != null && Number.isFinite(n) && n >= 0 ? Math.round(n) : null, note: noteStr.trim() || null });
+    onClose();
+  };
+  const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onClose(); };
+  return (
+    <div className="ck-piece-edit">
+      <label>
+        <span className="kicker">Paid</span>
+        <input inputMode="decimal" value={paidStr} onChange={e => setPaidStr(e.target.value)} onKeyDown={onKey}
+          placeholder="what you paid, $" aria-label="What you paid, in dollars" />
+      </label>
+      <label style={{ flex: 1, minWidth: 180 }}>
+        <span className="kicker">Note</span>
+        <input value={noteStr} onChange={e => setNoteStr(e.target.value)} onKeyDown={onKey}
+          placeholder="private note" maxLength={200} aria-label="Private note" />
+      </label>
+      <button type="button" className="ray-own-btn" onClick={commit}>Save</button>
+      <button type="button" className="ray-own-x" style={{ fontSize: 12 }} aria-label="Cancel" onClick={onClose}>Cancel</button>
+    </div>
+  );
+}
+
 /** The in-place dossier — a watching row opens on its own row. Everything
     the cards view buried (the saved-delta narrative, the engine read with
     its basis, the live bid state) without leaving the ledger. Mounted only
@@ -242,6 +277,7 @@ function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
             <span className="ck-dossier-v">
               {formatPrice(lot.currentBid!)} bid
               {typeof lot.bidCount === 'number' && lot.bidCount > 0 && <span className="sub"> · {lot.bidCount} {lot.bidCount === 1 ? 'bid' : 'bids'}</span>}
+              {lot.overlayAt && <span className="sub"> · <LiveStamp iso={lot.overlayAt} /></span>}
             </span>
           </div>
         )}
@@ -288,6 +324,39 @@ function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`}>Open the lot</Link>
         <button type="button" className="quiet" onClick={onRemove}>Remove watch</button>
       </div>
+    </div>
+  );
+}
+
+/** THE RECORD TIMELINE — every judged call in hammer order around the
+    estimate line: mint beat it, coral missed it. Height rides a sqrt scale
+    clamped at ±300% so one runaway outcome can't flatten the sequence.
+    Each bar deep-links to its lot; the receipts stay attached. */
+function RecordTimeline({ series }: { series: { id: string; d: string; pct: number; title: string }[] }) {
+  if (series.length < 5) return null;
+  const HALF = 52;
+  const h = (pct: number) => Math.max(2, Math.round(Math.sqrt(Math.min(Math.abs(pct), 300) / 300) * HALF));
+  return (
+    <div className="ck-rec-tl">
+      <span className="kicker">Call by call</span>
+      <div className="ck-rec-tl-band" role="list" aria-label={`${series.length} judged calls in hammer order`}>
+        {series.map(x => {
+          const flat = Math.round(x.pct) === 0;
+          const up = x.pct > 0;
+          return (
+            <Link key={x.id} href={`/lot?id=${encodeURIComponent(x.id)}`} className="ck-rec-tl-bar" role="listitem"
+              aria-label={`${fmtSignedPct(Math.round(x.pct))} vs estimate, ${formatDate(x.d)}`}
+              title={`${craftTitle(x.title)} — ${fmtSignedPct(Math.round(x.pct))} vs estimate · ${formatDate(x.d)}`}>
+              <i style={{
+                height: h(x.pct),
+                background: flat ? 'var(--color-text-faint)' : up ? 'var(--color-up)' : 'var(--color-down-text)',
+                ...(up || flat ? { bottom: '50%' } : { top: '50%' }),
+              }} />
+            </Link>
+          );
+        })}
+      </div>
+      <span className="ck-rec-tl-cap">each judged call in hammer order · above the line beat its estimate</span>
     </div>
   );
 }
@@ -460,7 +529,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
 
 export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
-  const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned } = useSavedLots();
+  const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned, setSavedFields } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
   const { unseen: unseenAlerts } = useAlerts();
 
@@ -501,6 +570,8 @@ export default function SavedPage() {
      the page, Enter/Space toggles the row's dossier (native on links).
      Typing surfaces and overlays keep their own keys. ── */
   const [openRow, setOpenRow] = useState<string | null>(null);
+  // which collection piece has its cost-basis/note editor open
+  const [editPiece, setEditPiece] = useState<string | null>(null);
   const toggleRow = useCallback((id: string) => setOpenRow(o => (o === id ? null : id)), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -651,7 +722,9 @@ export default function SavedPage() {
     const rows = savedLots
       .filter(l => ownedLotIds.has(l.id))
       .map(l => {
-        const paid = l.priceUsd || null;
+        const m = metaFor(l.id);
+        // YOUR number first: the recorded cost basis beats the hammer price
+        const paid = m?.paidUsd ?? (l.priceUsd || null);
         const appr = appraiseLot(l, allLots);
         const band = !appr && isSportsScienceObject(l) ? soldCompBand(l, allLots) : null;
         const appraised = appr?.value ?? band?.median ?? null;
@@ -673,7 +746,7 @@ export default function SavedPage() {
         const deltaPct = paid && appraised ? Math.round((appraised / paid - 1) * 100) : null;
         const drill = drillRowFor(l, marketData);
         const drillRef = drillSlugFor(l);
-        return { lot: l, paid, appraised, basis: basis ?? refRange, refOnly: !basis && !!refRange, deltaPct, drill, drillSlug: drillRef?.slug ?? null };
+        return { lot: l, paid, paidIsOverride: m?.paidUsd != null, note: m?.note ?? null, savedId: savedIdOf(l.id), appraised, basis: basis ?? refRange, refOnly: !basis && !!refRange, deltaPct, drill, drillSlug: drillRef?.slug ?? null };
       })
       .sort((a, b) => (b.appraised ?? b.paid ?? 0) - (a.appraised ?? a.paid ?? 0));
     // owned ARCHIVE wins — the lot left the corpus, but the win is real:
@@ -688,7 +761,8 @@ export default function SavedPage() {
         auctionHouse: 'archive', saleDate: o.saleDate, priceUsd: o.priceUsd, status: 'sold',
       } as unknown as AuctionLot;
       rows.push({
-        lot: ghost, paid: o.priceUsd || null, appraised: null,
+        lot: ghost, paid: m?.paidUsd ?? (o.priceUsd || null), paidIsOverride: m?.paidUsd != null,
+        note: m?.note ?? null, savedId: o.id, appraised: null,
         basis: 'archive record · carried at bought price', refOnly: false,
         deltaPct: null, drill: null, drillSlug: null,
       });
@@ -698,7 +772,7 @@ export default function SavedPage() {
     const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
     const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
     return { rows, totalPaid, totalAppraised, deltaPct };
-  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta]);
+  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
   const exposure = useMemo(() => {
@@ -966,7 +1040,15 @@ export default function SavedPage() {
     const split = flaggedAtSave.length >= 3 && restAtSave.length >= 3
       ? { flagged: median(flaggedAtSave.map(x => x.pct)), flaggedN: flaggedAtSave.length, rest: median(restAtSave.map(x => x.pct)), restN: restAtSave.length }
       : null;
-    return { n: judged.length, realized, med, split };
+    // the TIMELINE — every judged call in hammer order, most recent 60. The
+    // median is the headline; the sequence is the receipt trail (and shows
+    // whether the eye is improving).
+    const series = judged
+      .slice()
+      .sort((a, b) => ((a.l.saleDate || '') < (b.l.saleDate || '') ? -1 : 1))
+      .slice(-60)
+      .map(x => ({ id: x.l.id, d: (x.l.saleDate || '').slice(0, 10), pct: x.pct, title: x.l.title }));
+    return { n: judged.length, realized, med, split, series };
   }, [sold, metaFor]);
 
   /* ── since your last visit ── */
@@ -1454,6 +1536,7 @@ export default function SavedPage() {
                     </span>
                   </div>
                 )}
+                <RecordTimeline series={record.series} />
               </div>
             </section>
           )}
@@ -1521,35 +1604,51 @@ export default function SavedPage() {
                   <div style={{ width: 128, textAlign: 'right' }}><Term k="appraisal">lectr appraisal</Term></div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {collection.rows.map(({ lot, paid, appraised, basis, deltaPct, drill, drillSlug }) => (
-                    <div key={lot.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0', borderTop: '1px solid var(--hairline)' }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
-                        </Link>
-                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                          <span>{[ARTIST_LABEL[lot.artist] || lot.artist, lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
-                          {drill && drillSlug && (
-                            <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drill.label}</Link>
-                          )}
+                  {collection.rows.map(({ lot, paid, paidIsOverride, note, savedId, appraised, basis, deltaPct, drill, drillSlug }) => (
+                    <div key={lot.id} style={{ borderTop: '1px solid var(--hairline)' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0' }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
+                          </Link>
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                            <span>{[ARTIST_LABEL[lot.artist] || lot.artist, lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
+                            {drill && drillSlug && (
+                              <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drill.label}</Link>
+                            )}
+                            <button type="button" className="ck-piece-editbtn"
+                              aria-expanded={editPiece === lot.id}
+                              aria-label={`Edit cost basis and note for ${craftTitle(lot.title)}`}
+                              onClick={() => setEditPiece(p => (p === lot.id ? null : lot.id))}>
+                              {paidIsOverride || note ? 'edit' : 'set what you paid'}
+                            </button>
+                          </div>
+                          {note && <div className="ck-piece-note">{note}</div>}
+                        </div>
+                        <div style={{ width: 92, textAlign: 'right', flexShrink: 0, fontSize: 14.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                          title={paidIsOverride ? 'Your recorded cost basis' : 'Realized price — set what you paid to override'}>
+                          {paid != null ? formatPrice(paid) : '—'}
+                          {paidIsOverride && <span style={{ display: 'block', fontSize: 10, fontWeight: 500, color: 'var(--color-text-faint)' }}>your basis</span>}
+                        </div>
+                        <div style={{ width: 128, textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                            {appraised != null ? formatPrice(appraised) : '—'}
+                            {deltaPct != null && deltaPct !== 0 && (
+                              <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                                {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                            {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : 'appraising…')}
+                          </div>
                         </div>
                       </div>
-                      <div style={{ width: 92, textAlign: 'right', flexShrink: 0, fontSize: 14.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                        {paid != null ? formatPrice(paid) : '—'}
-                      </div>
-                      <div style={{ width: 128, textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                          {appraised != null ? formatPrice(appraised) : '—'}
-                          {deltaPct != null && deltaPct !== 0 && (
-                            <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                              {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                          {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : 'appraising…')}
-                        </div>
-                      </div>
+                      {editPiece === lot.id && (
+                        <PieceEditor paid={paidIsOverride ? paid : null} note={note}
+                          onSave={patch => setSavedFields(savedId, patch)}
+                          onClose={() => setEditPiece(null)} />
+                      )}
                     </div>
                   ))}
                 </div>
