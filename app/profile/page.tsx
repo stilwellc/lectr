@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback, useEffect, useState, useRef } from 'react';
+import React, { useMemo, useCallback, useEffect, useLayoutEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { retryFullLoad, retrySoldLedger, useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
@@ -21,7 +21,7 @@ import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
-import { AwayMark, PulseMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark } from '../components/marks';
+import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark } from '../components/marks';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 
@@ -133,6 +133,37 @@ const sigInk = (label: LiveSignal['label']) =>
 const sigText = (sig: LiveSignal) =>
   `${sig.label === 'Above Market' ? '−' : '+'}${Math.abs(Math.round(sig.pct))}%`;
 
+/* ── THE GLOSSARY — the cockpit's measured jargon, tappable. Terms live in
+   captions and heads, never inside an ellipsized cell. ── */
+const GLOSSARY: Record<string, string> = {
+  'signal now': 'The engine\u2019s live read on the lot \u2014 its comp median against the current ask. Below Market prints +% mint: the comps sit above the price on the block.',
+  'delta saved': 'How the signal moved since the day you saved the lot, in percentage points. \u201cFlipped\u201d means it crossed to the other side of market \u2014 directions compare only for saves that recorded one.',
+  'vs estimate': 'The realized all-in price against the house estimate midpoint \u2014 the one yardstick every settled watch is judged by. All-in = hammer plus buyer\u2019s premium.',
+  'appraisal': 'The median its comparable sales currently trade at \u2014 our read from the data, not a formal appraisal. Pieces without a usable comp pool carry at their bought price.',
+  'judged': 'A watch grades once it settles with a published price and carried an estimate to be judged against \u2014 no estimate, no judgment.',
+};
+function Term({ k, children }: { k: keyof typeof GLOSSARY; children: React.ReactNode }) {
+  return (
+    <span className="ck-term" tabIndex={0}>
+      {children}
+      <span className="ck-term-tip" role="tooltip">{GLOSSARY[k]}</span>
+    </span>
+  );
+}
+
+/** the "?" chip + how-to-read strip. The strip is a full-width flex child,
+    so inside the flex-wrap room heads it lands on its own line. */
+function HelpChip({ name, children }: { name: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="ck-helpbtn" aria-expanded={open}
+        aria-label={`How to read ${name}`} onClick={() => setOpen(v => !v)}>?</button>
+      {open && <div className="ck-help">{children}</div>}
+    </>
+  );
+}
+
 /** the at-save call rendered honestly: legacy saves lost direction → neutral */
 function CallCell({ meta }: { meta: SavedMeta | undefined }) {
   const call = signalCallOf(meta);
@@ -179,6 +210,84 @@ function SavedDelta({ lot, meta, sig }: { lot: AuctionLot; meta?: SavedMeta; sig
   return (
     <div className="ray-saved-delta">
       {bits.map((b, i) => <React.Fragment key={i}>{i > 0 && ' · '}{b}</React.Fragment>)}
+    </div>
+  );
+}
+
+/** The in-place dossier — a watching row opens on its own row. Everything
+    the cards view buried (the saved-delta narrative, the engine read with
+    its basis, the live bid state) without leaving the ledger. Mounted only
+    while open, so collapsed rows keep zero of its links in the tab order. */
+function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
+  lot: AuctionLot; meta: SavedMeta | undefined; sig: LiveSignal | null;
+  allLots: AuctionLot[]; fullLoaded: boolean; onRemove: () => void;
+}) {
+  const appr = useMemo(() => (fullLoaded ? appraiseLot(lot, allLots) : null), [fullLoaded, lot, allLots]);
+  const call = signalCallOf(meta);
+  const days = daysUntil(lot.saleDate);
+  const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
+  return (
+    <div className="ck-dossier" role="region" aria-label={`Details for ${lot.title}`}>
+      <SavedDelta lot={lot} meta={meta} sig={sig} />
+      <div className="ck-dossier-grid">
+        {hasEst && (
+          <div className="ck-dossier-cell">
+            <span className="kicker">Estimate</span>
+            <span className="ck-dossier-v">{formatEstimate(lot)}</span>
+          </div>
+        )}
+        {(lot.currentBid || 0) > 0 && (
+          <div className="ck-dossier-cell">
+            <span className="kicker">On the block</span>
+            <span className="ck-dossier-v">
+              {formatPrice(lot.currentBid!)} bid
+              {typeof lot.bidCount === 'number' && lot.bidCount > 0 && <span className="sub"> · {lot.bidCount} {lot.bidCount === 1 ? 'bid' : 'bids'}</span>}
+            </span>
+          </div>
+        )}
+        {sig && (
+          <div className="ck-dossier-cell">
+            <span className="kicker">Engine read</span>
+            <span className="ck-dossier-v" style={{ color: sigInk(sig.label) }}>
+              {sigText(sig)}
+              {sig.basis != null && sig.basis > 0 && <span className="sub"> · {sig.basis} comps</span>}
+            </span>
+          </div>
+        )}
+        {lot.cardComps && lot.cardComps.n > 0 && lot.cardComps.med != null ? (
+          <div className="ck-dossier-cell">
+            <span className="kicker">Direct comps</span>
+            <span className="ck-dossier-v">{formatPrice(lot.cardComps.med)}<span className="sub"> · {lot.cardComps.n} same card &amp; grade</span></span>
+          </div>
+        ) : appr ? (
+          <div className="ck-dossier-cell">
+            <span className="kicker">Appraisal</span>
+            <span className="ck-dossier-v">{formatPrice(appr.value)}<span className="sub"> · {appr.n} comps</span></span>
+          </div>
+        ) : null}
+        {meta && (
+          <div className="ck-dossier-cell">
+            <span className="kicker">Your save</span>
+            <span className="ck-dossier-v">
+              {formatDate(meta.savedAt)}
+              {meta.estMid != null && <span className="sub"> · est. {formatPrice(meta.estMid)} then</span>}
+              {call && call.dir !== 'unknown' && (
+                <span className="sub"> · called {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}%</span>
+              )}
+            </span>
+          </div>
+        )}
+        <div className="ck-dossier-cell">
+          <span className="kicker">Hammers</span>
+          <span className="ck-dossier-v">
+            {days === 0 && lot.saleDateTime ? <CloseClock iso={lot.saleDateTime} windowHours={24} /> : hammerWord(days)}
+          </span>
+        </div>
+      </div>
+      <div className="ck-dossier-actions">
+        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`}>Open the lot</Link>
+        <button type="button" className="quiet" onClick={onRemove}>Remove watch</button>
+      </div>
     </div>
   );
 }
@@ -339,6 +448,9 @@ export default function SavedPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
+      // the URL is shareable state and wins; localStorage is the memory
+      const uv = new URLSearchParams(window.location.search).get('view');
+      if (uv === 'cards' || uv === 'ledger') { setSavedView(uv); return; }
       const v = localStorage.getItem(SAVEDVIEW_KEY) ?? localStorage.getItem('ray-savedview');
       if (v === 'cards' || v === 'ledger') setSavedView(v);
     } catch { /* private mode */ }
@@ -346,6 +458,14 @@ export default function SavedPage() {
   const pickView = (v: SavedView) => {
     setSavedView(v);
     try { localStorage.setItem(SAVEDVIEW_KEY, v); } catch { /* private mode */ }
+    // round-trip ?view= — seed from the CURRENT search so foreign params and
+    // the hash survive; ledger is the default and owns a clean URL
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (v === 'ledger') sp.delete('view'); else sp.set('view', v);
+      const q = sp.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${q ? `?${q}` : ''}${window.location.hash}`);
+    } catch { /* older browsers: state just isn't shareable */ }
   };
   // cards are a desktop opt-in; SSR + first client render agree on ledger-only
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
@@ -355,6 +475,31 @@ export default function SavedPage() {
     on();
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
+  }, []);
+
+  /* ── INPUT CRAFT — the /value grammar: j/k walks every [data-nav-row] on
+     the page, Enter/Space toggles the row's dossier (native on links).
+     Typing surfaces and overlays keep their own keys. ── */
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const toggleRow = useCallback((id: string) => setOpenRow(o => (o === id ? null : id)), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (t?.closest('[role="dialog"],[role="listbox"],[role="menu"]')) return;
+      if (document.querySelector('.ray-ck-overlay, .ray-maker-sheet')) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== 'j' && e.key !== 'k') return;
+      const rowEls = Array.from(document.querySelectorAll<HTMLElement>('[data-nav-row]'));
+      if (!rowEls.length) return;
+      const cur = rowEls.indexOf(document.activeElement as HTMLElement);
+      const next = e.key === 'j' ? Math.min(cur + 1, rowEls.length - 1) : Math.max(cur - 1, 0);
+      rowEls[next]?.focus();
+      rowEls[next]?.scrollIntoView({ block: 'nearest' });
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   /* ── resolve saved ids through the alias map (id~ flips, Wright-family
@@ -697,6 +842,64 @@ export default function SavedPage() {
     return rows;
   }, [upcoming, signalById]);
 
+  /* ── FLIP — the action-first ledger re-ranks when data moves; rows should
+     visibly travel, not teleport. BOARD-relative tops (never viewport), a
+     forced reflow between offset write and reset (or the transition has no
+     painted origin), same-id-set only, settle timers tracked. ── */
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const flipPos = useRef<Map<string, number>>(new Map());
+  const flipTimers = useRef<number[]>([]);
+  const measureBoard = useCallback(() => {
+    const board = boardRef.current;
+    const next = new Map<string, number>();
+    if (board) {
+      const boardTop = board.getBoundingClientRect().top;
+      board.querySelectorAll<HTMLElement>('[data-flip-id]').forEach(el => {
+        next.set(el.dataset.flipId!, el.getBoundingClientRect().top - boardTop);
+      });
+    }
+    return next;
+  }, []);
+  const flipKey = room.map(r => r.l.id).join('|');
+  useLayoutEffect(() => {
+    const board = boardRef.current;
+    if (!board) { flipPos.current = new Map(); return; }
+    const prev = flipPos.current;
+    const next = measureBoard();
+    flipTimers.current.forEach(t => window.clearTimeout(t));
+    flipTimers.current = [];
+    const sameSet = prev.size === next.size && Array.from(next.keys()).every(k => prev.has(k));
+    if (sameSet && prev.size > 0) {
+      const moved: HTMLElement[] = [];
+      board.querySelectorAll<HTMLElement>('[data-flip-id]').forEach(el => {
+        const id = el.dataset.flipId!;
+        const dy = (prev.get(id) ?? 0) - (next.get(id) ?? 0);
+        if (Math.abs(dy) > 1) {
+          el.style.transition = 'none';
+          el.style.transform = `translateY(${dy}px)`;
+          moved.push(el);
+        }
+      });
+      if (moved.length) {
+        void board.offsetHeight; // reflow — the reset below needs this origin painted
+        requestAnimationFrame(() => {
+          moved.forEach(el => { el.style.transition = 'transform 420ms var(--ease-signature)'; el.style.transform = ''; });
+          flipTimers.current.push(window.setTimeout(() => {
+            moved.forEach(el => { el.style.transition = ''; });
+          }, 470));
+        });
+      }
+    }
+    flipPos.current = next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flipKey, measureBoard]);
+  // a dossier opening/closing shifts every row below it — re-baseline after
+  // the expansion settles or the next sort animates from stale tops
+  useEffect(() => {
+    const t = window.setTimeout(() => { flipPos.current = measureBoard(); }, 380);
+    return () => window.clearTimeout(t);
+  }, [openRow, measureBoard]);
+
   /* ── THE RECORD — measured, receipts attached ── */
   const record = useMemo(() => {
     const judged = sold
@@ -842,6 +1045,14 @@ export default function SavedPage() {
               title={<>Your desk at <Accent>the auction</Accent>.</>}
               sub="Watch lots to the hammer, keep your track record, and hold your collection against the engine’s live appraisal. Private to you, synced everywhere."
             />
+          </section>
+          <section className="rail ray-enter">
+            {/* the ghost desk — the signed-out visitor sees what this becomes */}
+            <div className="ck-ghost" aria-hidden>
+              <div className="ck-ghost-row"><span className="kicker">Watching</span><span>your live lots · signals + bids tracked to the hammer</span></div>
+              <div className="ck-ghost-row"><span className="kicker">Your record</span><span>every settled watch judged vs its estimate — your eye, measured</span></div>
+              <div className="ck-ghost-row"><span className="kicker">Collection</span><span>the pieces you own, appraised against the live market nightly</span></div>
+            </div>
           </section>
           <div className="rail ray-enter" style={{ paddingBlock: '26px 72px' }}>
             <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
@@ -1013,11 +1224,11 @@ export default function SavedPage() {
             {reads.length > 0 && (
               <div className="ck-reads ray-enter" role="list" aria-label="Today's reads">
                 <div className="ck-reads-head" aria-hidden>
-                  <span className="kicker"><span className="ray-sect-mark" aria-hidden><PulseMark size={14} /></span>Today&rsquo;s reads</span>
+                  <span className="kicker"><span className="ray-sect-mark" aria-hidden><ReadsMark size={14} /></span>Today&rsquo;s reads</span>
                   <i className="ck-reads-rule" />
                 </div>
                 {reads.map(r => (
-                  <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem">
+                  <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row>
                     <span className="ck-tag" data-tone={r.tone === 'up' ? 'up' : r.tone === 'hot' ? 'hot' : undefined}>{r.tag}</span>
                     <span className="ck-read-title">{craftTitle(r.lot.title)}</span>
                     <span className="ck-read-fact">{ARTIST_LABEL[r.lot.artist] || r.lot.artist} · {r.fact}</span>
@@ -1036,16 +1247,21 @@ export default function SavedPage() {
                   <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
                   <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
                 </div>
+                <HelpChip name="Watching">
+                  Every bookmarked lot still on the block, sorted action-first: lands soon, then flagged below
+                  market, then bid momentum, then quiet. Click a row (or press Enter on it) to open its dossier
+                  in place — <b>j</b>/<b>k</b> walks the rows. The tag on each row says why it needs you now.
+                </HelpChip>
               </div>
 
               {/* desktop ledger */}
-              <div className="ray-saved-ledger ray-enter">
-                <div className="ray-saved-cols ray-saved-ledger-head" aria-hidden>
+              <div className="ray-saved-ledger ray-enter" ref={boardRef}>
+                <div className="ray-saved-cols ray-saved-ledger-head">
                   <span className="kicker">Why now</span>
                   <span className="kicker">Work</span>
                   <span className="kicker r">Est</span>
-                  <span className="kicker r">Signal now</span>
-                  <span className="kicker r">Δ saved</span>
+                  <span className="kicker r"><Term k="signal now">Signal now</Term></span>
+                  <span className="kicker r"><Term k="delta saved">Δ saved</Term></span>
                   <span className="kicker r">Hammers</span>
                 </div>
                 {room.map(({ l: lot, reason }) => {
@@ -1064,33 +1280,50 @@ export default function SavedPage() {
                   // on the above axis deeper (+) is it worsening
                   const dInk = dPP == null || dPP === 0 ? 'var(--color-text-faint)'
                     : (call!.dir === 'below' ? dPP > 0 : dPP < 0) ? 'var(--color-up)' : 'var(--color-down-text)';
+                  const open = openRow === lot.id;
                   return (
-                    <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ray-saved-cols ray-savedrow">
-                      <span className="ck-why">
-                        {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
-                      </span>
-                      <span className="work">
-                        <span className="ck-workmaker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
-                        {craftTitle(lot.title)}
-                      </span>
-                      <span className="num">{formatEstimate(lot) || '—'}</span>
-                      <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
-                        {sig ? sigText(sig) : '—'}
-                      </span>
-                      <span className="num" style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
-                        {flipped ? 'flipped' : dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
-                        {vel ? (
-                          <span className="sub">+{vel.delta} bids/{Math.round(vel.hours)}h</span>
-                        ) : newBids > 0 ? (
-                          <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
-                        ) : null}
-                      </span>
-                      <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
-                        {days === 0 && lot.saleDateTime
-                          ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
-                          : hammerWord(days)}
-                      </span>
-                    </Link>
+                    <div key={lot.id} data-flip-id={lot.id}>
+                      {/* the row is the dossier's handle — the work title still
+                          deep-links; everything else opens in place */}
+                      <div
+                        role="button" tabIndex={0} data-nav-row aria-expanded={open}
+                        className="ray-saved-cols ray-savedrow ck-expandrow"
+                        onClick={() => toggleRow(lot.id)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRow(lot.id); } }}
+                      >
+                        <span className="ck-why">
+                          {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
+                        </span>
+                        <span className="work">
+                          <span className="ck-workmaker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+                          <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
+                            {craftTitle(lot.title)}
+                          </Link>
+                        </span>
+                        <span className="num">{formatEstimate(lot) || '—'}</span>
+                        <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
+                          aria-label={sig ? `${sig.label}, ${Math.abs(Math.round(sig.pct))} percent` : 'no signal'}>
+                          {sig ? sigText(sig) : '—'}
+                        </span>
+                        <span className="num" style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
+                          {flipped ? 'flipped' : dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
+                          {vel ? (
+                            <span className="sub">+{vel.delta} bids/{Math.round(vel.hours)}h</span>
+                          ) : newBids > 0 ? (
+                            <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
+                          ) : null}
+                        </span>
+                        <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
+                          {days === 0 && lot.saleDateTime
+                            ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
+                            : hammerWord(days)}
+                        </span>
+                      </div>
+                      {open && (
+                        <RowDossier lot={lot} meta={m} sig={sig} allLots={allLots} fullLoaded={fullLoaded}
+                          onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -1101,7 +1334,7 @@ export default function SavedPage() {
                   const sig = signalById.get(lot.id) ?? null;
                   const days = daysUntil(lot.saleDate);
                   return (
-                    <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-mrow">
+                    <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-mrow" data-nav-row>
                       <span className="ck-mrow-main">
                         <span className="ck-mtitle">{craftTitle(lot.title)}</span>
                         <span className="ck-msub">
@@ -1111,7 +1344,7 @@ export default function SavedPage() {
                         </span>
                       </span>
                       <span className="ck-mrow-right">
-                        {sig && <b style={{ color: sigInk(sig.label) }}>{sigText(sig)}</b>}
+                        {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${Math.abs(Math.round(sig.pct))} percent`}>{sigText(sig)}</b>}
                         <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
                           {days === 0 && lot.saleDateTime
                             ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
@@ -1150,7 +1383,7 @@ export default function SavedPage() {
                     {fmtSignedPct(Math.round(record.med))}
                   </span>
                   <span className="ck-record-s">
-                    {record.n} {record.n === 1 ? 'watch' : 'watches'} judged vs estimate · median, all-in · {formatPrice(record.realized)} realized ·{' '}
+                    {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in · {formatPrice(record.realized)} realized ·{' '}
                     <a href="#settled" className="ck-away-link">receipts below</a>
                   </span>
                 </div>
@@ -1237,7 +1470,7 @@ export default function SavedPage() {
                 <div className="kicker" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
                   <div style={{ flex: 1 }}>Piece</div>
                   <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
-                  <div style={{ width: 128, textAlign: 'right' }}>lectr appraisal</div>
+                  <div style={{ width: 128, textAlign: 'right' }}><Term k="appraisal">lectr appraisal</Term></div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {collection.rows.map(({ lot, paid, appraised, basis, deltaPct, drill, drillSlug }) => (
@@ -1299,13 +1532,13 @@ export default function SavedPage() {
               )}
 
               <div className="ray-settled-desk" style={{ marginTop: 12 }}>
-                <div className="ray-settled-cols kicker" aria-hidden style={{ padding: '0 2px 8px' }}>
+                <div className="ray-settled-cols ray-settled-head kicker" style={{ padding: '0 2px 8px' }}>
                   <span>Maker</span>
                   <span>Work</span>
                   <span style={{ textAlign: 'right' }}>Est</span>
                   <span style={{ textAlign: 'right' }}>Your call</span>
                   <span style={{ textAlign: 'right' }}>Realized</span>
-                  <span style={{ textAlign: 'right' }}>vs est</span>
+                  <span style={{ textAlign: 'right' }}><Term k="vs estimate">vs est</Term></span>
                   <span style={{ textAlign: 'right' }}>Own it</span>
                 </div>
                 {settledRows.map(row => {
@@ -1384,7 +1617,7 @@ export default function SavedPage() {
           )}
           {goneOrphans.length > 0 && (
             <section className="rail ray-enter" style={{ paddingBlock: '34px 64px' }}>
-              <h2 className="ray-h2" style={{ marginBottom: 6 }}>No longer on the block</h2>
+              <h2 className="ray-h2" style={{ marginBottom: 6 }}><span className="ray-sect-mark" aria-hidden><HorizonMark size={17} /></span>No longer on the block</h2>
               <p style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 14px' }}>
                 Saved lots the crawl no longer carries — withdrawn, relisted or purged by the house.
               </p>

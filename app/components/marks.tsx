@@ -285,6 +285,18 @@ export function CollectionMark(p: MarkProps) {
 }
 
 /** While you were away — the inbox tray */
+/** Today's reads — the desk note: ruled lines with the unread marker */
+export function ReadsMark(p: MarkProps) {
+  return (
+    <M {...p}>
+      <path d="M4 6.5h12" pathLength={1} />
+      <path d="M4 12h16" pathLength={1} />
+      <path d="M4 17.5h9" pathLength={1} />
+      <circle cx="19.5" cy="6.5" r="1" pathLength={1} />
+    </M>
+  );
+}
+
 export function AwayMark(p: MarkProps) {
   return (
     <M {...p}>

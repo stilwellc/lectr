@@ -134,8 +134,11 @@ export default function AlertsInbox() {
         )}
       </div>
 
-      {searches.map(s => {
-        const rows = bySearch.get(s.id) || [];
+      {searches.filter(s => (bySearch.get(s.id) || []).length > 0).map(s => {
+        const allRows = bySearch.get(s.id) || [];
+        // SIX rows per search — the inbox is a digest, not the archive; a
+        // 40-row Pokémon wall drowned every other search's matches
+        const rows = allRows.slice(0, 6);
         // synthetic signal feeds (query._signal) are standing sections the
         // nightly maintains — no delete (it would re-create tomorrow)
         const auto = !!(s.query as { _signal?: string } | null)?._signal;
@@ -148,12 +151,11 @@ export default function AlertsInbox() {
               ) : (
                 <button className="lectr-inbox-del" title="Delete this saved search" aria-label={`Delete saved search: ${s.name}`} onClick={() => remove(s.id)}>×</button>
               )}
+              {allRows.length > rows.length && (
+                <span style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>+{allRows.length - rows.length} more</span>
+              )}
             </div>
-            {rows.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', padding: '7px 0' }}>
-                no new matches yet — the next crawl checks tonight
-              </div>
-            ) : (
+            {(
               rows.map(a => {
                 const lot = lots[a.lot_id];
                 const est = lot?.estimateLow || lot?.estimateHigh;
@@ -193,6 +195,30 @@ export default function AlertsInbox() {
           </div>
         );
       })}
+      {(() => {
+        // the quiet searches, folded into ONE line — repeating "no new
+        // matches yet" once per search read as a wall of empty states
+        const quiet = searches.filter(s => (bySearch.get(s.id) || []).length === 0);
+        if (!quiet.length) return null;
+        return (
+          <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', padding: '14px 0 0' }}>
+            {quiet.length === searches.length ? 'No new matches yet' : 'Quiet'}:{' '}
+            {quiet.map((s, i) => {
+              const auto = !!(s.query as { _signal?: string } | null)?._signal;
+              return (
+                <span key={s.id} style={{ whiteSpace: 'nowrap' }}>
+                  {i > 0 && ' · '}
+                  {s.name}
+                  {!auto && (
+                    <button className="lectr-inbox-del" title="Delete this saved search" aria-label={`Delete saved search: ${s.name}`} onClick={() => remove(s.id)}>×</button>
+                  )}
+                </span>
+              );
+            })}
+            {' '}— the next crawl checks tonight
+          </div>
+        );
+      })()}
       {alerts.length > shownAlerts.length && (
         <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 8 }}>
           and {alerts.length - shownAlerts.length} older matches

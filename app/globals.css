@@ -3361,3 +3361,92 @@ body {
   .rcp-cols > :nth-child(1), .rcp-cols > :nth-child(3) { display: none; }
   .rcp-cols.kicker > :nth-child(1), .rcp-cols.kicker > :nth-child(3) { display: none; }
 }
+
+/* ── COCKPIT INPUT CRAFT (Aug 27): glossary, help strips, sticky heads,
+   keyboard walk, in-place dossiers — the /value·/makers interaction
+   grammar, landed on the profile ── */
+
+/* dotted terms that explain themselves (the vd-term grammar, cockpit-scoped) */
+.ck-term {
+  position: relative;
+  border-bottom: 1px dotted var(--color-text-faint);
+  cursor: help; outline: none;
+}
+.ck-term-tip {
+  position: absolute; bottom: calc(100% + 9px); left: 50%;
+  transform: translateX(-50%);
+  width: max-content; max-width: 260px; white-space: normal;
+  background: #101214; border: 1px solid var(--color-border-mid);
+  border-radius: 10px; padding: 9px 12px;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 11.5px; line-height: 1.55; letter-spacing: 0;
+  text-transform: none; font-weight: 400;
+  color: var(--color-text-secondary); text-align: left;
+  font-variant-numeric: normal;
+  opacity: 0; pointer-events: none; z-index: 30;
+  transition: opacity var(--duration-fast) var(--ease-signature);
+}
+.ck-term:hover .ck-term-tip, .ck-term:focus .ck-term-tip { opacity: 1; }
+
+/* the "?" chip + its how-to-read strip; the strip is a full-width flex
+   child so it wraps to its own line inside the flex-wrap room heads */
+.ck-helpbtn {
+  width: 20px; height: 20px; flex: none; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono), monospace; font-size: 10.5px;
+  color: var(--color-text-faint);
+  background: none; border: 1px solid var(--color-border); border-radius: 100px;
+  cursor: pointer; padding: 0;
+  transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
+}
+.ck-helpbtn:hover, .ck-helpbtn[aria-expanded='true'] { color: var(--color-fg); border-color: var(--color-border-mid); }
+.ck-help {
+  flex: 1 1 100%;
+  margin: 6px 0 2px; padding: 10px 14px;
+  border-left: 2px solid var(--color-border-mid);
+  font-size: 12.5px; line-height: 1.65; color: var(--color-text-muted);
+  max-width: 640px;
+}
+
+/* sticky room heads — a long ledger keeps its map (nav sits at 54px) */
+@media (min-width: 900px) {
+  .ray-saved-ledger-head, .ray-settled-head {
+    position: sticky; top: 54px; z-index: 20;
+    background: var(--color-bg);
+  }
+  .ray-settled-head { padding-top: 6px; }
+}
+
+/* keyboard walk — the j/k focus ring */
+.ray-savedrow:focus-visible, .ck-mrow:focus-visible, .ck-read:focus-visible {
+  outline: 1px solid var(--color-border-mid); outline-offset: -1px;
+  background: var(--color-hover-item);
+}
+.ck-expandrow { cursor: pointer; }
+
+/* the in-place dossier — a watch opens on its own row, nothing navigates */
+.ck-dossier {
+  border-top: 1px dashed var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
+  padding: 14px 16px 16px;
+  display: grid; gap: 12px;
+}
+.ck-dossier-grid { display: flex; flex-wrap: wrap; gap: 10px 36px; }
+.ck-dossier-cell { display: grid; gap: 3px; min-width: 0; }
+.ck-dossier-v {
+  font-family: var(--font-mono), monospace; font-size: 13px;
+  font-variant-numeric: tabular-nums; color: var(--color-fg);
+}
+.ck-dossier-v .sub { font-family: var(--font-sans), sans-serif; font-size: 11px; color: var(--color-text-muted); }
+.ck-dossier-note { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; }
+.ck-dossier-actions { display: flex; align-items: baseline; gap: 18px; }
+.ck-dossier-actions a, .ck-dossier-actions button {
+  font-size: 12px; font-weight: 600; color: var(--color-fg);
+  background: none; border: none; cursor: pointer; padding: 0;
+  text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
+}
+.ck-dossier-actions a:hover, .ck-dossier-actions button:hover { text-decoration-color: var(--color-fg); }
+.ck-dossier-actions .quiet { color: var(--color-text-muted); font-weight: 500; }
+
+/* settled desk never bleeds the rail on odd widths */
+.ray-settled-desk { overflow-x: auto; }
