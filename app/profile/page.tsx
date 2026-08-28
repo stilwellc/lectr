@@ -771,14 +771,16 @@ export default function SavedPage() {
       .slice(0, 3);
     for (const l of soon) {
       const d = daysUntil(l.saleDate);
-      // formatEstimate on a no-estimate bid lot ALREADY prints the live bid
-      // and count ("$402 bid · 10 bids") — appending bidCount again printed
-      // "· 10 bids · 10 bids"; the count rides separately only alongside a
-      // real estimate
-      const hasEst = (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0;
+      // when formatEstimate prints the live-bid form ("$402 bid · 10 bids" —
+      // it does this for ANY lot with a live bid and no two-sided estimate),
+      // appending bid state again printed "· 10 bids · 10 bids". Gate on what
+      // it PRINTED, not on which fields exist (one-sided estimates still take
+      // the bid branch).
+      const estText = formatEstimate(l);
+      const printedBid = estText.includes('bid');
       rows.push({
         key: `soon-${claim(l).id}`, tag: 'Lands soon', lot: l, tone: 'hot',
-        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{hasEst && typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
+        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{estText ? <> · {estText}</> : null}{!printedBid && typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
       });
     }
     if (fullLoaded) {
@@ -812,14 +814,14 @@ export default function SavedPage() {
       .sort((a, b) => dealScore(b.l, b.sig.pct) - dealScore(a.l, a.sig.pct))
       .slice(0, 2);
     for (const { l, sig } of under) {
-      // formatEstimate on a no-estimate bid lot ALREADY prints the live bid
-      // ("$220 bid · 2 bids") — appending currentBid again printed
-      // "· $220 bid · 2 bids · $220 bid"; the bid rides separately only
-      // alongside a real estimate
-      const hasEst = (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0;
+      // same printed-bid gate as the lands-soon read: formatEstimate takes
+      // the live-bid branch for any lot without a two-sided estimate, and
+      // appending currentBid on top printed "· $220 bid · 2 bids · $220 bid"
+      const estText = formatEstimate(l);
+      const printedBid = estText.includes('bid');
       rows.push({
         key: `bm-${claim(l).id}`, tag: 'Below market', lot: l, tone: 'up',
-        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{hasEst && (l.currentBid || 0) > 0 ? <> · {formatPrice(l.currentBid!)} bid</> : null}</>,
+        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {formatPrice(l.currentBid!)} bid</> : null}</>,
       });
     }
     return rows.slice(0, 8);
