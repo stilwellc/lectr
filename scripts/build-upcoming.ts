@@ -108,6 +108,13 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // per lot, (2) rank positive deltas within each market. delta<=0 lots still
   // carry a delta/hours read (a retracted/corrected bid is honest data) but get
   // no pctile — the percentile pool is positive-momentum peers only.
+  //
+  // FRESHNESS GATE: crawlers append a snapshot only when {b,n} CHANGES, so a
+  // lot that spiked Mon→Tue and then went quiet keeps the same last-two pair
+  // forever — and an ungated read would republish "+7 bids in 24h" every day
+  // after. A velocity is a LIVE read: it exists only if the latest change was
+  // recorded by TODAY's crawl (build-day `d`, or a full-ISO stamp within 24h
+  // for intraday passes). A quiet lot has NO velocity, not last week's.
   type Vel = { delta: number; hours: number; pctile: number | null };
   const velById = new Map<string, Vel>();
   const posDeltasByMarket = new Map<string, number[]>();
@@ -117,6 +124,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     const last = bh[bh.length - 1];
     const prev = bh[bh.length - 2];
     if (last?.n == null || prev?.n == null) continue;
+    const fresh = last.d.slice(0, 10) === todayCall
+      || Date.now() - new Date(last.d).getTime() < 24 * 3.6e6;
+    if (!fresh) continue;
     const delta = last.n - prev.n;
     const hours = (new Date(last.d).getTime() - new Date(prev.d).getTime()) / 3.6e6;
     if (!Number.isFinite(hours)) continue;
