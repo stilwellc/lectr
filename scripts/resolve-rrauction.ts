@@ -450,6 +450,34 @@ async function main() {
       throw new Error('[rr] discovery returned 0 sales — refusing to write; the leg must go red');
     }
 
+    // ── STALE-SALE RESOLVE — a sale that closes between nightlies falls off
+    // /auctions/ (discovery is live-sales-only) and its rows carry forward
+    // FROZEN as status 'upcoming' forever (the Aug-21 Steve Jobs/Apple sale
+    // 748 sat stuck for six days). RR keeps closed-sale pages up with
+    // "Sold For" values, so re-crawl any carried sale still holding
+    // past-dated upcoming rows and let the archive mapping settle it
+    // (sold → sold, unsold in a closed sale → bought_in). Capped per run to
+    // bound headless time; the queue drains across nightlies.
+    const priorSeg = readSegment('rrauction') as unknown as AuctionLot[];
+    const today = new Date().toISOString().slice(0, 10);
+    const liveSet = new Set(saleIds);
+    const saleOfId = (l: AuctionLot) => (String(l.id).match(/^rrauction-(\d+)-/) || [])[1] || '';
+    const staleCount = new Map<string, number>();
+    const staleDate = new Map<string, string>();
+    for (const l of priorSeg) {
+      const sid = saleOfId(l);
+      if (!sid || liveSet.has(sid)) continue;
+      const sd = String(l.saleDate || '').slice(0, 10);
+      if (l.status === 'upcoming' && sd && sd < today) {
+        staleCount.set(sid, (staleCount.get(sid) || 0) + 1);
+        if (!staleDate.has(sid) || sd > staleDate.get(sid)!) staleDate.set(sid, sd);
+      }
+    }
+    const staleIds = Array.from(staleCount.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([sid]) => sid);
+    if (staleIds.length) {
+      console.log(`[rr] stale closed sales to resolve: ${staleIds.map(s => `${s} (${staleCount.get(s)} stuck)`).join(', ')}`);
+    }
+
     const lots: AuctionLot[] = [];
     const dist: Record<string, number> = {};
     let dropped = 0;
@@ -464,6 +492,30 @@ async function main() {
         kept++;
       }
       console.log(`[rr] sale ${saleId} "${saleName}": ${raw.length} lots → ${kept} kept, ${raw.length - kept} dropped`);
+    }
+    for (const saleId of staleIds) {
+      try {
+        const { lots: raw, saleName, saleClosed } = await crawlSale(browser, saleId, maxPages);
+        // the sale-header close date is truth; the stuck rows' own saleDate
+        // is the fallback when the header omits it
+        const closedDate = saleClosed || staleDate.get(saleId) || today;
+        let kept = 0, sold = 0;
+        for (const r of raw) {
+          const slug = routeRRLot(r.title);
+          if (!slug) { dropped++; continue; }
+          const lot = toLot(r, slug, saleId, saleName, { saleDate: closedDate });
+          lots.push(lot);
+          dist[slug] = (dist[slug] || 0) + 1;
+          kept++;
+          if (lot.status === 'sold') sold++;
+        }
+        saleIds.push(saleId); // joins the crawled set so the merge replaces its rows
+        console.log(`[rr] STALE sale ${saleId} "${saleName}" (closed ${closedDate}): ${raw.length} lots → ${kept} resolved (${sold} sold, ${kept - sold} passed)`);
+      } catch (e) {
+        // a stale sale that fails to resolve stays carried untouched — never
+        // let a results pass take down the live crawl's write
+        console.warn(`[rr] stale sale ${saleId} resolve failed (carried as-is): ${(e as Error).message}`);
+      }
     }
 
     console.log(`\n[rr] TOTAL ${lots.length} lots kept, ${dropped} dropped`);

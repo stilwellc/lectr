@@ -368,8 +368,19 @@ export default function SavedPage() {
 
   const badgeCount = fullLoaded ? savedLots.length : savedIds.length;
 
-  const isPastPending = (l: AuctionLot) =>
-    l.status === 'upcoming' && !!l.resultsPending && !!l.saleDate && l.saleDate.slice(0, 10) < localToday();
+  // past-pending = concluded but unresolved. The resultsPending flag alone
+  // is NOT enough: a sale that closes between nightlies can carry rows frozen
+  // as bare status 'upcoming' with a past saleDate and NO flag (RR sale 748's
+  // Apple lots sat in "Watching" for six days this way). The DATE is the
+  // truth — anything upcoming whose sale day is behind us has left the block,
+  // flag or no flag. One-day grace mirrors isLiveUpcoming.
+  const isPastPending = (l: AuctionLot) => {
+    if (l.status !== 'upcoming' || !l.saleDate) return false;
+    const day = l.saleDate.slice(0, 10);
+    if (l.resultsPending) return day < localToday();
+    const graceMs = Date.parse(`${day}T00:00:00`) + 2 * 86_400_000; // sale day + 1 grace day
+    return !isNaN(graceMs) && graceMs < Date.parse(`${localToday()}T00:00:00`) + 1;
+  };
 
   const upcoming = useMemo(() =>
     savedLots
