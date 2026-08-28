@@ -89,7 +89,24 @@ export default function AlertsInbox() {
     return () => { dead = true; };
   }, [shownAlerts]);
 
-  if (!searchesReady || !alertsReady || searches.length === 0) return null;
+  if (!searchesReady || !alertsReady) return null;
+  if (searches.length === 0) {
+    // normally invisible with no standing searches — but orphaned unseen
+    // alerts (searches deleted on another device, alert rows left behind)
+    // would otherwise pin "N new matches" in the away strip forever while
+    // the only Mark-all-read control lives inside this hidden section
+    if (unseen === 0) return null;
+    return (
+      <section className="rail ray-enter" aria-label="Saved searches" style={{ paddingBlock: '34px 8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px' }}>
+          <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
+            {unseen} unread {unseen === 1 ? 'match' : 'matches'} from searches you&rsquo;ve since deleted.
+          </span>
+          <button className="ray-toolbar-reset" style={{ color: 'var(--color-butter-text)' }} onClick={markAllSeen}>Mark all read</button>
+        </div>
+      </section>
+    );
+  }
 
   const bySearch = new Map<string, typeof shownAlerts>();
   for (const a of shownAlerts) {

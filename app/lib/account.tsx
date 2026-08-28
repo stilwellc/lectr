@@ -41,7 +41,11 @@ export function signalCallOf(meta: { savedAt: string; signalPct: number | null }
   if (!meta || meta.signalPct == null) return null;
   const legacy = (meta.savedAt || '').slice(0, 10) < SIGNED_SIGNAL_SINCE;
   if (legacy) return { dir: 'unknown', pct: Math.abs(meta.signalPct) };
-  return meta.signalPct >= 0
+  // exactly 0 is "at market" — a magnitude with no direction. Mapping it to
+  // 'below' painted a green "+0%" call that measures nothing; no call at all
+  // is the honest read.
+  if (meta.signalPct === 0) return null;
+  return meta.signalPct > 0
     ? { dir: 'below', pct: meta.signalPct }
     : { dir: 'above', pct: -meta.signalPct };
 }
@@ -226,9 +230,30 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
         migratedRef.current = true;
         const local = readStored();
         if (local.length) {
+          // ignoreDuplicates keeps cloud rows authoritative for lots saved on
+          // both sides — EXCEPT when the cloud copy predates the signed-signal
+          // convention and the local copy carries a signed call: silently
+          // keeping the legacy row would downgrade that watch to
+          // direction-unknown forever. Those rows get a second, targeted
+          // upsert that overwrites.
           const { error } = await upsertSaved(user.id, local, { onConflict: 'user_id,lot_id', ignoreDuplicates: true });
-          if (!error) writeStored([]);
-          else { console.error('[account] migration upsert failed, keeping local:', error.message); migratedRef.current = false; }
+          let upgradeError = null as { message: string } | null;
+          if (!error) {
+            const signedLocal = local.filter(e => e.signalPct != null && (e.savedAt || '').slice(0, 10) >= SIGNED_SIGNAL_SINCE);
+            if (signedLocal.length) {
+              const { data: cloudRows } = await supabase!.from('saved_lots')
+                .select('lot_id,saved_at,signal_pct')
+                .eq('user_id', user.id)
+                .in('lot_id', signedLocal.map(e => e.id));
+              const legacyCloud = new Set((cloudRows || [])
+                .filter(r => (r.signal_pct as number | null) == null || ((r.saved_at as string) || '').slice(0, 10) < SIGNED_SIGNAL_SINCE)
+                .map(r => r.lot_id as string));
+              const upgrades = signedLocal.filter(e => legacyCloud.has(e.id));
+              if (upgrades.length) ({ error: upgradeError } = await upsertSaved(user.id, upgrades, { onConflict: 'user_id,lot_id' }));
+            }
+          }
+          if (!error && !upgradeError) writeStored([]);
+          else { console.error('[account] migration upsert failed, keeping local:', (error || upgradeError)!.message); migratedRef.current = false; }
         }
       }
       const { data, error } = await supabase!.from('saved_lots').select('*').eq('user_id', user.id);

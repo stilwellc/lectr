@@ -139,6 +139,15 @@ export function localToday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Median of a numeric list, null when empty — the app's ONE median.
+ *  (Hand-rolled copies of this litter the rooms; new code imports this.) */
+export function median(a: number[]): number | null {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
 /** Upgrade http:// image URLs to https:// so they don't trip mixed-content on
  *  our HTTPS pages (all our image hosts serve https). Undefined-safe. */
 export function httpsImg(u?: string | null): string | undefined {

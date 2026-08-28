@@ -8,9 +8,9 @@ import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { signalCallOf } from '../lib/account';
 import { useAuth } from '../lib/account';
 import { useAlerts } from '../lib/alerts';
-import { supabase } from '../lib/supabase';
+import { useCollectionSnapshots } from '../lib/snapshots';
 import ArtistNav from '../components/ArtistNav';
-import { Colophon } from '../components/Terminal';
+import { Colophon, daysUntil as daysUntilOrNull } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate } from '../components/LotCard';
 import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
@@ -22,7 +22,7 @@ import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import { AwayMark, PulseMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark } from '../components/marks';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 
 /* ============================================================
@@ -55,12 +55,9 @@ import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
    Market = −pct coral.
    ============================================================ */
 
-function daysUntil(dateStr: string): number {
-  const day = (dateStr || '').slice(0, 10);
-  const t = Date.parse(`${day}T00:00:00Z`);
-  if (isNaN(t)) return NaN;
-  return Math.round((t - Date.parse(`${localToday()}T00:00:00Z`)) / 86_400_000);
-}
+/** Terminal's shared daysUntil, kept on this page's NaN convention (every
+    comparison here is NaN-safe; a null would need `?? NaN` at 14 call sites) */
+const daysUntil = (dateStr: string): number => daysUntilOrNull(dateStr) ?? NaN;
 function hammerWord(days: number): string {
   if (isNaN(days)) return 'scheduled';
   if (days < 0) return `hammered ${-days} ${days === -1 ? 'day' : 'days'} ago`;
@@ -68,11 +65,65 @@ function hammerWord(days: number): string {
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
 }
-function median(a: number[]): number | null {
-  if (!a.length) return null;
-  const s = [...a].sort((x, y) => x - y);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+/** sort key for saleDate — a missing/garbled date must sort DETERMINISTICALLY
+    (to the end of any ordering), never feed NaN into a comparator. `missing`
+    is the sentinel: MAX for ascending lists, 0 for descending ones, so the
+    dateless rows land LAST either way. */
+const saleTime = (l: AuctionLot, missing = Number.MAX_SAFE_INTEGER): number => {
+  const t = Date.parse(`${(l.saleDate || '').slice(0, 10)}T00:00:00Z`);
+  return isNaN(t) ? missing : t;
+};
+
+/** past-pending = concluded but unresolved. The resultsPending flag alone
+    is NOT enough: a sale that closes between nightlies can carry rows frozen
+    as bare status 'upcoming' with a past saleDate and NO flag (RR sale 748's
+    Apple lots sat in "Watching" for six days this way). The DATE is the
+    truth — anything upcoming whose sale day is behind us has left the block,
+    flag or no flag. One-day grace mirrors isLiveUpcoming. A lot with NO
+    saleDate can't be date-judged and stays visible in Watching as
+    "scheduled" — an honest unknown, not a claim it is live.
+    UTC-parsed on both sides (the daysUntil convention) so the two clocks
+    can never disagree about whether a day is behind us. */
+function isPastPending(l: AuctionLot): boolean {
+  if (l.status !== 'upcoming' || !l.saleDate) return false;
+  const day = l.saleDate.slice(0, 10);
+  if (l.resultsPending) return day < localToday();
+  const graceMs = Date.parse(`${day}T00:00:00Z`) + 2 * 86_400_000; // sale day + 1 grace day
+  return !isNaN(graceMs) && graceMs < Date.parse(`${localToday()}T00:00:00Z`) + 1;
+}
+
+/** every id a save could be keyed under across the corpus AND the sold
+    ledger — the save itself, its tilde twin, and the Wright-family mirrors.
+    BOTH resolution passes must walk the same aliases: resolving a live row
+    through them but looking the ledger up by the raw id dressed real sales
+    as "withdrawn" whenever a save was keyed under an alias. */
+function idAliases(id: string): string[] {
+  const out = [id, id.endsWith('~') ? id.slice(0, -1) : `${id}~`];
+  const fam = id.match(/^(wright|rago|lama)-(\d+)~?$/);
+  if (fam) {
+    for (const h of ['wright', 'rago', 'lama']) {
+      if (h !== fam[1]) out.push(`${h}-${fam[2]}`, `${h}-${fam[2]}~`);
+    }
+  }
+  return out;
+}
+
+/* ── THE ONE CLASSIFIER — why a live watch needs you now. Both surfaces
+   that tag rows (Today's reads and the Watching ledger) read THESE
+   thresholds; a tuning change lands in both or in neither. ── */
+const TAG_SOON_DAYS = 2;      // "Lands soon": hammers within 2 days
+const TAG_QUIET_BIDS = 3;     // "Quiet": a published count of ≤3 bids…
+const TAG_QUIET_DAYS = 7;     // …landing within the week
+type WatchTag = { tag: 'Lands soon' | 'Below market' | 'Most bids' | 'Quiet'; rank: number };
+function watchTagOf(l: AuctionLot, sig: { label: string } | null | undefined): WatchTag | null {
+  const d = daysUntil(l.saleDate);
+  if (d >= 0 && d <= TAG_SOON_DAYS) return { tag: 'Lands soon', rank: 0 };
+  if (sig?.label === 'Below Market') return { tag: 'Below market', rank: 1 };
+  if (l.bidVelocity && l.bidVelocity.delta > 0) return { tag: 'Most bids', rank: 2 };
+  if (typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= TAG_QUIET_BIDS && d >= 0 && d <= TAG_QUIET_DAYS) {
+    return { tag: 'Quiet', rank: 3 };
+  }
+  return null;
 }
 
 type LiveSignal = NonNullable<ReturnType<typeof lotSignal>>;
@@ -140,7 +191,6 @@ function LedgerGate({ onState }: { onState: (s: { ledger: Map<string, LedgerEntr
   return null;
 }
 
-interface Snapshot { d: string; paid: number; appraised: number; pieces: number }
 type SavedView = 'ledger' | 'cards';
 const SAVEDVIEW_KEY = 'lectr-savedview';
 
@@ -149,12 +199,14 @@ type SettledRowData =
   | { kind: 'lot'; lot: AuctionLot; date: string }
   | { kind: 'ledger'; o: { id: string; priceUsd: number; saleDate: string; provisional: boolean }; date: string };
 
-function SettledRowView({ row, meta, owned, onOwn, onRemove, mobile }: {
+const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, savedId, onOwn, onRemove, mobile }: {
   row: SettledRowData;
   meta: SavedMeta | undefined;
   owned: boolean;
-  onOwn: () => void;
-  onRemove: () => void;
+  /** the id the save is keyed under — handlers are STABLE and take it back */
+  savedId: string;
+  onOwn: (savedId: string) => void;
+  onRemove: (savedId: string) => void;
   mobile: boolean;
 }) {
   if (row.kind === 'ledger') {
@@ -185,7 +237,7 @@ function SettledRowView({ row, meta, owned, onOwn, onRemove, mobile }: {
               )}
             </span>
           </div>
-          <div style={{ marginTop: 6 }}><button className="ray-own-btn" onClick={onRemove}>Remove</button></div>
+          <div style={{ marginTop: 6 }}><button className="ray-own-btn" onClick={() => onRemove(savedId)}>Remove</button></div>
         </div>
       );
     }
@@ -203,7 +255,7 @@ function SettledRowView({ row, meta, owned, onOwn, onRemove, mobile }: {
           title={vsSaveEst != null ? 'vs the estimate at save — all-in price against the estimate midpoint' : 'No estimate on file — outside the vs-est median'}>
           {vsSaveEst != null ? <>{fmtSignedPct(vsSaveEst)}<span className="sub">vs est at save</span></> : '—'}
         </span>
-        <span style={{ textAlign: 'right' }}><button className="ray-own-btn" onClick={onRemove}>Remove</button></span>
+        <span style={{ textAlign: 'right' }}><button className="ray-own-btn" onClick={() => onRemove(savedId)}>Remove</button></span>
       </div>
     );
   }
@@ -231,9 +283,15 @@ function SettledRowView({ row, meta, owned, onOwn, onRemove, mobile }: {
           </span>
         </div>
         <div style={{ marginTop: 6 }}>
-          <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={onOwn}>
-            {owned ? 'Owned' : 'I won it'}
-          </button>
+          {pending ? (
+            // no price yet — claiming it now would enter a $null piece into
+            // the collection; the button arrives with the result
+            <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>result pending</span>
+          ) : (
+            <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
+              {owned ? 'Owned' : 'I won it'}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -259,13 +317,17 @@ function SettledRowView({ row, meta, owned, onOwn, onRemove, mobile }: {
         {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
       </span>
       <span style={{ textAlign: 'right' }}>
-        <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={onOwn}>
-          {owned ? 'Owned' : 'I won it'}
-        </button>
+        {pending ? (
+          <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>—</span>
+        ) : (
+          <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
+            {owned ? 'Owned' : 'I won it'}
+          </button>
+        )}
       </span>
     </div>
   );
-}
+});
 
 export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
@@ -301,18 +363,9 @@ export default function SavedPage() {
   const { savedLots, savedIdByLotId, orphanIds } = useMemo(() => {
     const byId = new Map(allLots.map(l => [l.id, l]));
     const resolve = (id: string): AuctionLot | undefined => {
-      const direct = byId.get(id);
-      if (direct) return direct;
-      const flipped = id.endsWith('~') ? id.slice(0, -1) : `${id}~`;
-      const t = byId.get(flipped);
-      if (t) return t;
-      const fam = id.match(/^(wright|rago|lama)-(\d+)~?$/);
-      if (fam) {
-        for (const h of ['wright', 'rago', 'lama']) {
-          if (h === fam[1]) continue;
-          const hit = byId.get(`${h}-${fam[2]}`) ?? byId.get(`${h}-${fam[2]}~`);
-          if (hit) return hit;
-        }
+      for (const a of idAliases(id)) {
+        const hit = byId.get(a);
+        if (hit) return hit;
       }
       return undefined;
     };
@@ -358,7 +411,11 @@ export default function SavedPage() {
     const goneO: string[] = [];
     if (!ledgerState.loaded) return { soldOrphans: soldO, goneOrphans: goneO };
     for (const id of orphanIds) {
-      const hit = ledgerState.ledger.get(id);
+      // walk the SAME aliases corpus resolution walks — the ledger keys
+      // canonical ids, and a raw-id miss here dressed a real sale as
+      // "withdrawn by the house"
+      let hit: LedgerEntry | undefined;
+      for (const a of idAliases(id)) { hit = ledgerState.ledger.get(a); if (hit) break; }
       if (hit) soldO.push({ id, priceUsd: hit[0], saleDate: hit[1], provisional: hit.length > 2 });
       else goneO.push(id);
     }
@@ -366,38 +423,41 @@ export default function SavedPage() {
     return { soldOrphans: soldO, goneOrphans: goneO };
   }, [orphanIds, ledgerState]);
 
-  const badgeCount = fullLoaded ? savedLots.length : savedIds.length;
+  // the badge is the count of SAVES — a truth localStorage/cloud own outright.
+  // (Counting resolved rows made the badge silently shrink by the orphan
+  // count the moment phase 2 landed.)
+  const badgeCount = savedIds.length;
 
-  // past-pending = concluded but unresolved. The resultsPending flag alone
-  // is NOT enough: a sale that closes between nightlies can carry rows frozen
-  // as bare status 'upcoming' with a past saleDate and NO flag (RR sale 748's
-  // Apple lots sat in "Watching" for six days this way). The DATE is the
-  // truth — anything upcoming whose sale day is behind us has left the block,
-  // flag or no flag. One-day grace mirrors isLiveUpcoming.
-  const isPastPending = (l: AuctionLot) => {
-    if (l.status !== 'upcoming' || !l.saleDate) return false;
-    const day = l.saleDate.slice(0, 10);
-    if (l.resultsPending) return day < localToday();
-    const graceMs = Date.parse(`${day}T00:00:00`) + 2 * 86_400_000; // sale day + 1 grace day
-    return !isNaN(graceMs) && graceMs < Date.parse(`${localToday()}T00:00:00`) + 1;
-  };
+  // the page's calendar day, as STATE — a long-lived tab crosses midnight,
+  // and every date-bucketed memo below must re-cut when the day flips, not
+  // stay frozen on yesterday until the corpus happens to change identity
+  const [todayKey, setTodayKey] = useState(() => localToday());
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      setTodayKey(k => { const now = localToday(); return now === k ? k : now; });
+    }, 5 * 60_000);
+    return () => window.clearInterval(t);
+  }, []);
 
   const upcoming = useMemo(() =>
     savedLots
       .filter(l => l.status === 'upcoming' && !isPastPending(l))
-      .sort((a, b) => new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime()),
-    [savedLots]
+      .sort((a, b) => saleTime(a) - saleTime(b)),
+    // todayKey: isPastPending reads the calendar — re-cut at midnight
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedLots, todayKey]
   );
   const sold = useMemo(() =>
     savedLots
       .filter(l => l.status === 'sold' || isPastPending(l))
-      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
-    [savedLots]
+      .sort((a, b) => saleTime(b, 0) - saleTime(a, 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedLots, todayKey]
   );
   const other = useMemo(() =>
     savedLots
       .filter(l => l.status !== 'upcoming' && l.status !== 'sold')
-      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()),
+      .sort((a, b) => saleTime(b, 0) - saleTime(a, 0)),
     [savedLots]
   );
 
@@ -468,44 +528,9 @@ export default function SavedPage() {
     return Array.from(by.values()).sort((a, b) => b.held - a.held);
   }, [collection]);
 
-  /* ── collection history — one snapshot per LOCAL day; read the trail back ── */
-  useEffect(() => {
-    if (!supabase || !user || !fullLoaded || collection.rows.length === 0) return;
-    const day = localToday(); // local day — the page's whole clock runs local
-    const guardKey = `lectr-snap-${user.id.slice(0, 8)}`;
-    const guardVal = `${day}:${Math.round(collection.totalPaid)}:${Math.round(collection.totalAppraised)}:${collection.rows.length}`;
-    try { if (localStorage.getItem(guardKey) === guardVal) return; } catch { /* private mode */ }
-    supabase.from('collection_snapshots').upsert({
-      user_id: user.id, snap_date: day,
-      total_paid: Math.round(collection.totalPaid),
-      total_appraised: Math.round(collection.totalAppraised),
-      pieces: collection.rows.length,
-    }, { onConflict: 'user_id,snap_date' }).then(({ error }) => {
-      if (!error) { try { localStorage.setItem(guardKey, guardVal); } catch { /* ignore */ } }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, fullLoaded, collection]);
-
-  const [snaps, setSnaps] = useState<Snapshot[]>([]);
-  useEffect(() => {
-    if (!supabase || !user) { setSnaps([]); return; }
-    let dead = false;
-    // MOST RECENT 180 days — ascending+limit returned the OLDEST 180, which
-    // would freeze the chart in the past once a user out-lives the window
-    supabase.from('collection_snapshots')
-      .select('snap_date,total_paid,total_appraised,pieces')
-      .eq('user_id', user.id)
-      .order('snap_date', { ascending: false })
-      .limit(180)
-      .then(({ data, error }) => {
-        if (dead || error || !data) return;
-        const rows = data.map(r => ({ d: r.snap_date as string, paid: r.total_paid as number, appraised: r.total_appraised as number, pieces: r.pieces as number }));
-        rows.reverse(); // chart reads oldest → newest
-        setSnaps(rows);
-      });
-    return () => { dead = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  /* ── collection history — one snapshot per LOCAL day; read the trail back
+     (lib/snapshots owns the DB round-trip; this page only renders it) ── */
+  const snaps = useCollectionSnapshots(collection, fullLoaded);
   const collectionChart = useMemo(() => {
     if (snaps.length < 3) return null;
     return {
@@ -543,7 +568,10 @@ export default function SavedPage() {
       if (!m) continue;
       const cur = signalById.get(lot.id);
       const call = signalCallOf(m);
-      if (call && cur) {
+      if (call && cur && call.dir !== 'unknown') {
+        // legacy saves have no recorded direction — SavedDelta and the Δ
+        // column render them neutral, so the masthead must not count them
+        // as "moved" on magnitude alone (the two surfaces would disagree)
         const flipped = (call.dir === 'below' && cur.label !== 'Below Market') || (call.dir === 'above' && cur.label !== 'Above Market');
         if (flipped || Math.round(cur.pct) !== Math.round(call.pct)) moved++;
       }
@@ -559,6 +587,11 @@ export default function SavedPage() {
   const reads = useMemo(() => {
     type Read = { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' };
     const rows: Read[] = [];
+    // ONE read per lot — the same LeBron card led "Most bids" AND "Lands
+    // soon" in adjacent rows; each read type claims from the not-yet-used
+    // pool, in evidence order (velocity > quiet > landing > comps > flags)
+    const used = new Set<string>();
+    const claim = (l: AuctionLot) => { used.add(l.id); return l; };
     const hot = upcoming
       .filter(l => l.bidVelocity && l.bidVelocity.delta > 0)
       .sort((a, b) => (b.bidVelocity!.delta) - (a.bidVelocity!.delta))
@@ -566,41 +599,50 @@ export default function SavedPage() {
     for (const l of hot) {
       const v = l.bidVelocity!;
       rows.push({
-        key: `hot-${l.id}`, tag: 'Most bids', lot: l, tone: 'hot',
-        fact: <>+{v.delta} {v.delta === 1 ? 'bid' : 'bids'} in {Math.round(v.hours)}h{v.pctile != null && <> · faster than {v.pctile}% of live lots</>}</>,
+        key: `hot-${claim(l).id}`, tag: 'Most bids', lot: l, tone: 'hot',
+        // pctile is a BRAG — printing "faster than 19% of live lots" reads
+        // as praise for a bottom-quintile pace; cite it only above median
+        fact: <>+{v.delta} {v.delta === 1 ? 'bid' : 'bids'} in {Math.round(v.hours)}h{v.pctile != null && v.pctile >= 50 && <> · faster than {v.pctile}% of live lots</>}</>,
       });
     }
     // the sleeper read: bid-platform lots landing THIS WEEK with a published
     // near-zero count — absent bidCount is absent data, never "no interest"
     const quiet = upcoming
-      .filter(l => typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= 3)
-      .filter(l => !hot.includes(l))
-      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 7; })
+      .filter(l => typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= TAG_QUIET_BIDS)
+      .filter(l => !used.has(l.id))
+      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= TAG_QUIET_DAYS; })
       .sort((a, b) => (a.bidCount ?? 0) - (b.bidCount ?? 0) || daysUntil(a.saleDate) - daysUntil(b.saleDate))
       .slice(0, 2);
     for (const l of quiet) {
       const d = daysUntil(l.saleDate);
       rows.push({
-        key: `q-${l.id}`, tag: 'Quietest', lot: l,
+        key: `q-${claim(l).id}`, tag: 'Quietest', lot: l,
         fact: <>{(l.bidCount ?? 0) === 0 ? 'no bids yet' : `only ${l.bidCount} ${l.bidCount === 1 ? 'bid' : 'bids'}`} · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{(l.currentBid || 0) > 0 ? <> · at {formatPrice(l.currentBid!)}</> : null}</>,
       });
     }
     const soon = upcoming
-      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= 2; })
+      .filter(l => !used.has(l.id))
+      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= TAG_SOON_DAYS; })
       .slice(0, 3);
     for (const l of soon) {
       const d = daysUntil(l.saleDate);
+      // formatEstimate on a no-estimate bid lot ALREADY prints the live bid
+      // and count ("$402 bid · 10 bids") — appending bidCount again printed
+      // "· 10 bids · 10 bids"; the count rides separately only alongside a
+      // real estimate
+      const hasEst = (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0;
       rows.push({
-        key: `soon-${l.id}`, tag: 'Lands soon', lot: l, tone: 'hot',
-        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
+        key: `soon-${claim(l).id}`, tag: 'Lands soon', lot: l, tone: 'hot',
+        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{hasEst && typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
       });
     }
     if (fullLoaded) {
       let found = 0;
       for (const l of upcoming) {
+        if (used.has(l.id)) continue;
         if (l.cardComps && l.cardComps.n > 0 && l.cardComps.med != null) {
           rows.push({
-            key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
+            key: `dc-${claim(l).id}`, tag: 'Direct comps', lot: l,
             fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {formatPrice(l.cardComps.med)} median</>,
           });
           found++;
@@ -608,7 +650,7 @@ export default function SavedPage() {
           const a = appraiseLot(l, allLots);
           if (a && a.kind === 'edition' && a.n >= 3) {
             rows.push({
-              key: `dc-${l.id}`, tag: 'Direct comps', lot: l,
+              key: `dc-${claim(l).id}`, tag: 'Direct comps', lot: l,
               fact: <>{a.n} same-edition comps · {formatPrice(a.value)} median</>,
             });
             found++;
@@ -619,35 +661,25 @@ export default function SavedPage() {
     }
     // deepest below-market — dealScore, THE one flagged ranking
     const under = upcoming
+      .filter(l => !used.has(l.id))
       .map(l => ({ l, sig: signalById.get(l.id) }))
       .filter((x): x is { l: AuctionLot; sig: LiveSignal } => !!x.sig && x.sig.label === 'Below Market')
       .sort((a, b) => dealScore(b.l, b.sig.pct) - dealScore(a.l, a.sig.pct))
       .slice(0, 2);
     for (const { l, sig } of under) {
       rows.push({
-        key: `bm-${l.id}`, tag: 'Below market', lot: l, tone: 'up',
+        key: `bm-${claim(l).id}`, tag: 'Below market', lot: l, tone: 'up',
         fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{(l.currentBid || 0) > 0 ? <> · {formatPrice(l.currentBid!)} bid</> : null}</>,
       });
     }
-    return rows;
+    return rows.slice(0, 8);
   }, [upcoming, allLots, fullLoaded, signalById]);
 
   /* ── THE ROOM — the watching ledger with the brief fused in: every row
      carries its reason tag and the ledger sorts action-first. ── */
   const room = useMemo(() => {
-    type Reason = { tag: string; rank: number };
-    const reasonOf = (l: AuctionLot): Reason | null => {
-      const d = daysUntil(l.saleDate);
-      const sig = signalById.get(l.id);
-      if (d >= 0 && d <= 2) return { tag: 'Lands soon', rank: 0 };
-      if (sig?.label === 'Below Market') return { tag: 'Below market', rank: 1 };
-      if (l.bidVelocity && l.bidVelocity.delta > 0) return { tag: 'Most bids', rank: 2 };
-      if (typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= 3 && d >= 0 && d <= 7) {
-        return { tag: 'Quiet', rank: 3 };
-      }
-      return null;
-    };
-    const rows = upcoming.map(l => ({ l, reason: reasonOf(l) }));
+    // watchTagOf — the ONE classifier Today's reads shares
+    const rows = upcoming.map(l => ({ l, reason: watchTagOf(l, signalById.get(l.id)) }));
     rows.sort((a, b) => {
       const ra = a.reason?.rank ?? 9;
       const rb = b.reason?.rank ?? 9;
@@ -748,6 +780,10 @@ export default function SavedPage() {
   const onCardToggle = useCallback((id: string) => {
     toggle(savedIdOf(id), lotById.get(id));
   }, [toggle, savedIdOf, lotById]);
+  // STABLE settled-row handlers — SettledRowView is memoized; fresh inline
+  // closures per row would defeat it on every keystroke-level re-render
+  const onSettledOwn = useCallback((savedId: string) => toggleOwned(savedId), [toggleOwned]);
+  const onSettledRemove = useCallback((savedId: string) => toggle(savedId), [toggle]);
 
   // phase-2 failed but SOME saves resolved eagerly — never silently thin the desk
   const partialLoadFailed = fullError && !fullLoaded && savedIds.length > 0;
@@ -855,9 +891,14 @@ export default function SavedPage() {
                   ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {sold.length + soldOrphans.length} settled.</>
                   : upcoming.length === 0 && savedLots.length === 0 && orphanIds.length > 0
                   ? <>Your desk: <Accent>{orphanIds.length} settled {orphanIds.length === 1 ? 'watch' : 'watches'}</Accent>, resolving results.</>
-                  : <>
-                      Watching <Accent>{upcoming.length || savedLots.length} {(upcoming.length || savedLots.length) === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
-                    </>}
+                  : upcoming.length > 0
+                  ? <>
+                      Watching <Accent>{upcoming.length} {upcoming.length === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
+                    </>
+                  // nothing live: the desk is a record, not a watch — falling
+                  // back to savedLots.length claimed "Watching 3 lots to the
+                  // hammer" over a sub-line that said "0 live lots"
+                  : <>Your desk: <Accent>{savedLots.length} settled {savedLots.length === 1 ? 'watch' : 'watches'}</Accent>, judged below.</>}
               sub={
                 <>
                   {summary.next && (
@@ -891,7 +932,11 @@ export default function SavedPage() {
             {/* partial phase-2 failure — say so where the data would be */}
             {partialLoadFailed && (
               <div className="ck-warn ray-enter" role="status">
-                Couldn&apos;t load the archive that resolves your concluded lots — settled results and appraisals are incomplete.{' '}
+                Couldn&apos;t load the archive that resolves your concluded lots —{' '}
+                {savedIds.length - savedLots.length > 0
+                  ? <>{savedIds.length - savedLots.length} of your {savedIds.length} saved {savedIds.length === 1 ? 'watch is' : 'watches are'} not shown, and </>
+                  : null}
+                settled results and appraisals are incomplete.{' '}
                 <button className="ck-warn-btn" onClick={() => retryFullLoad()}>Try again</button>
               </div>
             )}
@@ -1272,8 +1317,9 @@ export default function SavedPage() {
                       row={row}
                       meta={meta}
                       owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : false}
-                      onOwn={() => row.kind === 'lot' && toggleOwned(savedIdOf(row.lot.id))}
-                      onRemove={() => toggle(row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id)}
+                      savedId={row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id}
+                      onOwn={onSettledOwn}
+                      onRemove={onSettledRemove}
                       mobile={false}
                     />
                   );
@@ -1289,8 +1335,9 @@ export default function SavedPage() {
                       row={row}
                       meta={meta}
                       owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : false}
-                      onOwn={() => row.kind === 'lot' && toggleOwned(savedIdOf(row.lot.id))}
-                      onRemove={() => toggle(row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id)}
+                      savedId={row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id}
+                      onOwn={onSettledOwn}
+                      onRemove={onSettledRemove}
                       mobile
                     />
                   );

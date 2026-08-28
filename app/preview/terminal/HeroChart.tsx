@@ -95,6 +95,20 @@ const fmtTick = (v: number, unit: HeroLine['unit']): string => {
   if (unit === 'count') return v >= 1000 ? `${Math.round(v / 1000)}K` : `${Math.round(v)}`;
   return v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `$${Math.round(v / 1000)}K` : `$${Math.round(v)}`;
 };
+/** format a tick SET together — whole-K rounding on a tight domain collides
+    distinct rules into the same label ("$5K / $5K / $4K"); when that happens
+    the whole axis steps up one decimal so every printed rule reads as its
+    own value (the formatEstimate "$49K–$49K" guard, applied to an axis) */
+const fmtTickSet = (vals: number[], unit: HeroLine['unit']): Map<number, string> => {
+  const base = new Map(vals.map(v => [v, fmtTick(v, unit)]));
+  if (new Set(base.values()).size === base.size) return base;
+  const fine = (v: number): string => {
+    if (unit === 'pct') return `${v > 0 ? '+' : ''}${v.toFixed(1)}%`;
+    if (unit === 'count') return v >= 1000 ? `${(v / 1000).toFixed(1)}K` : `${Math.round(v)}`;
+    return v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(2)}M` : v >= 1000 ? `$${(v / 1000).toFixed(1)}K` : `$${Math.round(v)}`;
+  };
+  return new Map(vals.map(v => [v, fine(v)]));
+};
 const fmtVal = (v: number, unit: HeroLine['unit']): string => {
   if (unit === 'pct') return `${v > 0 ? '+' : ''}${v.toFixed(1)}%`;
   if (unit === 'count') return `${Math.round(v).toLocaleString()}/qtr`;
@@ -165,6 +179,8 @@ export default function HeroChart({
   const mainUnit = flipped ? (mainLines[0]?.unit ?? 'pct') : anchor.unit;
   const ticks = useMemo(() => niceTicks(main.min, main.max, compact ? 2 : 3), [main.min, main.max, compact]);
   const subTicks = useMemo(() => (flipped ? niceTicks(sub.min, sub.max, 1) : []), [flipped, sub.min, sub.max]);
+  const tickLabels = useMemo(() => fmtTickSet(ticks, mainUnit), [ticks, mainUnit]);
+  const subTickLabels = useMemo(() => fmtTickSet(subTicks, anchor.unit), [subTicks, anchor.unit]);
   const zeroInDomain = mainUnit === 'pct' && main.min < 0 && main.max > 0;
 
   // sparse x labels — first, ~middle(s), last
@@ -244,7 +260,7 @@ export default function HeroChart({
               <line x1={0} x2={W} y1={y} y2={y} className={isZero ? styles.hcRuleZero : styles.hcRule} />
               {!hideTickLabels && (
                 <text x={W - 4} y={y - 5} textAnchor="end" className={`${styles.hcTick}${mainUnit === 'pct' ? ` ${styles.pctData}` : ''}`}>
-                  {fmtTick(t, mainUnit)}{isZero && !flipped ? ' · est' : ''}
+                  {tickLabels.get(t)}{isZero && !flipped ? ' · est' : ''}
                 </text>
               )}
             </g>
@@ -344,7 +360,7 @@ export default function HeroChart({
               if (y < 10 || y > subHeight - 10) return null;
               return (
                 <text key={`st${t}`} x={W - 4} y={y - 4} textAnchor="end" className={styles.hcTick}>
-                  {fmtTick(t, anchor.unit)}
+                  {subTickLabels.get(t)}
                 </text>
               );
             })}

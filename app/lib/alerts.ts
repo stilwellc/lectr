@@ -104,20 +104,31 @@ export function useAlerts() {
   const { user } = useAuth();
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [ready, setReady] = useState(false);
+  // the TRUE unseen total — the row fetch is capped at 200, and counting
+  // unseen inside that window let the cap masquerade as the number ("200
+  // new" pinned forever). A head-count query is exact and row-free.
+  const [unseenExact, setUnseenExact] = useState<number | null>(null);
 
   useEffect(() => {
     let dead = false;
     (async () => {
-      if (!supabase || !user) { setAlerts([]); setReady(true); return; }
-      const { data } = await supabase
-        .from('alerts')
-        .select('id,search_id,lot_id,created_at,seen')
-        .eq('user_id', user.id)   // defense in depth alongside RLS
-        .order('created_at', { ascending: false })
-        .limit(200);
+      if (!supabase || !user) { setAlerts([]); setUnseenExact(null); setReady(true); return; }
+      const [{ data }, { count }] = await Promise.all([
+        supabase
+          .from('alerts')
+          .select('id,search_id,lot_id,created_at,seen')
+          .eq('user_id', user.id)   // defense in depth alongside RLS
+          .order('created_at', { ascending: false })
+          .limit(200),
+        supabase
+          .from('alerts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('seen', false),
+      ]);
       // on a fetch error keep the prior list — never wipe the UI to empty
       // (same doctrine as useSavedSearches above)
-      if (!dead) { if (data) setAlerts(data as AlertRow[]); setReady(true); }
+      if (!dead) { if (data) setAlerts(data as AlertRow[]); if (count != null) setUnseenExact(count); setReady(true); }
     })();
     return () => { dead = true; };
     // user?.id, not the user object — see refresh above
@@ -127,12 +138,13 @@ export function useAlerts() {
   const markAllSeen = useCallback(async () => {
     if (!supabase || !user) return;
     setAlerts(a => a.map(x => ({ ...x, seen: true })));
+    setUnseenExact(0);
     // explicit user filter: RLS scopes this, but an unscoped UPDATE must
     // never be one policy-config mistake away from flipping every user's rows
     await supabase.from('alerts').update({ seen: true }).eq('user_id', user.id).eq('seen', false);
   }, [user]);
 
-  return { alerts, ready, markAllSeen, unseen: alerts.filter(a => !a.seen).length };
+  return { alerts, ready, markAllSeen, unseen: unseenExact ?? alerts.filter(a => !a.seen).length };
 }
 
 /** Just the unseen count — for the nav, one cheap HEAD query per mount. */
