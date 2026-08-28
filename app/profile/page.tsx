@@ -812,9 +812,14 @@ export default function SavedPage() {
       .sort((a, b) => dealScore(b.l, b.sig.pct) - dealScore(a.l, a.sig.pct))
       .slice(0, 2);
     for (const { l, sig } of under) {
+      // formatEstimate on a no-estimate bid lot ALREADY prints the live bid
+      // ("$220 bid · 2 bids") — appending currentBid again printed
+      // "· $220 bid · 2 bids · $220 bid"; the bid rides separately only
+      // alongside a real estimate
+      const hasEst = (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0;
       rows.push({
         key: `bm-${claim(l).id}`, tag: 'Below market', lot: l, tone: 'up',
-        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{(l.currentBid || 0) > 0 ? <> · {formatPrice(l.currentBid!)} bid</> : null}</>,
+        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{formatEstimate(l) ? <> · {formatEstimate(l)}</> : null}{hasEst && (l.currentBid || 0) > 0 ? <> · {formatPrice(l.currentBid!)} bid</> : null}</>,
       });
     }
     return rows.slice(0, 8);
@@ -1308,7 +1313,7 @@ export default function SavedPage() {
                         <span className="num" style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
                           {flipped ? 'flipped' : dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
                           {vel ? (
-                            <span className="sub">+{vel.delta} bids/{Math.round(vel.hours)}h</span>
+                            <span className="sub">+{vel.delta} {vel.delta === 1 ? 'bid' : 'bids'}/{Math.round(vel.hours)}h</span>
                           ) : newBids > 0 ? (
                             <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
                           ) : null}

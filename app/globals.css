@@ -3448,5 +3448,7 @@ body {
 .ck-dossier-actions a:hover, .ck-dossier-actions button:hover { text-decoration-color: var(--color-fg); }
 .ck-dossier-actions .quiet { color: var(--color-text-muted); font-weight: 500; }
 
-/* settled desk never bleeds the rail on odd widths */
-.ray-settled-desk { overflow-x: auto; }
+/* settled desk never bleeds the rail on odd widths — clip, NOT auto:
+   an auto scroll container would re-anchor the sticky head to itself
+   and un-pin it from the viewport */
+.ray-settled-desk { overflow-x: clip; }
