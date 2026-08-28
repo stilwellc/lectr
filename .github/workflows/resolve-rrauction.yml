@@ -1,0 +1,39 @@
+# Dispatchable RR Auction resolve — the nightly's rrauction leg, runnable on
+# demand. Exists for exactly the sale-748 class of failure: a sale closes
+# between nightlies with published "Sold For" prices on its (still-live)
+# pages, and its rows sit frozen as status 'upcoming' until the next crawl.
+# resolve-rrauction's stale-sale pass settles them; this workflow lets that
+# happen NOW instead of at 07:00 UTC. Pair with a
+# `nightly.yml -f skip_crawl=true` dispatch to bake the healed segment.
+name: Resolve RR Auction (on demand)
+on:
+  workflow_dispatch: {}
+concurrency:
+  group: crawl-rrauction
+  cancel-in-progress: false
+permissions:
+  contents: read
+env:
+  NODE_OPTIONS: --max-old-space-size=10240
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RAY_HOUSE: rrauction
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Pull last-good segment
+        run: bash scripts/data-store.sh pull-segment rrauction
+      - name: Install Chrome
+        timeout-minutes: 8
+        run: npx playwright install chrome || npx playwright install --with-deps chrome || which google-chrome
+      - name: Resolve (live sales + stale closed sales)
+        run: npx tsx scripts/resolve-rrauction.ts --write
+      - name: Push segment
+        run: bash scripts/data-store.sh push-segment rrauction
