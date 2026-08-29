@@ -17,6 +17,7 @@ import HeroChart, { type HeroLine } from '../../preview/terminal/HeroChart';
 import { resolveHeroLayers, type HeroLayer } from '../../lib/heroLayers';
 import type { MarketData } from '../../hooks/useRayData';
 import { IndexLabMark } from '../marks';
+import FigCap from '../FigCap';
 
 const CSS = `
 .ray-il-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -41,7 +42,17 @@ const WINDOWS = [
 
 export default function IndexLab({ marketData, scope }: { marketData: MarketData | null; scope: string }) {
   const [tf, setTf] = useState<'1Y' | '3Y' | 'MAX'>('3Y');
-  const idx = marketData?.markets?.[scope]?.index || [];
+  // THE OBSERVATORY UPGRADE (Aug 29): the anchor is the HEDONIC index when
+  // the market publishes one — the statistically-defensible read, and its
+  // per-quarter confidence interval rides the chart as a shaded ribbon
+  // (uncertainty as a shape, the lab grammar). Cohort index remains the
+  // fallback for markets the hedonic engine can't yet carry.
+  const hed = marketData?.hedonic?.[scope]?.series;
+  const hasHedonic = Array.isArray(hed) && hed.length >= 8;
+  const idx = useMemo(
+    () => (hasHedonic ? hed! : (marketData?.markets?.[scope]?.index || [])),
+    [hasHedonic, hed, marketData, scope],
+  );
 
   const layerDefs = useMemo(() => resolveHeroLayers(scope, marketData), [scope, marketData]);
 
@@ -52,9 +63,17 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
     const win = idx.slice(startI);
     const base = win[0]?.value;
     if (!(base > 0)) return null;
+    const reb = (v: number) => ((v / base) - 1) * 100;
     const anchor: HeroLine = {
-      key: '_idx', label: 'Cohort index', color: '', unit: 'pct',
-      points: win.map(p => ({ period: p.period, value: ((p.value / base) - 1) * 100, n: p.n ?? 0 })),
+      key: '_idx', label: hasHedonic ? 'Hedonic index' : 'Cohort index', color: '', unit: 'pct',
+      points: win.map(p => {
+        const w = p as { period: string; value: number; n?: number; ciLo?: number; ciHi?: number };
+        return {
+          period: w.period, value: reb(w.value), n: w.n ?? 0,
+          ...(hasHedonic && w.ciLo != null && w.ciHi != null && w.ciLo > 0
+            ? { lo: reb(w.ciLo), hi: reb(w.ciHi) } : {}),
+        };
+      }),
     };
     const startPeriod = win[0].period;
     const windowLayer = (l: HeroLayer): { line: HeroLine; last: number; kind: HeroLayer['kind'] } | null => {
@@ -70,7 +89,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
     const main = layerDefs.main.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
     const sub = layerDefs.sub.map(windowLayer).filter((x): x is NonNullable<typeof x> => !!x);
     return { anchor, main, sub, anchorLast: anchor.points[anchor.points.length - 1].value };
-  }, [idx, tf, layerDefs]);
+  }, [idx, tf, layerDefs, hasHedonic]);
 
   // thin history: keep the card (a silent gap reads as a bug) and say why
   if (!built) {
@@ -112,7 +131,9 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
         </span>
       </div>
       <div className="ray-vm-method" style={{ margin: '2px 0 10px', textAlign: 'left' }}>
-        like-for-like cohort index, rebased Δ% over the window · layers: the market&rsquo;s tracked sub-markets · every point a real quarterly reading
+        {hasHedonic
+          ? <>hedonic index — like-for-like controls, IRLS fit, rebased Δ% over the window · the shaded ribbon is the model&rsquo;s own 95% interval</>
+          : <>like-for-like cohort index, rebased Δ% over the window · layers: the market&rsquo;s tracked sub-markets</>}
       </div>
       <HeroChart
         anchor={built.anchor}
@@ -123,12 +144,20 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
         subHeight={72}
         compact
         play={false}
+        band={hasHedonic}
       />
       <div className="ray-il-legend">
-        {key('Cohort index', '', built.anchorLast, 'anchor')}
+        {key(hasHedonic ? 'Hedonic index' : 'Cohort index', '', built.anchorLast, 'anchor')}
         {built.main.map(x => key(x.line.label, x.line.color, x.last, x.kind))}
         {built.sub.map(x => key(x.line.label, x.line.color, x.last, x.kind))}
       </div>
+      <FigCap>
+        {hasHedonic
+          ? <>Hedonic price index, quarterly — log-price regression with reference/form/size/house controls, IRLS-weighted,
+              refit nightly; the ribbon is the per-quarter 95% CI. Rebased to the window start; {idx.length} quarters on file.</>
+          : <>Like-for-like cohort index, quarterly — each cohort measured against its own average, never chained;
+              {' '}{idx.length} quarters on file.</>}
+      </FigCap>
     </div>
   );
 }

@@ -4061,3 +4061,14 @@ html[data-lectr-light] .vd-lane-name::before {
   margin-right: 10px;
   vertical-align: 2px;
 }
+
+/* the confidence ribbon — gold-wash on dark, ink-wash on porcelain */
+html[data-lectr-light] { --ci-ribbon: rgba(29, 29, 27, 0.07); }
+
+/* lab categorical inks — the calibration curve's per-market lines, deepened
+   for paper (the pastel screen hues wash on white) */
+html[data-lectr-light] {
+  --lab-art: #3E6488;
+  --lab-design: #2E7D6E;
+  --lab-watches: #6B4FA1;
+}

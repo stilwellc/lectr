@@ -67,9 +67,16 @@ export default function SeasonalityStrip({ marketData, scope }: {
         <span className="ray-vm-method">hammer vs estimate by calendar month · trailing full-history · {totalN.toLocaleString()} sales</span>
       </div>
       <div className="ray-ss-grid">
-        {cells.map((c, i) =>
-          c.n >= MIN_N ? (
-            <div key={MONTHS[i]} className="ray-ss-cell" data-dir={toneOf(c.hammerMedPct)} title={`${c.n.toLocaleString()} sales`}>
+        {cells.map((c, i) => {
+          const heat = Math.min(Math.abs(c.hammerMedPct ?? 0), 12) / 12;
+          const dir = toneOf(c.hammerMedPct);
+          const bg = c.n >= MIN_N && dir === 'up'
+            ? `color-mix(in srgb, var(--color-up) ${Math.round(heat * 24)}%, transparent)`
+            : c.n >= MIN_N && dir === 'down'
+              ? `color-mix(in srgb, var(--color-down) ${Math.round(heat * 24)}%, transparent)`
+              : undefined;
+          return c.n >= MIN_N ? (
+            <div key={MONTHS[i]} className="ray-ss-cell" data-dir={dir} style={bg ? { background: bg } : undefined} title={`${c.n.toLocaleString()} sales`}>
               <span className="ray-ss-mo">{MONTHS[i]}</span>
               <span className="ray-ss-pct">{fmtSignedPct(c.hammerMedPct)}</span>
               <span className="ray-ss-n">{fmtN(c.n)}</span>
@@ -80,8 +87,8 @@ export default function SeasonalityStrip({ marketData, scope }: {
               <span className="ray-ss-pct">—</span>
               <span className="ray-ss-n">&nbsp;</span>
             </div>
-          )
-        )}
+          );
+        })}
       </div>
       {showTakeaway && (
         <p className="ray-ss-take">

@@ -9,9 +9,9 @@ const BUCKET_LABELS = ['<0.6×', '0.6–0.9×', '0.9–1.3×', '1.3–2×', '2�
 // hero and rides the chart-hero token; per-market cohorts stay distinguishable
 const MARKET_COLORS: Record<string, string> = {
   global: 'var(--chart-hero, #e8dab6)',
-  art: '#7EA4CC',
-  design: '#6FB5AC',
-  watches: '#A98BC8',
+  art: 'var(--lab-art, #7EA4CC)',
+  design: 'var(--lab-design, #6FB5AC)',
+  watches: 'var(--lab-watches, #A98BC8)',
 };
 
 /**

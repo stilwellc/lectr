@@ -75,11 +75,22 @@ export default function HouseMatrix({ marketData, scope }: {
                 if (!cell || cell.n < MIN_N) {
                   return <span key={c} className="ray-hm-cell ray-hm-empty">—</span>;
                 }
+                // HEAT: the cell's ground carries the magnitude (|pct| capped
+                // at 15 → alpha ramp) so the matrix pattern reads at a glance —
+                // the diverging-heatmap grammar, in the two signal inks only
+                const heat = Math.min(Math.abs(cell.hammerMedPct), 15) / 15;
+                const dir = toneOf(cell.hammerMedPct);
+                const bg = dir === 'up'
+                  ? `color-mix(in srgb, var(--color-up) ${Math.round(heat * 26)}%, transparent)`
+                  : dir === 'down'
+                    ? `color-mix(in srgb, var(--color-down) ${Math.round(heat * 26)}%, transparent)`
+                    : undefined;
                 return (
                   <span
                     key={c}
                     className="ray-hm-cell"
-                    data-dir={toneOf(cell.hammerMedPct)}
+                    data-dir={dir}
+                    style={bg ? { background: bg, borderRadius: 6 } : undefined}
                     title={`${cell.n.toLocaleString()} sales · hammers ${fmtSignedPct(cell.hammerMedPct)} vs the house's estimate mid`}
                   >
                     <span className="num">{fmtSignedPct(cell.hammerMedPct)}</span>

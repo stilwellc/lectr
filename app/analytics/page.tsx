@@ -32,6 +32,7 @@ import meta from '../../public/data/ray/meta.json';
 
 const Distributions = dynamic(() => import('../components/analytics/Distributions'), { ssr: false });
 const CalibrationCurve = dynamic(() => import('../components/analytics/CalibrationCurve'), { ssr: false });
+const RecordByYear = dynamic(() => import('../components/RecordByYear'), { ssr: false });
 
 /* ============================================================
    THE RESEARCH DESK — /analytics rebuilt as the data-science
@@ -115,6 +116,9 @@ export default function AnalyticsPage() {
         )}
         {(activeKey === 'all' || activeKey === 'sports') && <div style={{ marginBottom: 14 }}><GradeLadderPanel marketData={marketData} /></div>}
         {backtest && <CalibrationCurve backtest={backtest} />}
+        {/* the by-year replay — 27 years of flagged-vs-unflagged, previously
+            unplotted on the research desk; the edge band figure */}
+        {backtest && <div className="ray-rby-host">{<RecordByYear backtest={backtest} />}</div>}
       </div>
     )],
     ['horizon', <LongHorizon key="horizon" marketData={marketData} scope={activeKey} />],
@@ -141,6 +145,15 @@ export default function AnalyticsPage() {
            svg): on a 390px viewport the panels ran away to ~600px and bled
            off-screen. Capping the items breaks the loop. */
         .ray-desk-microgrid > * { min-width: 0; }
+        .ray-abstract { max-width: 760px; margin-top: 26px; padding: 4px 0 0 18px; border-left: 2px solid var(--color-fg); }
+        .ray-abstract-k { font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-butter-text); }
+        .ray-abstract p { margin: 6px 0 0; font-size: 14px; line-height: 1.7; color: var(--color-text-secondary); }
+        .ray-abstract b { color: var(--color-fg); font-variant-numeric: tabular-nums; }
+        .ray-methods { max-width: 820px; padding-block: 34px 8px; }
+        .ray-methods p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.7; color: var(--color-text-muted); }
+        /* RecordByYear ships as a .rail section for /value — hosted inside
+           the engine cell (already inside a rail) it must not double-gutter */
+        .ray-rby-host .rail { padding-inline: 0; max-width: none; }
         @media (max-width: 900px) { .ray-desk-microgrid { grid-template-columns: 1fr; } }
       ` }} />
       <ArtistNav activeSlug="analytics" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
@@ -156,6 +169,25 @@ export default function AnalyticsPage() {
             {lastCrawl ? <>, read {formatDate(lastCrawl)}</> : null}.</>}
         />
         <DeskNote market={activeKey} style={{ marginTop: 12 }} />
+
+        {/* THE ABSTRACT — the lab-report opening: what this desk measured and
+            what it found, three claims with their bases. Prose, not tiles. */}
+        {backtest && (
+          <div className="ray-abstract ray-enter">
+            <span className="ray-abstract-k">Abstract</span>
+            <p>
+              Nightly, this desk replays every settled sale against the engine&rsquo;s point-in-time calls and refits
+              its indexes with like-for-like controls. Across <b>{backtest.flagged.n.toLocaleString()}</b> replayed
+              flags, below-market calls realized{' '}
+              <b className="pct-data" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                {fmtSignedPct(backtest.flagged.medianPerfPct)}
+              </b>{' '}
+              vs estimate all-in against {fmtSignedPct(backtest.unflagged.medianPerfPct)} unflagged — an edge that
+              holds in every hammer year since 2000 (FIG. below). Indexes publish only where their 95% interval
+              resolves the sign; everything else abstains, and the abstentions are printed.
+            </p>
+          </div>
+        )}
 
         {/* the desk strip — the eager headline facts */}
         <div className="ray-desk-strip2">
@@ -212,6 +244,19 @@ export default function AnalyticsPage() {
       {/* ── DEEP POOLS — corpus-scale panels, mounted on approach ── */}
       <DeepPools activeKey={activeKey} mktSet={mktSet} marketStats={marketStats} />
 
+      {/* THE METHODS — the lab colophon: how every figure on this page is made */}
+      <section className="rail ray-methods">
+        <span className="ray-abstract-k">Methods</span>
+        <p>
+          Price movement: hedonic log-price regression per market (reference/form/size/house controls,
+          IRLS-weighted, quarterly time coefficients) and same-object repeat-sale fits where pairs allow; both
+          abstain below density, dominance and CI gates, and a ±plausibility ceiling drops implied compound moves
+          the controls cannot defend. Record: every flag replayed against realized results at both hammer and
+          all-in bases — never backfilled. Calibration: beat-rates refit nightly, recency-weighted and shrunk.
+          Figures print their n and basis; suppressed cells mean the data did not clear the bar. Data from public
+          auction results across 16 houses.
+        </p>
+      </section>
       <Colophon record={null} />
     </div>
   );

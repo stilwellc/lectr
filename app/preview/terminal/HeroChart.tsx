@@ -27,7 +27,7 @@ import styles from './style.module.css';
    reading; the readout prints values in each line's own unit.
    ============================================================ */
 
-export interface HeroPoint { period: string; value: number; n: number }
+export interface HeroPoint { period: string; value: number; n: number; lo?: number; hi?: number }
 export interface HeroLine {
   key: string;
   label: string;
@@ -53,6 +53,13 @@ interface Props {
       lines take the MAIN stage; the anchor (the numeral's own line) rides
       the lower band. Same scrub, same chips, same honesty. */
   flip?: boolean;
+  /** draw the anchor's per-point confidence band (points carry lo/hi) as a
+      shaded ribbon under the line — the lab grammar: uncertainty is part
+      of the figure, not a footnote */
+  band?: boolean;
+  /** print every line's label at its end persistently (the direct-label
+      grammar; default only ≤3-series charts do) */
+  alwaysLabels?: boolean;
 }
 
 /* ── scales & paths ────────────────────────────────────────── */
@@ -115,13 +122,23 @@ const fmtVal = (v: number, unit: HeroLine['unit']): string => {
   return v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(2)}M` : `$${Math.round(v).toLocaleString()}`;
 };
 
+/** the CI ribbon path — linear segments (a confidence envelope must never
+    overshoot its own bounds, so no monotone smoothing here) */
+function ribbonPath(pts: HeroPoint[], xOf: Map<string, number>, yOf: (v: number) => number): string {
+  const withBand = pts.filter(p => p.lo != null && p.hi != null && xOf.has(p.period));
+  if (withBand.length < 2) return '';
+  const top = withBand.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf.get(p.period)!.toFixed(2)},${yOf(p.hi!).toFixed(2)}`).join('');
+  const bot = withBand.slice().reverse().map(p => `L${xOf.get(p.period)!.toFixed(2)},${yOf(p.lo!).toFixed(2)}`).join('');
+  return `${top}${bot}Z`;
+}
+
 /* one pane's geometry: x from the shared period axis, y from its own domain */
 function usePane(lines: HeroLine[], periods: string[], w: number, h: number, padTop: number, padBot: number) {
   return useMemo(() => {
     const xOf = new Map<string, number>();
     const span = Math.max(1, periods.length - 1);
     periods.forEach((p, i) => xOf.set(p, (i / span) * w));
-    const vals = lines.flatMap(l => l.points.map(p => p.value));
+    const vals = lines.flatMap(l => l.points.flatMap(p => (p.lo != null && p.hi != null ? [p.value, p.lo, p.hi] : [p.value])));
     let min = vals.length ? Math.min(...vals) : 0;
     let max = vals.length ? Math.max(...vals) : 1;
     if (min === max) { min -= 1; max += 1; }
@@ -141,7 +158,7 @@ function usePane(lines: HeroLine[], periods: string[], w: number, h: number, pad
 export default function HeroChart({
   anchor, layers = [], subLayers = [], subLabel, highlight,
   height = 280, subHeight = 84, compact = false, play, flip = false,
-  hideTickLabels = false,
+  hideTickLabels = false, band = false, alwaysLabels = false,
 }: Props) {
   const reduce = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -284,6 +301,12 @@ export default function HeroChart({
         {hoverX != null && <line x1={hoverX} x2={hoverX} y1={10} y2={height - 20} className={styles.hcCross} />}
 
         <g className={animCls || undefined}>
+          {/* the confidence ribbon — under every line; the model's own
+              uncertainty printed as a shape, not a footnote */}
+          {band && !flipped && (() => {
+            const d = ribbonPath(anchor.points, main.xOf, main.yOf);
+            return d ? <path d={d} fill="var(--ci-ribbon, rgba(232, 218, 182, 0.10))" stroke="none" /> : null;
+          })()}
           {/* layers under the anchor (flipped: every main line IS a layer) */}
           {(flipped ? main.paths : main.paths.slice(1)).map(({ line, d, pts }) => (
             <g key={line.key} style={{ opacity: opacityOf(line.key), transition: 'opacity 0.25s ease' }}>
@@ -292,7 +315,7 @@ export default function HeroChart({
               {pts.length > 0 && (
                 <circle cx={main.xOf.get(pts[pts.length - 1].period)} cy={main.yOf(pts[pts.length - 1].value)} r={2.2} fill={line.color} />
               )}
-              {(highlight === line.key || mainLines.length <= 3) && pts.length > 0 && (
+              {(highlight === line.key || alwaysLabels || mainLines.length <= 3) && pts.length > 0 && (
                 <text x={Math.min(W - 4, (main.xOf.get(pts[pts.length - 1].period) ?? 0) + 8)}
                   y={main.yOf(pts[pts.length - 1].value) + 3}
                   textAnchor={(main.xOf.get(pts[pts.length - 1].period) ?? 0) > W - 80 ? 'end' : 'start'}

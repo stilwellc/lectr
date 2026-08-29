@@ -35,11 +35,26 @@ export default function VerifiedMovers({
     </div>
   );
 
+  // THE WHISKER BOARD — the CI is the whole point, so it IS the figure:
+  // every mover renders as an interval bar (lo ─── ● ─── hi) on one shared
+  // axis spanning the board's extremes, zero rule marked. The point estimate
+  // is the dot; the number annotates rather than carries.
+  const shown = movers.slice(0, 5);
+  const ext = shown.length
+    ? { lo: Math.min(0, ...shown.map(m => m.ciLoPct)), hi: Math.max(0, ...shown.map(m => m.ciHiPct)) }
+    : { lo: 0, hi: 1 };
+  const X = (v: number) => ((v - ext.lo) / (ext.hi - ext.lo || 1)) * 100;
   const Body = movers.length ? (
     <div className="ray-vm-rows">
-      {movers.slice(0, 5).map((mv) => (
+      {shown.map((mv) => (
         <div key={mv.slug} className="ray-vm-row" data-dir={mv.dir}>
           <span className="ray-vm-name">{mv.label}</span>
+          <span className="ray-vm-whisk" aria-hidden>
+            <i className="ray-vm-zero" style={{ left: `${X(0)}%` }} />
+            <i className="ray-vm-band" data-dir={mv.dir}
+              style={{ left: `${X(mv.ciLoPct)}%`, width: `${Math.max(1.5, X(mv.ciHiPct) - X(mv.ciLoPct))}%` }} />
+            <i className="ray-vm-dot" data-dir={mv.dir} style={{ left: `${X(mv.changePct)}%` }} />
+          </span>
           <span className="ray-vm-chg" data-dir={mv.dir}>
             {fmtPct(mv.changePct)} <em>{mv.horizon}</em>
           </span>
@@ -73,12 +88,20 @@ function VerifiedStyles() {
       .ray-vm-rows { display: flex; flex-direction: column; }
       .ray-vm-row {
         display: grid;
-        grid-template-columns: 1fr auto auto;
-        align-items: baseline;
+        grid-template-columns: minmax(90px, 1fr) minmax(80px, 1.2fr) auto auto;
+        align-items: center;
         gap: 10px 14px;
         padding: 9px 0;
         border-top: 1px solid var(--color-border);
       }
+      .ray-vm-whisk { position: relative; height: 14px; min-width: 70px; }
+      .ray-vm-zero { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--chart-ref, rgba(128,128,128,0.3)); }
+      .ray-vm-band { position: absolute; top: 5px; height: 4px; border-radius: 2px; opacity: 0.35; }
+      .ray-vm-band[data-dir="up"] { background: var(--color-up); }
+      .ray-vm-band[data-dir="down"] { background: var(--color-down); }
+      .ray-vm-dot { position: absolute; top: 3px; width: 8px; height: 8px; border-radius: 50%; transform: translateX(-50%); }
+      .ray-vm-dot[data-dir="up"] { background: var(--color-up); }
+      .ray-vm-dot[data-dir="down"] { background: var(--color-down); }
       .ray-vm-row:first-child { border-top: none; }
       .ray-vm-name { font-size: 13.5px; font-weight: 600; color: var(--color-fg); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ray-vm-chg { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }

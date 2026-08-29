@@ -11,7 +11,6 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
-import { LAYER_PALETTE } from '../../lib/heroLayers';
 import { StrengthMark } from '../marks';
 
 type DrillRow = SubMarketRead & { parent: string };
@@ -67,9 +66,14 @@ function Spark({ values, color }: { values: number[]; color: string }) {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
+  // the dashed rule marks the window's STARTING level — the spark now answers
+  // "up or down since then" at a glance instead of drawing decoration
+  const y0 = pad + (1 - (values[0] - min) / (max - min)) * (h - pad * 2);
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="ray-rs-spark" aria-hidden>
+      <line x1={pad} x2={w - pad} y1={y0} y2={y0} stroke="var(--chart-ref)" strokeWidth={0.75} strokeDasharray="2 3" />
       <polyline points={pts} fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={w - pad} cy={pad + (1 - (values[values.length - 1] - min) / (max - min)) * (h - pad * 2)} r={1.8} fill={color} />
     </svg>
   );
 }
@@ -92,7 +96,7 @@ function BoardColumn({ head, rows, showKind }: { head: string; rows: Ranked[]; s
   return (
     <div className="ray-rs-col">
       <div className="ray-rs-colhead">{head}</div>
-      {rows.map(({ row, value, rank }, i) => (
+      {rows.map(({ row, value, rank }) => (
         <Link key={row.slug} href={`/sub/${row.slug.replace(':', '/')}`} className="ray-rs-row">
           <span className="ray-rs-rank">{rank}</span>
           <span style={{ minWidth: 0 }}>
@@ -102,7 +106,7 @@ function BoardColumn({ head, rows, showKind }: { head: string; rows: Ranked[]; s
             </span>
             <span className="ray-rs-n">{row.lots.toLocaleString()} lots</span>
           </span>
-          <Spark values={sparkValues(row)} color={LAYER_PALETTE[i % LAYER_PALETTE.length]} />
+          <Spark values={sparkValues(row)} color={value >= 0 ? 'var(--color-up)' : 'var(--color-down)'} />
           <ReadCell r={row} value={value} />
         </Link>
       ))}
