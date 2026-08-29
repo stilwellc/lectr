@@ -46,7 +46,7 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 import IndexHero from './IndexHero';
 import SubMarketBoard from './SubMarketBoard';
 import TonightsWall, { type WallItem, gapMultiple } from './TonightsWall';
-import { CellGrid, Cell, ColorCell } from '../../components/cells';
+import { CellGrid, Cell, ColorCell, FigGate, FigCorpus, FigPools, FigTape } from '../../components/cells';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
 
@@ -250,18 +250,6 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
    not in cells.tsx: the figures there are 132px plates; these are chips. */
 const ICO = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.3 } as const;
 const ICO_DOT = { ...ICO, strokeDasharray: '1 2.4' } as const;
-function IcoEngine() { // the gate — candidates fan in, one call leaves
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden>
-      <line x1="3" y1="4.5" x2="9" y2="10" {...ICO_DOT} />
-      <line x1="3" y1="10" x2="9" y2="10" {...ICO_DOT} />
-      <line x1="3" y1="15.5" x2="9" y2="10" {...ICO_DOT} />
-      <circle cx="10.4" cy="10" r="1.6" {...ICO} />
-      <line x1="12.4" y1="10" x2="16.6" y2="10" {...ICO} />
-      <circle cx="17" cy="10" r="1.1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
 function IcoRecord() { // the settled tape — ticks print, one result steps up
   return (
     <svg viewBox="0 0 20 20" aria-hidden>
@@ -270,18 +258,6 @@ function IcoRecord() { // the settled tape — ticks print, one result steps up
       <line x1="14.5" y1="13.5" x2="14.5" y2="11.5" {...ICO} />
       <path d="M8.5 13.5 L8.5 8 L11.5 8 L11.5 13.5" {...ICO} />
       <line x1="2.5" y1="8" x2="17.5" y2="8" {...ICO_DOT} />
-    </svg>
-  );
-}
-function IcoMakers() { // the ledger — one dot-and-rule row per name
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden>
-      <circle cx="4.2" cy="5.5" r="1.2" {...ICO} />
-      <line x1="7.5" y1="5.5" x2="17" y2="5.5" {...ICO} />
-      <circle cx="4.2" cy="10" r="1.2" {...ICO} />
-      <line x1="7.5" y1="10" x2="17" y2="10" {...ICO} />
-      <circle cx="4.2" cy="14.5" r="1.2" fill="currentColor" stroke="none" />
-      <line x1="7.5" y1="14.5" x2="17" y2="14.5" {...ICO_DOT} />
     </svg>
   );
 }
@@ -933,33 +909,48 @@ export default function TerminalHomePage() {
                     href="#on-the-block"
                   />
                 )}
+                {/* THE POP (Collin: "nothing POPs, dead space"): every cell
+                    leads with its big mono numeral — numbers are the desk's
+                    product art — and carries its patent figure as a top-right
+                    watermark. Stats are the same live values the bodies
+                    already printed; nothing invented. */}
                 <Cell
-                  icon={<IcoEngine />}
+                  stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : '1.3×'}
+                  statNote={belowMktCount > 0 ? 'flagged on the book tonight' : 'where a flag becomes legal'}
+                  mark={<FigGate size={96} />}
                   label="The value engine"
                   body={belowMktCount > 0
-                    ? `Live asks priced against where their comparables actually sold — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged on this book right now.`
+                    ? 'Live asks priced against where their comparables actually sold.'
                     : 'Live asks priced against where their comparables actually sold — every flag on this page starts here.'}
                   href="/value"
                 />
                 <Cell
+                  stat={backtest?.flagged?.n ? backtest.flagged.n.toLocaleString() : undefined}
+                  statNote={backtest?.flagged?.n ? 'settled calls replayed' : undefined}
                   icon={<IcoRecord />}
+                  mark={<FigCorpus size={96} />}
                   label="The record"
                   body={backtest?.flagged?.n
-                    ? `Every flagged call replayed against the hammer that followed — ${backtest.flagged.n.toLocaleString()} settled calls on the record.`
+                    ? 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'
                     : 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'}
                   href="/analytics"
                 />
                 <Cell
-                  icon={<IcoMakers />}
+                  stat={MAKER_COUNT.toLocaleString()}
+                  statNote={`makers tracked across ${VERTICAL_COUNT} verticals`}
+                  mark={<FigPools size={96} />}
                   label="The makers ledger"
-                  body={`Sale history, live coverage and market reads for ${MAKER_COUNT.toLocaleString()} tracked makers across ${VERTICAL_COUNT} verticals.`}
+                  body="Sale history, live coverage and market reads, one dossier per name."
                   href="/makers"
                 />
                 <Cell
+                  stat={savedIds.length > 0 ? savedIds.length.toLocaleString() : undefined}
+                  statNote={savedIds.length > 0 ? (savedIds.length === 1 ? 'lot on your desk' : 'lots on your desk') : undefined}
                   icon={<IcoDesk />}
+                  mark={<FigTape size={96} />}
                   label="Your desk"
                   body={savedIds.length > 0
-                    ? `${savedIds.length.toLocaleString()} saved — what moved since you saved it, the next hammers, and your own record.`
+                    ? 'What moved since you saved it, the next hammers, and your own record.'
                     : 'Save any lot on the block and it reports here — what moved since you saved it, and when it hammers.'}
                   href="/profile"
                 />

@@ -4257,6 +4257,28 @@ a.ns-cell:active { transform: scale(0.99); }
 }
 .ns-cell-chip svg { width: 20px; height: 20px; }
 .ns-cell-air { flex: 1 1 44px; min-height: 34px; }
+/* the POP row — a big mono numeral leads the cell; the watermark figure
+   balances it top-right (composition, not dead space) */
+.ns-cell-statwrap { display: flex; flex-direction: column; gap: 5px; position: relative; z-index: 1; }
+.ns-cell-stat {
+  font-family: var(--font-mono), monospace;
+  font-size: clamp(34px, 2.9vw, 46px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+}
+.ns-cell-stat-note { font-size: 12.5px; color: var(--color-text-muted); }
+.ns-cell-mark {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  color: var(--color-text-faint);
+  opacity: 0.65;
+  pointer-events: none;
+}
+a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--ease-house); }
 .ns-cell-label { font-size: 15px; font-weight: 450; color: var(--color-text-muted); margin-bottom: 5px; }
 .ns-cell-body { font-size: 15px; line-height: 1.5; color: var(--color-fg); }
 

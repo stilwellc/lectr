@@ -39,17 +39,32 @@ export function CellGrid({ children, min = 240, className = '' }: {
   );
 }
 
-export function Cell({ icon, label, body, span, href }: {
+export function Cell({ icon, label, body, span, href, stat, statNote, mark }: {
   icon?: React.ReactNode;
   label: string;
   body: React.ReactNode;
   /** grid-column span (e.g. 2 for a wide cell) */
   span?: number;
   href?: string;
+  /** the POP: a big mono numeral leading the cell (numbers are lectr's
+      product art) — when present it replaces the icon chip */
+  stat?: React.ReactNode;
+  /** small unit line under the stat ("flagged tonight") */
+  statNote?: React.ReactNode;
+  /** patent-figure watermark, top-right (FigGate etc.) */
+  mark?: React.ReactNode;
 }) {
   const inner = (
     <>
-      {icon != null && <span className="ns-cell-chip" aria-hidden>{icon}</span>}
+      {mark != null && <span className="ns-cell-mark" aria-hidden>{mark}</span>}
+      {stat != null ? (
+        <span className="ns-cell-statwrap">
+          <span className="ns-cell-stat">{stat}</span>
+          {statNote != null && <span className="ns-cell-stat-note">{statNote}</span>}
+        </span>
+      ) : icon != null ? (
+        <span className="ns-cell-chip" aria-hidden>{icon}</span>
+      ) : null}
       <span className="ns-cell-air" aria-hidden />
       <span className="ns-cell-label">{label}</span>
       <span className="ns-cell-body">{body}</span>
