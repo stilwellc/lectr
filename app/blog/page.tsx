@@ -74,36 +74,41 @@ function fmtShort(date: string): string {
    Injected via __html — raw-text <style> children with quotes break
    hydration on prerendered pages (LotPage's convention). */
 const BLOG_CSS = `
+/* NORTH STAR (docs/NORTHSTAR_UI.md): the index head goes Waldenburg-style —
+   huge, LIGHT, tight — and every label speaks the quiet sentence-case
+   kicker voice. Ledger rows keep their grammar; the double certificate
+   rule collapses to one hairline. */
+.ray-blog-head .ray-masthead-h1{font-weight:320 !important;letter-spacing:-0.02em !important;font-size:clamp(36px,5vw,48px) !important;line-height:1.08 !important}
+@media (max-width:480px){.ray-blog-head .ray-masthead-h1{font-size:clamp(28px,8vw,34px) !important}}
 .ray-blog-shelf{display:flex;flex-direction:column;gap:14px}
 .ray-blog-lead,.ray-blog-entry{display:block;text-decoration:none;color:inherit;border:1px solid var(--hairline);border-radius:12px;padding:22px 24px;background:var(--color-bg-elevated)}
 .ray-blog-date{font-family:var(--font-mono),monospace;font-size:11.5px;color:var(--color-text-faint);margin-bottom:8px;font-variant-numeric:tabular-nums}
-.ray-blog-title{font-size:21px;font-weight:700;letter-spacing:-0.02em;margin:0 0 8px;line-height:1.3;color:var(--color-fg)}
+.ray-blog-title{font-size:21px;font-weight:550;letter-spacing:-0.015em;margin:0 0 8px;line-height:1.3;color:var(--color-fg)}
 .ray-blog-dek{font-size:14.5px;line-height:1.55;color:var(--color-text-secondary);margin:0}
-.ray-blog-read{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:13px;font-weight:600;color:var(--color-text-muted)}
+.ray-blog-read{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:13px;font-weight:500;color:var(--color-text-muted)}
 .ray-blog-lead-kicker{display:none}
 .ray-blog-entry-flick{display:none}
 .ray-blog-ledger{display:contents}
 .ray-blog-ledger-head{display:none}
 @media (min-width:900px){
   .ray-blog-shelf{gap:0}
-  /* the lead — the newest note, full width, editorial voice */
+  /* the lead — the newest note, full width, light editorial voice */
   .ray-blog-lead{border:none;border-radius:0;background:none;padding:6px 0 30px;transform:none}
   .ray-blog-lead:hover{border:none;transform:none}
   .ray-blog-lead .ray-blog-date{display:none}
   .ray-blog-lead-kicker{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
-  .ray-blog-lead-kicker .no{letter-spacing:0.08em;color:var(--color-text-faint)}
-  .ray-blog-lead .ray-blog-title{font-family:var(--font-serif),serif;font-size:clamp(30px,3.6vw,40px);font-weight:620;letter-spacing:-0.025em;line-height:1.12;margin:0 0 12px;max-width:24ch}
-  .ray-blog-lead:hover .ray-blog-title{color:var(--color-accent-gold,var(--color-fg))}
+  .ray-blog-lead-kicker .no{color:var(--color-text-faint)}
+  .ray-blog-lead .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:clamp(30px,3.6vw,40px);font-weight:340;letter-spacing:-0.02em;line-height:1.12;margin:0 0 12px;max-width:26ch}
+  .ray-blog-lead:hover .ray-blog-title{color:var(--color-text-secondary)}
   .ray-blog-lead .ray-blog-dek{font-size:15.5px;line-height:1.6;max-width:62ch}
-  /* the ledger — the rest of the file as dated rows */
-  .ray-blog-ledger{display:block;border-top:2px solid var(--color-fg);position:relative}
-  .ray-blog-ledger::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
+  /* the ledger — the rest of the file as dated rows, one quiet top rule */
+  .ray-blog-ledger{display:block;border-top:1px solid var(--hairline);position:relative}
   .ray-blog-ledger-head{display:grid;grid-template-columns:118px 1fr;gap:0 22px;padding:9px 0 10px}
   .ray-blog-entry{display:grid;grid-template-columns:118px 1fr auto;gap:2px 22px;align-items:baseline;border:none;border-radius:0;background:none;padding:16px 2px;border-top:1px solid var(--hairline);transition:background var(--duration-fast) var(--ease-signature)}
   .ray-blog-entry:hover{border-color:var(--hairline);transform:none;background:var(--color-hover-item)}
   .ray-blog-entry .ray-blog-date{grid-row:1 / span 2;margin:0;align-self:baseline}
-  .ray-blog-entry .ray-blog-title{font-family:var(--font-serif),serif;font-size:19px;font-weight:600;letter-spacing:-0.015em;line-height:1.25;margin:0}
-  .ray-blog-entry:hover .ray-blog-title{color:var(--color-accent-gold,var(--color-fg))}
+  .ray-blog-entry .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:19px;font-weight:500;letter-spacing:-0.015em;line-height:1.25;margin:0}
+  .ray-blog-entry:hover .ray-blog-title{color:var(--color-fg)}
   .ray-blog-entry .ray-blog-dek{grid-column:2;font-size:13px;line-height:1.5;color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ray-blog-entry .ray-blog-read{display:none}
   .ray-blog-entry-flick{display:block;grid-column:3;grid-row:1;color:var(--color-text-faint)}
@@ -119,7 +124,7 @@ export default function BlogIndex() {
       <style dangerouslySetInnerHTML={{ __html: BLOG_CSS }} />
       <ArtistNav activeSlug="blog" />
       <div style={{ paddingTop: 28, paddingBottom: 60 }}>
-        <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 var(--gutter)', marginBottom: 34 }}>
+        <div className="ray-blog-head" style={{ maxWidth: 860, margin: '0 auto', padding: '0 var(--gutter)', marginBottom: 34 }}>
           {/* the certificate masthead — dated from the crawl the notes read */}
           <Masthead
             kicker="Notes from the desk"
@@ -137,8 +142,8 @@ export default function BlogIndex() {
               the first card of the stack */}
           <Link href={lead.href ?? `/blog/${lead.slug}`} className="ray-blog-card ray-blog-lead">
             <div className="ray-blog-lead-kicker">
-              <span className="kicker">Latest from the desk</span>
-              <span className="kicker no">{fmtLong(lead.date)}</span>
+              <span className="ns-kicker" style={{ marginBottom: 0 }}>Latest from the desk</span>
+              <span className="ns-kicker no" style={{ marginBottom: 0 }}>{fmtLong(lead.date)}</span>
             </div>
             <div className="ray-blog-date">{fmtShort(lead.date)}</div>
             <h2 className="ray-blog-title">{lead.title}</h2>
@@ -149,8 +154,8 @@ export default function BlogIndex() {
           {/* the rest of the file — cards on mobile, a dated ledger ≥900px */}
           <div className="ray-blog-ledger">
             <div className="ray-blog-ledger-head" aria-hidden>
-              <span className="kicker">Dated</span>
-              <span className="kicker">Note</span>
+              <span className="ns-kicker" style={{ marginBottom: 0 }}>Dated</span>
+              <span className="ns-kicker" style={{ marginBottom: 0 }}>Note</span>
             </div>
             {rest.map(p => (
               <Link key={p.slug} href={p.href ?? `/blog/${p.slug}`} className="ray-blog-card ray-blog-entry">
@@ -168,7 +173,7 @@ export default function BlogIndex() {
         <div style={{ maxWidth: 860, margin: '38px auto 0', padding: '0 var(--gutter)' }}>
           <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 16 }}>
             <Link href="/blog/corrections" style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, textDecoration: 'none', color: 'var(--color-text-muted)', fontSize: 13.5, lineHeight: 1.5 }}>
-              <span className="kicker">Corrections register</span>
+              <span className="ns-kicker" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>Corrections register</span>
               <span>We keep the receipts — a dated log of when a published figure was reconciled to the live build. <Flick size={11} /></span>
             </Link>
           </div>

@@ -565,14 +565,25 @@ function HeroLot({ c }: { c: typeof proof.cases[number] }) {
   );
 }
 
-function Sec({ ord, label, title, children }: {
-  ord: string; label: string; title: React.ReactNode; children: React.ReactNode;
+function Sec({ ord, label, title, lede, children }: {
+  ord: string; label: string; title: React.ReactNode;
+  /** north-star split head: the chapter's opening copy rides the right
+      column beside the light headline (stacks under 900px) */
+  lede?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <section className="deck-slide" id={`ch-${ord}`} data-ch={ord}>
       <div className="rail dk-s" style={{ position: 'relative' }}>
         <span className="kicker dk-kick">{label}</span>
-        <h2 className="deck-h">{title}</h2>
+        {lede != null ? (
+          <div className="ns-split">
+            <h2 className="deck-h">{title}</h2>
+            <p>{lede}</p>
+          </div>
+        ) : (
+          <h2 className="deck-h">{title}</h2>
+        )}
         {children}
       </div>
     </section>
@@ -625,7 +636,9 @@ export default function AboutPage() {
         <header className="dk-cover" data-ch="00">
           <div className="rail dk-cover-rail">
             <div className="dk-kickrow">
-              <span className="kicker">What is lectr</span>
+              {/* the quiet kicker voice (north star); the dated serial keeps
+                  the mono instrument register — a data label, not an eyebrow */}
+              <span className="ns-kicker" style={{ marginBottom: 0 }}>What is lectr</span>
               <span className="kicker dk-serial">No. {serial}</span>
             </div>
             {/* the hand-drawn mark, writing itself on — the loader's wipe, once */}
@@ -692,14 +705,14 @@ export default function AboutPage() {
 
         {/* "It took 35 years to build" overclaimed — lectr didn't spend the
             years, the record spans them. Same swagger, honest verb. */}
-        <Sec ord="1" label="The corpus" title={<>Depth is the moat. {ARCHIVE_YEARS} years of results, one schema.</>}>
-          <p style={p}>
+        <Sec ord="1" label="The corpus" title={<>Depth is the moat. {ARCHIVE_YEARS} years of results, one schema.</>}
+          lede={<>
             Comparable-sales pricing is only as good as the pool behind it, and auction results are
             scattered across houses that publish in different shapes, purge lots when a sale closes,
             and rarely keep a machine-readable archive. lectr holds all of it in one schema — every
             lot normalised to a dated FX rate, a declared price basis, and a structured identity, so
             a 1994 Geneva watch sale and a lot closing tonight are the same kind of object.
-          </p>
+          </>}>
           <CoverageChart rows={COVERAGE} />
           <div className="cov-split">
             <CorpusBars bars={CORPUS_BARS} total={CORPUS_BARS.reduce((t, b) => t + b.n, 0)} />
@@ -713,12 +726,12 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="2" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}>
-          <p style={p}>
+        <Sec ord="2" label="The value engine" title={<>What a lot is worth, argued from the sales that resemble it.</>}
+          lede={<>
             The engine does not forecast taste. It answers a narrower question with evidence: given
             everything that has actually sold, where should this lot clear — and does the house&rsquo;s
             estimate agree?
-          </p>
+          </>}>
           <div className="dk-s" style={{ margin: '20px 0 0' }}>
             <Step n="1" title="Resolve the object"
               body={<>Every lot is parsed into a structured identity — maker, form, model line, reference, edition, dimensions, year, materials — not just a title string. Two lots match on what they <em>are</em>, never on how a cataloguer chose to describe them.</>} />
@@ -737,14 +750,14 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="3" label="The record" title={<>The whole thesis, replayed against history.</>}>
-          <p style={p}>
+        <Sec ord="3" label="The record" title={<>The whole thesis, replayed against history.</>}
+          lede={<>
             {fmt(F.n)} flagged calls and {fmt(U.n)} unflagged controls, each scored on what the lot
             actually did next. Two bases are published side by side, because they answer different
             questions: <b style={{ color: 'var(--color-fg)' }}>all-in</b> is what a buyer paid,
             including the house&rsquo;s premium; <b style={{ color: 'var(--color-fg)' }}>at hammer</b> strips
             the premium out for a like-for-like comparison against an estimate that never included it.
-          </p>
+          </>}>
           <OutcomeCurve dist={DIST} />
 
           {SERIES.length >= 4 && <RecordYears series={SERIES} />}
@@ -795,14 +808,14 @@ export default function AboutPage() {
           </div>
         </section>
 
-        <Sec ord="4" label="The proof" title={<>We said what it was worth. The room paid less.</>}>
-          <p style={p}>
+        <Sec ord="4" label="The proof" title={<>We said what it was worth. The room paid less.</>}
+          lede={<>
             The record above is an aggregate. This is what it looks like as individual lots: the
             engine priced each object from comparable sold evidence, and the hammer came in under
             that number. Two of the six below carried <b style={{ color: 'var(--color-fg)' }}>no house
             estimate at all</b> — lectr&rsquo;s figure was the only valuation in existence when the
             hammer fell.
-          </p>
+          </>}>
           <div className="proof-grid dk-s">
             {proof.cases.filter((c) => !(c as { hero?: boolean }).hero).map((c) => <ProofCase key={c.id} c={c} />)}
           </div>
@@ -821,12 +834,12 @@ export default function AboutPage() {
 
         <HeroLot c={proof.cases.find((x) => (x as { hero?: boolean }).hero) ?? proof.cases[0]} />
 
-        <Sec ord="5" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}>
-          <p style={p}>
+        <Sec ord="5" label="Restraint" title={<>The number we are proudest of is how often it says nothing.</>}
+          lede={<>
             lectr runs an explicit ladder: a confidence-interval
             index where the data resolves the sign, a measured demand read where coverage allows, and
             below that, no movement number at all.
-          </p>
+          </>}>
           <div className="dk-s" style={{ display: 'flex', flexWrap: 'wrap', gap: '24px 20px', margin: '24px 0 0', paddingTop: 22, borderTop: '1px solid var(--hairline)' }}>
             <Stat figure={<><span data-count>{String(makerPublish)}</span> of <span data-count>{String(makerTotal)}</span></>}
               label="Makers clear the 95% bar" note="the rest publish no index — the interval doesn't resolve the sign" />
@@ -854,12 +867,11 @@ export default function AboutPage() {
           </div>
         </Sec>
 
-        <Sec ord="6" label="The graph" title={<>One lot, linked to everything that explains it.</>}>
-          <p style={p}>
+        <Sec ord="6" label="The graph" title={<>One lot, linked to everything that explains it.</>}
+          lede={<>
             A price is not an answer on its own. Every lot resolves into a chain you can walk — and
             every step of it is a page, not a footnote. The links below open real ones.
-          </p>
-
+          </>}>
           {/* Each node links to a LIVE example — the graph as a tour, not a
               diagram. Targets are derived (DEMO_MAKER must actually publish;
               DEMO_REF is tonight's deepest dossier) so a link can never demo
@@ -896,12 +908,12 @@ export default function AboutPage() {
           </p>
         </Sec>
 
-        <Sec ord="7" label="What it changes" title={<>For the person holding the paddle.</>}>
-          <p style={p}>
+        <Sec ord="7" label="What it changes" title={<>For the person holding the paddle.</>}
+          lede={<>
             A price is only useful if it changes what someone does. Four people ask the same question
             — what does this actually clear at, and how sure can you be — and get four different days
             out of the answer.
-          </p>
+          </>}>
           <div className="value-list dk-s">
             {[
               {
@@ -1096,16 +1108,18 @@ const DECK_CSS = `
     display: block; width: clamp(150px, 20vw, 240px); height: auto;
     margin: 0 0 clamp(18px, 2.4vw, 30px);
   }
+  /* NORTH STAR: the cover statement goes LIGHT — impact through lightness,
+     never boldness; the numeral carries one ink step more than its words */
   .dk-h1 {
-    font-family: var(--font-serif), Georgia, serif;
-    font-size: var(--d-cover); font-weight: 620;
-    letter-spacing: -0.025em; line-height: 1.08;
+    font-family: var(--font-sans), sans-serif;
+    font-size: var(--d-cover); font-weight: 300;
+    letter-spacing: -0.03em; line-height: 1.06;
     color: var(--color-fg);
     margin: 0 0 clamp(18px, 2.2vw, 28px);
     max-width: 15ch; text-wrap: balance;
   }
   .dk-h1-line2 { display: block; }
-  .dk-h1 b { font-weight: 620; font-variant-numeric: tabular-nums; }
+  .dk-h1 b { font-weight: 450; font-variant-numeric: tabular-nums; }
   .dk-u { position: relative; white-space: nowrap; }
   .dk-u::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0.02em; height: 3px;
@@ -1157,7 +1171,7 @@ const DECK_CSS = `
   .dk-curve-dot {
     position: absolute; right: -3px; width: 7px; height: 7px; border-radius: 50%;
     background: var(--color-butter); transform: translateY(-50%);
-    box-shadow: var(--glow-lit);
+    /* glow retired — flat identification, north star and house law agree */
   }
   @media (prefers-reduced-motion: no-preference) {
     .dk-curve-dot { opacity: 0; animation: dkDot .5s ease 3.1s forwards; }
@@ -1201,20 +1215,24 @@ const DECK_CSS = `
   .dk-kick { display: none; } /* eyebrow above headline — retired */
   .dk-ord {
     position: absolute; right: var(--gutter, 24px); top: clamp(-30px, -3vw, -14px);
-    font-family: var(--font-serif), Georgia, serif;
+    font-family: var(--font-sans), sans-serif;
     font-size: clamp(110px, 15vw, 230px); line-height: 1; font-weight: 400;
     color: color-mix(in srgb, var(--color-fg) 4.5%, transparent);
     pointer-events: none; user-select: none; z-index: 0;
   }
+  /* chapter heads: bigger stays, weight drops — the pen, not the marker */
   .deck-h {
-    font-family: var(--font-serif), Georgia, serif;
-    font-size: var(--d-h); font-weight: 620;
-    letter-spacing: -0.025em; line-height: 1.12;
+    font-family: var(--font-sans), sans-serif;
+    font-size: var(--d-h); font-weight: 330;
+    letter-spacing: -0.025em; line-height: 1.1;
     color: var(--color-fg);
     margin: 0 0 16px; max-width: 22ch; text-wrap: balance;
     position: relative; z-index: 1;
   }
-  .deck-h b { font-weight: 400; font-variant-numeric: tabular-nums; }
+  .deck-h b { font-weight: 450; font-variant-numeric: tabular-nums; }
+  /* split section head — headline left, the lede right (stacks under 900) */
+  .deck-slide .ns-split { margin-bottom: 10px; }
+  .deck-slide .ns-split .deck-h { margin-bottom: 0; }
 
   /* ── statement: the deck inhales ────────────────────────────────── */
   .deck-statement {
@@ -1257,7 +1275,7 @@ const DECK_CSS = `
     background: var(--panel-mat, var(--color-bg-elevated));
     overflow: hidden;
     border: 1px solid var(--hairline);
-    border-radius: 8px;
+    border-radius: 14px;
   }
   .hero-plate img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: clamp(14px, 2vw, 26px); }
   .hero-cap {
@@ -1276,8 +1294,9 @@ const DECK_CSS = `
     position: relative;
   }
   .method-step::before {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: var(--hairline);
+    /* the spec-ledger seam — dotted, the invoice grammar */
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 0;
+    border-top: 1px dotted var(--color-border-mid);
   }
   .method-n {
     grid-row: 1; font-size: var(--d-cap); font-weight: 700;
@@ -1334,9 +1353,9 @@ const DECK_CSS = `
     margin-top: clamp(28px, 3vw, 44px);
   }
   .close-line {
-    font-family: var(--font-serif), Georgia, serif;
-    font-size: var(--d-close); font-weight: 620;
-    letter-spacing: -0.025em; line-height: 1.1;
+    font-family: var(--font-sans), sans-serif;
+    font-size: var(--d-close); font-weight: 300;
+    letter-spacing: -0.025em; line-height: 1.08;
     color: var(--color-fg);
     margin: 0 0 18px; max-width: 20ch; text-wrap: balance;
   }
@@ -1358,24 +1377,27 @@ const DECK_CSS = `
     .close-actions { flex-direction: column; align-items: stretch; }
     .close-cta, .close-alt { justify-content: center; }
   }
+  /* the pill era: CTAs go fully round, weight drops off bold, press = 0.98 */
   .close-cta {
     display: inline-flex; align-items: center; gap: 8px;
     background: var(--color-butter); color: var(--color-butter-ink, #0F0E0A);
-    border: 1px solid transparent; border-radius: 10px; padding: 16px 28px;
-    font-size: var(--d-body); font-weight: 700; text-decoration: none;
+    border: 1px solid transparent; border-radius: 999px; padding: 15px 28px;
+    font-size: var(--d-body); font-weight: 500; text-decoration: none;
     transition: transform .25s var(--ease-ui), filter .25s var(--ease-ui);
   }
   .close-cta:hover { transform: translateY(-1px); filter: brightness(1.05); }
+  .close-cta:active { transform: scale(0.98); }
   .close-cta svg { transition: transform .25s var(--ease-ui); }
   .close-cta:hover svg { transform: translateX(2px); }
   .close-alt {
     display: inline-flex; align-items: center;
-    border: 1px solid var(--hairline); border-radius: 10px;
-    padding: 16px 24px; font-size: var(--d-body); font-weight: 600;
+    border: 1px solid var(--hairline); border-radius: 999px;
+    padding: 15px 24px; font-size: var(--d-body); font-weight: 500;
     color: var(--color-text-secondary); text-decoration: none;
-    transition: color .25s var(--ease-ui), border-color .25s var(--ease-ui);
+    transition: color .25s var(--ease-ui), border-color .25s var(--ease-ui), transform .25s var(--ease-ui);
   }
   .close-alt:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
+  .close-alt:active { transform: scale(0.98); }
 
   .scope-note {
     margin-top: clamp(20px, 2.2vw, 26px);

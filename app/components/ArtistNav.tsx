@@ -245,6 +245,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           display: flex;
           align-items: center;
           gap: 12px;
+          /* north star: the bar breathes at ~64px total (8px padding-block x2) */
+          min-height: 48px;
         }
         .ray-wordmark {
           display: inline-flex;
@@ -292,9 +294,17 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
           font-weight: 500;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.01em;
           cursor: pointer;
+          /* NORTH STAR pill era: the finder is a full pill. The important
+             beats the legacy 10px-radius important in globals because this
+             block renders later in the document. Press = house scale. */
+          border-radius: 999px !important;
+          transition:
+            background var(--duration-fast) var(--ease-signature),
+            transform 120ms var(--ease-signature);
         }
+        .ray-artist-select-btn:active { transform: scale(0.98); }
         .ray-artist-dropdown-item {
           display: block;
           width: 100%;
@@ -343,8 +353,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
           font-weight: 600;
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
+          /* north star: sentence case, untracked (matches the de-slop layer) */
+          letter-spacing: 0.02em;
+          text-transform: none;
           color: var(--color-text-faint);
           border: none;
           border-bottom: 1px solid var(--color-border);
@@ -493,7 +504,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           z-index: 1;
           font-size: 11.5px;
           padding: 14px 20px 8px;
-          letter-spacing: 0.16em;
+          letter-spacing: 0.02em;
           background: var(--color-bg);
         }
         .ray-maker-sheet .ray-artist-count {
@@ -519,7 +530,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           cursor: pointer;
           font-family: var(--font-sans), sans-serif;
           font-size: 17px;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           color: var(--color-fg);
         }

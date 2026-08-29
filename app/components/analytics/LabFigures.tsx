@@ -33,7 +33,7 @@ import { GapMark, OddsMark, DepthMark, SalesMark } from '../marks';
 const CSS = `
 .ray-lf-card { padding: var(--card-pad); min-width: 0; }
 .ray-lf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
-.ray-lf-title { font-size: 13.5px; font-weight: 650; color: var(--color-fg); }
+.ray-lf-title { font-size: 13.5px; font-weight: 550; color: var(--color-fg); }
 .ray-lf-title .ray-sect-mark { margin-right: 8px; }
 .ray-lf-method { font-size: 10.5px; color: var(--color-text-muted); text-align: right; }
 .ray-lf-plot { position: relative; overflow: hidden; }

@@ -23,9 +23,11 @@ export const metadata: Metadata = {
     'The math behind lectr\'s appreciation numbers: a per-maker Huber-robust hedonic log-price regression that controls for the within-maker mix, and a confidence gate that publishes a return only when its 95% CI resolves the sign. The result is that almost everything abstains — and the few makers that clear the bar are the whole point.',
 };
 
-const wrap: React.CSSProperties = { maxWidth: 648, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 22, fontWeight: 620, letterSpacing: '-0.02em', margin: '46px 0 10px' };
-const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.72, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
+/* NORTH STAR editorial grammar (docs/NORTHSTAR_UI.md): 17px prose on a
+   ~680px measure; heads bigger and lighter, never serif, never bold. */
+const wrap: React.CSSProperties = { maxWidth: 728, margin: '0 auto', padding: '0 24px' };
+const h2: React.CSSProperties = { fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 450, letterSpacing: '-0.02em', lineHeight: 1.2, margin: '46px 0 12px' };
+const p: React.CSSProperties = { fontSize: 17, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '6px 0 20px', fontSize: 14 };
 const th: React.CSSProperties = { textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
@@ -37,7 +39,7 @@ function Formula({ children, caption }: { children: React.ReactNode; caption?: s
   return (
     <figure style={{ margin: '18px 0 20px' }}>
       <div style={{
-        border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--color-bg-elevated)',
+        border: '1px solid var(--hairline)', borderRadius: 12, background: 'var(--color-bg-elevated)',
         padding: '16px 18px', overflowX: 'auto',
       }}>
         <div style={{
@@ -62,13 +64,28 @@ export default function PricingEnginePost() {
       <ArtistNav activeSlug="blog" />
       <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 10 }}>
-          <p className="kicker" style={{ margin: '0 0 14px' }}>
-            <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · July 24, 2026 · technical
+          <p className="ns-kicker" style={{ margin: '0 0 14px' }}>
+            <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link>
           </p>
-          <h1 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 620, letterSpacing: '-0.025em', lineHeight: 1.15, margin: '0 0 14px' }}>
+          <h1 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 'clamp(30px, 4.4vw, 40px)', fontWeight: 330, letterSpacing: '-0.02em', lineHeight: 1.1, margin: '0 0 14px' }}>
             How we built the price-movement engine
           </h1>
-          <p style={{ ...p, fontSize: 16.5 }}>
+          {/* the provenance ledger — gray label over ink value, dotted close */}
+          <div className="ns-byline" style={{ margin: '0 0 18px' }}>
+            <div>
+              <span className="k" style={{ display: 'block' }}>Published</span>
+              <span className="v" style={{ display: 'block' }}>July 24, 2026</span>
+            </div>
+            <div>
+              <span className="k" style={{ display: 'block' }}>Category</span>
+              <span className="v" style={{ display: 'block' }}>Technical</span>
+            </div>
+            <div>
+              <span className="k" style={{ display: 'block' }}>Corpus at build</span>
+              <span className="v" style={{ display: 'block' }}>{meta.totalLots.toLocaleString()} lots</span>
+            </div>
+          </div>
+          <p style={{ ...p, fontSize: 17 }}>
             An index that says how much a market has actually moved is easy to fake and hard to earn.
             Ours is a per-maker hedonic regression with a confidence gate bolted to the front of it —
             and the gate&rsquo;s job is to make the engine <span style={strong}>shut up</span>. Across

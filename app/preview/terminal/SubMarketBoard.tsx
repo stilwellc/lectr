@@ -633,14 +633,9 @@ export default function SubMarketBoard({
     return (
       <LazyMotion features={domAnimation} strict>
         <div className={styles.roomA} ref={ref}>
-          {/* the altar — centered on the page axis */}
-          <div className={styles.altar}>
-            <h2 className={styles.altarHead}>We find what the room misprices.</h2>
-            <p className={styles.altarSub}>
-              Live lots flagged under their comparables, the market indices behind them,
-              and the replayed record that keeps us honest.
-            </p>
-          </div>
+          {/* the altar moved OUTSIDE the vault (north star, Aug 29): the intro
+              head now speaks in the split grammar on the page ground above
+              this room — see TerminalHome's engineIntro. */}
 
           {/* ── 01 · THE ENGINE — demonstrated on one lot ── */}
           {hero && (

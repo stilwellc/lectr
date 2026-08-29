@@ -151,8 +151,13 @@ export default function RelativeStrength({ marketData, scope }: {
   return (
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      <div className="ray-vm-head">
-        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><StrengthMark size={16} /></span>Relative strength</span>
+      <div className="ray-vm-head" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <span style={{ minWidth: 0 }}>
+          <span className="ns-kicker" style={{ marginBottom: 4 }}>What&rsquo;s running, what&rsquo;s cooling</span>
+          <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+            <span className="ray-sect-mark" aria-hidden><StrengthMark size={18} /></span>Relative strength
+          </span>
+        </span>
         <span className="ray-vm-method">CI-verified indexes first, measured demand second · descriptive markets excluded</span>
       </div>
       <p className="ray-rs-spread">

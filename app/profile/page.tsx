@@ -1314,37 +1314,39 @@ export default function SavedPage() {
               </div>
             )}
 
-            {/* ── 2 · THE GAUGE LINE — one fused band, no boxes ── */}
+            {/* ── 2 · THE GAUGE LINE — the desk's provenance ledger: gray label
+                over black value, closed by the dotted rule (ns-byline). Signed
+                deltas keep their measured red/green exactly. ── */}
             {(collection.rows.length > 0 || record || unseenAlerts > 0) && (
-              <div className="ck-gauge ray-enter">
+              <div className="ns-byline ray-enter" style={{ marginTop: 22 }}>
                 {collection.rows.length > 0 && (
-                  <a href="#collection" className="ck-gauge-cell">
-                    <span className="kicker">Collection</span>
-                    <span className="ck-gauge-v">
+                  <a href="#collection" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
+                    <div className="k">Collection</div>
+                    <div className="v">
                       {formatPrice(collection.totalAppraised)}
                       {collection.deltaPct != null && collection.deltaPct !== 0 && (
-                        <em style={{ color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                        <em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                           {fmtSignedPct(collection.deltaPct)}
                         </em>
                       )}
-                    </span>
-                    <span className="ck-gauge-s">{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · appraised vs bought</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · appraised vs bought</div>
                   </a>
                 )}
                 {record && record.med != null && (
-                  <a href="#record" className="ck-gauge-cell">
-                    <span className="kicker">Your record</span>
-                    <span className="ck-gauge-v" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
+                  <a href="#record" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
+                    <div className="k">Your record</div>
+                    <div className="v" style={{ fontWeight: 600, color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
                       {fmtSignedPct(Math.round(record.med))}
-                    </span>
-                    <span className="ck-gauge-s">{record.n} judged · vs estimate, median</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{record.n} judged · vs estimate, median</div>
                   </a>
                 )}
                 {unseenAlerts > 0 && (
-                  <a href="#inbox" className="ck-gauge-cell">
-                    <span className="kicker">Inbox</span>
-                    <span className="ck-gauge-v">{unseenAlerts}<em style={{ color: 'var(--color-up)' }}>new</em></span>
-                    <span className="ck-gauge-s">nightly matches to your searches</span>
+                  <a href="#inbox" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
+                    <div className="k">Inbox</div>
+                    <div className="v">{unseenAlerts}<em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: 'var(--color-up)' }}>new</em></div>
+                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>nightly matches to your searches</div>
                   </a>
                 )}
               </div>
@@ -1371,6 +1373,8 @@ export default function SavedPage() {
           {/* ══ 3 · WATCHING — the room, action-first, brief fused in ══ */}
           {upcoming.length > 0 && (
             <section className="ray-saved-section rail" data-view={savedView}>
+              {/* the room as a framed plate — ns-plate draws the top rule + crop marks */}
+              <div className="ns-plate" style={{ paddingTop: 18 }}>
               <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 16 }}>
                 <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><WatchMark size={17} /></span>Watching · on the block</h2>
                 <div className="ray-savedview-toggle" role="group" aria-label="Watching view">
@@ -1497,6 +1501,7 @@ export default function SavedPage() {
                   ))}
                 </div>
               )}
+              </div>
             </section>
           )}
 
@@ -1545,20 +1550,32 @@ export default function SavedPage() {
           {collection.rows.length > 0 && (
             <div id="collection" className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
               <section className="rail" aria-label="Your collection">
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 6 }}>
-                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><CollectionMark size={17} /></span>Your collection</h2>
-                  <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'}
-                    {collection.totalPaid > 0 && (
-                      <>{' '}· bought <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalPaid)}</b></>
-                    )}
-                    {' '}· lectr appraisal <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{formatPrice(collection.totalAppraised)}</b>
-                    {collection.deltaPct != null && collection.deltaPct !== 0 && (
-                      <b style={{ color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontVariantNumeric: 'tabular-nums' }}>
-                        {' '}· {fmtSignedPct(collection.deltaPct)}
-                      </b>
-                    )}
-                  </span>
+                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><CollectionMark size={17} /></span>Your collection</h2>
+                {/* the certificate's provenance ledger — gray label over black
+                    value, dotted closing rule; the signed delta keeps its ink */}
+                <div className="ns-byline" style={{ margin: '14px 0 2px' }}>
+                  <div>
+                    <div className="k">Pieces</div>
+                    <div className="v">{collection.rows.length}</div>
+                  </div>
+                  {collection.totalPaid > 0 && (
+                    <div>
+                      <div className="k">Bought</div>
+                      <div className="v">{formatPrice(collection.totalPaid)}</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="k">lectr appraisal</div>
+                    <div className="v">{formatPrice(collection.totalAppraised)}</div>
+                  </div>
+                  {collection.deltaPct != null && collection.deltaPct !== 0 && (
+                    <div>
+                      <div className="k">Appraised vs bought</div>
+                      <div className="v" style={{ fontWeight: 600, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                        {fmtSignedPct(collection.deltaPct)}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {collectionChart && (
@@ -1605,8 +1622,9 @@ export default function SavedPage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {collection.rows.map(({ lot, paid, paidIsOverride, note, savedId, appraised, basis, deltaPct, drill, drillSlug }) => (
-                    <div key={lot.id} style={{ borderTop: '1px solid var(--hairline)' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0' }}>
+                    <React.Fragment key={lot.id}>
+                      {/* the spec-sheet row — dotted hairline ledger (ns-ledger-row) */}
+                      <div className="ns-ledger-row" style={{ gap: 12 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                             <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
@@ -1649,7 +1667,7 @@ export default function SavedPage() {
                           onSave={patch => setSavedFields(savedId, patch)}
                           onClose={() => setEditPiece(null)} />
                       )}
-                    </div>
+                    </React.Fragment>
                   ))}
                 </div>
                 <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
@@ -1665,6 +1683,7 @@ export default function SavedPage() {
           {/* ══ 6 · SETTLED — the line-item receipts ══ */}
           {(sold.length > 0 || soldOrphans.length > 0) && (
             <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
+              <div className="ns-plate" style={{ paddingTop: 18 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
                 <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><TapeMark size={17} /></span>Settled</h2>
                 <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
@@ -1723,21 +1742,27 @@ export default function SavedPage() {
                   );
                 })}
               </div>
+              </div>
             </section>
           )}
 
           {other.length > 0 && (
             <section className="ray-saved-section rail">
-              <h2 className="ray-h2 ray-enter" style={{ marginBottom: 6 }}><span className="ray-sect-mark" aria-hidden><ArchiveMark size={17} /></span>Concluded &amp; other</h2>
-              <p className="ray-enter" style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 18px' }}>
-                Saved lots that closed without a published hammer, were bought in, or are awaiting results.
-              </p>
+              <div className="ns-plate" style={{ paddingTop: 18 }}>
+              {/* head with intro copy — the split grammar: light head left, copy right */}
+              <div className="ns-split ray-enter" style={{ marginBottom: 18 }}>
+                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><ArchiveMark size={17} /></span>Concluded &amp; other</h2>
+                <p>
+                  Saved lots that closed without a published hammer, were bought in, or are awaiting results.
+                </p>
+              </div>
               <div className="ray-saved-grid" style={{ display: 'grid' }}>
                 {other.map((lot, i) => (
                   <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
                     <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} />
                   </div>
                 ))}
+              </div>
               </div>
             </section>
           )}
@@ -1764,10 +1789,13 @@ export default function SavedPage() {
           )}
           {goneOrphans.length > 0 && (
             <section className="rail ray-enter" style={{ paddingBlock: '34px 64px' }}>
-              <h2 className="ray-h2" style={{ marginBottom: 6 }}><span className="ray-sect-mark" aria-hidden><HorizonMark size={17} /></span>No longer on the block</h2>
-              <p style={{ fontSize: 13, color: 'var(--color-text-faint)', margin: '0 0 14px' }}>
-                Saved lots the crawl no longer carries — withdrawn, relisted or purged by the house.
-              </p>
+              <div className="ns-plate" style={{ paddingTop: 18 }}>
+              <div className="ns-split" style={{ marginBottom: 14 }}>
+                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><HorizonMark size={17} /></span>No longer on the block</h2>
+                <p>
+                  Saved lots the crawl no longer carries — withdrawn, relisted or purged by the house.
+                </p>
+              </div>
               <div className="glass glass-quiet">
                 {goneOrphans.map(id => {
                   const m = savedMeta[id];
@@ -1803,6 +1831,7 @@ export default function SavedPage() {
                     </div>
                   );
                 })}
+              </div>
               </div>
             </section>
           )}

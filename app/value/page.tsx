@@ -163,7 +163,7 @@ function MarketPulse({ ray, activeKey, activeLabel, play }: {
     <div className="vd-pulse">
       <div className="vd-pulse-head">
         <span className="vd-sect-mark" aria-hidden><PulseMark size={15} /></span>
-        <span className="kicker">Market pulse</span>
+        <span className="ns-kicker">Market pulse</span>
         <span className="vd-pulse-rule" aria-hidden />
       </div>
       {anchor && <HeroChart anchor={anchor} height={120} compact hideTickLabels play={play} />}
@@ -244,7 +244,7 @@ function LaneHead({ mark, name, count, tag, right, help, play }: {
         <span className="vd-sect-cap">{tag}</span>
         {right}
       </div>
-      {help && showHelp && <div className="vd-lane-help">{help}</div>}
+      {help && showHelp && <div className="ns-well vd-lane-help">{help}</div>}
     </>
   );
 }
@@ -443,7 +443,7 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
     );
   };
   return (
-    <section id="gap" className="rail ray-enter vd-annex vd-room" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+    <section id="gap" className="rail ray-enter vd-annex vd-room ns-plate" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
       <LaneHead
         mark={<GapMark />}
         name="The Gap"
@@ -509,7 +509,7 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
   if (!rows.length && !queued) return null;
   const rec = receipts?.record?.quiet;
   return (
-    <section id="sleepers" className="rail ray-enter vd-annex vd-room" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
+    <section id="sleepers" className="rail ray-enter vd-annex vd-room ns-plate" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
       <LaneHead
         mark={<SleeperMark />}
         name="The Sleepers"
@@ -1192,12 +1192,13 @@ export default function ValuePage() {
         .vd-pulse-beam { flex: 1 1 170px; min-width: 110px; max-width: 240px; }
         .vd-pulse-sub { font-size: 12px; color: var(--color-text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* ── the dial strip — one fused band, hairline splits, no boxes ── */
+        /* ── the dial strip — one fused band, hairline splits, no boxes;
+           byline grammar: gray label over value, dotted closing rule ── */
         .vd-dials {
           display: flex;
           margin-top: 18px;
           border-top: 1px solid var(--color-border);
-          border-bottom: 1px solid var(--color-border);
+          border-bottom: 1px dotted var(--color-border-mid);
         }
         .vd-dial {
           flex: 1 1 0; min-width: 0;
@@ -1228,7 +1229,7 @@ export default function ValuePage() {
             gap: 2px 16px;
             padding: 11px 2px;
             border-left: none;
-            border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06));
+            border-bottom: 1px dotted var(--color-border-mid);
             min-height: 44px;
           }
           .vd-dial-k { grid-area: k; }
@@ -1237,9 +1238,9 @@ export default function ValuePage() {
           .vd-pulse { margin-top: 14px; }
         }
 
-        /* ── section heads (kicker beside a rule) ── */
+        /* ── section heads (quiet ns-kicker beside a rule) ── */
         .vd-sect-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-        .vd-sect-head .kicker { white-space: nowrap; }
+        .vd-sect-head .ns-kicker, .vd-pulse-head .ns-kicker { margin-bottom: 0; white-space: nowrap; }
         @media (max-width: 640px) {
           .vd-sect-head { flex-wrap: wrap; }
           .vd-sect-cap { white-space: normal; flex-basis: 100%; }
@@ -1464,10 +1465,13 @@ export default function ValuePage() {
           color: var(--color-text-secondary);
           background: var(--color-bg-elevated);
         }
+        /* north star: authority through lightness — the room title is
+           bigger and thinner, never bold */
         .vd-lane-name {
-          font-size: 20px; font-weight: 650; letter-spacing: -0.02em;
-          margin: 0; white-space: nowrap;
+          font-size: 28px; font-weight: 340; letter-spacing: -0.02em;
+          line-height: 1.1; margin: 0; white-space: nowrap;
         }
+        @media (max-width: 640px) { .vd-lane-name { font-size: 23px; } }
         .vd-lane-count {
           font-family: var(--font-mono), monospace;
           font-size: 12px; font-weight: 600;
@@ -1557,7 +1561,7 @@ export default function ValuePage() {
         .vd-annex-meter {
           margin-top: 10px;
           padding-top: 9px;
-          border-top: 1px solid var(--color-border);
+          border-top: 1px dotted var(--color-border-mid);
           font-family: var(--font-mono), monospace;
           font-size: 11px; letter-spacing: 0.02em;
           color: var(--color-text-faint);
@@ -1722,7 +1726,13 @@ export default function ValuePage() {
           display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
           gap: 12px 26px; padding: 12px 16px 0;
         }
-        .vd-detail-grid .kicker { font-size: 10px; letter-spacing: 0.14em; }
+        /* explanatory labels go quiet sentence-case (ledger column heads
+           keep the mono instrument register) */
+        .vd-detail-grid .kicker {
+          font-family: var(--font-sans), sans-serif;
+          font-size: 12px; font-weight: 500;
+          letter-spacing: 0.01em; text-transform: none;
+        }
         .vd-detail-grid p { margin: 4px 0 0; font-size: 12px; color: var(--color-text-muted); line-height: 1.5; }
         .vd-curve { position: relative; padding: 16px 16px 0; }
         .vd-curve-rail {
@@ -1796,12 +1806,26 @@ export default function ValuePage() {
           transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
         }
         .vd-lane-helpbtn:hover, .vd-lane-helpbtn[aria-expanded="true"] { color: var(--color-fg); border-color: var(--color-border-mid); }
+        /* explanatory copy rides the cream well (ns-well supplies the
+           plate); this only trims the well to the lane's measure */
         .vd-lane-help {
-          margin: -4px 0 14px; padding: 12px 16px;
-          border-left: 2px solid var(--color-border-mid);
+          margin: -4px 0 14px;
           font-size: 12.5px; line-height: 1.65; color: var(--color-text-muted);
           max-width: 640px;
         }
+
+        /* ── north star, the closer: no serif — the engine card's head
+           speaks the same light grotesk as every room title (.ray-engine-*
+           is value-only; the paper tokens stay) ── */
+        .ray-engine-head {
+          font-family: var(--font-sans), sans-serif;
+          font-weight: 340;
+          letter-spacing: -0.02em;
+        }
+
+        /* ── pill press — the house scale(0.98) on the local pill family ── */
+        .vd-sort button, .vd-detail-save, .vd-lane-helpbtn { transition-property: color, border-color, background, transform; transition-duration: var(--duration-fast); transition-timing-function: var(--ease-signature); }
+        .vd-sort button:active, .vd-detail-save:active, .vd-lane-helpbtn:active { transform: scale(0.98); }
 
         /* ── MOTION WITH INTENT (armed only when motion is welcome) ── */
         @media (prefers-reduced-motion: no-preference) {
@@ -1880,7 +1904,7 @@ export default function ValuePage() {
           )}
 
           {call && (
-            <section id="call" className="rail ray-enter vd-room" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
+            <section id="call" className="rail ray-enter vd-room ns-plate" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
               {/* ONE CALLPLATE — the page's single lit element. PriceBand
                   hydrates at fullLoaded; a fixed slot holds the room. */}
               <CallPlate
@@ -1904,7 +1928,7 @@ export default function ValuePage() {
             </section>
           )}
 
-          <section id="flags" className="ray-value-section rail vd-room">
+          <section id="flags" className="ray-value-section rail vd-room ns-plate">
             <div className="ray-enter">
               <LaneHead
                 mark={<FlagsMark />}
@@ -2193,10 +2217,10 @@ export default function ValuePage() {
           <Phase2Sentinel />
 
           {/* settled tape — flags stamped before the hammer, then graded */}
-          <section id="tape" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
+          <section id="tape" className="rail ray-enter vd-room ns-plate" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
               <div className="vd-sect-head">
                 <span className="vd-sect-mark" aria-hidden><TapeMark size={16} /></span>
-                <span className="kicker">Settled calls</span>
+                <span className="ns-kicker">Settled calls</span>
                 <span className="vd-pulse-rule" aria-hidden />
                 <span className="vd-sect-cap">flag stamped before the hammer — honest by construction</span>
               </div>
@@ -2239,7 +2263,7 @@ export default function ValuePage() {
             </section>
 
           {/* ════ ROOM 5 · THE ENGINE CARD (paper #2, the closer) ════ */}
-          <section id="engine" className="rail ray-enter vd-room" style={{ paddingBlock: '18px 8px' }}>
+          <section id="engine" className="rail ray-enter vd-room ns-plate" style={{ paddingBlock: '18px 8px' }}>
             <div className="ray-engine-card">
               <h2 className="ray-engine-head">
                 <span className="vd-sect-mark" style={{ verticalAlign: -3, marginRight: 10 }} aria-hidden><EngineMark size={19} /></span>

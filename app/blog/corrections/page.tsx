@@ -4,9 +4,18 @@ import Flick from '../../components/Flick';
 import { Colophon } from '../../components/Terminal';
 import Masthead, { Accent } from '../../components/Masthead';
 
-const wrap: React.CSSProperties = { maxWidth: 648, margin: '0 auto', padding: '0 24px' };
-const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.72, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
+/* NORTH STAR editorial grammar (docs/NORTHSTAR_UI.md): 17px prose on a
+   ~680px measure, light display head, quiet sentence-case kickers. */
+const wrap: React.CSSProperties = { maxWidth: 728, margin: '0 auto', padding: '0 24px' };
+const p: React.CSSProperties = { fontSize: 17, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
+
+/* the register head goes light — the masthead's inline 640 weight needs the
+   later-in-cascade important to yield (same pattern as the blog index) */
+const HEAD_CSS = `
+.ray-blog-head .ray-masthead-h1{font-weight:320 !important;letter-spacing:-0.02em !important;font-size:clamp(34px,4.6vw,44px) !important;line-height:1.08 !important}
+@media (max-width:480px){.ray-blog-head .ray-masthead-h1{font-size:clamp(28px,8vw,34px) !important}}
+`;
 
 /** the fixed date this register was first swept — every entry below is dated */
 const SWEPT = '2026-08-02';
@@ -19,7 +28,7 @@ function fmtLong(date: string): string {
 function Rec({ where, claim, truth }: { where: string; claim: React.ReactNode; truth: React.ReactNode }) {
   return (
     <li style={{ margin: '0 0 18px', listStyle: 'none' }}>
-      <span className="kicker" style={{ display: 'block', margin: '0 0 6px' }}>{where}</span>
+      <span className="ns-kicker" style={{ margin: '0 0 6px' }}>{where}</span>
       <span style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--color-text-secondary)', display: 'block' }}>
         <span style={{ color: 'var(--color-text-faint)', textDecoration: 'line-through', textDecorationColor: 'var(--hairline)' }}>{claim}</span>
         <span aria-hidden style={{ fontFamily: 'var(--font-mono), monospace', color: 'var(--color-text-faint)', padding: '0 8px' }}>&rarr;</span>
@@ -32,9 +41,10 @@ function Rec({ where, claim, truth }: { where: string; claim: React.ReactNode; t
 export default function CorrectionsRegister() {
   return (
     <div className="terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      <style dangerouslySetInnerHTML={{ __html: HEAD_CSS }} />
       <ArtistNav activeSlug="blog" />
       <div style={{ paddingTop: 28, paddingBottom: 60 }}>
-        <div style={{ ...wrap, marginBottom: 26 }}>
+        <div className="ray-blog-head" style={{ ...wrap, marginBottom: 26 }}>
           <p style={{ margin: '0 0 18px' }}>
             <Link href="/blog" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>
               <Flick size={11} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 2 }} /> All notes
@@ -60,9 +70,9 @@ export default function CorrectionsRegister() {
         </div>
 
         <article style={wrap}>
-          <div style={{ borderTop: '2px solid var(--color-fg)', paddingTop: 20 }}>
-            <p className="kicker" style={{ margin: '0 0 10px' }}>{fmtLong(SWEPT)}</p>
-            <h2 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 24, fontWeight: 620, letterSpacing: '-0.02em', margin: '0 0 14px', lineHeight: 1.2 }}>
+          <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 20 }}>
+            <p className="ns-kicker" style={{ margin: '0 0 10px' }}>{fmtLong(SWEPT)}</p>
+            <h2 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 26, fontWeight: 400, letterSpacing: '-0.02em', margin: '0 0 14px', lineHeight: 1.15 }}>
               Reconciled the editorial figures to the live build
             </h2>
             <p style={p}>
@@ -102,7 +112,7 @@ export default function CorrectionsRegister() {
 
           {/* the standing note — what this register is, going forward */}
           <div style={{ marginTop: 40, paddingTop: 22, borderTop: '1px solid var(--hairline)' }}>
-            <p className="kicker" style={{ margin: '0 0 10px' }}>Standing note</p>
+            <p className="ns-kicker" style={{ margin: '0 0 10px' }}>Standing note</p>
             <p style={{ ...p, marginBottom: 0 }}>
               This register updates whenever a published figure is reconciled. The engine refits nightly,
               editorial is periodic, and the gap between them is logged here — dated, in full — rather than

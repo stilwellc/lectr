@@ -440,6 +440,79 @@ function useColophonMeta(): { lots: number; lastCrawl: string } | null {
   return meta;
 }
 
+/* NORTH STAR FOOTER (docs/NORTHSTAR_UI.md) — the ink vault flattens onto the
+   page ground: ONE top hairline, the thesis restated in light-weight Inter
+   (authority through lightness), and the machined channels re-set as the
+   plain multi-column list grammar — gray column labels over ink links.
+   Injected after globals so equal-specificity rules win by order; the
+   light-mode `inherit` resets unwind the vault's porcelain-on-dark token
+   flips so the footer reads in page ink in both modes. The colophon stamp,
+   the mono spec line (instrument register) and the one butter Starling
+   channel all stay. */
+const NS_CLOSE_CSS = `
+.ray-close { background: none; border-top: 1px solid var(--hairline); }
+.ray-close-in { padding-block: 88px 40px; }
+.ray-close-thesis {
+  font-family: var(--font-sans), sans-serif;
+  font-size: clamp(30px, 2.4vw + 16px, 44px);
+  font-weight: 330;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--color-fg);
+  max-width: 18ch;
+}
+.ray-close-spec { color: var(--color-text-faint); }
+.ray-close-spec b { color: var(--color-text-secondary); }
+.ray-close-spec span + span::before { color: var(--color-text-faint); }
+.ray-close-spec a:hover { color: var(--color-fg); text-decoration-color: var(--color-border-mid); }
+.ray-close-lines {
+  margin-top: 64px;
+  border-top: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 32px 40px;
+}
+.ray-close-line { display: block; min-height: 0; border-bottom: none; padding: 0; }
+.ray-close-line-k {
+  font-family: var(--font-sans), sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--color-text-muted);
+  display: block;
+  padding: 0 0 8px;
+}
+.ray-close-line-links { display: flex; flex-direction: column; align-items: flex-start; column-gap: 0; }
+.ray-close-line-links a { padding: 8px 0; font-size: 14.5px; font-weight: 450; color: var(--color-fg); }
+.ray-close-line-links a:hover { color: var(--color-text-secondary); text-decoration-color: var(--color-border-mid); }
+.ray-close-line-links a:focus-visible { outline: 1.5px solid var(--color-border-mid); outline-offset: 2px; }
+.ray-close-base { margin-top: 64px; padding-top: 0; color: var(--color-text-faint); }
+@media (max-width: 720px) {
+  .ray-close-in { padding-block: 64px 48px; }
+  .ray-close-lines { margin-top: 48px; }
+  .ray-close-line-links a { padding: 11px 0; }
+  .ray-close-base { margin-top: 48px; }
+}
+html[data-lectr-light] .ray-close {
+  background: none;
+  border-top-color: var(--hairline);
+  --color-fg: inherit;
+  --color-text-secondary: inherit;
+  --color-text-muted: inherit;
+  --color-text-faint: inherit;
+  --hairline: inherit;
+  --color-border: inherit;
+  --color-border-mid: inherit;
+  --lw-06: inherit;
+  --lw-10: inherit;
+  --color-butter: inherit;
+  --color-butter-text: inherit;
+  --color-hover-item: inherit;
+}
+html[data-lectr-light] .ray-close .ray-close-thesis { color: var(--color-fg); }
+`;
+
 const SPEC_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 function specDate(iso: string): string | null {
   const t = new Date(iso);
@@ -489,6 +562,7 @@ export function Colophon({ lotCount, houseCount, record }: {
 
   return (
     <footer className={`ray-close${inView ? ' ray-close-on' : ''}`} ref={ref}>
+      <style dangerouslySetInnerHTML={{ __html: NS_CLOSE_CSS }} />
       <div className="rail ray-close-in">
         {/* the monument — the argument, set once, at the close */}
         <p className="ray-close-thesis">Every estimate, read against every hammer.</p>

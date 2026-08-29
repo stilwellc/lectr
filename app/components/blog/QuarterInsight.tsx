@@ -7,9 +7,12 @@ import { formatPrice } from '../../utils';
 export interface TopSale { title: string; priceUsd: number; house: string; date: string; maker: string }
 export interface Mover { label: string; chgPct: number; n: number; slug?: string }
 
-const wrap: React.CSSProperties = { maxWidth: 648, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontFamily: 'var(--font-serif), serif', fontSize: 21, fontWeight: 400, letterSpacing: '-0.015em', margin: '42px 0 10px' };
-const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
+/* NORTH STAR editorial grammar (docs/NORTHSTAR_UI.md): prose at 17px on a
+   ~680px measure, in-note heads bigger and lighter, the post title set in
+   light Inter — authority through lightness, never boldness. */
+const wrap: React.CSSProperties = { maxWidth: 728, margin: '0 auto', padding: '0 24px' };
+const h2: React.CSSProperties = { fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 450, letterSpacing: '-0.02em', lineHeight: 1.2, margin: '44px 0 12px' };
+const p: React.CSSProperties = { fontSize: 17, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '4px 0 8px', fontSize: 14 };
 const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
 const td: React.CSSProperties = { padding: '9px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-secondary)' };
@@ -52,23 +55,38 @@ export default function QuarterInsight({
       <ArtistNav activeSlug="blog" />
       <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 6 }}>
-          <p className="kicker" style={{ margin: '0 0 14px' }}>
-            <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link> · Q2 2026 in review · {date}
+          <p className="ns-kicker" style={{ margin: '0 0 14px' }}>
+            <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link>
           </p>
-          <h1 style={{ fontFamily: 'var(--font-serif), serif', fontSize: 'clamp(28px, 4vw, 36px)', fontWeight: 400, letterSpacing: '-0.015em', lineHeight: 1.16, margin: '0 0 12px' }}>{title}</h1>
-          <p style={{ ...p, fontSize: 16 }}>{dek}</p>
+          <h1 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 'clamp(30px, 4.4vw, 40px)', fontWeight: 330, letterSpacing: '-0.02em', lineHeight: 1.1, margin: '0 0 14px' }}>{title}</h1>
+          {/* the provenance ledger — gray label over ink value, closed by the dotted rule */}
+          <div className="ns-byline" style={{ margin: '0 0 18px' }}>
+            <div>
+              <span className="k" style={{ display: 'block' }}>Published</span>
+              <span className="v" style={{ display: 'block' }}>{date}</span>
+            </div>
+            <div>
+              <span className="k" style={{ display: 'block' }}>Market</span>
+              <span className="v" style={{ display: 'block' }}>{market.charAt(0).toUpperCase() + market.slice(1)}</span>
+            </div>
+            <div>
+              <span className="k" style={{ display: 'block' }}>Series</span>
+              <span className="v" style={{ display: 'block' }}>Q2 2026 in review</span>
+            </div>
+          </div>
+          <p style={{ ...p, fontSize: 17 }}>{dek}</p>
         </header>
 
-        {/* stat band — flat Linear tiles, mirroring the homepage .mStat idiom:
-            cool white-alpha surface, one fine border, near-white figure at 600,
-            a hairline top-highlight. */}
+        {/* stat band — north-star cream wells: borderless, inverted hierarchy
+            (gray label, ink figure). Tone colors stay with the lamp — market
+            direction only. */}
         <div style={{ ...wrap, margin: '18px auto 6px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {stats.map(s => (
-              <div key={s.label} style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 11, padding: '14px 16px', boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}>
-                <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 5 }}>{s.label}</div>
+              <div key={s.label} className="ns-well" style={{ padding: '16px 18px' }}>
+                <div className="ns-well-label" style={{ marginBottom: 5 }}>{s.label}</div>
                 <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: s.tone === 'up' ? 'var(--color-up)' : s.tone === 'down' ? 'var(--color-down)' : 'var(--color-fg)' }}>{s.value}</div>
-                {s.sub && <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 3 }}>{s.sub}</div>}
+                {s.sub && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 3 }}>{s.sub}</div>}
               </div>
             ))}
           </div>
@@ -92,11 +110,8 @@ export default function QuarterInsight({
                   loading="lazy"
                   style={{ width: '100%', maxHeight: 460, objectFit: 'contain', display: 'block', padding: 18 }}
                 />
-                <span aria-hidden style={{
-                  position: 'absolute', inset: 0, pointerEvents: 'none',
-                  background: 'none',
-                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 -46px 60px -34px rgba(6,7,8,0.6), inset 0 34px 44px -38px rgba(6,7,8,0.4)',
-                }} />
+                {/* the settle vignette retired — north star media frames are a
+                    plain 1px hairline on a rounded plate, no scrims, no glow */}
               </div>
               <figcaption style={{
                 display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px',

@@ -432,7 +432,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
               <DossierChart hist={r.stats.priceHistory} />
             </div>
           ) : (
-            <p className="mkx-none">Not enough sold history for a curve yet — the ledger fills as {r.label} lots settle.</p>
+            <div className="mkx-none ns-well"><span className="ns-well-body">Not enough sold history for a curve yet — the ledger fills as {r.label} lots settle.</span></div>
           )}
           <div className="mkx-grid">
             <div>
@@ -915,7 +915,7 @@ export default function MakersPage() {
           {/* ── THE COCKPIT ── */}
           {activeKey === 'all' && (
             <section className="rail ray-enter" style={{ '--enter-delay': '30ms', paddingTop: 4, paddingBottom: 2 } as React.CSSProperties}>
-              <div className="mk-cockpit" role="list">
+              <div className="mk-cockpit ns-plate" role="list">
                 {cockpit.map(c => (
                   <button key={c.key} type="button" role="listitem" className="mk-cock" onClick={() => jumpTo(c.key)}>
                     <span className="mk-cock-head">
@@ -1022,12 +1022,12 @@ export default function MakersPage() {
 
             <div ref={listRef}>
               {groups.length === 0 ? (
-                <p className="mk-empty">
+                <div className="mk-empty ns-well">
                   No maker matches the current filters in the {activeLabel} market.
                   {' '}<button type="button" className="mk-reset" onClick={() => { setQ(''); setFLive(false); setFVerified(false); setFFlagged(false); setFFollowing(false); }}>Clear the filters</button>
-                </p>
+                </div>
               ) : groups.map(g => (
-                <div key={g.key} id={`mk-${g.key}`} className="mk-group">
+                <div key={g.key} id={`mk-${g.key}`} className="mk-group ns-plate">
                   <div className="mk-group-head">
                     <span className="mk-group-mark" aria-hidden><MarketIcon market={g.key} size={15} /></span>
                     <h2 className="mk-group-name">{g.label}</h2>
@@ -1072,14 +1072,15 @@ const MAKERS_CSS = `
 /* ════ THE MAKERS DIRECTORY — trading grade (Aug 2026 pass 3) ════ */
 
 /* ── THE COCKPIT ── */
-.mk-cockpit{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));border-top:1px solid var(--color-border);border-bottom:1px solid var(--color-border)}
+/* the plate rule (ns-plate) draws the top hairline + crop marks */
+.mk-cockpit{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));border-bottom:1px solid var(--color-border)}
 .mk-cock{display:grid;gap:3px;align-content:start;text-align:left;padding:14px 16px 12px;background:none;border:none;border-left:1px solid var(--color-hair,rgba(255,255,255,0.06));cursor:pointer;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
 .mk-cock:first-child{border-left:none}
 .mk-cock:hover{background:var(--color-hover-item)}
 .mk-cock:focus-visible{outline:1.5px solid color-mix(in srgb,var(--color-fg) 70%,transparent);outline-offset:-1.5px}
 .mk-cock-head{display:flex;align-items:center;gap:7px;min-width:0}
 .mk-cock-icon{display:inline-flex;color:var(--color-text-muted);flex:none}
-.mk-cock-name{font-size:11px;font-weight:650;letter-spacing:0.02em;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-cock-name{font-size:11px;font-weight:550;letter-spacing:0.02em;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mk-cock-v{font-family:var(--font-mono),monospace;font-size:21px;font-weight:500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.15;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px}
 .mk-cock-v i{font-style:normal;font-size:10.5px;color:var(--color-text-faint);letter-spacing:0.06em}
 .mk-cock-v em{font-style:normal;font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:700;color:var(--color-up);letter-spacing:0.02em}
@@ -1092,7 +1093,7 @@ const MAKERS_CSS = `
 /* ── the filter bar ── */
 .mk-bar-wrap{position:sticky;top:54px;z-index:30;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
-.mk-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 210px;min-width:140px;padding:0 10px;height:30px;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-faint)}
+.mk-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 210px;min-width:140px;padding:0 12px;height:30px;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:999px;color:var(--color-text-faint)}
 .mk-search input{flex:1;min-width:0;background:none;border:none;outline:none;font-family:var(--font-sans),sans-serif;font-size:12.5px;color:var(--color-fg)}
 .mk-search input::placeholder{color:var(--color-text-faint)}
 .mk-search:focus-within{border-color:var(--color-border-mid)}
@@ -1101,6 +1102,7 @@ const MAKERS_CSS = `
 .mk-chip{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:0 12px;height:28px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer;transition:color var(--duration-fast) var(--ease-signature),border-color var(--duration-fast) var(--ease-signature),background var(--duration-fast) var(--ease-signature)}
 .mk-chip:hover{color:var(--color-fg)}
 .mk-chip[data-on]{background:var(--color-fg);color:var(--color-bg);border-color:var(--color-fg)}
+.mk-chip:active,.mkc-btn:active,.mk-act:active{transform:scale(0.98)}
 .mk-bar-rule{flex:1}
 .mk-count{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mk-seg .ray-seg-btn{font-size:11.5px;padding:5px 10px}
@@ -1125,11 +1127,11 @@ const MAKERS_CSS = `
   .mk-cols .kicker{font-size:10px;letter-spacing:0.14em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
-/* ── group heads ── */
-.mk-group{margin-bottom:6px;scroll-margin-top:150px}
+/* ── group heads — rooms as framed plates, authority through lightness ── */
+.mk-group{margin-bottom:22px;scroll-margin-top:150px}
 .mk-group-head{position:sticky;top:103px;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,var(--color-bg, #08090a) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-group-mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-secondary);background:var(--color-bg-elevated)}
-.mk-group-name{margin:0;font-size:14px;font-weight:650;letter-spacing:-0.01em;white-space:nowrap}
+.mk-group-name{margin:0;font-size:20px;font-weight:350;letter-spacing:-0.02em;white-space:nowrap}
 .mk-group-count{font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:100px;padding:1px 8px;flex:none}
 .mk-group-rule{flex:1;border-top:1px solid var(--color-border)}
 .mk-group-read{font-size:11.5px;color:var(--color-text-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -1150,7 +1152,7 @@ const MAKERS_CSS = `
 .mk-mono-letter{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:650;color:var(--color-text-secondary)}
 .mk-mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .mk-id{min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.mk-name{font-size:13.5px;font-weight:600;color:var(--color-fg);white-space:nowrap}
+.mk-name{font-size:13.5px;font-weight:550;color:var(--color-fg);white-space:nowrap}
 .mk-tags{display:inline-flex;gap:5px;flex-wrap:wrap}
 .mk-tag{display:inline-block;padding:1px 7px;font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:0.05em;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;white-space:nowrap}
 .mk-tag-verified{color:var(--color-text-secondary);border-color:var(--color-border-mid)}
@@ -1183,7 +1185,7 @@ const MAKERS_CSS = `
   /* hover actions — absolute siblings of the row (valid interactive nesting) */
   .mk-acts{display:flex;gap:4px;position:absolute;top:11px;right:30px;z-index:2;opacity:0;transition:opacity var(--duration-fast) var(--ease-signature)}
   .mk-item:hover .mk-acts,.mk-item:focus-within .mk-acts,.mk-item[data-sel] .mk-acts{opacity:1}
-  .mk-act{width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:7px;color:var(--color-text-muted);cursor:pointer;padding:0;transition:color var(--duration-fast) var(--ease-signature),border-color var(--duration-fast) var(--ease-signature)}
+  .mk-act{width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:999px;color:var(--color-text-muted);cursor:pointer;padding:0;transition:color var(--duration-fast) var(--ease-signature),border-color var(--duration-fast) var(--ease-signature)}
   .mk-act:hover{color:var(--color-fg);border-color:var(--color-border-mid)}
   .mk-act[data-on]{color:var(--color-fg);border-color:var(--color-border-mid);background:var(--color-hover-item)}
 }
@@ -1208,7 +1210,9 @@ const MAKERS_CSS = `
 .mkx-tick{position:absolute;font-family:var(--font-mono),monospace;font-size:9.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mkx-tick-y{left:-8px;transform:translate(-100%,-50%)}
 .mkx-tick-x{bottom:-16px;transform:translateX(-50%)}
-.mkx-none{margin:0;padding:14px 16px 0;font-size:12.5px;color:var(--color-text-muted)}
+/* the no-curve explanation — a cream well (ns-well provides ground+radius+pad) */
+.mkx-none{margin:14px 16px 0}
+.mkx-none .ns-well-body{font-size:12.5px;color:var(--color-text-muted)}
 .mkx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px 26px;padding:14px 16px 0}
 .mkx-grid .kicker{font-size:10px;letter-spacing:0.14em}
 .mkx-grid p{margin:4px 0 0;font-size:12px;color:var(--color-text-muted);line-height:1.55}
@@ -1276,7 +1280,7 @@ const MAKERS_CSS = `
 .mkc-note{margin:0;font-size:12.5px;color:var(--color-text-muted)}
 .mkc-note kbd{font-family:var(--font-mono),monospace;font-size:10.5px;border:1px solid var(--color-border);border-radius:5px;padding:1px 5px}
 
-/* ── empty state ── */
-.mk-empty{font-size:13.5px;color:var(--color-text-muted);padding:34px 14px;margin:0}
+/* ── empty state — a cream well plate ── */
+.mk-empty{font-size:13.5px;color:var(--color-text-muted);margin:20px 0}
 .mk-reset{background:none;border:none;padding:0;font:inherit;color:var(--color-fg);cursor:pointer;text-decoration:underline dotted}
 `;

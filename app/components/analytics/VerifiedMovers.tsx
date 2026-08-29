@@ -29,8 +29,11 @@ export default function VerifiedMovers({
   const where = !scope || scope === 'all' ? 'the market' : scope;
 
   const Head = (
-    <div className="ray-vm-head">
-      <span className="ray-vm-title">Verified movers</span>
+    <div className="ray-vm-head" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <span style={{ minWidth: 0 }}>
+        <span className="ns-kicker" style={{ marginBottom: 4 }}>The reads the engine stands behind</span>
+        <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>Verified movers</span>
+      </span>
       <span className="ray-vm-method">price movement · 95% confidence</span>
     </div>
   );
@@ -83,7 +86,7 @@ function VerifiedStyles() {
       .ray-vm-panel { background: var(--panel); padding: 18px 20px; }
       .ray-vm-card { padding: var(--card-pad); }
       .ray-vm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-      .ray-vm-title { font-size: 13.5px; font-weight: 650; color: var(--color-fg); }
+      .ray-vm-title { font-size: 13.5px; font-weight: 550; color: var(--color-fg); }
       .ray-vm-method { font-size: 10.5px; color: var(--color-text-muted); text-align: right; }
       .ray-vm-rows { display: flex; flex-direction: column; }
       .ray-vm-row {

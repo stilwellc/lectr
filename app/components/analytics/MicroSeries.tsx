@@ -28,7 +28,7 @@ function panel(
         <span className="ray-vm-method">{method}</span>
       </div>
       <div style={{ margin: '10px 0 2px' }}>
-        <span style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{headline}</span>
+        <span style={{ fontSize: 26, fontWeight: 550, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>{headline}</span>
         <span style={{ marginLeft: 10, fontSize: 12, color: 'var(--color-text-muted)' }}>{sub}</span>
       </div>
       {chart}

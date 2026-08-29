@@ -94,12 +94,9 @@ export default function AnalyticsPage() {
     ['lab', <IndexLab key="lab" marketData={marketData} scope={activeKey} />],
     ['strength', <RelativeStrength key="strength" marketData={marketData} scope={activeKey} />],
     ['verified', <VerifiedMovers key="verified" marketData={marketData} scope={activeKey} variant="card" />],
-    ['field', (
-      <div key="field">
-        <LabFiguresP.Styles />
-        <LabFiguresP.Field lots={allLots} scope={activeKey} />
-      </div>
-    )],
+    // LabFiguresStyles is hoisted below the sections' host (not in here):
+    // a wrapper carrying only a <style> would defeat the empty-plate guard
+    ['field', <LabFiguresP.Field key="field" lots={allLots} scope={activeKey} />],
     ['micro', (
       <div key="micro" className="ray-desk-microgrid">
         <SellThroughPanel marketData={marketData} scope={activeKey} />
@@ -122,12 +119,15 @@ export default function AnalyticsPage() {
     ['engine', (
       <div key="engine">
         {backtest && activeKey === 'all' && (
-          <div className="ray-vm ray-vm-card glass glass-quiet" style={{ marginBottom: 14 }}>
-            <div className="ray-vm-head">
-              <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><RecordMark size={16} /></span>The engine&rsquo;s record</span>
-              <span className="ray-vm-method">point-in-time replay of the live engine · dual basis</span>
+          /* the north-star split head: huge light headline left, the record
+             prose right — the room's intro copy IS the split's right column */
+          <div className="ns-split" style={{ marginBottom: 18 }}>
+            <div>
+              <span className="ns-kicker">Engine science</span>
+              <h2 className="ray-room-h"><span className="ray-sect-mark" aria-hidden><RecordMark size={18} /></span>The engine&rsquo;s record</h2>
+              <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--color-text-muted)' }}>point-in-time replay of the live engine · dual basis</div>
             </div>
-            <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--color-text-muted)', lineHeight: 1.65 }}>
+            <p>
               Across <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{backtest.flagged.n.toLocaleString()}</b> flagged
               lots replayed against history, our below-market calls went{' '}
               <b className="pct-data" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
@@ -156,13 +156,14 @@ export default function AnalyticsPage() {
       fontFamily: 'var(--font-sans), sans-serif',
     }}>
       <style dangerouslySetInnerHTML={{ __html: `
-        .ray-desk-strip2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 20px; }
-        /* min-height ≈ the settled k+v+s stack — cells paint with '—' before
-           phase-1 lands and must not grow (CLS) when the figures arrive */
-        .ray-desk-cell2 { border: 2px dotted color-mix(in srgb, var(--color-fg) 13%, transparent); border-radius: 16px; padding: 12px 15px 11px; min-height: 78px; box-sizing: border-box; }
-        .ray-desk-cell2 .k { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-faint); }
-        .ray-desk-cell2 .v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 3px; }
-        .ray-desk-cell2 .s { font-size: 11px; color: var(--color-text-muted); margin-top: 1px; }
+        /* the desk byline — the abstract's headline facts as a provenance
+           ledger (north-star byline grammar): gray label over ink value,
+           closed by the dotted rule. Cells always render (— before phase-1
+           lands) so the row never reflows (CLS). */
+        .ray-desk-byline { margin-top: 24px; }
+        .ray-desk-byline > div { min-height: 62px; }
+        .ray-desk-byline .v { font-size: 18px; font-weight: 450; letter-spacing: -0.01em; }
+        .ray-desk-byline .s { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
         .ray-desk-microgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
         /* min-width:0 — a 1fr track's minimum is otherwise the item's CONTENT
            width, and HeroChart's ResizeObserver-sized svg then feeds back into
@@ -174,11 +175,22 @@ export default function AnalyticsPage() {
            columns) — it spans the grid row instead of scrolling in a half cell */
         .ray-desk-microgrid > .ray-hm { grid-column: 1 / -1; }
         .ray-abstract { max-width: 760px; margin-top: 26px; padding: 4px 0 0 18px; border-left: 2px solid var(--color-fg); }
-        .ray-abstract-k { font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-butter-text); }
+        .ray-abstract .ns-kicker { margin-bottom: 2px; }
         .ray-abstract p { margin: 6px 0 0; font-size: 14px; line-height: 1.7; color: var(--color-text-secondary); }
         .ray-abstract b { color: var(--color-fg); font-variant-numeric: tabular-nums; }
+        /* the methods colophon as a dotted spec ledger (north-star grammar) */
         .ray-methods { max-width: 820px; padding-block: 34px 8px; }
-        .ray-methods p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.7; color: var(--color-text-muted); }
+        .ray-methods .ns-ledger-row { align-items: baseline; }
+        .ray-methods .ns-ledger-row .k { flex: 0 0 122px; font-size: 12.5px; color: var(--color-text-muted); }
+        .ray-methods .ns-ledger-row .val { flex: 1; font-size: 12.5px; line-height: 1.65; color: var(--color-text-secondary); }
+        /* the room headline — big and LIGHT (authority through lightness) */
+        .ray-room-h { margin: 0; font-family: var(--font-sans), sans-serif; font-size: 30px; font-weight: 340; letter-spacing: -0.02em; line-height: 1.12; color: var(--color-fg); }
+        /* a room whose instrument abstained (rendered null) must not print
+           a stray plate rule — an empty plate erases itself. (Kept as its
+           own rule: a selector list sharing :has would drop :empty too on
+           engines without :has.) */
+        .ns-plate:empty { border-top: none; padding-top: 0 !important; }
+        .ns-plate:empty::before, .ns-plate:empty::after { display: none; }
         /* RecordByYear ships as a .rail section for /value — hosted inside
            the engine cell (already inside a rail) it must not double-gutter */
         .ray-rby-host .rail { padding-inline: 0; max-width: none; }
@@ -202,7 +214,7 @@ export default function AnalyticsPage() {
             what it found, three claims with their bases. Prose, not tiles. */}
         {backtest && activeKey === 'all' && (
           <div className="ray-abstract ray-enter">
-            <span className="ray-abstract-k">Abstract</span>
+            <span className="ns-kicker">Abstract</span>
             <p>
               Nightly, this desk replays every settled sale against the engine&rsquo;s point-in-time calls and refits
               its indexes with like-for-like controls. Across <b>{backtest.flagged.n.toLocaleString()}</b> replayed
@@ -217,22 +229,22 @@ export default function AnalyticsPage() {
           </div>
         )}
 
-        {/* the desk strip — the eager headline facts */}
-        <div className="ray-desk-strip2">
-          <div className="ray-desk-cell2">
+        {/* the desk byline — the eager headline facts as provenance columns */}
+        <div className="ns-byline ray-desk-byline">
+          <div>
             <div className="k">On the book</div>
             <div className="v">{bookLots.toLocaleString()}</div>
             <div className="s">{bookSold.toLocaleString()} sold · {bookHouses} houses</div>
           </div>
-          <div className="ray-desk-cell2">
+          <div>
             <div className="k">Sub-markets tracked</div>
             <div className="v">{drillCount || '—'}</div>
             <div className="s">{activeKey === 'all' ? 'across every vertical' : `in ${activeKey}`}</div>
           </div>
-          {/* always rendered: this cell arriving LATE inserted itself into the
-              auto-fit grid and shifted every sibling sideways (CLS). Until
-              backtest lands it abstains with an ink '—', never a made-up %. */}
-          <div className="ray-desk-cell2">
+          {/* always rendered: this column arriving LATE would shift every
+              sibling sideways (CLS). Until backtest lands it abstains with
+              an ink '—', never a made-up %. */}
+          <div>
             <div className="k">The record</div>
             {backtest ? (
               <div className="v" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
@@ -243,7 +255,7 @@ export default function AnalyticsPage() {
             )}
             <div className="s">{backtest ? `${backtest.flagged.n.toLocaleString()} flagged calls, replayed · median vs estimate` : 'flagged calls, replayed · median vs estimate'}</div>
           </div>
-          <div className="ray-desk-cell2">
+          <div>
             <div className="k">Makers ranked</div>
             <div className="v">{Object.keys(marketStats).length || '—'}</div>
             <div className="s">{activeKey === 'all' ? 'every roster name' : `${activeKey} roster`}</div>
@@ -260,10 +272,17 @@ export default function AnalyticsPage() {
           screens down (the site's worst CLS, 0.53–0.65). The settled desk is
           far taller than the reservation, so it never adds whitespace. */}
       <div style={{ minHeight: '160vh' }}>
+        {/* the LabFigures ruleset serves the field, flow and repeat rooms —
+            mounted once here so no plate has to host a bare <style> */}
+        <LabFiguresP.Styles />
         <RayEntrance animate={!fromCache}>
           {sections.map(([k, node], i) => (
             <div key={k} className="rail ray-enter" style={{ paddingTop: i === 0 ? 20 : 20, '--enter-delay': `${Math.min(i, 3) * 90}ms` } as React.CSSProperties}>
-              {node}
+              {/* the registration frame: each room is a plate — top rule with
+                  crop-mark dots landing on the rail's edges */}
+              <div className="ns-plate" style={{ paddingTop: 18 }}>
+                {node}
+              </div>
             </div>
           ))}
         </RayEntrance>
@@ -272,18 +291,37 @@ export default function AnalyticsPage() {
       {/* ── DEEP POOLS — corpus-scale panels, mounted on approach ── */}
       <DeepPools activeKey={activeKey} mktSet={mktSet} marketStats={marketStats} />
 
-      {/* THE METHODS — the lab colophon: how every figure on this page is made */}
+      {/* THE METHODS — the lab colophon: how every figure on this page is
+          made, set as a dotted spec ledger (north-star grammar) */}
       <section className="rail ray-methods">
-        <span className="ray-abstract-k">Methods</span>
-        <p>
-          Price movement: hedonic log-price regression per market (reference/form/size/house controls,
-          IRLS-weighted, quarterly time coefficients) and same-object repeat-sale fits where pairs allow; both
-          abstain below density, dominance and CI gates, and a ±plausibility ceiling drops implied compound moves
-          the controls cannot defend. Record: every flag replayed against realized results at both hammer and
-          all-in bases — never backfilled. Calibration: beat-rates refit nightly, recency-weighted and shrunk.
-          Figures print their n and basis; suppressed cells mean the data did not clear the bar. Data from public
-          auction results across 16 houses.
-        </p>
+        <div className="ns-plate" style={{ paddingTop: 18 }}>
+          <span className="ns-kicker">Methods</span>
+          <div>
+            <div className="ns-ledger-row">
+              <span className="k">Price movement</span>
+              <span className="val">hedonic log-price regression per market (reference/form/size/house controls,
+                IRLS-weighted, quarterly time coefficients) and same-object repeat-sale fits where pairs allow; both
+                abstain below density, dominance and CI gates, and a ±plausibility ceiling drops implied compound moves
+                the controls cannot defend.</span>
+            </div>
+            <div className="ns-ledger-row">
+              <span className="k">The record</span>
+              <span className="val">every flag replayed against realized results at both hammer and all-in bases — never backfilled.</span>
+            </div>
+            <div className="ns-ledger-row">
+              <span className="k">Calibration</span>
+              <span className="val">beat-rates refit nightly, recency-weighted and shrunk.</span>
+            </div>
+            <div className="ns-ledger-row">
+              <span className="k">Figures</span>
+              <span className="val">print their n and basis; suppressed cells mean the data did not clear the bar.</span>
+            </div>
+            <div className="ns-ledger-row">
+              <span className="k">Data</span>
+              <span className="val">public auction results across 16 houses.</span>
+            </div>
+          </div>
+        </div>
       </section>
       <Colophon record={null} />
     </div>
@@ -314,7 +352,10 @@ function DeepPools({ activeKey, mktSet, marketStats }: {
       <div className="rail" style={{ paddingTop: 26 }}>
         {/* no mark here — BookMark belongs to "The full book" head below;
             one glyph, one room (the mark system's premise) */}
-        <div className="kicker" style={{ color: 'var(--color-text-faint)' }}>The deep pools · every lot on the book</div>
+        <div className="ns-plate" style={{ paddingTop: 18 }}>
+          <span className="ns-kicker">Every lot on the book</span>
+          <h2 className="ray-room-h">The deep pools</h2>
+        </div>
       </div>
       {armed ? <DeepPoolsBody activeKey={activeKey} mktSet={mktSet} marketStats={marketStats} /> : (
         <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}>

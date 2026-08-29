@@ -153,10 +153,11 @@ export default function UpcomingLots({
           } as React.CSSProperties}
         >
           <h2 style={{
-            fontFamily: 'var(--font-serif), serif',
-            fontSize: 24,
-            fontWeight: 400,
-            letterSpacing: '-0.015em',
+            fontFamily: 'var(--font-sans), sans-serif',
+            fontSize: 30,
+            fontWeight: 350,
+            letterSpacing: '-0.025em',
+            lineHeight: 1.12,
           }}>
             Upcoming <span style={{ fontStyle: 'normal' }}>lots</span>
           </h2>

@@ -91,16 +91,15 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
     return { anchor, main, sub, anchorLast: anchor.points[anchor.points.length - 1].value };
   }, [idx, tf, layerDefs, hasHedonic]);
 
-  // thin history: keep the card (a silent gap reads as a bug) and say why
+  // thin history: keep the plate (a silent gap reads as a bug) and say why —
+  // an explanation, not an instrument, so it sits on the cream well
   if (!built) {
     return (
-      <div className="ray-vm ray-vm-card glass glass-quiet">
-        <div className="ray-vm-head">
-          <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><IndexLabMark size={16} /></span>The index laboratory</span>
-        </div>
-        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '10px 0 4px' }}>
+      <div className="ns-well">
+        <div className="ns-well-label"><span className="ray-sect-mark" aria-hidden><IndexLabMark size={15} /></span>The index laboratory</div>
+        <div className="ns-well-body">
           Not enough settled history to chart an index for this market yet — it lights up as quarters accrue.
-        </p>
+        </div>
       </div>
     );
   }
@@ -121,8 +120,13 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
   return (
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      <div className="ray-vm-head ray-il-head">
-        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><IndexLabMark size={16} /></span>The index laboratory</span>
+      <div className="ray-vm-head ray-il-head" style={{ alignItems: 'flex-end' }}>
+        <span style={{ minWidth: 0 }}>
+          <span className="ns-kicker" style={{ marginBottom: 4 }}>The research desk&rsquo;s primary instrument</span>
+          <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+            <span className="ray-sect-mark" aria-hidden><IndexLabMark size={18} /></span>The index laboratory
+          </span>
+        </span>
         <span className="ray-il-tf" role="tablist" aria-label="Window">
           {WINDOWS.map(w => (
             <button key={w.key} type="button" role="tab" className="ray-il-tfbtn" data-on={tf === w.key}

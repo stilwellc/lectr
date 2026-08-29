@@ -230,10 +230,10 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           <div style={{ position: 'relative', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '16px 0 4px' }}>
           <div>
             <h2 style={{
-              fontFamily: 'var(--font-serif), serif',
-              fontSize: 24,
-              fontWeight: 400,
-              letterSpacing: '-0.015em',
+              fontFamily: 'var(--font-sans), sans-serif',
+              fontSize: 30,
+              fontWeight: 350,
+              letterSpacing: '-0.02em',
             }}>
               Recent <span style={{ fontStyle: 'normal' }}>results</span>
             </h2>
@@ -382,9 +382,9 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 )}
                 {!titleDupesMaker && (
                   <div style={{
-                    fontFamily: "var(--font-serif), serif",
-                    fontSize: 17,
-                    fontWeight: 400,
+                    fontFamily: "var(--font-sans), sans-serif",
+                    fontSize: 16.5,
+                    fontWeight: 450,
                     lineHeight: 1.3,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',

@@ -115,7 +115,7 @@ export default function Distributions({ allLots, statsByArtist, market, series }
           cursor: pointer;
           text-align: left;
         }
-        .ray-dist-disc-t { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+        .ray-dist-disc-t { font-size: 15px; font-weight: 550; letter-spacing: -0.01em; }
         .ray-dist-disc-stat {
           font-family: var(--font-mono), monospace;
           font-size: 11.5px; color: var(--color-text-muted);
@@ -152,12 +152,14 @@ export default function Distributions({ allLots, statsByArtist, market, series }
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{
+            margin: 0,
             fontFamily: 'var(--font-sans), sans-serif',
-            fontSize: 24,
-            fontWeight: 700,
+            fontSize: 30,
+            fontWeight: 340,
             letterSpacing: '-0.02em',
+            lineHeight: 1.12,
           }}>
-            <span className="ray-sect-mark" aria-hidden><DistMark size={17} /></span>Distri<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>butions</span>
+            <span className="ray-sect-mark" aria-hidden><DistMark size={18} /></span>Distri<span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>butions</span>
           </h2>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>{active.sub}</p>
         </div>

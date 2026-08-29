@@ -234,8 +234,13 @@ export default function LongHorizon({ marketData, scope }: {
   return (
     <div className="ray-vm ray-vm-card glass glass-quiet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      <div className="ray-vm-head">
-        <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><HorizonMark size={16} /></span>Long horizon</span>
+      <div className="ray-vm-head" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <span style={{ minWidth: 0 }}>
+          <span className="ns-kicker" style={{ marginBottom: 4 }}>The long-horizon reads</span>
+          <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+            <span className="ray-sect-mark" aria-hidden><HorizonMark size={18} /></span>Long horizon
+          </span>
+        </span>
         <span className="ray-vm-method">{curated.method}</span>
       </div>
       <div className="ray-lh-chart">

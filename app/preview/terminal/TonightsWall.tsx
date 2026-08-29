@@ -114,13 +114,14 @@ export default function TonightsWall({
       data-anim={play ? 'true' : undefined}
       data-seen={seen ? 'true' : undefined}
     >
-      <div className={styles.wallHead}>
+      <div className={`ns-split ${styles.wallHead}`}>
         <div>
+          <span className="ns-kicker">The front row</span>
           <h2 className={styles.roomTitle}>Tonight&rsquo;s wall</h2>
-          <p className={styles.roomSub}>{evening
+        </div>
+        <p>{evening
             ? 'The room tonight — closing soonest first, priced under where their comparables sell.'
             : 'Today\u2019s call and the strongest flagged lots on the block — priced under where their comparables sell.'}</p>
-        </div>
       </div>
       <div className={styles.wallRow}>
         {shown.map((it, i) => (

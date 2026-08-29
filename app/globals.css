@@ -1234,7 +1234,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-weight: 500 !important;
   letter-spacing: -0.01em !important;
   text-transform: none !important;
-  border-radius: 10px !important;
+  border-radius: 999px !important;
 }
 .ray-artist-dropdown-item {
   font-size: 13.5px !important;
@@ -2844,11 +2844,11 @@ body {
 /* ── THE RECORD-SALE PLATE + dossier name (kept from the design program) ── */
 /* M8 — the dossier name speaks Fraunces display */
 .lectr-dossier-name {
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-sans), sans-serif;
   font-size: clamp(44px, 5.5vw, 72px);
-  font-weight: 620;
+  font-weight: 320;
   letter-spacing: -0.03em;
-  line-height: 1.02;
+  line-height: 1.04;
   margin: 0;
   text-wrap: balance;
 }
@@ -2974,11 +2974,11 @@ body {
 }
 .ray-engine-eyebrow img { height: 18px; width: auto; filter: none; opacity: 0.9; }
 .ray-engine-head {
-  font-family: var(--font-serif), Georgia, serif;
-  font-weight: 620;
-  font-size: clamp(24px, 2.8vw, 36px);
-  line-height: 1.14;
-  letter-spacing: -0.025em;
+  font-family: var(--font-sans), sans-serif;
+  font-weight: 340;
+  font-size: clamp(26px, 2.9vw, 38px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
   margin: 14px 0 0;
 }
 .ray-engine-head em { font-style: normal; color: inherit; }

@@ -23,7 +23,7 @@ const fmtMult = (m: number) => (m >= 10 ? m.toFixed(1) : m.toFixed(2));
 const CSS = `
 .ray-gl.ray-vm-card{padding:var(--card-pad)}
 .ray-gl .ray-vm-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.ray-gl .ray-vm-title{font-size:13.5px;font-weight:650;color:var(--color-fg)}
+.ray-gl .ray-vm-title{font-size:13.5px;font-weight:550;color:var(--color-fg)}
 .ray-gl .ray-vm-method{font-size:10.5px;color:var(--color-text-muted);text-align:right}
 .ray-gl-strip{display:grid;column-gap:10px;align-items:end;margin-top:4px}
 .ray-gl-rung{display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}

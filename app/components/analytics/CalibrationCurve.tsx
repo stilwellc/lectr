@@ -101,11 +101,15 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
   // this panel relative to its siblings.
   return (
     <section className="ray-calibration" style={{ paddingBlock: 'var(--sect-t) var(--sect-b)', fontVariantNumeric: 'tabular-nums' }}>
-      <div style={{ marginBottom: 4 }}>
-        <h2 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
-          What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>
-        </h2>
-        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+      {/* north-star split head: huge light headline left, the method copy right */}
+      <div className="ns-split" style={{ marginBottom: 4 }}>
+        <div>
+          <span className="ns-kicker">The calibration curve</span>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-sans), sans-serif', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+            What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>
+          </h2>
+        </div>
+        <p>
           Measured chance a lot beats its high estimate, by how far its comps trade over the ask —
           refit from {cal.n?.toLocaleString?.() || 'every'} replayed sales at every nightly build. The 10×+ bucket drops on purpose: extreme gaps under-deliver, and the engine says so.
         </p>

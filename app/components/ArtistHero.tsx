@@ -249,8 +249,20 @@ export default function ArtistHero({
     <section className="ray-hero2 rail" data-tone={dir >= 0 ? 'up' : 'down'}>
       <div className="lectr-dossier-hero" style={{ marginBottom: 4 }}>
         <div style={{ minWidth: 0 }}>
-          {/* M8 — the maker's name in Fraunces display (was buried in the label line) */}
-          <h1 className="lectr-dossier-name" style={{ marginBottom: 10 }}>{label}</h1>
+          {/* NORTH STAR — the maker's name as a light grotesk display head:
+              impact through lightness, never boldness (inline override of the
+              shared serif class; PlayerPage keeps its own face untouched) */}
+          <h1
+            className="lectr-dossier-name"
+            style={{
+              marginBottom: 10,
+              fontFamily: 'var(--font-sans), sans-serif',
+              fontWeight: 320,
+              letterSpacing: '-0.03em',
+            }}
+          >
+            {label}
+          </h1>
           <p className="ray-hero2-label" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
               <ArtistAvatar label={label} size={26} />

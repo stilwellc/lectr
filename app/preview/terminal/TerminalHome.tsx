@@ -777,14 +777,28 @@ export default function TerminalHomePage() {
               closingNext={closingNext}
             />
 
-            {/* ══ TONIGHT'S WALL — the photographed front row (kept). A padded
-                seam sets it apart from the hero's search. ══ */}
-            {wallEl && <div className={styles.wallSeparator}>{wallEl}</div>}
+            {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
+                section opens on a registration plate (north-star frame). ══ */}
+            {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
 
             {/* ══ ROOM · THE VERIFIED BOARD — every certified read, on paper.
                 The movers ARE the board's top rows (one table, no duplicate
-                strip); the record sentence prints ONCE as the room's footer. ══ */}
+                strip); the record sentence prints ONCE as the room's footer.
+                NORTH STAR: the engine's intro head lives OUT HERE on the page
+                ground in the split grammar; the vault below stays the one
+                dark room. ══ */}
             {marketData?.subMarkets && (
+              <div className="ns-plate">
+                <div className={`ns-split ${styles.engineIntro}`}>
+                  <div>
+                    <span className="ns-kicker">The value engine</span>
+                    <h2 className={styles.engineIntroHead}>We find what the room misprices.</h2>
+                  </div>
+                  <p>
+                    Live lots flagged under their comparables, the market indices behind
+                    them, and the replayed record that keeps us honest.
+                  </p>
+                </div>
               <section className={styles.roomPaper}>
                 <div className={styles.roomInner}>
                   <SubMarketBoard
@@ -805,6 +819,7 @@ export default function TerminalHomePage() {
                   />
                 </div>
               </section>
+              </div>
             )}
 
             {/* the watchlist strip — the reader's saved lots (small, personal) */}
@@ -812,21 +827,16 @@ export default function TerminalHomePage() {
 
             {/* ══ THE FEED — On the block (full parity) ══ */}
             {upcoming.length > 0 && (
-              <section id="on-the-block" className={styles.feedSection}>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '10px 0 18px',
-                  }}
-                >
-                  <h2 className={styles.feedTitle}>On the block</h2>
+              <section id="on-the-block" className={`${styles.feedSection} ns-plate`}>
+                <div className={`ns-split ${styles.feedHead}`}>
+                  <div>
+                    <span className="ns-kicker">The live book</span>
+                    <h2 className={styles.feedTitle}>On the block</h2>
+                  </div>
                   {nextHammer && (
-                    <span style={{ fontSize: 13.5, color: 'var(--tt-muted)' }}>
+                    <p>
                       Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}
-                    </span>
+                    </p>
                   )}
                 </div>
 
@@ -1032,7 +1042,7 @@ export default function TerminalHomePage() {
                 surfaces this market always has. Only shows when all three
                 body sections are absent. ══ */}
             {upcoming.length === 0 && !wallEl && !marketData?.subMarkets && (
-              <section className={styles.feedSection}>
+              <section className={`${styles.feedSection} ns-plate`}>
                 <div className="ray-enter" style={{ textAlign: 'center', padding: '40px 20px 60px' }}>
                   <p style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 8, color: 'var(--tt-muted)' }}>
                     Nothing on the block in the {activeKey === 'all' ? 'total' : marketMeta.label} market yet — the crawl refreshes daily.
@@ -1054,6 +1064,7 @@ export default function TerminalHomePage() {
             <Phase2Sentinel />
 
             {/* ══ ROOM · THE SETTLEMENT — the slip is the room. ══ */}
+            <div className="ns-plate">
             <section className={styles.roomPaper}>
             <div className={styles.roomInner}>
             <div className={styles.slipRoom}>
@@ -1128,6 +1139,7 @@ export default function TerminalHomePage() {
             </div>
             </div>
             </section>
+            </div>
           </div>
 
         </RayEntrance>

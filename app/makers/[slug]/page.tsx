@@ -46,8 +46,8 @@ function ArchiveErrorPanel({ onRetry }: { onRetry: () => void }) {
     <div style={{ padding: '120px 24px', textAlign: 'center' }}>
       <h2 style={{
         fontFamily: 'var(--font-sans), sans-serif',
-        fontSize: 32,
-        fontWeight: 700,
+        fontSize: 34,
+        fontWeight: 350,
         letterSpacing: '-0.02em',
         marginBottom: 10,
       }}>
@@ -74,7 +74,7 @@ const DOSSIER_FEATURE_CSS = `
    padding otherwise comes from */
 .mkr-panel.ray-vm-card{padding:var(--card-pad)}
 .mkr-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:2px}
-.mkr-panel-title{font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--color-fg,#E8EAED)}
+.mkr-panel-title{font-size:15px;font-weight:550;letter-spacing:-0.01em;color:var(--color-fg,#E8EAED)}
 .mkr-panel-method{font-size:11.5px;color:var(--color-text-faint,#7A8087)}
 .mkr-rows{display:flex;flex-direction:column;margin-top:8px}
 .mkr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;transition:background 0.14s ease}
@@ -91,7 +91,9 @@ a.mkr-row:hover .mkr-row-name{color:var(--color-fg,#f7f8f8)}
 .mkr-row-meta{color:var(--color-text-faint,#7A8087);font-size:11.5px;font-variant-numeric:tabular-nums;text-align:right;min-width:64px}
 @media (max-width:640px){.mkr-row{grid-template-columns:1fr auto}.mkr-row-meta{display:none}}
 .mkr-note{margin-top:10px;font-size:11.5px;color:var(--color-text-faint,#7A8087)}
-.mkr-flag{display:inline-block;padding:8px 12px;border:2px dotted rgba(255,255,255,0.12);border-radius:10px;font-size:13px;color:var(--color-fg,#E8EAED)}
+/* the engine-flags callout rides the cream ns-well plate; this class only
+   keeps its type + link grammar */
+.mkr-flag{display:inline-block;font-size:13.5px;color:var(--color-fg,#E8EAED)}
 .mkr-flag a{color:inherit;text-decoration-color:var(--color-border-mid);text-underline-offset:3px}
 `;
 function useDossierFeatureStyles() {
@@ -261,12 +263,12 @@ function ValueEnginePresence({ upcoming }: { upcoming: AuctionLot[] }) {
 
   return (
     <div className="rail" style={{ marginTop: 4 }}>
-      <span className="mkr-flag">
+      <div className="mkr-flag ns-well" style={{ display: 'inline-block', padding: '12px 18px' }}>
         The engine flags{' '}
         <a href="#upcoming"><strong>{flagged}</strong> of {total} appraised live {total === 1 ? 'lot' : 'lots'}</a>{' '}
         below comparable market.{' '}
         <Link href="/value" style={{ color: 'inherit' }}>See the value desk &rsaquo;</Link>
-      </span>
+      </div>
     </div>
   );
 }
@@ -520,8 +522,8 @@ export default function ArtistDetailPage() {
         <div style={{ padding: '120px 24px', textAlign: 'center' }}>
           <h2 style={{
             fontFamily: 'var(--font-sans), sans-serif',
-            fontSize: 32,
-            fontWeight: 700,
+            fontSize: 34,
+            fontWeight: 350,
             letterSpacing: '-0.02em',
             marginBottom: 10,
           }}>

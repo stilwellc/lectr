@@ -385,16 +385,21 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
       `}</style>
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
-        {/* sans section head — serif stays reserved for masthead titles and
-            "On the block" heads; matches TopSales/Distributions/Calibration */}
-        <h2 style={{
-          fontFamily: 'var(--font-sans), sans-serif',
-          fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-        }}>
-          <span className="ray-sect-mark" aria-hidden><RankMark size={17} /></span>Maker <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>rankings</span>
-        </h2>
+        {/* north-star head — quiet kicker over a big LIGHT headline;
+            matches TopSales/Distributions/Calibration */}
+        <div style={{ minWidth: 0 }}>
+          <span className="ns-kicker" style={{ marginBottom: 4 }}>Every roster name</span>
+          <h2 style={{
+            margin: 0,
+            fontFamily: 'var(--font-sans), sans-serif',
+            fontSize: 30,
+            fontWeight: 340,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.12,
+          }}>
+            <span className="ray-sect-mark" aria-hidden><RankMark size={18} /></span>Maker <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>rankings</span>
+          </h2>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           {isBid && (
             <div style={{ display: 'flex', gap: 6 }} role="tablist" aria-label="Rankings lens">

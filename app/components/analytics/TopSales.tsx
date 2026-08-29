@@ -76,7 +76,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           cursor: pointer;
           text-align: left;
         }
-        .ray-disc-t { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+        .ray-disc-t { font-size: 15px; font-weight: 550; letter-spacing: -0.01em; }
         .ray-disc-stat {
           font-family: var(--font-mono), monospace;
           font-size: 11.5px; color: var(--color-text-muted);
@@ -114,12 +114,14 @@ export default function TopSales({ allLots, market, series }: Props) {
       <div className="ray-top-body" id="ray-topsales-body" data-open={open}>
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{
+          margin: 0,
           fontFamily: 'var(--font-sans), sans-serif',
-          fontSize: 24,
-          fontWeight: 700,
+          fontSize: 30,
+          fontWeight: 340,
           letterSpacing: '-0.02em',
+          lineHeight: 1.12,
         }}>
-          <span className="ray-sect-mark" aria-hidden><SalesMark size={17} /></span>Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
+          <span className="ray-sect-mark" aria-hidden><SalesMark size={18} /></span>Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
         </h2>
         <span style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
           top {topSales.length} · ranked over {fromCorpus ? 'the full corpus' : 'the loaded lots'} · % over est. on hammer basis — buyer&rsquo;s premium divided out

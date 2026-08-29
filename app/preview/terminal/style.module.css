@@ -122,11 +122,13 @@
 /* slim rows, one grammar: words left, instrument right — no dead space */
 .pulseGrid { display: flex; flex-direction: column; gap: 0; }
 .pulseBlock {
-  /* de-bento (Aug 25): a ROW on a hairline, not a boxed tile */
+  /* de-bento (Aug 25): a ROW on a hairline, not a boxed tile.
+     North star: the market-open figures read as a spec LEDGER — dotted
+     hairlines between label/value rows (.ns-ledger-row grammar). */
   position: relative; display: flex; flex-direction: row; align-items: center;
   justify-content: space-between; gap: 12px;
   min-width: 0; padding: 12px 2px; overflow: hidden;
-  border: 0; border-bottom: 1px solid var(--tt-hair);
+  border: 0; border-bottom: 1px dotted var(--tt-hair-2);
   background: none;
   transition: background 140ms var(--ease-signature, ease);
 }
@@ -173,7 +175,7 @@
 .pulseAction {
   position: relative; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 12px 2px; cursor: pointer; overflow: hidden;
-  border: 0; border-bottom: 1px solid var(--ba-28, rgba(232, 218, 182, 0.28));
+  border: 0; border-bottom: 1px dotted var(--ba-28, rgba(232, 218, 182, 0.28));
   background: none;
   transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease);
 }
@@ -214,7 +216,7 @@
   display: inline-flex; align-items: baseline; gap: 6px;
   font-family: var(--font-inter), sans-serif; font-size: 11px; color: var(--tt-fg, #ffffff);
   padding: 6px 11px; white-space: nowrap;
-  border: 1px solid var(--lw-07, rgba(255, 255, 255, 0.07)); border-radius: 8px;
+  border: 1px solid var(--lw-07, rgba(255, 255, 255, 0.07)); border-radius: 999px;
   background: var(--lw-028, rgba(255, 255, 255, 0.028));
 }
 .pulseChip em {
@@ -346,8 +348,8 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
-  border-radius: 12px;
+  padding: 12px 18px;
+  border-radius: 999px;
   border: 1px solid var(--tt-hair-2);
   background: var(--lw-05, rgba(255, 255, 255, 0.05));
   color: var(--tt-secondary);
@@ -402,12 +404,14 @@
 
 /* the feed section */
 .feedSection { margin-top: clamp(44px, 6vw, calc(var(--sect-t) + var(--sect-b) - var(--space-4))); }
+/* NORTH STAR (Aug 29): section heads carry authority through LIGHTNESS —
+   Inter 330, bigger, tighter. The serif display voice retired from heads. */
 .feedTitle {
-  font-family: var(--font-serif-display), serif;
-  font-weight: 620;
-  font-size: clamp(22px, 2.6vw, 32px);
-  line-height: 1.1;
-  letter-spacing: -0.025em;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 330;
+  font-size: clamp(30px, 3.4vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   color: var(--tt-fg);
   margin: 0;
 }
@@ -481,10 +485,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   width: 100%;
   justify-content: center;
   gap: 10px;
-  padding: 14px;
+  padding: 14px 18px;
   background: var(--lw-06, rgba(255, 255, 255, 0.06));
   border: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
-  border-radius: 12px;
+  border-radius: 999px;
   box-shadow: none;
   color: var(--tt-fg);
 }
@@ -510,11 +514,11 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 
 .tfToggle {
   display: inline-flex; gap: 3px; padding: 3px;
-  border: 1px solid var(--tt-hair-2); border-radius: 10px; background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--tt-hair-2); border-radius: 999px; background: rgba(0, 0, 0, 0.22);
 }
 .tfChip {
   font-family: var(--font-inter), sans-serif; font-size: 11.5px; letter-spacing: 0.04em;
-  padding: 5px 11px; border-radius: 7px; border: none; background: none; color: var(--tt-muted);
+  padding: 5px 11px; border-radius: 999px; border: none; background: none; color: var(--tt-muted);
   cursor: pointer; transition: background 180ms var(--ease-signature, cubic-bezier(0.23,1,0.32,1)), color 180ms;
 }
 .tfChip:hover { color: var(--tt-fg); }
@@ -732,12 +736,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 
 /* ── TONIGHT'S WALL (kept from the design program) ── */
 .wall { min-width: 0; margin-top: 22px; }
+/* the wall's head speaks the split grammar (.ns-split supplies the grid) */
 .wallHead {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 6px;
   margin-bottom: 28px;
 }
 /* plate index — 01–05 mono jewelry, echoing the masthead's inventory tag */
@@ -948,14 +948,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   animation-delay: calc(600ms + var(--wall-i, 0) * 60ms);
 }
 
-/* ── M11 · the serif section head — one italic butter word ── */
-.feedTitle {
-  font-size: clamp(30px, 3.2vw, 42px);
-}
-.feedTitle em { font-style: normal; color: inherit; }
-
-/* the On-the-block serif head — one italic butter word (kept) */
-.feedTitle { font-size: clamp(30px, 3.2vw, 42px); }
+/* (the M11 serif-head size overrides retired with the north-star pass —
+   .feedTitle is authored once, above) */
 .feedTitle em { font-style: normal; color: inherit; }
 
 /* ═══════════════ THE FIVE-ROOM SYSTEM (home redesign) ═══════════════
@@ -987,14 +981,14 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 
 
 /* room header grammar — every room introduces itself the same way:
-   Fraunces title (the "On the block" keeper format) + one purpose line */
+   a quiet sentence-case kicker over one LIGHT Inter headline (north star) */
 .roomTitle {
-  font-family: var(--font-serif-display), serif;
-  font-weight: 620;
-  font-size: clamp(26px, 2.8vw, 36px);
-  line-height: 1.1;
-  letter-spacing: -0.025em;
-  margin: 0 0 6px;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 330;
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
 }
 .roomTitle em { font-style: normal; color: inherit; }
 .roomPaper .roomTitle { color: var(--paper-ink, #1C1712); }
@@ -1038,9 +1032,11 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .roomPaper :global(.kicker) { letter-spacing: 0; text-transform: none; font-weight: 600; font-size: 13px; }
 
 
-/* the last paper room hands off to the colophon without stacked gaps */
+/* the last paper room hands off to the colophon without stacked gaps.
+   (Scoped via the shell's last child — the rooms now sit inside ns-plate
+   wrappers, so a bare :last-of-type would also catch the engine vault.) */
 .deskShell { padding-bottom: 0; }
-.roomPaper:last-of-type { margin-bottom: 0; }
+.deskShell > :last-child .roomPaper { margin-bottom: 0; }
 
 
 /* the method tag — a quiet tinted pill naming the read's certification */
@@ -1062,17 +1058,16 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    math from the type audit assumed weight 500; the de-caps grammar bumped
    it to 600 and "Below market ↗" clips again. Restore the fit. */
 
-/* ════ THE POSTER GRAMMAR — every room announces itself on the center
-   axis at display scale, the Robinhood statement rhythm in lectr's
-   voice: Fraunces monument, quiet centered purpose line beneath. ════ */
+/* ════ THE CATALOGUE GRAMMAR (north star, supersedes the poster pass) —
+   heads sit LEFT on the page axis in the split grammar: kicker over a
+   light headline, purpose copy in the right column (.ns-split). ════ */
 .roomTitle,
 .feedTitle {
-  text-align: center;
-  font-size: clamp(34px, 3.9vw, 56px);
+  text-align: left;
 }
 .roomSub {
-  text-align: center;
-  margin-inline: auto;
+  text-align: left;
+  margin-inline: 0;
 }
 
 
@@ -1449,34 +1444,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   margin-top: clamp(28px, 3.2vw, 48px);
   padding-top: clamp(26px, 3vw, 44px);
 }
-.wallSeparator::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(620px, 70%);
-  height: 2px;
-  background:
-    linear-gradient(90deg, transparent, rgba(4, 3, 2, 0.65) 16%, rgba(4, 3, 2, 0.65) 84%, transparent) left top / 100% 1px no-repeat,
-    linear-gradient(90deg, transparent, rgba(242, 238, 227, 0.1) 16%, rgba(242, 238, 227, 0.1) 84%, transparent) left bottom / 100% 1px no-repeat;
-}
-/* the groove scores itself outward from centre as the reader arrives (the
-   wall's data-seen is the arrival signal); browsers without :has() and
-   reduced-motion readers get the finished groove — a complete static design */
-@media (prefers-reduced-motion: no-preference) {
-  .wallSeparator:has(.wall[data-anim='true'][data-seen='true'])::before,
-  .wallSeparator:has(.wallStrip[data-anim='true'][data-seen='true'])::before {
-    clip-path: inset(0 50% 0 50%);
-    animation: seamScore 640ms cubic-bezier(0.23, 1, 0.32, 1) 120ms forwards;
-  }
-}
-@keyframes seamScore {
-  to { clip-path: inset(0 0 0 0); }
-}
+/* (the engraved groove retired with the north-star pass — the section now
+   opens on the global .ns-plate registration rule + crop marks) */
 @media (max-width: 900px) {
   .wallSeparator { margin-top: 36px; padding-top: 34px; }
-  .wallSeparator::before { width: min(320px, 78%); }
 }
 
 /* ════ THE VALUE ENGINE — chapter grammar for Room A ════ */
@@ -2561,9 +2532,9 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
-  border-radius: 12px;
+  border-radius: 999px;
   box-shadow: none;
-  padding: 13px 14px;
+  padding: 13px 18px;
   color: var(--tt-fg);
   transition:
     background 140ms var(--ease-signature, ease),
@@ -2638,7 +2609,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    and a flat Linear search input — no warm elevated blocks, no glass. ══ */
 .root :global(.ray-nav-link) {
   color: var(--tt-muted) !important;   /* Linear text-tertiary */
-  border-radius: 8px !important;
+  /* radius override removed (north star) — the global pill geometry wins */
   transition: color 140ms var(--ease-signature, ease), background 140ms var(--ease-signature, ease), box-shadow 140ms var(--ease-signature, ease) !important;
 }
 .root :global(.ray-nav-link:hover) {
@@ -2808,7 +2779,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    signature affordance on the primary command surface */
 .mtSide .railCmd { position: relative; }
 .cmdKbd {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
   font-family: var(--font-inter), sans-serif; font-size: 11px; line-height: 1.4;
   color: var(--tt-muted);
   padding: 1px 6px;
@@ -2844,3 +2815,45 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 :global(html[data-lectr-light]) .hcRule { stroke: rgba(28, 25, 23, 0.06); stroke-dasharray: none; }
 :global(html[data-lectr-light]) .hcRuleZero { stroke: rgba(28, 25, 23, 0.22); }
 :global(html[data-lectr-light]) .hcTick { fill: #8E877D; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   NORTH STAR (Aug 29) — the split-hero masthead + section-head organs.
+   Grammar comes from the global primitives (.ns-split/.ns-kicker); these
+   classes only size the type and space the blocks. Impact through
+   LIGHTNESS: display runs Inter 300, never 700. Tokens only — both modes.
+   ══════════════════════════════════════════════════════════════════════ */
+.nsMast { padding: clamp(16px, 2.2vw, 32px) 0 clamp(8px, 1.2vw, 16px); }
+.nsMastHead {
+  margin: 0;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(36px, 4.4vw, 58px);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--tt-fg);
+}
+.nsMastCtas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: clamp(2px, 0.6vw, 8px);
+}
+
+/* the engine room's intro head — outside the ink vault, on the page ground */
+.engineIntro { padding: clamp(28px, 3.4vw, 48px) 0 0; }
+.engineIntroHead {
+  margin: 0;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 330;
+  font-size: clamp(30px, 3.4vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--tt-fg);
+}
+/* the vault follows its intro closely — the room's own top margin stays,
+   trimmed a register so head and room read as one plate */
+.engineIntro + .roomPaper { margin-top: clamp(24px, 3vw, 40px); }
+
+/* the feed's head — kicker + light headline left, the next-hammer line right */
+.feedHead { padding: 10px 0 22px; }

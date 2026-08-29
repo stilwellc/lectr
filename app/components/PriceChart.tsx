@@ -183,9 +183,9 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
         {mark && <SectionMark n={mark} style={{ fontSize: 'clamp(96px, 12vw, 150px)' }} />}
         <h2 style={{
           position: 'relative',
-          fontFamily: 'var(--font-serif), serif',
-          fontSize: 24,
-          fontWeight: 620,
+          fontFamily: 'var(--font-sans), sans-serif',
+          fontSize: 30,
+          fontWeight: 340,
           letterSpacing: '-0.02em',
           padding: '16px 0 12px',
         }}>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
@@ -243,6 +244,31 @@ export default function IndexHero({
     transition: { duration: 0.6, ease: EASE, delay: reduce || !play ? 0 : delay },
   });
 
+  // ── THE MASTHEAD — the north-star split hero: quiet kicker, one LIGHT
+  // display headline left, the thesis copy right, pill CTAs beneath left.
+  // Impact through lightness (weight 300) — no display bold anywhere.
+  // Same element on both shells; ns-split collapses under 900px.
+  const masthead = (
+    <m.div className={`ns-split ${styles.nsMast}`} {...rise(0.02)}>
+      <div>
+        <span className="ns-kicker">Auction intelligence</span>
+        <h2 className={styles.nsMastHead}>Every lot on the block, priced against the record.</h2>
+      </div>
+      <p>
+        lectr reads the live auction book each night and checks every ask against
+        where its comparables actually sold — {fmtInt(totalLots)} lots on file.
+      </p>
+      <div className={styles.nsMastCtas}>
+        <a href="#on-the-block" className="ray-call-btn ray-call-btn-primary">
+          See what&rsquo;s on the block
+        </a>
+        <Link href="/value" className="ray-call-btn ray-call-btn-quiet">
+          Open the value desk
+        </Link>
+      </div>
+    </m.div>
+  );
+
   // ── THE PULSE BOARD — the shared "Right now" composition (desktop rail +
   // mobile card render the same instrument; only the shell differs).
   const settle = play && !reduce;
@@ -337,7 +363,8 @@ export default function IndexHero({
     return (
       <LazyMotion features={domAnimation} strict>
         <section className={styles.mHero}>
-          {/* masthead retired — the keypad above is the orientation */}
+          {/* the north-star masthead — the thesis, then the instruments */}
+          {masthead}
           {showMonument && (
             <m.div className={styles.mtMonWrapM} {...rise(0.07)}>
               <TapeMonument row={lead!} play={play} />
@@ -375,8 +402,10 @@ export default function IndexHero({
       {/* data-play gates the CSS choreography (masthead glint, serial stamp,
           rail settle) on the same fresh-arrival contract as the framer rises */}
       <section className={styles.mtHero} data-play={play ? 'true' : undefined}>
-        {/* the masthead line retired Aug 22 2026 (Collin) — the Exchange Rail
-            above IS the orientation; a second title row was saying it twice. */}
+        {/* the north-star split masthead (Aug 29) — the old masthead line was
+            retired Aug 22 as a duplicate title row; this is a different organ:
+            the site's thesis in the split-hero grammar, above the board. */}
+        {masthead}
         <div className={styles.mtBoard}>
           <m.div className={styles.mtBoardMain} {...rise(0.1)}>
             {activeKey === 'all'

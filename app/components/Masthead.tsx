@@ -51,9 +51,9 @@ export default function Masthead({
   return (
     <header className="ray-masthead" style={style}>
       <style>{`
-        .ray-masthead-h1 { font-size: clamp(32px, 5vw, 44px); }
+        .ray-masthead-h1 { font-size: clamp(36px, 5.4vw, 52px); }
         @media (max-width: 480px) {
-          .ray-masthead-h1 { font-size: clamp(26px, 8vw, 31px); }
+          .ray-masthead-h1 { font-size: clamp(28px, 8vw, 33px); }
         }
       `}</style>
 
@@ -67,10 +67,12 @@ export default function Masthead({
         className="ray-masthead-h1"
         style={{
           margin: '0 0 0',
+          /* NORTH STAR: page statements carry authority through lightness —
+             bigger and thinner, never bold (docs/NORTHSTAR_UI.md §2.2) */
           fontFamily: 'var(--font-inter), sans-serif',
-          fontWeight: 640,
-          letterSpacing: '-0.025em',
-          lineHeight: 1.12,
+          fontWeight: 320,
+          letterSpacing: '-0.02em',
+          lineHeight: 1.08,
           color: 'var(--color-fg)',
           maxWidth: 760,
         }}
