@@ -4336,6 +4336,12 @@ a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--e
   font-variant-numeric: tabular-nums;
   margin-bottom: 14px;
 }
+/* the read sits right-oriented (the vd-call-cell face keeps its own
+   ledger layout — display:block, excluded) */
+.ns-cell-color:not(.vd-call-cell) {
+  text-align: right;
+  align-items: flex-end;
+}
 /* the color cell speaks up — label stays quiet, the read is loud */
 .ns-cell-color .ns-cell-label { font-size: 16px; }
 .ns-cell-color .ns-cell-body {
