@@ -23,7 +23,8 @@ import LongHorizon from '../components/analytics/LongHorizon';
 import HouseMatrix from '../components/analytics/HouseMatrix';
 import GradeLadderPanel from '../components/analytics/GradeLadderPanel';
 import SeasonalityStrip from '../components/analytics/SeasonalityStrip';
-import { SellThroughPanel, DepthPanel } from '../components/analytics/MicroSeries';
+import MarketCockpit from '../components/analytics/MarketCockpit';
+import { CellGrid, FigureCell, FigGate, FigCalib, FigTape } from '../components/cells';
 import PortfolioHeader from '../components/analytics/PortfolioHeader';
 import ArtistRankingsTable from '../components/analytics/ArtistRankingsTable';
 import TopSales from '../components/analytics/TopSales';
@@ -99,8 +100,10 @@ export default function AnalyticsPage() {
     ['field', <LabFiguresP.Field key="field" lots={allLots} scope={activeKey} />],
     ['micro', (
       <div key="micro" className="ray-desk-microgrid">
-        <SellThroughPanel marketData={marketData} scope={activeKey} />
-        <DepthPanel marketData={marketData} scope={activeKey} />
+        {/* the cockpit — sell-through, depth and the calendar's hottest
+            month merged into ONE dashboard-grammar card (stat tabs over a
+            hairline); it takes the full rail like a dashboard hero */}
+        <MarketCockpit marketData={marketData} scope={activeKey} />
         <SeasonalityStrip marketData={marketData} scope={activeKey} />
         <HouseMatrix marketData={marketData} scope={activeKey} />
       </div>
@@ -174,6 +177,9 @@ export default function AnalyticsPage() {
         /* the house matrix needs the full rail on the all view (8 markets of
            columns) — it spans the grid row instead of scrolling in a half cell */
         .ray-desk-microgrid > .ray-hm { grid-column: 1 / -1; }
+        /* the cockpit is the room's dashboard hero — full rail, like their
+           Calls/Latency/CSAT panel */
+        .ray-desk-microgrid > .ray-mc { grid-column: 1 / -1; }
         .ray-abstract { max-width: 760px; margin-top: 26px; padding: 4px 0 0 18px; border-left: 2px solid var(--color-fg); }
         .ray-abstract .ns-kicker { margin-bottom: 2px; }
         .ray-abstract p { margin: 6px 0 0; font-size: 14px; line-height: 1.7; color: var(--color-text-secondary); }
@@ -290,6 +296,49 @@ export default function AnalyticsPage() {
 
       {/* ── DEEP POOLS — corpus-scale panels, mounted on approach ── */}
       <DeepPools activeKey={activeKey} mktSet={mktSet} marketStats={marketStats} />
+
+      {/* HONESTY, BUILT IN — the doctrine room: the ElevenLabs "Safety,
+          built in" grammar drawn for OUR laws. Three of the engine's real
+          gates as patent-figure cells; every claim below matches measured
+          behavior elsewhere on this page. */}
+      <section className="rail" style={{ paddingTop: 26 }}>
+        <div className="ns-plate" style={{ paddingTop: 18 }}>
+          <div className="ns-split" style={{ marginBottom: 18 }}>
+            <div>
+              <span className="ns-kicker">The doctrine</span>
+              <h2 className="ray-room-h">Honesty, built in</h2>
+            </div>
+            <p>
+              Every figure on this desk names its method and base, and the same laws bind the
+              engine underneath: where the data cannot clear its own bar, the desk abstains —
+              and the abstention is printed. Three of the gates, drawn.
+            </p>
+          </div>
+          <CellGrid min={260}>
+            <FigureCell
+              figure={<FigGate />}
+              label="The abstention"
+              body={<>Below the floors — too few sales in a cell, a confidence interval that will not
+                resolve the sign — the engine prints a dash rather than dress up a number it
+                cannot back. Suppressed cells are the method working.</>}
+            />
+            <FigureCell
+              figure={<FigCalib />}
+              label="The calibration"
+              body={<>What a flag is worth is refit from every nightly replay, recency-weighted and
+                shrunk. The 10&times;+ bucket drops on purpose: extreme comp gaps under-deliver,
+                and the curve says so instead of extrapolating.</>}
+            />
+            <FigureCell
+              figure={<FigTape />}
+              label="The printed-bid gate"
+              body={<>A bidding read rides only a bid that was actually printed on an exposed book —
+                never inferred from an ask. Where a house shows no live bidding, the desk prints
+                the ask and says so.</>}
+            />
+          </CellGrid>
+        </div>
+      </section>
 
       {/* THE METHODS — the lab colophon: how every figure on this page is
           made, set as a dotted spec ledger (north-star grammar) */}

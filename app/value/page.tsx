@@ -44,6 +44,10 @@ import {
   FlagsMark, GapMark, SleeperMark, PulseMark, RecordMark,
   DistMark, TapeMark, EngineMark, CallMark,
 } from '../components/marks';
+// THE CELL SYSTEM — the shared ElevenLabs cell grammar (cells.tsx +
+// globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
+// forced-color cell classes re-plate the call. Never redefined here.
+import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, overEstimatePct, toneOf } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
@@ -1007,6 +1011,16 @@ export default function ValuePage() {
   const hasFlags = deals.length > 0;
   const coverage = ray.market?.markets?.[activeKey]?.n;
 
+  // ── the reads room's one live figure: the Gap curve's fitted population,
+  // summed from the served closeCurve buckets (LabFigures' own precedent —
+  // "fitted from N bid histories"). Read from data, never a typed constant.
+  const curveSnaps = useMemo(() => {
+    const cc = (ray.market?.markets?.all?.analytics as {
+      closeCurve?: { n?: number[] };
+    } | undefined)?.closeCurve;
+    return Array.isArray(cc?.n) && cc!.n!.length ? cc!.n!.reduce((a, b) => a + b, 0) : null;
+  }, [ray.market]);
+
   // ── FLIP — a sort flip re-RANKS the same rows, so they should visibly
   // travel, not teleport. Animate only when the id set is unchanged (pure
   // reorder); data swaps, pagination and market flips stay instant.
@@ -1814,6 +1828,64 @@ export default function ValuePage() {
           max-width: 640px;
         }
 
+        /* ── ROOM 1e · how the desk reads — split head over the figure
+           cells. All cell chrome lives in globals ("THE CELL SYSTEM");
+           this is layout breathing room only. ── */
+        .vd-reads .ns-split { margin-bottom: 26px; }
+        @media (max-width: 768px) { .vd-reads .ns-split { margin-bottom: 18px; } }
+
+        /* ── THE CALL AS COLOR — the ns-cell-color grammar wraps the plate.
+           The wrapper supplies ground (gradient + grain, globals-owned);
+           in here the certificate's ink ramp re-resolves to the white-on-
+           signal ramp, so every figure the plate prints goes paper while
+           the ground carries the signal. DOM, data and CTAs untouched. ── */
+        .ns-cell.vd-call-cell { display: block; padding: 0; min-height: 0; }
+        /* doubled selector: the second arm out-ranks the porcelain flatten
+           rule (html[data-lectr-light] .terminal-shell .glass !important) —
+           without it the plate paints opaque white over the signal ground */
+        .vd-call-cell .glass.lectr-cp,
+        html[data-lectr-light] .terminal-shell .vd-call-cell .glass.lectr-cp {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          border-radius: inherit;
+          --color-fg: #FDFCFC;
+          --color-bg: #1C1917;
+          --color-text-secondary: rgba(253, 252, 252, 0.82);
+          --color-text-muted: rgba(253, 252, 252, 0.72);
+          --color-text-faint: rgba(253, 252, 252, 0.58);
+          --color-beige-text: rgba(253, 252, 252, 0.72);
+          --color-beige: rgba(253, 252, 252, 0.6);
+          /* the ground states the direction — text goes paper (the ColorCell
+             law from cells.tsx; the lamp lives in the gradient, not the type) */
+          --color-up: #FDFCFC;
+          --hairline: rgba(253, 252, 252, 0.32);
+          --cream-hair: rgba(253, 252, 252, 0.32);
+          --color-border: rgba(253, 252, 252, 0.32);
+          --color-border-mid: rgba(253, 252, 252, 0.4);
+          --color-bg-elevated: rgba(253, 252, 252, 0.1);
+          --color-hover-item: rgba(253, 252, 252, 0.08);
+        }
+        /* the gold marquee halo yields — the signal ground IS the marquee */
+        .vd-call-cell .lit { border: none !important; box-shadow: none !important; }
+        /* the multiple gets the big mono voice inside its leader row (the
+           only .up value on the compact plate is "The gap") */
+        .vd-call-cell .lectr-cp-v.up {
+          font-family: var(--font-mono), monospace;
+          font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+        }
+        /* CTAs on the white-on-signal ramp: primary = paper pill / ink text;
+           quiet = translucent paper (the light-mode white-ring override
+           would print white-on-white here, hence the !important) */
+        .vd-call-cell .ray-call-btn-primary { background: #FDFCFC; color: #1C1917; }
+        .vd-call-cell .ray-call-btn-primary:hover { opacity: 0.92; }
+        .vd-call-cell .ray-call-btn-quiet {
+          background: rgba(253, 252, 252, 0.14) !important;
+          color: #FDFCFC !important;
+          box-shadow: none !important;
+        }
+        .vd-call-cell .ray-call-btn-quiet:hover { background: rgba(253, 252, 252, 0.22) !important; }
+
         /* ── north star, the closer: no serif — the engine card's head
            speaks the same light grotesk as every room title (.ray-engine-*
            is value-only; the paper tokens stay) ── */
@@ -1892,6 +1964,50 @@ export default function ValuePage() {
             </div>
           </section>
 
+          {/* ════ ROOM 1e · HOW THE DESK READS — the cell grammar: split
+              head (quiet kicker, light headline) over three patent-figure
+              cells, one per lane. Copy states each lane's real gates
+              (pickCall/comps ladder, lanes.ts) in the lanes' own words; the
+              bid-history count reads live from the served closeCurve. No
+              thresholds invented, no new signal labels. ════ */}
+          <section id="reads" className="rail ray-enter vd-room ns-plate vd-reads" style={{ '--enter-delay': '20ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
+            <div className="ns-split">
+              <div>
+                <span className="ns-kicker">Three lanes, one question each</span>
+                <h2 className="ray-h2" style={{ margin: 0 }}>How the desk reads</h2>
+              </div>
+              <p>
+                Every claim on this desk belongs to one lane. Each lane asks one question,
+                prints one statistic, and keeps its own record — the Flags on the certified
+                replay, the Gap and the Sleepers accruing theirs on the forward tape. When
+                the data runs thin, a lane abstains out loud.
+              </p>
+            </div>
+            <CellGrid min={250} className="vd-reads-grid">
+              <FigureCell
+                figure={<FigGate />}
+                label="The Flags"
+                body={<>Live lots whose comps median clears the estimate by at least 1.3&times; —
+                  ranked by calibrated odds, confidence-gated, and the engine abstains rather
+                  than print a thin call.</>}
+              />
+              <FigureCell
+                figure={<FigReplay />}
+                label="The Gap"
+                body={<>No-estimate lots where the projected close sits at least 25% under the
+                  value floor — the close-day growth curve fitted
+                  from {curveSnaps != null ? `${compactCount(curveSnaps)} ` : ''}Goldin bid histories.</>}
+              />
+              <FigureCell
+                figure={<FigPools />}
+                label="The Sleepers"
+                body={<>Verified-fair lots with no printed bid yet, closing inside seven days —
+                  fairness measured against the engine&rsquo;s own appraisal, never inferred
+                  from a missing signal.</>}
+              />
+            </CellGrid>
+          </section>
+
           {/* ════ ROOM 2 · THE BOARD ════ */}
           {/* phase-2 failed: the ledger stands on the precomputed stamps —
               say what's missing instead of blanking the page */}
@@ -1905,8 +2021,20 @@ export default function ValuePage() {
 
           {call && (
             <section id="call" className="rail ray-enter vd-room ns-plate" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
-              {/* ONE CALLPLATE — the page's single lit element. PriceBand
-                  hydrates at fullLoaded; a fixed slot holds the room. */}
+              {/* THE CALL AS COLOR — the ONE forced-color cell on the desk:
+                  the plate's face rides the ns-cell-color grammar (grained
+                  signal gradient, text goes paper) while its DOM, data and
+                  CTAs stay byte-identical inside. dir is the call's actual
+                  direction — pickCall admits only Below-Market flags (comps
+                  over ask), the same 'up' the plate already stamps on its
+                  gap row — so the ground is lamp-lawful by construction;
+                  any non-directional call falls to ink. The gold .lit halo
+                  yields to the color ground: still one lit element, the
+                  signal itself is now the marquee. */}
+              <div
+                className="ns-cell ns-cell-color vd-call-cell"
+                data-dir={call.signal?.label === 'Below Market' ? 'up' : 'ink'}
+              >
               <CallPlate
                 lots={marketLots}
                 allLots={marketLots}
@@ -1925,6 +2053,7 @@ export default function ValuePage() {
                   />
                 ) : (callStamp && !fullLoaded && !fullError ? <div style={{ height: 102 }} aria-hidden /> : null)}
               />
+              </div>
             </section>
           )}
 

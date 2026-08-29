@@ -45,7 +45,8 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
 import SubMarketBoard from './SubMarketBoard';
-import TonightsWall, { type WallItem } from './TonightsWall';
+import TonightsWall, { type WallItem, gapMultiple } from './TonightsWall';
+import { CellGrid, Cell, ColorCell } from '../../components/cells';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
 
@@ -243,6 +244,60 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
     </button>
   );
 }
+
+/* THE INSTRUMENT SET's chip icons — 20px cuts of the cell system's patent
+   grammar (solid ink + dotted construction lines, currentColor). Drawn here,
+   not in cells.tsx: the figures there are 132px plates; these are chips. */
+const ICO = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.3 } as const;
+const ICO_DOT = { ...ICO, strokeDasharray: '1 2.4' } as const;
+function IcoEngine() { // the gate — candidates fan in, one call leaves
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden>
+      <line x1="3" y1="4.5" x2="9" y2="10" {...ICO_DOT} />
+      <line x1="3" y1="10" x2="9" y2="10" {...ICO_DOT} />
+      <line x1="3" y1="15.5" x2="9" y2="10" {...ICO_DOT} />
+      <circle cx="10.4" cy="10" r="1.6" {...ICO} />
+      <line x1="12.4" y1="10" x2="16.6" y2="10" {...ICO} />
+      <circle cx="17" cy="10" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function IcoRecord() { // the settled tape — ticks print, one result steps up
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden>
+      <line x1="2.5" y1="13.5" x2="17.5" y2="13.5" {...ICO} />
+      <line x1="5.5" y1="13.5" x2="5.5" y2="11.5" {...ICO} />
+      <line x1="14.5" y1="13.5" x2="14.5" y2="11.5" {...ICO} />
+      <path d="M8.5 13.5 L8.5 8 L11.5 8 L11.5 13.5" {...ICO} />
+      <line x1="2.5" y1="8" x2="17.5" y2="8" {...ICO_DOT} />
+    </svg>
+  );
+}
+function IcoMakers() { // the ledger — one dot-and-rule row per name
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden>
+      <circle cx="4.2" cy="5.5" r="1.2" {...ICO} />
+      <line x1="7.5" y1="5.5" x2="17" y2="5.5" {...ICO} />
+      <circle cx="4.2" cy="10" r="1.2" {...ICO} />
+      <line x1="7.5" y1="10" x2="17" y2="10" {...ICO} />
+      <circle cx="4.2" cy="14.5" r="1.2" fill="currentColor" stroke="none" />
+      <line x1="7.5" y1="14.5" x2="17" y2="14.5" {...ICO_DOT} />
+    </svg>
+  );
+}
+function IcoDesk() { // the save mark — the same bookmark the feed prints
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden>
+      <path d="M5.5 3.5 H14.5 V16.5 L10 13.2 L5.5 16.5 Z" {...ICO} />
+      <line x1="5.5" y1="6.8" x2="14.5" y2="6.8" {...ICO_DOT} />
+    </svg>
+  );
+}
+
+// The instrument set's honest platform counts — static, from the same
+// constants every page already trusts ('all' is the anchor, not a vertical).
+const MAKER_COUNT = Object.keys(ARTIST_LABEL).length;
+const VERTICAL_COUNT = MARKETS.length - 1;
 
 export default function TerminalHomePage() {
   const ray = useRayData();
@@ -504,6 +559,15 @@ export default function TerminalHomePage() {
       play={!fromCache}
     />
   ) : null;
+
+  // THE PLATFORM CELLS' call — the SAME lot Tonight's Wall leads with (one
+  // source, one direction): the wall marks call:true on the flagged lot that
+  // won the dealScore sort, and its pct is the same below-market gap the
+  // wall's ring and gap text already speak. No independent selection here.
+  const todaysCall = useMemo(() => {
+    const it = wallItems.find(w => w.call && w.pct != null);
+    return it ? { lot: it.lot, pct: it.pct! } : null;
+  }, [wallItems]);
 
   // The Value Engine's chapter-01 hero: ONE lot — the highest-confidence,
   // deepest-value flag on the book (confidence tier first, then gap depth).
@@ -821,6 +885,86 @@ export default function TerminalHomePage() {
               </section>
               </div>
             )}
+
+            {/* ══ ROOM · THE INSTRUMENT SET — the platform cells, taken
+                directly from the elevenlabs.io feature-cell grammar: four
+                quiet cream wells for the desk's four surfaces, and ONE
+                forced-color cell carrying today's call. LAMP LAW: the color
+                cell's dir is the call's real signal direction — 'up' because
+                a Below Market flag means comps sell ABOVE this ask (the same
+                tone the wall's ring wears) — or 'ink' when no call exists.
+                Its multiple prints through gapMultiple, the wall's own
+                formatter. Never invented, never decorative. ══ */}
+            <section className={`${styles.cellsSection} ns-plate`}>
+              <div className={`ns-split ${styles.cellsHead}`}>
+                <div>
+                  <span className="ns-kicker">The instrument set</span>
+                  <h2 className={styles.engineIntroHead}>One desk, four instruments.</h2>
+                </div>
+                <p>
+                  Every number on this page is made in one of these rooms — the
+                  engine that prices the book, the record that keeps it honest,
+                  the makers it tracks, and the desk you keep.
+                </p>
+              </div>
+              <CellGrid min={300} className={styles.cellsGrid}>
+                {todaysCall ? (
+                  <ColorCell
+                    dir="up"
+                    span={2}
+                    stat={gapMultiple(todaysCall.pct)}
+                    label="Today's call"
+                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
+                    href={`/lot/${todaysCall.lot.id}`}
+                  />
+                ) : (
+                  <ColorCell
+                    dir="ink"
+                    span={2}
+                    stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : upcoming.length > 0 ? upcoming.length.toLocaleString() : undefined}
+                    label="Today's call"
+                    body={
+                      belowMktCount > 0
+                        ? `No single call tonight — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged under their comparables on the live book.`
+                        : upcoming.length > 0
+                          ? `No flags on this book tonight — ${upcoming.length.toLocaleString()} ${upcoming.length === 1 ? 'lot' : 'lots'} on the block, priced in line with their comps.`
+                          : 'The book is quiet — the crawl refreshes daily.'
+                    }
+                    href="#on-the-block"
+                  />
+                )}
+                <Cell
+                  icon={<IcoEngine />}
+                  label="The value engine"
+                  body={belowMktCount > 0
+                    ? `Live asks priced against where their comparables actually sold — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged on this book right now.`
+                    : 'Live asks priced against where their comparables actually sold — every flag on this page starts here.'}
+                  href="/value"
+                />
+                <Cell
+                  icon={<IcoRecord />}
+                  label="The record"
+                  body={backtest?.flagged?.n
+                    ? `Every flagged call replayed against the hammer that followed — ${backtest.flagged.n.toLocaleString()} settled calls on the record.`
+                    : 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'}
+                  href="/analytics"
+                />
+                <Cell
+                  icon={<IcoMakers />}
+                  label="The makers ledger"
+                  body={`Sale history, live coverage and market reads for ${MAKER_COUNT.toLocaleString()} tracked makers across ${VERTICAL_COUNT} verticals.`}
+                  href="/makers"
+                />
+                <Cell
+                  icon={<IcoDesk />}
+                  label="Your desk"
+                  body={savedIds.length > 0
+                    ? `${savedIds.length.toLocaleString()} saved — what moved since you saved it, the next hammers, and your own record.`
+                    : 'Save any lot on the block and it reports here — what moved since you saved it, and when it hammers.'}
+                  href="/profile"
+                />
+              </CellGrid>
+            </section>
 
             {/* the watchlist strip — the reader's saved lots (small, personal) */}
             {watchStripEl}
