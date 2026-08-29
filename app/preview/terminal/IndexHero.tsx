@@ -254,17 +254,20 @@ export default function IndexHero({
         <span className="ns-kicker">Auction intelligence</span>
         <h2 className={styles.nsMastHead}>Every lot on the block, priced against the record.</h2>
       </div>
-      <p>
-        lectr reads the live auction book each night and checks every ask against
-        where its comparables actually sold — {fmtInt(totalLots)} lots on file.
-      </p>
-      <div className={styles.nsMastCtas}>
-        <a href="#on-the-block" className="ray-call-btn ray-call-btn-primary">
-          See what&rsquo;s on the block
-        </a>
-        <Link href="/value" className="ray-call-btn ray-call-btn-quiet">
-          Open the value desk
-        </Link>
+      {/* right column: the doors first, the thesis under them (Collin) */}
+      <div>
+        <div className={styles.nsMastCtas}>
+          <a href="#on-the-block" className="ray-call-btn ray-call-btn-primary">
+            See what&rsquo;s on the block
+          </a>
+          <Link href="/value" className="ray-call-btn ray-call-btn-quiet">
+            Open the value desk
+          </Link>
+        </div>
+        <p className={styles.nsMastThesis}>
+          lectr reads the live auction book each night and checks every ask against
+          where its comparables actually sold — {fmtInt(totalLots)} lots on file.
+        </p>
       </div>
     </m.div>
   );

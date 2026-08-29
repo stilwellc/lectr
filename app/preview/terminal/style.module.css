@@ -2837,8 +2837,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-top: clamp(2px, 0.6vw, 8px);
 }
+.nsMastThesis { margin: 16px 0 0; }
 
 /* the engine room's intro head — outside the ink vault, on the page ground */
 .engineIntro { padding: clamp(28px, 3.4vw, 48px) 0 0; }
