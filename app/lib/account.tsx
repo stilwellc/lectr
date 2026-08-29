@@ -484,7 +484,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           style={{
             position: 'fixed', left: '50%', bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
             transform: 'translateX(-50%)', zIndex: 300, maxWidth: 'min(92vw, 360px)',
-            background: 'rgba(28,26,20,0.96)', color: 'var(--color-fg)', border: '1px solid var(--hairline)',
+            background: 'var(--toast-bg, rgba(28,26,20,0.96))', color: 'var(--color-fg)', border: '1px solid var(--hairline)',
             borderRadius: 10, padding: '11px 16px', fontSize: 13.5, lineHeight: 1.35, textAlign: 'center',
             boxShadow: '0 8px 30px rgba(12,10,6,0.5)', backdropFilter: 'blur(6px)',
           }}

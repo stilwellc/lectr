@@ -89,7 +89,7 @@ const CALLPLATE_CSS = `
 .lectr-cp-body,.lectr-cp-fig,.lectr-cp-cert{display:contents}
 .lectr-cp-leaders{display:none}
 .lectr-cp-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
-.lectr-cp-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(242,238,227,0.28) 4px,rgba(242,238,227,0.28) 5px)}
+.lectr-cp-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,var(--cream-hair, rgba(242,238,227,0.28)) 4px,var(--cream-hair, rgba(242,238,227,0.28)) 5px)}
 .lectr-cp-monoglyph{font-size:40px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
 /* COMPACT density — no image plate: microcap head, maker/title, the dotted-
    leader certificate rows (always visible, every width), band slot, CTA. */
@@ -100,7 +100,7 @@ const CALLPLATE_CSS = `
 .lectr-cp-compact .lectr-cp-leaders{display:block;margin-top:14px;border-top:2px dotted var(--hairline);padding-top:4px}
 .lectr-cp-compact .lectr-cp-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
 .lectr-cp-compact .lectr-cp-k{color:var(--color-text-muted)}
-.lectr-cp-compact .lectr-cp-fill{flex:1;border-bottom:2px dotted rgba(242,238,227,0.28);transform:translateY(-3px)}
+.lectr-cp-compact .lectr-cp-fill{flex:1;border-bottom:2px dotted var(--cream-hair, rgba(242,238,227,0.28));transform:translateY(-3px)}
 .lectr-cp-compact .lectr-cp-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-cp-compact .lectr-cp-v.up{color:var(--color-up)}
 .lectr-cp-compact .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
@@ -143,7 +143,7 @@ const CALLPLATE_CSS = `
   .ray-board-belowrow .lectr-cp .lectr-cp-leaders{display:block;margin-top:14px;border-top:2px dotted var(--hairline);padding-top:4px}
   .ray-board-belowrow .lectr-cp .lectr-cp-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
   .ray-board-belowrow .lectr-cp .lectr-cp-k{color:var(--color-text-muted)}
-  .ray-board-belowrow .lectr-cp .lectr-cp-fill{flex:1;border-bottom:2px dotted rgba(242,238,227,0.28);transform:translateY(-3px)}
+  .ray-board-belowrow .lectr-cp .lectr-cp-fill{flex:1;border-bottom:2px dotted var(--cream-hair, rgba(242,238,227,0.28));transform:translateY(-3px)}
   .ray-board-belowrow .lectr-cp .lectr-cp-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
   .ray-board-belowrow .lectr-cp .lectr-cp-v.up{color:var(--color-up)}
   .ray-board-belowrow .lectr-cp .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}

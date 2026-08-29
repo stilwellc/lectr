@@ -324,12 +324,12 @@ h1 {
   --glass-caustic: rgba(168, 135, 93, 0.05);
   --glass-shimmer: 255 255 255;
   --glass-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 0 0 var(--lw-6, rgba(255, 255, 255, 0.6)) inset,
     0 0 40px 0 rgba(212, 184, 150, 0.05) inset,
     0 16px 40px -10px rgba(93, 74, 48, 0.13),
     0 4px 12px rgba(93, 74, 48, 0.06);
   --glass-shadow-hover:
-    0 1px 0 0 rgba(255, 255, 255, 0.75) inset,
+    0 1px 0 0 var(--lw-75, rgba(255, 255, 255, 0.75)) inset,
     0 0 60px 0 rgba(212, 184, 150, 0.08) inset,
     0 22px 52px -12px rgba(93, 74, 48, 0.18),
     0 6px 16px rgba(93, 74, 48, 0.08);
@@ -413,7 +413,7 @@ h1 {
 }
 [data-theme="light"] .glass-quiet {
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
+    0 1px 0 0 var(--lw-5, rgba(255, 255, 255, 0.5)) inset,
     0 8px 20px rgba(93, 74, 48, 0.08);
 }
 
@@ -523,7 +523,7 @@ h1 {
 }
 [data-theme="light"] .ray-lot-card:hover {
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
+    0 1px 0 0 var(--lw-5, rgba(255, 255, 255, 0.5)) inset,
     0 18px 36px rgba(93, 74, 48, 0.13);
 }
 .ray-lot-card:hover .ray-lot-img img[data-loaded=true] { transform: scale(1.045); }
@@ -595,7 +595,7 @@ h1 {
   padding: 6px 2px 8px;
   transition: border-color var(--duration-fast) var(--ease-signature);
 }
-.ray-toolbar-search:focus-within { border-color: rgba(232, 218, 182, 0.6); }
+.ray-toolbar-search:focus-within { border-color: var(--ba-6, rgba(232, 218, 182, 0.6)); }
 .ray-toolbar-search svg { width: 15px; height: 15px; color: var(--color-text-faint); flex: none; }
 .ray-toolbar-search input {
   flex: 1;
@@ -922,7 +922,7 @@ h1 {
   /* quiet Linear active chip — the gold pill retired Aug 22 (dead layer that
      was one cascade slip from resurfacing) */
   color: var(--color-fg);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--lw-06, rgba(255, 255, 255, 0.06));
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1135,8 +1135,8 @@ h1 {
 .terminal-shell .glass-quiet {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--lw-03, rgba(255, 255, 255, 0.03)) !important;
+  border: 1px solid var(--lw-08, rgba(255, 255, 255, 0.08)) !important;
   box-shadow: none !important;
 }
 .terminal-shell .glass::before,
@@ -1147,8 +1147,8 @@ h1 {
 }
 .terminal-shell .glass:hover,
 .terminal-shell .glass-quiet:hover {
-  border-color: rgba(255, 255, 255, 0.13) !important;
-  background: rgba(255, 255, 255, 0.045) !important;
+  border-color: var(--lw-13, rgba(255, 255, 255, 0.13)) !important;
+  background: var(--lw-045, rgba(255, 255, 255, 0.045)) !important;
 }
 
 /* FLOATING SHEETS/MODALS are the exception to the flatten: they overlay page
@@ -1157,13 +1157,13 @@ h1 {
 .terminal-shell .comp-modal-panel,
 .terminal-shell .ray-sheet {
   background: #121316 !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid var(--lw-1, rgba(255, 255, 255, 0.1)) !important;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.4) !important;
 }
 .terminal-shell .comp-modal-panel:hover,
 .terminal-shell .ray-sheet:hover {
   background: #121316 !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: var(--lw-1, rgba(255, 255, 255, 0.1)) !important;
 }
 
 /* keep the warm paper certificates; just give them the Terminal radius so
@@ -1177,7 +1177,7 @@ h1 {
    active market pill (.ray-markets-compact, further down); on /value
    it is the call plate, which wears this class. */
 .lit {
-  border-color: rgba(232, 218, 182, 0.85) !important;
+  border-color: var(--ba-85, rgba(232, 218, 182, 0.85)) !important;
   box-shadow: var(--glow-lit);
 }
 
@@ -1376,7 +1376,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
      instrument. Flat deepened ground: the warm radial pool is gone; the
      footer carries no lamp (butter appears once, on the Starling channel). */
   margin-top: 48px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--lw-06, rgba(255, 255, 255, 0.06));
   background: linear-gradient(180deg, #08090a, #060708 220px);
   overflow: hidden;
 }
@@ -1414,19 +1414,19 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   color: #d0d6e0;
   text-decoration: underline;
   text-underline-offset: 5px;
-  text-decoration-color: rgba(255, 255, 255, 0.28);
+  text-decoration-color: var(--lw-28, rgba(255, 255, 255, 0.28));
 }
 
 /* the machined channels — labeled engraved lines, never columns */
-.ray-close-lines { margin-top: 88px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.ray-close-lines { margin-top: 88px; border-top: 1px solid var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .ray-close-line {
   display: grid;
   grid-template-columns: 128px 1fr;
   align-items: center;
   min-height: 56px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--lw-06, rgba(255, 255, 255, 0.06));
 }
-.ray-close-line:last-child { border-bottom-color: rgba(255, 255, 255, 0.10); }
+.ray-close-line:last-child { border-bottom-color: var(--lw-10, rgba(255, 255, 255, 0.10)); }
 .ray-close-line-k {
   font-family: var(--font-mono-data), monospace;
   font-size: 10px;
@@ -1449,11 +1449,11 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   text-decoration-color: transparent;
   transition: color 160ms var(--ease-signature), text-decoration-color 160ms var(--ease-signature);
 }
-.ray-close-line-links a:hover { color: var(--color-fg); text-decoration-color: rgba(255, 255, 255, 0.28); }
-.ray-close-line-links a:focus-visible { outline: 1.5px solid rgba(255, 255, 255, 0.35); outline-offset: 2px; }
+.ray-close-line-links a:hover { color: var(--color-fg); text-decoration-color: var(--lw-28, rgba(255, 255, 255, 0.28)); }
+.ray-close-line-links a:focus-visible { outline: 1.5px solid var(--lw-35, rgba(255, 255, 255, 0.35)); outline-offset: 2px; }
 /* the one lit line — butter never brightens, the arrow answers the reach */
 .ray-close-starling { color: var(--color-butter, #e8dab6) !important; font-weight: 520; }
-.ray-close-starling:hover { text-decoration-color: rgba(232, 218, 182, 0.4) !important; }
+.ray-close-starling:hover { text-decoration-color: var(--ba-4, rgba(232, 218, 182, 0.4)) !important; }
 .ray-close-starling span { display: inline-block; transition: transform 200ms var(--ease-signature); }
 .ray-close-starling:hover span { transform: translate(2px, -2px); }
 
@@ -1625,7 +1625,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 /* ───────────────────────── toolbar, humanized ───────────────────────── */
 .ray-toolbar { border-bottom-color: var(--color-border); }
 .ray-toolbar-search { border-bottom: none; background: var(--color-bg-elevated); border-radius: 12px; padding: 9px 14px; max-width: 380px; }
-.ray-toolbar-search:focus-within { outline: 1.5px solid rgba(232, 218, 182, 0.6); }
+.ray-toolbar-search:focus-within { outline: 1.5px solid var(--ba-6, rgba(232, 218, 182, 0.6)); }
 .ray-toolbar-search input { font-family: var(--font-sans); font-style: normal; font-size: 14px; }
 /* 16px on touch widths — anything smaller makes iOS Safari zoom the page on focus */
 @media (max-width: 768px) {
@@ -2199,12 +2199,12 @@ body {
 
 /* buttons & chips with presence */
 .ray-call-btn-primary {
-  background: linear-gradient(180deg, var(--color-fg), #DCD5C4);
+  background: linear-gradient(180deg, var(--color-fg), var(--paper, #DCD5C4));
   box-shadow: none;
 }
 .ray-toolbar-pill[data-active=true],
 .ray-seg-btn[data-active=true] {
-  background: linear-gradient(180deg, var(--color-fg), #DCD5C4) !important;
+  background: linear-gradient(180deg, var(--color-fg), var(--paper, #DCD5C4)) !important;
   box-shadow: none;
 }
 .ray-toolbar-pill-signal[data-active=true] {
@@ -2254,11 +2254,11 @@ body {
    ══════════════════════════════════════════════════════════════════════ */
 .ray-rail {
   display: flex;
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
   border-radius: 12px;
   /* a quiet vertical fall of light gives the band body without breaking the
      flat doctrine — one surface, faint top sheen */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008));
+  background: linear-gradient(180deg, var(--lw-028, rgba(255, 255, 255, 0.028)), var(--lw-008, rgba(255, 255, 255, 0.008)));
   box-shadow: none;
   overflow: hidden;
 }
@@ -2274,7 +2274,7 @@ body {
   gap: 0;
   padding: 10px 8px 9px;
   border: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--lw-06, rgba(255, 255, 255, 0.06));
   background: transparent;
   cursor: pointer;
   text-align: center;
@@ -2286,7 +2286,7 @@ body {
 .ray-rail-anchor {
   flex: 1.35 1 0;
   min-width: 148px;
-  border-right: 1px solid rgba(255, 255, 255, 0.10);
+  border-right: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
   box-shadow: 1px 0 0 #08090a;
 }
 .ray-rail-top {
@@ -2321,8 +2321,8 @@ body {
 }
 /* the figure carries one more step of ink than its unit word */
 .ray-rail-read b { font-weight: 500; color: var(--color-text-secondary); }
-.ray-rail-cell:hover { background: rgba(255, 255, 255, 0.045); }
-.ray-rail-cell:hover .ray-rail-name { color: #ffffff; }
+.ray-rail-cell:hover { background: var(--lw-045, rgba(255, 255, 255, 0.045)); }
+.ray-rail-cell:hover .ray-rail-name { color: var(--color-fg, #ffffff); }
 .ray-rail-cell:hover .ray-rail-top { color: var(--color-text-secondary); }
 .ray-rail-cell:active { filter: brightness(0.92); }
 /* the filament — the departure-board row lamp */
@@ -2337,18 +2337,18 @@ body {
 }
 .ray-rail-cell[data-active=true] {
   /* flat: the filament identifies the active cell; nothing casts light */
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--lw-03, rgba(255, 255, 255, 0.03));
   z-index: 1;
 }
 .ray-rail-cell[data-active=true]::before { transform: scaleX(1); }
-.ray-rail-cell[data-active=true] .ray-rail-name { color: #ffffff; font-weight: 620; }
+.ray-rail-cell[data-active=true] .ray-rail-name { color: var(--color-fg, #ffffff); font-weight: 620; }
 .ray-rail-cell[data-active=true] .ray-rail-top { color: var(--color-butter); }
 .ray-rail-cell[data-active=true] .ray-rail-read { color: var(--color-text-muted); }
-.ray-rail-cell[data-active=true] .ray-rail-read b { color: #f7f8f8; }
+.ray-rail-cell[data-active=true] .ray-rail-read b { color: var(--color-fg, #f7f8f8); }
 /* the marquee rule: only where the switch IS the view's lit element */
 .ray-rail[data-lit=true] .ray-rail-cell[data-active=true] { box-shadow: var(--glow-lit); }
 .ray-rail-cell:focus-visible {
-  outline: 1.5px solid rgba(232, 218, 182, 0.6);
+  outline: 1.5px solid var(--ba-6, rgba(232, 218, 182, 0.6));
   outline-offset: -4px;
   z-index: 2;
 }
@@ -2356,7 +2356,7 @@ body {
 .ray-rail-flap { display: none; }
 
 /* compact (inner pages): the rail dimmed to navigation duty — one centered row */
-.ray-rail[data-variant=compact] { border-color: rgba(255, 255, 255, 0.06); background: transparent; box-shadow: none; }
+.ray-rail[data-variant=compact] { border-color: var(--lw-06, rgba(255, 255, 255, 0.06)); background: transparent; box-shadow: none; }
 .ray-rail[data-variant=compact] .ray-rail-cell,
 .ray-rail[data-variant=compact] .ray-rail-anchor { height: 42px; padding: 0 12px; min-width: 0; }
 .ray-rail[data-variant=compact] .ray-rail-anchor { flex: 1 1 0; border-right: 0; box-shadow: none; }
@@ -2396,7 +2396,7 @@ body {
     box-shadow: none;
   }
   .ray-rail-cell:nth-child(5) { border-left: 0; }
-  .ray-rail-cell:nth-child(n+5) { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+  .ray-rail-cell:nth-child(n+5) { border-top: 1px solid var(--lw-06, rgba(255, 255, 255, 0.06)); }
   .ray-rail-top { flex-direction: column; gap: 5px; }
   .ray-rail-top svg { width: 15px; height: 15px; }
   .ray-rail-name { font-size: 11.5px; font-weight: 560; }
@@ -2407,7 +2407,7 @@ body {
      and the lamp-cast rises from it */
   .ray-rail-cell::before { inset: auto 0 0 0; }
   .ray-rail-cell[data-active=true] {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--lw-03, rgba(255, 255, 255, 0.03));
   }
   .ray-rail[data-variant=door] .ray-rail-flap {
     display: flex;
@@ -2415,7 +2415,7 @@ body {
     height: 34px;
     align-items: center;
     justify-content: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    border-top: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
     font-family: var(--font-mono), monospace;
     font-size: 10px;
     font-weight: 500;
@@ -3513,4 +3513,266 @@ body {
 }
 .ck-piece-edit input:focus { border-color: var(--color-border-mid); }
 /* the paper band flips the ramp — keep inputs legible on beige */
-.ray-band .ck-piece-edit input { background: rgba(255,255,255,0.55); color: var(--paper-fg, #1c1a14); border-color: rgba(0,0,0,0.18); }
+.ray-band .ck-piece-edit input { background: var(--lw-55, rgba(255, 255, 255, 0.55)); color: var(--paper-fg, #1c1a14); border-color: rgba(0,0,0,0.18); }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE PORCELAIN — the light transformation (Aug 28 2026, POC).
+   Armed by ?light=1 → <html data-lectr-light> (ThemeProvider). Not a color
+   swap: the drama inverts. The dark site was near-black with one warm paper
+   band; the porcelain site is cool bone with INK VAULT bands, near-black
+   rooms cut into light paper. THE LAMP changes hands: butter retires and
+   VERMILION takes the accent chair — auction-paddle heat on porcelain
+   (the Taste Labs grammar: quiet ground, loud singular accent, ink bands).
+   Signals deepen to print-density green / brick red. Charts gain the pop
+   the black ground never allowed: ink lines, vermilion hero, white cards
+   with true shadows (elevation gets a voice; the dark site only had edges).
+   ═══════════════════════════════════════════════════════════════════════ */
+html[data-lectr-light] {
+  /* SURFACES — porcelain ladder. Cards are TRUE WHITE on bone (crisp lift). */
+  --color-bg: #F4F5F0;
+  --color-bg-deep: #ECEDE6;
+  --panel: #FFFFFF;
+  --color-bg-elevated: #FFFFFF;
+  --panel-mat: #FAFAF7;
+  --glass-bg: #FFFFFF;
+  --glass-bg-hover: #F7F8F3;
+  --glass-border: transparent;
+  --glass-border-top: transparent;
+  --glass-specular: transparent;
+  --glass-caustic: transparent;
+  --glass-shadow: 0 1px 2px rgba(29, 29, 27, 0.05), 0 10px 30px rgba(29, 29, 27, 0.07);
+  --glass-shadow-hover: 0 2px 4px rgba(29, 29, 27, 0.06), 0 14px 40px rgba(29, 29, 27, 0.10);
+  --color-nav-bg: rgba(244, 245, 240, 0.86);
+  --color-hover-item: rgba(29, 29, 27, 0.04);
+  --color-overlay-light: rgba(29, 29, 27, 0.04);
+  --color-surface: #FFFFFF;
+
+  /* TEXT — ink ramp on bone (fg 15.9:1 · secondary 9.6 · muted 5.1 · faint 3.9 large-only) */
+  --color-fg: #1D1D1B;
+  --color-text-secondary: #43423D;
+  --color-text-muted: #6E6D66;
+  --color-text-faint: #8E8C83;
+  --color-muted: #6E6D66;
+  --color-faint: #8E8C83;
+
+  /* HAIRLINES — ink-alpha, never grey solids */
+  --hairline: rgba(29, 29, 27, 0.10);
+  --hairline-soft: rgba(29, 29, 27, 0.07);
+  --color-border: rgba(29, 29, 27, 0.12);
+  --color-border-mid: rgba(29, 29, 27, 0.22);
+  --color-hair: rgba(29, 29, 27, 0.10);
+
+  /* THE LAMP — vermilion. One family, the butter jobs re-cast. */
+  --color-butter: #E8491F;         /* display accent, active pill fill, .lit */
+  --color-butter-text: #C43D14;    /* text-safe vermilion (5.0:1 on bone) */
+  --color-butter-deep: #A83811;    /* the quiet note */
+  --color-butter-subtle: rgba(232, 73, 31, 0.10);
+  --color-butter-ink: #FFF9F5;     /* text ON vermilion fills */
+  --color-beige: #E8491F;
+  --color-beige-text: #C43D14;
+  --color-accent-gold: #E8491F;
+  --color-accent-gold-text: #C43D14;
+  --color-accent-wine: #E8491F;
+  --color-accent-wine-text: #C43D14;
+  --color-accent-coral: #E8491F;
+  --color-lit: #E8491F;
+
+  /* DIRECTION — print-density green / brick red (both AA at their sizes) */
+  --color-up: #0F7C43;
+  --color-up-soft: rgba(15, 124, 67, 0.11);
+  --color-down: #C13E2C;
+  --color-down-text: #A5341F;
+  --color-down-soft: rgba(193, 62, 44, 0.11);
+
+  /* CHARTS — ink chrome, vermilion hero. The pop the black ground never had. */
+  --chart-hero: #E8491F;
+  --chart-grid: rgba(29, 29, 27, 0.08);
+  --chart-ref: rgba(29, 29, 27, 0.20);
+  --chart-tick: #6E6D66;
+  --chart-line-2: #B9B7AC;
+  --chart-ink: #6E6D66;
+  --chart-cursor: rgba(232, 73, 31, 0.38);
+
+  /* HOUSES / CATEGORIES — the curated light inks (slate/bronze, built for paper) */
+  --ray-house-phillips: #3E6488;
+  --ray-house-sothebys: #7D6140;
+  --ray-house-christies: #6B6150;
+  --ray-house-rago: #75603A;
+  --ray-house-wright: #3D607F;
+  --ray-house-heritage: #48657A;
+  --ray-house-bonhams: #7A6236;
+  --ray-house-hindman: #665C4C;
+  --ray-cat-original: #7D6140;
+  --ray-cat-print: #3E6488;
+  --ray-cat-photograph: #3D607F;
+  --ray-cat-sculpture: #7A6236;
+  --ray-cat-design: #6B6150;
+  --ray-cat-unknown: #665C4C;
+
+  /* THE INK VAULT — the paper band inverts. On the dark site the certificate
+     was the one LIGHT room; on porcelain it becomes the one DARK room —
+     near-black vault holding the collection, the movers, the call. The
+     entire .ray-band machinery flips itself off these twelve tokens. */
+  --paper: #1B1A17;
+  --paper-ink: #F2F1E9;
+  --paper-secondary: #CBC9BE;
+  --paper-muted: #A3A194;
+  --paper-faint: #8C8A7D;
+  --paper-line: rgba(242, 241, 233, 0.15);
+  --paper-edge: rgba(29, 29, 27, 0.55);
+  --paper-up: #57BE87;
+  --paper-down: #E0755F;
+  --paper-up-text: #63C58D;
+  --paper-down-text: #E58D7B;
+
+  /* FOCUS / SELECTION / SHADOWS */
+  --focus-ring: 2px solid #1D1D1B;
+  --selection-bg: rgba(232, 73, 31, 0.20);
+  --shadow-pop: 0 12px 32px rgba(29, 29, 27, 0.14);
+  --shadow-modal: 0 24px 64px rgba(29, 29, 27, 0.20), 0 4px 16px rgba(29, 29, 27, 0.12);
+
+  /* stranded-surface tokens (dark literals converted to var(--x, fallback)) */
+  --surface-tip: #FFFFFF;
+  --surface-mix: #FFFFFF;
+  --surface-well: #ECEDE6;
+  --surface-sheet: #FFFFFF;
+  --toast-bg: rgba(255, 255, 255, 0.97);
+  --cream-hair: rgba(29, 29, 27, 0.26);
+
+  color-scheme: light;
+}
+
+/* the terminal shell converges with the porcelain ground — ONE light system */
+html[data-lectr-light] .terminal-shell {
+  --color-bg: #F4F5F0;
+  --color-bg-deep: #ECEDE6;
+  --color-bg-elevated: #FFFFFF;
+  --color-nav-bg: rgba(244, 245, 240, 0.86);
+  --color-surface: #FFFFFF;
+  --panel: #FFFFFF;
+  --panel-mat: #FAFAF7;
+  --glass-bg: #FFFFFF;
+  --glass-bg-hover: #F7F8F3;
+  --color-fg: #1D1D1B;
+  --color-text-secondary: #43423D;
+  --color-text-muted: #6E6D66;
+  --color-text-faint: #8E8C83;
+  --hairline: rgba(29, 29, 27, 0.10);
+  --hairline-soft: rgba(29, 29, 27, 0.07);
+  --color-border: rgba(29, 29, 27, 0.12);
+  --color-border-mid: rgba(29, 29, 27, 0.22);
+  --color-hover-item: rgba(29, 29, 27, 0.04);
+  --color-hair: rgba(29, 29, 27, 0.10);
+  --color-up: #0F7C43;
+  --color-up-soft: rgba(15, 124, 67, 0.11);
+  --color-down: #C13E2C;
+  --color-down-text: #A5341F;
+  --color-down-soft: rgba(193, 62, 44, 0.11);
+  --chart-grid: rgba(29, 29, 27, 0.08);
+  --chart-ref: rgba(29, 29, 27, 0.20);
+  --chart-tick: #6E6D66;
+  --chart-line-2: #B9B7AC;
+  --chart-cursor: rgba(232, 73, 31, 0.38);
+}
+
+/* the shell's flatten rules carry !important literals — matched here */
+html[data-lectr-light] .terminal-shell .glass,
+html[data-lectr-light] .terminal-shell .glass-quiet {
+  background: #FFFFFF !important;
+  border-color: rgba(29, 29, 27, 0.10) !important;
+  box-shadow: 0 1px 2px rgba(29, 29, 27, 0.05), 0 10px 30px rgba(29, 29, 27, 0.07) !important;
+}
+html[data-lectr-light] .terminal-shell .comp-modal-panel,
+html[data-lectr-light] .terminal-shell .ray-sheet {
+  background: #FFFFFF !important;
+  border-color: rgba(29, 29, 27, 0.14) !important;
+  box-shadow: var(--shadow-modal) !important;
+}
+
+/* the ink-on-transparent script mark takes over from the cream raster */
+html[data-lectr-light] img[src='/brand/lectr-nav.png'],
+html[data-lectr-light] img[src='/brand/lectr.png'] {
+  content: url('/brand/lectr-ink.png');
+}
+
+/* term tips ride white cards with a real shadow now */
+html[data-lectr-light] .ck-term-tip,
+html[data-lectr-light] .vd-term-tip {
+  background: #FFFFFF;
+  border-color: rgba(29, 29, 27, 0.16);
+  box-shadow: var(--shadow-pop);
+}
+
+/* ink equivalents for every stranded white-alpha (mechanically tokenized) */
+html[data-lectr-light] {
+  --lw-008: rgba(29, 29, 27, 0.012);
+  --lw-01: rgba(29, 29, 27, 0.016);
+  --lw-015: rgba(29, 29, 27, 0.023);
+  --lw-018: rgba(29, 29, 27, 0.028);
+  --lw-02: rgba(29, 29, 27, 0.031);
+  --lw-028: rgba(29, 29, 27, 0.043);
+  --lw-03: rgba(29, 29, 27, 0.046);
+  --lw-04: rgba(29, 29, 27, 0.062);
+  --lw-045: rgba(29, 29, 27, 0.07);
+  --lw-05: rgba(29, 29, 27, 0.078);
+  --lw-06: rgba(29, 29, 27, 0.093);
+  --lw-065: rgba(29, 29, 27, 0.101);
+  --lw-07: rgba(29, 29, 27, 0.109);
+  --lw-08: rgba(29, 29, 27, 0.124);
+  --lw-09: rgba(29, 29, 27, 0.139);
+  --lw-10: rgba(29, 29, 27, 0.155);
+  --lw-1: rgba(29, 29, 27, 0.155);
+  --lw-115: rgba(29, 29, 27, 0.178);
+  --lw-12: rgba(29, 29, 27, 0.186);
+  --lw-13: rgba(29, 29, 27, 0.202);
+  --lw-14: rgba(29, 29, 27, 0.217);
+  --lw-15: rgba(29, 29, 27, 0.232);
+  --lw-16: rgba(29, 29, 27, 0.248);
+  --lw-18: rgba(29, 29, 27, 0.279);
+  --lw-26: rgba(29, 29, 27, 0.403);
+  --lw-28: rgba(29, 29, 27, 0.434);
+  --lw-35: rgba(29, 29, 27, 0.542);
+  --lw-4: rgba(29, 29, 27, 0.62);
+  --lw-45: rgba(29, 29, 27, 0.5);
+  --lw-5: rgba(29, 29, 27, 0.55);
+  --lw-55: rgba(29, 29, 27, 0.6);
+  --lw-6: rgba(29, 29, 27, 0.65);
+  --lw-7: rgba(29, 29, 27, 0.75);
+  --lw-72: rgba(29, 29, 27, 0.77);
+  --lw-75: rgba(29, 29, 27, 0.8);
+  --lw-92: rgba(29, 29, 27, 0.92);
+}
+
+/* vault shades for the paper-family surfaces + light-mode ink discipline */
+html[data-lectr-light] {
+  --paper-card: #232220;   /* card floated on the vault */
+  --paper-mid: #201F1C;
+  --paper-deep: #262421;
+}
+/* bid-velocity chips: butter's attention job passes to INK on porcelain —
+   vermilion here would read directional beside signed columns */
+html[data-lectr-light] .ray-bidvel,
+html[data-lectr-light] .ray-bidvel-sub,
+html[data-lectr-light] .ray-lot-bidvel {
+  color: var(--color-fg);
+}
+html[data-lectr-light] .ray-bidvel-dot { background: var(--color-fg); }
+
+/* vermilion equivalents for butter-alpha accents */
+html[data-lectr-light] {
+  --ba-04: rgba(196, 61, 20, 0.05);
+  --ba-05: rgba(196, 61, 20, 0.062);
+  --ba-09: rgba(196, 61, 20, 0.112);
+  --ba-12: rgba(196, 61, 20, 0.15);
+  --ba-18: rgba(196, 61, 20, 0.225);
+  --ba-28: rgba(196, 61, 20, 0.35);
+  --ba-3: rgba(196, 61, 20, 0.375);
+  --ba-35: rgba(196, 61, 20, 0.438);
+  --ba-4: rgba(196, 61, 20, 0.5);
+  --ba-5: rgba(196, 61, 20, 0.625);
+  --ba-6: rgba(196, 61, 20, 0.75);
+  --ba-7: rgba(196, 61, 20, 0.875);
+  --ba-72: rgba(196, 61, 20, 0.9);
+  --ba-85: rgba(196, 61, 20, 0.95);
+}

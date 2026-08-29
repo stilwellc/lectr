@@ -139,7 +139,7 @@ function Spark({ values }: { values: number[] }) {
   const pts = values.map((v, i) => `${px(i)},${py(v)}`).join(' ');
   return (
     <svg width={w} height={h} aria-hidden>
-      <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={pts} fill="none" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={px(values.length - 1)} cy={py(values[values.length - 1])} r="2" fill="var(--color-fg)" />
     </svg>
   );
@@ -168,9 +168,9 @@ function DossierChart({ hist }: { hist: MarketStats['priceHistory'] }) {
       <div className="mkx-plot">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
           {yTicks.map((t, k) => (
-            <line key={k} x1="0" y1={yPct(t)} x2="100" y2={yPct(t)} stroke="rgba(255,255,255,0.07)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+            <line key={k} x1="0" y1={yPct(t)} x2="100" y2={yPct(t)} stroke="var(--lw-07, rgba(255, 255, 255, 0.07))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
           ))}
-          <polyline points={line} fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <polyline points={line} fill="none" stroke="var(--lw-7, rgba(255, 255, 255, 0.7))" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         </svg>
         <span className="mkx-dot" style={{ left: '100%', top: `${yPct(vals[vals.length - 1])}%` }} aria-hidden />
         {yTicks.map((t, k) => (
@@ -191,10 +191,10 @@ function CIWhisker({ v }: { v: VerifiedMover }) {
   const x = (val: number) => ((val - dLo) / (dHi - dLo || 1)) * 100;
   return (
     <svg viewBox="0 0 100 16" className="mkx-ci" preserveAspectRatio="none" aria-hidden>
-      {dLo < 0 && dHi > 0 && <line x1={x(0)} y1="0" x2={x(0)} y2="16" stroke="rgba(255,255,255,0.18)" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />}
-      <line x1={x(lo)} y1="8" x2={x(hi)} y2="8" stroke="rgba(255,255,255,0.5)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <line x1={x(lo)} y1="4" x2={x(lo)} y2="12" stroke="rgba(255,255,255,0.5)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <line x1={x(hi)} y1="4" x2={x(hi)} y2="12" stroke="rgba(255,255,255,0.5)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      {dLo < 0 && dHi > 0 && <line x1={x(0)} y1="0" x2={x(0)} y2="16" stroke="var(--lw-18, rgba(255, 255, 255, 0.18))" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />}
+      <line x1={x(lo)} y1="8" x2={x(hi)} y2="8" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <line x1={x(lo)} y1="4" x2={x(lo)} y2="12" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <line x1={x(hi)} y1="4" x2={x(hi)} y2="12" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
       <circle cx={x(pt)} cy="8" r="2.4" fill={pt >= 0 ? 'var(--color-up)' : 'var(--color-down-text)'} />
     </svg>
   );
@@ -204,7 +204,7 @@ function CIWhisker({ v }: { v: VerifiedMover }) {
    Monochrome differentiation by LINE STYLE (solid/dashed/dotted/dash-dot):
    mint & coral stay reserved for each maker's own signed Δ. ── */
 const DASHES = ['', '7 5', '2 4', '9 3 2 3'];
-const STROKES = ['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.72)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.4)'];
+const STROKES = ['var(--lw-92, rgba(255, 255, 255, 0.92))', 'var(--lw-72, rgba(255, 255, 255, 0.72))', 'var(--lw-55, rgba(255, 255, 255, 0.55))', 'var(--lw-4, rgba(255, 255, 255, 0.4))'];
 function CompareTray({ sel, rows, onRemove, onClear }: {
   sel: string[];
   rows: Row[];
@@ -242,7 +242,7 @@ function CompareTray({ sel, rows, onRemove, onClear }: {
             <span key={r.slug} className="mkc-chip" data-thin={si == null || undefined}>
               <svg width="16" height="8" aria-hidden>
                 <line x1="1" y1="4" x2="15" y2="4" strokeWidth="1.6"
-                  stroke={si != null ? STROKES[si] : 'rgba(255,255,255,0.28)'}
+                  stroke={si != null ? STROKES[si] : 'var(--lw-28, rgba(255, 255, 255, 0.28))'}
                   strokeDasharray={si != null ? (DASHES[si] || undefined) : '2 2'} />
               </svg>
               {r.label}
@@ -264,7 +264,7 @@ function CompareTray({ sel, rows, onRemove, onClear }: {
               <div className="mkc-plotwrap">
                 <div className="mkc-plot">
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-                    <line x1="0" y1={yPct(0)} x2="100" y2={yPct(0)} stroke="rgba(255,255,255,0.16)" strokeWidth="1" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
+                    <line x1="0" y1={yPct(0)} x2="100" y2={yPct(0)} stroke="var(--lw-16, rgba(255, 255, 255, 0.16))" strokeWidth="1" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
                     {series.map((s, i) => (
                       <polyline key={s.r.slug}
                         points={s.pts.map(p => `${xPct(p.d)},${yPct(p.v)}`).join(' ')}
@@ -1090,7 +1090,7 @@ const MAKERS_CSS = `
 @media(max-width:700px){.mk-cockpit{grid-template-columns:repeat(2,1fr)}.mk-cock{border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}}
 
 /* ── the filter bar ── */
-.mk-bar-wrap{position:sticky;top:54px;z-index:30;background:color-mix(in srgb,#0b0c0e 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
+.mk-bar-wrap{position:sticky;top:54px;z-index:30;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
 .mk-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 210px;min-width:140px;padding:0 10px;height:30px;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-faint)}
 .mk-search input{flex:1;min-width:0;background:none;border:none;outline:none;font-family:var(--font-sans),sans-serif;font-size:12.5px;color:var(--color-fg)}
@@ -1109,7 +1109,7 @@ const MAKERS_CSS = `
 /* ── the Display menu ── */
 .mk-display{position:relative}
 .mk-display-veil{position:fixed;inset:0;z-index:39;background:none;border:none;cursor:default}
-.mk-display-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;min-width:180px;background:#101214;border:1px solid var(--color-border-mid);border-radius:12px;padding:8px;display:grid;gap:1px}
+.mk-display-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;min-width:180px;background:var(--surface-tip, #101214);border:1px solid var(--color-border-mid);border-radius:12px;padding:8px;display:grid;gap:1px}
 .mk-display-head{font-size:10px;letter-spacing:0.14em;padding:4px 8px 7px}
 .mk-display-item{display:flex;align-items:center;gap:8px;padding:6px 8px;background:none;border:none;border-radius:7px;font-family:var(--font-sans),sans-serif;font-size:12px;color:var(--color-text-muted);cursor:pointer;text-align:left;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
 .mk-display-item:hover{background:var(--color-hover-item);color:var(--color-fg)}
@@ -1127,7 +1127,7 @@ const MAKERS_CSS = `
 
 /* ── group heads ── */
 .mk-group{margin-bottom:6px;scroll-margin-top:150px}
-.mk-group-head{position:sticky;top:103px;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,#08090a 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
+.mk-group-head{position:sticky;top:103px;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,var(--color-bg, #08090a) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-group-mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-secondary);background:var(--color-bg-elevated)}
 .mk-group-name{margin:0;font-size:14px;font-weight:650;letter-spacing:-0.01em;white-space:nowrap}
 .mk-group-count{font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:100px;padding:1px 8px;flex:none}
@@ -1178,8 +1178,8 @@ const MAKERS_CSS = `
   .mk-go{display:flex;justify-content:flex-end;color:var(--color-text-faint);transition:transform var(--duration-fast) var(--ease-signature)}
   .mk-go[data-open]{transform:rotate(90deg)}
   .mk-soldcell{overflow:visible}
-  .mk-soldtrack{display:block;height:2px;margin-top:4px;background:rgba(255,255,255,0.07);border-radius:2px}
-  .mk-soldtrack>span{display:block;height:100%;border-radius:2px;background:rgba(255,255,255,0.4);margin-left:auto}
+  .mk-soldtrack{display:block;height:2px;margin-top:4px;background:var(--lw-07, rgba(255, 255, 255, 0.07));border-radius:2px}
+  .mk-soldtrack>span{display:block;height:100%;border-radius:2px;background:var(--lw-4, rgba(255, 255, 255, 0.4));margin-left:auto}
   /* hover actions — absolute siblings of the row (valid interactive nesting) */
   .mk-acts{display:flex;gap:4px;position:absolute;top:11px;right:30px;z-index:2;opacity:0;transition:opacity var(--duration-fast) var(--ease-signature)}
   .mk-item:hover .mk-acts,.mk-item:focus-within .mk-acts,.mk-item[data-sel] .mk-acts{opacity:1}
@@ -1196,7 +1196,7 @@ const MAKERS_CSS = `
 /* the dossier hero — the maker's flagship lot photo as a banner */
 .mkx-hero{position:relative;margin:14px 16px 0;height:150px;border-radius:12px;overflow:hidden;background:var(--color-bg-elevated)}
 .mkx-hero img{width:100%;height:100%;object-fit:cover;display:block}
-.mkx-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,color-mix(in srgb,#08090a 78%,transparent) 100%)}
+.mkx-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,color-mix(in srgb,var(--color-bg, #08090a) 78%,transparent) 100%)}
 .mkx-hero-cap{position:absolute;left:14px;bottom:11px;z-index:1;font-size:12px;font-weight:600;letter-spacing:0.01em;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,0.6)}
 @media(min-width:940px){.mkx-hero{height:190px}}
 .mkx-chartwrap{padding:14px 16px 0}
@@ -1216,8 +1216,8 @@ const MAKERS_CSS = `
 .mkx-houses{margin-top:6px;display:grid;gap:4px}
 .mkx-house{display:grid;grid-template-columns:minmax(64px,96px) minmax(0,1fr) 52px;gap:8px;align-items:center}
 .mkx-house-name{font-size:11px;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mkx-house-track{display:block;height:3px;background:rgba(255,255,255,0.07);border-radius:2px}
-.mkx-house-track>span{display:block;height:100%;border-radius:2px;background:rgba(255,255,255,0.4)}
+.mkx-house-track{display:block;height:3px;background:var(--lw-07, rgba(255, 255, 255, 0.07));border-radius:2px}
+.mkx-house-track>span{display:block;height:100%;border-radius:2px;background:var(--lw-4, rgba(255, 255, 255, 0.4))}
 .mkx-house-n{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);text-align:right;font-variant-numeric:tabular-nums}
 .mkx-verified{margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .mkx-verified b{font-family:var(--font-mono),monospace;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -1248,7 +1248,7 @@ const MAKERS_CSS = `
 .mkx-live-more:hover{color:var(--color-fg)}
 
 /* ── THE COMPARE TRAY ── */
-.mkc{position:fixed;left:0;right:0;bottom:0;z-index:35;background:color-mix(in srgb,#0b0c0e 94%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--color-border-mid)}
+.mkc{position:fixed;left:0;right:0;bottom:0;z-index:35;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 94%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--color-border-mid)}
 .mkc-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
 .mkc-title{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-text-muted)}
 .mkc-chip{display:inline-flex;align-items:center;gap:7px;padding:3px 6px 3px 9px;font-size:12px;font-weight:600;color:var(--color-fg);border:1px solid var(--color-border);border-radius:100px}

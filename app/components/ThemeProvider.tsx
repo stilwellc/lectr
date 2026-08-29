@@ -27,7 +27,19 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     // Ray ships one look — the dark "Catalogue" ground. No light variant and
     // no OS-pref switch; force dark and clear any stale saved preference.
     localStorage.removeItem(LEGACY_KEY);
-    setTheme('dark');
+    // THE PORCELAIN POC (Aug 28 2026, local review only): `?light=1` arms the
+    // light transformation for the session (`?light=0` disarms). It rides a
+    // SEPARATE attribute + storage key so the shipped dark look is untouched
+    // unless explicitly armed.
+    let poc = false;
+    try {
+      const q = new URLSearchParams(window.location.search).get('light');
+      if (q === '1') { localStorage.setItem('lectr-light-poc', '1'); poc = true; }
+      else if (q === '0') { localStorage.removeItem('lectr-light-poc'); }
+      else poc = localStorage.getItem('lectr-light-poc') === '1';
+    } catch { /* private mode */ }
+    document.documentElement.toggleAttribute('data-lectr-light', poc);
+    setTheme(poc ? 'light' : 'dark');
     setMounted(true);
   }, []);
 

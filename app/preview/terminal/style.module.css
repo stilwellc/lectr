@@ -130,7 +130,7 @@
   background: none;
   transition: background 140ms var(--ease-signature, ease);
 }
-.pulseBlock:hover { background: rgba(255, 255, 255, 0.03); }
+.pulseBlock:hover { background: var(--lw-03, rgba(255, 255, 255, 0.03)); }
 .pulseCellText { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* the lead cell hosts the paddle — same quiet stock as its siblings; the
    OBJECT carries the warmth (one-accent discipline) */
@@ -145,7 +145,7 @@
   flex: none;
   font-family: var(--font-inter), sans-serif;
   font-size: 24px; font-weight: 600;
-  letter-spacing: -0.02em; line-height: 1; color: #ffffff;
+  letter-spacing: -0.02em; line-height: 1; color: var(--tt-fg, #ffffff);
   font-variant-numeric: tabular-nums; /* the room count YIELDS to the certified read (Robinhood: the market figure wins) */
 }
 /* (the paddle object retired in the unification pass — one numeral grammar
@@ -154,7 +154,7 @@
 .pulseVal {
   display: flex; align-items: baseline; gap: 6px;
   font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 600;
-  letter-spacing: -0.02em; line-height: 1; color: #ffffff;
+  letter-spacing: -0.02em; line-height: 1; color: var(--tt-fg, #ffffff);
   font-variant-numeric: tabular-nums;
 }
 .pulseUnit {
@@ -173,21 +173,21 @@
 .pulseAction {
   position: relative; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 12px 2px; cursor: pointer; overflow: hidden;
-  border: 0; border-bottom: 1px solid rgba(232, 218, 182, 0.28);
+  border: 0; border-bottom: 1px solid var(--ba-28, rgba(232, 218, 182, 0.28));
   background: none;
   transition: border-color 200ms var(--ease-signature, ease), background 200ms var(--ease-signature, ease);
 }
 .pulseAction:hover {
-  border-bottom-color: rgba(232, 218, 182, 0.5);
-  background: rgba(255, 255, 255, 0.03);
+  border-bottom-color: var(--ba-5, rgba(232, 218, 182, 0.5));
+  background: var(--lw-03, rgba(255, 255, 255, 0.03));
 }
 .pulseAction:active .pulseTag { transform: translateY(0) scale(0.98); }
-.pulseAction:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
-.pulseAction .pulseLabel { color: rgba(232, 218, 182, 0.72); }
+.pulseAction:focus-visible { outline: 2px solid var(--ba-7, rgba(232, 218, 182, 0.7)); outline-offset: 2px; }
+.pulseAction .pulseLabel { color: var(--ba-72, rgba(232, 218, 182, 0.72)); }
 /* (the ticket object retired with the paddle — the action speaks through
    butter INK on the same plain numeral, and the cell's butter hairline) */
 .pulseTag { flex: none; display: flex; align-items: center; }
-.pulseTagGhost .pulseTagVal { color: rgba(232, 218, 182, 0.35); }
+.pulseTagGhost .pulseTagVal { color: var(--ba-35, rgba(232, 218, 182, 0.35)); }
 .pulseTagVal {
   font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: var(--tt-butter);
@@ -212,16 +212,16 @@
 .pulseTickerChips { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .pulseChip {
   display: inline-flex; align-items: baseline; gap: 6px;
-  font-family: var(--font-inter), sans-serif; font-size: 11px; color: #ffffff;
+  font-family: var(--font-inter), sans-serif; font-size: 11px; color: var(--tt-fg, #ffffff);
   padding: 6px 11px; white-space: nowrap;
-  border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px;
-  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid var(--lw-07, rgba(255, 255, 255, 0.07)); border-radius: 8px;
+  background: var(--lw-028, rgba(255, 255, 255, 0.028));
 }
 .pulseChip em {
   font-style: normal; font-family: var(--font-mono-data), monospace;
   font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-muted);
 }
-.pulseChip[data-tonight='true'] { border-color: rgba(255, 255, 255, 0.16); }
+.pulseChip[data-tonight='true'] { border-color: var(--lw-16, rgba(255, 255, 255, 0.16)); }
 .pulseChip[data-tonight='true'] em { color: var(--tt-secondary); }
 /* desktop rail: the ticker rides between the board and the search */
 .heroRail .pulseTicker { margin-top: 10px; }
@@ -284,7 +284,7 @@
   opacity: 0.86;
 }
 .railCmd:hover { opacity: 1; }
-.railCmd:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 2px; }
+.railCmd:focus-visible { outline: 2px solid var(--ba-7, rgba(232, 218, 182, 0.7)); outline-offset: 2px; }
 .railCmd { justify-content: center; }
 .railCmd .cmdLabel { flex: none; text-align: center; }
 
@@ -349,7 +349,7 @@
   padding: 12px 16px;
   border-radius: 12px;
   border: 1px solid var(--tt-hair-2);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--lw-05, rgba(255, 255, 255, 0.05));
   color: var(--tt-secondary);
   font-family: var(--font-inter), system-ui, sans-serif;
   font-size: 14px;
@@ -360,11 +360,11 @@
     transform 200ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
 }
 .cmdPillFull:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--lw-14, rgba(255, 255, 255, 0.14));
+  background: var(--lw-07, rgba(255, 255, 255, 0.07));
 }
 .cmdPillFull:focus-visible {
-  outline: 2px solid rgba(232, 218, 182, 0.7);
+  outline: 2px solid var(--ba-7, rgba(232, 218, 182, 0.7));
   outline-offset: 3px;
 }
 /* keycap jewelry — a real key: mono glyph, shaded bottom edge, pressed face */
@@ -375,9 +375,9 @@
   height: 20px;
   padding: 0 5px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--lw-12, rgba(255, 255, 255, 0.12));
   border-bottom-color: rgba(0, 0, 0, 0.5);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--lw-06, rgba(255, 255, 255, 0.06));
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.3);
   font-family: var(--font-mono-data), monospace;
   font-size: 11px;
@@ -453,19 +453,19 @@
 .mStat {
   /* Linear matte tile: flat cool surface, one fine border, near-white figure */
   display: flex; flex-direction: column; gap: 6px; min-width: 0; text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 12px 11px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--lw-08, rgba(255, 255, 255, 0.08)); border-radius: 11px; padding: 12px 11px;
+  background: var(--lw-04, rgba(255, 255, 255, 0.04));
   box-shadow: none;
 }
 button.mStat { cursor: pointer; font: inherit; transition: background 140ms var(--ease-signature, ease), border-color 140ms var(--ease-signature, ease); }
-button.mStat:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.6); outline-offset: 2px; }
-button.mStat:active { background: rgba(255, 255, 255, 0.06); }
+button.mStat:focus-visible { outline: 2px solid var(--ba-6, rgba(232, 218, 182, 0.6)); outline-offset: 2px; }
+button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* the one butter accent — the actionable below-market tile */
 .mStat[data-accent='true'] {
-  border-color: rgba(232, 218, 182, 0.3);
-  background: rgba(232, 218, 182, 0.05);
+  border-color: var(--ba-3, rgba(232, 218, 182, 0.3));
+  background: var(--ba-05, rgba(232, 218, 182, 0.05));
 }
-.mStatVal { font-family: var(--font-inter), sans-serif; font-size: 21px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: #f7f8f8; }
+.mStatVal { font-family: var(--font-inter), sans-serif; font-size: 21px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: var(--tt-fg, #f7f8f8); }
 .mStat[data-accent='true'] .mStatVal { color: var(--tt-butter); }
 .mStatLabel {
   /* tracking eased so the longest label ("Below market ↗") still fits the
@@ -482,8 +482,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   justify-content: center;
   gap: 10px;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--lw-06, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
   border-radius: 12px;
   box-shadow: none;
   color: var(--tt-fg);
@@ -493,15 +493,15 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mHero .cmdPillFull .cmdArrow {
   margin-left: auto;
   color: var(--tt-secondary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--lw-06, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--lw-12, rgba(255, 255, 255, 0.12));
   border-radius: 5px;
   padding: 1px 6px;
 }
-.mHero .cmdPillFull:active { background: rgba(255, 255, 255, 0.05); }
+.mHero .cmdPillFull:active { background: var(--lw-05, rgba(255, 255, 255, 0.05)); }
 /* the phone ledger rules cool, like every other hairline on the view */
 @media (max-width: 700px) {
-  .mHero .mtRow, .mtStage .mtRow { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+  .mHero .mtRow, .mtStage .mtRow { border-bottom: 1px solid var(--lw-06, rgba(255, 255, 255, 0.06)); }
   .mHero .mtRow:last-child, .mtStage .mtRow:last-child { border-bottom: 0; }
 }
 
@@ -518,8 +518,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   cursor: pointer; transition: background 180ms var(--ease-signature, cubic-bezier(0.23,1,0.32,1)), color 180ms;
 }
 .tfChip:hover { color: var(--tt-fg); }
-.tfChip[data-on='true'] { background: rgba(232, 218, 182, 0.12); color: var(--tt-butter); }
-.tfChip:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.6); outline-offset: 1px; }
+.tfChip[data-on='true'] { background: var(--ba-12, rgba(232, 218, 182, 0.12)); color: var(--tt-butter); }
+.tfChip:focus-visible { outline: 2px solid var(--ba-6, rgba(232, 218, 182, 0.6)); outline-offset: 1px; }
 
 /* mobile return card */
 
@@ -633,7 +633,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   border-left: none;
   border-right: none;
   border-top: none;
-  border-bottom: 1px solid rgba(232, 218, 182, 0.09);
+  border-bottom: 1px solid var(--ba-09, rgba(232, 218, 182, 0.09));
   background: transparent !important;
 }
 /* neutralize the card grid's row-gap for the stacked rows so they read
@@ -767,7 +767,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   color: inherit;
   font: inherit;
 }
-.wallPlate:focus-visible { outline: 2px solid rgba(232, 218, 182, 0.7); outline-offset: 3px; }
+.wallPlate:focus-visible { outline: 2px solid var(--ba-7, rgba(232, 218, 182, 0.7)); outline-offset: 3px; }
 /* THE MUSEUM MAT — a lit gallery frame, not a felt swatch: warm light pools
    from the top of the mat, the base falls into shade, an inner bevel gives
    the frame thickness, and the object casts a real contact shadow onto it. */
@@ -780,8 +780,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   padding: 14px;
   border-radius: 6px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--lw-03, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--lw-08, rgba(255, 255, 255, 0.08));
   box-shadow: none;
   transform-origin: 50% 100%;
   transition:
@@ -811,7 +811,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 /* frame-lift: the visitor takes the frame off the wall — the mat rises, its
    shadow deepens, the object's contact shadow stretches. The label stays. */
 .wallPlate:hover .wallMat {
-  border-color: rgba(232, 218, 182, 0.28);
+  border-color: var(--ba-28, rgba(232, 218, 182, 0.28));
 }
 .wallPlate:hover .wallMaker { color: var(--tt-butter); }
 /* the verdict ring — quieter than it was, still LIGHT: a 1.5px filament and
@@ -871,7 +871,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   text-transform: uppercase;
   font-size: 8.5px;
   padding: 1.5px 5px 1px;
-  border: 1px solid rgba(232, 218, 182, 0.35);
+  border: 1px solid var(--ba-35, rgba(232, 218, 182, 0.35));
   border-radius: 3px;
 }
 .wallSignal {
@@ -1236,7 +1236,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   border: 1px solid rgba(28, 23, 18, 0.18);
   border-radius: 12px;
   overflow: hidden;
-  background: #E7DFCC;
+  background: var(--paper-mid, #E7DFCC);
 }
 .tapeCol .tapeRow:last-child { border-bottom: 0; }
 .colHead {
@@ -1265,15 +1265,15 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   border: 0;
   border-bottom: 2px dotted rgba(28, 23, 18, 0.22);
   border-radius: 0;
-  background: #E7DFCC;
+  background: var(--paper-mid, #E7DFCC);
   color: var(--paper-ink, #1C1712);
   cursor: pointer;
   text-align: left;
   font-family: inherit;
   transition: background 0.16s ease-out;
 }
-.tapeRow:nth-of-type(even) { background: #DCD2BB; }
-.tapeRow:hover { background: #D5CBB2; }
+.tapeRow:nth-of-type(even) { background: var(--paper-deep, #DCD2BB); }
+.tapeRow:hover { background: var(--paper-deep, #D5CBB2); }
 .tapeRow:hover .tapeChevron { opacity: 1; }
 .tapeRow:hover .tapeLabel { transform: translateX(4px); }
 .brassRule { position: absolute; left: 0; top: -1px; bottom: -1px; width: 3px; background: #8A7440; }
@@ -1358,7 +1358,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   display: inline-block;
   margin-top: 40px;
   background: var(--paper-ink, #1C1712);
-  color: #E2D9C4;
+  color: var(--paper, #E2D9C4);
   font-size: 15px;
   font-weight: 500;
   padding: 14px 28px;
@@ -1518,7 +1518,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .rcpt {
   position: relative;
   width: min(400px, 88vw);
-  background: #FAF5E8;
+  background: var(--paper-card, #FAF5E8);
   padding: 26px 24px 24px;
   font-family: var(--font-mono-data), monospace;
   color: #1C1712;
@@ -1534,8 +1534,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   right: 0;
   height: 10px;
   background-image:
-    linear-gradient(-45deg, transparent 7px, #FAF5E8 0),
-    linear-gradient(45deg, transparent 7px, #FAF5E8 0);
+    linear-gradient(-45deg, transparent 7px, var(--paper-card, #FAF5E8) 0),
+    linear-gradient(45deg, transparent 7px, var(--paper-card, #FAF5E8) 0);
   background-position: left bottom;
   background-repeat: repeat-x;
   background-size: 14px 10px;
@@ -1646,7 +1646,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   max-width: 960px;
   margin: 0 auto;
   padding: clamp(14px, 1.8vw, 22px);
-  background: #EBE3D0;
+  background: var(--paper-mid, #EBE3D0);
   border: 1px solid rgba(28, 23, 18, 0.18);
   border-radius: 14px;
   color: var(--paper-ink, #1C1712);
@@ -1659,7 +1659,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .ehImg {
   position: relative;
   border-radius: 10px;
-  background: #F4EFE0;
+  background: var(--paper-card, #F4EFE0);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1796,7 +1796,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   width: min(560px, 94vw);
   background:
     linear-gradient(178deg, rgba(255, 251, 241, 0.6), rgba(255, 251, 241, 0) 40%),
-    #E9E1CE;
+    var(--paper-mid, #E9E1CE);
   border: 1px solid rgba(28, 23, 18, 0.25);
   border-radius: 16px;
   padding: 22px 26px 30px;
@@ -1911,17 +1911,17 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-family: var(--font-inter), sans-serif;
   font-size: 10px;
   letter-spacing: 0.04em;
-  fill: #7A8087;
+  fill: var(--tt-muted, #7A8087);
 }
 .hcXLabel {
   font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.05em;
-  fill: #8a8f98;
+  fill: var(--tt-muted, #8a8f98);
 }
 .hcCross { stroke: rgba(232, 234, 237, 0.35); stroke-width: 1; stroke-dasharray: 2 6; }
 .hcLineLabel { font-family: var(--font-inter), sans-serif; font-size: 10.5px; font-weight: 550; letter-spacing: 0.03em; }
-.hcAnno { font-family: var(--font-inter), sans-serif; font-size: 10.5px; fill: #A6ABB3; }
+.hcAnno { font-family: var(--font-inter), sans-serif; font-size: 10.5px; fill: var(--tt-secondary, #A6ABB3); }
 .hcTerminusRing { transform-origin: center; transform-box: fill-box; animation: hcPulse 2.6s ease-out infinite; }
 @keyframes hcPulse {
   0% { transform: scale(0.55); opacity: 0.9; }
@@ -1941,7 +1941,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   margin: 12px 0 4px;
   font-size: 10.5px;
   letter-spacing: 0.05em;
-  color: #7A8087;
+  color: var(--tt-muted, #7A8087);
 }
 .hcReadout {
   position: absolute;
@@ -1962,12 +1962,12 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .hcReadoutPeriod {
   font-size: 10px;
   letter-spacing: 0.06em;
-  color: #7A8087;
+  color: var(--tt-muted, #7A8087);
   margin-bottom: 2px;
 }
 .hcReadoutRow { display: flex; align-items: center; gap: 7px; }
 .hcReadoutRow i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.hcReadoutName { font-size: 11px; color: #A6ABB3; flex: 1; }
+.hcReadoutName { font-size: 11px; color: var(--tt-secondary, #A6ABB3); flex: 1; }
 .hcReadoutVal { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-fg, #E8EAED); }
 .hcReadoutRow[data-anchor='true'] .hcReadoutName { color: var(--color-fg, #E8EAED); font-weight: 550; }
 .hcReadoutRow[data-anchor='true'] .hcReadoutVal { font-weight: 600; }
@@ -2031,7 +2031,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   transition: background 0.15s ease;
 }
 .mtRow:last-child { border-bottom: 0; }
-.mtRow:hover { background: rgba(232, 218, 182, 0.04); }
+.mtRow:hover { background: var(--ba-04, rgba(232, 218, 182, 0.04)); }
 .mtRow[data-static='true'] { cursor: default; }
 .mtRow[data-static='true']:hover { background: none; }
 .mtLabelBlock { display: grid; gap: 3px; min-width: 0; }
@@ -2103,29 +2103,29 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtMon[data-dir='down'] .beamRule { stroke: rgba(204, 106, 92, 0.9); }
 .mtHero [data-dir='up'] .beamDiamond::before,
 .mHero [data-dir='up'] .beamDiamond::before,
-.mtMon[data-dir='up'] .beamDiamond::before { background: #57BE87; }
+.mtMon[data-dir='up'] .beamDiamond::before { background: var(--color-up, #57BE87); }
 .mtHero [data-dir='down'] .beamDiamond::before,
 .mHero [data-dir='down'] .beamDiamond::before,
-.mtMon[data-dir='down'] .beamDiamond::before { background: #CC6A5C; }
+.mtMon[data-dir='down'] .beamDiamond::before { background: var(--color-down, #CC6A5C); }
 /* direction ink — the sparklines read green up / red down like every other
    figure on the page. Both the row spark (demandLineMini) and the monument
    line (demandLine) carry it, across the hero, the sub-tape and the plate. */
 .mtHero [data-dir='up'] .demandPath,
 .mHero [data-dir='up'] .demandPath,
 .mtStage [data-dir='up'] .demandPath,
-.mtMon [data-dir='up'] .demandPath { stroke: #57BE87 !important; }
+.mtMon [data-dir='up'] .demandPath { stroke: var(--color-up, #57BE87) !important; }
 .mtHero [data-dir='down'] .demandPath,
 .mHero [data-dir='down'] .demandPath,
 .mtStage [data-dir='down'] .demandPath,
-.mtMon [data-dir='down'] .demandPath { stroke: #CC6A5C !important; }
+.mtMon [data-dir='down'] .demandPath { stroke: var(--color-down, #CC6A5C) !important; }
 .mtHero [data-dir='up'] .demandDot,
 .mHero [data-dir='up'] .demandDot,
 .mtStage [data-dir='up'] .demandDot,
-.mtMon [data-dir='up'] .demandDot { fill: #57BE87 !important; }
+.mtMon [data-dir='up'] .demandDot { fill: var(--color-up, #57BE87) !important; }
 .mtHero [data-dir='down'] .demandDot,
 .mHero [data-dir='down'] .demandDot,
 .mtStage [data-dir='down'] .demandDot,
-.mtMon [data-dir='down'] .demandDot { fill: #CC6A5C !important; }
+.mtMon [data-dir='down'] .demandDot { fill: var(--color-down, #CC6A5C) !important; }
 .mtHero .demandEnds, .mHero .demandEnds { color: var(--tt-faint); }
 
 @media (max-width: 700px) {
@@ -2173,7 +2173,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtHero .mtLabel { font-size: 16px; line-height: 20px; font-weight: 570; letter-spacing: -0.011em; color: rgba(237, 230, 218, 0.87); }
 .mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0.12em; }
 .mtHero .mtLabelBlock { gap: 4px; }
-.mtHero .mtFigure { font-size: 17px; line-height: 20px; font-weight: 620; color: #F2EDE3; }
+.mtHero .mtFigure { font-size: 17px; line-height: 20px; font-weight: 620; color: var(--paper-card, #F2EDE3); }
 .mtHero .mtFigure[data-dir='up'] { color: var(--color-up); }
 .mtHero .mtFigure[data-dir='down'] { color: var(--color-down); }
 .mtHero .mtSub { font-size: 11.5px; line-height: 16px; }
@@ -2195,21 +2195,21 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   vertical-align: 1px;
 }
 /* falling light: the board's hairlines dim toward its base */
-.mtBoardMain .mtRow { border-bottom-color: rgba(255, 255, 255, 0.10); }
-.mtBoardMain .mtRow:nth-child(n+3) { border-bottom-color: rgba(255, 255, 255, 0.08); }
-.mtBoardMain .mtRow:nth-child(n+5) { border-bottom-color: rgba(255, 255, 255, 0.06); }
+.mtBoardMain .mtRow { border-bottom-color: var(--lw-10, rgba(255, 255, 255, 0.10)); }
+.mtBoardMain .mtRow:nth-child(n+3) { border-bottom-color: var(--lw-08, rgba(255, 255, 255, 0.08)); }
+.mtBoardMain .mtRow:nth-child(n+5) { border-bottom-color: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* hover answers with light, not paint: a wash that decays from the pen-tick
    spine at the left margin. Data rows never squash — only glass gels. */
 .mtHero .mtRow:hover {
   /* Linear row hover: a flat, even neutral fill — no warm wash, no accent
      spine. Quiet and precise. */
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--lw-03, rgba(255, 255, 255, 0.03));
   box-shadow: none;
 }
 .mtHero .mtRow:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px var(--lw-16, rgba(255, 255, 255, 0.16));
+  background: var(--lw-03, rgba(255, 255, 255, 0.03));
 }
 .mtSide {
   /* the instrument column CENTERS against the tape (Aug 2026): flex column,
@@ -2241,10 +2241,10 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   min-height: 8px;
 }
 .mtConduitTop .mtConduitLine {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.10));
+  background: linear-gradient(180deg, var(--lw-04, rgba(255, 255, 255, 0.04)), var(--lw-10, rgba(255, 255, 255, 0.10)));
 }
 .mtConduitBottom .mtConduitLine {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  background: linear-gradient(180deg, var(--lw-10, rgba(255, 255, 255, 0.10)), var(--lw-04, rgba(255, 255, 255, 0.04)));
 }
 .mtConduitNode {
   flex: none;
@@ -2285,8 +2285,8 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtMon .beamLarge .beamDiamond::before { background: var(--tt-butter); }
 .mtMon[data-dir='up'] .beamLarge .beamRule { stroke: rgba(87, 190, 135, 0.9); }
 .mtMon[data-dir='down'] .beamLarge .beamRule { stroke: rgba(204, 106, 92, 0.9); }
-.mtMon[data-dir='up'] .beamLarge .beamDiamond::before { background: #57BE87; }
-.mtMon[data-dir='down'] .beamLarge .beamDiamond::before { background: #CC6A5C; }
+.mtMon[data-dir='up'] .beamLarge .beamDiamond::before { background: var(--color-up, #57BE87); }
+.mtMon[data-dir='down'] .beamLarge .beamDiamond::before { background: var(--color-down, #CC6A5C); }
 .mtSide .heroRail { grid-area: auto; align-self: stretch; }
 .mtSide .heroRail[data-under-monument='true'] { border-top: 1px solid var(--tt-hair-2); padding-top: clamp(14px, 1.6vw, 20px); }
 /* Total-market view has no monument, so the rail is the whole right column.
@@ -2304,7 +2304,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   background: none; border: 0; padding: 0; margin: 0;
   font: inherit; color: inherit; cursor: pointer; width: 100%;
 }
-.mtMon:hover .mtMonMarket { color: #ffffff; }
+.mtMon:hover .mtMonMarket { color: var(--tt-fg, #ffffff); }
 .mtMonKicker {
   display: flex; align-items: center; width: 100%;
   font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
@@ -2320,7 +2320,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-family: var(--font-serif-display), serif;
   font-weight: 620; letter-spacing: -0.025em; line-height: 1;
   font-size: clamp(22px, 1.9vw, 28px);
-  color: #ffffff;
+  color: var(--tt-fg, #ffffff);
   transition: color 0.15s ease;
 }
 .mtMonFigure {
@@ -2433,13 +2433,13 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtMon {
   position: relative; overflow: hidden; isolation: isolate;
   background: #14110d;
-  border: 1px solid rgba(232, 218, 182, 0.09);
+  border: 1px solid var(--ba-09, rgba(232, 218, 182, 0.09));
   border-radius: 14px;
   padding: clamp(12px, 1.2vw, 16px) clamp(14px, 1.5vw, 18px) clamp(12px, 1.2vw, 16px);
   box-shadow: none;
   transition: border-color 180ms var(--ease-signature, ease), transform 180ms var(--ease-signature, ease);
 }
-.mtMon:hover { border-color: rgba(255, 255, 255, 0.14); }
+.mtMon:hover { border-color: var(--lw-14, rgba(255, 255, 255, 0.14)); }
 .mtMon .mtMonKicker { color: var(--tt-faint); }
 
 /* the rail joins the plate ground so the side column reads as one furniture
@@ -2539,14 +2539,14 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtMon {
   /* Linear elevated surface: a flat cool translucent pane with a single fine
      border and a 1px top-highlight — no glass dome, no warm pool. */
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--lw-03, rgba(255, 255, 255, 0.03));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--lw-08, rgba(255, 255, 255, 0.08));
   border-radius: 12px; /* the column's one tile radius */
   box-shadow: none;
 }
-.mtMon:hover { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.045); }
+.mtMon:hover { border-color: var(--lw-14, rgba(255, 255, 255, 0.14)); background: var(--lw-045, rgba(255, 255, 255, 0.045)); }
 
 /* the search: a glass input, same family. The base .railCmd padding
    (11px 2px 2px) belongs to the borderless ledger-row it once was — inside
@@ -2557,10 +2557,10 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
      no gloss, no glint, no lift (the jewelry retired Aug 22; the rail's lamp
      is the view's only light). Butter answers focus only. */
   position: relative;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--lw-06, rgba(255, 255, 255, 0.06));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
   border-radius: 12px;
   box-shadow: none;
   padding: 13px 14px;
@@ -2569,12 +2569,12 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
     background 140ms var(--ease-signature, ease),
     border-color 140ms var(--ease-signature, ease);
 }
-.mtSide .railCmd .cmdLabel { color: #ffffff; font-weight: 500; font-size: 14px; }
+.mtSide .railCmd .cmdLabel { color: var(--tt-fg, #ffffff); font-weight: 500; font-size: 14px; }
 /* the return key reads as a real key — neutral, matching the ⌘/K keycaps */
 .mtSide .railCmd .cmdArrow {
   color: var(--tt-secondary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--lw-06, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--lw-12, rgba(255, 255, 255, 0.12));
   border-radius: 5px;
   padding: 1px 6px;
   margin-left: 4px;
@@ -2584,14 +2584,14 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 }
 /* hover: flat brighten, nothing moves, nothing warms */
 .mtSide .railCmd:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--lw-08, rgba(255, 255, 255, 0.08));
+  border-color: var(--lw-14, rgba(255, 255, 255, 0.14));
 }
-.mtSide .railCmd:active { background: rgba(255, 255, 255, 0.05); }
+.mtSide .railCmd:active { background: var(--lw-05, rgba(255, 255, 255, 0.05)); }
 .mtSide .railCmd:focus-visible {
   outline: none;
-  border-color: rgba(232, 218, 182, 0.6);
-  box-shadow: 0 0 0 3px rgba(232, 218, 182, 0.18); /* focus ring only */
+  border-color: var(--ba-6, rgba(232, 218, 182, 0.6));
+  box-shadow: 0 0 0 3px var(--ba-18, rgba(232, 218, 182, 0.18)); /* focus ring only */
 }
 
 
@@ -2627,7 +2627,7 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 
 /* — type contrast: Linear runs a sharp split — near-white primaries against
    cool-grey secondaries. Values ride at text-primary, labels at text-tertiary. */
-.mtHero .mtLabel { color: #f7f8f8; }
+.mtHero .mtLabel { color: var(--tt-fg, #f7f8f8); }
 .mtSub { color: var(--tt-muted); }
 
 /* — the masthead title: crisp near-white, tight — Linear's heading voice */
@@ -2642,22 +2642,22 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   transition: color 140ms var(--ease-signature, ease), background 140ms var(--ease-signature, ease), box-shadow 140ms var(--ease-signature, ease) !important;
 }
 .root :global(.ray-nav-link:hover) {
-  color: #f7f8f8 !important;
-  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--tt-fg, #f7f8f8) !important;
+  background: var(--lw-05, rgba(255, 255, 255, 0.05)) !important;
 }
 .root :global(.ray-nav-link[data-active='true']) {
-  color: #f7f8f8 !important;
+  color: var(--tt-fg, #f7f8f8) !important;
   /* the active section: a quiet translucent chip with a fine inset edge —
      inset box-shadow draws the border so the row never shifts by 1px */
-  background: rgba(255, 255, 255, 0.06) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  background: var(--lw-06, rgba(255, 255, 255, 0.06)) !important;
+  box-shadow: inset 0 0 0 1px var(--lw-08, rgba(255, 255, 255, 0.08)) !important;
 }
 .root :global(.ray-nav-link-value[data-active='true']) { color: var(--tt-butter) !important; }
 
 /* the desktop search — flatten the glass to a Linear input */
 .root :global(.ray-artist-select-btn) {
-  background: rgba(255, 255, 255, 0.04) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--lw-04, rgba(255, 255, 255, 0.04)) !important;
+  border: 1px solid var(--lw-08, rgba(255, 255, 255, 0.08)) !important;
   color: var(--tt-muted) !important;
   box-shadow: none !important;
   -webkit-backdrop-filter: none !important;
@@ -2667,13 +2667,13 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .root :global(.ray-artist-select-btn)::before,
 .root :global(.ray-artist-select-btn)::after { display: none !important; }
 .root :global(.ray-artist-select-btn:hover) {
-  background: rgba(255, 255, 255, 0.065) !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  color: #f7f8f8 !important;
+  background: var(--lw-065, rgba(255, 255, 255, 0.065)) !important;
+  border-color: var(--lw-14, rgba(255, 255, 255, 0.14)) !important;
+  color: var(--tt-fg, #f7f8f8) !important;
 }
 .root :global(.ray-nav-kbd) {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: var(--lw-06, rgba(255, 255, 255, 0.06)) !important;
+  border: 1px solid var(--lw-1, rgba(255, 255, 255, 0.1)) !important;
   color: var(--tt-muted) !important;
   box-shadow: none !important;
 }
@@ -2728,11 +2728,11 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   gap: 6px;
   padding: clamp(16px, 1.6vw, 22px) clamp(16px, 1.7vw, 22px) clamp(14px, 1.5vw, 18px);
   /* a lifted pane, not a flat tile: vertical luminance, top light, real drop */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, var(--lw-045, rgba(255, 255, 255, 0.045)), var(--lw-018, rgba(255, 255, 255, 0.018)));
+  border: 1px solid var(--lw-09, rgba(255, 255, 255, 0.09));
   box-shadow: none;
 }
-.mtSide .mtMon:hover { border-color: rgba(255, 255, 255, 0.15); }
+.mtSide .mtMon:hover { border-color: var(--lw-15, rgba(255, 255, 255, 0.15)); }
 .mtSide .mtMonMarket { font-size: clamp(24px, 2vw, 31px); }
 .mtSide .mtMonFigure {
   font-size: clamp(46px, 4.2vw, 64px);
@@ -2755,24 +2755,24 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .mtBoardMain .mtRow {
   border-bottom: 1px solid transparent;
   border-image: linear-gradient(90deg,
-    rgba(255, 255, 255, 0.02),
-    rgba(255, 255, 255, 0.115) 12%,
-    rgba(255, 255, 255, 0.115) 82%,
-    rgba(255, 255, 255, 0.02)) 1;
+    var(--lw-02, rgba(255, 255, 255, 0.02)),
+    var(--lw-115, rgba(255, 255, 255, 0.115)) 12%,
+    var(--lw-115, rgba(255, 255, 255, 0.115)) 82%,
+    var(--lw-02, rgba(255, 255, 255, 0.02))) 1;
 }
 .mtBoardMain .mtRow:nth-child(n+3) {
   border-image: linear-gradient(90deg,
-    rgba(255, 255, 255, 0.015),
-    rgba(255, 255, 255, 0.09) 12%,
-    rgba(255, 255, 255, 0.09) 82%,
-    rgba(255, 255, 255, 0.015)) 1;
+    var(--lw-015, rgba(255, 255, 255, 0.015)),
+    var(--lw-09, rgba(255, 255, 255, 0.09)) 12%,
+    var(--lw-09, rgba(255, 255, 255, 0.09)) 82%,
+    var(--lw-015, rgba(255, 255, 255, 0.015))) 1;
 }
 .mtBoardMain .mtRow:nth-child(n+5) {
   border-image: linear-gradient(90deg,
-    rgba(255, 255, 255, 0.01),
-    rgba(255, 255, 255, 0.065) 12%,
-    rgba(255, 255, 255, 0.065) 82%,
-    rgba(255, 255, 255, 0.01)) 1;
+    var(--lw-01, rgba(255, 255, 255, 0.01)),
+    var(--lw-065, rgba(255, 255, 255, 0.065)) 12%,
+    var(--lw-065, rgba(255, 255, 255, 0.065)) 82%,
+    var(--lw-01, rgba(255, 255, 255, 0.01))) 1;
 }
 .mtBoardMain .mtRow:last-child { border-image: none; border-bottom: 0; }
 
@@ -2781,9 +2781,9 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
 .demandSvg { color: transparent; }
 .mtHero .demandSvg, .mHero .demandSvg { color: rgba(237, 230, 218, 0.75); }
 .mtHero [data-dir='up'] .demandSvg, .mHero [data-dir='up'] .demandSvg,
-.mtMon[data-dir='up'] .demandSvg { color: #57BE87; }
+.mtMon[data-dir='up'] .demandSvg { color: var(--color-up, #57BE87); }
 .mtHero [data-dir='down'] .demandSvg, .mHero [data-dir='down'] .demandSvg,
-.mtMon[data-dir='down'] .demandSvg { color: #CC6A5C; }
+.mtMon[data-dir='down'] .demandSvg { color: var(--color-down, #CC6A5C); }
 /* row sparks get a lighter wash than the monument's — enough to read depth,
    never a slab under a flat-high series */
 .mtHero .mtInstrument .demandFill, .mHero .mtInstrument .demandFill { opacity: 0.5; }
@@ -2812,8 +2812,24 @@ button.mStat:active { background: rgba(255, 255, 255, 0.06); }
   font-family: var(--font-inter), sans-serif; font-size: 11px; line-height: 1.4;
   color: var(--tt-muted);
   padding: 1px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--lw-12, rgba(255, 255, 255, 0.12));
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--lw-05, rgba(255, 255, 255, 0.05));
 }
 @media (max-width: 899px) { .cmdKbd { display: none; } }
+
+/* THE PORCELAIN — the Terminal homepage joins the light system */
+:global(html[data-lectr-light]) .root {
+  --tt-bg: #F4F5F0;
+  --tt-panel: #FFFFFF;
+  --tt-panel-2: #ECEDE6;
+  --tt-fg: #1D1D1B;
+  --tt-butter: #D0400F;          /* the lamp, module register — vermilion */
+  --tt-secondary: #43423D;
+  --tt-muted: #6E6D66;
+  --tt-faint: #8E8C83;
+  --tt-hair: rgba(29, 29, 27, 0.10);
+  --tt-hair-2: rgba(29, 29, 27, 0.16);
+  --color-up: #0F7C43;
+  --color-down: #C13E2C;
+}

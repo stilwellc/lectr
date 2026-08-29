@@ -46,7 +46,7 @@ interface Curated {
   caption?: string;
 }
 
-const ANCHOR_INK = '#E8EAED';
+const ANCHOR_INK = 'var(--color-fg, #E8EAED)';
 
 const CSS = `
 .ray-lh-chart{margin-top:4px}
@@ -58,8 +58,8 @@ const CSS = `
 .ray-lh-val.pct{font-family:var(--font-mono,ui-monospace),monospace}
 .ray-lh-val[data-dir="up"]{color:var(--color-up,#2FBF71)}
 .ray-lh-val[data-dir="down"]{color:var(--color-down-text,#E5484D)}
-.ray-lh-sub{font-size:10.5px;color:#7A8087;font-variant-numeric:tabular-nums}
-.ray-lh-cap{margin:10px 0 0;font-size:11.5px;color:#7A8087;line-height:1.5}
+.ray-lh-sub{font-size:10.5px;color:var(--color-text-muted, #7A8087);font-variant-numeric:tabular-nums}
+.ray-lh-cap{margin:10px 0 0;font-size:11.5px;color:var(--color-text-muted, #7A8087);line-height:1.5}
 `;
 
 const fmtUsd = (n: number) =>

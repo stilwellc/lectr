@@ -33,14 +33,14 @@ const CSS = `
 a.ray-dr-row:hover{background:rgba(255,255,255,0.045)}
 a.ray-dr-row:hover .ray-dr-name{color:#FFF}
 .ray-dr-name{font-size:13.5px;color:var(--fg,#E8EAED)}
-.ray-dr-kind{color:#7A8087;font-size:12px;margin-left:6px}
+.ray-dr-kind{color:var(--color-text-muted, #7A8087);font-size:12px;margin-left:6px}
 .ray-dr-read{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .ray-dr-read .num{font-family:var(--font-mono,ui-monospace),monospace}
-.ray-dr-read[data-dir="up"] .num{color:#2FBF71}
-.ray-dr-read[data-dir="down"] .num{color:#E5484D}
-.ray-dr-read .ci{color:#7A8087;font-size:11px;margin-left:5px}
-.ray-dr-read .tag{color:#7A8087;font-size:11px;margin-left:5px}
-.ray-dr-meta{color:#7A8087;font-size:11.5px;font-variant-numeric:tabular-nums;text-align:right;min-width:74px}
+.ray-dr-read[data-dir="up"] .num{color:var(--color-up, #2FBF71)}
+.ray-dr-read[data-dir="down"] .num{color:var(--color-down, #E5484D)}
+.ray-dr-read .ci{color:var(--color-text-muted, #7A8087);font-size:11px;margin-left:5px}
+.ray-dr-read .tag{color:var(--color-text-muted, #7A8087);font-size:11px;margin-left:5px}
+.ray-dr-meta{color:var(--color-text-muted, #7A8087);font-size:11.5px;font-variant-numeric:tabular-nums;text-align:right;min-width:74px}
 @media (max-width:640px){.ray-dr-row{grid-template-columns:1fr auto}.ray-dr-meta{display:none}}
 `;
 

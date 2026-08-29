@@ -152,7 +152,7 @@ function MarketPulse({ ray, activeKey, activeLabel, play }: {
   const anchor = useMemo(() => series && series.length >= 4 ? {
     key: 'idx',
     label: `${activeLabel} index`,
-    color: 'rgba(255,255,255,0.45)',
+    color: 'var(--lw-45, rgba(255, 255, 255, 0.45))',
     unit: 'count' as const,
     points: series,
   } : null, [series, activeLabel]);
@@ -1167,7 +1167,7 @@ export default function ValuePage() {
         }
         /* the pulse panel — the room's only surfaced panel */
         .vd-pulse {
-          background: #0d0f11;
+          background: var(--surface-well, #0d0f11);
           border: 1px solid var(--color-border);
           border-radius: 16px;
           padding: 16px 18px 14px;
@@ -1593,7 +1593,7 @@ export default function ValuePage() {
         .vd-tape-vs { display: block; font-family: var(--font-mono), monospace; font-size: 11.5px; color: var(--color-text-muted); }
         .vd-tape-vs [data-tone="up"] { color: var(--color-up); font-weight: 700; }
         .vd-tape-vs [data-tone="down"] { color: var(--color-down-text); font-weight: 700; }
-        .vd-tape-ghost { height: 44px; border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06)); background: rgba(255,255,255,0.02); }
+        .vd-tape-ghost { height: 44px; border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06)); background: var(--lw-02, rgba(255, 255, 255, 0.02)); }
         @media (max-width: 640px) {
           .vd-tape-row { grid-template-columns: minmax(0, 1fr); }
           .vd-tape-cells { text-align: left; }
@@ -1637,7 +1637,7 @@ export default function ValuePage() {
           font-family: var(--font-mono), monospace; font-size: 10.5px;
           letter-spacing: 0.04em; white-space: nowrap;
           color: var(--color-text-secondary);
-          background: #101214; border: 1px solid var(--color-border-mid);
+          background: var(--surface-tip, #101214); border: 1px solid var(--color-border-mid);
           border-radius: 8px; padding: 5px 9px;
           opacity: 0; pointer-events: none;
           transition: opacity var(--duration-fast) var(--ease-signature);
@@ -1652,7 +1652,7 @@ export default function ValuePage() {
         @media (min-width: 900px) {
           .ray-value-head, .vd-lane-cols {
             position: sticky; top: 54px; z-index: 20;
-            background: color-mix(in srgb, #0b0c0e 90%, transparent);
+            background: color-mix(in srgb, var(--surface-mix, #0b0c0e) 90%, transparent);
             backdrop-filter: blur(14px);
           }
         }
@@ -1670,18 +1670,18 @@ export default function ValuePage() {
            itself is already a signed outcome) ── */
         .vd-cell-track {
           display: block; height: 2px; margin-top: 5px;
-          background: rgba(255,255,255,0.08); border-radius: 2px;
+          background: var(--lw-08, rgba(255, 255, 255, 0.08)); border-radius: 2px;
           position: relative; overflow: visible;
         }
         .vd-cell-track > span:not(.vd-track-dot) {
           display: block; height: 100%; border-radius: 2px;
-          background: rgba(255,255,255,0.45);
+          background: var(--lw-45, rgba(255, 255, 255, 0.45));
           margin-left: auto; /* right-aligned cells fill from the right */
         }
         .vd-track-up > span:not(.vd-track-dot) { background: var(--color-up); opacity: 0.7; }
         .vd-track-witness::before {
           content: ''; position: absolute; top: -3px; bottom: -3px;
-          left: 45.45%; width: 1px; background: rgba(255,255,255,0.28);
+          left: 45.45%; width: 1px; background: var(--lw-28, rgba(255, 255, 255, 0.28));
         }
         .vd-track-dot {
           position: absolute; top: 50%; width: 5px; height: 5px;
@@ -1721,17 +1721,17 @@ export default function ValuePage() {
         .vd-curve { position: relative; padding: 16px 16px 0; }
         .vd-curve-rail {
           display: block; position: relative; height: 2px;
-          background: rgba(255,255,255,0.10); border-radius: 2px;
+          background: var(--lw-10, rgba(255, 255, 255, 0.10)); border-radius: 2px;
         }
         .vd-curve-wire {
           position: absolute; left: 0; top: 0; bottom: 0;
-          background: rgba(255,255,255,0.26); border-radius: 2px;
+          background: var(--lw-26, rgba(255, 255, 255, 0.26)); border-radius: 2px;
         }
         .vd-curve-dot {
           position: absolute; top: 50%; width: 7px; height: 7px;
           border-radius: 100px; background: var(--color-fg);
           transform: translate(-50%, -50%);
-          box-shadow: 0 0 0 3px rgba(255,255,255,0.08);
+          box-shadow: 0 0 0 3px var(--lw-08, rgba(255, 255, 255, 0.08));
         }
         .vd-curve-labels {
           position: relative; display: flex; justify-content: space-between;
@@ -1768,7 +1768,7 @@ export default function ValuePage() {
           position: absolute; bottom: calc(100% + 9px); left: 50%;
           transform: translateX(-50%);
           width: max-content; max-width: 260px; white-space: normal;
-          background: #101214; border: 1px solid var(--color-border-mid);
+          background: var(--surface-tip, #101214); border: 1px solid var(--color-border-mid);
           border-radius: 10px; padding: 9px 12px;
           font-family: var(--font-sans), sans-serif;
           font-size: 11.5px; line-height: 1.55; letter-spacing: 0;
