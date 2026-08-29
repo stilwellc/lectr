@@ -2833,3 +2833,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   --color-up: #0F7C43;
   --color-down: #C13E2C;
 }
+
+/* THE CATALOGUE — pen-weight display numerals on paper (light only) */
+:global(html[data-lectr-light]) .pulseValLead { font-weight: 430; }
+:global(html[data-lectr-light]) .mStatVal { font-weight: 430; }

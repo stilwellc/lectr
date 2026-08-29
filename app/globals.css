@@ -3867,3 +3867,150 @@ html[data-lectr-light] [class*='rcpt'] {
   --pa-6: rgba(28, 23, 18, 0.6);
   --pa-8: rgba(28, 23, 18, 0.8);
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE CATALOGUE LANGUAGE — wave one (Aug 29). Light is not a palette, it
+   is a MEDIUM. Six practices the black ground could never print:
+
+   1 THE SEAL — a room's mark struck as white metal in an ink chip; the
+     eye finds rooms by ink density, not by reading.  (Ink was invisible
+     on ink; a seal was impossible on the dark site.)
+   2 THE STAMP — the lot's verdict struck as an ink block, the signal
+     printed inside in the vault's own ink grammar.
+   3 DESK PHYSICS — three lift tiers of true shadow; pinned things LIFT.
+     (Dark had only edges; elevation finally has a voice.)
+   4 RULE HIERARCHY — print's double-rule: a heavy ink master rule over a
+     hairline. Weight contrast structures the page without boxes.
+   5 THE GOLD PENCIL — the auctioneer's margin tick beside flagged rows;
+     annotation, not chrome.
+   6 MATERIAL & DENSITY — paper grain whisper; oversized display numerals
+     drop to pen weight (thin type blooms illegibly on black, prints
+     beautifully on bone); sparklines gain area fills that would have
+     glowed to mud on the terminal.
+   All scoped to html[data-lectr-light]; the dark site is untouched.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 3 · DESK PHYSICS — the lift tiers ── */
+html[data-lectr-light] {
+  --lift-1: 0 1px 2px rgba(29, 29, 27, 0.05), 0 8px 24px rgba(29, 29, 27, 0.06);
+  --lift-2: 0 2px 4px rgba(29, 29, 27, 0.07), 0 16px 44px rgba(29, 29, 27, 0.10);
+  --lift-3: 0 3px 6px rgba(29, 29, 27, 0.09), 0 28px 64px rgba(29, 29, 27, 0.14);
+  --grain-opacity: 0.02;               /* the paper whispers */
+}
+/* floating instruments ride tier 2 */
+html[data-lectr-light] .terminal-shell .glass,
+html[data-lectr-light] .terminal-shell .glass-quiet {
+  box-shadow: var(--lift-1) !important;
+}
+html[data-lectr-light] .ray-lot-card { box-shadow: var(--lift-1); border-color: rgba(29, 29, 27, 0.09); }
+html[data-lectr-light] .ray-lot-card:hover { box-shadow: var(--lift-2); transform: translateY(-1px); }
+html[data-lectr-light] .ray-lot-card { transition: box-shadow var(--duration-fast) var(--ease-signature), transform var(--duration-fast) var(--ease-signature); }
+/* the pinned things lift off the page as they stick */
+html[data-lectr-light] .ray-saved-ledger-head,
+html[data-lectr-light] .ray-settled-head {
+  box-shadow: 0 10px 18px -14px rgba(29, 29, 27, 0.35);
+}
+html[data-lectr-light] .comp-modal-panel,
+html[data-lectr-light] .ray-sheet { box-shadow: var(--lift-3) !important; }
+
+/* ── 1 · THE SEAL — the mark struck in ink. Inverts by room automatically:
+   on the page it is ink holding a porcelain glyph; inside the vault the
+   fg/bg tokens flip and the seal becomes porcelain holding ink. ── */
+html[data-lectr-light] .ray-sect-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  vertical-align: -6px;
+  margin-right: 11px;
+}
+html[data-lectr-light] .ray-sect-mark svg { width: 15px; height: 15px; }
+/* the vault flips the seal by its own tokens */
+html[data-lectr-light] .ray-band .ray-sect-mark {
+  background: var(--paper-ink);
+  color: var(--paper);
+}
+
+/* ── 4 · RULE HIERARCHY — the print double-rule on room heads: one heavy
+   ink master rule with a hairline shadow-rule beneath. Structure without
+   boxes; the h2 becomes a catalogue section head. ── */
+html[data-lectr-light] .ray-saved-section > div:first-child h2.ray-h2,
+html[data-lectr-light] section.rail > h2.ray-h2,
+html[data-lectr-light] .ray-saved-section > h2.ray-h2 {
+  padding-top: 14px;
+  border-top: 2px solid var(--color-fg);
+  position: relative;
+}
+html[data-lectr-light] .ray-saved-section > div:first-child h2.ray-h2::after,
+html[data-lectr-light] section.rail > h2.ray-h2::after,
+html[data-lectr-light] .ray-saved-section > h2.ray-h2::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+/* ── 2 · THE STAMP — the card's verdict struck as an ink block. The
+   signal number prints INSIDE in the vault's signal inks (the one place
+   green/coral live on ink in light — the vault grammar at cell scale). ── */
+html[data-lectr-light] .ray-sigrow {
+  display: inline-flex;
+  align-items: baseline;
+  background: var(--color-fg);
+  color: #F2F1E9;
+  border-radius: 8px;
+  padding: 7px 11px 8px;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+html[data-lectr-light] .ray-sigrow[data-tone=up] .ray-sigrow-pct { color: #57BE87; }
+html[data-lectr-light] .ray-sigrow[data-tone=down] .ray-sigrow-pct { color: #E0846F; }
+html[data-lectr-light] .ray-sigrow .ray-sigrow-ctx { color: #A3A194; }
+html[data-lectr-light] .ray-sigrow .ray-sigrow-dots [data-on='true'] { background: #F2F1E9; }
+
+/* ── 5 · THE GOLD PENCIL — the auctioneer's tick in the margin of every
+   flagged row. A short gold stroke, hand-placed left of the row; the
+   ledger reads like a marked-up catalogue. ── */
+html[data-lectr-light] .ray-savedrow:has(.ck-tag[data-tone='up'])::before,
+html[data-lectr-light] .ck-read:has(.ck-tag[data-tone='up'])::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-2deg);
+  width: 4px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--color-butter, #8F6B1E);
+  opacity: 0.85;
+}
+html[data-lectr-light] .ray-savedrow,
+html[data-lectr-light] .ck-read { position: relative; }
+
+/* ── 6 · DENSITY — display figures drop to pen weight and grow. Thin
+   numerals bloom on black; on bone they print like a ledger hand. ── */
+html[data-lectr-light] .ck-record-fig {
+  font-weight: 420;
+  font-size: clamp(44px, 5vw, 60px);
+  letter-spacing: -0.03em;
+}
+html[data-lectr-light] .ck-gauge-v { font-weight: 440; }
+
+/* the value lanes join the seal system */
+html[data-lectr-light] .vd-lane-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  flex: none;
+}
+html[data-lectr-light] .vd-lane-mark svg { width: 16px; height: 16px; }
