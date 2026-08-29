@@ -2836,7 +2836,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   .nsMast {
     grid-template-columns: minmax(0, 1fr) clamp(350px, 30vw, 448px);
     gap: 24px clamp(32px, 3.5vw, 56px);
+    /* headline top rides the pills' top line — the breath lives BELOW */
+    align-items: start;
   }
+  .nsMast .nsMastHead { margin-top: -8px; /* optical: cap height meets pill top */ }
 }
 .nsMastHead {
   margin: 0;
