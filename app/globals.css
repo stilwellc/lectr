@@ -2197,22 +2197,23 @@ body {
 
 /* matte law: lines and numerals print, they never radiate (glows retired) */
 
-/* buttons & chips with presence */
+/* buttons & chips: SOLID ink fills — the dark-era presence gradients are
+   retired (north star: pills are flat ink, Collin Aug 29) */
 .ray-call-btn-primary {
-  background: linear-gradient(180deg, var(--color-fg), var(--paper, #DCD5C4));
+  background: var(--color-fg);
   box-shadow: none;
 }
 .ray-toolbar-pill[data-active=true],
 .ray-seg-btn[data-active=true] {
-  background: linear-gradient(180deg, var(--color-fg), var(--paper, #DCD5C4)) !important;
+  background: var(--color-fg) !important;
   box-shadow: none;
 }
 .ray-toolbar-pill-signal[data-active=true] {
-  background: linear-gradient(180deg, #3BD186, #27A863) !important;
+  background: var(--color-up) !important;
   box-shadow: none;
 }
 .ray-range-btn[data-active=true] {
-  background: linear-gradient(180deg, var(--glass-bg-hover), var(--color-bg-elevated));
+  background: var(--color-bg-elevated);
   box-shadow: none;
 }
 
