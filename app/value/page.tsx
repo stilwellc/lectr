@@ -34,6 +34,7 @@ const HeroChart = dynamic(() => import('../preview/terminal/HeroChart'), {
 import { CIBeam } from '../preview/terminal/CIBeam';
 import { useReducedMotion } from '../preview/terminal/hooks';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
+import FigCap from '../components/FigCap';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
@@ -674,6 +675,11 @@ function OutcomeDistribution({ backtest }: { backtest: Backtest }) {
         <span><span className="vd-dist-key vd-dist-bar-f" /> flagged · n {fN.toLocaleString()}</span>
         <span><span className="vd-dist-key vd-dist-bar-u" /> unflagged · n {uN.toLocaleString()}</span>
       </div>
+      <FigCap>
+        Share of each cohort by realized price vs estimate midpoint, all-in — flagged n {fN.toLocaleString()} against
+        unflagged n {uN.toLocaleString()}, every settled sale replayed nightly. The rightward mass is the edge,
+        printed as a distribution rather than a median alone.
+      </FigCap>
     </section>
   );
 }

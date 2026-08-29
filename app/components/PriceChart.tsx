@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot } from 'recharts';
+import FigCap from './FigCap';
 import { PricePoint, AuctionLot } from '../types';
 import type { LotCategory } from '../types';
 import { formatPrice, categoryLabels, categoryColors, formatMoneyAxis } from '../utils';
@@ -319,6 +320,10 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            <FigCap>
+              Quarterly median and record hammer, sold lots only — {data.length} quarters plotted. The axis caps near
+              the 92nd percentile so one record sale can&apos;t flatten the movement; the record itself stays annotated.
+            </FigCap>
           </div>
         )}
 
