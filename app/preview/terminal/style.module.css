@@ -2424,7 +2424,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* the rail joins the plate ground so the side column reads as one furniture
    piece: plate above, ledger below, one seam */
 .mtSide .heroRail[data-under-monument='true'] {
-  border-top: none; padding-top: 0; margin-top: clamp(2px, 0.4vw, 6px);
+  border-top: none; margin-top: clamp(2px, 0.4vw, 6px);
 }
 .mtSide .heroRail .railCmd { margin-top: 7px; }
 
@@ -2666,13 +2666,12 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    numbers, better instrument.
    ══════════════════════════════════════════════════════════════════════ */
 .mtSide .heroRail:not([data-under-monument='true']) {
-  /* the blocks ARE the surface — the wrapper card retired Aug 22 (card-in-
-     card double borders + a radial wash against the flat law) */
+  /* Aug 29: the cream CELL is the surface now — this legacy rule zeroed
+     the plate's padding (the wrapper-card retirement predates the cell) */
   align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0;
 }
 
 /* the loupe on the search bar rides the muted tone */
