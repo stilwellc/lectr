@@ -46,7 +46,9 @@ export default function SeasonalityStrip({ marketData, scope }: {
   scope: string;
 }) {
   const seasonality = marketData?.seasonality;
-  const cells = seasonality?.[scope] ?? seasonality?.all;
+  // the all-fallback only serves the 'all' view — on a scoped market a
+  // missing per-market calendar must HIDE, not silently show global data
+  const cells = seasonality?.[scope] ?? (scope === 'all' ? seasonality?.all : undefined);
   if (!cells || cells.length !== 12) return null;
 
   const usable = cells

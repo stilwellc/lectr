@@ -4073,3 +4073,16 @@ html[data-lectr-light] {
   --lab-watches: #6B4FA1;
 }
 
+
+/* ── THE OBSERVATORY, mobile discipline (Collin: if it can't look good on
+   mobile, it leaves the mobile view) ── */
+@media (max-width: 768px) {
+  /* 614-point scatter at 335px is noise, not evidence */
+  .ray-lf-field { display: none; }
+  /* the full 8-market calibration matrix can't fit a phone; the scoped
+     single-market column still renders */
+  .ray-hm[data-wide] { display: none; }
+  /* the whisker carries the interval — the bracket text was bleeding */
+  .ray-vm-ci { display: none; }
+  .ray-vm-row { grid-template-columns: minmax(80px, 1fr) minmax(70px, 1.1fr) auto !important; }
+}

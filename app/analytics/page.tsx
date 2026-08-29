@@ -97,7 +97,7 @@ export default function AnalyticsPage() {
     ['field', (
       <div key="field">
         <LabFiguresP.Styles />
-        <LabFiguresP.Field lots={allLots} />
+        <LabFiguresP.Field lots={allLots} scope={activeKey} />
       </div>
     )],
     ['micro', (
@@ -108,17 +108,20 @@ export default function AnalyticsPage() {
         <HouseMatrix marketData={marketData} scope={activeKey} />
       </div>
     )],
-    ['flow', (
+    // the flow trio are CROSS-MARKET fits (bid histories, conformal bands,
+    // venue factors) — they render on the all view only; a scoped market
+    // must never print a global fit dressed as its own
+    ...(activeKey === 'all' ? [['flow', (
       <div key="flow" className="ray-lf-grid3">
         <LabFiguresP.CloseCurve marketData={marketData} />
         <LabFiguresP.Funnel backtest={backtest} />
         <LabFiguresP.Venue marketData={marketData} />
       </div>
-    )],
+    )] as [string, React.ReactNode]] : []),
     ['repeat', <LabFiguresP.Repeat key="repeat" marketData={marketData} scope={activeKey} />],
     ['engine', (
       <div key="engine">
-        {backtest && (
+        {backtest && activeKey === 'all' && (
           <div className="ray-vm ray-vm-card glass glass-quiet" style={{ marginBottom: 14 }}>
             <div className="ray-vm-head">
               <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><RecordMark size={16} /></span>The engine&rsquo;s record</span>
@@ -137,10 +140,10 @@ export default function AnalyticsPage() {
           </div>
         )}
         {(activeKey === 'all' || activeKey === 'sports') && <div style={{ marginBottom: 14 }}><GradeLadderPanel marketData={marketData} /></div>}
-        {backtest && <CalibrationCurve backtest={backtest} />}
+        {backtest && <CalibrationCurve backtest={backtest} scope={activeKey} />}
         {/* the by-year replay — 27 years of flagged-vs-unflagged, previously
             unplotted on the research desk; the edge band figure */}
-        {backtest && <div className="ray-rby-host">{<RecordByYear backtest={backtest} />}</div>}
+        {backtest && activeKey === 'all' && <div className="ray-rby-host">{<RecordByYear backtest={backtest} />}</div>}
       </div>
     )],
     ['horizon', <LongHorizon key="horizon" marketData={marketData} scope={activeKey} />],
@@ -167,6 +170,9 @@ export default function AnalyticsPage() {
            svg): on a 390px viewport the panels ran away to ~600px and bled
            off-screen. Capping the items breaks the loop. */
         .ray-desk-microgrid > * { min-width: 0; }
+        /* the house matrix needs the full rail on the all view (8 markets of
+           columns) — it spans the grid row instead of scrolling in a half cell */
+        .ray-desk-microgrid > .ray-hm { grid-column: 1 / -1; }
         .ray-abstract { max-width: 760px; margin-top: 26px; padding: 4px 0 0 18px; border-left: 2px solid var(--color-fg); }
         .ray-abstract-k { font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-butter-text); }
         .ray-abstract p { margin: 6px 0 0; font-size: 14px; line-height: 1.7; color: var(--color-text-secondary); }
@@ -194,7 +200,7 @@ export default function AnalyticsPage() {
 
         {/* THE ABSTRACT — the lab-report opening: what this desk measured and
             what it found, three claims with their bases. Prose, not tiles. */}
-        {backtest && (
+        {backtest && activeKey === 'all' && (
           <div className="ray-abstract ray-enter">
             <span className="ray-abstract-k">Abstract</span>
             <p>

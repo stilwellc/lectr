@@ -36,11 +36,11 @@ const CSS = `
 .ray-lf-title { font-size: 13.5px; font-weight: 650; color: var(--color-fg); }
 .ray-lf-title .ray-sect-mark { margin-right: 8px; }
 .ray-lf-method { font-size: 10.5px; color: var(--color-text-muted); text-align: right; }
-.ray-lf-plot { position: relative; }
+.ray-lf-plot { position: relative; overflow: hidden; }
 .ray-lf-lbl { position: absolute; font-family: var(--font-mono), monospace; font-size: 10px; color: var(--color-text-muted); white-space: nowrap; transform: translateX(-50%); }
 .ray-lf-vlbl { position: absolute; font-family: var(--font-mono), monospace; font-size: 10px; color: var(--color-text-muted); white-space: nowrap; }
 .ray-lf-note { position: absolute; font-size: 10.5px; color: var(--color-text-faint); white-space: nowrap; }
-.ray-lf-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: start; }
+.ray-lf-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start; }
 .ray-lf-grid3 > * { min-width: 0; }
 @media (max-width: 1000px) { .ray-lf-grid3 { grid-template-columns: 1fr; } }
 .ray-lf-dot { position: absolute; border-radius: 50%; transform: translate(-50%, 50%); }
@@ -123,7 +123,7 @@ export function CoverageFunnel({ backtest }: { backtest: Backtest | null }) {
   return (
     <div className="ray-lf-card glass glass-quiet">
       <div className="ray-lf-head">
-        <span className="ray-lf-title"><span className="ray-sect-mark" aria-hidden><OddsMark size={15} /></span>How wide the bands run</span>
+        <span className="ray-lf-title"><span className="ray-sect-mark" aria-hidden><OddsMark size={15} /></span>Band width</span>
         <span className="ray-lf-method">prediction interval by confidence</span>
       </div>
       <div className="ray-lf-plot" style={{ height: 150 }}>
@@ -209,7 +209,7 @@ export function VenueStrip({ marketData }: { marketData: MarketData | null }) {
 }
 
 /* ═══ 4 · THE DEPTH FIELD — the live board as a scatter ═══ */
-export function DepthField({ lots }: { lots: AuctionLot[] }) {
+export function DepthField({ lots, scope = 'all' }: { lots: AuctionLot[]; scope?: string }) {
   const pts = useMemo(() => {
     const out: { id: string; x: number; y: number; n: number; conf: string; title: string; mkt: string; kind: 'bid' | 'ask' }[] = [];
     for (const l of lots) {
@@ -239,9 +239,9 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
         });
       }
     }
-    return out;
-  }, [lots]);
-  if (pts.length < 40) return null;
+    return scope === 'all' ? out : out.filter(p => p.mkt === scope);
+  }, [lots, scope]);
+  if (pts.length < (scope === 'all' ? 40 : 12)) return null;
   const xs = pts.map(p => Math.log(p.x));
   const xLo = Math.min(...xs), xHi = Math.max(...xs);
   const yLo = -100, yHi = 155;
@@ -252,7 +252,7 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
   const decades = [100, 1000, 10000, 100000, 1000000].filter(d => Math.log(d) > xLo && Math.log(d) < xHi);
   const fmt$ = (v: number) => (v >= 1e6 ? '$1M' : v >= 1e3 ? `$${v / 1e3}K` : `$${v}`);
   return (
-    <div className="ray-lf-card glass glass-quiet">
+    <div className="ray-lf-card ray-lf-field glass glass-quiet">
       <div className="ray-lf-head">
         <span className="ray-lf-title"><span className="ray-sect-mark" aria-hidden><DepthMark size={15} /></span>The depth field</span>
         <span className="ray-lf-method">the live board vs its comps · ● bid · ○ ask · hue = market · opacity = confidence</span>
@@ -286,7 +286,7 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <i style={{ width: 8, height: 8, borderRadius: '50%', border: '1.5px solid var(--color-text-secondary)', display: 'inline-block', boxSizing: 'border-box' }} aria-hidden /> ask
         </span>
-        {Object.keys(MARKET_INK).filter(m => pts.some(p => p.mkt === m)).map(m => (
+        {scope === 'all' && Object.keys(MARKET_INK).filter(m => pts.some(p => p.mkt === m)).map(m => (
           <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <i style={{ width: 8, height: 8, borderRadius: '50%', background: MARKET_INK[m], display: 'inline-block' }} aria-hidden />
             {MARKET_LABEL[m] || m}

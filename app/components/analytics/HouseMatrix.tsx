@@ -54,7 +54,7 @@ export default function HouseMatrix({ marketData, scope }: {
   if (!houses.length) return null;
 
   return (
-    <div className="ray-hm ray-vm ray-vm-card glass glass-quiet">
+    <div className="ray-hm ray-vm ray-vm-card glass glass-quiet" data-wide={cols.length > 2 || undefined}>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ray-vm-head">
         <span className="ray-vm-title"><span className="ray-sect-mark" aria-hidden><CalibrationMark size={16} /></span>House calibration</span>

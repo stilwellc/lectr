@@ -21,8 +21,10 @@ const MARKET_COLORS: Record<string, string> = {
  * The honesty is the point: the final bucket (10×+) DROPS — extreme ratios
  * under-deliver, and the engine says so instead of extrapolating.
  */
-export default function CalibrationCurve({ backtest, bare = false, flagThreshold = false }: {
+export default function CalibrationCurve({ backtest, bare = false, flagThreshold = false, scope = 'all' }: {
   backtest: Backtest;
+  /** active market — scoped views draw global + THEIR line only */
+  scope?: string;
   /** render only the chart panel — the caller owns the section head/copy */
   bare?: boolean;
   /** draw the 1.3× flag-bar witness at the first flag-eligible bucket */
@@ -69,7 +71,7 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
                 );
               }}
             />
-            {(['watches', 'design', 'art'] as const).map(m => (
+            {(['watches', 'design', 'art'] as const).filter(m => scope === 'all' || m === scope).map(m => (
               <Line key={m} type="stepAfter" dataKey={m} stroke={MARKET_COLORS[m]} strokeWidth={1.4} dot={false} isAnimationActive={false} strokeOpacity={0.75} />
             ))}
             <Line type="stepAfter" dataKey="global" stroke={MARKET_COLORS.global} strokeWidth={2} dot={false} isAnimationActive={false}
@@ -80,7 +82,7 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
         </ResponsiveContainer>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '8px 0 10px 18px', fontSize: 12.5, color: 'var(--color-text-faint)' }}>
-        {Object.entries(MARKET_COLORS).map(([m, c]) => (
+        {Object.entries(MARKET_COLORS).filter(([m]) => m === 'global' || scope === 'all' || m === scope).map(([m, c]) => (
           <span key={m}><span style={{ display: 'inline-block', width: 14, height: 2, background: c, verticalAlign: 'middle', marginRight: 6 }} />{m}</span>
         ))}
       </div>
