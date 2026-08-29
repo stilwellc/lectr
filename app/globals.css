@@ -3532,38 +3532,38 @@ body {
    ═══════════════════════════════════════════════════════════════════════ */
 html[data-lectr-light] {
   /* SURFACES — porcelain ladder. Cards are TRUE WHITE on bone (crisp lift). */
-  --color-bg: #F4F5F0;
-  --color-bg-deep: #ECEDE6;
+  --color-bg: #FDFCFC;
+  --color-bg-deep: #F5F3F1;
   --panel: #FFFFFF;
   --color-bg-elevated: #FFFFFF;
-  --panel-mat: #FAFAF7;
+  --panel-mat: #FAF8F8;
   --glass-bg: #FFFFFF;
-  --glass-bg-hover: #F7F8F3;
+  --glass-bg-hover: #FAF8F8;
   --glass-border: transparent;
   --glass-border-top: transparent;
   --glass-specular: transparent;
   --glass-caustic: transparent;
-  --glass-shadow: 0 1px 2px rgba(29, 29, 27, 0.05), 0 10px 30px rgba(29, 29, 27, 0.07);
-  --glass-shadow-hover: 0 2px 4px rgba(29, 29, 27, 0.06), 0 14px 40px rgba(29, 29, 27, 0.10);
-  --color-nav-bg: rgba(244, 245, 240, 0.86);
-  --color-hover-item: rgba(29, 29, 27, 0.04);
-  --color-overlay-light: rgba(29, 29, 27, 0.04);
+  --glass-shadow: 0 1px 2px rgba(28, 25, 23, 0.05), 0 10px 30px rgba(28, 25, 23, 0.07);
+  --glass-shadow-hover: 0 2px 4px rgba(28, 25, 23, 0.06), 0 14px 40px rgba(28, 25, 23, 0.10);
+  --color-nav-bg: rgba(253, 252, 252, 0.86);
+  --color-hover-item: rgba(28, 25, 23, 0.04);
+  --color-overlay-light: rgba(28, 25, 23, 0.04);
   --color-surface: #FFFFFF;
 
   /* TEXT — ink ramp on bone (fg 15.9:1 · secondary 9.6 · muted 5.1 · faint 3.9 large-only) */
-  --color-fg: #1D1D1B;
-  --color-text-secondary: #43423D;
-  --color-text-muted: #6E6D66;
-  --color-text-faint: #86847B;
-  --color-muted: #6E6D66;
-  --color-faint: #8E8C83;
+  --color-fg: #1C1917;
+  --color-text-secondary: #44403B;
+  --color-text-muted: #6B655D;
+  --color-text-faint: #8A837A;
+  --color-muted: #6B655D;
+  --color-faint: #8E877D;
 
   /* HAIRLINES — ink-alpha, never grey solids */
-  --hairline: rgba(29, 29, 27, 0.10);
-  --hairline-soft: rgba(29, 29, 27, 0.07);
-  --color-border: rgba(29, 29, 27, 0.12);
-  --color-border-mid: rgba(29, 29, 27, 0.22);
-  --color-hair: rgba(29, 29, 27, 0.10);
+  --hairline: rgba(28, 25, 23, 0.10);
+  --hairline-soft: rgba(28, 25, 23, 0.07);
+  --color-border: rgba(28, 25, 23, 0.12);
+  --color-border-mid: rgba(28, 25, 23, 0.22);
+  --color-hair: rgba(28, 25, 23, 0.10);
 
   /* THE LAMP — butter at ink density (burnished gold). The same warm
      counterpoint dark mode plays, mirrored for paper. Direction ink
@@ -3591,11 +3591,11 @@ html[data-lectr-light] {
 
   /* CHARTS — ink chrome, vermilion hero. The pop the black ground never had. */
   --chart-hero: #8F6B1E;
-  --chart-grid: rgba(29, 29, 27, 0.08);
-  --chart-ref: rgba(29, 29, 27, 0.20);
-  --chart-tick: #6E6D66;
-  --chart-line-2: #B9B7AC;
-  --chart-ink: #6E6D66;
+  --chart-grid: rgba(28, 25, 23, 0.08);
+  --chart-ref: rgba(28, 25, 23, 0.20);
+  --chart-tick: #6B655D;
+  --chart-line-2: #BDB6AC;
+  --chart-ink: #6B655D;
   --chart-cursor: rgba(143, 107, 30, 0.38);
 
   /* HOUSES / CATEGORIES — the curated light inks (slate/bronze, built for paper) */
@@ -3616,52 +3616,52 @@ html[data-lectr-light] {
 
 
   /* FOCUS / SELECTION / SHADOWS */
-  --focus-ring: 2px solid #1D1D1B;
+  --focus-ring: 2px solid #1C1917;
   --selection-bg: rgba(143, 107, 30, 0.20);
-  --shadow-pop: 0 12px 32px rgba(29, 29, 27, 0.14);
-  --shadow-modal: 0 24px 64px rgba(29, 29, 27, 0.20), 0 4px 16px rgba(29, 29, 27, 0.12);
+  --shadow-pop: 0 12px 32px rgba(28, 25, 23, 0.14);
+  --shadow-modal: 0 24px 64px rgba(28, 25, 23, 0.20), 0 4px 16px rgba(28, 25, 23, 0.12);
 
   /* stranded-surface tokens (dark literals converted to var(--x, fallback)) */
   --surface-tip: #FFFFFF;
   --surface-mix: #FFFFFF;
-  --surface-well: #ECEDE6;
+  --surface-well: #F5F3F1;
   --surface-sheet: #FFFFFF;
   --toast-bg: rgba(255, 255, 255, 0.97);
-  --cream-hair: rgba(29, 29, 27, 0.26);
+  --cream-hair: rgba(28, 25, 23, 0.26);
 
   color-scheme: light;
 }
 
 /* the terminal shell converges with the porcelain ground — ONE light system */
 html[data-lectr-light] .terminal-shell {
-  --color-bg: #F4F5F0;
-  --color-bg-deep: #ECEDE6;
+  --color-bg: #FDFCFC;
+  --color-bg-deep: #F5F3F1;
   --color-bg-elevated: #FFFFFF;
-  --color-nav-bg: rgba(244, 245, 240, 0.86);
+  --color-nav-bg: rgba(253, 252, 252, 0.86);
   --color-surface: #FFFFFF;
   --panel: #FFFFFF;
-  --panel-mat: #FAFAF7;
+  --panel-mat: #FAF8F8;
   --glass-bg: #FFFFFF;
-  --glass-bg-hover: #F7F8F3;
-  --color-fg: #1D1D1B;
-  --color-text-secondary: #43423D;
-  --color-text-muted: #6E6D66;
-  --color-text-faint: #86847B;
-  --hairline: rgba(29, 29, 27, 0.10);
-  --hairline-soft: rgba(29, 29, 27, 0.07);
-  --color-border: rgba(29, 29, 27, 0.12);
-  --color-border-mid: rgba(29, 29, 27, 0.22);
-  --color-hover-item: rgba(29, 29, 27, 0.04);
-  --color-hair: rgba(29, 29, 27, 0.10);
+  --glass-bg-hover: #FAF8F8;
+  --color-fg: #1C1917;
+  --color-text-secondary: #44403B;
+  --color-text-muted: #6B655D;
+  --color-text-faint: #8A837A;
+  --hairline: rgba(28, 25, 23, 0.10);
+  --hairline-soft: rgba(28, 25, 23, 0.07);
+  --color-border: rgba(28, 25, 23, 0.12);
+  --color-border-mid: rgba(28, 25, 23, 0.22);
+  --color-hover-item: rgba(28, 25, 23, 0.04);
+  --color-hair: rgba(28, 25, 23, 0.10);
   --color-up: #0F7C43;
   --color-up-soft: rgba(15, 124, 67, 0.11);
   --color-down: #C13E2C;
   --color-down-text: #A5341F;
   --color-down-soft: rgba(193, 62, 44, 0.11);
-  --chart-grid: rgba(29, 29, 27, 0.08);
-  --chart-ref: rgba(29, 29, 27, 0.20);
-  --chart-tick: #6E6D66;
-  --chart-line-2: #B9B7AC;
+  --chart-grid: rgba(28, 25, 23, 0.08);
+  --chart-ref: rgba(28, 25, 23, 0.20);
+  --chart-tick: #6B655D;
+  --chart-line-2: #BDB6AC;
   --chart-cursor: rgba(143, 107, 30, 0.38);
 }
 
@@ -3669,13 +3669,13 @@ html[data-lectr-light] .terminal-shell {
 html[data-lectr-light] .terminal-shell .glass,
 html[data-lectr-light] .terminal-shell .glass-quiet {
   background: #FFFFFF !important;
-  border-color: rgba(29, 29, 27, 0.10) !important;
-  box-shadow: 0 1px 2px rgba(29, 29, 27, 0.05), 0 10px 30px rgba(29, 29, 27, 0.07) !important;
+  border-color: rgba(28, 25, 23, 0.10) !important;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.05), 0 10px 30px rgba(28, 25, 23, 0.07) !important;
 }
 html[data-lectr-light] .terminal-shell .comp-modal-panel,
 html[data-lectr-light] .terminal-shell .ray-sheet {
   background: #FFFFFF !important;
-  border-color: rgba(29, 29, 27, 0.14) !important;
+  border-color: rgba(28, 25, 23, 0.14) !important;
   box-shadow: var(--shadow-modal) !important;
 }
 
@@ -3692,48 +3692,48 @@ html[data-lectr-light] img[src='/brand/lectr.png'] {
 html[data-lectr-light] .ck-term-tip,
 html[data-lectr-light] .vd-term-tip {
   background: #FFFFFF;
-  border-color: rgba(29, 29, 27, 0.16);
+  border-color: rgba(28, 25, 23, 0.16);
   box-shadow: var(--shadow-pop);
 }
 
 /* ink equivalents for every stranded white-alpha (mechanically tokenized) */
 html[data-lectr-light] {
-  --lw-008: rgba(29, 29, 27, 0.012);
-  --lw-01: rgba(29, 29, 27, 0.016);
-  --lw-015: rgba(29, 29, 27, 0.023);
-  --lw-018: rgba(29, 29, 27, 0.028);
-  --lw-02: rgba(29, 29, 27, 0.031);
-  --lw-028: rgba(29, 29, 27, 0.043);
-  --lw-03: rgba(29, 29, 27, 0.046);
-  --lw-04: rgba(29, 29, 27, 0.062);
-  --lw-045: rgba(29, 29, 27, 0.07);
-  --lw-05: rgba(29, 29, 27, 0.078);
-  --lw-06: rgba(29, 29, 27, 0.093);
-  --lw-065: rgba(29, 29, 27, 0.101);
-  --lw-07: rgba(29, 29, 27, 0.109);
-  --lw-08: rgba(29, 29, 27, 0.124);
-  --lw-09: rgba(29, 29, 27, 0.139);
-  --lw-10: rgba(29, 29, 27, 0.155);
-  --lw-1: rgba(29, 29, 27, 0.155);
-  --lw-115: rgba(29, 29, 27, 0.178);
-  --lw-12: rgba(29, 29, 27, 0.186);
-  --lw-13: rgba(29, 29, 27, 0.202);
-  --lw-14: rgba(29, 29, 27, 0.217);
-  --lw-15: rgba(29, 29, 27, 0.232);
-  --lw-16: rgba(29, 29, 27, 0.248);
-  --lw-18: rgba(29, 29, 27, 0.279);
-  --lw-26: rgba(29, 29, 27, 0.403);
-  --lw-28: rgba(29, 29, 27, 0.434);
-  --lw-35: rgba(29, 29, 27, 0.542);
-  --lw-4: rgba(29, 29, 27, 0.62);
-  --lw-45: rgba(29, 29, 27, 0.5);
-  --lw-5: rgba(29, 29, 27, 0.55);
-  --lw-55: rgba(29, 29, 27, 0.6);
-  --lw-6: rgba(29, 29, 27, 0.65);
-  --lw-7: rgba(29, 29, 27, 0.75);
-  --lw-72: rgba(29, 29, 27, 0.77);
-  --lw-75: rgba(29, 29, 27, 0.8);
-  --lw-92: rgba(29, 29, 27, 0.92);
+  --lw-008: rgba(28, 25, 23, 0.012);
+  --lw-01: rgba(28, 25, 23, 0.016);
+  --lw-015: rgba(28, 25, 23, 0.023);
+  --lw-018: rgba(28, 25, 23, 0.028);
+  --lw-02: rgba(28, 25, 23, 0.031);
+  --lw-028: rgba(28, 25, 23, 0.043);
+  --lw-03: rgba(28, 25, 23, 0.046);
+  --lw-04: rgba(28, 25, 23, 0.062);
+  --lw-045: rgba(28, 25, 23, 0.07);
+  --lw-05: rgba(28, 25, 23, 0.078);
+  --lw-06: rgba(28, 25, 23, 0.093);
+  --lw-065: rgba(28, 25, 23, 0.101);
+  --lw-07: rgba(28, 25, 23, 0.109);
+  --lw-08: rgba(28, 25, 23, 0.124);
+  --lw-09: rgba(28, 25, 23, 0.139);
+  --lw-10: rgba(28, 25, 23, 0.155);
+  --lw-1: rgba(28, 25, 23, 0.155);
+  --lw-115: rgba(28, 25, 23, 0.178);
+  --lw-12: rgba(28, 25, 23, 0.186);
+  --lw-13: rgba(28, 25, 23, 0.202);
+  --lw-14: rgba(28, 25, 23, 0.217);
+  --lw-15: rgba(28, 25, 23, 0.232);
+  --lw-16: rgba(28, 25, 23, 0.248);
+  --lw-18: rgba(28, 25, 23, 0.279);
+  --lw-26: rgba(28, 25, 23, 0.403);
+  --lw-28: rgba(28, 25, 23, 0.434);
+  --lw-35: rgba(28, 25, 23, 0.542);
+  --lw-4: rgba(28, 25, 23, 0.62);
+  --lw-45: rgba(28, 25, 23, 0.5);
+  --lw-5: rgba(28, 25, 23, 0.55);
+  --lw-55: rgba(28, 25, 23, 0.6);
+  --lw-6: rgba(28, 25, 23, 0.65);
+  --lw-7: rgba(28, 25, 23, 0.75);
+  --lw-72: rgba(28, 25, 23, 0.77);
+  --lw-75: rgba(28, 25, 23, 0.8);
+  --lw-92: rgba(28, 25, 23, 0.92);
 }
 
 
@@ -3772,7 +3772,7 @@ html[data-lectr-light] {
    (its text tokens otherwise resolve to page ink and sink into the plate) ── */
 html[data-lectr-light] .ray-close {
   background: linear-gradient(180deg, #1B1A17, #171613 220px);
-  border-top-color: rgba(29, 29, 27, 0.35);
+  border-top-color: rgba(28, 25, 23, 0.35);
 }
 html[data-lectr-light] .ray-close .ray-close-thesis { color: #E9E7DD; }
 html[data-lectr-light] .ray-close {
@@ -3806,7 +3806,7 @@ html[data-lectr-light] [class*='roomPaper'] {
   --paper-muted: #A3A194;
   --paper-faint: #8C8A7D;
   --paper-line: rgba(242, 241, 233, 0.15);
-  --paper-edge: rgba(29, 29, 27, 0.55);
+  --paper-edge: rgba(28, 25, 23, 0.55);
   --paper-up: #57BE87;
   --paper-down: #E0755F;
   --paper-up-text: #63C58D;
@@ -3893,9 +3893,9 @@ html[data-lectr-light] [class*='rcpt'] {
 
 /* ── 3 · DESK PHYSICS — the lift tiers ── */
 html[data-lectr-light] {
-  --lift-1: 0 1px 2px rgba(29, 29, 27, 0.05), 0 8px 24px rgba(29, 29, 27, 0.06);
-  --lift-2: 0 2px 4px rgba(29, 29, 27, 0.07), 0 16px 44px rgba(29, 29, 27, 0.10);
-  --lift-3: 0 3px 6px rgba(29, 29, 27, 0.09), 0 28px 64px rgba(29, 29, 27, 0.14);
+  --lift-1: 0 1px 2px rgba(28, 25, 23, 0.05), 0 8px 24px rgba(28, 25, 23, 0.06);
+  --lift-2: 0 2px 4px rgba(28, 25, 23, 0.07), 0 16px 44px rgba(28, 25, 23, 0.10);
+  --lift-3: 0 3px 6px rgba(28, 25, 23, 0.09), 0 28px 64px rgba(28, 25, 23, 0.14);
   --grain-opacity: 0.02;               /* the paper whispers */
 }
 /* floating instruments ride tier 2 */
@@ -3903,13 +3903,13 @@ html[data-lectr-light] .terminal-shell .glass,
 html[data-lectr-light] .terminal-shell .glass-quiet {
   box-shadow: var(--lift-1) !important;
 }
-html[data-lectr-light] .ray-lot-card { box-shadow: var(--lift-1); border-color: rgba(29, 29, 27, 0.09); }
+html[data-lectr-light] .ray-lot-card { box-shadow: var(--lift-1); border-color: rgba(28, 25, 23, 0.09); }
 html[data-lectr-light] .ray-lot-card:hover { box-shadow: var(--lift-2); transform: translateY(-1px); }
 html[data-lectr-light] .ray-lot-card { transition: box-shadow var(--duration-fast) var(--ease-signature), transform var(--duration-fast) var(--ease-signature); }
 /* the pinned things lift off the page as they stick */
 html[data-lectr-light] .ray-saved-ledger-head,
 html[data-lectr-light] .ray-settled-head {
-  box-shadow: 0 10px 18px -14px rgba(29, 29, 27, 0.35);
+  box-shadow: 0 10px 18px -14px rgba(28, 25, 23, 0.35);
 }
 html[data-lectr-light] .comp-modal-panel,
 html[data-lectr-light] .ray-sheet { box-shadow: var(--lift-3) !important; }
@@ -4063,7 +4063,7 @@ html[data-lectr-light] .vd-lane-name::before {
 }
 
 /* the confidence ribbon — gold-wash on dark, ink-wash on porcelain */
-html[data-lectr-light] { --ci-ribbon: rgba(29, 29, 27, 0.07); }
+html[data-lectr-light] { --ci-ribbon: rgba(28, 25, 23, 0.07); }
 
 /* lab categorical inks — the calibration curve's per-market lines, deepened
    for paper (the pastel screen hues wash on white) */
@@ -4086,3 +4086,126 @@ html[data-lectr-light] {
   .ray-vm-ci { display: none; }
   .ray-vm-row { grid-template-columns: minmax(80px, 1fr) minmax(70px, 1.1fr) auto !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   THE NORTH STAR (Aug 29 2026) — the ElevenLabs-derived catalogue grammar.
+   Full audit + translation map: docs/NORTHSTAR_UI.md. Doctrine:
+   impact through LIGHTNESS (300-weight display, never bold), pill
+   controls, 150ms house curve + scale(0.98) press, registration-frame
+   sections with crop marks, cream wells with gray-label/black-body
+   inverted hierarchy, dotted spec ledgers, color only where the market
+   speaks (THE LAMP LAW stands). Structural rules ship both modes;
+   warm surface colors live in the light token blocks above.
+   ════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --ease-house: cubic-bezier(0.4, 0, 0.2, 1);   /* the 150ms workhorse */
+  --duration-tap: 150ms;
+  --ring-shadow: 0 0 1px rgba(28, 25, 23, 0.4), 0 1px 1px rgba(28, 25, 23, 0.04), 0 2px 4px rgba(28, 25, 23, 0.04);
+}
+
+/* CONTROLS GO PILL — one geometry for every button/chip family */
+.ray-call-btn, .ray-show-more, .ray-toolbar-pill, .ray-seg-btn,
+.ray-sort-pill, .ray-own-btn {
+  border-radius: 999px;
+}
+.ray-call-btn {
+  font-weight: 500;
+  transition: background var(--duration-tap) var(--ease-house),
+              color var(--duration-tap) var(--ease-house),
+              opacity var(--duration-tap) var(--ease-house),
+              transform 120ms var(--ease-house);
+}
+.ray-call-btn:active { transform: scale(0.98); }
+
+/* SECTION HEADS — authority through lightness. The 24/620 head becomes
+   30/350: bigger, thinner, tighter. (Dark keeps it too — north star
+   is the system now, dark is the archive skin.) */
+.ray-h2 {
+  font-size: 30px;
+  font-weight: 350;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+/* THE KICKER — quiet gray sentence-case Inter above a headline. Never
+   uppercase, never tracked, never gold. (The de-slop eyebrow ban stays
+   for the shouty form; this is the whisper form.) */
+.ns-kicker {
+  display: block;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+}
+
+/* THE REGISTRATION FRAME — content plates bounded by hairlines with
+   crop-mark dots at rule intersections; sections read as sheets in a
+   technical catalogue. Apply .ns-plate to a section wrapper whose
+   parent provides horizontal padding (the rail).  */
+.ns-plate {
+  position: relative;
+  border-top: 1px solid var(--hairline, var(--color-border));
+}
+.ns-plate::before, .ns-plate::after {
+  content: '';
+  position: absolute;
+  top: -2px; width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--color-border-mid);
+}
+.ns-plate::before { left: -1.5px; }
+.ns-plate::after { right: -1.5px; }
+
+/* SPLIT SECTION HEAD — huge light headline left, body copy right.
+   Collapses to a stack under 900px. */
+.ns-split {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 24px 64px;
+  align-items: end;
+}
+@media (max-width: 900px) { .ns-split { grid-template-columns: 1fr; align-items: start; } }
+.ns-split > p { font-size: 15px; line-height: 1.6; color: var(--color-text-secondary); margin: 0; }
+
+/* THE CREAM WELL — borderless soft plate; icon chip + inverted
+   hierarchy (category gray, content black). */
+.ns-well {
+  background: var(--color-bg-deep);
+  border-radius: 16px;
+  padding: 20px;
+}
+.ns-well-label { font-size: 13px; color: var(--color-text-muted); font-weight: 500; margin-bottom: 4px; }
+.ns-well-body { font-size: 14.5px; color: var(--color-fg); line-height: 1.5; }
+
+/* THE SPEC LEDGER — dotted hairline rows, label + value. */
+.ns-ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  border-top: 1px dotted var(--color-border-mid);
+}
+.ns-ledger-row:first-child { border-top: none; }
+
+/* THE BYLINE LEDGER — provenance columns (gray label over black value)
+   closed by a dotted rule. */
+.ns-byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 48px;
+  padding-bottom: 16px;
+  border-bottom: 1px dotted var(--color-border-mid);
+}
+.ns-byline > div { min-width: 120px; }
+.ns-byline dt, .ns-byline .k { font-size: 12.5px; color: var(--color-text-muted); margin-bottom: 3px; }
+.ns-byline dd, .ns-byline .v { font-size: 14.5px; color: var(--color-fg); margin: 0; font-variant-numeric: tabular-nums; }
+
+/* SECONDARY (ring) BUTTON — white pill, borderless, stacked ring shadow */
+html[data-lectr-light] .ray-call-btn-quiet {
+  background: #FFFFFF;
+  box-shadow: var(--ring-shadow);
+}
+html[data-lectr-light] .ray-call-btn-quiet:hover { background: #FDFCFC; }

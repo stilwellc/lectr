@@ -2820,16 +2820,16 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 
 /* THE PORCELAIN — the Terminal homepage joins the light system */
 :global(html[data-lectr-light]) .root {
-  --tt-bg: #F4F5F0;
+  --tt-bg: #FDFCFC;
   --tt-panel: #FFFFFF;
-  --tt-panel-2: #ECEDE6;
-  --tt-fg: #1D1D1B;
+  --tt-panel-2: #F5F3F1;
+  --tt-fg: #1C1917;
   --tt-butter: #7A5A14;          /* the lamp, module register — gold ink */
-  --tt-secondary: #43423D;
-  --tt-muted: #6E6D66;
-  --tt-faint: #8E8C83;
-  --tt-hair: rgba(29, 29, 27, 0.10);
-  --tt-hair-2: rgba(29, 29, 27, 0.16);
+  --tt-secondary: #44403B;
+  --tt-muted: #6B655D;
+  --tt-faint: #8E877D;
+  --tt-hair: rgba(28, 25, 23, 0.10);
+  --tt-hair-2: rgba(28, 25, 23, 0.16);
   --color-up: #0F7C43;
   --color-down: #C13E2C;
 }
@@ -2841,6 +2841,6 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* LAB DISCIPLINE — light: grid rules become solid whisper-hairlines,
    ticks a step quieter (the matplotlib voice; dotted texture is the
    terminal's, not the page's) */
-:global(html[data-lectr-light]) .hcRule { stroke: rgba(29, 29, 27, 0.06); stroke-dasharray: none; }
-:global(html[data-lectr-light]) .hcRuleZero { stroke: rgba(29, 29, 27, 0.22); }
-:global(html[data-lectr-light]) .hcTick { fill: #8E8C83; }
+:global(html[data-lectr-light]) .hcRule { stroke: rgba(28, 25, 23, 0.06); stroke-dasharray: none; }
+:global(html[data-lectr-light]) .hcRuleZero { stroke: rgba(28, 25, 23, 0.22); }
+:global(html[data-lectr-light]) .hcTick { fill: #8E877D; }
