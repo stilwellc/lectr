@@ -1391,7 +1391,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-weight: 620;
   line-height: 1.1;
   letter-spacing: -0.025em;
-  color: #d0d6e0;
+  color: var(--color-text-secondary, #d0d6e0);
   max-width: 16ch;
 }
 
@@ -1406,12 +1406,12 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-variant-numeric: tabular-nums;
   color: #62666d;
 }
-.ray-close-spec b { font-weight: 500; color: #d0d6e0; }
+.ray-close-spec b { font-weight: 500; color: var(--color-text-secondary, #d0d6e0); }
 .ray-close-spec b.up { color: var(--color-up, #57be87); }
 .ray-close-spec span + span::before { content: '·'; margin: 0 10px; color: #62666d; }
 .ray-close-spec a { color: inherit; text-decoration: none; transition: color 160ms var(--ease-signature); }
 .ray-close-spec a:hover {
-  color: #d0d6e0;
+  color: var(--color-text-secondary, #d0d6e0);
   text-decoration: underline;
   text-underline-offset: 5px;
   text-decoration-color: var(--lw-28, rgba(255, 255, 255, 0.28));
@@ -2997,7 +2997,7 @@ body {
   gap: 10px 14px;
   margin: 20px auto 0;
   padding-top: 16px;
-  border-top: 2px dotted rgba(28, 23, 18, 0.25);
+  border-top: 2px dotted var(--pa-25, rgba(28, 23, 18, 0.25));
   max-width: 720px;
   font-size: 13px;
   color: var(--paper-muted, #5A5240);
@@ -3005,7 +3005,7 @@ body {
 }
 .ray-engine-stats b { color: var(--paper-ink, #1C1712); font-weight: 650; }
 .ray-engine-stats b.up { color: #1e7a4d; }
-.ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(28, 23, 18, 0.3); align-self: center; }
+.ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--pa-3, rgba(28, 23, 18, 0.3)); align-self: center; }
 .ray-engine-cta {
   display: inline-block;
   margin-top: 22px;
@@ -3552,7 +3552,7 @@ html[data-lectr-light] {
   --color-fg: #1D1D1B;
   --color-text-secondary: #43423D;
   --color-text-muted: #6E6D66;
-  --color-text-faint: #8E8C83;
+  --color-text-faint: #86847B;
   --color-muted: #6E6D66;
   --color-faint: #8E8C83;
 
@@ -3657,7 +3657,7 @@ html[data-lectr-light] .terminal-shell {
   --color-fg: #1D1D1B;
   --color-text-secondary: #43423D;
   --color-text-muted: #6E6D66;
-  --color-text-faint: #8E8C83;
+  --color-text-faint: #86847B;
   --hairline: rgba(29, 29, 27, 0.10);
   --hairline-soft: rgba(29, 29, 27, 0.07);
   --color-border: rgba(29, 29, 27, 0.12);
@@ -3690,10 +3690,13 @@ html[data-lectr-light] .terminal-shell .ray-sheet {
   box-shadow: var(--shadow-modal) !important;
 }
 
-/* the ink-on-transparent script mark takes over from the cream raster */
-html[data-lectr-light] img[src='/brand/lectr-nav.png'],
+/* the ink-on-transparent script marks take over from the cream rasters
+   (full-resolution ink recolors — the 68px lectr-ink.png blurred at scale) */
+html[data-lectr-light] img[src='/brand/lectr-nav.png'] {
+  content: url('/brand/lectr-ink-nav.png');
+}
 html[data-lectr-light] img[src='/brand/lectr.png'] {
-  content: url('/brand/lectr-ink.png');
+  content: url('/brand/lectr-ink-lg.png');
 }
 
 /* term tips ride white cards with a real shadow now */
@@ -3775,4 +3778,53 @@ html[data-lectr-light] {
   --ba-7: rgba(196, 61, 20, 0.875);
   --ba-72: rgba(196, 61, 20, 0.9);
   --ba-85: rgba(196, 61, 20, 0.95);
+}
+
+/* porcelain equivalents for paper-ink alpha strokes (the vault flips ink) */
+html[data-lectr-light] {
+  --pa-05: rgba(242, 241, 233, 0.05);
+  --pa-08: rgba(242, 241, 233, 0.08);
+  --pa-16: rgba(242, 241, 233, 0.16);
+  --pa-18: rgba(242, 241, 233, 0.18);
+  --pa-22: rgba(242, 241, 233, 0.22);
+  --pa-25: rgba(242, 241, 233, 0.25);
+  --pa-3: rgba(242, 241, 233, 0.3);
+  --pa-32: rgba(242, 241, 233, 0.32);
+  --pa-35: rgba(242, 241, 233, 0.35);
+  --pa-36: rgba(242, 241, 233, 0.36);
+  --pa-4: rgba(242, 241, 233, 0.4);
+  --pa-5: rgba(242, 241, 233, 0.5);
+  --pa-55: rgba(242, 241, 233, 0.55);
+  --pa-6: rgba(242, 241, 233, 0.6);
+  --pa-8: rgba(242, 241, 233, 0.8);
+}
+
+/* vault-side tones for the tape meters (deep inks designed for cream) */
+html[data-lectr-light] {
+  --tape-up: #57BE87;
+  --tape-down: #E0755F;
+  --tape-mut: #A3A194;
+}
+
+/* ── THE PORCELAIN: the Colophon becomes the closing INK VAULT — the maker's
+   plate stays engraved in the dark, porcelain ink on the near-black band
+   (its text tokens otherwise resolve to page ink and sink into the plate) ── */
+html[data-lectr-light] .ray-close {
+  background: linear-gradient(180deg, #1B1A17, #171613 220px);
+  border-top-color: rgba(29, 29, 27, 0.35);
+}
+html[data-lectr-light] .ray-close .ray-close-thesis { color: #E9E7DD; }
+html[data-lectr-light] .ray-close {
+  --color-fg: #F2F1E9;
+  --color-text-secondary: #CBC9BE;
+  --color-text-muted: #A3A194;
+  --color-text-faint: #8C8A7D;
+  --hairline: rgba(242, 241, 233, 0.12);
+  --color-border: rgba(242, 241, 233, 0.12);
+  --color-border-mid: rgba(242, 241, 233, 0.2);
+  --lw-06: rgba(242, 241, 233, 0.10);
+  --lw-10: rgba(242, 241, 233, 0.16);
+  --color-butter: #E8763F;
+  --color-butter-text: #E8763F;
+  --color-hover-item: rgba(242, 241, 233, 0.05);
 }
