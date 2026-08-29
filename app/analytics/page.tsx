@@ -33,6 +33,14 @@ import meta from '../../public/data/ray/meta.json';
 const Distributions = dynamic(() => import('../components/analytics/Distributions'), { ssr: false });
 const CalibrationCurve = dynamic(() => import('../components/analytics/CalibrationCurve'), { ssr: false });
 const RecordByYear = dynamic(() => import('../components/RecordByYear'), { ssr: false });
+const LabFiguresP = {
+  CloseCurve: dynamic(() => import('../components/analytics/LabFigures').then(m => m.CloseCurveFigure), { ssr: false }),
+  Funnel: dynamic(() => import('../components/analytics/LabFigures').then(m => m.CoverageFunnel), { ssr: false }),
+  Venue: dynamic(() => import('../components/analytics/LabFigures').then(m => m.VenueStrip), { ssr: false }),
+  Field: dynamic(() => import('../components/analytics/LabFigures').then(m => m.DepthField), { ssr: false }),
+  Repeat: dynamic(() => import('../components/analytics/LabFigures').then(m => m.RepeatSaleRoom), { ssr: false }),
+  Styles: dynamic(() => import('../components/analytics/LabFigures').then(m => m.LabFiguresStyles), { ssr: false }),
+};
 
 /* ============================================================
    THE RESEARCH DESK — /analytics rebuilt as the data-science
@@ -86,6 +94,12 @@ export default function AnalyticsPage() {
     ['lab', <IndexLab key="lab" marketData={marketData} scope={activeKey} />],
     ['strength', <RelativeStrength key="strength" marketData={marketData} scope={activeKey} />],
     ['verified', <VerifiedMovers key="verified" marketData={marketData} scope={activeKey} variant="card" />],
+    ['field', (
+      <div key="field">
+        <LabFiguresP.Styles />
+        <LabFiguresP.Field lots={allLots} />
+      </div>
+    )],
     ['micro', (
       <div key="micro" className="ray-desk-microgrid">
         <SellThroughPanel marketData={marketData} scope={activeKey} />
@@ -94,6 +108,14 @@ export default function AnalyticsPage() {
         <HouseMatrix marketData={marketData} scope={activeKey} />
       </div>
     )],
+    ['flow', (
+      <div key="flow" className="ray-lf-grid3">
+        <LabFiguresP.CloseCurve marketData={marketData} />
+        <LabFiguresP.Funnel backtest={backtest} />
+        <LabFiguresP.Venue marketData={marketData} />
+      </div>
+    )],
+    ['repeat', <LabFiguresP.Repeat key="repeat" marketData={marketData} scope={activeKey} />],
     ['engine', (
       <div key="engine">
         {backtest && (
