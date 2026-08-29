@@ -489,10 +489,14 @@ const NS_CLOSE_CSS = `
 .ray-close-line-links a:focus-visible { outline: 1.5px solid var(--color-border-mid); outline-offset: 2px; }
 .ray-close-base { margin-top: 64px; padding-top: 0; color: var(--color-text-faint); }
 @media (max-width: 720px) {
-  .ray-close-in { padding-block: 64px 48px; }
-  .ray-close-lines { margin-top: 48px; }
-  .ray-close-line-links a { padding: 11px 0; }
-  .ray-close-base { margin-top: 48px; }
+  /* compact footer (Collin: mobile footer way too long) — columns sit
+     two-up instead of stacking, links tighten, margins halve */
+  .ray-close-in { padding-block: 44px 28px; }
+  .ray-close-thesis { font-size: 26px; }
+  .ray-close-lines { margin-top: 28px; grid-template-columns: 1fr 1fr; gap: 20px 24px; }
+  .ray-close-line-k { padding-bottom: 4px; font-size: 13px; }
+  .ray-close-line-links a { padding: 5px 0; font-size: 13.5px; }
+  .ray-close-base { margin-top: 28px; }
 }
 html[data-lectr-light] .ray-close {
   background: none;
