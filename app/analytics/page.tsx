@@ -11,7 +11,7 @@ import { useRayData, useFullLots, useSoldArchive, retryArchiveLoad, retryFullLoa
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { formatDate, getUpcomingCounts, fmtSignedPct } from '../utils';
-import Masthead, { Underscore } from '../components/Masthead';
+import Masthead from '../components/Masthead';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import DeskNote from '../components/analytics/DeskNote';
 import { RecordMark } from '../components/marks';
@@ -208,7 +208,7 @@ export default function AnalyticsPage() {
         <Masthead
           kicker="The research desk"
           serial={lastCrawl || meta.lastCrawl}
-          title={<>Every market, read as <Underscore>one book</Underscore>.</>}
+          title={<>Every market, read as one book.</>}
           sub={<>Indexes, relative strength, microstructure and the engine&rsquo;s own science —{' '}
             <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{bookLots.toLocaleString()} lots</b>,{' '}
             <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{drillCount} tracked sub-markets</b>

@@ -40,7 +40,10 @@ const CSS = `
 .ray-lf-lbl { position: absolute; font-family: var(--font-mono), monospace; font-size: 10px; color: var(--color-text-muted); white-space: nowrap; transform: translateX(-50%); }
 .ray-lf-vlbl { position: absolute; font-family: var(--font-mono), monospace; font-size: 10px; color: var(--color-text-muted); white-space: nowrap; }
 .ray-lf-note { position: absolute; font-size: 10.5px; color: var(--color-text-faint); white-space: nowrap; }
-.ray-lf-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.ray-lf-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: stretch; }
+.ray-lf-grid3 > .ray-lf-card { display: flex; flex-direction: column; }
+.ray-lf-grid3 > .ray-lf-card .ray-lf-plot, .ray-lf-grid3 > .ray-lf-card .ray-lf-venue { flex: 1 1 auto; }
+.ray-lf-grid3 > .ray-lf-card figcaption, .ray-lf-grid3 > .ray-lf-card .ray-figcap { margin-top: auto; }
 .ray-lf-grid3 > * { min-width: 0; }
 @media (max-width: 1000px) { .ray-lf-grid3 { grid-template-columns: 1fr; } }
 .ray-lf-dot { position: absolute; border-radius: 50%; transform: translate(-50%, 50%); }
