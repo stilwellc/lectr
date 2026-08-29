@@ -41,8 +41,8 @@ import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import CountUp from '../components/CountUp';
 import {
-  FlagsMark, GapMark, SleeperMark, PulseMark, RecordMark,
-  DistMark, TapeMark, EngineMark, CallMark,
+  FlagsMark, GapMark, SleeperMark, PulseMark,
+  DistMark, TapeMark, EngineMark,
 } from '../components/marks';
 // THE CELL SYSTEM — the shared ElevenLabs cell grammar (cells.tsx +
 // globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
@@ -250,58 +250,6 @@ function LaneHead({ mark, name, count, tag, right, help, play }: {
       </div>
       {help && showHelp && <div className="ns-well vd-lane-help">{help}</div>}
     </>
-  );
-}
-
-/* ── THE SPINE — the desk's fixed room index (≥1280px). The page stops
-   being one long scroll the moment its rooms are addressable: the spine
-   tracks where you are, jumps on click, and stamps the hash so a room can
-   be linked to directly (/value#gap). ── */
-function DeskSpine({ rooms }: { rooms: { id: string; label: string; mark: React.ReactNode; n?: number }[] }) {
-  const [active, setActive] = useState(rooms[0]?.id);
-  const reduce = useReducedMotion();
-  const key = rooms.map(r => r.id).join('|');
-  useEffect(() => {
-    let t = 0;
-    const read = () => {
-      t = 0;
-      const yBar = window.innerHeight * 0.42;
-      let cur = rooms[0]?.id;
-      for (const r of rooms) {
-        const el = document.getElementById(r.id);
-        if (el && el.getBoundingClientRect().top <= yBar) cur = r.id;
-      }
-      setActive(cur);
-    };
-    const onScroll = () => { if (!t) t = requestAnimationFrame(read); };
-    read();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      if (t) cancelAnimationFrame(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return (
-    <nav className="vd-spine" aria-label="Rooms on this desk">
-      {rooms.map(r => (
-        <button
-          key={r.id} type="button" data-on={active === r.id || undefined}
-          aria-label={r.label} aria-current={active === r.id ? 'true' : undefined}
-          onClick={() => {
-            const el = document.getElementById(r.id);
-            if (!el) return;
-            el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-            try { window.history.replaceState(window.history.state, '', `#${r.id}`); } catch { /* ignore */ }
-          }}
-        >
-          <span className="vd-spine-mark" aria-hidden>{r.mark}</span>
-          <span className="vd-spine-tip" aria-hidden>{r.label}{r.n != null ? ` · ${r.n}` : ''}</span>
-        </button>
-      ))}
-    </nav>
   );
 }
 
@@ -1074,21 +1022,6 @@ export default function ValuePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flipKey]);
 
-  // ── THE SPINE's room registry — only rooms that actually render tonight
-  const spineRooms = useMemo(() => {
-    const r: { id: string; label: string; mark: React.ReactNode; n?: number }[] = [
-      { id: 'desk', label: 'The desk', mark: <PulseMark size={15} /> },
-    ];
-    if (call) r.push({ id: 'call', label: 'Today’s call', mark: <CallMark size={15} /> });
-    r.push({ id: 'flags', label: 'The Flags', n: deals.length, mark: <FlagsMark size={15} /> });
-    if (gapRows.length) r.push({ id: 'gap', label: 'The Gap', n: gapRows.length, mark: <GapMark size={15} /> });
-    if (sleeperRows.length || sleeperQueue) r.push({ id: 'sleepers', label: 'The Sleepers', n: sleeperRows.length, mark: <SleeperMark size={15} /> });
-    if (backtest && backtest.flagged.n >= 100) r.push({ id: 'record', label: 'The record', mark: <RecordMark size={15} /> });
-    r.push({ id: 'tape', label: 'Settled calls', mark: <TapeMark size={15} /> });
-    r.push({ id: 'engine', label: 'The engine', mark: <EngineMark size={15} /> });
-    return r;
-  }, [call, deals.length, gapRows.length, sleeperRows.length, sleeperQueue, backtest, ray.market]);
-
   // the five dials — three of them (hammer, record, coverage) are corpus/
   // record-backed and survive a zero-flag night at full strength
   const dials = useMemo<Dial[]>(() => {
@@ -1628,47 +1561,6 @@ export default function ValuePage() {
         /* ── rooms are addressable — anchors land under the sticky nav ── */
         .vd-room { scroll-margin-top: 76px; }
 
-        /* ── THE SPINE — the desk's fixed room index (wide screens only) ── */
-        .vd-spine {
-          position: fixed; left: 14px; top: 50%;
-          transform: translateY(-50%);
-          z-index: 25;
-          display: none; flex-direction: column; gap: 4px;
-        }
-        /* 1160 = the narrowest window where the 34px strip clears the rail's
-           left gutter (rail max 1200 + gutter ≥56 leaves ≥8px of air) */
-        @media (min-width: 1160px) { .vd-spine { display: flex; } }
-        .vd-spine button {
-          position: relative;
-          display: flex; align-items: center; justify-content: center;
-          width: 34px; height: 34px;
-          background: none; border: 1px solid transparent; border-radius: 9px;
-          color: var(--color-text-faint); cursor: pointer; padding: 0;
-          transition: color var(--duration-fast) var(--ease-signature),
-                      background var(--duration-fast) var(--ease-signature),
-                      border-color var(--duration-fast) var(--ease-signature);
-        }
-        .vd-spine button:hover { color: var(--color-text-secondary); }
-        .vd-spine button[data-on] {
-          color: var(--color-fg);
-          background: var(--color-bg-elevated);
-          border-color: var(--color-border);
-        }
-        .vd-spine-mark { display: inline-flex; }
-        .vd-spine-tip {
-          position: absolute; left: calc(100% + 10px); top: 50%;
-          transform: translateY(-50%);
-          font-family: var(--font-mono), monospace; font-size: 10.5px;
-          letter-spacing: 0.04em; white-space: nowrap;
-          color: var(--color-text-secondary);
-          background: var(--surface-tip, #101214); border: 1px solid var(--color-border-mid);
-          border-radius: 8px; padding: 5px 9px;
-          opacity: 0; pointer-events: none;
-          transition: opacity var(--duration-fast) var(--ease-signature);
-        }
-        .vd-spine button:hover .vd-spine-tip,
-        .vd-spine button:focus-visible .vd-spine-tip { opacity: 1; }
-
         /* ── sub-room head marks (bare glyph beside the kicker) ── */
         .vd-sect-mark { display: inline-flex; align-items: center; color: var(--color-text-muted); flex: none; }
 
@@ -1932,7 +1824,6 @@ export default function ValuePage() {
         <RayEntrance animate={!fromCache}>
           <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}><MarketSwitch compact /></div>
 
-          <DeskSpine rooms={spineRooms} />
 
           {/* ════ ROOM 1 · THE COCKPIT ════ */}
           <section id="desk" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
