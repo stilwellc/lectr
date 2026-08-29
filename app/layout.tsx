@@ -60,7 +60,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0F0E0A',
+  themeColor: '#F4F5F0',
   viewportFit: 'cover',
 };
 
@@ -83,9 +83,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preload" href="/data/ray/stats.json" as="fetch" crossOrigin="anonymous" />
         <link rel="preload" href="/data/ray/meta.json" as="fetch" crossOrigin="anonymous" />
         <link rel="preload" href="/data/ray/backtest.json" as="fetch" crossOrigin="anonymous" />
+        {/* THE PORCELAIN is the shipped default. This runs synchronously in
+            <head> so the first paint is already light — no dark flash.
+            `?light=0` opts a session back to the dark catalogue (stored),
+            `?light=1` clears the opt-out. ThemeProvider mirrors this exact
+            logic post-hydration; the pair data-theme="light" + data-lectr-light
+            is what every porcelain rule keys on. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{document.documentElement.setAttribute('data-theme','dark')}catch(e){}})();`,
+            __html: `(function(){var d=document.documentElement,dark=false;try{var q=new URLSearchParams(location.search).get('light');if(q==='0')localStorage.setItem('lectr-dark','1');else if(q==='1')localStorage.removeItem('lectr-dark');localStorage.removeItem('lectr-light-poc');dark=localStorage.getItem('lectr-dark')==='1'}catch(e){}d.toggleAttribute('data-lectr-light',!dark);d.setAttribute('data-theme',dark?'dark':'light')})();`,
           }}
         />
         <style>{`
