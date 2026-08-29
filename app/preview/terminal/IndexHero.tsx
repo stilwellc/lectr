@@ -251,7 +251,8 @@ export default function IndexHero({
   const masthead = (
     <m.div className={`ns-split ${styles.nsMast}`} {...rise(0.02)}>
       <div>
-        <span className="ns-kicker">Auction intelligence</span>
+        {/* no kicker here — the headline opens the lander (Collin: the
+            eyebrow line spent a full row of prime space) */}
         <h2 className={styles.nsMastHead}>Every lot on the block, priced against the record.</h2>
       </div>
       {/* right column: the doors first, the thesis under them (Collin) */}
