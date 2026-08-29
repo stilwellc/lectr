@@ -211,16 +211,33 @@ export function VenueStrip({ marketData }: { marketData: MarketData | null }) {
 /* ═══ 4 · THE DEPTH FIELD — the live board as a scatter ═══ */
 export function DepthField({ lots }: { lots: AuctionLot[] }) {
   const pts = useMemo(() => {
-    const out: { id: string; x: number; y: number; n: number; conf: string; title: string; mkt: string }[] = [];
+    const out: { id: string; x: number; y: number; n: number; conf: string; title: string; mkt: string; kind: 'bid' | 'ask' }[] = [];
     for (const l of lots) {
       if (l.status !== 'upcoming') continue;
       const v = (l as AuctionLot & { value?: { compValueUsd?: number; vsBid?: { pct: number } | null; n?: number; confidence?: string } }).value;
-      if (!v?.compValueUsd || v.compValueUsd < 50 || !v.vsBid || typeof v.vsBid.pct !== 'number') continue;
-      out.push({
-        id: l.id, x: v.compValueUsd, y: Math.max(-95, Math.min(150, v.vsBid.pct)),
-        n: v.n || 1, conf: v.confidence || 'low', title: l.title || '',
-        mkt: marketOf(l.artist) || 'culture',
-      });
+      if (v?.compValueUsd && v.compValueUsd >= 50 && v.vsBid && typeof v.vsBid.pct === 'number') {
+        out.push({
+          id: l.id, x: v.compValueUsd, y: Math.max(-95, Math.min(150, v.vsBid.pct)),
+          n: v.n || 1, conf: v.confidence || 'low', title: l.title || '',
+          mkt: marketOf(l.artist) || 'culture', kind: 'bid',
+        });
+        continue;
+      }
+      // ESTIMATE-HOUSE lots (art, watches, science…) carry the same read on
+      // the ASK: signal.pct is comps-vs-ask, inverted here onto the shared
+      // "price on the block vs comps" axis. Rings, not dots — the price is
+      // an estimate midpoint, not money already on the table.
+      const sig = l.signal as (NonNullable<AuctionLot['signal']> & { med?: number }) | null | undefined;
+      if (sig && typeof sig.pct === 'number' && sig.med && sig.med >= 50 && (l.estimateLow || l.estimateHigh)) {
+        const askVs = sig.label === 'Below Market'
+          ? (1 / (1 + sig.pct / 100) - 1) * 100
+          : (1 / Math.max(0.05, 1 - sig.pct / 100) - 1) * 100;
+        out.push({
+          id: l.id, x: sig.med, y: Math.max(-95, Math.min(150, askVs)),
+          n: sig.basis || 1, conf: sig.confidence === 'very-high' ? 'high' : (sig.confidence || 'low'), title: l.title || '',
+          mkt: marketOf(l.artist) || 'culture', kind: 'ask',
+        });
+      }
     }
     return out;
   }, [lots]);
@@ -238,7 +255,7 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
     <div className="ray-lf-card glass glass-quiet">
       <div className="ray-lf-head">
         <span className="ray-lf-title"><span className="ray-sect-mark" aria-hidden><DepthMark size={15} /></span>The depth field</span>
-        <span className="ray-lf-method">every appraised live lot · bid vs comps × comp value · hue = market · opacity = confidence</span>
+        <span className="ray-lf-method">the live board vs its comps · ● bid · ○ ask · hue = market · opacity = confidence</span>
       </div>
       <div className="ray-lf-plot" style={{ height: H + 26 }}>
         <span className="ray-lf-zero" style={{ top: `${(Y(0) / 100) * H}px` }} aria-hidden />
@@ -255,12 +272,20 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
             className="ray-lf-dot" style={{
               top: `${(Y(p.y) / 100) * H}px`, left: `${X(p.x)}%`,
               width: Math.min(13, 4 + Math.sqrt(p.n) * 1.6), height: Math.min(13, 4 + Math.sqrt(p.n) * 1.6),
-              background: MARKET_INK[p.mkt] || 'var(--color-text-faint)',
+              ...(p.kind === 'bid'
+                ? { background: MARKET_INK[p.mkt] || 'var(--color-text-faint)' }
+                : { background: 'transparent', border: `1.5px solid ${MARKET_INK[p.mkt] || 'var(--color-text-faint)'}` }),
               opacity: p.conf === 'high' ? 0.92 : p.conf === 'medium' ? 0.6 : 0.35,
             }} aria-label={`Open lot: ${p.title.slice(0, 50)}`} />
         ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', padding: '10px 0 0', fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <i style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-text-secondary)', display: 'inline-block' }} aria-hidden /> live bid
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <i style={{ width: 8, height: 8, borderRadius: '50%', border: '1.5px solid var(--color-text-secondary)', display: 'inline-block', boxSizing: 'border-box' }} aria-hidden /> ask
+        </span>
         {Object.keys(MARKET_INK).filter(m => pts.some(p => p.mkt === m)).map(m => (
           <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <i style={{ width: 8, height: 8, borderRadius: '50%', background: MARKET_INK[m], display: 'inline-block' }} aria-hidden />
@@ -269,10 +294,11 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
         ))}
       </div>
       <FigCap>
-        {pts.length} live lots with an engine appraisal and a printed bid — vertical is the bid&apos;s distance from the
-        comp median (below the dashed rule = bidding under the comps, {Math.round((below / pts.length) * 100)}% of the
-        field right now), horizontal is comp value (log). Hue is the lot&apos;s market, dot size is comp-pool depth,
-        opacity is engine confidence. Every dot opens its lot.
+        {pts.length} live lots against their comps — filled dots carry a printed bid, rings carry only an ask
+        (estimate midpoint vs the comp median). Vertical is the price&apos;s distance from the comps (below the dashed
+        rule = priced under them, {Math.round((below / pts.length) * 100)}% of the field right now); horizontal is the
+        comp median (log). Hue is the market, size is comp-pool depth, opacity is engine confidence. Every point opens
+        its lot.
       </FigCap>
     </div>
   );
