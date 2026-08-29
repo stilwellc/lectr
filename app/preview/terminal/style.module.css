@@ -2849,9 +2849,16 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 }
 .nsMastCtas {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;   /* the two doors sit side by side, never stacked */
   align-items: center;
   gap: 10px;
+}
+.nsMastCtas > * {
+  flex: 1 1 0;
+  justify-content: center;
+  white-space: nowrap;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 .nsMastThesis { margin: 16px 0 0; }
 .nsMastMark {
