@@ -2884,3 +2884,27 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 
 /* the feed's head — kicker + light headline left, the next-hammer line right */
 .feedHead { padding: 10px 0 22px; }
+
+/* ── THE CREAM CELL INTERIOR (light) — the rail's instruments restyled for
+   the plate (Collin: the gray blob + mustard clashed). White ring-shadow
+   chips on cream (the cell-grammar chip voice), the below-market read in
+   the signal ink it actually is, hairlines in ink-alpha. Dark keeps its
+   own well voice untouched. ── */
+:global(html[data-lectr-light]) .mtSide .railCmd {
+  background: var(--panel, #fff);
+  border-color: transparent;
+  box-shadow: var(--ring-shadow);
+  opacity: 1;
+}
+:global(html[data-lectr-light]) .mtSide .railCmd:hover { background: #fdfcfc; }
+:global(html[data-lectr-light]) .pulseChip {
+  background: var(--panel, #fff);
+  border-color: transparent;
+  box-shadow: var(--ring-shadow);
+}
+:global(html[data-lectr-light]) .pulseAction { border-bottom-color: rgba(28, 25, 23, 0.22); }
+:global(html[data-lectr-light]) .pulseAction:hover { background: rgba(28, 25, 23, 0.03); border-bottom-color: rgba(28, 25, 23, 0.34); }
+:global(html[data-lectr-light]) .pulseAction:focus-visible { outline-color: var(--color-fg); }
+:global(html[data-lectr-light]) .pulseAction .pulseLabel { color: var(--color-text-muted); }
+:global(html[data-lectr-light]) .pulseTagVal { color: var(--color-up, #0F7C43); }
+:global(html[data-lectr-light]) .pulseTagGhost .pulseTagVal { color: var(--color-text-faint); }
