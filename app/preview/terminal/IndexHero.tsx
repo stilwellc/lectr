@@ -16,7 +16,6 @@ import { fmtInt, useReducedMotion } from './hooks';
 const KICKER_NAME: Partial<Record<Market, string>> = { tcg: 'TCG' };
 const kickerName = (k: Market): string => KICKER_NAME[k] ?? k;
 /** the conduit tag — what the selector is feeding the instrument column */
-const feedName = (k: Market): string => (k === 'all' ? 'Total market' : kickerName(k));
 import styles from './style.module.css';
 
 /* RAIL MARKS — the constructed-mark language on the "Right now" metrics:
@@ -420,16 +419,9 @@ export default function IndexHero({
               : <SubTape market={market} activeKey={activeKey} play={play} />}
           </m.div>
 
-          <m.aside className={styles.mtSide} {...rise(0.16)}>
-            {/* THE FEED CONDUIT (Aug 2026): the instrument column centers
-                against the tape, and the slack becomes circuitry — a hairline
-                drops from under the market rail, tagged with the market
-                feeding it, into the board; below, the line grounds out. */}
-            <div className={`${styles.mtConduit} ${styles.mtConduitTop}`} aria-hidden="true">
-              <i className={styles.mtConduitNode} />
-              <span className={styles.mtConduitTag}>{feedName(activeKey)} · feed</span>
-              <i className={styles.mtConduitLine} />
-            </div>
+          <m.aside className={styles.mtSide} data-plain="true" {...rise(0.16)}>
+            {/* conduit circuitry retired (Collin, Aug 29) — the cream cell
+                stands on its own; the column simply centers */}
             {showMonument && <TapeMonument row={lead!} play={play} />}
             <div className={styles.heroRail} data-under-monument={showMonument ? 'true' : undefined}>
               {pulseBoard}
@@ -439,11 +431,6 @@ export default function IndexHero({
                 <kbd className={styles.cmdKbd} aria-hidden>⌘K</kbd>
               </button>
               {tickerEl}
-            </div>
-            <div className={`${styles.mtConduit} ${styles.mtConduitBottom}`} aria-hidden="true">
-              <i className={styles.mtConduitLine} />
-              <i className={styles.mtConduitNode} />
-              <span className={styles.mtConduitTag}>read nightly</span>
             </div>
           </m.aside>
         </div>

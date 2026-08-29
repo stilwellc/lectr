@@ -2127,8 +2127,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    Exchange Rail above is the orientation; the board opens directly) */
 .mtBoard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 372px);
-  gap: 0 clamp(40px, 4.5vw, 72px);
+  grid-template-columns: minmax(0, 1fr) clamp(350px, 30vw, 448px);
+  gap: 0 clamp(32px, 3.5vw, 56px);
   /* stretch: the board fills the monument column's height, rows sharing it
      equally — a departures board fills its frame */
   align-items: stretch;
@@ -2183,11 +2183,11 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   background: var(--lw-03, rgba(255, 255, 255, 0.03));
 }
 .mtSide {
-  /* the instrument column CENTERS against the tape (Aug 2026): flex column,
-     the conduits above and below flex-grow into the slack — the filler is
-     circuitry, not void. */
+  /* the instrument column centers against the tape — the conduit
+     circuitry retired Aug 29; the cream cell stands on its own */
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: clamp(18px, 2vw, 26px);
   min-width: 0;
 }
@@ -2265,7 +2265,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
      grammar, NOT the color one) — the conduits drop into the plate */
   background: var(--color-bg-deep);
   border-radius: 20px;
-  padding: clamp(16px, 1.9vw, 22px);
+  padding: clamp(22px, 2.3vw, 30px);
 }
 .mtSide .heroRail[data-under-monument='true'] { border-top: none; margin-top: clamp(10px, 1.2vw, 16px); }
 /* Total-market view has no monument, so the rail is the whole right column.
