@@ -4101,7 +4101,9 @@ html[data-lectr-light] {
 
 :root {
   --ease-house: cubic-bezier(0.4, 0, 0.2, 1);   /* the 150ms workhorse */
-  --ns-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  /* pixel static (the reference's noise is hard speckle, not film blur):
+     turbulence posterized to pure black/white dots via discrete transfer */
+  --ns-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='discrete' tableValues='0 1'/%3E%3CfeFuncG type='discrete' tableValues='0 1'/%3E%3CfeFuncB type='discrete' tableValues='0 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
   --duration-tap: 150ms;
   --ring-shadow: 0 0 1px rgba(28, 25, 23, 0.4), 0 1px 1px rgba(28, 25, 23, 0.04), 0 2px 4px rgba(28, 25, 23, 0.04);
 }
@@ -4319,8 +4321,9 @@ a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--e
   position: absolute;
   inset: 0;
   background-image: var(--ns-grain);
-  background-size: 160px;
-  opacity: 0.4;
+  background-size: 128px;
+  image-rendering: pixelated;
+  opacity: 0.16;
   mix-blend-mode: overlay;
   pointer-events: none;
 }
