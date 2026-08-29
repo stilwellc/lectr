@@ -2258,8 +2258,16 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mtMon[data-dir='down'] .beamLarge .beamRule { stroke: rgba(204, 106, 92, 0.9); }
 .mtMon[data-dir='up'] .beamLarge .beamDiamond::before { background: var(--color-up, #57BE87); }
 .mtMon[data-dir='down'] .beamLarge .beamDiamond::before { background: var(--color-down, #CC6A5C); }
-.mtSide .heroRail { grid-area: auto; align-self: stretch; }
-.mtSide .heroRail[data-under-monument='true'] { border-top: 1px solid var(--tt-hair-2); padding-top: clamp(14px, 1.6vw, 20px); }
+.mtSide .heroRail {
+  grid-area: auto;
+  align-self: stretch;
+  /* the instrument rail rides a quiet cream cell (Collin: the cell
+     grammar, NOT the color one) — the conduits drop into the plate */
+  background: var(--color-bg-deep);
+  border-radius: 20px;
+  padding: clamp(16px, 1.9vw, 22px);
+}
+.mtSide .heroRail[data-under-monument='true'] { border-top: none; margin-top: clamp(10px, 1.2vw, 16px); }
 /* Total-market view has no monument, so the rail is the whole right column.
    space-between left the three rows floating with voids between their own
    hairlines — worse than the top-packed void it replaced. Instead the CELLS
