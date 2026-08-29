@@ -1,7 +1,8 @@
 'use client';
 
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import type { Backtest } from '../hooks/useRayData';
+import FigCap from './FigCap';
 import { fmtSignedPct } from '../utils';
 
 /**
@@ -11,8 +12,13 @@ import { fmtSignedPct } from '../utils';
  * above the gray one in EVERY year — this chart lets a skeptic check.
  */
 export default function RecordByYear({ backtest }: { backtest: Backtest }) {
-  const data = (backtest.series || []).filter(p => p.flaggedMedianPct != null && p.unflaggedMedianPct != null);
-  if (data.length < 5) return null;
+  const raw = (backtest.series || []).filter(p => p.flaggedMedianPct != null && p.unflaggedMedianPct != null);
+  if (raw.length < 5) return null;
+  // THE EDGE BAND — the story is the DISTANCE between the lines; shade it.
+  // A range area (unflagged → flagged) prints the edge as a green wash the
+  // way a lab shades the region between treatment and control.
+  const data = raw.map(p => ({ ...p, edge: [p.unflaggedMedianPct, p.flaggedMedianPct] as [number, number] }));
+  const last = data[data.length - 1];
 
   return (
     <section className="rail ray-enter" style={{ paddingTop: 30 }}>
@@ -25,7 +31,7 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
       <div className="glass glass-quiet" style={{ padding: '18px 12px 8px 0' }}>
         <div style={{ height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 6, right: 18, left: 0, bottom: 2 }}>
+            <ComposedChart data={data} margin={{ top: 6, right: 86, left: 0, bottom: 2 }}>
               <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
               <XAxis
                 dataKey="year"
@@ -53,9 +59,16 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                   );
                 }}
               />
-              <Line type="monotone" dataKey="unflaggedMedianPct" stroke="var(--chart-line-2)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-              <Line type="monotone" dataKey="flaggedMedianPct" stroke="var(--color-up)" strokeWidth={1.75} dot={false} isAnimationActive={false} />
-            </LineChart>
+              <Area type="monotone" dataKey="edge" stroke="none" fill="var(--edge-fill, rgba(47, 191, 113, 0.06))" isAnimationActive={false} activeDot={false} />
+              <Line type="monotone" dataKey="unflaggedMedianPct" stroke="var(--chart-line-2)" strokeWidth={1.5} dot={false} isAnimationActive={false}
+                label={(p: { index?: number; x?: number; y?: number }) => (p.index === data.length - 1 && p.x != null && p.y != null ? (
+                  <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fill="var(--chart-line-2)">unflagged</text>
+                ) : <g />)} />
+              <Line type="monotone" dataKey="flaggedMedianPct" stroke="var(--color-up)" strokeWidth={1.75} dot={false} isAnimationActive={false}
+                label={(p: { index?: number; x?: number; y?: number }) => (p.index === data.length - 1 && p.x != null && p.y != null ? (
+                  <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={600} fill="var(--color-up)">flagged</text>
+                ) : <g />)} />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
         <div style={{ display: 'flex', gap: 18, padding: '8px 0 10px 18px', fontSize: 12.5, color: 'var(--color-text-faint)' }}>
@@ -63,6 +76,10 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--chart-line-2)', verticalAlign: 'middle', marginRight: 6 }} />unflagged</span>
           <span>· premium-inclusive, as bought</span>
         </div>
+        <FigCap>
+          Median realized price vs estimate midpoint, flagged against unflagged lots, by hammer year — the shaded band is
+          the edge. Every settled sale replayed nightly; {last?.year ? `through ${last.year}` : 'full history'} · all-in, as bought.
+        </FigCap>
       </div>
     </section>
   );

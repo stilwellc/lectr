@@ -1,6 +1,7 @@
 'use client';
 
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import FigCap from '../FigCap';
 import type { Backtest } from '../../hooks/useRayData';
 
 const BUCKET_LABELS = ['<0.6×', '0.6–0.9×', '0.9–1.3×', '1.3–2×', '2–10×', '10×+'];
@@ -42,7 +43,7 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
     <div className="glass glass-quiet" style={{ padding: '18px 12px 6px 0', marginTop: bare ? 0 : 16 }}>
       <div style={{ height: 230 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 6, right: 18, left: 0, bottom: 2 }}>
+          <LineChart data={rows} margin={{ top: 6, right: 64, left: 0, bottom: 2 }}>
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis dataKey="bucket" tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} interval={0} />
             <YAxis domain={[30, 85]} tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 10.5, fill: 'var(--chart-tick)', fontFamily: 'var(--font-sans), sans-serif' }} axisLine={false} tickLine={false} width={40} />
@@ -71,7 +72,10 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
             {(['watches', 'design', 'art'] as const).map(m => (
               <Line key={m} type="stepAfter" dataKey={m} stroke={MARKET_COLORS[m]} strokeWidth={1.4} dot={false} isAnimationActive={false} strokeOpacity={0.75} />
             ))}
-            <Line type="stepAfter" dataKey="global" stroke={MARKET_COLORS.global} strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line type="stepAfter" dataKey="global" stroke={MARKET_COLORS.global} strokeWidth={2} dot={false} isAnimationActive={false}
+              label={(p: { index?: number; x?: number; y?: number }) => (p.index === rows.length - 1 && p.x != null && p.y != null ? (
+                <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={600} fill="var(--chart-hero, #e8dab6)">global</text>
+              ) : <g />)} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -80,6 +84,11 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
           <span key={m}><span style={{ display: 'inline-block', width: 14, height: 2, background: c, verticalAlign: 'middle', marginRight: 6 }} />{m}</span>
         ))}
       </div>
+      <FigCap>
+        Beat rate vs the high estimate by comp-ratio bucket, per market — recency-weighted and shrunk, refit at every
+        nightly replay{cal.n?.toLocaleString ? ` over ${cal.n.toLocaleString()} sales` : ''}. The 10×+ bucket drops on
+        purpose: extreme ratios under-deliver and the curve says so.
+      </FigCap>
     </div>
   );
   if (bare) return panel;

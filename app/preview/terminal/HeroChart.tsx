@@ -292,7 +292,7 @@ export default function HeroChart({
               {pts.length > 0 && (
                 <circle cx={main.xOf.get(pts[pts.length - 1].period)} cy={main.yOf(pts[pts.length - 1].value)} r={2.2} fill={line.color} />
               )}
-              {highlight === line.key && pts.length > 0 && (
+              {(highlight === line.key || mainLines.length <= 3) && pts.length > 0 && (
                 <text x={Math.min(W - 4, (main.xOf.get(pts[pts.length - 1].period) ?? 0) + 8)}
                   y={main.yOf(pts[pts.length - 1].value) + 3}
                   textAnchor={(main.xOf.get(pts[pts.length - 1].period) ?? 0) > W - 80 ? 'end' : 'start'}

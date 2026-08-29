@@ -2837,3 +2837,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* THE CATALOGUE — pen-weight display numerals on paper (light only) */
 :global(html[data-lectr-light]) .pulseValLead { font-weight: 430; }
 :global(html[data-lectr-light]) .mStatVal { font-weight: 430; }
+
+/* LAB DISCIPLINE — light: grid rules become solid whisper-hairlines,
+   ticks a step quieter (the matplotlib voice; dotted texture is the
+   terminal's, not the page's) */
+:global(html[data-lectr-light]) .hcRule { stroke: rgba(29, 29, 27, 0.06); stroke-dasharray: none; }
+:global(html[data-lectr-light]) .hcRuleZero { stroke: rgba(29, 29, 27, 0.22); }
+:global(html[data-lectr-light]) .hcTick { fill: #8E8C83; }

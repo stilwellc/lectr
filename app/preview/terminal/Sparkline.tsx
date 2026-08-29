@@ -71,6 +71,7 @@ export default function Sparkline({
       <path d={area} fill={`url(#sg-${gid})`} stroke="none" />
       {/* the glow: a blurred, low-opacity copy of the line beneath it */}
       <path
+        className="ray-chart-glow"
         d={line}
         fill="none"
         stroke={color}

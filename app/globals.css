@@ -4014,3 +4014,35 @@ html[data-lectr-light] .vd-lane-mark {
   flex: none;
 }
 html[data-lectr-light] .vd-lane-mark svg { width: 16px; height: 16px; }
+
+/* ── FIG. — the catalogue's figure furniture (light only; dark unchanged).
+   Charts sign themselves like lab figures: numbered folio, basis line. ── */
+.ray-figcap { display: none; }
+html[data-lectr-light] .terminal-shell { counter-reset: lectr-fig; }
+html[data-lectr-light] .ray-figcap {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 2px 0;
+  border-top: 1px solid var(--hairline);
+  margin-top: 10px;
+}
+html[data-lectr-light] .ray-figcap-no::before {
+  counter-increment: lectr-fig;
+  content: 'FIG. ' counter(lectr-fig, decimal-leading-zero);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--color-butter-text);
+  white-space: nowrap;
+}
+html[data-lectr-light] .ray-figcap-body {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ── LAB DISCIPLINE (light): instruments never glow on paper, and grid
+   rules go from dotted terminal texture to matplotlib-quiet hairlines ── */
+html[data-lectr-light] .ray-chart-glow { display: none; }
