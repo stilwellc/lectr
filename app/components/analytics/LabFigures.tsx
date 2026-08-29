@@ -25,6 +25,7 @@ import Link from 'next/link';
 import HeroChart, { type HeroLine } from '../../preview/terminal/HeroChart';
 import type { MarketData, Backtest } from '../../hooks/useRayData';
 import type { AuctionLot } from '../../types';
+import { marketOf } from '../../constants';
 import FigCap from '../FigCap';
 import { GapMark, OddsMark, DepthMark, SalesMark } from '../marks';
 
@@ -52,6 +53,23 @@ const TIER_INK: Record<string, string> = {
   high: 'var(--color-fg)',
   medium: 'var(--color-text-muted)',
   low: 'var(--color-text-faint)',
+};
+
+/* the field's categorical inks — one hue per market, none of them
+   red- or green-adjacent (direction owns those two); light mode deepens
+   each via the --fld-* tokens */
+const MARKET_INK: Record<string, string> = {
+  watches: 'var(--fld-watches, #A98BC8)',
+  art: 'var(--fld-art, #7EA4CC)',
+  design: 'var(--fld-design, #8C9DAF)',
+  sports: 'var(--fld-sports, #C2A868)',
+  tcg: 'var(--fld-tcg, #B58BA6)',
+  science: 'var(--fld-science, #9AA8B4)',
+  culture: 'var(--fld-culture, #DAD3C2)',
+};
+const MARKET_LABEL: Record<string, string> = {
+  watches: 'watches', art: 'art', design: 'design', sports: 'sports',
+  tcg: 'tcg', science: 'science', culture: 'pop culture',
 };
 
 /* ═══ 1 · THE CLOSE CURVE ═══ */
@@ -201,7 +219,7 @@ export function VenueStrip({ marketData }: { marketData: MarketData | null }) {
 /* ═══ 4 · THE DEPTH FIELD — the live board as a scatter ═══ */
 export function DepthField({ lots }: { lots: AuctionLot[] }) {
   const pts = useMemo(() => {
-    const out: { id: string; x: number; y: number; n: number; conf: string; title: string }[] = [];
+    const out: { id: string; x: number; y: number; n: number; conf: string; title: string; mkt: string }[] = [];
     for (const l of lots) {
       if (l.status !== 'upcoming') continue;
       const v = (l as AuctionLot & { value?: { compValueUsd?: number; vsBid?: { pct: number } | null; n?: number; confidence?: string } }).value;
@@ -209,6 +227,7 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
       out.push({
         id: l.id, x: v.compValueUsd, y: Math.max(-95, Math.min(150, v.vsBid.pct)),
         n: v.n || 1, conf: v.confidence || 'low', title: l.title || '',
+        mkt: marketOf(l.artist) || 'culture',
       });
     }
     return out;
@@ -227,7 +246,7 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
     <div className="ray-lf-card glass glass-quiet">
       <div className="ray-lf-head">
         <span className="ray-lf-title"><span className="ray-sect-mark" aria-hidden><DepthMark size={15} /></span>The depth field</span>
-        <span className="ray-lf-method">every appraised live lot · bid vs comps × comp value · ink = confidence</span>
+        <span className="ray-lf-method">every appraised live lot · bid vs comps × comp value · hue = market · opacity = confidence</span>
       </div>
       <div className="ray-lf-plot" style={{ height: H + 26 }}>
         <span className="ray-lf-zero" style={{ top: `${(Y(0) / 100) * H}px` }} aria-hidden />
@@ -244,16 +263,24 @@ export function DepthField({ lots }: { lots: AuctionLot[] }) {
             className="ray-lf-dot" style={{
               top: `${(Y(p.y) / 100) * H}px`, left: `${X(p.x)}%`,
               width: Math.min(13, 4 + Math.sqrt(p.n) * 1.6), height: Math.min(13, 4 + Math.sqrt(p.n) * 1.6),
-              background: TIER_INK[p.conf] || TIER_INK.low,
-              opacity: p.conf === 'high' ? 0.8 : p.conf === 'medium' ? 0.55 : 0.38,
+              background: MARKET_INK[p.mkt] || 'var(--color-text-faint)',
+              opacity: p.conf === 'high' ? 0.92 : p.conf === 'medium' ? 0.6 : 0.35,
             }} aria-label={`Open lot: ${p.title.slice(0, 50)}`} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', padding: '10px 0 0', fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+        {Object.keys(MARKET_INK).filter(m => pts.some(p => p.mkt === m)).map(m => (
+          <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <i style={{ width: 8, height: 8, borderRadius: '50%', background: MARKET_INK[m], display: 'inline-block' }} aria-hidden />
+            {MARKET_LABEL[m] || m}
+          </span>
         ))}
       </div>
       <FigCap>
         {pts.length} live lots with an engine appraisal and a printed bid — vertical is the bid&apos;s distance from the
         comp median (below the dashed rule = bidding under the comps, {Math.round((below / pts.length) * 100)}% of the
-        field right now), horizontal is comp value (log). Dot size is comp-pool depth; ink density is engine confidence.
-        Every dot opens its lot.
+        field right now), horizontal is comp value (log). Hue is the lot&apos;s market, dot size is comp-pool depth,
+        opacity is engine confidence. Every dot opens its lot.
       </FigCap>
     </div>
   );
