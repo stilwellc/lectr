@@ -4100,6 +4100,7 @@ html[data-lectr-light] {
 
 :root {
   --ease-house: cubic-bezier(0.4, 0, 0.2, 1);   /* the 150ms workhorse */
+  --ns-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   --duration-tap: 150ms;
   --ring-shadow: 0 0 1px rgba(28, 25, 23, 0.4), 0 1px 1px rgba(28, 25, 23, 0.04), 0 2px 4px rgba(28, 25, 23, 0.04);
 }
@@ -4209,3 +4210,146 @@ html[data-lectr-light] .ray-call-btn-quiet {
   box-shadow: var(--ring-shadow);
 }
 html[data-lectr-light] .ray-call-btn-quiet:hover { background: #FDFCFC; }
+
+/* ════════════════════════════════════════════════════════════════════
+   THE CELL SYSTEM (north star wave 3) — taken directly from the middle
+   of elevenlabs.io per Collin. Components in app/components/cells.tsx.
+   Quiet cell = cream well, icon chip, tall air, gray label / ink body.
+   Color cell = the ONE cell in a grid that forces color: grained signal
+   gradient (lamp-lawful: up/down only) or ink. Figure cell = patent
+   line-drawing on cream. StatRow = dashboard chart header tabs.
+   ════════════════════════════════════════════════════════════════════ */
+
+.ns-cellgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--cell-min, 240px), 100%), 1fr));
+  gap: 14px;
+}
+
+.ns-cell {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--color-bg-deep);
+  border-radius: 20px;
+  padding: 26px;
+  min-height: 280px;
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  transition: transform 150ms var(--ease-house), box-shadow 150ms var(--ease-house);
+}
+a.ns-cell:hover { transform: translateY(-1px); box-shadow: var(--lift-2, 0 8px 24px rgba(28, 25, 23, 0.08)); }
+a.ns-cell:active { transform: scale(0.99); }
+
+.ns-cell-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--panel, #fff);
+  box-shadow: var(--ring-shadow);
+  color: var(--color-fg);
+  flex: none;
+}
+.ns-cell-chip svg { width: 20px; height: 20px; }
+.ns-cell-air { flex: 1 1 44px; min-height: 34px; }
+.ns-cell-label { font-size: 15px; font-weight: 450; color: var(--color-text-muted); margin-bottom: 5px; }
+.ns-cell-body { font-size: 15px; line-height: 1.5; color: var(--color-fg); }
+
+/* the forced-color cell — grain over a signal gradient; text goes paper */
+.ns-cell-color { color: #FDFCFC; }
+.ns-cell-color .ns-cell-label { color: rgba(253, 252, 252, 0.72); }
+.ns-cell-color .ns-cell-body { color: #FDFCFC; }
+.ns-cell-color[data-dir="up"] { background: linear-gradient(152deg, #17915269 -20%, #0F7C43 34%, #06371D 108%) , #0F7C43; }
+.ns-cell-color[data-dir="down"] { background: linear-gradient(152deg, #d4573f70 -20%, #C13E2C 34%, #571710 108%), #C13E2C; }
+.ns-cell-color[data-dir="ink"] { background: linear-gradient(152deg, #44403B -12%, #292524 40%, #12100E 110%), #292524; }
+.ns-cell-color::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--ns-grain);
+  background-size: 160px;
+  opacity: 0.28;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+.ns-ccell-stat {
+  font-family: var(--font-mono), monospace;
+  font-size: clamp(30px, 3.2vw, 44px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 10px;
+}
+
+/* the figure cell — drawing centered in its own stage, ink at 80% */
+.ns-cell-figure { min-height: 300px; }
+.ns-fig-stage {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  padding: 12px 0 22px;
+}
+
+/* chart-header stat tabs — small gray label over tabular ink value;
+   the active tab carries a 2px ink underline across its column */
+.ns-statrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 28px;
+  border-bottom: 1px solid var(--hairline, var(--color-border));
+  margin-bottom: 14px;
+}
+.ns-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 10px;
+  border: none;
+  background: none;
+  cursor: default;
+  text-align: left;
+  position: relative;
+  font: inherit;
+  color: inherit;
+}
+button.ns-stat { cursor: pointer; }
+.ns-stat-k { font-size: 11px; color: var(--color-text-muted); letter-spacing: 0.01em; }
+.ns-stat-v { font-size: 16.5px; font-weight: 550; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.ns-stat.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: var(--color-fg);
+}
+.ns-stat:not(.is-active) .ns-stat-v { color: var(--color-text-secondary); }
+
+/* the annotation chip that sits on a chart */
+.ns-anno {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--panel, #fff);
+  border-radius: 10px;
+  padding: 7px 11px;
+  box-shadow: var(--ring-shadow);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.ns-anno-k { color: var(--color-text-muted); font-size: 11px; }
+.ns-anno-v { color: var(--color-fg); font-weight: 550; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; }
+.ns-anno-dot { width: 7px; height: 7px; border-radius: 50%; }
+.ns-anno-dot[data-dir="up"] { background: var(--color-up); }
+.ns-anno-dot[data-dir="down"] { background: var(--color-down); }
+
+@media (max-width: 640px) {
+  .ns-cell { min-height: 210px; padding: 20px; }
+  .ns-cell-figure { min-height: 240px; }
+}
