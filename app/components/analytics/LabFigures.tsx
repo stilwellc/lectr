@@ -44,6 +44,12 @@ const CSS = `
 .ray-lf-grid3 > * { min-width: 0; }
 @media (max-width: 1000px) { .ray-lf-grid3 { grid-template-columns: 1fr; } }
 .ray-lf-dot { position: absolute; border-radius: 50%; transform: translate(-50%, 50%); }
+.ray-lf-venue { display: flex; flex-direction: column; }
+.ray-lf-vrow { display: grid; grid-template-columns: minmax(88px, 120px) 1fr 52px; align-items: center; gap: 10px; min-height: 27px; }
+.ray-lf-vname { font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ray-lf-vtrack { position: relative; height: 100%; min-height: 22px; }
+.ray-lf-vrule { position: absolute; top: -3px; bottom: -3px; border-left: 1px dashed var(--chart-ref); }
+.ray-lf-vval { font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .ray-lf-axis { position: absolute; left: 0; right: 0; border-top: 1px solid var(--chart-grid); }
 .ray-lf-zero { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--chart-ref); }
 `;
@@ -175,29 +181,39 @@ export function VenueStrip({ marketData }: { marketData: MarketData | null }) {
         <span className="ray-lf-title"><span className="ray-sect-mark" aria-hidden><SalesMark size={15} /></span>The venue factor</span>
         <span className="ray-lf-method">what the room does to a price</span>
       </div>
-      <div className="ray-lf-plot" style={{ height: rows.length * 26 + 30 }}>
-        <span style={{ position: 'absolute', top: 0, bottom: 24, left: `${X(1)}%`, borderLeft: '1px dashed var(--chart-ref)' }} aria-hidden />
-        <span className="ray-lf-lbl" style={{ bottom: 6, left: `${X(1)}%` }}>1.00×</span>
-        {rows.map(([house, f], i) => {
-          const y = 6 + i * 26;
+      {/* ROW GRAMMAR (the collision fix): every row is a grid of three
+          gutters — name | track | value. Labels can never sit on names
+          because they never share a column. The 1.00× rule spans the
+          track gutter only. */}
+      <div className="ray-lf-venue">
+        {rows.map(([house, f]) => {
           const up = f > 1.001; const down = f < 0.999;
           return (
-            <React.Fragment key={house}>
-              <span className="ray-lf-vlbl" style={{ top: y, left: 0, color: 'var(--color-text-secondary)', maxWidth: '30%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{house}</span>
-              <span style={{
-                position: 'absolute', top: y + 4, left: `${Math.min(X(1), X(f))}%`, width: `${Math.abs(X(f) - X(1))}%`,
-                height: 2, background: 'var(--chart-grid)',
-              }} aria-hidden />
-              <span className="ray-lf-dot" style={{
-                top: y + 10, left: `${X(f)}%`, width: 9, height: 9,
-                background: up ? 'var(--color-up)' : down ? 'var(--color-down)' : 'var(--color-text-muted)',
-              }} aria-hidden />
-              <span className="ray-lf-vlbl" style={{ top: y, left: `calc(${X(f)}% ${X(f) < 52 ? '- 14px' : '+ 10px'})`, ...(X(f) < 52 ? { transform: 'translateX(-100%)' } : {}), fontWeight: 600, color: 'var(--color-fg)' }}>
-                {f.toFixed(2)}×
+            <div key={house} className="ray-lf-vrow">
+              <span className="ray-lf-vname" title={house}>{house}</span>
+              <span className="ray-lf-vtrack" aria-hidden>
+                <i className="ray-lf-vrule" style={{ left: `${X(1)}%` }} />
+                <i style={{
+                  position: 'absolute', top: '50%', marginTop: -1, height: 2,
+                  left: `${Math.min(X(1), X(f))}%`, width: `${Math.abs(X(f) - X(1))}%`,
+                  background: 'var(--chart-grid)',
+                }} />
+                <i className="ray-lf-dot" style={{
+                  top: '50%', left: `${X(f)}%`, width: 9, height: 9, marginTop: -0.5,
+                  background: up ? 'var(--color-up)' : down ? 'var(--color-down)' : 'var(--color-text-muted)',
+                }} />
               </span>
-            </React.Fragment>
+              <span className="ray-lf-vval" style={{ color: 'var(--color-fg)' }}>{f.toFixed(2)}×</span>
+            </div>
           );
         })}
+        <div className="ray-lf-vrow" aria-hidden>
+          <span className="ray-lf-vname" />
+          <span className="ray-lf-vtrack" style={{ height: 14 }}>
+            <span className="ray-lf-lbl" style={{ top: 0, left: `${X(1)}%` }}>1.00×</span>
+          </span>
+          <span className="ray-lf-vval" />
+        </div>
       </div>
       <FigCap>
         The venue multiplier the engine applies when a comp sold in a different room — the same object trades

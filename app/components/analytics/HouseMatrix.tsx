@@ -28,9 +28,9 @@ const CSS = `
 .ray-hm-scroll{overflow-x:auto;margin:0 -6px;padding:0 6px}
 .ray-hm-grid{display:grid;align-items:baseline;column-gap:12px;min-width:min-content}
 .ray-hm-corner{font-size:10.5px;color:var(--color-text-muted)}
-.ray-hm-col{font-size:10.5px;color:var(--color-text-muted);text-align:right;padding:2px 0 6px;white-space:nowrap}
+.ray-hm-col{font-size:10.5px;color:var(--color-text-muted);text-align:center;padding:2px 0 6px;white-space:nowrap}
 .ray-hm-house{font-size:13px;font-weight:600;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px 0;border-top:1px solid var(--color-border)}
-.ray-hm-cell{text-align:right;padding:8px 0;border-top:1px solid var(--color-border);white-space:nowrap}
+.ray-hm-cell{text-align:center;padding:8px 0;border-top:1px solid var(--color-border);white-space:nowrap}
 .ray-hm-cell .num{font-family:var(--font-mono),monospace;font-size:12.5px;font-variant-numeric:tabular-nums}
 .ray-hm-cell[data-dir="up"] .num{color:var(--color-up)}
 .ray-hm-cell[data-dir="down"] .num{color:var(--color-down-text,var(--color-down))}
