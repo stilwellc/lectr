@@ -2839,6 +2839,13 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   gap: 10px;
 }
 .nsMastThesis { margin: 16px 0 0; }
+.nsMastMark {
+  height: 22px;
+  width: auto;
+  display: inline-block;
+  vertical-align: -6px;
+  margin-right: 1px;
+}
 
 /* the engine room's intro head — outside the ink vault, on the page ground */
 .engineIntro { padding: clamp(28px, 3.4vw, 48px) 0 0; }

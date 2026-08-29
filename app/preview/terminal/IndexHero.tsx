@@ -265,7 +265,10 @@ export default function IndexHero({
           </Link>
         </div>
         <p className={styles.nsMastThesis}>
-          lectr reads the live auction book each night and checks every ask against
+          {/* the script mark IS the word — the light-mode ink swap in globals
+              retargets this src automatically */}
+          <img src="/brand/lectr-nav.png" alt="lectr" className={styles.nsMastMark} />
+          {' '}reads the live auction book each night and checks every ask against
           where its comparables actually sold — {fmtInt(totalLots)} lots on file.
         </p>
       </div>
