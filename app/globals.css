@@ -4286,16 +4286,41 @@ a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--e
 .ns-cell-color { color: #FDFCFC; }
 .ns-cell-color .ns-cell-label { color: rgba(253, 252, 252, 0.72); }
 .ns-cell-color .ns-cell-body { color: #FDFCFC; }
-.ns-cell-color[data-dir="up"] { background: linear-gradient(152deg, #17915269 -20%, #0F7C43 34%, #06371D 108%) , #0F7C43; }
-.ns-cell-color[data-dir="down"] { background: linear-gradient(152deg, #d4573f70 -20%, #C13E2C 34%, #571710 108%), #C13E2C; }
-.ns-cell-color[data-dir="ink"] { background: linear-gradient(152deg, #44403B -12%, #292524 40%, #12100E 110%), #292524; }
+/* the Omnichannel atmosphere (taken directly per Collin): blurred
+   multi-bloom ground — a luminous core, a cooler corner, a warm corner —
+   falling into near-black under a legibility scrim, heavy grain. Hues
+   transposed into the signal family only (the lamp holds). */
+.ns-cell-color[data-dir="up"] {
+  background:
+    linear-gradient(180deg, rgba(4, 14, 8, 0) 38%, rgba(3, 11, 6, 0.62) 100%),
+    radial-gradient(95% 85% at 22% 34%, rgba(163, 201, 100, 0.92) 0%, rgba(163, 201, 100, 0) 56%),
+    radial-gradient(75% 65% at 84% 10%, rgba(52, 116, 96, 0.95) 0%, rgba(52, 116, 96, 0) 62%),
+    radial-gradient(65% 60% at 62% 62%, rgba(58, 124, 54, 0.75) 0%, rgba(58, 124, 54, 0) 66%),
+    radial-gradient(55% 50% at 6% 4%, rgba(116, 158, 62, 0.6) 0%, rgba(116, 158, 62, 0) 60%),
+    linear-gradient(180deg, #1D4128 0%, #0B2314 55%, #05100A 100%);
+}
+.ns-cell-color[data-dir="down"] {
+  background:
+    linear-gradient(180deg, rgba(14, 5, 3, 0) 38%, rgba(11, 4, 2, 0.62) 100%),
+    radial-gradient(95% 85% at 22% 34%, rgba(214, 138, 84, 0.9) 0%, rgba(214, 138, 84, 0) 56%),
+    radial-gradient(75% 65% at 84% 10%, rgba(130, 56, 60, 0.95) 0%, rgba(130, 56, 60, 0) 62%),
+    radial-gradient(65% 60% at 62% 62%, rgba(158, 64, 44, 0.75) 0%, rgba(158, 64, 44, 0) 66%),
+    linear-gradient(180deg, #4A1D14 0%, #2A0E08 55%, #120504 100%);
+}
+.ns-cell-color[data-dir="ink"] {
+  background:
+    linear-gradient(180deg, rgba(8, 7, 6, 0) 38%, rgba(6, 5, 4, 0.6) 100%),
+    radial-gradient(95% 85% at 22% 34%, rgba(120, 112, 100, 0.55) 0%, rgba(120, 112, 100, 0) 56%),
+    radial-gradient(75% 65% at 84% 10%, rgba(68, 64, 59, 0.9) 0%, rgba(68, 64, 59, 0) 62%),
+    linear-gradient(180deg, #34302B 0%, #1C1917 55%, #0C0A09 100%);
+}
 .ns-cell-color::before {
   content: '';
   position: absolute;
   inset: 0;
   background-image: var(--ns-grain);
   background-size: 160px;
-  opacity: 0.28;
+  opacity: 0.4;
   mix-blend-mode: overlay;
   pointer-events: none;
 }
