@@ -31,8 +31,8 @@ const CSS = `
 .ray-dr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;cursor:pointer;transition:background 0.14s ease}
 .ray-dr-row:last-child{border-bottom:none}
 a.ray-dr-row:hover{background:rgba(255,255,255,0.045)}
-a.ray-dr-row:hover .ray-dr-name{color:#FFF}
-.ray-dr-name{font-size:13.5px;color:var(--fg,#E8EAED)}
+a.ray-dr-row:hover .ray-dr-name{color:var(--color-fg, #FFF)}
+.ray-dr-name{font-size:13.5px;color:var(--color-fg, #E8EAED)}
 .ray-dr-kind{color:var(--color-text-muted, #7A8087);font-size:12px;margin-left:6px}
 .ray-dr-read{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .ray-dr-read .num{font-family:var(--font-mono,ui-monospace),monospace}

@@ -3610,21 +3610,6 @@ html[data-lectr-light] {
   --ray-cat-design: #6B6150;
   --ray-cat-unknown: #665C4C;
 
-  /* THE INK VAULT — the paper band inverts. On the dark site the certificate
-     was the one LIGHT room; on porcelain it becomes the one DARK room —
-     near-black vault holding the collection, the movers, the call. The
-     entire .ray-band machinery flips itself off these twelve tokens. */
-  --paper: #1B1A17;
-  --paper-ink: #F2F1E9;
-  --paper-secondary: #CBC9BE;
-  --paper-muted: #A3A194;
-  --paper-faint: #8C8A7D;
-  --paper-line: rgba(242, 241, 233, 0.15);
-  --paper-edge: rgba(29, 29, 27, 0.55);
-  --paper-up: #57BE87;
-  --paper-down: #E0755F;
-  --paper-up-text: #63C58D;
-  --paper-down-text: #E58D7B;
 
   /* FOCUS / SELECTION / SHADOWS */
   --focus-ring: 2px solid #1D1D1B;
@@ -3747,12 +3732,7 @@ html[data-lectr-light] {
   --lw-92: rgba(29, 29, 27, 0.92);
 }
 
-/* vault shades for the paper-family surfaces + light-mode ink discipline */
-html[data-lectr-light] {
-  --paper-card: #232220;   /* card floated on the vault */
-  --paper-mid: #201F1C;
-  --paper-deep: #262421;
-}
+
 /* bid-velocity chips: butter's attention job passes to INK on porcelain —
    vermilion here would read directional beside signed columns */
 html[data-lectr-light] .ray-bidvel,
@@ -3780,31 +3760,8 @@ html[data-lectr-light] {
   --ba-85: rgba(196, 61, 20, 0.95);
 }
 
-/* porcelain equivalents for paper-ink alpha strokes (the vault flips ink) */
-html[data-lectr-light] {
-  --pa-05: rgba(242, 241, 233, 0.05);
-  --pa-08: rgba(242, 241, 233, 0.08);
-  --pa-16: rgba(242, 241, 233, 0.16);
-  --pa-18: rgba(242, 241, 233, 0.18);
-  --pa-22: rgba(242, 241, 233, 0.22);
-  --pa-25: rgba(242, 241, 233, 0.25);
-  --pa-3: rgba(242, 241, 233, 0.3);
-  --pa-32: rgba(242, 241, 233, 0.32);
-  --pa-35: rgba(242, 241, 233, 0.35);
-  --pa-36: rgba(242, 241, 233, 0.36);
-  --pa-4: rgba(242, 241, 233, 0.4);
-  --pa-5: rgba(242, 241, 233, 0.5);
-  --pa-55: rgba(242, 241, 233, 0.55);
-  --pa-6: rgba(242, 241, 233, 0.6);
-  --pa-8: rgba(242, 241, 233, 0.8);
-}
 
-/* vault-side tones for the tape meters (deep inks designed for cream) */
-html[data-lectr-light] {
-  --tape-up: #57BE87;
-  --tape-down: #E0755F;
-  --tape-mut: #A3A194;
-}
+
 
 /* ── THE PORCELAIN: the Colophon becomes the closing INK VAULT — the maker's
    plate stays engraved in the dark, porcelain ink on the near-black band
@@ -3828,3 +3785,48 @@ html[data-lectr-light] .ray-close {
   --color-butter-text: #E8763F;
   --color-hover-item: rgba(242, 241, 233, 0.05);
 }
+
+/* ═══ THE INK VAULT — scoped to the TRUE paper bands only. The paper tokens
+   are consumed in two contexts: the certificate bands (flip to the vault)
+   and paper-styled chips/meters on white cards (must STAY cream/ink — the
+   global flip painted porcelain strokes onto white cards on /value). ═══ */
+html[data-lectr-light] .ray-band,
+html[data-lectr-light] .ray-paper,
+html[data-lectr-light] [class*='roomPaper'] {
+  --paper: #1B1A17;
+  --paper-card: #232220;
+  --paper-mid: #201F1C;
+  --paper-deep: #262421;
+  --paper-ink: #F2F1E9;
+  --paper-secondary: #CBC9BE;
+  --paper-muted: #A3A194;
+  --paper-faint: #8C8A7D;
+  --paper-line: rgba(242, 241, 233, 0.15);
+  --paper-edge: rgba(29, 29, 27, 0.55);
+  --paper-up: #57BE87;
+  --paper-down: #E0755F;
+  --paper-up-text: #63C58D;
+  --paper-down-text: #E58D7B;
+  --tape-up: #57BE87;
+  --tape-down: #E0755F;
+  --tape-mut: #A3A194;
+  --seal-ink: rgba(163, 161, 148, 0.7);
+  --pa-05: rgba(242, 241, 233, 0.05);
+  --pa-08: rgba(242, 241, 233, 0.08);
+  --pa-16: rgba(242, 241, 233, 0.16);
+  --pa-18: rgba(242, 241, 233, 0.18);
+  --pa-22: rgba(242, 241, 233, 0.22);
+  --pa-25: rgba(242, 241, 233, 0.25);
+  --pa-3: rgba(242, 241, 233, 0.3);
+  --pa-32: rgba(242, 241, 233, 0.32);
+  --pa-35: rgba(242, 241, 233, 0.35);
+  --pa-36: rgba(242, 241, 233, 0.36);
+  --pa-4: rgba(242, 241, 233, 0.4);
+  --pa-5: rgba(242, 241, 233, 0.5);
+  --pa-55: rgba(242, 241, 233, 0.55);
+  --pa-6: rgba(242, 241, 233, 0.6);
+  --pa-8: rgba(242, 241, 233, 0.8);
+}
+
+/* light: the lens-pill count reads muted-ink on the mint wash (faint was 2.96) */
+html[data-lectr-light] .ray-toolbar-pill-signal i { color: var(--color-text-muted); }
