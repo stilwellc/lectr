@@ -3522,8 +3522,10 @@ body {
    swap: the drama inverts. The dark site was near-black with one warm paper
    band; the porcelain site is cool bone with INK VAULT bands, near-black
    rooms cut into light paper. THE LAMP changes hands: butter retires and
-   VERMILION takes the accent chair — auction-paddle heat on porcelain
-   (the Taste Labs grammar: quiet ground, loud singular accent, ink bands).
+   the lamp is NOT a new color — it is dark mode's butter printed at ink
+   density: burnished gold on paper (and TRUE butter returns on the dark
+   vault plates). THE LAW: red means down market, green means up market —
+   no other use may borrow either hue.
    Signals deepen to print-density green / brick red. Charts gain the pop
    the black ground never allowed: ink lines, vermilion hero, white cards
    with true shadows (elevation gets a voice; the dark site only had edges).
@@ -3563,20 +3565,22 @@ html[data-lectr-light] {
   --color-border-mid: rgba(29, 29, 27, 0.22);
   --color-hair: rgba(29, 29, 27, 0.10);
 
-  /* THE LAMP — vermilion. One family, the butter jobs re-cast. */
-  --color-butter: #E8491F;         /* display accent, active pill fill, .lit */
-  --color-butter-text: #C43D14;    /* text-safe vermilion (5.0:1 on bone) */
-  --color-butter-deep: #A83811;    /* the quiet note */
-  --color-butter-subtle: rgba(232, 73, 31, 0.10);
-  --color-butter-ink: #FFF9F5;     /* text ON vermilion fills */
-  --color-beige: #E8491F;
-  --color-beige-text: #C43D14;
-  --color-accent-gold: #E8491F;
-  --color-accent-gold-text: #C43D14;
-  --color-accent-wine: #E8491F;
-  --color-accent-wine-text: #C43D14;
-  --color-accent-coral: #E8491F;
-  --color-lit: #E8491F;
+  /* THE LAMP — butter at ink density (burnished gold). The same warm
+     counterpoint dark mode plays, mirrored for paper. Direction ink
+     (red/green) is sacred and untouched. */
+  --color-butter: #8F6B1E;         /* display accent, active pill fill, .lit */
+  --color-butter-text: #7A5A14;    /* text-safe vermilion (5.0:1 on bone) */
+  --color-butter-deep: #5F4610;    /* the quiet note */
+  --color-butter-subtle: rgba(143, 107, 30, 0.10);
+  --color-butter-ink: #FFF9EB;     /* text ON vermilion fills */
+  --color-beige: #8F6B1E;
+  --color-beige-text: #7A5A14;
+  --color-accent-gold: #8F6B1E;
+  --color-accent-gold-text: #7A5A14;
+  --color-accent-wine: #8F6B1E;
+  --color-accent-wine-text: #7A5A14;
+  --color-accent-coral: #8F6B1E;
+  --color-lit: #8F6B1E;
 
   /* DIRECTION — print-density green / brick red (both AA at their sizes) */
   --color-up: #0F7C43;
@@ -3586,13 +3590,13 @@ html[data-lectr-light] {
   --color-down-soft: rgba(193, 62, 44, 0.11);
 
   /* CHARTS — ink chrome, vermilion hero. The pop the black ground never had. */
-  --chart-hero: #E8491F;
+  --chart-hero: #8F6B1E;
   --chart-grid: rgba(29, 29, 27, 0.08);
   --chart-ref: rgba(29, 29, 27, 0.20);
   --chart-tick: #6E6D66;
   --chart-line-2: #B9B7AC;
   --chart-ink: #6E6D66;
-  --chart-cursor: rgba(232, 73, 31, 0.38);
+  --chart-cursor: rgba(143, 107, 30, 0.38);
 
   /* HOUSES / CATEGORIES — the curated light inks (slate/bronze, built for paper) */
   --ray-house-phillips: #3E6488;
@@ -3613,7 +3617,7 @@ html[data-lectr-light] {
 
   /* FOCUS / SELECTION / SHADOWS */
   --focus-ring: 2px solid #1D1D1B;
-  --selection-bg: rgba(232, 73, 31, 0.20);
+  --selection-bg: rgba(143, 107, 30, 0.20);
   --shadow-pop: 0 12px 32px rgba(29, 29, 27, 0.14);
   --shadow-modal: 0 24px 64px rgba(29, 29, 27, 0.20), 0 4px 16px rgba(29, 29, 27, 0.12);
 
@@ -3658,7 +3662,7 @@ html[data-lectr-light] .terminal-shell {
   --chart-ref: rgba(29, 29, 27, 0.20);
   --chart-tick: #6E6D66;
   --chart-line-2: #B9B7AC;
-  --chart-cursor: rgba(232, 73, 31, 0.38);
+  --chart-cursor: rgba(143, 107, 30, 0.38);
 }
 
 /* the shell's flatten rules carry !important literals — matched here */
@@ -3742,22 +3746,22 @@ html[data-lectr-light] .ray-lot-bidvel {
 }
 html[data-lectr-light] .ray-bidvel-dot { background: var(--color-fg); }
 
-/* vermilion equivalents for butter-alpha accents */
+/* gold-ink equivalents for butter-alpha accents */
 html[data-lectr-light] {
-  --ba-04: rgba(196, 61, 20, 0.05);
-  --ba-05: rgba(196, 61, 20, 0.062);
-  --ba-09: rgba(196, 61, 20, 0.112);
-  --ba-12: rgba(196, 61, 20, 0.15);
-  --ba-18: rgba(196, 61, 20, 0.225);
-  --ba-28: rgba(196, 61, 20, 0.35);
-  --ba-3: rgba(196, 61, 20, 0.375);
-  --ba-35: rgba(196, 61, 20, 0.438);
-  --ba-4: rgba(196, 61, 20, 0.5);
-  --ba-5: rgba(196, 61, 20, 0.625);
-  --ba-6: rgba(196, 61, 20, 0.75);
-  --ba-7: rgba(196, 61, 20, 0.875);
-  --ba-72: rgba(196, 61, 20, 0.9);
-  --ba-85: rgba(196, 61, 20, 0.95);
+  --ba-04: rgba(122, 90, 20, 0.05);
+  --ba-05: rgba(122, 90, 20, 0.062);
+  --ba-09: rgba(122, 90, 20, 0.112);
+  --ba-12: rgba(122, 90, 20, 0.15);
+  --ba-18: rgba(122, 90, 20, 0.225);
+  --ba-28: rgba(122, 90, 20, 0.35);
+  --ba-3: rgba(122, 90, 20, 0.375);
+  --ba-35: rgba(122, 90, 20, 0.438);
+  --ba-4: rgba(122, 90, 20, 0.5);
+  --ba-5: rgba(122, 90, 20, 0.625);
+  --ba-6: rgba(122, 90, 20, 0.75);
+  --ba-7: rgba(122, 90, 20, 0.875);
+  --ba-72: rgba(122, 90, 20, 0.9);
+  --ba-85: rgba(122, 90, 20, 0.95);
 }
 
 
@@ -3781,8 +3785,8 @@ html[data-lectr-light] .ray-close {
   --color-border-mid: rgba(242, 241, 233, 0.2);
   --lw-06: rgba(242, 241, 233, 0.10);
   --lw-10: rgba(242, 241, 233, 0.16);
-  --color-butter: #E8763F;
-  --color-butter-text: #E8763F;
+  --color-butter: #E8DAB6;
+  --color-butter-text: #E8DAB6;
   --color-hover-item: rgba(242, 241, 233, 0.05);
 }
 
