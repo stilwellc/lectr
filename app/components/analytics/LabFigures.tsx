@@ -26,6 +26,7 @@ import HeroChart, { type HeroLine } from '../../preview/terminal/HeroChart';
 import type { MarketData, Backtest } from '../../hooks/useRayData';
 import type { AuctionLot } from '../../types';
 import { marketOf } from '../../constants';
+import { MARKET_COLOR } from '../../lib/heroLayers';
 import FigCap from '../FigCap';
 import { GapMark, OddsMark, DepthMark, SalesMark } from '../marks';
 
@@ -55,18 +56,9 @@ const TIER_INK: Record<string, string> = {
   low: 'var(--color-text-faint)',
 };
 
-/* the field's categorical inks — one hue per market, none of them
-   red- or green-adjacent (direction owns those two); light mode deepens
-   each via the --fld-* tokens */
-const MARKET_INK: Record<string, string> = {
-  watches: 'var(--fld-watches, #A98BC8)',
-  art: 'var(--fld-art, #7EA4CC)',
-  design: 'var(--fld-design, #8C9DAF)',
-  sports: 'var(--fld-sports, #C2A868)',
-  tcg: 'var(--fld-tcg, #B58BA6)',
-  science: 'var(--fld-science, #9AA8B4)',
-  culture: 'var(--fld-culture, #DAD3C2)',
-};
+/* the field speaks the index laboratory's exact color language — one
+   market→ink map, exported from heroLayers (single source of truth) */
+const MARKET_INK = MARKET_COLOR;
 const MARKET_LABEL: Record<string, string> = {
   watches: 'watches', art: 'art', design: 'design', sports: 'sports',
   tcg: 'tcg', science: 'science', culture: 'pop culture',

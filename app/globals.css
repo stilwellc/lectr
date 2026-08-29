@@ -4073,13 +4073,3 @@ html[data-lectr-light] {
   --lab-watches: #6B4FA1;
 }
 
-/* the depth field's categorical inks, deepened for paper */
-html[data-lectr-light] {
-  --fld-watches: #6B4FA1;
-  --fld-art: #3E6488;
-  --fld-design: #48657A;
-  --fld-sports: #7A6236;
-  --fld-tcg: #8A5878;
-  --fld-science: #5F7486;
-  --fld-culture: #33302B;
-}

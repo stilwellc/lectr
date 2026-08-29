@@ -32,7 +32,21 @@ export interface HeroLayer {
 }
 
 /** the layer palette — six dusty hues tuned for the #0A0B0D ground */
-export const LAYER_PALETTE = ['#7EA4CC', '#A98BC8', '#6FB5AC', '#C9A96E', '#C98B94', '#8F9BA8'];
+export const LAYER_PALETTE = ['#7EA4CC', '#A98BC8', '#6FB5AC', '#C9A96E', '#C98B94', '#8F9BA8', '#B08BB3'];
+
+/** THE market → ink map — the exact hues the index laboratory's 'all' view
+    assigns its seven market layers, exported so every categorical figure
+    (the depth field, future scatters) speaks the same color language.
+    (Before the 7th palette entry, Pop culture wrapped onto Art's blue.) */
+export const MARKET_COLOR: Record<string, string> = {
+  art: LAYER_PALETTE[0],
+  design: LAYER_PALETTE[1],
+  watches: LAYER_PALETTE[2],
+  science: LAYER_PALETTE[3],
+  sports: LAYER_PALETTE[4],
+  tcg: LAYER_PALETTE[5],
+  culture: LAYER_PALETTE[6],
+};
 
 interface LayerRef { key: string; label: string; source: 'markets' | 'drills' | 'subs'; vertical?: string; slug?: string; kind: LayerKind }
 
