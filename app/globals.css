@@ -3830,3 +3830,36 @@ html[data-lectr-light] [class*='roomPaper'] {
 
 /* light: the lens-pill count reads muted-ink on the mint wash (faint was 2.96) */
 html[data-lectr-light] .ray-toolbar-pill-signal i { color: var(--color-text-muted); }
+
+/* ── THE RECEIPT keeps its dark-mode face (Collin: 'the same exact way it
+   was on dark mode — way better'): the cream paper slip, dark ink, red
+   replay seal — printed matter pinned INSIDE the ink vault. Restores the
+   original paper palette on the receipt subtree only. ── */
+html[data-lectr-light] [class*='rcpt'] {
+  --paper-card: #FAF5E8;
+  --paper: #E2D9C4;
+  --paper-ink: #1C1712;
+  --paper-secondary: #3D3830;
+  --paper-muted: #5A5240;
+  --paper-faint: #665F4B;
+  --paper-line: rgba(28, 23, 18, 0.16);
+  --tape-up: #1e7a4d;
+  --tape-down: #a03d2e;
+  --tape-mut: #8A7440;
+  --seal-ink: rgba(90, 82, 64, 0.55);
+  --pa-05: rgba(28, 23, 18, 0.05);
+  --pa-08: rgba(28, 23, 18, 0.08);
+  --pa-16: rgba(28, 23, 18, 0.16);
+  --pa-18: rgba(28, 23, 18, 0.18);
+  --pa-22: rgba(28, 23, 18, 0.22);
+  --pa-25: rgba(28, 23, 18, 0.25);
+  --pa-3: rgba(28, 23, 18, 0.3);
+  --pa-32: rgba(28, 23, 18, 0.32);
+  --pa-35: rgba(28, 23, 18, 0.35);
+  --pa-36: rgba(28, 23, 18, 0.36);
+  --pa-4: rgba(28, 23, 18, 0.4);
+  --pa-5: rgba(28, 23, 18, 0.5);
+  --pa-55: rgba(28, 23, 18, 0.55);
+  --pa-6: rgba(28, 23, 18, 0.6);
+  --pa-8: rgba(28, 23, 18, 0.8);
+}
