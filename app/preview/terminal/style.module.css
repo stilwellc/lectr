@@ -2881,6 +2881,12 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   padding-left: 12px;
   padding-right: 12px;
 }
+/* the narrowest phones only: the two nowrap labels' min-content widths can
+   exceed the rail — let the pair stack as two full-width thumb pills there
+   (flex-wrap only engages when they truly don't fit; ≥400px stays side-by-side) */
+@media (max-width: 399px) {
+  .nsMastCtas { flex-wrap: wrap; }
+}
 .nsMastThesis { margin: 16px 0 0; }
 .nsMastMark {
   height: 22px;
@@ -2943,3 +2949,19 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 :global(html[data-lectr-light]) .pulseAction .pulseLabel { color: var(--color-text-muted); }
 :global(html[data-lectr-light]) .pulseTagVal { color: var(--color-up, #0F7C43); }
 :global(html[data-lectr-light]) .pulseTagGhost .pulseTagVal { color: var(--color-text-faint); }
+/* the phone Right-now rides the SAME quiet cream cell the desktop rail
+   wears (.mtSide .heroRail) — bare hairline rows + search floating on the
+   eggshell ground read as a collapsed desktop list, not a designed card.
+   Dark keeps its Aug 22 doctrine: blocks are the surface, no wrapper shell. */
+:global(html[data-lectr-light]) .mRightNow {
+  background: var(--color-bg-deep);
+  border-radius: 20px;
+  padding: 16px 16px 14px;
+}
+/* on cream the search speaks the cell-grammar chip voice (railCmd's own) */
+:global(html[data-lectr-light]) .mRightNow .cmdPillFull {
+  background: var(--panel, #fff);
+  border-color: transparent;
+  box-shadow: var(--ring-shadow);
+}
+:global(html[data-lectr-light]) .mRightNow .cmdPillFull:hover { background: #fdfcfc; }

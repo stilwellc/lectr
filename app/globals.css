@@ -4170,7 +4170,9 @@ html[data-lectr-light] {
   gap: 24px 64px;
   align-items: end;
 }
-@media (max-width: 900px) { .ns-split { grid-template-columns: 1fr; align-items: start; } }
+/* stacked, the copy reads as the headline's own dek — one tight register,
+   not two floating blocks (the desktop 24px row gap is a column rhythm) */
+@media (max-width: 900px) { .ns-split { grid-template-columns: 1fr; align-items: start; gap: 12px; } }
 .ns-split > p { font-size: 15px; line-height: 1.6; color: var(--color-text-secondary); margin: 0; }
 
 /* THE CREAM WELL — borderless soft plate; icon chip + inverted
@@ -4419,4 +4421,21 @@ button.ns-stat { cursor: pointer; }
 @media (max-width: 640px) {
   .ns-cell { min-height: 210px; padding: 20px; }
   .ns-cell-figure { min-height: 240px; }
+  /* span cells stand down — a span wider than the track count forces an
+     implicit column and overflows the viewport (!important: spans ride
+     inline styles from cells.tsx) */
+  .ns-cellgrid > * { grid-column: auto !important; }
+  /* the byline ledger goes 2-up — the ragged flex wrap read as a collapsed
+     desktop row; the phone gets aligned provenance columns instead */
+  .ns-byline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
+  .ns-byline > div { min-width: 0; }
+  /* stat tabs wrap WITHOUT breaking the underline — once tabs wrap, the
+     row's single bottom rule sits under the last line only and a first-row
+     active tab's ink underline floats mid-air; each tab carries its own
+     hairline instead (gap 0 + flex-grow keeps each line's rule continuous) */
+  .ns-statrow { border-bottom: none; gap: 6px 0; }
+  .ns-stat { flex: 1 1 auto; padding-right: 18px; border-bottom: 1px solid var(--hairline, var(--color-border)); }
+  /* ledger rows wrap instead of squeezing a long value against its label */
+  .ns-ledger-row { flex-wrap: wrap; row-gap: 2px; }
+  .ns-ledger-row > * { min-width: 0; }
 }

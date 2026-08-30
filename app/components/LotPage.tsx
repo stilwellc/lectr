@@ -164,9 +164,13 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
   .lectr-lot-lval{flex-wrap:wrap}
   .lectr-lot-lsub{white-space:normal}
   .lectr-lot-lv{max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .lectr-lot .ns-byline{gap:8px 28px}
   .lectr-lot .ns-byline .s{max-width:100%}
   .lectr-lot-read-stat{font-size:30px}
+}
+/* tablet band only — under 641px the byline rides the global 2-up grid
+   and its own gap rhythm; this flex-era tightening must not override it */
+@media (min-width:641px) and (max-width:899px){
+  .lectr-lot .ns-byline{gap:8px 28px}
 }
 `;
 

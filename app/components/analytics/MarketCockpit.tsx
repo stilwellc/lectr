@@ -56,8 +56,11 @@ const chipLift = (y: number) =>
 
 const CSS = `
 .ray-mc.ray-vm-card{padding:var(--card-pad)}
-.ray-mc .ns-statrow{gap:0 32px}
+@media(min-width:641px){.ray-mc .ns-statrow{gap:0 32px}}
 .ray-mc-method{display:block;text-align:right;font-size:10.5px;color:var(--color-text-muted);margin:0 0 6px}
+/* phone: the method note joins the reading edge — a right-orphaned caption
+   under wrapped tabs reads as collapsed-desktop debris */
+@media(max-width:640px){.ray-mc-method{text-align:left}}
 .ray-mc-stage{position:relative}
 .ray-mc-chip{position:absolute;pointer-events:none;z-index:2}
 .ray-mc-mos{display:grid;grid-template-columns:repeat(12,1fr);margin-top:4px}
