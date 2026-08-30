@@ -25,7 +25,7 @@ interface ArtistStats {
 const size = { width: 1200, height: 630 };
 
 // The sign, embedded — this script runs pre-build with no host to fetch from.
-const mark = fs.readFileSync(path.join(process.cwd(), 'public', 'brand', 'lectr.png')).toString('base64');
+const mark = fs.readFileSync(path.join(process.cwd(), 'public', 'brand', 'lectr-ink-lg.png')).toString('base64');
 
 function fmt(n: number): string {
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
@@ -46,34 +46,23 @@ function card(label: string, s: ArtistStats) {
     .map((v, i) => `${((i / Math.max(hist.length - 1, 1)) * W).toFixed(1)},${(H - ((v - min) / Math.max(max - min, 1)) * H + 8).toFixed(1)}`)
     .join(' ');
   const up = hist.length >= 2 ? hist[hist.length - 1] >= hist[0] : true;
-  const lineColor = up ? '#2FBF71' : '#E5544B';
+  // print-density signal inks — they hold on the eggshell card
+  const lineColor = up ? '#0F7C43' : '#C13E2C';
 
   return new ImageResponse(
     (
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', background: '#0B0A07', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
-        {/* mat frame — holds the edge in an iMessage dark-mode bubble */}
-        <div style={{ position: 'absolute', top: 24, left: 24, right: 24, bottom: 24, border: '1px solid rgba(242,238,227,0.14)' }} />
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', background: '#FDFCFC', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
+        {/* mat frame — ink hairline holds the edge in light AND dark bubbles */}
+        <div style={{ position: 'absolute', top: 24, left: 24, right: 24, bottom: 24, border: '1px solid rgba(28,25,23,0.16)' }} />
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          {/* the light the sign casts on the wall */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 36,
-              margin: -36,
-              background: 'radial-gradient(closest-side, rgba(242,238,227,0.07), transparent 70%)',
-            }}
-          >
-            <img src={'data:image/png;base64,' + mark} width={150} height={96} alt="" />
-          </div>
-          <div style={{ fontSize: 20, color: '#8A8477' }}>artist market page · lectr.bid</div>
+          <img src={'data:image/png;base64,' + mark} width={150} height={96} alt="" />
+          <div style={{ fontSize: 20, color: '#777169' }}>maker market page · lectr.bid</div>
         </div>
-        <div style={{ display: 'flex', fontSize: 62, fontWeight: 800, color: '#F2EEE3', letterSpacing: -2.5, marginTop: 22 }}>{label}</div>
-        <div style={{ display: 'flex', gap: 40, marginTop: 10, fontSize: 24, color: '#A19B8D' }}>
+        <div style={{ display: 'flex', fontSize: 66, fontWeight: 400, color: '#1C1917', letterSpacing: -2.5, marginTop: 22 }}>{label}</div>
+        <div style={{ display: 'flex', gap: 40, marginTop: 10, fontSize: 24, color: '#59544F' }}>
           <div style={{ display: 'flex' }}>{`avg sale ${fmt(s.avgPriceLast12Months || 0)}`}</div>
           <div style={{ display: 'flex' }}>{`record ${fmt(s.recordPrice || 0)}`}</div>
-          <div style={{ display: 'flex', color: appr >= 0 ? '#2FBF71' : '#E5544B', fontWeight: 700 }}>
+          <div style={{ display: 'flex', color: appr >= 0 ? '#0F7C43' : '#A5341F', fontWeight: 600 }}>
             {`prices ${appr >= 0 ? 'up' : 'down'} ${Math.abs(appr).toFixed(1)}% this year`}
           </div>
         </div>

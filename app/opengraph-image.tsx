@@ -45,8 +45,8 @@ export default function OG() {
     .map((v, i) => `${((i / Math.max(pts.length - 1, 1)) * W).toFixed(1)},${(H - (v / max) * H + 8).toFixed(1)}`)
     .join(' ');
 
-  // the sign, embedded — no host to fetch from at build time
-  const mark = fs.readFileSync(path.join(process.cwd(), 'public/brand/lectr.png')).toString('base64');
+  // the sign, embedded — the INK cut on the eggshell card (north star)
+  const mark = fs.readFileSync(path.join(process.cwd(), 'public/brand/lectr-ink-lg.png')).toString('base64');
 
   return new ImageResponse(
     (
@@ -57,12 +57,12 @@ export default function OG() {
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
-          background: '#0B0A07',
+          background: '#FDFCFC',
           padding: '40px 60px 36px',
           fontFamily: 'sans-serif',
         }}
       >
-        {/* mat frame — holds the edge in an iMessage dark-mode bubble */}
+        {/* mat frame — ink hairline holds the edge in light AND dark bubbles */}
         <div
           style={{
             position: 'absolute',
@@ -70,42 +70,30 @@ export default function OG() {
             left: 24,
             right: 24,
             bottom: 24,
-            border: '1px solid rgba(242,238,227,0.14)',
+            border: '1px solid rgba(28,25,23,0.16)',
           }}
         />
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          {/* the light the sign casts on the wall */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 80,
-              margin: -80,
-              background: 'radial-gradient(closest-side, rgba(242,238,227,0.07), transparent 70%)',
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={'data:image/png;base64,' + mark} width={340} height={218} alt="" />
-          </div>
-          <div style={{ fontSize: 22, color: '#8A8477' }}>auction intelligence · lectr.bid</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={'data:image/png;base64,' + mark} width={340} height={218} alt="" />
+          <div style={{ fontSize: 22, color: '#777169' }}>auction intelligence · lectr.bid</div>
         </div>
-        <div style={{ display: 'flex', fontSize: 26, color: '#A19B8D', marginTop: 8 }}>
+        <div style={{ display: 'flex', fontSize: 26, color: '#777169', marginTop: 8 }}>
           The collectibles market · art, design, watches &amp; science · total realized, all time
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 26 }}>
-          <div style={{ fontSize: 110, fontWeight: 800, color: '#F2EEE3', letterSpacing: -4 }}>{totalLabel}</div>
-          <div style={{ fontSize: 30, fontWeight: 700, color: '#A19B8D' }}>
+          <div style={{ fontSize: 116, fontWeight: 400, color: '#1C1917', letterSpacing: -5 }}>{totalLabel}</div>
+          <div style={{ fontSize: 30, fontWeight: 400, color: '#59544F' }}>
             {`across ${salesLabel} tracked sales`}
           </div>
         </div>
         <svg width={W} height={H + 16} style={{ marginTop: 8 }}>
-          <polyline points={line} fill="none" stroke="#E8DAB6" strokeWidth={5} strokeLinejoin="round" strokeLinecap="round" />
+          <polyline points={line} fill="none" stroke="#1C1917" strokeWidth={5} strokeLinejoin="round" strokeLinecap="round" />
         </svg>
         {backtest.flagged.n > 500 && (
-          <div style={{ display: 'flex', fontSize: 21, color: '#A19B8D', marginTop: 'auto', gap: 7 }}>
+          <div style={{ display: 'flex', fontSize: 21, color: '#59544F', marginTop: 'auto', gap: 7 }}>
             <span>flagged calls hammered</span>
-            <span style={{ color: '#2FBF71', fontWeight: 700 }}>{`+${backtest.flagged.medianPerfPct}% median`}</span>
+            <span style={{ color: '#0F7C43', fontWeight: 600 }}>{`+${backtest.flagged.medianPerfPct}% median`}</span>
             <span>{`over estimates · ${backtest.flagged.n.toLocaleString()} replayed sales`}</span>
           </div>
         )}
