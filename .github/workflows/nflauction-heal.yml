@@ -24,11 +24,11 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
-      - name: Pull corpus from R2
-        run: bash scripts/data-store.sh pull
+      - name: Pull the nflauction segment from R2
+        run: bash scripts/data-store.sh pull-segment nflauction
       - name: Heal (dry run first, then write)
         run: |
           npx tsx scripts/heal-nflauction-idwalk.ts
           npx tsx scripts/heal-nflauction-idwalk.ts --write
-      - name: Push corpus to R2
-        run: bash scripts/data-store.sh push
+      - name: Push the healed segment
+        run: bash scripts/data-store.sh push-segment nflauction
