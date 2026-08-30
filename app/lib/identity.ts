@@ -19,6 +19,10 @@ import { ARTISTS } from '../constants';
 
 export const WATCH_SLUGS = new Set<string>(ARTISTS.filter(a => a.market === 'watches').map(a => a.slug));
 
+/** Art-market maker slugs — scope key for the art-only AREA-RATIO comp gate in
+ *  similarity.ts (Engine Spec v2 item 7, adopted Aug 30 2026; receipt there). */
+export const ART_SLUGS = new Set<string>(ARTISTS.filter(a => a.market === 'art').map(a => a.slug));
+
 /** Autograph-format verticals: science + culture + the sports autographs
  *  slug. (Pokémon moved to its own 'tcg' market Aug 21 2026, so the old
  *  not-pokémon carve-out is structural now.) An ALS and a signed photo of the

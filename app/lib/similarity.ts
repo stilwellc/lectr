@@ -30,7 +30,7 @@
  * so scoring stays pure and deterministic given the same table.
  */
 import type { AuctionLot } from '../types';
-import { numericWatchRef, watchMaterialCoarse, editionIdentityKey, isEditionLot, autographFormatOf, WATCH_SLUGS, AUTOGRAPH_SLUGS } from './identity';
+import { numericWatchRef, watchMaterialCoarse, editionIdentityKey, isEditionLot, autographFormatOf, WATCH_SLUGS, ART_SLUGS, AUTOGRAPH_SLUGS } from './identity';
 
 // ── IDF ────────────────────────────────────────────────────────────────────
 export type IdfTable = { N: number; df: Record<string, number> };
@@ -194,6 +194,22 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
   // hard gate: dimensions grossly different when both known
   const sr = sizeRatio(a, b);
   if (sr !== null && sr > 1.6) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+  // hard gate: AREA RATIO >4×, ART ONLY (Engine Spec v2 item 7, adopted
+  // Aug 30 2026). The 1.6× max-dim gate above is blind to ASPECT mismatch —
+  // a 100×100cm canvas and a 65×10cm panel pass max-dim at 1.54× while their
+  // areas differ 15×. LOO receipt (scripts/_qa/dims-gate-loo.ts, 4,000 art
+  // anchors, temporal holdout): gate touches 95/2,185 reads, touched med|err|
+  // 49.4%→39.9%, 3 reads lost (99.9% coverage kept), aggregate 45.4%→44.9%.
+  // Band choice: ≤2.5× (the CLIENT engine's 2D band) measured WORSE on the
+  // touched subset here (53.1%→53.6%, 9 reads lost — it does not transfer to
+  // this pool machinery); ≤9× improves the same way but fires 4× less often.
+  // Missing dims on either side never gate (honest reads). Scope: DESIGN
+  // measured dead (12.1% area coverage; 5 touched reads, no error change —
+  // declined); WATCHES structurally dead (0.2% dims, spec §2.3).
+  if (ART_SLUGS.has(a.artist) && a.heightCm && a.widthCm && b.heightCm && b.widthCm) {
+    const ar = (a.heightCm * a.widthCm) / (b.heightCm * b.widthCm);
+    if (ar > 4 || ar < 0.25) return { score: 0, cosine: 0, cls: 'none', reasons: [] };
+  }
   // hard gate: autograph FORMAT (science/culture/sports-autographs). An ALS and
   // a signed photo of the same person are different markets (RR spells the
   // format out on 24% of these titles) — mismatch never comps. Only reject when
@@ -230,7 +246,15 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
     else if (sr <= 1.25) { bonus += 0.02; }
   }
 
-  // year proximity, discounted when the year came from the title not a field
+  // year proximity, discounted when the year came from the title not a field.
+  // SOFT bonus only, deliberately: a HARD era gate (±10y/±15y, Engine Spec v2
+  // item 6) was measured and DECLINED in every vertical (scripts/_qa/
+  // era-gate-loo.ts, Aug 30 2026). Watches at n=4,000: ±15y touched-read err
+  // 35.8%→36.2% (worse), ±10y −1.3pt touched at the cost of 73 lost reads —
+  // and the n=1,500 run had shown a PHANTOM −2.5pt win, so do not re-litigate
+  // below n≈4,000. Design (n=1,500): ±10y touched 41.7%→42.9%. Art (n=1,500):
+  // ±10y touched 55.7%→58.4% (title years are often SUBJECT dates, not
+  // production years — the same reason the spec rejected art ±15y client-side).
   if (a.yearNum && b.yearNum) {
     const dy = Math.abs(a.yearNum - b.yearNum);
     const trusted = a.yearSource === 'field' && b.yearSource === 'field';
