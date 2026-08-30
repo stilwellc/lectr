@@ -1,0 +1,33 @@
+# THE SHOT RIG — nightly visual regression against prod.
+# Captures the key routes (2 viewports x 2 modes) and diffs them against
+# the approved baselines in tests/ui-baseline/. Drift beyond the threshold
+# fails the run and uploads red-overlay diffs as an artifact.
+# Re-baseline deliberately: run scripts/ui-shots.mjs --approve locally and
+# commit tests/ui-baseline/.
+name: ui-shots
+on:
+  schedule:
+    - cron: '20 9 * * *'   # nightly, after the crawl deploy settles
+  workflow_dispatch: {}
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/ui-shots.mjs
+      - name: Upload diffs + captures on drift
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-drift
+          path: |
+            shots/diff/
+            shots/current/
+          retention-days: 14

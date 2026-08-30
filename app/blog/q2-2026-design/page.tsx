@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
+import { PullQuote } from '../../components/blog/Editorial';
 
 export const metadata: Metadata = {
   title: 'Q2 2026 design market in review — small money, real heat',
@@ -50,7 +51,7 @@ export default function Q2Design() {
       footnote="Design is thin enough that our engine abstains on designer-level appreciation — none of these cohorts clear the confidence bar. The moves shown are demand reads: how each maker's median lot is hammering against its own estimate right now, not a measured return."
     >
       <H>The strongest demand read we measured</H>
-      <P>
+      <P lede>
         Design is a $5.9M market next to art&rsquo;s half-billion — and it out-demanded everything.
         The median lot hammered <B>48% over its estimate midpoint</B>, <B>69% cleared their high
         estimate outright</B> — the best of any vertical this quarter — and 88% of offered lots sold.
@@ -91,6 +92,8 @@ export default function Q2Design() {
         watches concentrates in one house, design stayed a three-room market — a sign the depth of
         demand is broad, not a single-sale artifact.
       </P>
+      {/* the pull — lifted verbatim from the closing paragraph below */}
+      <PullQuote>One maker, two markets — and the median can only see one of them.</PullQuote>
       <H>The maker reads: Nakashima and Prouvé grind, the commodity end drags</H>
       <P>
         The durable signal is <B>Nakashima&rsquo;s +20% demand read across 65 sales</B> — the deepest

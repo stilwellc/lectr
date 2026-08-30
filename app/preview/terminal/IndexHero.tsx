@@ -67,6 +67,55 @@ function RailMark({ k }: { k: 'onBlock' | 'trend' | 'bids' | 'below' | 'search' 
 
 const EASE = [0.23, 1, 0.32, 1] as const;
 
+/* ── THE WORD REVEAL (north star §1.6, `text-reveal-word`) ────────────────
+   The masthead headline resolves word by word: each word enters at
+   opacity 0, scaleY(.95) scaleX(.92), blur(12px) and settles sharp on the
+   measured signature curve cubic-bezier(.76,.31,.04,1.01). ~48ms stagger,
+   whole line settled ~1.05s. Gated on the SAME fresh-arrival contract as
+   rise(): reduce || !play → initial:false → renders resolved instantly
+   (cached back-nav / prefers-reduced-motion never see the blur). Plays
+   once on entrance only — nothing rebinds it to hover or scroll. */
+const REVEAL_EASE = [0.76, 0.31, 0.04, 1.01] as const;
+const revealLine = {
+  hidden: {},
+  visible: { transition: { delayChildren: 0.04, staggerChildren: 0.048 } },
+};
+const revealWord = {
+  hidden: { opacity: 0, scaleY: 0.95, scaleX: 0.92, filter: 'blur(12px)' },
+  visible: {
+    opacity: 1,
+    scaleY: 1,
+    scaleX: 1,
+    filter: 'blur(0px)',
+    transition: { duration: 0.62, ease: REVEAL_EASE },
+  },
+};
+
+/** The headline, split into word spans for the reveal. innerText stays the
+ *  full sentence (spans hold the words, real spaces sit between them, so
+ *  copy/SEO read the exact string); the h2 carries the sentence as its
+ *  aria-label and the spans go aria-hidden so screen readers hear one
+ *  unbroken line, never nine fragments. */
+function RevealHeadline({ text, className, play }: { text: string; className: string; play: boolean }) {
+  const words = useMemo(() => text.split(' '), [text]);
+  return (
+    <m.h2
+      className={className}
+      aria-label={text}
+      variants={revealLine}
+      initial={play ? 'hidden' : false}
+      animate="visible"
+    >
+      {words.map((w, i) => (
+        <span key={i} aria-hidden>
+          {i > 0 ? ' ' : null}
+          <m.span className={styles.nsMastWord} variants={revealWord}>{w}</m.span>
+        </span>
+      ))}
+    </m.h2>
+  );
+}
+
 /* ── THE PULSE BOARD PRIMITIVES ─────────────────────────────────────────────
    The "Right now" panel is the lander's heartbeat: a bento of live blocks
    (Block's geometry), numerals that settle like a ticker (Robinhood's data-as-
@@ -251,8 +300,13 @@ export default function IndexHero({
     <m.div className={`ns-split ${styles.nsMast}`} {...rise(0.02)}>
       <div>
         {/* no kicker here — the headline opens the lander (Collin: the
-            eyebrow line spent a full row of prime space) */}
-        <h2 className={styles.nsMastHead}>Every lot on the block, priced against the record.</h2>
+            eyebrow line spent a full row of prime space). It enters on the
+            north-star word reveal, same play gate as every rise. */}
+        <RevealHeadline
+          className={styles.nsMastHead}
+          text="Every lot on the block, priced against the record."
+          play={play && !reduce}
+        />
       </div>
       {/* right column: the doors first, the thesis under them (Collin) */}
       <div>

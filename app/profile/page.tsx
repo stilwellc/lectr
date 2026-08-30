@@ -22,6 +22,7 @@ import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark } from '../components/marks';
+import { CellGrid, Cell, ColorCell, FigPools, FigTape } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 
@@ -1121,6 +1122,9 @@ export default function SavedPage() {
   // phase-2 failed but SOME saves resolved eagerly — never silently thin the desk
   const partialLoadFailed = fullError && !fullLoaded && savedIds.length > 0;
 
+  // the one settled count every surface prints (Settled head, the cell room)
+  const settledCount = sold.length + soldOrphans.length;
+
   const deskKicker = givenName ? `${givenName}’s desk` : 'My desk';
 
   const emptyState = (
@@ -1372,7 +1376,7 @@ export default function SavedPage() {
 
           {/* ══ 3 · WATCHING — the room, action-first, brief fused in ══ */}
           {upcoming.length > 0 && (
-            <section className="ray-saved-section rail" data-view={savedView}>
+            <section id="watching" className="ray-saved-section rail" data-view={savedView}>
               {/* the room as a framed plate — ns-plate draws the top rule + crop marks */}
               <div className="ns-plate" style={{ paddingTop: 18 }}>
               <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 16 }}>
@@ -1543,6 +1547,79 @@ export default function SavedPage() {
                 )}
                 <RecordTimeline series={record.series} />
               </div>
+            </section>
+          )}
+
+          {/* ══ 4b · THE DESK IN CELLS — the cell-system POP (the home page's
+              instrument-set grammar). ONE forced-color cell carries the desk's
+              signed read — appraised-vs-bought when a bought total exists,
+              else the settled-record median — and its dir is the REAL sign of
+              that already-computed number (signed-signal law untouched: the
+              values are collection.deltaPct / record.med exactly as the gauge
+              line and the record room print them). Zero or no signed read →
+              ink, honest abstention. The quiet cells' big numerals are counts
+              the page already prints. Renders only once the desk has a record
+              or a collection — a watching-only desk keeps its density. ══ */}
+          {(collection.rows.length > 0 || settledCount > 0) && (
+            <section className="rail ray-enter" aria-label="The desk in figures" style={{ paddingBlock: '34px 6px' }}>
+              <CellGrid min={225} className="ck-cells">
+                {collection.deltaPct != null && collection.totalPaid > 0 ? (
+                  <ColorCell
+                    dir={collection.deltaPct > 0 ? 'up' : collection.deltaPct < 0 ? 'down' : 'ink'}
+                    stat={fmtSignedPct(collection.deltaPct)}
+                    label="Appraised vs bought"
+                    body={`${formatPrice(collection.totalAppraised)} at the engine's appraisal against ${formatPrice(collection.totalPaid)} bought — only pieces with a recorded price enter the read.`}
+                    href="#collection"
+                  />
+                ) : record && record.med != null ? (
+                  <ColorCell
+                    dir={record.med > 0 ? 'up' : record.med < 0 ? 'down' : 'ink'}
+                    stat={fmtSignedPct(Math.round(record.med))}
+                    label="Your record"
+                    body={`${record.n} settled ${record.n === 1 ? 'watch' : 'watches'} judged vs estimate — median, all-in. Receipts below.`}
+                    href="#record"
+                  />
+                ) : (
+                  <ColorCell
+                    dir="ink"
+                    label="Your record"
+                    body="No signed read yet — a delta prints once a judged watch settles, or a piece carries a bought price."
+                  />
+                )}
+                {collection.rows.length > 0 && (
+                  <Cell
+                    stat={collection.rows.length.toLocaleString()}
+                    statNote={collection.rows.length === 1 ? 'piece held' : 'pieces held'}
+                    mark={<FigPools size={96} />}
+                    label="Collection"
+                    body={`${formatPrice(collection.totalAppraised)} at the engine's appraisal — pieces without a usable comp pool carry at their bought price.`}
+                    href="#collection"
+                  />
+                )}
+                {upcoming.length > 0 && (
+                  <Cell
+                    stat={upcoming.length.toLocaleString()}
+                    statNote="watching, live"
+                    label="On the block"
+                    body={summary.totalEst > 0
+                      ? `${formatPrice(summary.totalEst)} in estimates tracked to the hammer${summary.flagged > 0 ? ` — ${summary.flagged} flagged below market now.` : '.'}`
+                      : 'Tracked to the hammer — signals and bids follow every watch.'}
+                    href="#watching"
+                  />
+                )}
+                {settledCount > 0 && (
+                  <Cell
+                    stat={settledCount.toLocaleString()}
+                    statNote={settledCount === 1 ? 'settled watch' : 'settled watches'}
+                    mark={<FigTape size={96} />}
+                    label="Settled"
+                    body={record
+                      ? `${record.n} judged vs estimate · ${formatPrice(record.realized)} realized — the line-item receipts below.`
+                      : 'Awaiting judgment — a watch grades once it settles with a published price and carried an estimate.'}
+                    href="#settled"
+                  />
+                )}
+              </CellGrid>
             </section>
           )}
 

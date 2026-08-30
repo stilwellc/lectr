@@ -87,6 +87,7 @@ const BLOG_CSS = `
 .ray-blog-dek{font-size:14.5px;line-height:1.55;color:var(--color-text-secondary);margin:0}
 .ray-blog-read{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:13px;font-weight:500;color:var(--color-text-muted)}
 .ray-blog-lead-kicker{display:none}
+.ray-blog-shelf .ray-blog-lead-ledger{display:none}
 .ray-blog-entry-flick{display:none}
 .ray-blog-ledger{display:contents}
 .ray-blog-ledger-head{display:none}
@@ -97,19 +98,20 @@ const BLOG_CSS = `
   .ray-blog-lead:hover{border:none;transform:none}
   .ray-blog-lead .ray-blog-date{display:none}
   .ray-blog-lead-kicker{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
-  .ray-blog-lead-kicker .no{color:var(--color-text-faint)}
-  .ray-blog-lead .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:clamp(30px,3.6vw,40px);font-weight:340;letter-spacing:-0.02em;line-height:1.12;margin:0 0 12px;max-width:26ch}
+  .ray-blog-lead .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:clamp(34px,4.2vw,46px);font-weight:330;letter-spacing:-0.022em;line-height:1.08;margin:0 0 16px;max-width:24ch}
   .ray-blog-lead:hover .ray-blog-title{color:var(--color-text-secondary)}
-  .ray-blog-lead .ray-blog-dek{font-size:15.5px;line-height:1.6;max-width:62ch}
+  /* the featured note carries the byline-ledger provenance columns */
+  .ray-blog-lead .ray-blog-lead-ledger{display:flex;margin:0 0 16px;padding-bottom:14px}
+  .ray-blog-lead .ray-blog-dek{font-size:16px;line-height:1.6;max-width:62ch}
   /* the ledger — the rest of the file as dated rows, one quiet top rule */
   .ray-blog-ledger{display:block;border-top:1px solid var(--hairline);position:relative}
-  .ray-blog-ledger-head{display:grid;grid-template-columns:118px 1fr;gap:0 22px;padding:9px 0 10px}
-  .ray-blog-entry{display:grid;grid-template-columns:118px 1fr auto;gap:2px 22px;align-items:baseline;border:none;border-radius:0;background:none;padding:16px 2px;border-top:1px solid var(--hairline);transition:background var(--duration-fast) var(--ease-signature)}
+  .ray-blog-ledger-head{display:grid;grid-template-columns:118px 1fr;gap:0 22px;padding:7px 0 8px}
+  .ray-blog-entry{display:grid;grid-template-columns:118px 1fr auto;gap:1px 22px;align-items:baseline;border:none;border-radius:0;background:none;padding:13px 2px;border-top:1px solid var(--hairline);transition:background var(--duration-fast) var(--ease-signature)}
   .ray-blog-entry:hover{border-color:var(--hairline);transform:none;background:var(--color-hover-item)}
   .ray-blog-entry .ray-blog-date{grid-row:1 / span 2;margin:0;align-self:baseline}
   .ray-blog-entry .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:19px;font-weight:500;letter-spacing:-0.015em;line-height:1.25;margin:0}
   .ray-blog-entry:hover .ray-blog-title{color:var(--color-fg)}
-  .ray-blog-entry .ray-blog-dek{grid-column:2;font-size:13px;line-height:1.5;color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ray-blog-entry .ray-blog-dek{grid-column:2;font-size:12.5px;line-height:1.5;color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ray-blog-entry .ray-blog-read{display:none}
   .ray-blog-entry-flick{display:block;grid-column:3;grid-row:1;color:var(--color-text-faint)}
 }
@@ -143,10 +145,20 @@ export default function BlogIndex() {
           <Link href={lead.href ?? `/blog/${lead.slug}`} className="ray-blog-card ray-blog-lead">
             <div className="ray-blog-lead-kicker">
               <span className="ns-kicker" style={{ marginBottom: 0 }}>Latest from the desk</span>
-              <span className="ns-kicker no" style={{ marginBottom: 0 }}>{fmtLong(lead.date)}</span>
             </div>
             <div className="ray-blog-date">{fmtShort(lead.date)}</div>
             <h2 className="ray-blog-title">{lead.title}</h2>
+            {/* the provenance ledger — gray label over ink value, dotted close (desktop) */}
+            <div className="ns-byline ray-blog-lead-ledger">
+              <div>
+                <span className="k" style={{ display: 'block' }}>Published</span>
+                <span className="v" style={{ display: 'block' }}>{fmtLong(lead.date)}</span>
+              </div>
+              <div>
+                <span className="k" style={{ display: 'block' }}>Notes on file</span>
+                <span className="v" style={{ display: 'block' }}>{POSTS.length}</span>
+              </div>
+            </div>
             <p className="ray-blog-dek">{lead.dek}</p>
             <span className="ray-blog-read">Read the note <Flick size={12} /></span>
           </Link>

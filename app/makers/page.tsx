@@ -18,6 +18,7 @@ import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, local
 import { formatEstimate } from '../components/LotCard';
 import { formatDemand } from '../lib/demand';
 import { verifiedMovers, type VerifiedMover } from '../preview/terminal/verified';
+import { CellGrid, Cell, ColorCell, FigureCell, FigCalib, FigGate, FigPools } from '../components/cells';
 import CountUp from '../components/CountUp';
 import CloseClock from '../components/CloseClock';
 import Masthead, { Accent } from '../components/Masthead';
@@ -755,6 +756,20 @@ export default function MakersPage() {
   const totalFlags = useMemo(() => rows.filter(r => mktSet.has(r.slug)).reduce((s, r) => s + r.flags, 0), [rows, mktSet]);
   const verifiedCount = useMemo(() => rows.filter(r => mktSet.has(r.slug) && r.verified).length, [rows, mktSet]);
 
+  // ── THE VERIFIED READ — the strongest CI-verified maker move currently
+  // published on the active book: largest |Δ| among the same verifiedMovers
+  // rows the ledger already prints (no re-derivation). LAMP LAW: the color
+  // cell's dir comes from the REAL sign of the published changePct — a zero
+  // (unpublishable by construction, guarded anyway) falls to ink. ──
+  const topVerified = useMemo(() => {
+    let best: Row | null = null;
+    for (const r of rows) {
+      if (!mktSet.has(r.slug) || !r.verified) continue;
+      if (!best || Math.abs(r.verified.changePct) > Math.abs(best.verified!.changePct)) best = r;
+    }
+    return best;
+  }, [rows, mktSet]);
+
   // ── stable callbacks for the memoized rows ──
   const onToggleOpen = useCallback((slug: string) => setOpen(o => (o === slug ? null : slug)), []);
   const onToggleCompare = useCallback((slug: string) => {
@@ -937,6 +952,61 @@ export default function MakersPage() {
             </section>
           )}
 
+          {/* ══ THE VERIFIED READ CELL — the cell-system POP (the home page's
+              instrument-set grammar): ONE forced-color cell carrying the
+              strongest CI-verified maker read on this book — dir is the real
+              sign of its published Δ, nothing else — beside quiet cells whose
+              big numerals are the same counts the masthead already prints
+              (roster / CI-verified indexes / flagged on the block). Honest
+              abstention: no verified read on the book → the cell goes ink and
+              says so. ══ */}
+          <section className="rail ray-enter mk-cellroom" style={{ '--enter-delay': '35ms' } as React.CSSProperties}>
+            <CellGrid min={230} className="mk-cells">
+              {topVerified && topVerified.verified ? (
+                <ColorCell
+                  dir={topVerified.verified.changePct > 0 ? 'up' : topVerified.verified.changePct < 0 ? 'down' : 'ink'}
+                  span={2}
+                  stat={`${topVerified.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(topVerified.verified.changePct))}%`}
+                  label={`The verified read · ${topVerified.verified.horizon}`}
+                  body={`${topVerified.label} — the strongest CI-verified move on the ${activeLabel} book · 95% CI ${Math.round(topVerified.verified.ciLoPct)}% to ${Math.round(topVerified.verified.ciHiPct)}% · n ${topVerified.verified.n.toLocaleString()}`}
+                  href={`/makers/${topVerified.slug}`}
+                />
+              ) : (
+                <ColorCell
+                  dir="ink"
+                  span={2}
+                  label="The verified read"
+                  body={`No CI-verified index on the ${activeLabel} book yet — a maker publishes a move only when its 95% interval resolves the sign; everything else abstains.`}
+                />
+              )}
+              <Cell
+                stat={rosterCount.toLocaleString()}
+                statNote={noun}
+                mark={<FigPools size={96} />}
+                label="The roster"
+                body={`Every maker lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.`}
+              />
+              <Cell
+                stat={verifiedCount.toLocaleString()}
+                statNote="CI-verified indexes"
+                mark={<FigCalib size={96} />}
+                label="Verified indexes"
+                body="Repeat-sales reads whose 95% interval resolves the sign — the only price moves the engine will stand behind."
+              />
+              <Cell
+                stat={totalFlags.toLocaleString()}
+                statNote="flagged by the engine"
+                mark={<FigGate size={96} />}
+                label="On the block"
+                body={totalFlags > 0
+                  ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} priced under ${totalFlags === 1 ? 'its' : 'their'} comparables.`
+                  : totalLive > 0
+                    ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — none flagged under its comparables.`
+                    : 'The book is quiet — the crawl refreshes daily.'}
+              />
+            </CellGrid>
+          </section>
+
           {/* ── THE FILTER BAR ── */}
           <div className="mk-bar-wrap">
             <div className="rail mk-bar">
@@ -1022,9 +1092,17 @@ export default function MakersPage() {
 
             <div ref={listRef}>
               {groups.length === 0 ? (
-                <div className="mk-empty ns-well">
-                  No maker matches the current filters in the {activeLabel} market.
-                  {' '}<button type="button" className="mk-reset" onClick={() => { setQ(''); setFLive(false); setFVerified(false); setFFlagged(false); setFFollowing(false); }}>Clear the filters</button>
+                <div className="mk-empty">
+                  {/* the empty state as a patent plate — the gate drawing:
+                      many candidates fan in, none leaves under these filters */}
+                  <FigureCell
+                    figure={<FigGate />}
+                    label="The directory"
+                    body={<>
+                      No maker matches the current filters in the {activeLabel} market.
+                      {' '}<button type="button" className="mk-reset" onClick={() => { setQ(''); setFLive(false); setFVerified(false); setFFlagged(false); setFFollowing(false); }}>Clear the filters</button>
+                    </>}
+                  />
                 </div>
               ) : groups.map(g => (
                 <div key={g.key} id={`mk-${g.key}`} className="mk-group ns-plate">
@@ -1089,6 +1167,14 @@ const MAKERS_CSS = `
 .mk-cock-s b[data-dir="up"]{color:var(--color-up)}
 .mk-cock-s b[data-dir="down"]{color:var(--color-down-text)}
 @media(max-width:700px){.mk-cockpit{grid-template-columns:repeat(2,1fr)}.mk-cock{border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}}
+
+/* ── THE VERIFIED READ CELL room ── */
+.mk-cellroom{padding-top:10px;padding-bottom:20px}
+/* under two-column width the span-2 color cell must stand down: a span-2
+   item in a one-track auto-fit grid forces an implicit column and overflows
+   the 390px viewport (the home page's own rule; !important because the span
+   rides an inline style) */
+@media(max-width:679px){.mk-cells > *{grid-column:auto !important}}
 
 /* ── the filter bar ── */
 .mk-bar-wrap{position:sticky;top:54px;z-index:30;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
@@ -1280,7 +1366,8 @@ const MAKERS_CSS = `
 .mkc-note{margin:0;font-size:12.5px;color:var(--color-text-muted)}
 .mkc-note kbd{font-family:var(--font-mono),monospace;font-size:10.5px;border:1px solid var(--color-border);border-radius:5px;padding:1px 5px}
 
-/* ── empty state — a cream well plate ── */
-.mk-empty{font-size:13.5px;color:var(--color-text-muted);margin:20px 0}
+/* ── empty state — a patent-figure plate (FigureCell) ── */
+.mk-empty{margin:20px 0}
+.mk-empty .ns-cell-body{font-size:13.5px;color:var(--color-text-muted)}
 .mk-reset{background:none;border:none;padding:0;font:inherit;color:var(--color-fg);cursor:pointer;text-decoration:underline dotted}
 `;

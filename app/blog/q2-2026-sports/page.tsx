@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
+import { PullQuote } from '../../components/blog/Editorial';
 
 export const metadata: Metadata = {
   title: 'Q2 2026 sports market in review — a $126M quarter led by the cards',
@@ -42,7 +43,7 @@ export default function Q2Sports() {
       footnote="Sports runs on bid auctions with no published estimates, so there is no vs-estimate read here and our engine treats the card, game-used, ticket, trophy and memorabilia buckets as descriptive — we report volume, records and top sales, not an appreciation figure. The typical (median) lot prices cited per collection are the honest read where no estimate exists to hammer against. Prices are final bid plus premium."
     >
       <H>The modern cards set the ceiling</H>
-      <P>
+      <P lede>
         The top of the quarter was a card market, not a memorabilia one: a <B>$2.93M LeBron rookie
         patch auto</B>, a <B>$2.56M Ohtani 1/1 SuperFractor</B>, and a <B>$1.83M PSA-8 &rsquo;52
         Mantle</B> — three of the four biggest lots. The lone jersey in that group, Gretzky&rsquo;s
@@ -70,6 +71,8 @@ export default function Q2Sports() {
         $1.83M and an SGC 7 at $580K — a clean, legible grade-to-price ladder that vintage still offers
         and raw modern cards can&rsquo;t.
       </P>
+      {/* the pull — lifted verbatim from the second paragraph above */}
+      <PullQuote>Nine of the quarter&rsquo;s ten biggest lots were cards.</PullQuote>
       <H>The marquee is still game-used</H>
       <P>
         Cards set the ceiling, but the single most storied object of the quarter was worn, not printed.

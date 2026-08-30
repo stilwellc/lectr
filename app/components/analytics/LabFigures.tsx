@@ -23,7 +23,7 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import HeroChart, { type HeroLine } from '../../preview/terminal/HeroChart';
-import type { MarketData, Backtest } from '../../hooks/useRayData';
+import type { MarketData, Backtest, HedonicEntry } from '../../hooks/useRayData';
 import type { AuctionLot } from '../../types';
 import { marketOf } from '../../constants';
 import { MARKET_COLOR } from '../../lib/heroLayers';
@@ -55,6 +55,9 @@ const CSS = `
 .ray-lf-vval { font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .ray-lf-axis { position: absolute; left: 0; right: 0; border-top: 1px solid var(--chart-grid); }
 .ray-lf-zero { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--chart-ref); }
+.ray-lf-comp { --lfgut: 100px; }
+.ray-lf-cend { position: absolute; font-size: 10.5px; white-space: nowrap; transform: translateY(-50%); max-width: calc(var(--lfgut) - 6px); overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) { .ray-lf-comp { --lfgut: 78px; } .ray-lf-cend { font-size: 9.5px; } }
 `;
 
 /* ── shared: the ink ladder for confidence tiers — labs rank by density,
@@ -389,6 +392,247 @@ export function RepeatSaleRoom({ marketData, scope }: { marketData: MarketData |
         The same physical object selling twice is the cleanest price evidence auctions produce — {rs.nPairs?.toLocaleString()}
         {' '}pairs across {rs.nObjects?.toLocaleString()} objects, GLS-fit, rebased to the window start. Whiskers are the
         95% intervals of the published horizons; unpublishable horizons abstain and are absent.
+      </FigCap>
+    </div>
+  );
+}
+
+/* ═══ 6 · THE COMPOSITE AND ITS PARTS — dispersion, drawn ═══
+   The all-market hedonic composite against its seven per-vertical component
+   fits, every line rebased over the same window (IndexLab's rebase form:
+   window slice → base = first value → Δ%). The window is the pooled fit's
+   ONLY publishable horizon (1Y, complete quarters): its own gates print
+   composition breaks beyond that, and drawing the raw 3Y series would dress
+   a mix artifact (Q3'23→Q1'24 ×4.4) as a price move. Honest window or none. */
+export function CompositeParts({ marketData }: { marketData: MarketData | null }) {
+  const built = useMemo(() => {
+    const hed = marketData?.hedonic as unknown as Record<string, HedonicEntry & {
+      lastCompleteQuarter?: string; diag?: { nLots?: number };
+    }> | undefined;
+    const all = hed?.all;
+    const h1 = all?.horizons?.['1Y'];
+    // no publishable pooled read → no figure: dispersion around an abstained
+    // composite would print a break as a move
+    if (!all?.series?.length || !h1?.publishable || h1.changePct == null) return null;
+    const endI = all.lastCompleteQuarter ? all.series.findIndex(p => p.period === all.lastCompleteQuarter) : -1;
+    if (endI < 4) return null;
+    const win = all.series.slice(endI - 4, endI + 1); // the 1Y horizon, complete quarters only
+    const periods = win.map(p => p.period);
+    const pIdx = new Map(periods.map((p, i) => [p, i] as const));
+    const base = win[0].value;
+    if (!(base > 0)) return null;
+    const reb = (v: number, b: number) => ((v / b) - 1) * 100;
+    const comps: { key: string; label: string; ink: string; pts: { i: number; v: number }[] }[] = [];
+    for (const key of Object.keys(MARKET_INK)) {
+      const w = (hed?.[key]?.series || []).filter(p => pIdx.has(p.period));
+      if (w.length < periods.length || w[0].period !== periods[0]) continue;
+      const b = w[0].value;
+      if (!(b > 0)) continue;
+      comps.push({
+        key, label: MARKET_LABEL[key] || key, ink: MARKET_INK[key] || 'var(--color-text-faint)',
+        pts: w.map(p => ({ i: pIdx.get(p.period)!, v: reb(p.value, b) })),
+      });
+    }
+    if (comps.length < 3) return null;
+    const cPts = win.map((p, i) => ({ i, v: reb(p.value, base) }));
+    const finals = comps.map(c => c.pts[c.pts.length - 1].v);
+    const spread = Math.max(...finals) - Math.min(...finals);
+    const vals = [...cPts.map(p => p.v), ...comps.flatMap(c => c.pts.map(p => p.v))];
+    let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+    const pad = (hi - lo) * 0.07 || 10; lo -= pad; hi += pad;
+    const step = [10, 20, 25, 50, 100, 200, 500].find(s => (hi - lo) / s <= 5.5) || 500;
+    const grid: number[] = [];
+    for (let g = Math.ceil(lo / step) * step; g <= hi; g += step) grid.push(g);
+    const abst = all.horizons?.['3Y']?.reason || all.horizons?.['5Y']?.reason || '';
+    return { periods, cPts, comps, lo, hi, grid, spread, h1, nEndQ: win[win.length - 1].n ?? 0, nLots: all.diag?.nLots, abst };
+  }, [marketData]);
+  if (!built) return null;
+  const H = 235;
+  const X = (i: number) => (i / (built.periods.length - 1)) * 100;
+  const Y = (v: number) => (1 - (v - built.lo) / (built.hi - built.lo)) * 100;
+  const path = (pts: { i: number; v: number }[]) => pts.map(p => `${X(p.i)},${Y(p.v)}`).join(' ');
+  // direct end labels, collision-nudged down the right gutter (no legend)
+  const items = [
+    ...built.comps.map(c => ({ label: c.label, ink: c.ink, v: c.pts[c.pts.length - 1].v, strong: false })),
+    {
+      label: `all markets ${built.h1.changePct! >= 0 ? '+' : ''}${built.h1.changePct!.toFixed(0)}%`,
+      ink: 'var(--color-fg)', v: built.cPts[built.cPts.length - 1].v, strong: true,
+    },
+  ].map(it => ({ ...it, y: (Y(it.v) / 100) * H })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < items.length; i++) items[i].y = Math.max(items[i].y, items[i - 1].y + 14);
+  if (items[items.length - 1].y > H - 2) {
+    items[items.length - 1].y = H - 2;
+    for (let i = items.length - 2; i >= 0; i--) items[i].y = Math.min(items[i].y, items[i + 1].y - 14);
+  }
+  const ci = built.h1.ciLoPct != null && built.h1.ciHiPct != null
+    ? ` [${built.h1.ciLoPct.toFixed(1)}, ${built.h1.ciHiPct.toFixed(1)}]` : '';
+  const last = built.periods.length - 1;
+  return (
+    <div className="ray-lf-card ray-lf-comp glass glass-quiet">
+      <div className="ray-lf-head">
+        <span className="ray-lf-title">The composite and its parts</span>
+        <span className="ray-lf-method">pooled hedonic fit vs seven vertical fits · rebased Δ% · complete quarters</span>
+      </div>
+      <div className="ray-lf-plot" style={{ height: H + 26 }}>
+        {built.grid.map(g => (
+          <React.Fragment key={g}>
+            <span style={{
+              position: 'absolute', top: (Y(g) / 100) * H, left: 0, right: 'var(--lfgut)',
+              borderTop: g === 0 ? '1px dashed var(--chart-ref)' : '1px solid var(--chart-grid)',
+            }} aria-hidden />
+            <span className="ray-lf-vlbl" style={{ top: Math.max(2, (Y(g) / 100) * H - 14), left: 0 }}>{g > 0 ? '+' : ''}{g}%</span>
+          </React.Fragment>
+        ))}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden
+          style={{ position: 'absolute', top: 0, left: 0, width: 'calc(100% - var(--lfgut))', height: H, overflow: 'visible' }}>
+          {built.comps.map(c => (
+            <polyline key={c.key} points={path(c.pts)} fill="none" stroke={c.ink} strokeWidth={1.25}
+              opacity={0.55} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+          ))}
+          <polyline points={path(built.cPts)} fill="none" stroke="var(--color-fg)" strokeWidth={2}
+            vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
+        {items.map(it => (
+          <span key={it.label} className="ray-lf-cend" style={{
+            top: it.y, left: 'calc(100% - var(--lfgut) + 8px)', color: it.ink,
+            fontWeight: it.strong ? 600 : 450, opacity: it.strong ? 1 : 0.85,
+          }}>{it.label}</span>
+        ))}
+        {[0, Math.floor(last / 2), last].map(i => (
+          <span key={i} className="ray-lf-lbl" style={{
+            bottom: 0, left: `calc((100% - var(--lfgut)) * ${X(i) / 100})`,
+            transform: i === 0 ? 'none' : i === last ? 'translateX(-100%)' : 'translateX(-50%)',
+          }}>{built.periods[i].replace('-', ' ')}</span>
+        ))}
+      </div>
+      <FigCap>
+        The all-market hedonic composite (ink) over its seven vertical component fits, every line rebased to{' '}
+        {built.periods[0].replace('-', ' ')} and ending at the last complete quarter — the composite glides while its
+        parts whipsaw, ending {Math.round(built.spread)} points apart. Over this window the pooled fit prints{' '}
+        {built.h1.changePct! >= 0 ? '+' : ''}{built.h1.changePct!.toFixed(1)}%{ci}, the only horizon its own gates
+        publish; longer windows abstain{built.abst ? <> (&ldquo;{built.abst}&rdquo;)</> : null}. Same nightly IRLS fits
+        as the laboratory above{built.nLots ? <> — {built.nLots.toLocaleString()} lots pooled,</> : <> —</>}{' '}
+        {built.nEndQ.toLocaleString()} in the end quarter. Component lines are context in the laboratory&rsquo;s market
+        inks, not certified moves.
+      </FigCap>
+    </div>
+  );
+}
+
+/* ═══ 7 · BID VELOCITY — the live book's bid distribution ═══ */
+const VEL_LABELS = ['0', '1', '2', '3–5', '6–10', '11–20', '21–50', '50+'];
+const velBucket = (v: number) => (v <= 0 ? 0 : v === 1 ? 1 : v === 2 ? 2 : v <= 5 ? 3 : v <= 10 ? 4 : v <= 20 ? 5 : v <= 50 ? 6 : 7);
+
+export function BidVelocityFigure({ lots, scope = 'all' }: { lots: AuctionLot[]; scope?: string }) {
+  const d = useMemo(() => {
+    const counts: number[] = [];
+    const houses = new Map<string, number>();
+    for (const l of lots) {
+      // only lots whose house prints a live book carry bidCount at all — the
+      // printed-bid gate: ask-only rooms are absent from this figure, not zero
+      if (l.status !== 'upcoming' || typeof l.bidCount !== 'number') continue;
+      if (scope !== 'all' && (marketOf(l.artist) || 'culture') !== scope) continue;
+      counts.push(l.bidCount);
+      houses.set(String(l.auctionHouse), (houses.get(String(l.auctionHouse)) || 0) + 1);
+    }
+    counts.sort((a, b) => a - b);
+    const active = counts.filter(c => c > 0);
+    const med = (a: number[]) => (a.length ? a[Math.floor(a.length / 2)] : 0);
+    return {
+      counts, active, zero: counts.length - active.length,
+      med: med(counts), medActive: med(active),
+      houses: Array.from(houses.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0]),
+    };
+  }, [lots, scope]);
+  const n = d.counts.length;
+  // under 20 exposed books the shape would be noise — the figure abstains
+  if (n < 20) return null;
+  const basis = (
+    <>counted on the {d.houses.length === 1 ? 'one house' : `${d.houses.length} houses`} whose live books print
+    bids ({d.houses.join(', ')}) — ask-only rooms are absent by the printed-bid gate, not
+    zero{scope !== 'all' ? <> · {scope} lots only</> : null}.</>
+  );
+  if (n >= 100) {
+    const cnt: number[] = new Array(VEL_LABELS.length).fill(0);
+    for (const v of d.counts) cnt[velBucket(v)]++;
+    const maxC = Math.max(...cnt);
+    const H = 150;
+    return (
+      <div className="ray-lf-card glass glass-quiet">
+        <div className="ray-lf-head">
+          <span className="ray-lf-title">Bid velocity</span>
+          <span className="ray-lf-method">bids per lot · the live book</span>
+        </div>
+        <div className="ray-lf-plot" style={{ height: H + 28 }}>
+          {cnt.map((c, i) => {
+            const h = Math.max(2, (c / maxC) * H);
+            const x = (i + 0.5) / cnt.length;
+            const zero = i === 0; // exposed book, no money yet — drawn hollow
+            return (
+              <React.Fragment key={i}>
+                <span style={{
+                  position: 'absolute', bottom: 28, left: `${x * 100}%`, transform: 'translateX(-50%)',
+                  width: `${Math.max(6, 46 / cnt.length)}%`, height: h,
+                  background: zero ? 'transparent' : 'color-mix(in srgb, var(--color-fg) 14%, transparent)',
+                  borderTop: zero ? '2px dashed var(--color-text-faint)' : '2px solid var(--color-fg)',
+                  borderRadius: '3px 3px 0 0',
+                }} aria-hidden />
+                <span className="ray-lf-lbl" style={{ bottom: 28 + h + 5, left: `${x * 100}%`, color: zero ? 'var(--color-text-muted)' : 'var(--color-fg)', fontWeight: 600 }}>
+                  {Math.round((c / n) * 100)}%
+                </span>
+                <span className="ray-lf-lbl" style={{ bottom: 10, left: `${x * 100}%` }}>{VEL_LABELS[i]}</span>
+              </React.Fragment>
+            );
+          })}
+          <span className="ray-lf-axis" style={{ bottom: 28 }} aria-hidden />
+        </div>
+        <FigCap>
+          Bids per lot across {n.toLocaleString()} upcoming lots, {basis} The median lot holds {d.med} bid{d.med === 1 ? '' : 's'}
+          {' '}({d.medActive} among the {d.active.length.toLocaleString()} already bid on); the hollow bar is
+          the {d.zero.toLocaleString()} at zero — an exposed book no one has bid into yet, not a missing read.
+          Counts refresh nightly, close-day lots intraday.
+        </FigCap>
+      </div>
+    );
+  }
+  // 20 ≤ n < 100 — the thin-data form: every lot drawn as its own dot on a
+  // log bids axis; a histogram here would pretend density the book can't back
+  const max = Math.max(2, ...d.active);
+  const LX = (v: number) => (Math.log(v) / Math.log(max)) * 100;
+  const H = 110;
+  const groups = new Map<number, number>();
+  const dots = d.active.map(v => {
+    const j = groups.get(v) || 0; groups.set(v, j + 1);
+    // fan ties vertically, cycling after ±4 so a heavy tie overplots (translucent
+    // ink shows the pile-up) instead of escaping the plot
+    const ring = j % 9;
+    return { v, y: 48 + (ring % 2 === 0 ? 1 : -1) * Math.ceil(ring / 2) * 9 };
+  });
+  const medX = LX(Math.max(1, d.medActive));
+  return (
+    <div className="ray-lf-card glass glass-quiet">
+      <div className="ray-lf-head">
+        <span className="ray-lf-title">Bid velocity</span>
+        <span className="ray-lf-method">bids per lot · the live book · thin sample, every lot drawn</span>
+      </div>
+      <div className="ray-lf-plot" style={{ height: H + 26 }}>
+        {[1, 3, 10, 30, 100].filter(t => t <= max).map(t => (
+          <React.Fragment key={t}>
+            <span style={{ position: 'absolute', top: 0, height: H, left: `${LX(t)}%`, borderLeft: '1px solid var(--chart-grid)' }} aria-hidden />
+            <span className="ray-lf-lbl" style={{ bottom: 8, left: `${LX(t)}%` }}>{t}</span>
+          </React.Fragment>
+        ))}
+        <span style={{ position: 'absolute', top: 0, height: H, left: `${medX}%`, borderLeft: '1px dashed var(--chart-ref)' }} aria-hidden />
+        <span className="ray-lf-lbl" style={{ top: 2, left: `${medX}%`, color: 'var(--color-fg)', fontWeight: 600 }}>median {d.medActive}</span>
+        {dots.map((p, i) => (
+          <span key={i} className="ray-lf-dot" style={{ top: p.y - 7, left: `${LX(p.v)}%`, width: 7, height: 7, background: 'var(--color-text-muted)', opacity: 0.7 }} aria-hidden />
+        ))}
+        <span className="ray-lf-axis" style={{ bottom: 26 }} aria-hidden />
+      </div>
+      <FigCap>
+        Each dot is one upcoming lot placed by its printed bid count (log axis) — {d.active.length} lots carrying at
+        least one bid out of {n} exposed books{d.zero > 0 ? <> ({d.zero} at zero sit off the log axis)</> : null},{' '}
+        {basis} Too thin for a histogram, so every lot is drawn; the dashed rule is the median.
       </FigCap>
     </div>
   );

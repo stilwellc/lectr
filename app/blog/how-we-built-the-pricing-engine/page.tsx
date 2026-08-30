@@ -6,6 +6,7 @@ import marketJson from '../../../public/data/ray/market.json';
 import { Colophon } from '../../components/Terminal';
 import { verifiedMovers, fmtPct } from '../../preview/terminal/verified';
 import type { MarketData } from '../../hooks/useRayData';
+import { EditorialStyle, PullQuote, FigCap } from '../../components/blog/Editorial';
 
 // BUILD-TIME figures, not literals: the movers table below reads the shipped
 // market.json through the SAME selection the live VerifiedMovers panel uses
@@ -48,7 +49,12 @@ function Formula({ children, caption }: { children: React.ReactNode; caption?: s
         }}>{children}</div>
       </div>
       {caption && (
-        <figcaption style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--color-text-muted)', margin: '8px 4px 0' }}>{caption}</figcaption>
+        <>
+          {/* FIG. duality (Editorial.tsx): the numbered folio carries the
+              caption on paper; the plain twin holds the same words in dark */}
+          <FigCap>{caption}</FigCap>
+          <figcaption className="lectr-fig-dark" style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--color-text-muted)', margin: '8px 4px 0' }}>{caption}</figcaption>
+        </>
       )}
     </figure>
   );
@@ -61,6 +67,7 @@ const V = ({ children }: { children: React.ReactNode }) => (
 export default function PricingEnginePost() {
   return (
     <div className="terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      <EditorialStyle />
       <ArtistNav activeSlug="blog" />
       <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 10 }}>
@@ -85,7 +92,7 @@ export default function PricingEnginePost() {
               <span className="v" style={{ display: 'block' }}>{meta.totalLots.toLocaleString()} lots</span>
             </div>
           </div>
-          <p style={{ ...p, fontSize: 17 }}>
+          <p className="lectr-dropcap" style={{ ...p, fontSize: 17 }}>
             An index that says how much a market has actually moved is easy to fake and hard to earn.
             Ours is a per-maker hedonic regression with a confidence gate bolted to the front of it —
             and the gate&rsquo;s job is to make the engine <span style={strong}>shut up</span>. Across
@@ -226,6 +233,9 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
             <span style={strong}>less, on purpose</span> — because a confident-looking wrong number is
             worse than an honest blank.
           </p>
+
+          {/* the pull — §8's closing sentence, lifted verbatim */}
+          <PullQuote>We publish less, on purpose — and everything we publish, we can defend.</PullQuote>
 
           <h2 style={h2}>4 · The verified movers</h2>
           <p style={p}>

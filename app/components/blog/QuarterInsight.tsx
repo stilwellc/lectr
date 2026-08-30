@@ -3,6 +3,7 @@ import ArtistNav from '../ArtistNav';
 import Flick from '../Flick';
 import { Colophon } from '../Terminal';
 import { formatPrice } from '../../utils';
+import { EditorialStyle, FigCap } from './Editorial';
 
 export interface TopSale { title: string; priceUsd: number; house: string; date: string; maker: string }
 export interface Mover { label: string; chgPct: number; n: number; slug?: string }
@@ -18,8 +19,9 @@ const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', border
 const td: React.CSSProperties = { padding: '9px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-secondary)' };
 const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', whiteSpace: 'nowrap' };
 
-/** Prose paragraph + section head for the narrative body. */
-export function P({ children }: { children: React.ReactNode }) { return <p style={p}>{children}</p>; }
+/** Prose paragraph + section head for the narrative body. `lede` marks the
+ *  note's opening paragraph — it takes the editorial drop cap (Editorial.tsx). */
+export function P({ children, lede }: { children: React.ReactNode; lede?: boolean }) { return <p style={p} className={lede ? 'lectr-dropcap' : undefined}>{children}</p>; }
 export function H({ children }: { children: React.ReactNode }) { return <h2 style={h2}>{children}</h2>; }
 export function B({ children }: { children: React.ReactNode }) { return <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{children}</span>; }
 
@@ -52,6 +54,7 @@ export default function QuarterInsight({
 }) {
   return (
     <div className="terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+      <EditorialStyle />
       <ArtistNav activeSlug="blog" />
       <div style={{ paddingTop: 28, paddingBottom: 60 }}>
         <header style={{ ...wrap, marginBottom: 6 }}>
@@ -80,7 +83,7 @@ export default function QuarterInsight({
         {/* stat band — north-star cream wells: borderless, inverted hierarchy
             (gray label, ink figure). Tone colors stay with the lamp — market
             direction only. */}
-        <div style={{ ...wrap, margin: '18px auto 6px' }}>
+        <figure style={{ ...wrap, margin: '18px auto 6px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {stats.map(s => (
               <div key={s.label} className="ns-well" style={{ padding: '16px 18px' }}>
@@ -90,7 +93,9 @@ export default function QuarterInsight({
               </div>
             ))}
           </div>
-        </div>
+          {/* the stat plate signs itself — FIG. folio in the light catalogue only */}
+          <FigCap>The quarter&rsquo;s headline measures, from the {market} sales lectr tracked in Q2 2026.</FigCap>
+        </figure>
 
         <article style={wrap}>
           {headline && (
@@ -118,9 +123,11 @@ export default function QuarterInsight({
                 padding: '12px 2px 0', fontSize: 13.5, color: 'var(--color-text-muted)',
               }}>
                 <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{headline.caption}</span>
-                <span>{headline.house} · {headline.saleLine}</span>
+                {/* the sale line moves down into the FIG. folio on paper; dark keeps it here */}
+                <span className="lectr-fig-dark">{headline.house} · {headline.saleLine}</span>
                 <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', fontWeight: 700 }}>{formatPrice(headline.priceUsd)}</span>
               </figcaption>
+              <FigCap>{headline.house} · {headline.saleLine}</FigCap>
               <div style={{ marginTop: 14 }}>
                 <p style={{ ...p, margin: 0 }}>{headline.para}</p>
               </div>

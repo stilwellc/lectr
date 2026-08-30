@@ -2850,6 +2850,24 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   letter-spacing: -0.02em;
   color: var(--tt-fg);
 }
+/* the north-star word reveal (§1.6 `text-reveal-word`) — framer drives the
+   opacity/scale/blur values inline; this class only shapes the box so the
+   transforms take (inline elements ignore transform) and each word scales
+   from its baseline, resolving upward, not from its middle. */
+.nsMastWord {
+  display: inline-block;
+  transform-origin: 50% 100%;
+}
+/* belt over the framer gate: a reduced-motion reader never sees a word in
+   flight, whatever inline values may land */
+@media (prefers-reduced-motion: reduce) {
+  .nsMastWord {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
 .nsMastCtas {
   display: flex;
   flex-wrap: nowrap;   /* the two doors sit side by side, never stacked */

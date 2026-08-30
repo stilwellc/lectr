@@ -199,3 +199,17 @@ re-ground and cream wells are light-scoped tokens. Dark stays the archive look.
   value, makers, profile, lot, blog/about, nav+footer.
 - Wave 3 (verification): full-page screenshots desktop + 390px, both modes, then ship.
 Record deviations and verdicts here as they land.
+
+## PART 4 — THE UPGRADE MACHINE (Aug 30 2026)
+- **/styleguide** — every primitive rendered once (internal, noindex). Taste
+  decisions get made there first; the shot rig captures it nightly.
+- **THE SHOT RIG** — scripts/ui-shots.mjs + .github/workflows/ui-shots.yml:
+  nightly Playwright captures of the key routes (desktop+mobile, light+dark)
+  against prod, pixelmatch-diffed vs tests/ui-baseline/. Re-baseline
+  deliberately with `node scripts/ui-shots.mjs --approve` + commit.
+  BASE_URL=http://localhost:3000 for a pre-ship check.
+- **THE REFERENCE ROTATION** — one taste-setter studied deeply per week, one
+  specific pattern taken, applied to one surface. Queue: Linear (app density,
+  keyboard surfaces), Stripe docs (tables/code), Amie (playful motion),
+  Arc/browser co (personality moments), Vercel (data viz restraint). Each
+  rotation appends its findings here — this doc is the accumulating law.

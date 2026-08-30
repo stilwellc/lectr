@@ -22,11 +22,15 @@ import Flick from './Flick';
 import PlateImg from './PlateImg';
 
 /**
- * LotPage — one lot as a CATALOGUE PAGE in the certificate language: the
+ * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
  * matted photograph plate (monogram fallback, CallPlate's pattern) beside a
- * ruled certificate column — microcap kicker, title, dotted-leader rows, the
- * comp pool as compact ledger rows, and the CTA row (view at house / save /
- * copy permalink). Serves BOTH permalink shapes:
+ * certificate column — quiet sentence-case head, light-display title, the
+ * ns-byline provenance ledger (House / Hammers / the money / Category), the
+ * engine's read as a compact ns-cell-color face (lamp-lawful: up only for a
+ * real Below Market call, ink otherwise), dotted .ns-ledger-row spec rows,
+ * the comp pool as dotted ledger rows under kicker + light headline plates,
+ * and the CTA row (view at house / save / copy permalink). Serves BOTH
+ * permalink shapes:
  *   /lot?id=<id>        — universal client resolution from the served data
  *   /lot/<id> (static)  — the flagged set, prerendered with initialLot so the
  *                         first paint (and the crawler) sees real content.
@@ -59,10 +63,16 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
    (display:contents) and CSS order restores the single-column reading order:
    plate → certificate → provenance → ladder → comps. */
 .lectr-lot-cola,.lectr-lot-colb{min-width:0}
-.lectr-lot-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:12px}
-.lectr-lot-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
-.lectr-lot-head .no{color:var(--color-text-muted);font-weight:600;font-variant-numeric:tabular-nums}
-.lectr-lot-title{font-size:clamp(24px,3.4vw,34px);font-weight:650;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0 0 4px}
+/* the plate head — north star: quiet gray sentence case over a single
+   hairline with crop-mark dots at the rule ends (registration grammar);
+   the old tracked-uppercase form is retired on this surface */
+.lectr-lot-head{position:relative;padding-top:14px;border-top:1px solid var(--hairline);font-size:13.5px;font-weight:400;letter-spacing:0.01em;color:var(--color-text-muted);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:14px}
+.lectr-lot-head::before,.lectr-lot-head::after{content:"";position:absolute;top:-2px;width:3px;height:3px;border-radius:50%;background:var(--color-border-mid)}
+.lectr-lot-head::before{left:-1.5px}
+.lectr-lot-head::after{right:-1.5px}
+.lectr-lot-head .no{color:var(--color-text-faint);font-weight:400;font-variant-numeric:tabular-nums}
+/* the lot's name goes light-display — authority through lightness */
+.lectr-lot-title{font-size:clamp(28px,4vw,42px);font-weight:330;letter-spacing:-0.02em;line-height:1.08;color:var(--color-fg);margin:0 0 6px}
 .lectr-lot-medium{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:2px 0 0}
 .lectr-lot-leaders{margin-top:16px;border-top:1px solid var(--hairline);padding-top:4px}
 .lectr-lot-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
@@ -72,7 +82,6 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-v.up{color:var(--color-up)}
 .lectr-lot-v.down{color:var(--color-down)}
 .lectr-lot-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
-.lectr-lot-dots{font-size:8.5px;letter-spacing:1px;color:var(--color-butter);margin-right:7px}
 .lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
 .lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(255,255,255,0.28) 4px,rgba(255,255,255,0.28) 5px)}
 .lectr-lot-monoglyph{font-size:64px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
@@ -80,7 +89,7 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
 .lectr-lot .ray-plate-img img{object-fit:contain}
 .lectr-lot .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11px;color:var(--color-text-muted);text-align:left}
-.lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--hairline)}
+.lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px dotted var(--color-border-mid)}
 .lectr-lot-comps{margin-top:44px}
 .lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
 .lectr-lot-comps-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
@@ -102,6 +111,32 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
   @keyframes lectrLotPulse{0%,100%{opacity:1}50%{opacity:0.45}}
 }
 .lectr-lot-noimg .ray-plate-img{height:220px}
+/* ── NORTH STAR, lot-only additions — every rule below is scoped under
+   .lectr-lot (or an -lk/-lval/-read/-shead class only this page renders),
+   so the shared comp-ledger grammar Ref/Sub/Player reuse is untouched.
+   The .lectr-lot-row/-k/-v/-fill/-sub family above now serves PlayerPage;
+   this page's spec rows speak .ns-ledger-row. ── */
+.lectr-lot-byline{margin:18px 0 2px}
+.lectr-lot .ns-byline .s{font-size:11px;line-height:1.45;color:var(--color-text-faint);margin-top:3px;max-width:230px}
+.lectr-lot .lectr-lot-leaders{border-top:none;padding-top:0;margin-top:8px}
+.lectr-lot-lk{font-size:13px;color:var(--color-text-muted);flex:none}
+.lectr-lot-lval{display:flex;align-items:baseline;justify-content:flex-end;gap:10px;min-width:0;text-align:right}
+.lectr-lot-lsub{font-size:11px;font-weight:500;color:var(--color-text-muted);white-space:nowrap}
+.lectr-lot-lv{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-lot-lv.up{color:var(--color-up)}
+.lectr-lot-lv.down{color:var(--color-down)}
+/* the read as color — compact ns-cell-color face; ground = the signal */
+.lectr-lot-read{min-height:0;padding:20px 22px;border-radius:16px;margin:18px 0 4px}
+.lectr-lot-read-stat{font-family:var(--font-mono),monospace;font-size:clamp(30px,3.2vw,40px);font-weight:500;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;margin:10px 0 8px}
+.lectr-lot-read .ns-cell-label{font-size:13px}
+.lectr-lot-read .ns-cell-body{font-size:13px;font-weight:450;line-height:1.5;max-width:40ch}
+/* section heads — quiet kicker + light headline on a registration plate */
+.lectr-lot-shead{display:flex;justify-content:space-between;align-items:flex-end;gap:8px 18px;flex-wrap:wrap;padding-top:14px}
+.lectr-lot-shead .ns-kicker{margin-bottom:4px}
+.lectr-lot-h2{font-size:clamp(19px,2.2vw,23px);font-weight:350;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0}
+.lectr-lot-shctx{font-size:11.5px;color:var(--color-text-faint);padding-bottom:2px}
+.lectr-lot .lectr-lot-comp{border-bottom:1px dotted var(--color-border-mid)}
+.lectr-lot .lectr-lot-note{padding:14px 16px;margin-top:14px}
 @media (max-width:899px){
   .lectr-lot{padding-block-start:14px}
   .lectr-lot-grid{grid-template-columns:minmax(0,1fr)}
@@ -125,6 +160,13 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
   .lectr-lot-row{flex-wrap:wrap}
   .lectr-lot-sub{white-space:normal}
   .lectr-lot-v{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  /* north-star rows: same wrap doctrine on the new ledger grammar */
+  .lectr-lot-lval{flex-wrap:wrap}
+  .lectr-lot-lsub{white-space:normal}
+  .lectr-lot-lv{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .lectr-lot .ns-byline{gap:8px 28px}
+  .lectr-lot .ns-byline .s{max-width:100%}
+  .lectr-lot-read-stat{font-size:30px}
 }
 `;
 
@@ -184,16 +226,19 @@ export function CopyLinkButton({ id, style }: { id: string; style?: React.CSSPro
   );
 }
 
-/** One dotted-leader certificate row: label — dotted fill — value. */
+/** One certificate spec row in the north-star ledger grammar: label left,
+    sub + value right, dotted hairline between rows (.ns-ledger-row). Tone
+    stays lamp-lawful — up/down only ever carry the signal's own direction. */
 function LeaderRow({ k, v, tone, sub, children }: {
   k: string; v?: string; tone?: 'up' | 'down'; sub?: string; children?: React.ReactNode;
 }) {
   return (
-    <div className="lectr-lot-row">
-      <span className="lectr-lot-k">{k}</span>
-      <span className="lectr-lot-fill" aria-hidden />
-      {sub && <span className="lectr-lot-sub">{sub}</span>}
-      <span className={`lectr-lot-v${tone ? ` ${tone}` : ''}`}>{children ?? v}</span>
+    <div className="ns-ledger-row">
+      <span className="lectr-lot-lk">{k}</span>
+      <span className="lectr-lot-lval">
+        {sub && <span className="lectr-lot-lsub">{sub}</span>}
+        <span className={`lectr-lot-lv${tone ? ` ${tone}` : ''}`}>{children ?? v}</span>
+      </span>
     </div>
   );
 }
@@ -252,12 +297,11 @@ export function LotPageSkeleton() {
         </div>
         <div>
           <div className="lectr-lot-head"><span className="lectr-lot-skel-block" style={{ width: 190, height: 10 }} /></div>
-          <div className="lectr-lot-skel-block" style={{ width: '70%', height: 30, marginBottom: 10 }} />
+          <div className="lectr-lot-skel-block" style={{ width: '70%', height: 36, marginBottom: 10 }} />
           <div className="lectr-lot-leaders">
             {[0, 1, 2, 3, 4].map(i => (
-              <div key={i} className="lectr-lot-row">
+              <div key={i} className="ns-ledger-row">
                 <span className="lectr-lot-skel-block" style={{ width: 74, height: 12 }} />
-                <span className="lectr-lot-fill" aria-hidden />
                 <span className="lectr-lot-skel-block" style={{ width: 96, height: 12 }} />
               </div>
             ))}
@@ -272,10 +316,10 @@ function NotOnTheBook({ id }: { id: string }) {
   return (
     <div className="lectr-lot rail" style={{ paddingTop: 60, paddingBottom: 100, textAlign: 'center' }}>
       <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
-      <div className="kicker" style={{ marginBottom: 14, fontVariantNumeric: 'tabular-nums' }}>
+      <span className="ns-kicker" style={{ marginBottom: 14, fontVariantNumeric: 'tabular-nums' }}>
         {id ? `no. ${id}` : 'no lot number'}
-      </div>
-      <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 650, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
+      </span>
+      <h1 style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 340, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
         This lot isn&rsquo;t on the book
       </h1>
       <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', maxWidth: 420, margin: '0 auto 26px', lineHeight: 1.55 }}>
@@ -576,10 +620,13 @@ export default function LotPage({ lotId, initialLot }: {
               Strict physical-match groups only; absence of the section means
               the engine confirmed nothing, never that nothing exists. */}
           {provenance.length >= 2 && (
-            <section className="lectr-lot-comps lectr-lot-prov" aria-label="Provenance">
-              <div className="lectr-lot-comps-head">
-                <span>Provenance · this exact object, {provenance.length} appearances</span>
-                <span className="ctx">physical matches, engine-confirmed</span>
+            <section className="lectr-lot-comps lectr-lot-prov ns-plate" aria-label="Provenance">
+              <div className="lectr-lot-shead">
+                <div>
+                  <span className="ns-kicker">Provenance</span>
+                  <h2 className="lectr-lot-h2">This exact object, {provenance.length} appearances</h2>
+                </div>
+                <span className="lectr-lot-shctx">physical matches, engine-confirmed</span>
               </div>
               <div style={{ marginTop: 6 }}>
                 {provenance.map(p => {
@@ -616,10 +663,13 @@ export default function LotPage({ lotId, initialLot }: {
               card market in one table. Build-stamped from exact identity
               matches, never similarity. */}
           {lot.cardComps && lot.cardComps.gradeLadder.length > 1 && (
-            <section className="lectr-lot-comps lectr-lot-ladder" aria-label="Grade ladder">
-              <div className="lectr-lot-comps-head">
-                <span>The grade ladder · this card, every grade</span>
-                <span className="ctx">medians, never means</span>
+            <section className="lectr-lot-comps lectr-lot-ladder ns-plate" aria-label="Grade ladder">
+              <div className="lectr-lot-shead">
+                <div>
+                  <span className="ns-kicker">The grade ladder</span>
+                  <h2 className="lectr-lot-h2">This card, every grade</h2>
+                </div>
+                <span className="lectr-lot-shctx">medians, never means</span>
               </div>
               <div style={{ marginTop: 6 }}>
                 {lot.cardComps.gradeLadder.map(r => (
@@ -642,10 +692,11 @@ export default function LotPage({ lotId, initialLot }: {
           <div className="lectr-lot-cert">
             <div className="lectr-lot-head">
               <span>
+                {/* the market rides the byline's Category column now —
+                    printing it here too would say it twice */}
                 {lot.artist in ARTIST_LABEL
                   ? <Link href={`/makers/${lot.artist}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
                   : makerName}
-                {marketLabel ? ` · ${marketLabel}` : ''}
               </span>
               <span className="no">no. {lot.id}</span>
             </div>
@@ -657,47 +708,75 @@ export default function LotPage({ lotId, initialLot }: {
               </p>
             )}
 
-            <div className="lectr-lot-leaders">
-              {isSold ? (
-                <>
-                  <LeaderRow
-                    k={lot.status === 'bought_in' ? 'Result' : 'Realized'}
-                    v={lot.status === 'bought_in' ? 'bought in' : lot.priceUsd ? formatPrice(lot.priceUsd) : '—'}
-                  />
-                  {(lot.estimateLow || lot.estimateHigh) && <LeaderRow k="Estimate" v={formatEstimate(lot)} />}
-                </>
-              ) : (
-                <LeaderRow
-                  // label by the value's shape: formatEstimate prints "$4K bid ·
-                  // 9 bids" whenever the two-sided estimate is missing and live
-                  // bids exist (RR runs bid sales too) — "Ask" over a bid
-                  // reading is a mislabel
-                  k={lot.auctionHouse === 'Goldin' || (!(lot.estimateLow && lot.estimateHigh) && (lot.currentBid || 0) > 0) ? 'Current bid' : 'Ask'}
-                  v={formatEstimate(lot)}
-                />
+            {/* the byline ledger — the lot's provenance columns (gray label
+                over ink value, dotted closing rule): House / Hammers /
+                the money / Category. Label logic preserved verbatim —
+                formatEstimate prints "$4K bid · 9 bids" whenever the
+                two-sided estimate is missing and live bids exist (RR runs
+                bid sales too), and "Ask" over a bid reading is a mislabel;
+                sold lots print the realized price, never ask-forward. */}
+            <div className="ns-byline lectr-lot-byline">
+              <div>
+                <div className="k">House</div>
+                <div className="v" style={{ color: houseColor }}>{lot.auctionHouse}</div>
+                {houseIntel && <div className="s">{houseIntel}</div>}
+              </div>
+              <div>
+                <div className="k">{isSold || isPastPending ? 'Hammered' : 'Hammers'}</div>
+                <div className="v">{formatDate(lot.saleDate)}</div>
+                {isPastPending
+                  ? <div className="s">results pending</div>
+                  : !isSold && mounted && !isNaN(new Date(lot.saleDate).getTime())
+                    ? <div className="s">{daysWord(lot.saleDate)}</div>
+                    : null}
+              </div>
+              <div>
+                <div className="k">
+                  {isSold
+                    ? (lot.status === 'bought_in' ? 'Result' : 'Realized')
+                    : lot.auctionHouse === 'Goldin' || (!(lot.estimateLow && lot.estimateHigh) && (lot.currentBid || 0) > 0) ? 'Current bid' : 'Ask'}
+                </div>
+                <div className="v">
+                  {isSold
+                    ? (lot.status === 'bought_in' ? 'bought in' : lot.priceUsd ? formatPrice(lot.priceUsd) : '—')
+                    : (formatEstimate(lot) || '—')}
+                </div>
+              </div>
+              {marketLabel && (
+                <div>
+                  <div className="k">Category</div>
+                  <div className="v">{marketLabel}</div>
+                </div>
               )}
+            </div>
+
+            {/* THE READ AS COLOR — the engine's face in ns-cell-color
+                grammar. dir comes STRICTLY from the signal the row already
+                printed: 'up' only when the engine called Below Market (the
+                lamp); anything else falls to ink — never red, never
+                manufactured. Every figure is the gap row's own number. */}
+            {isUpcoming && sig && (
+              <div className="ns-cell ns-cell-color lectr-lot-read" data-dir={sig.label === 'Below Market' ? 'up' : 'ink'}>
+                <span className="ns-cell-label">The gap · {sig.label.toLowerCase()}</span>
+                <span className="lectr-lot-read-stat">{signalMagnitude(sig.label, sig.pct)}</span>
+                <span className="ns-cell-body">
+                  {beatRate != null
+                    ? `${beatRate}% of flags like this beat their estimate`
+                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
+                  {' · '}{confidenceMeter(sig.confidence).word} confidence
+                </span>
+              </div>
+            )}
+
+            <div className="lectr-lot-leaders">
+              {isSold && (lot.estimateLow || lot.estimateHigh) ? (
+                <LeaderRow k="Estimate" v={formatEstimate(lot)} />
+              ) : null}
 
               {compsMed != null && (
                 <LeaderRow k="Comps median" v={formatPrice(compsMed)} sub={compsN != null ? `${compsN} sales` : undefined} />
               )}
 
-              {/* ask-forward framing is for open lots only */}
-              {isUpcoming && sig && (
-                <LeaderRow
-                  k="The gap"
-                  v={signalMagnitude(sig.label, sig.pct)}
-                  tone={sig.label === 'Below Market' ? 'up' : 'down'}
-                  sub={beatRate != null
-                    ? `${beatRate}% of flags like this beat their estimate`
-                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
-                />
-              )}
-              {isUpcoming && sig && (
-                <LeaderRow k="Confidence">
-                  <span className="lectr-lot-dots" aria-hidden>{confidenceMeter(sig.confidence).dots}</span>
-                  {confidenceMeter(sig.confidence).word}
-                </LeaderRow>
-              )}
               {isUpcoming && !sig && band && (
                 <LeaderRow k="Similar sold" v={`${formatPrice(band.low)}–${formatPrice(band.high)}`} sub={`${band.n} sales`} />
               )}
@@ -740,22 +819,8 @@ export default function LotPage({ lotId, initialLot }: {
                 />
               ) : null}
 
-              {isSold ? (
-                <LeaderRow k="Hammered" v={formatDate(lot.saleDate)} />
-              ) : isPastPending ? (
-                <LeaderRow k="Hammered" v={`${formatDate(lot.saleDate)} · results pending`} />
-              ) : (
-                <LeaderRow
-                  k="Hammers"
-                  v={mounted && !isNaN(new Date(lot.saleDate).getTime())
-                    ? `${formatDate(lot.saleDate)} · ${daysWord(lot.saleDate)}`
-                    : formatDate(lot.saleDate)}
-                />
-              )}
-
-              <LeaderRow k="House" sub={houseIntel ?? undefined}>
-                <span style={{ color: houseColor }}>{lot.auctionHouse}</span>
-              </LeaderRow>
+              {/* Hammers/Hammered, House (+ calibration) and the money row
+                  moved up into the byline ledger — same values, same guards */}
 
               {/* watch lots link into their reference dossier — the page a
                   bidder reads before trusting the estimate. Link gated on the
@@ -875,39 +940,51 @@ export default function LotPage({ lotId, initialLot }: {
               Suppressed for card-comp lots with no client-resolvable pool —
               the exact-card certificate rows are their proof surface. */}
           {!hideComps && (
-          <section className="lectr-lot-comps lectr-lot-pool" aria-label="Comparable sales">
-          <div className="lectr-lot-comps-head">
-            <span>
-              {band
-                ? `Recent sold · ${band.n} comparable ${formLabel}`
-                : called
-                  ? called.kind === 'edition'
-                    ? `The comps · this exact work, sold ${called.n} times`
-                    : `The comps · ${called.n} comparable ${formLabel}`
-                  : 'The comps'}
-            </span>
-            <span className="ctx">medians, never means</span>
+          <section className="lectr-lot-comps lectr-lot-pool ns-plate" aria-label="Comparable sales">
+          <div className="lectr-lot-shead">
+            <div>
+              <span className="ns-kicker">{band ? 'Recent sold' : 'The comps'}</span>
+              <h2 className="lectr-lot-h2">
+                {band
+                  ? `${band.n} comparable ${formLabel}`
+                  : called
+                    ? called.kind === 'edition'
+                      ? `This exact work, sold ${called.n} times`
+                      : `${called.n} comparable ${formLabel}`
+                    : 'Comparable sales'}
+              </h2>
+            </div>
+            <span className="lectr-lot-shctx">medians, never means</span>
           </div>
+          {/* explanation copy rides a cream well — the printed-bid gate
+              language below is preserved verbatim */}
           {band && (
-            <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.5 }}>
-              Realized prices — winning bid plus buyer&rsquo;s premium. Goldin publishes no estimates.
-            </p>
+            <div className="ns-well lectr-lot-note">
+              <div className="ns-well-label">How these prices read</div>
+              <div className="ns-well-body">
+                Realized prices — winning bid plus buyer&rsquo;s premium. Goldin publishes no estimates.
+              </div>
+            </div>
           )}
 
           {compsPending || (lot && isSportsScienceObject(lot) && wantsArchive && !archive.archiveLoaded && !archive.archiveError) ? (
             <div className="lectr-lot-quiet">Loading comparable sales&hellip;</div>
           ) : compRows.length === 0 ? (
-            <div className="lectr-lot-quiet">
-              {fullError
-                ? <>
-                    Comparable sales couldn&rsquo;t be loaded.{' '}
-                    <button onClick={() => retryFullLoad()} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
-                      Try again
-                    </button>
-                  </>
-                : (called && called.n > 0) || (lot?.status === 'upcoming' && (lot?.signal?.basis || 0) > 0)
-                  ? <>The {(called && called.n) || lot?.signal?.basis} sales behind this call sit in the deep corpus — the evidence rows couldn&rsquo;t be loaded right now.</>
-                  : <>No comparable sales clear the gates for this lot — lectr doesn&rsquo;t manufacture a pool.</>}
+            /* the honest empty state — explanation copy in a cream well,
+               wording preserved verbatim */
+            <div className="ns-well lectr-lot-note">
+              <div className="ns-well-body">
+                {fullError
+                  ? <>
+                      Comparable sales couldn&rsquo;t be loaded.{' '}
+                      <button onClick={() => retryFullLoad()} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
+                        Try again
+                      </button>
+                    </>
+                  : (called && called.n > 0) || (lot?.status === 'upcoming' && (lot?.signal?.basis || 0) > 0)
+                    ? <>The {(called && called.n) || lot?.signal?.basis} sales behind this call sit in the deep corpus — the evidence rows couldn&rsquo;t be loaded right now.</>
+                    : <>No comparable sales clear the gates for this lot — lectr doesn&rsquo;t manufacture a pool.</>}
+              </div>
             </div>
           ) : (
             <div style={{ marginTop: 6 }}>

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
+import { PullQuote } from '../../components/blog/Editorial';
 
 export const metadata: Metadata = {
   title: 'Q2 2026 art market in review — the trophies cleared, the middle got picky',
@@ -52,7 +53,7 @@ export default function Q2Art() {
       footnote="Art is print- and edition-dominated and our engine abstains on artist-level appreciation here — none of these cohorts clear the confidence bar. The moves shown are demand reads: how the median lot is hammering against its own estimate right now, not a measured return. Sachs traded only a handful of times in the quarter — treat that read as an anecdote."
     >
       <H>Two houses, two evenings, half a billion dollars</H>
-      <P>
+      <P lede>
         Almost the entire quarter&rsquo;s value lived in the May and June marquee sales, and it split
         cleanly down the middle: <B>Sotheby&rsquo;s took 52% of the art we track, Christie&rsquo;s
         46%</B> — no other house cleared 1%. Phillips, Bonhams and Wright, between them, moved under
@@ -71,6 +72,8 @@ export default function Q2Art() {
         the roster combined — split the remaining ~6%. That is what a trophy quarter looks like on the
         tape: a few objects doing almost all of the work, and a long, quiet tail underneath.
       </P>
+      {/* the pull — lifted verbatim from the paragraph above */}
+      <PullQuote>That is what a trophy quarter looks like on the tape: a few objects doing almost all of the work, and a long, quiet tail underneath.</PullQuote>
       <H>Warhol: the trophies moved, the cohort didn&rsquo;t</H>
       <P>
         Warhol is the clean case study for why we separate a headline from a market. Three Warhols

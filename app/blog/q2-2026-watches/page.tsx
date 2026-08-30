@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Fragment } from 'react';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
+import { PullQuote } from '../../components/blog/Editorial';
 import meta from '../../../public/data/ray/meta.json';
 import marketJson from '../../../public/data/ray/market.json';
 import { verifiedMovers, fmtPct, type VerifiedMover } from '../../preview/terminal/verified';
@@ -149,7 +150,7 @@ export default function Q2Watches() {
       footnote={footnote}
     >
       <H>The only tape we&rsquo;ll put a number on</H>
-      <P>
+      <P lede>
         Watches were the easiest market to sell into all quarter — <B>97–98% sell-through</B> across
         1,811 lots, with the median hammering 35% over its estimate midpoint and 55% clearing the high
         outright. Nothing else we track comes close on clearance or on sample depth: art buys in a
@@ -173,6 +174,8 @@ export default function Q2Watches() {
         {ONLY_WATCHES ? <> It is also why watches is the one place we quote a return at all — everywhere
         else the intervals never tighten enough to clear the bar.</> : null}
       </P>
+      {/* the pull — lifted verbatim from the paragraph above */}
+      <PullQuote>A read of &ldquo;+8%, but anywhere from −5% to +21%&rdquo; isn&rsquo;t a direction, it&rsquo;s noise wearing a number, and we&rsquo;d rather say so than launder it into a headline.</PullQuote>
       <H>What the index actually says</H>
       <P>
         One thing to be clear about before the numbers: the quarter above is fixed history, but the

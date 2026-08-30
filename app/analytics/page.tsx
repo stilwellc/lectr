@@ -40,6 +40,8 @@ const LabFiguresP = {
   Venue: dynamic(() => import('../components/analytics/LabFigures').then(m => m.VenueStrip), { ssr: false }),
   Field: dynamic(() => import('../components/analytics/LabFigures').then(m => m.DepthField), { ssr: false }),
   Repeat: dynamic(() => import('../components/analytics/LabFigures').then(m => m.RepeatSaleRoom), { ssr: false }),
+  Composite: dynamic(() => import('../components/analytics/LabFigures').then(m => m.CompositeParts), { ssr: false }),
+  Velocity: dynamic(() => import('../components/analytics/LabFigures').then(m => m.BidVelocityFigure), { ssr: false }),
   Styles: dynamic(() => import('../components/analytics/LabFigures').then(m => m.LabFiguresStyles), { ssr: false }),
 };
 
@@ -93,6 +95,13 @@ export default function AnalyticsPage() {
 
   const sections: [string, React.ReactNode][] = [
     ['lab', <IndexLab key="lab" marketData={marketData} scope={activeKey} />],
+    // the composite-dispersion exhibit rides beside the laboratory: the pooled
+    // fit against its vertical parts is a cross-market read, so it renders on
+    // the all view only (the flow trio's law — a scoped market must never
+    // print a global fit dressed as its own)
+    ...(activeKey === 'all'
+      ? [['parts', <LabFiguresP.Composite key="parts" marketData={marketData} />] as [string, React.ReactNode]]
+      : []),
     ['strength', <RelativeStrength key="strength" marketData={marketData} scope={activeKey} />],
     ['verified', <VerifiedMovers key="verified" marketData={marketData} scope={activeKey} variant="card" />],
     // LabFiguresStyles is hoisted below the sections' host (not in here):
@@ -105,6 +114,10 @@ export default function AnalyticsPage() {
             hairline); it takes the full rail like a dashboard hero */}
         <MarketCockpit marketData={marketData} scope={activeKey} />
         <SeasonalityStrip marketData={marketData} scope={activeKey} />
+        {/* bid velocity — the live book's own bids-per-lot distribution; it
+            filters to the scoped market's lots (a measured subset, never a
+            global fit re-labeled) and abstains below n=20 exposed books */}
+        <LabFiguresP.Velocity lots={allLots} scope={activeKey} />
         <HouseMatrix marketData={marketData} scope={activeKey} />
       </div>
     )],

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
+import { PullQuote } from '../../components/blog/Editorial';
 
 export const metadata: Metadata = {
   title: 'Q2 2026 science market in review — instruments and space, between the seasons',
@@ -40,7 +41,7 @@ export default function Q2Science() {
       footnote="A note on hygiene: the raw Q2 science tape carries a run of paintings and design lots that upstream routing mis-filed under scientific instruments and space (works with 'lunar,' 'celestial' or 'astronaut' in the title — a Hockney, a Houseago astronaut sculpture, a Niemeyer bed all surfaced above the real instruments). The top sales above are the cleaned, genuinely scientific set. The demand figures are our engine's per-collection medians over estimate — space +24%, fossils +23%, instruments +2%, meteorites −32% — read against near-complete estimate coverage in this vertical."
     >
       <H>Between the seasons</H>
-      <P>
+      <P lede>
         Science doesn&rsquo;t trade continuously the way watches do — it moves in curated seasonal
         sales, and the biggest ones didn&rsquo;t land inside Q2. What cleared was the steady middle
         of the instrument market: <B>a pair of George IV library globes at $38,400</B>, a set of
@@ -65,6 +66,8 @@ export default function Q2Science() {
         would rather show a $38,400 globe as our top lot and mean it than a $482,600 Hockney we
         don&rsquo;t.
       </P>
+      {/* the pull — lifted verbatim from the paragraph above */}
+      <PullQuote>We would rather show a $38,400 globe as our top lot and mean it than a $482,600 Hockney we don&rsquo;t.</PullQuote>
       <H>What demand says, since price can&rsquo;t</H>
       <P>
         These are collectible buckets, not priced cohorts — our engine won&rsquo;t publish an
