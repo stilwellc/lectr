@@ -3957,23 +3957,24 @@ html[data-lectr-light] .ray-saved-section > h2.ray-h2::after {
   border-top: 1px solid var(--hairline);
 }
 
-/* ── 2 · THE STAMP — the card's verdict struck as an ink block. The
-   signal number prints INSIDE in the vault's signal inks (the one place
-   green/coral live on ink in light — the vault grammar at cell scale). ── */
+/* ── 2 · THE VERDICT WASH — the ink-block stamp retired (Collin, Aug 30:
+   'the comps (+88%) is black still'). The verdict now prints as a soft
+   signal wash: the heat-pill grammar at card scale — signal-ink number,
+   secondary context, ground tinted by the direction it measures. ── */
 html[data-lectr-light] .ray-sigrow {
   display: inline-flex;
   align-items: baseline;
-  background: var(--color-fg);
-  color: #F2F1E9;
   border-radius: 8px;
   padding: 7px 11px 8px;
   gap: 9px;
   margin-bottom: 8px;
 }
-html[data-lectr-light] .ray-sigrow[data-tone=up] .ray-sigrow-pct { color: #57BE87; }
-html[data-lectr-light] .ray-sigrow[data-tone=down] .ray-sigrow-pct { color: #E0846F; }
-html[data-lectr-light] .ray-sigrow .ray-sigrow-ctx { color: #A3A194; }
-html[data-lectr-light] .ray-sigrow .ray-sigrow-dots [data-on='true'] { background: #F2F1E9; }
+html[data-lectr-light] .ray-sigrow[data-tone=up] { background: var(--color-up-soft); }
+html[data-lectr-light] .ray-sigrow[data-tone=down] { background: var(--color-down-soft); }
+html[data-lectr-light] .ray-sigrow[data-tone=up] .ray-sigrow-pct { color: var(--color-up); }
+html[data-lectr-light] .ray-sigrow[data-tone=down] .ray-sigrow-pct { color: var(--color-down-text); }
+html[data-lectr-light] .ray-sigrow .ray-sigrow-ctx { color: var(--color-text-secondary); }
+html[data-lectr-light] .ray-sigrow .ray-sigrow-dots [data-on='true'] { background: var(--color-fg); }
 
 /* ── 5 · THE GOLD PENCIL — the auctioneer's tick in the margin of every
    flagged row. A short gold stroke, hand-placed left of the row; the
