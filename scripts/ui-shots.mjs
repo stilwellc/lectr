@@ -60,7 +60,8 @@ for (const vp of VIEWPORTS) {
       const name = `${slug(route)}-${vp.name}-${mode.name}.png`;
       const page = await ctx.newPage();
       try {
-        await page.goto(`${BASE}${route}?${mode.q}`, { waitUntil: 'networkidle', timeout: 60000 });
+        await page.goto(`${BASE}${route}?${mode.q}`, { waitUntil: 'load', timeout: 60000 });
+        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
         // kill every transition/animation so frames are deterministic
         await page.addStyleTag({ content: '*,*::before,*::after{transition:none!important;animation:none!important}' });
         // walk the page so lazy rooms mount, then return to the top
