@@ -196,9 +196,33 @@ async function main() {
     try { const lot = toLot(it, ident, 'sold'); if (lot) lots.push(lot); else miss++; } catch { miss++; }
   });
   console.log(`[NFLAuction] parsed ${lots.length} new sold game-used lots (${miss} skipped)`);
+  // POISON DETECTOR: if one exact price carries >20% of a >=50-row batch,
+  // the feed is echoing a widget/campaign figure, not per-lot results.
+  if (lots.length >= 50) {
+    const census = new Map<number, number>();
+    for (const l of lots) {
+      const p = (l as unknown as { priceUsd?: number }).priceUsd;
+      if (typeof p === 'number') census.set(p, (census.get(p) || 0) + 1);
+    }
+    const [topPrice, topN] = Array.from(census.entries()).sort((a, b) => b[1] - a[1])[0] ?? [0, 0];
+    if (topN > lots.length * 0.2) {
+      console.error(`[NFLAuction] ABORT: $${topPrice} repeats on ${topN}/${lots.length} new sold rows — poisoned feed, nothing written.`);
+      process.exit(1);
+    }
+  }
 
-  // ── IDWALK — the deep archive: every wayback-recovered id vs the live site ──
+  // ── IDWALK — RETIRED (Aug 30 2026). The mode's price extraction was
+  // unsound: the first "Current Bid: $X" on an archived lot page belongs to
+  // the sidebar Hot-Items widget as often as the subject, which minted 3,895
+  // fake sales sharing a handful of widget prices ($10,050 ×3,622 …) — 70% of
+  // the NFL sold corpus, healed by scripts/heal-nflauction-idwalk.ts. Closed
+  // pages render true amounts via JS only; there is no honest server-side
+  // price for these ids. Never re-enable without a verified per-lot source.
   if (process.argv.includes('--idwalk')) {
+    console.error('[NFLAuction] --idwalk is RETIRED: its price scrape read the Hot-Items widget, not the lot. See scripts/heal-nflauction-idwalk.ts.');
+    process.exit(1);
+  }
+  if (false) {
     const manifest = path.join(process.cwd(), 'scripts', 'data', 'nflauction-wayback-ids.csv');
     const rows = fs.readFileSync(manifest, 'utf8').trim().split('\n').slice(1)
       .map(l => { const [id, ts] = l.split(','); return { id: Number(id), ts }; })
