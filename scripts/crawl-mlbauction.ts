@@ -369,6 +369,22 @@ async function main() {
   if (process.argv.includes('--write')) {
     const { good, dropped } = settledOnly(lots);
     if (dropped) console.log(`[MLBAuction] dropped ${dropped} unsettled/future-dated lots`);
+    // POISON DETECTOR (the NFL idwalk lesson, Aug 30 2026): if one exact
+    // price carries >20% of a >=50-row batch of NEW sold rows, the source is
+    // echoing a template/widget constant, not per-lot results — abort.
+    if (good.length >= 50) {
+      const census = new Map<number, number>();
+      for (const l of good) {
+        const pv = (l as unknown as { priceUsd?: number; realizedUsd?: number });
+        const pr = pv.realizedUsd ?? pv.priceUsd;
+        if (typeof pr === 'number') census.set(pr, (census.get(pr) || 0) + 1);
+      }
+      const top = Array.from(census.entries()).sort((a, b) => b[1] - a[1])[0];
+      if (top && top[1] > good.length * 0.2) {
+        console.error(`[MLBAuction] ABORT: $${top[0]} repeats on ${top[1]}/${good.length} new sold rows — poisoned feed, nothing written.`);
+        process.exit(1);
+      }
+    }
     const rep = assertInvariants(good.concat(liveLots));
     if (rep.fatal.length) {
       console.error(`[MLBAuction] refusing to write: ${rep.fatal.length} FATALs`);
