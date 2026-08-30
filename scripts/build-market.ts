@@ -229,6 +229,32 @@ export function runMarketBuild() {
   const teamOf = (l: AuctionLot) => { let v = teamCache.get(l.id); if (v === undefined) { v = guTeamOf(l.title || ''); teamCache.set(l.id, v); } return v; };
   const useOf = (l: AuctionLot) => { let v = useCache.get(l.id); if (v === undefined) { v = guUseClass(l.title || ''); useCache.set(l.id, v); } return v; };
   const gameOf = (l: AuctionLot) => { let v = gameCache.get(l.id); if (v === undefined) { v = guGameKey(l.title || '', (l as { sportYear?: number | null }).sportYear ?? null); gameCache.set(l.id, v); } return v; };
+  // ── THE ROSTER TIER (Aug 30 2026, Collin: "cross player is great but it
+  // has to be smart") — a per-player price factor over sold game-used, the
+  // venue-factor grammar applied to rosters: factor = playerMedian /
+  // commodityMedian (the median of player medians). Cross-player pooling
+  // below uses it to (a) admit only tier-compatible comps and (b) scale a
+  // comp's realized price into the subject's tier. Players under 2 sales
+  // carry no factor (treated as commodity-band).
+  const guFactor = new Map<string, number>();
+  {
+    const byPlayer = new Map<string, number[]>();
+    for (const c of soldByArtist.get('game-used') || []) {
+      const pp = playerSlugOf(c);
+      const rv = (c as { realizedUsd?: number }).realizedUsd;
+      if (!pp || !(rv! > 0)) continue;
+      const arr = byPlayer.get(pp) || []; arr.push(rv!); byPlayer.set(pp, arr);
+    }
+    const meds: number[] = [];
+    const med = (a: number[]) => { const x = [...a].sort((q, w) => q - w); return x.length % 2 ? x[(x.length - 1) / 2] : (x[x.length / 2 - 1] + x[x.length / 2]) / 2; };
+    const pm = new Map<string, number>();
+    byPlayer.forEach((vals, pp) => { if (vals.length >= 2) { const m = med(vals); pm.set(pp, m); meds.push(m); } });
+    const commodity = meds.length >= 8 ? med(meds) : null;
+    if (commodity) pm.forEach((m, pp) => guFactor.set(pp, m / commodity));
+    console.log(`[market] roster tier: ${guFactor.size} player factors (commodity median ${commodity ? '$' + Math.round(commodity) : 'n/a'})`);
+  }
+  const crossPooled = new Set<string>();
+
   for (const lot of upcoming) {
     let pool = soldByArtist.get(lot.artist) || [];
     if (SPORTS_SET.has(lot.artist)) {
@@ -246,6 +272,33 @@ export function runMarketBuild() {
             useOf(c) === use &&                       // never used↔issued
             (!team || teamOf(c) === team) &&          // same team when named
             gameOf(c) === game);                      // exact game match: a dated (specific-game) lot comps ONLY same-game; an undated lot (game=null) comps ONLY other undated
+          // ROSTER-TIER CROSS-PLAYER: thin same-player pool + a named game
+          // (or team) → admit OTHER players from the same game/team, but only
+          // tier-compatibly. Subject with a known factor comps within ±1
+          // octave, each comp's price scaled by subjF/compF; a no-history
+          // subject is by definition not a star → commodity-band comps only,
+          // unadjusted. Confidence caps at medium below.
+          if (pool.length < 3 && (game || team)) {
+            const subjF = guFactor.get(pid) ?? null;
+            const cross: typeof pool = [];
+            for (const c of soldByArtist.get('game-used') || []) {
+              const cp = playerSlugOf(c);
+              if (!cp || cp === pid) continue;
+              if (useOf(c) !== use) continue;
+              if (game ? gameOf(c) !== game : teamOf(c) !== team) continue;
+              const rv = (c as { realizedUsd?: number }).realizedUsd;
+              if (!(rv! > 0)) continue;
+              const cf = guFactor.get(cp) ?? null;
+              if (subjF != null) {
+                if (cf == null || Math.abs(Math.log2(cf / subjF)) > 1) continue;
+                cross.push({ ...c, realizedUsd: rv! * (subjF / cf) } as typeof pool[number]);
+              } else {
+                if (cf != null && cf > 2) continue;   // stars never comp a no-history subject
+                cross.push(c);
+              }
+            }
+            if (cross.length) { pool = pool.concat(cross); crossPooled.add(lot.id); }
+          }
         }
       } else {
         // NO readable player (~19% the title parser can't read) → same-SPORT is
@@ -266,6 +319,11 @@ export function runMarketBuild() {
       // the failToSell receipt already shows flags don't chase no-sales).
       const st = artistSellThrough.get(lot.artist);
       if (st !== undefined) (v as ValueResult & { poolSellThroughPct?: number }).poolSellThroughPct = st;
+      if (crossPooled.has(lot.id)) {
+        const vv = v as ValueResult & { crossPlayer?: boolean; confidence?: string };
+        vv.crossPlayer = true;                        // UI: name the basis honestly
+        if (vv.confidence === 'high') vv.confidence = 'medium';
+      }
       (lot as AuctionLot & { value?: ValueResult }).value = v; valued++;
     }
     else (lot as AuctionLot & { value?: ValueResult | null }).value = null;

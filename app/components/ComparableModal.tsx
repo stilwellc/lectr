@@ -1134,7 +1134,7 @@ export default function ComparableModal({
             {called
               ? called.signal.kind === 'edition'
                 ? `The call — this exact work, sold ${comparables.length} times`
-                : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}`
+                : `The call — ${comparables.length} comparable ${FORM_LABEL[called.signal.form]}${(lot as AuctionLot & { value?: { crossPlayer?: boolean } | null }).value?.crossPlayer ? ' · same-game jerseys, player-tier matched' : ''}`
               : band
                 ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
                 : compsPending || comparables.length === 0

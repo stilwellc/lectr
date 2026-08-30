@@ -122,10 +122,33 @@ export function playerOf(title: string, slug: string): { player: string | null; 
     const c = parseCard(title);
     return { player: c.player, playerSlug: c.playerSlug };
   }
+  // STRUCTURED HOUSE TITLES (NFL/MLB Auction): "{Sale prefix} - {Team} {Player}
+  // Game (Worn|Used|Issued) …". The leading run before the dash is sale
+  // BRANDING ("London Games", "Crucial Catch"), not a person — it minted a
+  // pseudo-player that pooled the whole vertical together (Aug 30 2026).
+  // Parse the segment between the dash and the use-class token, dropping a
+  // leading team name.
+  const structured = stripped.match(
+    /-\s+((?:[A-Z][\w'’.-]*[\w.]\s+){1,5}?)Game[- ](?:Worn|Used|Issued)/
+  );
+  if (structured) {
+    const words = structured[1].trim().split(/\s+/);
+    // drop leading team token(s) — NFL/MLB franchise names are single words
+    // here ("Jets", "Dolphins", "49ers", "Yankees"); two-word city forms don't
+    // appear in these feeds. Anything left is the athlete.
+    const TEAMS = /^(Cardinals|Falcons|Ravens|Bills|Panthers|Bears|Bengals|Browns|Cowboys|Broncos|Lions|Packers|Texans|Colts|Jaguars|Chiefs|Raiders|Chargers|Rams|Dolphins|Vikings|Patriots|Saints|Giants|Jets|Eagles|Steelers|49ers|Seahawks|Buccaneers|Titans|Commanders|Redskins|Football|Yankees|Mets|Dodgers|Cubs|Sox|Astros|Braves|Padres|Phillies|Mariners|Angels|Athletics|Orioles|Royals|Tigers|Twins|Guardians|Indians|Rangers|Blue|Jays|Marlins|Nationals|Pirates|Reds|Rockies|Brewers|Diamondbacks)$/i;
+    while (words.length > 1 && TEAMS.test(words[0])) words.shift();
+    const cand = words.join(' ');
+    if (words.length >= 2 && !NAME_STOP.test(words[0])) {
+      return { player: cand, playerSlug: playerSlugOf(cand) };
+    }
+    return { player: null, playerSlug: null };
+  }
   const m = stripped.match(LEADING_PLAYER);
   const name = m ? trimNameRun(m[1]) : null;
-  // reject non-person leads ("World Series", "Super Bowl", team-ish runs)
-  if (name && /\b(World|Series|Super|Bowl|Olympic|Stanley|Final|Champion|League|Team|City|United|Yankees|Lakers|Cowboys|Collection|Lot\b)/i.test(name)) {
+  // reject non-person leads ("World Series", "Super Bowl", team-ish runs,
+  // sale branding — "London Games", "Crucial Catch", "Salute to Service")
+  if (name && /\b(World|Series|Super|Bowl|Olympic|Stanley|Final|Champion|League|Team|City|United|Yankees|Lakers|Cowboys|Collection|Games|Catch|Salute|Auction|Lot\b)/i.test(name)) {
     return { player: null, playerSlug: null };
   }
   return { player: name, playerSlug: playerSlugOf(name) };
