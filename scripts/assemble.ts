@@ -95,6 +95,34 @@ async function main() {
     console.log(`[assemble] no baseline meta; ${allLots.length} lots clears the ${CORPUS_FLOOR} floor`);
   }
 
+  // ── SENTINEL PRICE WATCH (Aug 30 2026, the NFL idwalk lesson) — poisoned
+  // feeds stamp ONE price across a batch ($10,050 ×3,622 NFL idwalk; $3.1M
+  // ×27 Lelands gallery bleed). Honest repeats are bid-increment ×premium
+  // ties ($200×1.22=$244 ×68 inside one big card sale) — those live under
+  // ~$1,000 and ladder across increments. WARNING-tier only (crawlers carry
+  // their own abort-tier batch detectors): flag any single price ≥$1,000
+  // repeating ≥15× with ≥60% of the repeats on ONE saleDate.
+  {
+    const byHouse = new Map<string, Map<number, Map<string, number>>>();
+    for (const l of allLots) {
+      if (l.status !== 'sold') continue;
+      const p = (l as { realizedUsd?: number; priceUsd?: number }).realizedUsd
+        ?? (l as { priceUsd?: number }).priceUsd;
+      if (!(p! >= 1000)) continue;
+      const h = l.auctionHouse || '?';
+      const m = byHouse.get(h) || new Map<number, Map<string, number>>(); byHouse.set(h, m);
+      const d = m.get(p!) || new Map<string, number>(); m.set(p!, d);
+      d.set(l.saleDate || '?', (d.get(l.saleDate || '?') || 0) + 1);
+    }
+    byHouse.forEach((m, h) => m.forEach((d, p) => {
+      let n = 0, top = 0, topDate = '';
+      d.forEach((c, dt) => { n += c; if (c > top) { top = c; topDate = dt; } });
+      if (n >= 15 && top / n >= 0.6) {
+        console.warn(`[assemble] SENTINEL WARNING: ${h} $${p.toLocaleString()} ×${n} (${top} on ${topDate}) — possible price bleed; inspect before trusting comps.`);
+      }
+    }));
+  }
+
   // ── corpus-hygiene normalization (idempotent) ──
   // Runs AFTER the sanity gate (so we never normalize a corpus we're about to
   // reject) and BEFORE the per-slug stats + corpus/served write, so the reroute,
