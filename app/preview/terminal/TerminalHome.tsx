@@ -19,12 +19,12 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTIST_LABEL, MARKETS, marketArtists, type Market } from '../../constants';
+import { ARTIST_LABEL, MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
 import { signalCallOf } from '../../lib/account';
 import { useSavedLots } from '../../hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, sizedImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
 import { dealScore, signalMagnitude } from '../../lib/comps';
@@ -223,11 +223,15 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
           <img
-            src={httpsImg(lot.imageUrl)}
+            // the resizer rung, not the 2880px master (Bonhams ships 600KB+
+            // per lot; twenty of them painted white squares for seconds).
+            // Transparent until it paints so the monogram behind shows.
+            src={sizedImg(httpsImg(lot.imageUrl), 120)}
             alt=""
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
+            style={{ background: 'transparent' }}
             onError={e => { e.currentTarget.style.display = 'none'; }}
           />
         )}
@@ -272,7 +276,8 @@ function IcoDesk() { // the save mark — the same bookmark the feed prints
 
 // The instrument set's honest platform counts — static, from the same
 // constants every page already trusts ('all' is the anchor, not a vertical).
-const MAKER_COUNT = Object.keys(ARTIST_LABEL).length;
+// ROSTER splits named makers from category pseudo-artists: "54 makers" was
+// counting 22 categories as people.
 const VERTICAL_COUNT = MARKETS.length - 1;
 
 export default function TerminalHomePage() {
@@ -545,10 +550,12 @@ export default function TerminalHomePage() {
     return it ? { lot: it.lot, pct: it.pct! } : null;
   }, [wallItems]);
 
-  // The Value Engine's chapter-01 hero: ONE lot — the highest-confidence,
-  // deepest-value flag on the book (confidence tier first, then gap depth).
-  // Prefers a lot not already hanging on Tonight's Wall; falls back to the
-  // absolute best when no high-confidence flag exists off the wall.
+  // The Value Engine's chapter-01 hero: ONE lot — the best flag on the book
+  // by THE ONE FLAGGED RANKING (dealScore: calibrated odds first, then the
+  // capped gap — never confidence+pct, which is a second ranking).
+  // Prefers a high-confidence lot not already hanging on Tonight's Wall
+  // (confidence is a GATE here, not the sort); falls back to the absolute
+  // best when no high-confidence flag exists off the wall.
   const engineHero = useMemo(() => {
     const CONF: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, low: 0 };
     const wallSet = new Set(wallItems.map(w => w.lot.id));
@@ -562,9 +569,7 @@ export default function TerminalHomePage() {
       .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
       .filter((x): x is { lot: AuctionLot; signal: NonNullable<ReturnType<typeof lotSignal>> } =>
         !!x.signal && x.signal.label === 'Below Market')
-      .sort((a, b) =>
-        (CONF[b.signal.confidence || 'low'] - CONF[a.signal.confidence || 'low'])
-        || (b.signal.pct - a.signal.pct));
+      .sort((a, b) => dealScore(b.lot, b.signal.pct) - dealScore(a.lot, a.signal.pct));
     const offWall = cands.find(x => !wallSet.has(x.lot.id) && CONF[x.signal.confidence || 'low'] >= 2);
     return offWall ?? cands[0] ?? null;
   }, [upcoming, belowIds, allLots, wallItems]);
@@ -936,8 +941,8 @@ export default function TerminalHomePage() {
                   href="/analytics"
                 />
                 <Cell
-                  stat={MAKER_COUNT.toLocaleString()}
-                  statNote={`makers tracked across ${VERTICAL_COUNT} verticals`}
+                  stat={ROSTER.makers.toLocaleString()}
+                  statNote={`makers · ${ROSTER.categories} categories across ${VERTICAL_COUNT} verticals`}
                   mark={<FigPools size={96} />}
                   label="The makers ledger"
                   body="Sale history, live coverage and market reads, one dossier per name."
@@ -1028,12 +1033,17 @@ export default function TerminalHomePage() {
                                   {lot.imageUrl && (
                                     <img
                                       className="thumb"
-                                      src={httpsImg(lot.imageUrl)}
+                                      // the resizer rung, not the 2880px master — and
+                                      // NO opaque background: .thumb's elevated fill
+                                      // painted a blank square over the monogram for
+                                      // the seconds a 600KB Bonhams master took to land
+                                      // (the four white Patek squares on the block)
+                                      src={sizedImg(httpsImg(lot.imageUrl), 120)}
                                       alt=""
                                       loading="lazy"
                                       decoding="async"
                                       referrerPolicy="no-referrer"
-                                      style={{ position: 'absolute', inset: 0 }}
+                                      style={{ position: 'absolute', inset: 0, background: 'transparent' }}
                                       ref={el => { if (el && el.complete && el.naturalWidth === 0) el.style.display = 'none'; }}
                                       onError={e => { e.currentTarget.style.display = 'none'; }}
                                     />

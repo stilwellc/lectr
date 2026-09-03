@@ -59,6 +59,31 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull
 
+      # GUARD 0 — never deploy OLDER data than production already serves.
+      # This workflow fires on every close-board bot commit (6×/day) with no
+      # meta.json in git to defend with: if the R2 pull above fell back to a
+      # stale copy (pointer lag, R2 blip, a checkout that predates the last
+      # push), the export would bake yesterday's book over today's. Compare
+      # lastCrawl (ISO — lexicographic order IS chronological) against the
+      # live site's meta.json; the close-board overlay is committed to git
+      # and rides regardless. Prod unreachable → proceed (can't compare,
+      # but a code fix must still be able to ship); DEPLOY_ALLOW_OLDER=1 on
+      # a manual dispatch overrides a deliberate rollback.
+      - name: Refuse to deploy data older than production
+        run: |
+          local_stamp=$(python3 -c "import json;print(json.load(open('public/data/ray/meta.json')).get('lastCrawl',''))" 2>/dev/null || echo "")
+          [ -n "$local_stamp" ] || { echo "::error::public/data/ray/meta.json missing or has no lastCrawl after the R2 pull — refusing to bake a data-less export"; exit 1; }
+          prod_stamp=$(curl -sf --max-time 20 "https://lectr.bid/data/ray/meta.json?cb=$(date +%s)" | python3 -c "import json,sys;print(json.load(sys.stdin).get('lastCrawl',''))" 2>/dev/null || echo "")
+          if [ -z "$prod_stamp" ]; then echo "prod meta.json unreadable — cannot compare; deploying local ($local_stamp)"; exit 0; fi
+          if [[ "$local_stamp" < "$prod_stamp" ]]; then
+            if [ "${DEPLOY_ALLOW_OLDER:-0}" = "1" ]; then echo "::warning::deploying OLDER data ($local_stamp) over prod ($prod_stamp) — DEPLOY_ALLOW_OLDER=1"; exit 0; fi
+            echo "::error::local data ($local_stamp) is OLDER than production ($prod_stamp) — refusing to regress prod. Re-run after \`data-store.sh pull\` resolves the fresh pointer, or dispatch with DEPLOY_ALLOW_OLDER=1 for a deliberate rollback."
+            exit 1
+          fi
+          echo "✓ local data $local_stamp ≥ prod $prod_stamp"
+        env:
+          DEPLOY_ALLOW_OLDER: ${{ vars.DEPLOY_ALLOW_OLDER }}
+
       # build-og pre-renders the 33 artist share cards, then next exports
       # the whole site to out/ (50 static pages + data)
       - name: Build static export

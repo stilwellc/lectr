@@ -304,3 +304,58 @@ Validate: science hindsight coverage 179→1,300±100 with per-slug within-±100
 **Step 8 (deferred, in priority order):** (a) watches era/recency gate — **MEASURED AND DECLINED Aug 30 2026** (`scripts/_qa/era-gate-loo.ts`, build-side engine, 4,000-anchor LOO: ±15y touched-read err 35.8%→36.2%, ±10y −1.3pt touched for 73 lost reads — under the ≥2pt bar; the 1,500-anchor run showed a phantom −2.5pt win, so any re-litigation needs n≥4,000). Same pass adopted the build-side ART area gate at ≤4× (`scripts/_qa/dims-gate-loo.ts`: touched 95/2,185 reads 49.4%→39.9%, aggregate 45.4%→44.9%; ≤2.5× — this spec's client band — measured WORSE there; design/watches declined) — wired in `app/lib/similarity.ts`; (b) Goldin sold history → client shards or server-side band precompute vs the 507K R2 corpus (worth ~5× the game-used parser's live yield); (c) crawl-stamp dimensions + design modelKey (unlocks the currently-blind 2.2× length gate: fires on 29.8% of pairs when it can see, sees 0.28%); (d) meteorite weight parsing (the biggest unexploited within-identity lever for science bands).
 
 **Global regression tripwires (every step):** repeat-sales card index untouched (no card-path file is modified); `signalMagnitude`/`dealScore` semantics unchanged; edition path precedence unchanged; flag beat definition (realized ≥ estMid, premium-flattered ~1.25×) used ONLY for A/B deltas, never quoted as an absolute win rate.
+
+---
+
+## 5 · SEP 2 2026 ENGINE AUDIT — WHAT SHIPPED (amends §1–4 and supersedes ENGINE_LANES cut-list #12 for the backtest/calibration items below)
+
+All file references are the shipped code; every number is measured on the local Aug 14 corpus snapshot (1.10M lots, 283k backtest targets).
+
+### 5.1 The backtest lives again (P0-1)
+- **Exact candidate pre-filter** — `scripts/backtest-core.ts` `candidatePriors`: per-maker inverted index; a prior is a candidate only if it shares a token from the target's heaviest-IDF prefix (suffix-norm bound: cosine ≤ ‖a_shared‖/‖a‖ < 0.45 ⇒ inadmissible) or its exact ref/edition key. Necessary-condition filter, **byte-identical results** (2,421-target stratified harness, diff = 0). Throughput 31 → **459 targets/s**; culture 148 → 2.3 ms/target. Root cause of the "40→4/s past 160k" collapse: the RR archive's 228k-lot entertainment-memorabilia roster, not array growth.
+- **Rehydration instead of forced rebuild** — `rehydrateState`: `pf = r·cr − 1`, `fl = cr ≥ 1.3` (the uncalibrated legacy labeler), `et = 'b'` pre-Aug-14, `sd` from the frozen `nowMs` anchor, `kt` by (market, sale-day) cohort lookup. Local: all 85,515 legacy rows repaired; byMarket went from n:0 everywhere to art 18,002/16,480, watches 13,028/20,625, design 3,197/3,450, science 802/819, culture 1,996/2,611, sports 2,292/3,682 (flagged/unflagged).
+- **"New" keying** — `build-backtest-incremental.ts`: never-attempted (`scoredIds ∪ triedIds`) AND (closed inside the trailing 120-day window OR `firstSeen` after the prior run). Nightly budget 80k, chunked oldest-first. Late-posted results are no longer dropped.
+- **Per-market legs** — `build-backtest.ts --market <m> --leg-dir …` and `--merge`; `mergeStates` is exact (order-free accumulators). Design leg: 17.5k targets in 22 s wall (incl. 18 s corpus prep). Incremental (3.5k targets after rehydration): **34 s wall**.
+- **Exit codes** — both entry points exit 1 on any failure; `assertRecord` refuses an empty summary; state writes are atomic (tmp + rename).
+- Workflow changes are in `docs/ENGINE_WORKFLOW_PATCH.md` (blocking job, leg matrix, stale-record check, validate-engine gate).
+
+### 5.2 Point-in-time calibration (P1-1)
+`replayTargets` scores in saleDate order and calls `setCalibration(calibrationFor(state, quarterStart))` at every calendar-quarter boundary — the calibration is refit from observations dated strictly before the quarter (≥500 rows, else the hardcoded holdout fallback). The record now measures the engine production ran. `ENGINE_VERSION = '2026.09.02-pit-cal'`; rows carry `ev`; `backtest.json.rowsOnVersionPct` shows how much of the record is on the current labeler (1.7% until a full leg run).
+
+### 5.3 Out-of-sample band coverage (P1-2)
+`calibration.bandCoverageOOS[market] = {high, medium, low, nFit, nTest, split}` — fit on the older half of that market's rows (its own median sale day), tested on the newer half; per-market tier bands (`calibration.bandByMarket`, n ≥ 150 per tier) with the global band as fallback, and the engine reads `bandByMarket[market][conf] ?? band[conf]`. Local (global-split run): all 81/78/73; art 72/73/69; watches 86/78/72; design 83/79/76; science —/66/68; culture —/—/85; sports —/74/61. **The in-sample `bandCoverage` (70/70/70 by construction) must no longer be cited as "70% of the time" — the UI should print the OOS figure for the lot's market.**
+
+### 5.4 Card-comp tier honesty (P0-2) — `scripts/build-market.ts` §3e
+Tier 1/2 pools now use a **1-year half-life recency decay** (they used every sale ever); the **band is the pool's own 15/85 lerp dispersion** (`[min,max]` at n=2) instead of `low = high = value`; **n=2–3 exact → 'medium'**, n ≥ 4 → 'high'; tier 2 grade-adjusts EVERY rung to the target grade (all rungs vote) instead of nearest-rung only; bid reads go through `vsBidRead` (all-in). Venue clamp stays ±10% unless a house has ≥300 cross-house observations (then ±20%) — the Aug 25 build had five houses pinned at the clamp; raw shrunk factors are logged. The forward tape grades per tier: `calls-ledger` card calls carry `s` = `x` exact / `g` grade-adj / `p` player / `t` tcg / `m` raw median, and `callsRecord.card.byTier` publishes each at 20 graded.
+
+### 5.5 One floor rule (P1-4)
+`app/lib/lanes.ts` `valueFloor(lot)` (value.low at non-low confidence, else 0.85 × cardComps.med at n ≥ 3) is called by `gapRead`, `build-upcoming` (bidProj stamp — was ungated) and `close-board`.
+
+### 5.6 Basis (P1-5)
+- `app/lib/premiums.ts` `inferHammerUsd(lot)`: published hammer, else realized ÷ the lot's own premium factor. Used by `indices.ts` houseAccuracy, `build-market` houseCal + seasonality, `backtest-core` hammer perfs. No flat `/1.25` remains in owned files. **Still flat in a file not owned by this pass:** `scripts/sub-markets.ts:154` (`price / 1.25`) — switch to `inferHammerUsd`.
+- `value.ts` `vsBidRead`: the bid is grossed to all-in before the ±12% comparison (a raw hammer bid read ~20% "below comps" on every lot). Shared by the hedonic path and all card/TCG tiers.
+- `value.ts` `basisNote(kind)` exports the caption strings: `estimate` → "all-in realized vs hammer-basis estimate — the gap carries the buyer's premium by design"; `bid` → "bid grossed to all-in (house premium) vs all-in comp value"; `value` → "comp value is all-in (median of premium-inclusive realized prices)".
+- **UI captions that must change (owned by the UI agent):**
+  - `app/opengraph-image.tsx` — "hammered +41%" is an ALL-IN figure; either say "realized +41% vs estimate (all-in)" or print the hammer-basis `flagged.hammerMedianPct` (+13%).
+  - `app/components/MethodologyNote.tsx` — the 30%/20% thresholds sentence must carry `basisNote('estimate')`.
+  - `app/components/analytics/ArtistRankingsTable.tsx`, `TopSales.tsx` — "premium divided out" is false where hammer is inferred; caption: "hammer where published, else realized ÷ house premium schedule".
+  - `app/components/analytics/PortfolioHeader.tsx`, `ArtistSparklines.tsx` — the second stat compares all-in to hammer-basis; caption with `basisNote('estimate')`.
+  - `app/components/ComparableModal.tsx:104` — "70% of the time" → the market's `bandCoverageOOS` figure.
+
+### 5.7 Abstain reasons (P1-6)
+`estimateValueEx` returns `{ value, abstain }` (`AbstainReason`: `pool<3`, `no-candidates`, `no-identity`, `dispersion`, `no-value`, `card:pool<2`, `card:player<5`, `tcg:pool<2`). `build-market` stamps `lot.abstain` when `value` is null (and deletes it when a value lands); card/TCG tiers stamp partial reasons on the ValueResult (`abstain: 'card:player-median-context-only'`). `slimForClient` keeps the string, so served rows distinguish abstained from never-ran. `estimateValue` (null-returning) is unchanged for every other caller.
+
+### 5.8 Gates with teeth (P1-8)
+- `scripts/validate-engine.ts`: markets derived from `ARTISTS`; runs through `backtest-core.valueOne` (production replay path); gates G1–G4 (see file header); exits 1 on failure; `--sample`, `--market`, `--json`.
+- `scripts/assemble.ts` sentinel: poison signature = price ≥ $1,000 repeating ≥ 15× with ≥ 60% on one saleDate AND `price ÷ premiumFactor` not a round increment (`premiums.isRoundIncrement`, absolute ±$1 tolerance on a 50/100/500/1000 step by size); `::warning::` per signature, `meta.json.sentinel.signatures[]`, exit 1 at ≥ 2 distinct poison signatures (`RAY_SENTINEL_WARN_ONLY=1` override).
+- `scripts/build-market.ts` coverage floor: fails if valued-upcoming drops > 40% vs the prior `market.json.coverage` while the book held ≥ 60% of its size (`RAY_SKIP_COVERAGE_GATE=1` override). `market.json.coverage = {upcoming, valuedUpcoming, hedonicValued, cardValued, abstained}`.
+
+### 5.9 P2 items
+- **One quantile** — `value.ts` `quantile()` (lerp on a sorted array) imported by `comps.ts` (5 dispersion sites), `backtest-core` bands, `emit-value-book`, `validate-engine`.
+- **Sleeper band basis** — `lanes.ts` `sleeperRead` compares all-in cvu to `estMid × lotAllInFactor`.
+- **Per-market confidence** — `calibration.mdape[market][tier]` (median |1/r − 1|); the engine demotes 'high' > 30% and 'medium' > 50% one notch in that market (`CONF_MDAPE_CEIL`). Local: sports high 0.483 and culture high 0.388 demote; science/culture/sports medium demote.
+- **FX** — `normalize.ts` 2025/2026 rows replaced (GBP 1.270/1.330, EUR 1.080/1.150, CHF 1.190/1.250, AUD 0.645/0.700, CNY 0.139/0.145, HKD 0.128); sources in the comments. Re-stamp 2026 with the full-year average in Jan 2027.
+- **Point-in-time IDF** — documented decision to keep the full-corpus IDF (`backtest-core.ts` header above `prepare`): production itself values with the build-day IDF, the leak is a token-weighting effect not a price leak, and a per-period rebuild multiplies replay cost by the period count.
+- **Removed** the dead `market.calibration` block in `build-market.ts` (no UI read it; every surface cites `backtest.json.calibration`).
+- **Lane labels** — `SIGNAL_LABEL` exported from `value.ts` and re-exported from `lanes.ts`. Files that still hardcode the strings and should import: `app/makers/[slug]/page.tsx:257`, `app/components/ComparableModal.tsx:41-42`, `app/components/LotCard.tsx:211-212`, `app/preview/terminal/TerminalHome.tsx:186-187`.
+- **TCG comp tier** — `build-market.ts` §3e: `pokemonKey` (year|set|#no|edition|GRADE) exact pool (n ≥ 2, 1y decay, dispersion band; n ≥ 4 'high' else 'medium', tier `tcg-exact`) and a cross-grade pool adjusted with the SPORTS grade ladder as a proxy (tier `tcg-grade-adj`, capped 'low', no vsBid) until a Pokémon ladder is fitted. Counts are logged as `[market] tcg value estimator`.

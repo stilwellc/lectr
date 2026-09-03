@@ -14,6 +14,7 @@ import { safeHref } from '../lib/safe-href';
 import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
+import { valueFloor } from '../lib/lanes';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
@@ -37,6 +38,15 @@ import PlateImg from './PlateImg';
  * Sold lots print the realized price, never ask-forward framing; lots past
  * their hammer with no result say "results pending".
  */
+
+/** THE VALUE FLOOR a reader may bid against — lanes.ts valueFloor, the ONE
+ *  floor rule (value.low only at non-low confidence, else 0.85 × the exact-
+ *  card median at n ≥ 3). The old read here took value.low at ANY confidence
+ *  and cardComps.med at n = 1, so "Max bid" and "still under the floor"
+ *  leaned on a floor the engine itself would not certify. */
+function gatedFloor(lot: AuctionLot): number | null {
+  return valueFloor(lot)?.floor ?? null;
+}
 
 /* The copy button styles itself (id-guarded head injection, LotCard's
    pattern) — it mounts inside ComparableModal too, where LOTPAGE_CSS never
@@ -63,6 +73,13 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
    (display:contents) and CSS order restores the single-column reading order:
    plate → certificate → provenance → ladder → comps. */
 .lectr-lot-cola,.lectr-lot-colb{min-width:0}
+/* ≥900px the plate column is STICKY: the certificate + comp ledger run
+   2–3× the plate's height, and the column sat empty under the photograph
+   for most of the scroll. align-items:start on the grid lets the column
+   keep its own height, so sticky rides it down until the row ends. */
+@media (min-width:900px){
+  .lectr-lot-cola{position:sticky;top:84px;align-self:start}
+}
 /* the plate head — north star: quiet gray sentence case over a single
    hairline with crop-mark dots at the rule ends (registration grammar);
    the old tracked-uppercase form is retired on this surface */
@@ -77,13 +94,13 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-leaders{margin-top:16px;border-top:1px solid var(--hairline);padding-top:4px}
 .lectr-lot-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
 .lectr-lot-k{color:var(--color-text-muted)}
-.lectr-lot-fill{flex:1;border-bottom:1px dotted rgba(255,255,255,0.09);transform:translateY(-3px)}
+.lectr-lot-fill{flex:1;border-bottom:1px dotted var(--color-border-mid);transform:translateY(-3px)}
 .lectr-lot-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-lot-v.up{color:var(--color-up)}
 .lectr-lot-v.down{color:var(--color-down)}
 .lectr-lot-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
 .lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
-.lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,rgba(255,255,255,0.28) 4px,rgba(255,255,255,0.28) 5px)}
+.lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,var(--color-border-mid) 4px,var(--color-border-mid) 5px)}
 .lectr-lot-monoglyph{font-size:64px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
 .lectr-lot .ray-plate-mat{padding:18px;margin-bottom:0}
 .lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
@@ -366,8 +383,9 @@ export default function LotPage({ lotId, initialLot }: {
   // Phase-2 permalink fast path — one indexed row from the Supabase lots
   // table resolves the certificate in ~1KB instead of waiting on the 25MB
   // shard stream. It is also the long memory: rows are upserted nightly and
-  // never deleted, so a permalink keeps resolving after the lot rolls off
-  // the tape. Live shard data supersedes it the moment it arrives.
+  // sold rows are kept 24 months, so a permalink keeps resolving well after
+  // the lot rolls off the tape. Live shard data supersedes it the moment it
+  // arrives.
   const [dbLot, setDbLot] = useState<AuctionLot | null>(null);
   const [dbSettled, setDbSettled] = useState(false);
   useEffect(() => {
@@ -761,7 +779,9 @@ export default function LotPage({ lotId, initialLot }: {
                 manufactured. Every figure is the gap row's own number. */}
             {isUpcoming && sig && (
               <div className="ns-cell ns-cell-color lectr-lot-read" data-dir={sig.label === 'Below Market' ? 'up' : 'ink'}>
-                <span className="ns-cell-label">The gap · {sig.label.toLowerCase()}</span>
+                {/* "vs. estimate", not "the gap" — THE GAP is the no-estimate
+                    lane's name (lanes.ts); this cell is the FLAGS read */}
+                <span className="ns-cell-label">vs. estimate · {sig.label.toLowerCase()}</span>
                 <span className="lectr-lot-read-stat">{signalMagnitude(sig.label, sig.pct)}</span>
                 <span className="ns-cell-body">
                   {beatRate != null
@@ -794,8 +814,7 @@ export default function LotPage({ lotId, initialLot }: {
                 />
               )}
               {isUpcoming && (() => {
-                const floor = (lot.value?.low && lot.value.low > 0 ? lot.value.low : null)
-                  ?? (lot.cardComps?.med ? Math.round(lot.cardComps.med * 0.85) : null);
+                const floor = gatedFloor(lot);
                 if (!floor) return null;
                 return (
                   <LeaderRow
@@ -805,23 +824,39 @@ export default function LotPage({ lotId, initialLot }: {
                   />
                 );
               })()}
-              {isUpcoming && lot.bidProj?.allIn != null && (
-                <LeaderRow
-                  k="Projected close"
-                  v={`~${formatPrice(lot.bidProj.allIn)}`}
-                  tone={lot.bidProj.below ? 'up' : undefined}
-                  sub={lot.bidProj.floor
-                    ? (lot.bidProj.below ? `still under the ${formatPrice(lot.bidProj.floor)} floor` : `vs ${formatPrice(lot.bidProj.floor)} floor`)
-                    : 'bid × close-day curve · all-in'}
-                />
-              )}
-              {isUpcoming && lot.crossLive?.length ? (
-                <LeaderRow
-                  k="Also live at"
-                  v={`${lot.crossLive[0].house} · ${lot.crossLive[0].bid > 0 ? formatPrice(lot.crossLive[0].bid) + ' bid' : 'open'}`}
-                  sub={lot.crossLive.length > 1 ? `same card at ${lot.crossLive.length} other venues` : 'the same card, head to head'}
-                />
-              ) : null}
+              {isUpcoming && lot.bidProj?.allIn != null && (() => {
+                // the build stamps bidProj.floor UNGATED (value.low at any
+                // confidence); the floor a reader may lean on is the gated
+                // one — no gated floor, no "under the floor" and no lamp
+                const floor = gatedFloor(lot);
+                const below = !!floor && lot.bidProj!.allIn < floor;
+                return (
+                  <LeaderRow
+                    k="Projected close"
+                    v={`~${formatPrice(lot.bidProj!.allIn)}`}
+                    tone={below ? 'up' : undefined}
+                    sub={floor
+                      ? (below ? `still under the ${formatPrice(floor)} floor` : `vs ${formatPrice(floor)} floor`)
+                      : 'bid × close-day curve · all-in'}
+                  />
+                );
+              })()}
+              {isUpcoming && lot.crossLive?.length ? (() => {
+                // the build caps crossLive at 3 siblings — the array's
+                // length is a cap, not a count. A stamped total (crossLiveN)
+                // prints; otherwise no number at all.
+                const n = (lot as AuctionLot & { crossLiveN?: number }).crossLiveN;
+                const others = typeof n === 'number' && n > 0 ? n : null;
+                return (
+                  <LeaderRow
+                    k="Also live at"
+                    v={`${lot.crossLive![0].house} · ${lot.crossLive![0].bid > 0 ? formatPrice(lot.crossLive![0].bid) + ' bid' : 'open'}`}
+                    sub={lot.crossLive!.length > 1
+                      ? (others ? `same card at ${others} other venues` : 'same card at other venues')
+                      : 'the same card, head to head'}
+                  />
+                );
+              })() : null}
 
               {/* Hammers/Hammered, House (+ calibration) and the money row
                   moved up into the byline ledger — same values, same guards */}

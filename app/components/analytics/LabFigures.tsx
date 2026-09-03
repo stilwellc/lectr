@@ -52,7 +52,7 @@ const CSS = `
 .ray-lf-vname { font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ray-lf-vtrack { position: relative; height: 100%; min-height: 22px; }
 .ray-lf-vrule { position: absolute; top: -3px; bottom: -3px; border-left: 1px dashed var(--chart-ref); }
-.ray-lf-vval { font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.ray-lf-vval { font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
 .ray-lf-axis { position: absolute; left: 0; right: 0; border-top: 1px solid var(--chart-grid); }
 .ray-lf-zero { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--chart-ref); }
 .ray-lf-comp { --lfgut: 100px; }
@@ -104,7 +104,7 @@ export function CloseCurveFigure({ marketData }: { marketData: MarketData | null
                 background: 'color-mix(in srgb, var(--color-fg) 14%, transparent)',
                 borderTop: '2px solid var(--color-fg)', borderRadius: '3px 3px 0 0',
               }} aria-hidden />
-              <span className="ray-lf-lbl" style={{ bottom: 28 + h + 5, left: `${x * 100}%`, color: 'var(--color-fg)', fontWeight: 600 }}>
+              <span className="ray-lf-lbl" style={{ bottom: 28 + h + 5, left: `${x * 100}%`, color: 'var(--color-fg)', fontWeight: 500 }}>
                 {v.toFixed(1)}×
               </span>
               <span className="ray-lf-lbl" style={{ bottom: 10, left: `${x * 100}%` }}>{labels[i]}</span>
@@ -125,7 +125,18 @@ export function CloseCurveFigure({ marketData }: { marketData: MarketData | null
 /* ═══ 2 · THE COVERAGE FUNNEL ═══ */
 export function CoverageFunnel({ backtest }: { backtest: Backtest | null }) {
   const band = backtest?.calibration?.band as Record<string, { lo: number; hi: number }> | undefined;
-  const cov = (backtest?.calibration as unknown as { bandCoverage?: Record<string, number> } | undefined)?.bandCoverage;
+  // COVERAGE BASIS: bandCoverage is in-sample by construction (the bands
+  // are fit on the same replay). The engine emits bandCoverageOOS — held-out
+  // coverage per tier — where it can; render that with its basis named, and
+  // fall back to the in-sample figure LABELED in-sample. Never a bare
+  // coverage figure without its basis.
+  const cal = backtest?.calibration as unknown as {
+    bandCoverage?: Record<string, number | null>;
+    bandCoverageOOS?: Record<string, number | null>;
+  } | undefined;
+  const hasOOS = !!cal?.bandCoverageOOS && Object.values(cal.bandCoverageOOS).some(v => v != null);
+  const cov = hasOOS ? cal!.bandCoverageOOS! : cal?.bandCoverage;
+  const covBasis = hasOOS ? 'out-of-sample' : 'in-sample';
   if (!band?.high) return null;
   const tiers = (['high', 'medium', 'low'] as const).filter(t => band[t]);
   // shared log-x axis over the union of bands, 1.0× marked
@@ -145,7 +156,7 @@ export function CoverageFunnel({ backtest }: { backtest: Backtest | null }) {
           const y = 14 + i * 38;
           return (
             <React.Fragment key={t}>
-              <span className="ray-lf-vlbl" style={{ top: y - 4, left: 0, color: TIER_INK[t], fontWeight: 600 }}>{t}</span>
+              <span className="ray-lf-vlbl" style={{ top: y - 4, left: 0, color: TIER_INK[t], fontWeight: 500 }}>{t}</span>
               <span style={{
                 position: 'absolute', top: y + 12, left: `${X(band[t].lo)}%`, width: `${X(band[t].hi) - X(band[t].lo)}%`,
                 height: 5, borderRadius: 3, background: TIER_INK[t], opacity: t === 'high' ? 0.9 : t === 'medium' ? 0.55 : 0.3,
@@ -156,16 +167,17 @@ export function CoverageFunnel({ backtest }: { backtest: Backtest | null }) {
               <span className="ray-lf-vlbl" style={X(band[t].hi) > 62
                 ? { top: y - 4, left: `${X(band[t].hi)}%`, transform: 'translateX(-100%)' }
                 : { top: y + 6, left: `calc(${X(band[t].hi)}% + 6px)` }}>
-                {band[t].hi.toFixed(2)}×{cov?.[t] != null ? ` · ${cov[t]}% inside` : ''}
+                {band[t].hi.toFixed(2)}×{cov?.[t] != null ? ` · ${cov[t]}% inside, ${covBasis}` : ''}
               </span>
             </React.Fragment>
           );
         })}
       </div>
       <FigCap>
-        Conformal prediction bands around the engine&apos;s value calls, by confidence tier — the realized price landed
-        inside its band {cov?.high ?? 70}% of the time at every tier (that symmetry is the design: the tier moves the
-        WIDTH, never the promise).
+        Conformal prediction bands around the engine&apos;s value calls, by confidence tier
+        {cov?.high != null
+          ? <> — the realized price landed inside its band {cov.high}% of the time ({covBasis}{hasOOS ? ', held-out replay' : ', the fitting replay'}){tiers.every(t => cov?.[t] === cov?.high) ? ' at every tier (that symmetry is the design: the tier moves the WIDTH, never the promise)' : ''}</>
+          : <> — coverage not yet measured; the tier moves the WIDTH, never the promise</>}.
       </FigCap>
     </div>
   );
@@ -369,7 +381,7 @@ export function RepeatSaleRoom({ marketData, scope }: { marketData: MarketData |
             const dir = (x.v!.changePct ?? 0) >= 0;
             return (
               <React.Fragment key={x.h}>
-                <span className="ray-lf-vlbl" style={{ top: y, left: 0, fontWeight: 600, color: 'var(--color-fg)' }}>{x.h}</span>
+                <span className="ray-lf-vlbl" style={{ top: y, left: 0, fontWeight: 500, color: 'var(--color-fg)' }}>{x.h}</span>
                 <span style={{
                   position: 'absolute', top: y + 5, left: `${HX(x.v!.ciLoPct!)}%`, width: `${HX(x.v!.ciHiPct!) - HX(x.v!.ciLoPct!)}%`,
                   height: 4, borderRadius: 2, background: dir ? 'var(--color-up)' : 'var(--color-down)', opacity: 0.32,
@@ -495,7 +507,7 @@ export function CompositeParts({ marketData }: { marketData: MarketData | null }
         {items.map(it => (
           <span key={it.label} className="ray-lf-cend" style={{
             top: it.y, left: 'calc(100% - var(--lfgut) + 8px)', color: it.ink,
-            fontWeight: it.strong ? 600 : 450, opacity: it.strong ? 1 : 0.85,
+            fontWeight: it.strong ? 550 : 450, opacity: it.strong ? 1 : 0.85,
           }}>{it.label}</span>
         ))}
         {[0, Math.floor(last / 2), last].map(i => (
@@ -577,7 +589,7 @@ export function BidVelocityFigure({ lots, scope = 'all' }: { lots: AuctionLot[];
                   borderTop: zero ? '2px dashed var(--color-text-faint)' : '2px solid var(--color-fg)',
                   borderRadius: '3px 3px 0 0',
                 }} aria-hidden />
-                <span className="ray-lf-lbl" style={{ bottom: 28 + h + 5, left: `${x * 100}%`, color: zero ? 'var(--color-text-muted)' : 'var(--color-fg)', fontWeight: 600 }}>
+                <span className="ray-lf-lbl" style={{ bottom: 28 + h + 5, left: `${x * 100}%`, color: zero ? 'var(--color-text-muted)' : 'var(--color-fg)', fontWeight: 500 }}>
                   {Math.round((c / n) * 100)}%
                 </span>
                 <span className="ray-lf-lbl" style={{ bottom: 10, left: `${x * 100}%` }}>{VEL_LABELS[i]}</span>
@@ -623,7 +635,7 @@ export function BidVelocityFigure({ lots, scope = 'all' }: { lots: AuctionLot[];
           </React.Fragment>
         ))}
         <span style={{ position: 'absolute', top: 0, height: H, left: `${medX}%`, borderLeft: '1px dashed var(--chart-ref)' }} aria-hidden />
-        <span className="ray-lf-lbl" style={{ top: 2, left: `${medX}%`, color: 'var(--color-fg)', fontWeight: 600 }}>median {d.medActive}</span>
+        <span className="ray-lf-lbl" style={{ top: 2, left: `${medX}%`, color: 'var(--color-fg)', fontWeight: 500 }}>median {d.medActive}</span>
         {dots.map((p, i) => (
           <span key={i} className="ray-lf-dot" style={{ top: p.y - 7, left: `${LX(p.v)}%`, width: 7, height: 7, background: 'var(--color-text-muted)', opacity: 0.7 }} aria-hidden />
         ))}

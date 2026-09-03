@@ -180,12 +180,21 @@ export default function ArtistHero({
     // authoritative count from stats.json: Σ totalSales over the trailing 4
     // quarters of priceHistory (mirrors the series/typicalSale stats path).
     const cutoff = Date.now() - 365 * 86_400_000;
-    const sold12mo = bidMarket && stats?.priceHistory?.length
-      ? stats.priceHistory.slice(-4).reduce((s, p) => s + (p.totalSales || 0), 0)
+    // compute-stats now emits sold12m on a TRUE calendar-365 window
+    // (sold12mWindow.days === 365). The old read — priceHistory.slice(-4),
+    // the last four NON-EMPTY quarters — spans years on a thin maker, so
+    // it may only ever print as "last N sales · since <year>", never "12 mo".
+    const s12 = stats as (MarketStats & { sold12m?: number; sold12mWindow?: { from: string; to: string; days: number } }) | null;
+    const trueWindow = !!s12 && typeof s12.sold12m === 'number' && s12.sold12mWindow?.days === 365;
+    const tail = stats?.priceHistory?.slice(-4) || [];
+    const tailCount = tail.reduce((s, p) => s + (p.totalSales || 0), 0);
+    const tailSince = tail.length ? String(tail[0].date).slice(0, 4) : null;
+    const sold12mo = bidMarket
+      ? (trueWindow ? s12!.sold12m! : tailCount)
       : lots.filter(l =>
           l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff
         ).length;
-    return { sellThrough, houses, total, sold12mo };
+    return { sellThrough, houses, total, sold12mo, sold12mTrue: !bidMarket || trueWindow, tailSince };
   }, [lots, stats, bidMarket]);
 
   // The live-lot count comes from the page (date-filtered, the same list the
@@ -452,11 +461,18 @@ export default function ArtistHero({
             // no-reserve bid markets conclude every lot 'sold' — a constant
             // "Sell-through 100%" cell says nothing, so count the year instead
             bidMarket
-              ? {
-                  k: 'Sales, past 12 mo',
-                  v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
-                  sub: 'sold, trailing 12 months',
-                }
+              ? facts.sold12mTrue
+                ? {
+                    k: 'Sales, past 12 mo',
+                    v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+                    sub: 'sold, trailing 12 months',
+                  }
+                : {
+                    // not a 12-month window (last four ACTIVE quarters) — say what it is
+                    k: 'Recent sales',
+                    v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+                    sub: `last ${facts.sold12mo.toLocaleString()} sales${facts.tailSince ? ` · since ${facts.tailSince}` : ''}`,
+                  }
               : {
                   k: 'Sell-through',
                   v: facts.sellThrough !== null ? <CountUp animate={anim} to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—',

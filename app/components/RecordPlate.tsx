@@ -98,10 +98,10 @@ export default function RecordPlate({
     ? idx === 0
       ? label
       : idx === 1
-        ? '2nd highest'
+        ? 'Second-highest'
         : idx === 2
-          ? '3rd highest'
-          : `#${idx + 1} sale`
+          ? 'Third-highest'
+          : `Sale ${idx + 1} of the vitrine`
     : label;
 
   const body: ReactNode = (

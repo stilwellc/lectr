@@ -15,6 +15,7 @@ import * as path from 'path';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { marketOf } from '../app/constants';
 import { hasConditionFlag } from '../app/lib/condition';
+import { valueFloor } from '../app/lib/lanes';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const GOLDIN_API = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';
@@ -118,8 +119,8 @@ async function main() {
     const g = curve.buckets[bucketOf(daysOut)];
     if (b > 0 && g && g >= 1) {
       const projAllIn = Math.round(b * g * lotAllInFactor(l, b * g));
-      const floor = (l.value?.low && l.value.low > 0 && l.value.confidence !== 'low' ? l.value.low : null)
-        ?? (l.cardComps?.med && (l.cardComps.n || 0) >= 3 ? Math.round(l.cardComps.med * 0.85) : null);
+      // ONE floor rule (lanes.valueFloor — P1-4), shared with build-upcoming + gapRead
+      const floor = valueFloor(l)?.floor ?? null;
       entry.proj = projAllIn;
       if (floor) {
         entry.floor = floor;

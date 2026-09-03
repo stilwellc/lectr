@@ -22,6 +22,29 @@
 import type { AuctionLot } from '../types';
 import { estUsdBand } from './comps';
 import { hasConditionFlag } from './condition';
+import { lotAllInFactor } from './premiums';
+export { SIGNAL_LABEL, type SignalLabel, basisNote } from './value';
+
+/* ── THE FLOOR (one-source law, P1-4, Sep 2 2026) ───────────────────────── */
+
+export interface ValueFloor { floor: number; src: 'value.low' | 'cardComps' }
+
+/** THE value floor a projected close is measured against — the strict rule
+ *  (F6): `value.low` only at non-low confidence; else 0.85 × the exact-card
+ *  median only at cardComps.n ≥ 3; else none. gapRead, build-upcoming's
+ *  bidProj stamp and close-board's overlay ALL call this — there used to be
+ *  three copies and build-upcoming's was ungated (any value.low, any card
+ *  median), so the served floor disagreed with the lane it fed. */
+export function valueFloor(lot: {
+  value?: { low?: number; confidence?: string } | null;
+  cardComps?: { med?: number | null; n?: number } | null;
+}): ValueFloor | null {
+  const v = lot.value;
+  if (v && typeof v.low === 'number' && v.low > 0 && v.confidence !== 'low') return { floor: v.low, src: 'value.low' };
+  const cc = lot.cardComps;
+  if (cc && typeof cc.med === 'number' && cc.med > 0 && (cc.n || 0) >= 3) return { floor: Math.round(cc.med * 0.85), src: 'cardComps' };
+  return null;
+}
 
 /* ── THE GAP ────────────────────────────────────────────────────────────── */
 
@@ -45,18 +68,11 @@ export function gapRead(lot: AuctionLot, now: number): GapRead | null {
   const proj = lot.bidProj;
   if (!proj || !(proj.allIn > 0)) return null;
   if (hasConditionFlag(lot.title)) return null;
-  // the floor is derived HERE with the strict rule (close-board's variant):
-  // value.low only at non-low confidence; else 0.85 × cardComps.med at n≥3
-  const v = lot.value;
-  let floor: number | null = null;
-  let floorSrc: GapRead['floorSrc'] = 'value.low';
-  if (v && v.low > 0 && v.confidence !== 'low') {
-    floor = v.low;
-  } else if (lot.cardComps?.med && (lot.cardComps.n || 0) >= 3) {
-    floor = Math.round(lot.cardComps.med * 0.85);
-    floorSrc = 'cardComps';
-  }
-  if (!floor || floor <= 0) return null;
+  // the floor is derived HERE through the ONE floor rule (valueFloor above)
+  const vf = valueFloor(lot);
+  if (!vf) return null;
+  const floor = vf.floor;
+  const floorSrc: GapRead['floorSrc'] = vf.src;
   const iso = lot.saleDateTime || lot.saleDate;
   if (!iso) return null;
   const closeMs = Date.parse(lot.saleDateTime || `${lot.saleDate}T23:59:59Z`);
@@ -96,7 +112,11 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
   const estMid = est.low && est.high ? (est.low + est.high) / 2 : (est.low ?? est.high);
   let anchor: SleeperRead['anchor'];
   if (estMid) {
-    const ratio = cvu / estMid;
+    // BASIS-CONSISTENT (P2): cvu is all-in (median of premium-inclusive
+    // realized), estMid is hammer-basis — gross the estimate to all-in
+    // through the lot's premium before applying the engine's at-market band
+    // (the raw ratio silently carried ~20 points of premium).
+    const ratio = cvu / (estMid * lotAllInFactor(lot, estMid));
     if (ratio < 0.75 || ratio > 1.3) return null; // the engine's own at-market band
     anchor = 'fair-est';
   } else {

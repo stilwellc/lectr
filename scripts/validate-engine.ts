@@ -3,38 +3,48 @@
  *
  * "Not assumptions" means empirically validated. This runs a temporal holdout:
  * for sold lots in the back of the corpus, it estimates value + the directional
- * signal using ONLY sales strictly before each lot's saleDate, then scores the
- * predictions against what the lot actually hammered for. It reports, per market
- * and per confidence tier:
+ * signal using ONLY sales strictly before each lot's saleDate (the production
+ * replay path — backtest-core.valueOne, same pools, same gates), then scores
+ * the predictions against what the lot actually hammered for. It reports, per
+ * market and per confidence tier:
  *   - value error (median ratio, % within ±25% / ±50%), vs the house benchmark
  *   - the directional signal's calibration (beat-high rate across compRatio)
- * and prints a VERDICT: which claims are validated (ship) and which are
- * suppressed. Run: npx tsx scripts/validate-engine.ts
+ * and prints a VERDICT. Sep 2 2026 (P1-8): the verdict has TEETH — the process
+ * exits non-zero on any failed gate, every bucket with n ≥ 30 is checked, and
+ * the market list is derived from the roster (app/constants ARTISTS — culture,
+ * tcg and every current slug included; nothing hardcoded).
+ *
+ * Gates (each evaluated only where n ≥ 30):
+ *   G1 directional monotonicity, global: beat-high rate must not fall by more
+ *      than 1pt across ascending compRatio buckets.
+ *   G2 directional monotonicity, per market: same test per market.
+ *   G3 tier honesty, per market: 'high' median error < 1.6× AND high ≤ low
+ *      (a tier that isn't more accurate than 'low' is mislabeled).
+ *   G4 coverage sanity: ≥ 10% of holdout lots valued globally (an engine that
+ *      silently stopped valuing must not pass on an empty table).
+ *
+ * Run: npx tsx scripts/validate-engine.ts [--sample 30000] [--market art]
+ *      [--json path]   (nightly: after build-market; see ENGINE_WORKFLOW_PATCH)
  */
-import * as zlib from 'zlib';
 import * as fs from 'fs';
-import * as path from 'path';
 import type { AuctionLot } from '../app/types';
-import { buildIdf, CandidateIndex, buildVectors, type IdfTable } from '../app/lib/similarity';
-import { resolveComps, estimateValue } from '../app/lib/value';
+import { ARTISTS } from '../app/constants';
+import { setCalibration } from '../app/lib/value';
+import { readCorpus } from './corpus-io';
+import { prepare, targetsOf, valueOne, type L } from './backtest-core';
 
-const CORPUS = path.join(process.cwd(), 'data', 'corpus');
-function readCorpus(): AuctionLot[] {
-  // buffer-safe NDJSON read via the shared codec (corpus is NDJSON now)
-  const rd = (f: string) => require('./corpus-io').readGzRows(path.join(CORPUS, f + '.gz'));
-  return rd('lots.json').concat(rd('sold-archive.json'));
-}
+const arg = (n: string): string | null => { const i = process.argv.indexOf(`--${n}`); return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : null; };
 
-const MARKETS: Record<string, string[]> = {
-  art: ['george-condo', 'kaws', 'andy-warhol', 'keith-haring', 'ed-ruscha', 'pablo-picasso', 'henri-matisse', 'tom-sachs', 'peter-saul', 'raymond-pettibon', 'barry-mcgee', 'futura-2000', 'r-crumb', 'fab-5-freddy', 'francesco-clemente', 'eddie-martinez', 'kenny-scharf'],
-  design: ['george-nakashima', 'charles-eames', 'jean-prouve', 'pierre-jeanneret'],
-  watches: ['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier'],
-  sports: ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia'],
-  science: ['space-exploration', 'meteorites', 'fossils', 'scientific-instruments'],
-};
-const marketOf = (l: AuctionLot) => { for (const m in MARKETS) if (MARKETS[m].includes(l.artist)) return m; return 'other'; };
+// the roster's markets — every current slug, derived, never a hardcoded list
+const MARKET_KEYS = Array.from(new Set<string>(ARTISTS.map(a => a.market)));
+const MARKET_OF: Record<string, string> = {};
+for (const a of ARTISTS) MARKET_OF[a.slug] = a.market;
+// production engine exclusions (build-market): mass-produced card slugs and the
+// thin-metadata algolia backfill never enter the hedonic engine, so they are
+// not holdout targets either (their tiers are graded on the forward tape)
+const ENGINE_EXCLUDED = new Set(['sports-cards', 'graded-cards', 'pokemon']);
 
-function pctile(a: number[], q: number) { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.round(q * (s.length - 1)))]; }
+function pctile(a: number[], q: number) { const s = [...a].sort((x, y) => x - y); if (!s.length) return NaN; const pos = q * (s.length - 1); const lo = Math.floor(pos), hi = Math.ceil(pos); return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (pos - lo); }
 function report(errs: number[]) {
   if (errs.length < 15) return `thin (n${errs.length})`;
   const med = Math.exp(pctile(errs, 0.5));
@@ -42,34 +52,63 @@ function report(errs: number[]) {
   const w50 = errs.filter(e => e <= Math.log(1.5)).length / errs.length * 100;
   return `medErr ${med.toFixed(2)}× · ±25% ${w25.toFixed(0)}% · ±50% ${w50.toFixed(0)}% (n${errs.length})`;
 }
+const BUCKETS = ['<0.6', '0.6-0.9', '0.9-1.3', '1.3-2', '>2'] as const;
+const bucketOf = (cr: number) => (cr < 0.6 ? '<0.6' : cr < 0.9 ? '0.6-0.9' : cr < 1.3 ? '0.9-1.3' : cr < 2 ? '1.3-2' : '>2');
+const mkSig = () => Object.fromEntries(BUCKETS.map(b => [b, { beat: 0, n: 0 }])) as Record<string, { beat: number; n: number }>;
+const MIN_N = 30;
+
+function monotonic(sig: Record<string, { beat: number; n: number }>): { ok: boolean; rates: string } {
+  let prev = -1, ok = true;
+  const parts: string[] = [];
+  for (const b of BUCKETS) {
+    const s = sig[b]; const rate = s.n ? s.beat / s.n * 100 : 0;
+    parts.push(`${b} ${rate.toFixed(0)}% (n${s.n})`);
+    if (s.n >= MIN_N) { if (rate + 1 < prev) ok = false; prev = rate; }
+  }
+  return { ok, rates: parts.join(' · ') };
+}
 
 function main() {
+  const t0 = Date.now();
+  const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
+  const onlyMarket = arg('market');
+  const sample = parseInt(arg('sample') || '30000', 10);
   console.log('[validate] reading corpus…');
-  const all = readCorpus();
-  const sold = all.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length)
-    .sort((a, b) => a.saleDate < b.saleDate ? -1 : 1);
-  const tbl = buildIdf(sold);
-  buildVectors(sold, tbl);
-  const idx = new CandidateIndex(sold, tbl);
-  const pos = new Map(sold.map((l, i) => [l.id, i]));
-
-  const cutoff = sold[Math.floor(sold.length * 0.4)].saleDate;
-  const test = sold.filter(l => l.saleDate >= cutoff).filter((_, i) => i % 2 === 0);
-  console.log(`[validate] holdout: ${test.length} test lots (saleDate ≥ ${cutoff.slice(0, 10)}), predicting from prior-only comps\n`);
+  const all = (readCorpus() as unknown as AuctionLot[]).filter(l => !ENGINE_EXCLUDED.has(l.artist) && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
+  setCalibration(null); // the raw engine — calibration is measured, not assumed
+  const prep = prepare(all, console.log, elapsed);
+  const { soldTargets } = targetsOf(prep);
+  const sorted = soldTargets.slice().sort((a, b) => (a.saleDate < b.saleDate ? -1 : 1));
+  const cutoff = sorted[Math.floor(sorted.length * 0.4)].saleDate;
+  // stratified holdout: the back 60% by date, capped per market so no vertical
+  // (the RR culture archive) crowds out the others in a bounded nightly run
+  const perMarketCap = Math.max(500, Math.floor(sample / MARKET_KEYS.length));
+  const byM = new Map<string, L[]>();
+  for (const l of sorted) {
+    if (l.saleDate < cutoff) continue;
+    const m = MARKET_OF[l.artist] || 'other';
+    if (onlyMarket && m !== onlyMarket) continue;
+    (byM.get(m) || byM.set(m, []).get(m)!).push(l);
+  }
+  const test: L[] = [];
+  byM.forEach(arr => { const step = Math.max(1, Math.ceil(arr.length / perMarketCap)); for (let i = 0; i < arr.length; i += step) test.push(arr[i]); });
+  console.log(`[validate] holdout: ${test.length} test lots (saleDate ≥ ${cutoff.slice(0, 10)}, ≤${perMarketCap}/market), predicting from prior-only comps\n`);
 
   // accumulators
+  const markets = MARKET_KEYS.filter(m => !onlyMarket || m === onlyMarket).concat('other');
   const valErr: Record<string, Record<string, number[]>> = {};   // market → confidence → errs
   const houseErr: Record<string, number[]> = {};
-  const sigBuckets: Record<string, { beat: number; n: number }> = { '<0.6': { beat: 0, n: 0 }, '0.6-0.9': { beat: 0, n: 0 }, '0.9-1.3': { beat: 0, n: 0 }, '1.3-2': { beat: 0, n: 0 }, '>2': { beat: 0, n: 0 } };
-  for (const m in MARKETS) { valErr[m] = { high: [], medium: [], low: [] }; houseErr[m] = []; }
+  const sigGlobal = mkSig();
+  const sigByM: Record<string, Record<string, { beat: number; n: number }>> = {};
+  const testN: Record<string, number> = {};
+  for (const m of markets) { valErr[m] = { high: [], medium: [], low: [] }; houseErr[m] = []; sigByM[m] = mkSig(); testN[m] = 0; }
 
-  let covered = 0;
+  let covered = 0, done = 0;
   for (const lot of test) {
-    const m = marketOf(lot); if (!valErr[m]) continue;
-    const i = pos.get(lot.id)!;
-    const cands = idx.candidates(i).map(j => sold[j]);
-    const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, cands as (AuctionLot & { _v?: Record<string, number> })[], tbl, lot.saleDate);
-    const v = estimateValue(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
+    const m = MARKET_OF[lot.artist] || 'other'; if (!valErr[m]) continue;
+    testN[m]++;
+    if (++done % 5000 === 0) console.log(`[validate] ${done}/${test.length} (${elapsed()})`);
+    const v = valueOne(prep, lot);
     if (!v) continue;
     covered++;
     const err = Math.abs(Math.log(v.compValueUsd / lot.realizedUsd!));
@@ -79,38 +118,70 @@ function main() {
       houseErr[m].push(Math.abs(Math.log(em / lot.realizedUsd!)));
       // directional signal calibration
       if (v.compRatio != null) {
-        const cr = v.compRatio;
-        const b = cr < 0.6 ? '<0.6' : cr < 0.9 ? '0.6-0.9' : cr < 1.3 ? '0.9-1.3' : cr < 2 ? '1.3-2' : '>2';
-        sigBuckets[b].n++;
-        if (lot.realizedUsd! > lot.estHighUsd) sigBuckets[b].beat++;
+        const b = bucketOf(v.compRatio);
+        sigGlobal[b].n++; sigByM[m][b].n++;
+        if (lot.realizedUsd! > lot.estHighUsd) { sigGlobal[b].beat++; sigByM[m][b].beat++; }
       }
     }
   }
 
-  console.log(`COVERAGE: ${(covered / test.length * 100).toFixed(0)}% of test lots got an engine value\n`);
+  const coveragePct = test.length ? covered / test.length * 100 : 0;
+  console.log(`\nCOVERAGE: ${coveragePct.toFixed(0)}% of test lots got an engine value (${elapsed()})\n`);
   console.log('VALUE ERROR by market × confidence (engine) vs the house benchmark:');
-  for (const m in MARKETS) {
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  const tierMed = (errs: number[]) => (errs.length >= MIN_N ? Math.exp(pctile(errs, 0.5)) : null);
+  for (const m of markets) {
+    if (!testN[m]) continue;
     const hasHouse = houseErr[m].length >= 15;
-    console.log(`  ${m}`);
+    console.log(`  ${m} (n${testN[m]} test)`);
     for (const c of ['high', 'medium', 'low']) console.log(`    ${c.padEnd(7)} ${report(valErr[m][c])}`);
     console.log(`    house   ${hasHouse ? report(houseErr[m]) : '— (no estimates: engine is the only value)'}`);
+    // G3 tier honesty
+    const hi = tierMed(valErr[m].high), lo = tierMed(valErr[m].low);
+    if (hi != null) {
+      if (hi >= 1.6) failures.push(`G3 ${m}: 'high' median error ${hi.toFixed(2)}× ≥ 1.6× (n${valErr[m].high.length})`);
+      if (lo != null && hi > lo) failures.push(`G3 ${m}: 'high' (${hi.toFixed(2)}×) is less accurate than 'low' (${lo.toFixed(2)}×) — tiers inverted`);
+    }
+    // G2 per-market monotonicity
+    const mono = monotonic(sigByM[m]);
+    const measured = BUCKETS.filter(b => sigByM[m][b].n >= MIN_N).length;
+    if (measured >= 2 && !mono.ok) failures.push(`G2 ${m}: beat-high rate not monotonic — ${mono.rates}`);
+    if (measured >= 2) console.log(`    signal  ${mono.ok ? 'monotonic' : 'NOT monotonic'} — ${mono.rates}`);
+    else console.log(`    signal  thin (${measured} buckets ≥ n${MIN_N})`);
   }
 
-  console.log('\nDIRECTIONAL SIGNAL calibration (compRatio → beat-high rate; must be monotonic to ship):');
-  let prev = -1, monotonic = true;
-  for (const b of ['<0.6', '0.6-0.9', '0.9-1.3', '1.3-2', '>2']) {
-    const s = sigBuckets[b]; const rate = s.n ? s.beat / s.n * 100 : 0;
-    console.log(`    comps ${b.padEnd(8)} beat-high ${rate.toFixed(0)}% (n${s.n})`);
-    if (s.n >= 30) { if (rate + 1 < prev) monotonic = false; prev = rate; }
-  }
+  console.log('\nDIRECTIONAL SIGNAL calibration, global (compRatio → beat-high rate; must be monotonic to ship):');
+  const g = monotonic(sigGlobal);
+  for (const b of BUCKETS) { const s = sigGlobal[b]; console.log(`    comps ${b.padEnd(8)} beat-high ${(s.n ? s.beat / s.n * 100 : 0).toFixed(0)}% (n${s.n})`); }
+  if (!g.ok) failures.push(`G1 global: beat-high rate not monotonic — ${g.rates}`);
+  if (BUCKETS.filter(b => sigGlobal[b].n >= MIN_N).length < 3) warnings.push(`G1 global: fewer than 3 buckets at n≥${MIN_N} — monotonicity unmeasured`);
+  if (coveragePct < 10) failures.push(`G4 coverage: only ${coveragePct.toFixed(1)}% of holdout lots valued`);
 
   // ── VERDICT ──
   console.log('\n════ VERDICT ════');
-  const goldinHigh = valErr.sports.high.concat(valErr.sports.medium);
-  console.log(`• Directional signal: ${monotonic ? 'VALIDATED — ships (monotonic beat-rate gradient)' : 'FAILED — suppress'}`);
+  console.log(`• Directional signal: ${g.ok ? 'VALIDATED — ships (monotonic beat-rate gradient)' : 'FAILED — suppress'}`);
   console.log('• Absolute valuation vs house on art/design/watches: engine defers to house estimate (comps shown as context, not an override) — by design');
-  console.log(`• Goldin/no-estimate value: ${goldinHigh.length >= 30 ? 'ships with confidence tiers (only estimate that exists)' : 'thin'}`);
-  console.log('• Confidence tiers: high-confidence value error should be materially below low — see the table above; any tier not beating a ~1.6× floor is labeled low.');
+  console.log(`• Confidence tiers: 'high' must beat a 1.6× median-error floor AND be more accurate than 'low' in every market with n≥${MIN_N}`);
+  for (const w of warnings) console.log(`• WARN ${w}`);
+  for (const f of failures) console.log(`• FAIL ${f}`);
+  const outPath = arg('json');
+  if (outPath) {
+    fs.writeFileSync(outPath, JSON.stringify({
+      generatedAt: new Date().toISOString(), cutoff: cutoff.slice(0, 10), test: test.length, coveragePct: Math.round(coveragePct * 10) / 10,
+      global: sigGlobal, byMarket: Object.fromEntries(markets.filter(m => testN[m]).map(m => [m, {
+        test: testN[m], signal: sigByM[m],
+        tiers: Object.fromEntries(['high', 'medium', 'low'].map(c => [c, { n: valErr[m][c].length, medErr: tierMed(valErr[m][c]) }])),
+        house: houseErr[m].length >= 15 ? Math.exp(pctile(houseErr[m], 0.5)) : null,
+      }])),
+      failures, warnings,
+    }, null, 2));
+  }
+  if (failures.length) {
+    console.error(`\n[validate] ${failures.length} gate(s) FAILED — exit 1`);
+    process.exit(1);
+  }
+  console.log(`\n[validate] all gates passed (${elapsed()})`);
 }
 
-main();
+try { main(); } catch (e) { console.error('[validate] FAILED:', (e as Error).message); process.exit(1); }

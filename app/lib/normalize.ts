@@ -51,7 +51,12 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
     2010: 1.546, 2011: 1.604, 2012: 1.585, 2013: 1.565, 2014: 1.648,
     2015: 1.528, 2016: 1.355, 2017: 1.289, 2018: 1.335, 2019: 1.277,
     2020: 1.284, 2021: 1.376, 2022: 1.237, 2023: 1.244, 2024: 1.279,
-    2025: 1.300, 2026: 1.300,
+    // 2025 = annual average of daily fixes (Fed H.10 / ECB reference rates);
+    // 2026 = Jan–Aug YTD average (ECB reference 8 Jan 2026: EUR/USD 1.1675,
+    // EUR/GBP 0.8687 → GBP/USD 1.344; ATO monthly Jan–Feb 2026 cross-checked).
+    // Replaced the 1.300/1.300 placeholders (Sep 2 2026 audit). Re-stamp 2026
+    // with the full-year average in Jan 2027.
+    2025: 1.270, 2026: 1.330,
   },
   // EUR→USD annual averages
   EUR: {
@@ -60,7 +65,9 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
     2010: 1.326, 2011: 1.392, 2012: 1.286, 2013: 1.328, 2014: 1.329,
     2015: 1.110, 2016: 1.107, 2017: 1.130, 2018: 1.181, 2019: 1.120,
     2020: 1.142, 2021: 1.183, 2022: 1.053, 2023: 1.082, 2024: 1.082,
-    2025: 1.080, 2026: 1.080,
+    // 2025 annual avg / 2026 Jan–Aug YTD (ECB reference 8 Jan 2026: 1.1675;
+    // dollar softened through H1) — placeholders 1.080/1.080 replaced Sep 2 2026
+    2025: 1.080, 2026: 1.150,
   },
   // HKD→USD (HKD is pegged ~7.75–7.85/USD → ~0.128 USD)
   HKD: {
@@ -69,6 +76,7 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
     2010: 0.129, 2011: 0.128, 2012: 0.129, 2013: 0.129, 2014: 0.129,
     2015: 0.129, 2016: 0.129, 2017: 0.128, 2018: 0.128, 2019: 0.128,
     2020: 0.129, 2021: 0.129, 2022: 0.128, 2023: 0.128, 2024: 0.128,
+    // HKMA peg band 7.75–7.85 held through 2025 and 2026 YTD (~7.80 avg)
     2025: 0.128, 2026: 0.128,
   },
   // AUD→USD annual averages
@@ -78,7 +86,9 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
     2010: 0.920, 2011: 1.033, 2012: 1.036, 2013: 0.968, 2014: 0.903,
     2015: 0.752, 2016: 0.744, 2017: 0.767, 2018: 0.748, 2019: 0.695,
     2020: 0.690, 2021: 0.751, 2022: 0.694, 2023: 0.665, 2024: 0.660,
-    2025: 0.650, 2026: 0.650,
+    // 2025 annual avg ≈0.645 (RBA/H.10); 2026 Jan–Aug YTD ≈0.70 (ATO monthly
+    // Jan 2026: 1 AUD = 0.5323 GBP / 0.6149 EUR ⇒ ≈0.71 USD; Feb similar)
+    2025: 0.645, 2026: 0.700,
   },
   // CHF→USD annual averages
   CHF: {
@@ -87,7 +97,9 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
     2010: 0.961, 2011: 1.130, 2012: 1.066, 2013: 1.079, 2014: 1.093,
     2015: 1.040, 2016: 1.016, 2017: 1.016, 2018: 1.022, 2019: 1.006,
     2020: 1.066, 2021: 1.094, 2022: 1.047, 2023: 1.113, 2024: 1.136,
-    2025: 1.150, 2026: 1.150,
+    // 2025 annual avg: USD/CHF ≈0.84 ⇒ 1.19 (SNB/H.10); 2026 Jan–Aug YTD ≈1.25
+    // (ECB 8 Jan 2026: EUR/CHF 0.9312 with EUR/USD 1.1675 ⇒ 1.254)
+    2025: 1.190, 2026: 1.250,
   },
   // CNY→USD annual averages
   CNY: {
@@ -96,7 +108,9 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
     2010: 0.148, 2011: 0.155, 2012: 0.158, 2013: 0.163, 2014: 0.163,
     2015: 0.160, 2016: 0.151, 2017: 0.148, 2018: 0.151, 2019: 0.145,
     2020: 0.145, 2021: 0.155, 2022: 0.149, 2023: 0.141, 2024: 0.139,
-    2025: 0.138, 2026: 0.138,
+    // 2025 annual avg: USD/CNY ≈7.19 ⇒ 0.139 (PBOC/H.10); 2026 Jan–Aug YTD
+    // ≈6.9 ⇒ 0.145 (ATO Jan 2026: 1 AUD = 4.8825 CNY at AUD ≈0.71 USD)
+    2025: 0.139, 2026: 0.145,
   },
 };
 

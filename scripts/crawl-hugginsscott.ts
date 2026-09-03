@@ -85,32 +85,47 @@ async function main() {
   const write = process.argv.includes('--write');
   if (write) installCrashGuard('H&S');
   const lots: AuctionLot[] = [];
-  let miss = 0;
+  let miss = 0, skippedKnown = 0;
   const conc = arg('conc', 1);
+  // A settled archive lot never changes: skip ids the segment already holds as
+  // sold (the nightly used to re-fetch ~4.9K archive pages for +0 new). Pass
+  // --refetch to force a full re-read of the selected months.
+  const refetch = process.argv.includes('--refetch');
+  const haveSold = new Set(
+    (readSegment('hugginsscott') as unknown as AuctionLot[])
+      .filter(l => (l as { status?: string }).status === 'sold')
+      .map(l => l.id),
+  );
   for (const mu of months) {
     const urls = await lotUrlsForMonth(mu);
-    console.log(`  [H&S] ${mu}: ${urls.length} lot urls`);
-    // concurrent per-lot fetch (H&S is plain HTTP); conc 1 = sequential (default)
-    const monthLots = (await mapPool(urls, conc, async (u) => {
+    const todo = refetch ? urls : urls.filter(u => !haveSold.has(`hugginsscott-${idFromUrl(u)}`));
+    skippedKnown += urls.length - todo.length;
+    console.log(`  [H&S] ${mu}: ${urls.length} lot urls (${todo.length} to fetch, ${urls.length - todo.length} already settled in segment)`);
+    // concurrent per-lot fetch (H&S is plain HTTP); conc 1 = sequential (default).
+    // --delay applies PER LOT (it used to sleep once per month, i.e. never
+    // between the lot pages that actually draw the rate limit).
+    const monthLots = (await mapPool(todo, conc, async (u) => {
       const html = await getHtml(u);
+      await new Promise(r => setTimeout(r, delayMs));
       if (!html) return null;
       try { return parseReaLot(html, idFromUrl(u), 'Huggins & Scott', u); } catch { return null; }
-    })).filter((x): x is AuctionLot => !!x);
-    miss += urls.length - monthLots.length;
+    }, 'H&S archive')).filter((x): x is AuctionLot => !!x);
+    miss += todo.length - monthLots.length;
     lots.push(...monthLots);
-    if (conc <= 1) await new Promise(r => setTimeout(r, delayMs));
     // INCREMENTAL: persist after each month so a mid-run crash keeps progress
     if (write && monthLots.length) {
       const { good } = settledOnly(monthLots);
       if (good.length) { const r = writeMergedSegment('hugginsscott', good); console.log(`    [H&S] segment now ${r.total} lots`); }
     }
   }
-  console.log(`[H&S] parsed ${lots.length} sold lots (${miss} skipped)`);
+  console.log(`[H&S] parsed ${lots.length} sold lots (${miss} skipped, ${skippedKnown} already in segment)`);
 
   // ── live leg: H&S live bidding runs on bid.hugginsandscott.com — the SAME
   // Livewire stack as bid.collectrea.com (REA owns H&S), so the REA live
-  // crawler transfers verbatim. Pre-open the grid renders an "opening soon"
-  // shell with zero lot links → 0 upcoming lots, which is a fact, not an error.
+  // crawler transfers verbatim — including its earned-ok gate: a 0-id grid
+  // ("opening soon" shell) or pages that parse to nothing keeps last night's
+  // upcoming snapshot instead of evicting it; the resolve pass still settles
+  // closed rows to sold (the REA Summer 2026 lesson, Sep 2 2026).
   let liveLots: AuctionLot[] = [];
   let liveOk = false;
   if (process.argv.includes('--live')) {

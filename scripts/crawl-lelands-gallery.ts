@@ -5,10 +5,14 @@
 // CF-clear drives the dropdown through all ~132 auctions. Extends to Memory
 // Lane / LOTG (same engine) via --house. Run:
 //   RAY_SKIP_MAIN=1 npx tsx scripts/crawl-lelands-gallery.ts --house lelands [--write] [--max-auctions N]
+//     [--sale-date YYYY-MM-DD]   only auctions whose season date lands within ±75 days
+//     [--auction <substring>]    only auctions whose dropdown name contains it (case-insensitive)
+//   (the heal targeting knobs — e.g. Memory Lane 2026-06-06: --house memorylane --sale-date 2026-06-06)
 import { chromium, type Browser, type Page } from 'playwright-core';
 import type { AuctionLot, LotCategory, AuctionHouse } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
 import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate, writeMergedSegment, settledOnly, installCrashGuard, purgeFromSegment } from './lib/sports-crawl';
+import { readSegment } from './corpus-io';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const HOUSES: Record<string, { host: string; house: AuctionHouse; seg: string; prefix: string }> = {
@@ -31,12 +35,13 @@ async function clearCF(page: Page, maxMs = 30000): Promise<boolean> {
 
 interface RawCard { id: string; title: string; sold: string; img: string | null; wd?: boolean; }
 async function extractCards(page: Page): Promise<RawCard[]> {
+  // no named fns inside evaluate — the tsx/esbuild __name trap
   return page.evaluate(() => {
-    const seen = new Set<string>(); const out: RawCard[] = [];
+    const byId = new Map<string, { title: string; card: string; img: string | null }>();
     document.querySelectorAll('a[href*="bidplace.aspx?itemid="]').forEach((a) => {
       const href = (a as HTMLAnchorElement).href;
       const id = (href.match(/itemid=(\d+)/) || [])[1];
-      if (!id || seen.has(id)) return; seen.add(id);
+      if (!id) return;
       // walk up ONLY while the element holds a single itemid — past that is the
       // grid, where a priceless (withdrawn) card would steal a NEIGHBOR's
       // "SOLD FOR" (this exact bug wrote 27 Lelands lots at the same $3.1M)
@@ -53,10 +58,31 @@ async function extractCards(page: Page): Promise<RawCard[]> {
         el = el.parentElement;
       }
       const txt = (card?.textContent || '').replace(/\s+/g, ' ').trim();
+      const img = (card?.querySelector('img') as HTMLImageElement | null)?.getAttribute('src') || null;
+      // TITLE AT SOURCE (Sep 2 2026): a card has 2+ anchors for one itemid
+      // (image + title text) — the title is the longest anchor's OWN text, not
+      // the whole card blob (which leads with ribbon labels, the boxed lot
+      // number and trails with the price line; the pre-fix rows stored that
+      // blob as the title)
+      const own = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      const prev = byId.get(id) || { title: '', card: txt, img };
+      if (own.length > prev.title.length && !/^\$|current bid|sold for/i.test(own)) prev.title = own;
+      if (!prev.img && img) prev.img = img;
+      if (txt.length > prev.card.length) prev.card = txt;
+      byId.set(id, prev);
+    });
+    const out: RawCard[] = [];
+    byId.forEach((v, id) => {
+      const txt = v.card;
       const wd = /\bwithdrawn\b/i.test(txt); // withdrawn ≠ a sale — reported so its ghost row gets purged
       const sold = wd ? '' : (txt.match(/sold for\s*\$[\d,]+(?:\.\d+)?/i) || [])[0] || '';
-      const img = (card?.querySelector('img') as HTMLImageElement | null)?.getAttribute('src') || null;
-      out.push({ id, title: txt.replace(/sold for\s*\$[\d,.]+/i, '').replace(/current bid.*/i, '').trim().slice(0, 200), sold, img, wd });
+      // blob fallback only: strip ribbon + the boxed lot number (never off the
+      // anchor's own text — that would eat the year of "1952 Topps …")
+      const fallback = txt.replace(/sold for\s*\$[\d,.]+/i, '').replace(/current bid.*/i, '').trim()
+        .replace(/^(best of the best|highlight|featured|premier)\s+/i, '')
+        .replace(/^\d{1,4}\s+(?=\D)/, '');
+      const title = (v.title || fallback).replace(/^(best of the best|highlight|featured|premier)\s+/i, '').trim().slice(0, 200);
+      out.push({ id, title, sold, img: v.img, wd });
     });
     return out;
   }).catch(() => [] as RawCard[]);
@@ -90,6 +116,24 @@ async function main() {
   const cfg = HOUSES[argStr('house', 'lelands')];
   if (!cfg) { console.error('unknown --house'); process.exit(1); }
   const maxAuctions = argNum('max-auctions', 200);
+  // heal targeting: --sale-date narrows to auctions whose season date (the
+  // dropdown name → seasonToDate, day 15) lands within ±75 days of it (a
+  // hobby season is ~a quarter; the exact close day isn't in the name);
+  // --auction narrows on the dropdown name itself
+  const saleDateArg = argStr('sale-date', '');
+  const auctionArg = argStr('auction', '').toLowerCase();
+  if (saleDateArg && !/^\d{4}-\d{2}-\d{2}$/.test(saleDateArg)) { console.error('--sale-date must be YYYY-MM-DD'); process.exit(1); }
+  const WINDOW_MS = 75 * 86_400_000;
+
+  // Rows the segment already holds with an EXACT sale date (the live-leg /
+  // per-lot paths stamp the auction's real End: date; only the gallery stamps
+  // a season-approximate day-15). A heal that re-prices a row must not also
+  // downgrade its date — the Aug 13 resolve pass learned this on ~1.9k Lelands
+  // rows. Keep the existing exact date; take the gallery's price.
+  const exactDates = new Map<string, { saleDate: string; saleDateTime: string | null }>();
+  for (const r of readSegment(cfg.seg) as unknown as (AuctionLot & { saleDateTime?: string | null })[]) {
+    if (r && r.id && typeof r.saleDate === 'string' && !r.saleDate.endsWith('-15')) exactDates.set(r.id, { saleDate: r.saleDate, saleDateTime: r.saleDateTime ?? null });
+  }
 
   const browser: Browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
 
@@ -105,8 +149,14 @@ async function main() {
     return out;
   });
   await ictx.close();
-  const settled = auctions.filter((a) => { const d = seasonToDate(a.name); return d && d <= TODAY; });
-  console.log(`[gal:${cfg.seg}] ${auctions.length} auctions (${settled.length} settled); crawling up to ${maxAuctions}`);
+  let settled = auctions.filter((a) => { const d = seasonToDate(a.name); return d && d <= TODAY; });
+  if (saleDateArg) {
+    const t = Date.parse(saleDateArg);
+    settled = settled.filter((a) => Math.abs(Date.parse(seasonToDate(a.name)!) - t) <= WINDOW_MS);
+  }
+  if (auctionArg) settled = settled.filter((a) => a.name.toLowerCase().includes(auctionArg));
+  console.log(`[gal:${cfg.seg}] ${auctions.length} auctions (${settled.length} settled${saleDateArg || auctionArg ? ` after --sale-date/--auction filter` : ''}); crawling up to ${maxAuctions}`);
+  if (saleDateArg || auctionArg) console.log(`[gal:${cfg.seg}] targeted: ${settled.map((a) => `${a.name} (${a.id} → ${seasonToDate(a.name)})`).join(' · ') || 'NONE — check the filter against the dropdown names above'}`);
 
   const all: AuctionLot[] = [];
   let done = 0;
@@ -143,7 +193,11 @@ async function main() {
     } catch (e) { console.error(`  [gal] ${a.name} failed:`, (e as Error).message.slice(0, 50)); await ctx.close(); continue; }
     await ctx.close();
 
-    const lots = cards.filter((c) => !c.wd).map((c) => buildLot(c, saleDate, cfg)).filter((x): x is AuctionLot => !!x);
+    const lots = cards.filter((c) => !c.wd).map((c) => {
+      const prev = exactDates.get(`${cfg.prefix}-${c.id}`);
+      const lot = buildLot(c, prev?.saleDate || saleDate, cfg);
+      return lot && prev ? ({ ...lot, saleDateTime: prev.saleDateTime } as AuctionLot) : lot;
+    }).filter((x): x is AuctionLot => !!x);
     const wdIds = new Set(cards.filter((c) => c.wd).map((c) => `${cfg.prefix}-${c.id}`));
     all.push(...lots);
     done++;

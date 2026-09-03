@@ -1232,6 +1232,9 @@ export default function ValuePage() {
         .vd-thumb-letter { font-family: var(--font-inter), sans-serif; font-weight: 600; font-size: 18px; line-height: 1; color: color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint)); }
         .ray-value-row-maker { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .ray-value-row-title { font-size: 12.5px; font-weight: 400; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* phones: the hammer date is its own line under the title (never inside
+           the ellipsized title span, where it was the first thing cut) */
+        .ray-value-mobdate { display: block; font-size: 11.5px; color: var(--color-text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
         .ray-value-row-sig { font-size: 13.5px; font-weight: 700; color: var(--color-up); text-align: right; white-space: nowrap; }
         .ray-value-row-est { font-size: 12.5px; color: var(--color-text-muted); text-align: right; white-space: nowrap; }
         @media (max-width: 768px) {
@@ -1256,7 +1259,7 @@ export default function ValuePage() {
             padding: 12px 16px 9px;
             border-bottom: 1px solid var(--color-border);
           }
-          .ray-value-head .kicker { font-size: 10px; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .ray-value-head .kicker { font-size: 11.5px; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .ray-value-mob { display: none; }
           .ray-value-mobdate { display: none; }
           .ray-value-cell {
@@ -1444,7 +1447,7 @@ export default function ValuePage() {
           padding: 12px 16px 9px;
           border-bottom: 1px solid var(--color-border);
         }
-        .vd-lane-cols .kicker { font-size: 10px; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vd-lane-cols .kicker { font-size: 11.5px; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vd-lane-row {
           display: grid;
           gap: 14px;
@@ -1686,6 +1689,7 @@ export default function ValuePage() {
           border-bottom: 1px dotted var(--color-text-faint);
           cursor: help; outline: none;
         }
+        .vd-term:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; border-radius: 2px; }
         .vd-term-tip {
           position: absolute; bottom: calc(100% + 9px); left: 50%;
           transform: translateX(-50%);
@@ -2041,19 +2045,22 @@ export default function ValuePage() {
                       </span>
                       <span className="ray-value-row-title" style={{ display: 'block' }}>
                         {craftTitle(d.lot.title)}
-                        <span className="ray-value-mobdate">
+                      </span>
+                      {/* its own line: inside the nowrap/ellipsis title the date was the first thing cut */}
+                      <span className="ray-value-mobdate">
+                        <span className="ray-value-mobdate-in">
                           {(() => {
                             const day = trueSaleDay(d.lot) || d.lot.saleDate;
                             const past = trueSaleDay(d.lot) && trueSaleDay(d.lot) < localToday();
                             const dU = daysUntil(day);
                             if (!past && dU != null && dU <= 0) {
                               const tonight = !!d.lot.saleDateTime && new Date(d.lot.saleDateTime).getHours() >= 17;
-                              return <> · <span style={{ color: 'var(--color-up)', fontWeight: 600 }}>
+                              return <><span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
                                 {tonight ? 'closes tonight' : 'closes today'}
                                 {d.lot.saleDateTime && <> · <CloseClock iso={d.lot.saleDateTime} windowHours={24} /></>}
                               </span></>;
                             }
-                            return <>{' '}· {past ? 'hammered' : 'hammers'} {formatDate(day)}</>;
+                            return <>{past ? 'hammered' : 'hammers'} {formatDate(day)}</>;
                           })()}
                         </span>
                       </span>
@@ -2064,7 +2071,7 @@ export default function ValuePage() {
                         const iso = d.lot.saleDateTime;
                         const ms = iso ? Date.parse(iso) - Date.now() : null;
                         return ms != null && ms > 0 && ms < 24 * 3600e3
-                          ? <span className="vd-breathe" style={{ color: 'var(--color-up)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
+                          ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
                           : formatDate(trueSaleDay(d.lot) || d.lot.saleDate);
                       })()}
                     </span>

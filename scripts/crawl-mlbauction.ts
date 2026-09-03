@@ -121,10 +121,40 @@ async function pageThrough(qMode: 'open' | 'closed', query: string, maxPages: nu
 
 interface PageRead { desc: string; winningBid: number | null; winningDate: string | null; }
 
-/** the WINNING bid-history row — server-rendered with its exact timestamp */
-function parseWinningRow(html: string): { date: string | null; bid: number | null } {
-  const txt = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  const m = txt.match(/WINNING\s+([A-Z][a-z]{2} \d{1,2}, 20\d{2})[^$]{0,60}\$\s*([\d,\.]+)/);
+// ── SUBJECT-LOT ANCHORING ────────────────────────────────────────────────────
+// An ended lot page also carries related-lot cards ("Current Bid: $X" ×3 on a
+// Sep 2 2026 sample) and a search-result JS template — a page-wide "first
+// match" reads THOSE as the subject's price. That is the exact poison shape
+// that minted 3,895 fake NFL sales off the Hot-Items widget (see
+// heal-nflauction-idwalk.ts). Every price read here is therefore scoped to a
+// block only the SUBJECT lot renders (verified on auctionId 6395641):
+//   settled figure  <li class="auction-bid-current …"><b>Winning Bid:</b></span> <span>$45.00</span></li>
+//   bid history     <li id="bid-history"> … <div class="the-winner">WINNING</div></td>
+//                   <td headers="date">Aug 23, 2026 03:13:23 PM EDT</td> <td headers="bid" class="numeric">$45.00</td>
+// A related-lot card renders neither block, so nothing outside the subject can
+// satisfy either anchor.
+const BID_HISTORY_OPEN = /<li[^>]*\bid="bid-history"[^>]*>/i;
+const AUCTION_BID_CURRENT_OPEN = /<li[^>]*\bclass="[^"]*\bauction-bid-current\b[^"]*"[^>]*>/i;
+let anchorMisses = 0;
+
+/** slice from the anchor's opening tag to its own closing `</li>` (neither
+ *  block nests an <li>, so the first close IS the boundary), length-capped */
+function subjectBlock(html: string, openRe: RegExp, maxLen: number): string | null {
+  const m = html.match(openRe);
+  if (!m || m.index == null) return null;
+  const start = m.index;
+  const close = html.indexOf('</li>', start);
+  const end = close < 0 ? start + maxLen : Math.min(close + 5, start + maxLen);
+  return html.slice(start, end);
+}
+
+/** the WINNING bid-history row — server-rendered with its exact timestamp,
+ *  read ONLY inside the subject's <li id="bid-history"> block */
+export function parseWinningRow(html: string): { date: string | null; bid: number | null } {
+  const block = subjectBlock(html, BID_HISTORY_OPEN, 80000);
+  if (!block) return { date: null, bid: null };
+  const m = block.match(/the-winner"[^>]*>\s*WINNING\s*<\/div>\s*<\/td>\s*<td[^>]*headers="date"[^>]*>\s*([A-Z][a-z]{2} \d{1,2}, 20\d{2})[^<]*<\/td>\s*<td[^>]*headers="bid"[^>]*>\s*\$\s*([\d,\.]+)/i)
+    ?? block.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').match(/WINNING\s+([A-Z][a-z]{2} \d{1,2}, 20\d{2})[^$]{0,60}\$\s*([\d,\.]+)/);
   if (!m) return { date: null, bid: null };
   const t = Date.parse(`${m[1]} UTC`);
   const bid = parseFloat(m[2].replace(/,/g, ''));
@@ -133,33 +163,92 @@ function parseWinningRow(html: string): { date: string | null; bid: number | nul
     bid: isFinite(bid) && bid > 0 ? bid : null,
   };
 }
+
+/** the settled figure — ONLY from the subject's auction-bid-current block; a
+ *  "Winning Bid" printed anywhere else on the page is an anchor miss (logged,
+ *  never priced).
+ *  NOT a sold gate on its own (verified Sep 2 2026, auctionId 6395702): a lot
+ *  that closed with "No bids yet on this item." STILL prints
+ *  `Winning Bid: $22,995.00` (its opening/reserve figure). So: a "No bids yet"
+ *  bid-history block nulls it, and callers must pair it with real bidding
+ *  evidence — the API's bidCount>0, or the WINNING history row (idwalk). */
+export function parseWinningBid(html: string): number | null {
+  const hist = subjectBlock(html, BID_HISTORY_OPEN, 80000);
+  if (hist && /No bids yet/i.test(hist)) return null; // closed without a bid — the printed figure is not a sale
+  const block = subjectBlock(html, AUCTION_BID_CURRENT_OPEN, 4000);
+  if (!block) {
+    if (/Winning Bid/i.test(html) && anchorMisses++ < 5) console.warn('[MLBAuction] page prints "Winning Bid" outside the subject auction-bid-current block — anchor miss (markup change?); treated as unsettled');
+    return null;
+  }
+  const w = block.replace(/<[^>]+>/g, ' ').match(/Winning Bid:?\s*\$\s*([\d,\.]+)/i);
+  const n = w ? parseFloat(w[1].replace(/,/g, '')) : NaN;
+  return isFinite(n) && n > 0 ? n : null;
+}
+
+/** POISON DETECTOR (the NFL idwalk lesson, Aug 30 2026): one exact price on
+ *  >20% of a ≥50-row batch of NEW sold rows means the source is echoing a
+ *  template/widget constant, not per-lot results. Runs on EVERY write —
+ *  the idwalk's incremental flushes included, not just the final one. */
+function poisonedBatch(rows: AuctionLot[]): { price: number; n: number } | null {
+  if (rows.length < 50) return null;
+  const census = new Map<number, number>();
+  for (const l of rows) {
+    const pv = (l as unknown as { priceUsd?: number; realizedUsd?: number });
+    const pr = pv.realizedUsd ?? pv.priceUsd;
+    if (typeof pr === 'number') census.set(pr, (census.get(pr) || 0) + 1);
+  }
+  const top = Array.from(census.entries()).sort((a, b) => b[1] - a[1])[0];
+  return top && top[1] > rows.length * 0.2 ? { price: top[0], n: top[1] } : null;
+}
+
 /** the WAF here rate-limits: a request burst gets a "Human Verification"
- *  interstitial instead of the lot page. Treat it as a miss (never parse it),
- *  count consecutive hits, and stop page-fetching for the run once tripped —
- *  skipped lots simply retry next night (the merge is additive). */
+ *  interstitial instead of the lot page. Treat it as a miss (never parse it)
+ *  and count CONSECUTIVE hits — every clean page resets the streak to 0 (that
+ *  reset is the success signal). A tripped streak no longer ends the run's
+ *  fetching outright: the pool pauses once for a cool-down, resets, and goes
+ *  again; only after MAX_COOLDOWNS does it stop for the night — skipped lots
+ *  simply retry next run (the merge is additive). */
 let challengeStreak = 0;
 const CHALLENGE_TRIP = 10;
+const MAX_COOLDOWNS = 2;
+const COOLDOWN_MS = 60_000;
+let cooldowns = 0;
+let cooling: Promise<void> | null = null;
 function challenged(html: string): boolean {
   if (/<title>\s*Human Verification/i.test(html)) { challengeStreak++; return true; }
-  challengeStreak = 0;
+  challengeStreak = 0; // success → streak reset
   return false;
 }
 const wafTripped = () => challengeStreak >= CHALLENGE_TRIP;
+/** call before every lot-page fetch: true = go ahead. Shared across the pool —
+ *  concurrent workers all wait on the same cool-down promise. */
+async function wafGate(): Promise<boolean> {
+  if (!wafTripped()) return true;
+  if (!cooling) {
+    if (cooldowns >= MAX_COOLDOWNS) return false; // out of cool-downs: stop fetching for the run
+    cooldowns++;
+    console.warn(`[MLBAuction] WAF challenge streak reached ${challengeStreak} — cooling down ${COOLDOWN_MS / 1000}s (${cooldowns}/${MAX_COOLDOWNS}) before resuming`);
+    cooling = new Promise<void>(r => setTimeout(r, COOLDOWN_MS)).then(() => { challengeStreak = 0; cooling = null; });
+  }
+  await cooling;
+  return !wafTripped();
+}
 
 /** the lot page: the real description block + the server-rendered settled
  *  figure (`Winning Bid: $X` prints for the subject lot only when the sale
  *  actually closed with a winner — the sold gate on a reserve-blind API) */
 async function readLotPage(id: number | string): Promise<PageRead | null> {
-  if (wafTripped()) return null;
+  if (!(await wafGate())) return null;
   const html = await getHtml(`${HOST}/iSynApp/auctionDisplay.action?sid=${SID}&auctionId=${id}`);
   if (!html || challenged(html)) return null;
   const d = html.match(/id="auction-description"[^>]*>([\s\S]{0,4000}?)<\/div>/i);
   const desc = d ? decodeHtml(d[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim() : '';
-  const w = html.match(/Winning Bid:?\s*<\/b>\s*<\/span>\s*<span>\s*\$\s*([\d,\.]+)/i)
-    ?? html.replace(/<[^>]+>/g, ' ').match(/Winning Bid:?\s*\$\s*([\d,\.]+)/i);
-  const winningBid = w ? parseFloat(w[1].replace(/,/g, '')) : null;
+  // the WINNING history row is the primary figure (per-lot bidding evidence);
+  // the printed Winning Bid fills in only when the row is absent — and the
+  // API-path caller additionally requires bidCount>0 (toLot's sold branch)
   const row = parseWinningRow(html);
-  return { desc, winningBid: winningBid && winningBid > 0 ? winningBid : row.bid, winningDate: row.date };
+  const winningBid = row.bid ?? parseWinningBid(html);
+  return { desc, winningBid, winningDate: row.date };
 }
 
 /** league chain-of-custody = the game-used gold standard on this house */
@@ -272,7 +361,7 @@ async function main() {
     console.log(`[MLBAuction] idwalk: ${rows.length} unknown historical ids${idskip || idcap ? ` (skip ${idskip}, cap ${idcap || '∞'})` : ''}`);
     let walked = 0, kept = 0;
     await mapPool(rows, conc, async (r) => {
-      if (wafTripped()) return;
+      if (!(await wafGate())) return;
       const html = await getHtml(`${HOST}/x/isynmv1/aucd/${r.id}`);
       await new Promise(res => setTimeout(res, delayMs));
       walked++;
@@ -282,13 +371,16 @@ async function main() {
       const t = html.match(/<meta property="og:title" content="([^"]*)"/i);
       const title = t ? decodeHtml(t[1]).replace(/\s*\|.*$/, '').trim() : '';
       if (!title || /official mlb auctions/i.test(title) || !GAME_USED_RE.test(title)) return;
-      // the settled gate: a finalized sale prints the WINNING history row
-      // (with its exact timestamp) and the Winning Bid figure — reserve-not-
-      // met/unsold ended pages render neither
+      // the settled gate is the WINNING history row (exact timestamp + the
+      // bid that won) — the ONLY per-lot evidence a bid was actually placed.
+      // The "Winning Bid:" figure is NOT a gate: a no-bid close prints its
+      // opening figure there too (see parseWinningBid), and the walk has no
+      // API bidCount to lean on. It is used as a cross-check only.
       const row = parseWinningRow(html);
-      const w = html.replace(/<[^>]+>/g, ' ').match(/Winning Bid:?\s*\$\s*([\d,\.]+)/i);
-      const bid = row.bid ?? (w ? parseFloat(w[1].replace(/,/g, '')) : null);
-      if (!bid || bid <= 0) return; // no verified final price → never a sale
+      if (!row.bid || row.bid <= 0) return; // no WINNING row → never a sale
+      const bid = row.bid;
+      const printed = parseWinningBid(html);
+      if (printed != null && Math.abs(printed - bid) > 0.5 && anchorMisses++ < 5) console.warn(`[MLBAuction] idwalk ${r.id}: WINNING row $${bid} ≠ printed Winning Bid $${printed} — keeping the row`);
       const d = html.match(/id="auction-description"[^>]*>([\s\S]{0,4000}?)<\/div>/i);
       const desc = d ? decodeHtml(d[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim() : '';
       const cat = classifySports('', title);
@@ -311,9 +403,15 @@ async function main() {
         ...stampRealizedUsd(bid, saleDate),
       } as unknown as AuctionLot;
       lots.push(lot); kept++;
-      // INCREMENTAL: the walk is long — persist every 500 keeps
+      // INCREMENTAL: the walk is long — persist every 500 keeps, but ONLY
+      // after the poison detector clears the batch (a flush used to bypass it)
       if (process.argv.includes('--write') && kept % 500 === 0) {
         const { good } = settledOnly(lots);
+        const p = poisonedBatch(good);
+        if (p) {
+          console.error(`[MLBAuction] ABORT (idwalk flush): $${p.price} repeats on ${p.n}/${good.length} new sold rows — poisoned feed, nothing written.`);
+          process.exit(1);
+        }
         if (good.length) writeMergedSegment('mlbauction', good);
       }
     });
@@ -369,21 +467,11 @@ async function main() {
   if (process.argv.includes('--write')) {
     const { good, dropped } = settledOnly(lots);
     if (dropped) console.log(`[MLBAuction] dropped ${dropped} unsettled/future-dated lots`);
-    // POISON DETECTOR (the NFL idwalk lesson, Aug 30 2026): if one exact
-    // price carries >20% of a >=50-row batch of NEW sold rows, the source is
-    // echoing a template/widget constant, not per-lot results — abort.
-    if (good.length >= 50) {
-      const census = new Map<number, number>();
-      for (const l of good) {
-        const pv = (l as unknown as { priceUsd?: number; realizedUsd?: number });
-        const pr = pv.realizedUsd ?? pv.priceUsd;
-        if (typeof pr === 'number') census.set(pr, (census.get(pr) || 0) + 1);
-      }
-      const top = Array.from(census.entries()).sort((a, b) => b[1] - a[1])[0];
-      if (top && top[1] > good.length * 0.2) {
-        console.error(`[MLBAuction] ABORT: $${top[0]} repeats on ${top[1]}/${good.length} new sold rows — poisoned feed, nothing written.`);
-        process.exit(1);
-      }
+    // POISON DETECTOR — see poisonedBatch (also runs on every idwalk flush)
+    const poison = poisonedBatch(good);
+    if (poison) {
+      console.error(`[MLBAuction] ABORT: $${poison.price} repeats on ${poison.n}/${good.length} new sold rows — poisoned feed, nothing written.`);
+      process.exit(1);
     }
     const rep = assertInvariants(good.concat(liveLots));
     if (rep.fatal.length) {

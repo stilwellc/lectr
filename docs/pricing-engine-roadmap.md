@@ -194,3 +194,15 @@ guard + #3 recency decay + #6 backtest parity (then re-baseline).
 #5 Phillips backfill, #7 art token hygiene.
 **Wave 3 (calibration + card migration):** #9 calibration pack, #2 full card-signal
 migration, #10 Goldin pack, #8 pollution pack prototypes.
+
+
+## Status — Sep 2 2026 engine audit
+
+Shipped (see docs/ENGINE_SPEC_V2.md §5 for file:line and measurements):
+- #1 basis-honest claims: `inferHammerUsd` replaces every flat /1.25 in owned files; `vsBidRead` grosses bids to all-in; `basisNote()` caption strings exported; the UI captions still to change are listed in ENGINE_SPEC_V2 §5.6.
+- #9 calibration pack: per-market bands, per-market MdAPE with tier demotion, OUT-OF-SAMPLE band coverage published per market; the replay applies the prior quarter's calibration (the record measured an uncalibrated engine before).
+- Backtest infrastructure: exact candidate pre-filter (31 → 459 targets/s, byte-identical), legacy-state rehydration, per-market legs + merge, incremental keyed on "never attempted", non-zero exits, engine version stamps.
+- Card tiers: recency decay, dispersion bands, n=2 → medium, per-tier tape grading; TCG exact-card tier.
+- Gates: validate-engine exits non-zero (roster-derived markets), sentinel abort on ≥2 poison signatures, build-market coverage floor.
+
+Still open from this list: Phillips backfill (#5), art token hygiene (#7), the Pokémon grade ladder (the TCG grade-adj tier borrows the sports ladder), `scripts/sub-markets.ts:154` flat /1.25, the four UI files hardcoding signal labels, and the UI captions in ENGINE_SPEC_V2 §5.6.

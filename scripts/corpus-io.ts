@@ -175,6 +175,10 @@ export function slimForClient<T extends Record<string, unknown>>(lot: T): Record
   for (const k in lot) {
     if (STRIP.has(k)) continue;
     const v = lot[k];
+    // `abstain` (P1-6) is a short reason string stamped by build-market when
+    // the engine DECLINED to value a lot — kept so served data distinguishes
+    // "abstained" (abstain set, no value) from "never ran" (neither key).
+    // `value: null` is still omitted below (the abstain string is the marker).
     if (v === null || v === undefined) continue;          // omit nulls — pure weight
     if (Array.isArray(v) && v.length === 0) continue;
     // truthy-only reads: every consumer checks `if (l.resultsPending)` — the

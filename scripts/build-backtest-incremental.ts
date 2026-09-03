@@ -2,90 +2,83 @@
  * build-backtest-incremental.ts — the FAST NIGHTLY backtest.
  *
  * The full replay (build-backtest.ts) re-scores EVERY concluded-with-estimate
- * lot against all its priors, every run — an O(targets × priors) pass that grew
- * to HOURS as the corpus passed ~500k lots. But the record is CUMULATIVE history
- * that barely moves night-to-night: the only lots whose call is genuinely NEW
- * are the ones that CLOSED since the last run. This entry point scores ONLY
- * those and APPENDS them to the carried-forward record.
+ * lot against all its priors — a pass that grew to HOURS as the corpus passed
+ * ~1M lots. But the record is CUMULATIVE history that barely moves night-to-
+ * night: the only lots whose call is genuinely NEW are the ones that CLOSED (or
+ * were first CRAWLED) since the last run. This entry point scores ONLY those and
+ * APPENDS them to the carried-forward record.
  *
  * It reuses the SAME scoring code as the full replay (backtest-core.ts) over the
  * SAME full corpus (identical IDF, vectors, and per-maker roster), so each newly
  * folded row is byte-identical to the row a full replay would produce for that
  * same lot. What makes append correct is the sidecar STATE FILE: the full build
- * persists the raw accumulator arrays (perfs, calObs, byYear, scoredIds); we
- * rehydrate them, fold ONLY the new lots' observations in, and re-derive the
- * published summary. scoredIds dedups any lot that straddles the boundary.
+ * persists the raw accumulator arrays (perfs, calObs, byYear, scoredIds,
+ * triedIds); we rehydrate them, fold ONLY the new lots' observations in, and
+ * re-derive the published summary. scoredIds ∪ triedIds dedups any lot that was
+ * already attempted, whatever the outcome.
  *
- * ── DRIFT BOUND (the one place incremental can diverge from a full replay) ──
+ * ── WHAT IS "NEW" (P0-1b, Sep 2 2026) ──
+ * The old cutoff was `saleDate > priorGeneratedAt`, which silently dropped any
+ * result crawled AFTER its close day (results posted late, resolved-later
+ * houses, archive backfills) — forever. New = not yet attempted AND (closed
+ * inside the trailing 120-day window OR first seen by the crawler after the
+ * prior run). The attempted set makes the window cheap: an abstention is not
+ * re-attempted every night. Backfills bigger than the nightly budget are
+ * chunked oldest-first across nights (the tried set carries the frontier).
+ *
+ * ── FIELD DRIFT (P0-1a) ──
+ * A state minted before a calObs field existed is REHYDRATED (arithmetic +
+ * corpus lookup, backtest-core.rehydrateState) — never a forced full rebuild.
+ * The forced rebuild is exactly what killed every nightly Aug 26 → Sep 1: it
+ * could not finish inside the job cap, wrote no state, and repeated.
+ *
+ * ── DRIFT BOUND ──
  * A lot's call is a function of its comp pool = all strictly-EARLIER same-maker
- * sold priors. For a lot that CLOSES normally, every prior is already in the
- * corpus (priors are older by construction), so its incremental row equals its
- * full-replay row exactly. The ONLY divergence is a RETROACTIVE prior: a lot
- * BACKFILLED into the corpus that is dated BEFORE an already-scored target. That
- * new prior would enter the target's pool on a full replay but the target is
- * never re-scored incrementally. Two guards bound this:
- *   1. We only score targets dated STRICTLY AFTER the prior run's generatedAt,
- *      so a backfilled OLD lot is skipped as a target (not re-added), never
- *      double-counted — the record can go slightly STALE for that cohort but
- *      never wrong-by-duplication.
- *   2. The WEEKLY full rebuild re-scores everything from scratch and overwrites
- *      the state, erasing any accumulated drift. So drift is bounded to at most
- *      one week of backfilled-prior effect on already-closed lots — acceptable
- *      for a cumulative track record, and exactly why the weekly backstop exists.
+ * sold priors. A RETROACTIVE prior (a lot backfilled into the corpus dated
+ * BEFORE an already-scored target) would enter the target's pool on a full
+ * replay but the target is never re-scored incrementally; the per-market full
+ * legs (build-backtest.ts --market) erase that drift when they run.
+ *
+ * Exit codes: non-zero whenever no record can be produced.
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import * as zlib from 'zlib';
 import { readCorpus as readCorpusShared } from './corpus-io';
 import type { AuctionLot } from '../app/types';
 import {
-  prepare, targetsOf, scoreSold, scoreBoughtIn,
-  summarizeState, summaryLine, type BacktestState, type L,
+  prepare, targetsOf, replayTargets, rehydrateState, assertRecord,
+  summarizeState, summaryLine, ENGINE_VERSION, type BacktestState, type L,
 } from './backtest-core';
-import { buildBacktest, writeState, STATE_FILE } from './build-backtest';
+import { buildBacktest, writeState, readStateFile, STATE_FILE } from './build-backtest';
+
+/** Trailing close-date window (days) inside which a never-attempted target is
+ *  still admitted — covers late-posted results without a full replay. */
+export const LATE_RESULT_WINDOW_DAYS = 120;
+/** Nightly budget: more than this is chunked oldest-first across nights. */
+export const NIGHTLY_TARGET_BUDGET = 80_000;
 
 /** Load the sidecar accumulator state, or null if it's absent/unreadable (first
- *  ever run, or a state file that predates this feature). Null → caller falls
- *  back to a full build, which is always correct. */
+ *  ever run, or a truncated file). Null → caller falls back to a full build. */
 function readState(): BacktestState | null {
-  if (!fs.existsSync(STATE_FILE)) return null;
-  try {
-    const st = JSON.parse(zlib.gunzipSync(fs.readFileSync(STATE_FILE)).toString('utf8')) as BacktestState;
-    // shape guard — a truncated/legacy file must not silently zero the record
-    if (!st || !Array.isArray(st.scoredIds) || !st.flagged || typeof st.nowMs !== 'number') return null;
-    // FIELD-DRIFT GUARD (Aug 25 2026): a state minted before a calObs field
-    // existed carries rows WITHOUT it forever — weekday appends only add the
-    // handful of newly-closed rows, so a derived summary (byMarket medians
-    // need `pf`) publishes zeros for weeks while looking healthy. If the
-    // carried rows lack a field the summarizer depends on, force the full
-    // rebuild (the same fallback a missing state takes). This is exactly how
-    // byMarket shipped n:0 for 12 days: the Sunday full-rebuild backstop that
-    // would have refreshed the state was a cancelled run.
-    if (Array.isArray(st.calObs) && st.calObs.length > 100 &&
-        st.calObs.filter(o => typeof (o as { pf?: number }).pf === 'number').length === 0) {
-      console.log('[backtest] incremental: state predates calObs.pf — forcing full rebuild');
-      return null;
-    }
-    return st;
-  } catch {
-    return null;
-  }
+  try { return readStateFile(STATE_FILE); } catch { return null; }
 }
 
-/** Prior generatedAt (YYYY-MM-DD) from the published record — the close-date
- *  cutoff for "what's new". Null if there's no prior record to append to. */
+/** Prior generatedAt (YYYY-MM-DD) from the published record. Null if there's
+ *  no prior record to append to. */
 function readPriorGeneratedAt(dataDir: string): string | null {
   const p = path.join(dataDir, 'backtest.json');
   if (!fs.existsSync(p)) return null;
   try {
     const prev = JSON.parse(fs.readFileSync(p, 'utf8')) as { generatedAt?: string };
-    return typeof prev.generatedAt === 'string' && prev.generatedAt.length >= 10 ? prev.generatedAt : null;
+    return typeof prev.generatedAt === 'string' && prev.generatedAt.length >= 10 ? prev.generatedAt.slice(0, 10) : null;
   } catch {
     return null;
   }
 }
 
-export function buildBacktestIncremental(dataDir: string, allLots?: AuctionLot[]): void {
+const shiftDays = (iso: string, days: number) => new Date(Date.parse(iso) + days * 864e5).toISOString().slice(0, 10);
+
+export function buildBacktestIncremental(dataDir: string, allLots?: AuctionLot[]): ReturnType<typeof summarizeState> {
   const t0 = Date.now();
   const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
 
@@ -95,39 +88,62 @@ export function buildBacktestIncremental(dataDir: string, allLots?: AuctionLot[]
     // Safe on an empty/missing prior: no state to append to → do the full build
     // (which ALSO writes the state file, so tomorrow's incremental can run).
     console.log('[backtest] no prior state/record — falling back to FULL build');
-    buildBacktest(dataDir, allLots);
-    return;
+    return buildBacktest(dataDir, allLots);
   }
 
   const lots = (allLots ?? (readCorpusShared() as unknown as AuctionLot[]));
-  console.log(`[backtest] incremental: loaded ${lots.length} lots (${elapsed()}); prior record generatedAt=${priorGeneratedAt}, ${st.scoredIds.length} lots on record`);
+  console.log(`[backtest] incremental: loaded ${lots.length} lots (${elapsed()}); prior record generatedAt=${priorGeneratedAt}, ${st.scoredIds.length} scored + ${(st.triedIds || []).length} abstained on record; state engine ${st.engineVersion || 'legacy'} → ${ENGINE_VERSION}`);
 
   const prep = prepare(lots, console.log, elapsed);
+  // legacy field drift → repair in place (never a forced full rebuild)
+  rehydrateState(st, prep, console.log);
   const { soldTargets, biTargets } = targetsOf(prep);
 
-  // NEW = closed strictly after the prior run's stamp AND not already folded in.
-  // The generatedAt cutoff is the cheap coarse filter (a saleDate string compare
-  // — ISO dates sort lexically); scoredIds is the exact dedup that also catches a
-  // lot dated ON the boundary day. Together they guarantee no double-count.
-  const seen = new Set(st.scoredIds);
-  const isNew = (l: L) => l.saleDate > priorGeneratedAt && !seen.has(l.id);
-  const newSold = soldTargets.filter(isNew);
-  const newBi = biTargets.filter(isNew);
-  console.log(`[backtest] incremental: ${newSold.length} newly-closed sold + ${newBi.length} bought-in targets to score (${elapsed()})`);
+  const scored = new Set(st.scoredIds);
+  const tried = new Set(st.triedIds || []);
+  const windowStart = shiftDays(priorGeneratedAt, -LATE_RESULT_WINDOW_DAYS);
+  const isNew = (l: L) => {
+    if (scored.has(l.id) || tried.has(l.id)) return false;
+    if (l.saleDate > windowStart) return true;
+    const fs = (l as L & { firstSeen?: string }).firstSeen;
+    return !!fs && fs.slice(0, 10) > priorGeneratedAt;
+  };
+  let newSold = soldTargets.filter(isNew);
+  let newBi = biTargets.filter(isNew);
+  console.log(`[backtest] incremental: ${newSold.length} sold + ${newBi.length} bought-in targets not yet attempted (window since ${windowStart} or first seen after ${priorGeneratedAt}) (${elapsed()})`);
+  if (newSold.length + newBi.length > NIGHTLY_TARGET_BUDGET) {
+    // chunk oldest-first so the rolling calibration stays point-in-time; the
+    // remainder is picked up tomorrow (they are still "not attempted")
+    const byDate = (a: L, b: L) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0);
+    newSold = newSold.sort(byDate).slice(0, NIGHTLY_TARGET_BUDGET);
+    newBi = newBi.sort(byDate).slice(0, Math.max(0, NIGHTLY_TARGET_BUDGET - newSold.length));
+    console.log(`[backtest] incremental: over the nightly budget — scoring the oldest ${newSold.length + newBi.length} tonight, the rest tomorrow`);
+  }
 
-  for (const lot of newSold) if (scoreSold(prep, st, lot)) st.scoredIds.push(lot.id);
-  for (const lot of newBi) if (scoreBoughtIn(prep, st, lot)) st.scoredIds.push(lot.id);
+  const res = replayTargets(prep, st, newSold, newBi, console.log, 5000);
+  st.engineVersion = st.engineVersion || 'legacy';
+  console.log(`[backtest] incremental: ${res.scored} scored, ${res.tried} abstained (${elapsed()})`);
 
   // Re-derive + republish. generatedAt advances to today so tomorrow's cutoff
   // moves forward; the summary/calibration/series are recomputed over the merged
   // accumulators (nowMs stays frozen from the last full build, so recency
-  // weighting is stable across incrementals — the weekly full refreshes it).
+  // weighting is stable across incrementals — the per-market full legs refresh it).
   const out = summarizeState(st, new Date().toISOString().slice(0, 10));
+  assertRecord(out);
+  fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(path.join(dataDir, 'backtest.json'), JSON.stringify(out));
   writeState(st);
   console.log(`[backtest] incremental complete (${elapsed()}) —`, summaryLine(out));
+  return out;
 }
 
 if (require.main === module) {
-  buildBacktestIncremental(path.join(process.cwd(), 'public', 'data', 'ray'));
+  const i = process.argv.indexOf('--out');
+  const dataDir = i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : path.join(process.cwd(), 'public', 'data', 'ray');
+  try {
+    buildBacktestIncremental(dataDir);
+  } catch (e) {
+    console.error('[backtest] FAILED:', (e as Error).message);
+    process.exit(1);
+  }
 }

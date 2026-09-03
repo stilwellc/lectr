@@ -33,7 +33,7 @@ export default function DeskNote({ market, style }: { market: Market; style?: Re
           alignItems: 'center',
           gap: 5,
           color: 'var(--color-fg)',
-          fontWeight: 600,
+          fontWeight: 500,
           textDecoration: 'none',
         }}
       >

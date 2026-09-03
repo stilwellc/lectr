@@ -24,7 +24,8 @@ import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants
 import { lotAllInFactor } from '../app/lib/premiums';
 import { appendCalls, type Call } from './lib/calls-ledger';
 import { hasConditionFlag } from '../app/lib/condition';
-import { gapRead, sleeperRead } from '../app/lib/lanes';
+import { gapRead, sleeperRead, valueFloor } from '../app/lib/lanes';
+import { CARD_TIER_CODE } from './lib/calls-ledger';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -253,15 +254,25 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
           const g = closeCurve.buckets[b];
           if (g && g >= 1) {
             const projAllIn = Math.round(bid * g * lotAllInFactor(l as { auctionHouse?: string | null; buyerPremiumPct?: number | null }, bid * g));
-            const v = (l as { value?: { low?: number } }).value;
-            const cardMed = (l as { cardComps?: { med?: number | null } }).cardComps?.med || null;
-            const floor = (v?.low && v.low > 0 ? v.low : null) ?? (cardMed ? Math.round(cardMed * 0.85) : null);
+            // ONE floor rule (lanes.valueFloor — P1-4): value.low at non-low
+            // confidence, else 0.85× the exact-card median at n≥3. This stamp
+            // used to take ANY value.low / ANY card median, so the served
+            // floor disagreed with the lane and the close-board that read it.
+            const floor = valueFloor(l as { value?: { low?: number; confidence?: string } | null; cardComps?: { med?: number | null; n?: number } | null })?.floor ?? null;
             emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}) };
             if (floor) freshCalls.push({ id: String(l.id), d: todayCall, k: 'vsbid', p: projAllIn, f: floor, m: marketOf(l.artist) });
           }
         }
+        // CARD CALL with its TIER (P0-2): the graded claim is the value the
+        // card actually wears — the tiered card-comp value when one was
+        // stamped (s = tier code), else the raw exact-card median (s = 'm').
         const cc = (l as { cardComps?: { med?: number | null; n?: number } }).cardComps;
-        if (cc?.med && (cc.n || 0) >= 3) freshCalls.push({ id: String(l.id), d: todayCall, k: 'card', p: cc.med, m: marketOf(l.artist) });
+        const cv = (l as { value?: { basis?: string; compValueUsd?: number; cardTier?: string } | null }).value;
+        if (cv?.basis === 'card-comp' && (cv.compValueUsd || 0) > 0) {
+          freshCalls.push({ id: String(l.id), d: todayCall, k: 'card', p: cv.compValueUsd!, s: CARD_TIER_CODE[cv.cardTier || ''] || 'm', m: marketOf(l.artist) });
+        } else if (cc?.med && (cc.n || 0) >= 3) {
+          freshCalls.push({ id: String(l.id), d: todayCall, k: 'card', p: cc.med, s: 'm', m: marketOf(l.artist) });
+        }
         // THE GAP + THE SLEEPERS (multi-lane engine, Aug 25): both lanes log
         // the night a lot first enters their board — the SAME readers the
         // /value page renders from (app/lib/lanes), so a lot can never show

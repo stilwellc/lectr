@@ -426,12 +426,6 @@ h1 {
 
 }
 
-@keyframes floatSlow {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(18px, -24px) scale(1.03); }
-  66% { transform: translate(-12px, 14px) scale(0.98); }
-}
-
 /* Dense grids: glass look without per-tile blur cost (48-card grids) */
 .glass-noblur,
 .glass-noblur.glass-quiet {
@@ -716,16 +710,16 @@ h1 {
 }
 .ray-toolbar-pill:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
 .ray-toolbar-pill[data-active=true] {
-  background: var(--color-accent-gold);
-  border-color: var(--color-accent-gold);
+  background: var(--color-fg);
+  border-color: var(--color-fg);
   color: var(--color-bg);
 }
 .ray-toolbar-pill[data-active=true] i { color: color-mix(in srgb, var(--color-bg) 72%, transparent); }
-.ray-toolbar-pill-signal { color: var(--color-up); border-color: color-mix(in srgb, var(--color-up) 34%, transparent); }
-.ray-toolbar-pill-signal:hover { color: var(--color-up); border-color: var(--color-up); }
+.ray-toolbar-pill-signal { color: var(--color-fg); border-color: var(--color-border-mid); }
+.ray-toolbar-pill-signal:hover { color: var(--color-fg); border-color: var(--color-fg); }
 .ray-toolbar-pill-signal[data-active=true] {
-  background: var(--color-up);
-  border-color: var(--color-up);
+  background: var(--color-fg);
+  border-color: var(--color-fg);
   color: var(--color-bg);
 }
 .ray-toolbar-divider { width: 1px; height: 16px; background: var(--color-border-mid); margin: 0 4px; flex: none; }
@@ -888,7 +882,7 @@ h1 {
   gap: 5px;
   transition: color var(--duration-fast) var(--ease-signature), gap var(--duration-fast) var(--ease-signature);
 }
-.ray-lot-card:hover .ray-lot-comps { color: var(--color-accent-gold-text); gap: 8px; }
+.ray-lot-card:hover .ray-lot-comps { color: var(--color-fg); gap: 8px; }
 /* Uniform grids: titles cap at three lines */
 .ray-lot-title {
   display: -webkit-box;
@@ -1644,9 +1638,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-toolbar-pill i { font-family: var(--font-sans); font-size: 12.5px; font-weight: 500; }
 .ray-toolbar-pill:hover { color: var(--color-fg); background: var(--glass-bg-hover); }
 .ray-toolbar-pill[data-active=true] { background: var(--color-fg); border: none; color: var(--color-bg); }
-.ray-toolbar-pill-signal { color: var(--color-up); background: var(--color-up-soft); }
-.ray-toolbar-pill-signal:hover { color: var(--color-up); }
-.ray-toolbar-pill-signal[data-active=true] { background: var(--color-up); color: var(--color-bg); }
+.ray-toolbar-pill-signal { color: var(--color-fg); background: var(--color-bg-elevated); }
+.ray-toolbar-pill-signal:hover { color: var(--color-fg); }
+.ray-toolbar-pill-signal[data-active=true] { background: var(--color-fg); color: var(--color-bg); }
 .ray-toolbar-count { font-family: var(--font-sans); font-size: 13.5px; color: var(--color-text-faint); }
 .ray-toolbar-reset {
   text-transform: none;
@@ -1720,15 +1714,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-lot-card:hover .ray-lot-comps { color: var(--color-fg); }
 @media (max-width: 768px) { .ray-lot-img { height: 220px !important; } }
 
-/* section heads: the terminal's editorial serif carried inward (Wave 3) */
-.ray-h2 {
-  font-family: var(--font-serif), serif;
-  font-size: 24px;
-  font-weight: 620;
-  letter-spacing: -0.02em;
-  color: var(--color-fg);
-  margin: 0;
-}
 
 /* ── the mark system (components/marks.tsx) — a room head's constructed
    monoline glyph. Inline beside kickers/titles; inherits muted ink. ── */
@@ -1969,7 +1954,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-method-lede { font-size: 15.5px; line-height: 1.55; color: var(--color-text-secondary); margin: 0 0 14px; }
 .ray-method ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .ray-method li { font-size: 13.5px; line-height: 1.55; color: var(--color-text-muted); padding-left: 18px; position: relative; }
-.ray-method li::before { content: ''; position: absolute; left: 2px; top: 8px; width: 5px; height: 5px; border-radius: 100px; background: var(--color-up); }
+.ray-method li::before { content: ''; position: absolute; left: 2px; top: 8px; width: 5px; height: 5px; border-radius: 100px; background: var(--color-text-faint); }
 .ray-method li b { color: var(--color-fg); font-weight: 600; }
 .ray-method-foot { font-size: 12.5px; color: var(--color-text-faint); margin: 16px 0 0; line-height: 1.5; }
 .ray-method-close {
@@ -2790,8 +2775,8 @@ body {
   justify-content: center;
   background:
         var(--color-bg-deep);
-  transition: opacity 520ms var(--ease-ui);
-  /* decorative splash only — never intercept the first 1.75s of taps/clicks on
+  transition: opacity 240ms var(--ease-ui);
+  /* decorative splash only — never intercept the first 0.9s of taps/clicks on
      the live page underneath (it's aria-hidden and purely visual). */
   pointer-events: none;
 }
@@ -2800,7 +2785,7 @@ body {
   height: 132px;
   width: auto;
   clip-path: inset(0 100% 0 0);
-  animation: lectrCloseWrite 1.4s var(--ease-draw) 150ms forwards;
+  animation: lectrCloseWrite 480ms var(--ease-draw) 60ms forwards;
 }
 @media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }
 
@@ -2813,33 +2798,57 @@ body {
 .ray-blog-card { transition: border-color 180ms var(--ease-signature), transform 180ms var(--ease-signature); }
 .ray-blog-card:hover { border-color: var(--color-border-mid); transform: translateY(-1px); }
 
-/* the category control is the accent's job — never one more gray pill */
+/* the category control is the primary pill — ink fill, never gold (the one
+   display gold is reserved for folio/FIG/seal/the H1 accent word) */
 .ray-toolbar-pill.ray-cat-pill-primary {
-  background: var(--color-butter);
-  border-color: var(--color-butter);
-  color: var(--color-butter-ink, #1C1712);
-  font-weight: 700;
-}
-.ray-toolbar-pill.ray-cat-pill-primary:hover { filter: brightness(1.04); }
-.ray-toolbar-pill.ray-cat-pill {
-  border-color: color-mix(in srgb, var(--color-butter) 55%, transparent);
-  color: var(--color-butter-text);
+  background: var(--color-fg);
+  border-color: var(--color-fg);
+  color: var(--color-bg);
   font-weight: 600;
 }
-.ray-toolbar-pill.ray-cat-pill:hover { border-color: var(--color-butter); }
-
-/* THE KICKER — one sitewide label voice (terminal reference: sectionKicker).
-   Declared LAST so it wins cascade ties against component rulesets.
-   Mono microcap, wide-tracked, muted. Contexts that need another ink
-   (butter certificate heads, paper bands) override color inline. */
-.kicker {
-  font-family: var(--font-mono), monospace;
-  font-size: var(--text-label);
+.ray-toolbar-pill.ray-cat-pill-primary:hover { background: var(--color-text-secondary); border-color: var(--color-text-secondary); }
+.ray-toolbar-pill.ray-cat-pill {
+  border-color: var(--color-border-mid);
+  color: var(--color-fg);
   font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--color-text-muted); /* = --tt-muted, the reference ink */
+}
+.ray-toolbar-pill.ray-cat-pill:hover { border-color: var(--color-fg); }
+
+/* THE KICKER — one sitewide label voice, on the north-star recipe
+   (docs/NORTHSTAR_UI.md §1.3): quiet gray, sentence case, Inter, no
+   tracking, never uppercase. The mono microcap it replaced (10.5px, 0.22em,
+   uppercase) was the eyebrow the doctrine retired; ~130 sites migrate
+   through this one rule. Declared here so it wins cascade ties against
+   component rulesets; contexts that need another ink override color inline. */
+.kicker {
+  font-family: var(--font-inter), var(--font-sans), sans-serif;
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-muted);
   line-height: 1.4;
+}
+/* the terminal's compact-panel + lot-comps caps ride the same recipe; the
+   originals live in component <style> blocks, so the html prefix wins the tie */
+html .lectr-cp-head,
+html .lectr-cp-compact .lectr-cp-head,
+html .ray-board-belowrow .lectr-cp .lectr-cp-head,
+html .lectr-lot-comps-head {
+  font-family: var(--font-inter), var(--font-sans), sans-serif;
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-muted);
+}
+html .lectr-recplate-k {
+  font-family: var(--font-inter), var(--font-sans), sans-serif;
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-muted);
 }
 
 /* ── THE RECORD-SALE PLATE + dossier name (kept from the design program) ── */
@@ -3329,7 +3338,7 @@ body {
   font-family: var(--font-mono), monospace;
   font-size: clamp(30px, 3vw, 40px); font-weight: 600;
   letter-spacing: -0.02em; line-height: 1;
-  font-variant-numeric: tabular-nums; color: #ffffff;
+  font-variant-numeric: tabular-nums; color: var(--color-fg);
 }
 .rcp-dim { color: var(--color-text-muted); }
 .rcp-sub { font-size: 12px; color: var(--color-text-muted); line-height: 1.5; }
@@ -3372,6 +3381,11 @@ body {
   position: relative;
   border-bottom: 1px dotted var(--color-text-faint);
   cursor: help; outline: none;
+}
+.ck-term:focus-visible, .vd-term:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 .ck-term-tip {
   position: absolute; bottom: calc(100% + 9px); left: 50%;
@@ -3485,7 +3499,7 @@ body {
 }
 .ray-live-stamp i {
   width: 5px; height: 5px; border-radius: 50%; flex: none;
-  background: var(--color-up); /* the nav's "new"-verb mint dot, not signal ink */
+  background: var(--color-text-faint); /* a "new" verb reads in ink — mint is the market's (lamp law) */
 }
 
 /* ── collection piece editor (cost basis + private note) ── */
@@ -3555,9 +3569,9 @@ html[data-lectr-light] {
   --color-fg: #1C1917;
   --color-text-secondary: #44403B;
   --color-text-muted: #6B655D;
-  --color-text-faint: #8A837A;
+  --color-text-faint: #726C63;   /* 5.0:1 eggshell · 4.7:1 cream — the 10–12.5px tier reads */
   --color-muted: #6B655D;
-  --color-faint: #8E877D;
+  --color-faint: #726C63;
 
   /* HAIRLINES — ink-alpha, never grey solids */
   --hairline: rgba(28, 25, 23, 0.10);
@@ -3595,7 +3609,7 @@ html[data-lectr-light] {
   --chart-grid: rgba(28, 25, 23, 0.08);
   --chart-ref: rgba(28, 25, 23, 0.20);
   --chart-tick: #6B655D;
-  --chart-line-2: #BDB6AC;
+  --chart-line-2: #948D84;   /* 3.2:1 — comparison strokes must read on paper */
   --chart-ink: #6B655D;
   --chart-cursor: rgba(143, 107, 30, 0.38);
 
@@ -3647,7 +3661,7 @@ html[data-lectr-light] .terminal-shell {
   --color-fg: #1C1917;
   --color-text-secondary: #44403B;
   --color-text-muted: #6B655D;
-  --color-text-faint: #8A837A;
+  --color-text-faint: #726C63;
   --hairline: rgba(28, 25, 23, 0.10);
   --hairline-soft: rgba(28, 25, 23, 0.07);
   --color-border: rgba(28, 25, 23, 0.12);
@@ -3662,7 +3676,7 @@ html[data-lectr-light] .terminal-shell {
   --chart-grid: rgba(28, 25, 23, 0.08);
   --chart-ref: rgba(28, 25, 23, 0.20);
   --chart-tick: #6B655D;
-  --chart-line-2: #BDB6AC;
+  --chart-line-2: #948D84;   /* 3.2:1 — comparison strokes must read on paper */
   --chart-cursor: rgba(143, 107, 30, 0.38);
 }
 
@@ -3894,9 +3908,10 @@ html[data-lectr-light] [class*='rcpt'] {
 
 /* ── 3 · DESK PHYSICS — the lift tiers ── */
 html[data-lectr-light] {
-  --lift-1: 0 1px 2px rgba(28, 25, 23, 0.05), 0 8px 24px rgba(28, 25, 23, 0.06);
-  --lift-2: 0 2px 4px rgba(28, 25, 23, 0.07), 0 16px 44px rgba(28, 25, 23, 0.10);
-  --lift-3: 0 3px 6px rgba(28, 25, 23, 0.09), 0 28px 64px rgba(28, 25, 23, 0.14);
+  /* the ring shadow (north star §1.5): a 1px ring + two short drops — no bloom tier */
+  --lift-1: 0 0 1px rgba(28, 25, 23, 0.40), 0 1px 1px rgba(28, 25, 23, 0.04), 0 2px 4px rgba(28, 25, 23, 0.04);
+  --lift-2: 0 0 1px rgba(28, 25, 23, 0.45), 0 1px 2px rgba(28, 25, 23, 0.05), 0 4px 10px rgba(28, 25, 23, 0.06);
+  --lift-3: 0 0 1px rgba(28, 25, 23, 0.50), 0 2px 4px rgba(28, 25, 23, 0.06), 0 8px 20px rgba(28, 25, 23, 0.08);
   --grain-opacity: 0.02;               /* the paper whispers */
 }
 /* floating instruments ride tier 2 */
@@ -4039,6 +4054,22 @@ html[data-lectr-light] .ray-figcap-no::before {
   color: var(--color-butter-text);
   white-space: nowrap;
 }
+/* THE ONE DISPLAY GOLD — burnished, ink-density. Declared at the root so it
+   survives every scope that re-tokens butter (the vault re-points
+   --color-butter-text to true butter for its dark plate). */
+html[data-lectr-light] { --gold-ink: #8F6B1E; --gold-ink-text: #7A5A14; }
+/* a white card inside the vault is white ground again: the folio and the
+   headline figures read in ink-density gold / ink, never in true butter */
+html[data-lectr-light] .ray-band .glass .ray-figcap-no::before,
+html[data-lectr-light] .ray-band .glass-quiet .ray-figcap-no::before,
+html[data-lectr-light] .ray-paper .glass .ray-figcap-no::before,
+html[data-lectr-light] .ray-paper .glass-quiet .ray-figcap-no::before { color: var(--gold-ink-text); }
+html[data-lectr-light] .ray-band .glass .ray-figcap-body,
+html[data-lectr-light] .ray-band .glass-quiet .ray-figcap-body { color: #6B655D; }
+html[data-lectr-light] .ray-band .glass .ray-figcap,
+html[data-lectr-light] .ray-band .glass-quiet .ray-figcap { border-top-color: rgba(28, 25, 23, 0.10); }
+html[data-lectr-light] .ray-band .glass .rcp-fig,
+html[data-lectr-light] .ray-band .glass-quiet .rcp-fig { color: #1C1917; }
 html[data-lectr-light] .ray-figcap-body {
   font-size: 11.5px;
   line-height: 1.5;
@@ -4296,30 +4327,11 @@ a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--e
    multi-bloom ground — a luminous core, a cooler corner, a warm corner —
    falling into near-black under a legibility scrim, heavy grain. Hues
    transposed into the signal family only (the lamp holds). */
-.ns-cell-color[data-dir="up"] {
-  background:
-    linear-gradient(180deg, rgba(4, 14, 8, 0) 38%, rgba(3, 11, 6, 0.62) 100%),
-    radial-gradient(95% 85% at 22% 34%, rgba(163, 201, 100, 0.92) 0%, rgba(163, 201, 100, 0) 56%),
-    radial-gradient(75% 65% at 84% 10%, rgba(52, 116, 96, 0.95) 0%, rgba(52, 116, 96, 0) 62%),
-    radial-gradient(65% 60% at 62% 62%, rgba(58, 124, 54, 0.75) 0%, rgba(58, 124, 54, 0) 66%),
-    radial-gradient(55% 50% at 6% 4%, rgba(116, 158, 62, 0.6) 0%, rgba(116, 158, 62, 0) 60%),
-    linear-gradient(180deg, #1D4128 0%, #0B2314 55%, #05100A 100%);
-}
-.ns-cell-color[data-dir="down"] {
-  background:
-    linear-gradient(180deg, rgba(14, 5, 3, 0) 38%, rgba(11, 4, 2, 0.62) 100%),
-    radial-gradient(95% 85% at 22% 34%, rgba(214, 138, 84, 0.9) 0%, rgba(214, 138, 84, 0) 56%),
-    radial-gradient(75% 65% at 84% 10%, rgba(130, 56, 60, 0.95) 0%, rgba(130, 56, 60, 0) 62%),
-    radial-gradient(65% 60% at 62% 62%, rgba(158, 64, 44, 0.75) 0%, rgba(158, 64, 44, 0) 66%),
-    linear-gradient(180deg, #4A1D14 0%, #2A0E08 55%, #120504 100%);
-}
-.ns-cell-color[data-dir="ink"] {
-  background:
-    linear-gradient(180deg, rgba(8, 7, 6, 0) 38%, rgba(6, 5, 4, 0.6) 100%),
-    radial-gradient(95% 85% at 22% 34%, rgba(120, 112, 100, 0.55) 0%, rgba(120, 112, 100, 0) 56%),
-    radial-gradient(75% 65% at 84% 10%, rgba(68, 64, 59, 0.9) 0%, rgba(68, 64, 59, 0) 62%),
-    linear-gradient(180deg, #34302B 0%, #1C1917 55%, #0C0A09 100%);
-}
+/* quiet two-stop tints (doctrine §2.7: no orbs, no blooms) — the hue is the
+   signal family, the drama is the dark ground, nothing radiates */
+.ns-cell-color[data-dir="up"] { background: linear-gradient(180deg, #1F4A2C 0%, #08170D 100%); }
+.ns-cell-color[data-dir="down"] { background: linear-gradient(180deg, #4E2016 0%, #170705 100%); }
+.ns-cell-color[data-dir="ink"] { background: linear-gradient(180deg, #34302B 0%, #0F0D0B 100%); }
 .ns-cell-color::before {
   content: '';
   position: absolute;
@@ -4327,8 +4339,7 @@ a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--e
   background-image: var(--ns-grain);
   background-size: 128px;
   image-rendering: pixelated;
-  opacity: 0.16;
-  mix-blend-mode: overlay;
+  opacity: 0.07;
   pointer-events: none;
 }
 .ns-ccell-stat {

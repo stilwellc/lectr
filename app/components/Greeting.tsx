@@ -7,7 +7,9 @@ import { useEffect, useState } from 'react';
  * itself over the closed floor before the terminal appears. Same gesture as
  * the footer's write-on, promoted to a welcome: ~1.4s of pen, a breath, then
  * the floor lifts away. Back-navigation and internal moves never replay it
- * (sessionStorage 'lectr-greeted'); reduced-motion skips it entirely.
+ * (sessionStorage 'lectr-greeted'); reduced-motion skips it entirely, and
+ * so do automation (navigator.webdriver — the shot rig must see the fold)
+ * and an explicit ?nogreet=1. The whole gesture is under 900ms.
  */
 export default function Greeting() {
   // effect-mounted (never in the server render) so hydration stays clean —
@@ -18,6 +20,8 @@ export default function Greeting() {
   useEffect(() => {
     try {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (navigator.webdriver) return;
+      if (new URLSearchParams(window.location.search).get('nogreet') === '1') return;
       if (sessionStorage.getItem('lectr-greeted')) return;
     } catch { return; }
     setShow(true);
@@ -28,12 +32,12 @@ export default function Greeting() {
     const hold = setTimeout(() => {
       setLeaving(true);
       try { sessionStorage.setItem('lectr-greeted', '1'); } catch { /* private mode */ }
-    }, 1750);
+    }, 620);
     // greeted = the write-on COMPLETED — stamping at completion (not on arm)
     // keeps StrictMode's dev double-mount from stranding the floor at full
     // opacity forever (run 1 stamped + armed, cleanup killed the timers,
     // run 2 saw the stamp and bailed with show still true)
-    const gone = setTimeout(() => setShow(false), 2300);
+    const gone = setTimeout(() => setShow(false), 880);
     return () => { clearTimeout(hold); clearTimeout(gone); setShow(false); setLeaving(false); };
   }, []);
 

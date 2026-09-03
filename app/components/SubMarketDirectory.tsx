@@ -1,18 +1,23 @@
 'use client';
 /**
  * SubMarketDirectory — the taxonomy made visible on /makers (the roster).
- * The active market's sub-category tree as a grid of group cards: sports
- * kinds hold their sport splits, watch makers hold their model families,
- * culture splits by subject and by kind, science by collection, design by
- * form and material. Each row is a drills read from market.json — the same
- * honesty ladder as everywhere (CI'd index / demand vs estimate / plain
- * descriptive facts; green-red ONLY on real deltas, mono ONLY on % figures).
+ * The active market's sub-category tree as cream wells: sports kinds hold
+ * their sport splits, watch makers hold their model families, culture splits
+ * by subject and by kind, science by collection, design by form and
+ * material. Each row is a drills read from market.json — the same honesty
+ * ladder as everywhere (CI'd index / demand vs estimate / plain descriptive
+ * facts; green-red ONLY on real deltas, mono ONLY on % figures).
+ *
+ * North-star grammar: quiet kicker head, borderless cream wells with the
+ * inverted hierarchy (gray group title, ink rows), dotted ledger rows. The
+ * well + grouping are exported so the /sub index speaks the same voice.
  */
 import React from 'react';
 import Link from 'next/link';
 import { ARTISTS, MARKETS } from '../constants';
 import { SUBCAT_LABELS } from '../lib/subcat-labels';
 import type { MarketData, SubMarketRead } from '../hooks/useRayData';
+import '../northstar-pages.css';
 
 type DrillRow = SubMarketRead & { parent: string };
 
@@ -28,62 +33,56 @@ const AXIS_TITLES: Record<string, string> = {
 const groupTitle = (parent: string): string =>
   AXIS_TITLES[parent] ?? MAKER_LABEL[parent] ?? SUBCAT_LABELS[parent] ?? parent;
 
-// row label inside a group card: the drill's own name (the group already
+// row label inside a group well: the drill's own name (the group already
 // names the kind/maker), falling back to the emitted label.
 const rowLabel = (r: DrillRow): string => {
   const part = r.slug.split(':')[1];
   return (part && SUBCAT_LABELS[part]) || r.label;
 };
 
+/** SIGNED-SIGNAL LAW: the glyph and the ink agree. A rounded 0 is flat —
+    no sign, no color; only a real up wears '+' and green, a real down '−'
+    and red. Shared by every sub-market surface that prints these reads. */
+export const signedPct = (v: number): string => {
+  const r = Math.round(v);
+  return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r)}%`;
+};
+export const dirOf = (v: number): 'up' | 'down' | undefined => {
+  const r = Math.round(v);
+  return r > 0 ? 'up' : r < 0 ? 'down' : undefined;
+};
+
 const fmtUsd = (n: number) =>
   n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `$${Math.round(n / 1000)}K` : `$${n.toLocaleString()}`;
 
-const CSS = `
-.ray-smd{margin:6px 0 10px}
-.ray-smd-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
-.ray-smd-title{font-size:15px;font-weight:600;color:var(--color-fg,#E8EAED)}
-.ray-smd-method{font-size:11.5px;color:var(--color-text-faint,#7A8087)}
-.ray-smd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
-.ray-smd-card{border:2px dotted rgba(255,255,255,0.11);border-radius:20px;padding:16px 18px 8px}
-.ray-smd-cardhead{display:flex;align-items:baseline;justify-content:space-between;padding-bottom:10px;border-bottom:2px dotted rgba(255,255,255,0.09)}
-.ray-smd-cardtitle{font-size:13.5px;font-weight:600;color:var(--color-fg,#E8EAED)}
-.ray-smd-cardmeta{font-size:11px;color:var(--color-text-faint,#7A8087);font-variant-numeric:tabular-nums}
-.ray-smd-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:baseline;padding:8px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.07);border-radius:8px;color:inherit;text-decoration:none;cursor:pointer;transition:background 0.14s ease}
-.ray-smd-row:last-child{border-bottom:none}
-a.ray-smd-row:hover{background:rgba(255,255,255,0.05)}
-a.ray-smd-row:hover .ray-smd-name{color:var(--color-fg,#f7f8f8)}
-.ray-smd-name{font-size:13px;color:var(--color-fg,#E8EAED)}
-.ray-smd-read{font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;color:var(--color-fg,#E8EAED)}
-.ray-smd-read .num{font-family:var(--font-mono,ui-monospace),monospace}
-.ray-smd-read[data-dir="up"] .num{color:var(--color-up,#57be87)}
-.ray-smd-read[data-dir="down"] .num{color:var(--color-down-text,#cc6a5c)}
-.ray-smd-read .tag{color:var(--color-text-faint,#7A8087);font-size:10.5px;margin-left:5px}
-.ray-smd-more{display:block;padding:8px 0 6px;font-size:11px;color:var(--color-text-faint,#7A8087);text-decoration:none;transition:color 0.14s ease}
-a.ray-smd-more:hover{color:var(--color-text-muted,#8a8f98)}
-a.ray-smd-more .arw{margin-left:4px}
-`;
+/** One vertical's drills, grouped by taxonomy parent and ranked by depth. */
+export function groupDrillsByParent(rows: DrillRow[]): { title: string; rows: DrillRow[] }[] {
+  const byParent = new Map<string, DrillRow[]>();
+  for (const r of rows) (byParent.get(r.parent) || byParent.set(r.parent, []).get(r.parent)!).push(r);
+  const wells = Array.from(byParent.entries()).map(([parent, rs]) => ({ title: groupTitle(parent), rows: rs }));
+  wells.sort((a, b) => b.rows.reduce((s, r) => s + r.lots, 0) - a.rows.reduce((s, r) => s + r.lots, 0));
+  return wells;
+}
 
 function readCell(r: DrillRow) {
   if (r.readType === 'index' && r.index) {
-    const v = r.index.changePct;
     return (
-      <span className="ray-smd-read" data-dir={v >= 0 ? 'up' : 'down'}>
-        <span className="num">{v >= 0 ? '+' : ''}{v.toFixed(0)}%</span>
+      <span className="nsp-read-cell" data-dir={dirOf(r.index.changePct)}>
+        <span className="num">{signedPct(r.index.changePct)}</span>
         <span className="tag">{r.index.horizon} verified</span>
       </span>
     );
   }
   if (r.readType === 'demand' && r.demandNow != null) {
-    const v = r.demandNow;
     return (
-      <span className="ray-smd-read" data-dir={v >= 0 ? 'up' : 'down'}>
-        <span className="num">{v >= 0 ? '+' : ''}{v.toFixed(0)}%</span>
+      <span className="nsp-read-cell" data-dir={dirOf(r.demandNow)}>
+        <span className="num">{signedPct(r.demandNow)}</span>
         <span className="tag">vs estimate</span>
       </span>
     );
   }
   return (
-    <span className="ray-smd-read">
+    <span className="nsp-read-cell">
       {r.typicalUsd != null
         ? <>{fmtUsd(r.typicalUsd)}<span className="tag">typical</span></>
         : <span className="tag">{r.lots.toLocaleString()} lots</span>}
@@ -93,32 +92,36 @@ function readCell(r: DrillRow) {
 
 const MAX_ROWS = 7;
 
-function GroupCard({ title, rows, full }: { title: string; rows: DrillRow[]; full?: boolean }) {
-  const shown = rows.slice(0, MAX_ROWS);
+/** A cream well: gray group title + lot count over dotted ledger rows, each
+    a sub-market dossier link with its honest read. `full` keeps the emitted
+    label ('Soccer · cards' vs 'Soccer · memorabilia') for cross-market wells;
+    `limit` caps the rows (the makers directory folds at 7 behind a door to
+    the vertical's desk; the /sub index prints every row). */
+export function SubMarketWell({ title, rows, full, limit = MAX_ROWS }: { title: string; rows: DrillRow[]; full?: boolean; limit?: number }) {
+  const shown = rows.slice(0, limit);
   const total = rows.reduce((s, r) => s + r.lots, 0);
-  // #24 — the honest "shows the rest" destination: the vertical's analytics
-  // desk (full sub-market book + maker rankings). Every drill row carries its
-  // parent vertical; all rows in a card share it.
+  // the honest "shows the rest" destination: the vertical's analytics desk
+  // (full sub-market book + maker rankings). Every drill row carries its
+  // parent vertical; all rows in a well share it.
   const vertical = rows[0]?.vertical;
   return (
-    <div className="ray-smd-card">
-      <div className="ray-smd-cardhead">
-        <span className="ray-smd-cardtitle">{title}</span>
-        <span className="ray-smd-cardmeta">{total.toLocaleString()} lots</span>
+    <div className="ns-well">
+      <div className="nsp-well-head">
+        <span className="ns-well-label">{title}</span>
+        <span className="nsp-well-meta">{total.toLocaleString()} lots</span>
       </div>
-      {shown.map(r => (
-        <Link key={r.slug} href={`/sub/${r.slug.replace(':', '/')}`} className="ray-smd-row">
-          {/* cross-market overview mixes kinds in one card — keep the full
-              emitted label there ('Soccer · cards' vs 'Soccer · memorabilia');
-              a scoped group card already names the kind/maker in its head */}
-          <span className="ray-smd-name">{full ? r.label : rowLabel(r)}</span>
-          {readCell(r)}
-        </Link>
-      ))}
-      {rows.length > MAX_ROWS && (
+      <div className="nsp-well-rows">
+        {shown.map(r => (
+          <Link key={r.slug} href={`/sub/${r.slug.replace(':', '/')}`} className="nsp-row">
+            <span className="nsp-row-name">{full ? r.label : rowLabel(r)}</span>
+            {readCell(r)}
+          </Link>
+        ))}
+      </div>
+      {rows.length > limit && (
         vertical
-          ? <Link href={`/analytics/${vertical}`} className="ray-smd-more">+ {rows.length - MAX_ROWS} more tracked<span className="arw">&#8594;</span></Link>
-          : <div className="ray-smd-more">+ {rows.length - MAX_ROWS} more tracked</div>
+          ? <Link href={`/analytics/${vertical}`} className="nsp-more">+ {rows.length - limit} more tracked &#8594;</Link>
+          : <span className="nsp-more">+ {rows.length - limit} more tracked</span>
       )}
     </div>
   );
@@ -128,34 +131,31 @@ export default function SubMarketDirectory({ marketData, scope }: { marketData: 
   const drills = marketData?.drills;
   if (!drills) return null;
 
-  let cards: { title: string; rows: DrillRow[]; full?: boolean }[] = [];
+  let wells: { title: string; rows: DrillRow[]; full?: boolean }[] = [];
   if (scope === 'all') {
-    // overview: one card per vertical, its strongest few reads. Pass the FULL
-    // row set — GroupCard slices to MAX_ROWS itself and needs the real length
+    // overview: one well per vertical, its strongest few reads. Pass the FULL
+    // row set — the well slices to MAX_ROWS itself and needs the real length
     // to render the "+N more → /analytics/<vertical>" door (pre-slicing here
     // hid 54 of the 94 tracked drills with no affordance to reach them).
     for (const m of MARKETS) {
       const rows = drills[m.key];
-      if (rows?.length) cards.push({ title: m.label, rows, full: true });
+      if (rows?.length) wells.push({ title: m.label, rows, full: true });
     }
   } else {
-    const rows = drills[scope] || [];
-    const byParent = new Map<string, DrillRow[]>();
-    for (const r of rows) (byParent.get(r.parent) || byParent.set(r.parent, []).get(r.parent)!).push(r);
-    cards = Array.from(byParent.entries()).map(([parent, rs]) => ({ title: groupTitle(parent), rows: rs }));
-    cards.sort((a, b) => b.rows.reduce((s, r) => s + r.lots, 0) - a.rows.reduce((s, r) => s + r.lots, 0));
+    wells = groupDrillsByParent(drills[scope] || []);
   }
-  if (!cards.length) return null;
+  if (!wells.length) return null;
 
   return (
-    <div className="ray-smd">
-      <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      <div className="ray-smd-head">
-        <span className="ray-smd-title">Sub-markets</span>
-        <span className="ray-smd-method">performance by sub-category · every figure measured, never modeled</span>
+    <div style={{ margin: '6px 0 10px' }}>
+      <div className="nsp-dir-head">
+        <span className="ns-kicker">
+          <Link href="/sub" style={{ color: 'inherit', textDecoration: 'none' }}>Sub-markets</Link>
+        </span>
+        <span className="nsp-shctx">performance by sub-category · every figure measured, never modeled</span>
       </div>
-      <div className="ray-smd-grid">
-        {cards.map(c => <GroupCard key={c.title} title={c.title} rows={c.rows} full={c.full} />)}
+      <div className="nsp-wells" style={{ marginTop: 14 }}>
+        {wells.map(w => <SubMarketWell key={w.title} title={w.title} rows={w.rows} full={w.full} />)}
       </div>
     </div>
   );

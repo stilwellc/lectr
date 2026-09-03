@@ -95,14 +95,20 @@ async function main() {
     console.log(`[assemble] no baseline meta; ${allLots.length} lots clears the ${CORPUS_FLOOR} floor`);
   }
 
-  // ── SENTINEL PRICE WATCH (Aug 30 2026, the NFL idwalk lesson) — poisoned
-  // feeds stamp ONE price across a batch ($10,050 ×3,622 NFL idwalk; $3.1M
-  // ×27 Lelands gallery bleed). Honest repeats are bid-increment ×premium
-  // ties ($200×1.22=$244 ×68 inside one big card sale) — those live under
-  // ~$1,000 and ladder across increments. WARNING-tier only (crawlers carry
-  // their own abort-tier batch detectors): flag any single price ≥$1,000
-  // repeating ≥15× with ≥60% of the repeats on ONE saleDate.
+  // ── SENTINEL PRICE WATCH (Aug 30 2026, the NFL idwalk lesson; teeth added
+  // Sep 2 2026, P1-8) — poisoned feeds stamp ONE price across a batch ($10,050
+  // ×3,622 NFL idwalk; $3.1M ×27 Lelands gallery bleed). A POISON SIGNATURE =
+  // one price ≥ $1,000 repeating ≥15× with ≥60% of the repeats on ONE saleDate,
+  // EXCLUDING honest increment × premium ties: if price ÷ the house's premium
+  // factor is a round bid increment ($1,000 × 1.22 = $1,220 ×40 inside one big
+  // card sale), the repeat is a real clustering of bids, not a bleed. Every
+  // signature is emitted as a GitHub `::warning::` annotation and written into
+  // meta.json (`sentinel`); ≥2 DISTINCT poison signatures abort the publish
+  // (exit non-zero — the last-good payload stays live). RAY_SENTINEL_WARN_ONLY=1
+  // downgrades to warnings for a deliberate re-run after inspection.
+  const sentinel: { house: string; price: number; n: number; top: number; topDate: string; hammer: number; honest: boolean }[] = [];
   {
+    const { lotAllInFactor, isRoundIncrement } = await import('../app/lib/premiums');
     const byHouse = new Map<string, Map<number, Map<string, number>>>();
     for (const l of allLots) {
       if (l.status !== 'sold') continue;
@@ -118,9 +124,23 @@ async function main() {
       let n = 0, top = 0, topDate = '';
       d.forEach((c, dt) => { n += c; if (c > top) { top = c; topDate = dt; } });
       if (n >= 15 && top / n >= 0.6) {
-        console.warn(`[assemble] SENTINEL WARNING: ${h} $${p.toLocaleString()} ×${n} (${top} on ${topDate}) — possible price bleed; inspect before trusting comps.`);
+        const hammer = p / lotAllInFactor({ auctionHouse: h }, p);
+        const honest = isRoundIncrement(hammer);
+        sentinel.push({ house: h, price: p, n, top, topDate, hammer: Math.round(hammer * 100) / 100, honest });
       }
     }));
+    sentinel.sort((a, b) => b.n - a.n);
+    const poison = sentinel.filter(s => !s.honest);
+    for (const s of sentinel) {
+      const msg = `[assemble] SENTINEL ${s.honest ? 'honest tie' : 'POISON'}: ${s.house} $${s.price.toLocaleString()} ×${s.n} (${s.top} on ${s.topDate}; hammer ${s.hammer}${s.honest ? ' = round increment' : ''})`;
+      if (s.honest) console.log(msg);
+      else { console.warn(msg); console.log(`::warning title=sentinel price bleed::${s.house} $${s.price.toLocaleString()} x${s.n} (${s.top} on ${s.topDate}) — possible price bleed; inspect before trusting comps`); }
+    }
+    if (poison.length >= 2 && process.env.RAY_SENTINEL_WARN_ONLY !== '1') {
+      console.log(`::error title=sentinel abort::${poison.length} distinct poison price signatures — refusing to publish`);
+      throw new Error(`[assemble] SENTINEL ABORT: ${poison.length} distinct poison signatures (${poison.slice(0, 4).map(s => `${s.house} $${s.price} ×${s.n}`).join('; ')}) — refusing to publish (RAY_SENTINEL_WARN_ONLY=1 to override after inspection)`);
+    }
+    console.log(`[assemble] sentinel: ${sentinel.length} repeat signatures, ${poison.length} poison, ${sentinel.length - poison.length} honest increment×premium ties`);
   }
 
   // ── corpus-hygiene normalization (idempotent) ──
@@ -175,6 +195,9 @@ async function main() {
     priceBasis: PRICE_BASIS,
     soldByYear: soldByYear(allLots),
     coverage: houseCoverage(allLots),
+    // the sentinel price watch's findings (P1-8): every ≥15× repeat signature
+    // with its honesty verdict, so a poisoned night is inspectable after the fact
+    sentinel: { checkedAt: new Date().toISOString(), signatures: sentinel },
     version: 2,
   }, null, 2));
 

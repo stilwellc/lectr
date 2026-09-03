@@ -23,10 +23,21 @@ import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import { Colophon } from '../../components/Terminal';
 
-const PriceChart = dynamic(() => import('../../components/PriceChart'), { ssr: false });
+// P1-10: both charts are client-only; without a placeholder the page jumps
+// by a full chart well when the module lands. The skeletons match the wells
+// exactly (PriceChart: section padding + 300px container, 200px on phones;
+// the decade band: 150px) so the layout is settled before the chart draws.
+function PriceChartWell() {
+  return (
+    <section className="rail" style={{ paddingBlock: 'var(--sect-t) var(--sect-b)' }} aria-hidden>
+      <div className="mkr-chart-well" />
+    </section>
+  );
+}
+const PriceChart = dynamic(() => import('../../components/PriceChart'), { ssr: false, loading: PriceChartWell });
 // #32 — the maker's-decade band rides on the same hand-rolled SVG instrument as
 // the lander hero. ssr:false: it measures its container with a ResizeObserver.
-const HeroChart = dynamic(() => import('../../preview/terminal/HeroChart'), { ssr: false });
+const HeroChart = dynamic(() => import('../../preview/terminal/HeroChart'), { ssr: false, loading: () => <div style={{ height: 150 }} aria-hidden /> });
 type HeroLine = import('../../preview/terminal/HeroChart').HeroLine;
 
 // A thin wrapper so the decade band mounts the shared HeroChart with the
@@ -73,13 +84,15 @@ const DOSSIER_FEATURE_CSS = `
    mounts VerifiedMovers, whose injected global is where .ray-vm-card's
    padding otherwise comes from */
 .mkr-panel.ray-vm-card{padding:var(--card-pad)}
+.mkr-chart-well{height:300px}
+@media (max-width:768px){.mkr-chart-well{height:200px}}
 .mkr-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:2px}
 .mkr-panel-title{font-size:15px;font-weight:550;letter-spacing:-0.01em;color:var(--color-fg,#E8EAED)}
 .mkr-panel-method{font-size:11.5px;color:var(--color-text-faint,#7A8087)}
 .mkr-rows{display:flex;flex-direction:column;margin-top:8px}
-.mkr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted rgba(255,255,255,0.09);border-radius:8px;color:inherit;text-decoration:none;transition:background 0.14s ease}
+.mkr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted var(--hairline,rgba(255,255,255,0.09));border-radius:8px;color:inherit;text-decoration:none;transition:background 0.14s ease}
 .mkr-row:last-child{border-bottom:none}
-a.mkr-row:hover{background:rgba(255,255,255,0.045)}
+a.mkr-row:hover{background:var(--color-hover-item,rgba(255,255,255,0.045))}
 a.mkr-row:hover .mkr-row-name{color:var(--color-fg,#f7f8f8)}
 .mkr-row-name{font-size:13.5px;color:var(--color-fg,#E8EAED)}
 .mkr-row-sub{color:var(--color-text-faint,#7A8087);font-size:12px;margin-left:7px}

@@ -330,7 +330,27 @@ function loadRayData(): Promise<RayPayload> {
     const market = mkR.status === 'fulfilled' ? (mkR.value as MarketData) : null;
     const receipts = rcR.status === 'fulfilled' ? (rcR.value as ReceiptsData) : null;
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
-    const metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[]; totalLots?: number; totalSold?: number };
+    let metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[]; totalLots?: number; totalSold?: number };
+    // DATA-VERSION SKEW CHECK (Sep 2 2026): next.config bakes the served
+    // meta.json's lastCrawl into the build (NEXT_PUBLIC_DATA_VERSION). If the
+    // meta.json we just fetched disagrees, either the CDN handed us a cached
+    // meta.json from before the last deploy (the shard URLs below would then
+    // be versioned by a stale crawl) or the HTML and the data come from
+    // different deploys. Re-fetch meta with a cache-bust: a fresher answer
+    // replaces the stale one (and versions the shards correctly); a matching
+    // answer means genuine build/data skew — log it, no UI change.
+    const builtVersion = process.env.NEXT_PUBLIC_DATA_VERSION || '';
+    if (builtVersion && metaData.lastCrawl && metaData.lastCrawl !== builtVersion) {
+      try {
+        const fresh = await fetchJson(`/data/ray/meta.json?cb=${Date.now()}`, { cache: 'reload' }) as typeof metaData;
+        if (fresh?.lastCrawl && fresh.lastCrawl !== metaData.lastCrawl) {
+          console.warn(`[ray-data] meta.json was cache-stale (${metaData.lastCrawl} → ${fresh.lastCrawl}); build stamped ${builtVersion}`);
+          metaData = fresh;
+        } else {
+          console.warn(`[ray-data] build/data skew: HTML built against crawl ${builtVersion}, served meta.json says ${metaData.lastCrawl}`);
+        }
+      } catch { /* the first meta stands; the skew is logged next visit */ }
+    }
     const backtest = btR.status === 'fulfilled' ? (btR.value as Backtest) : null;
     const up = upR.status === 'fulfilled'
       ? (upR.value as {
@@ -353,20 +373,42 @@ function loadRayData(): Promise<RayPayload> {
       deepValue?: Array<{ id: string; depth: number; allIn: number; floor: number; closes: string; m?: string }>;
     }) : null;
     const upGen = (up as { generatedAt?: string } | null)?.generatedAt;
-    if (cb?.bids && up?.lots && (!upGen || !cb.generatedAt || cb.generatedAt > upGen)) {
+    // ACCEPT RULE (Sep 2 2026). The overlay used to be applied only when its
+    // generatedAt beat upcoming.json's — but close-board reads PROD's
+    // upcoming.json while the nightly rebuilds a newer base, so for up to ~4h
+    // after every push the whole overlay was discarded even though its bids
+    // were captured hours after the base's crawl. Now a lot takes the overlay
+    // when (a) the overlay as a whole is newer, OR (b) the entry carries its
+    // own timestamp `t` newer than the base, OR (c) the entry's bid is
+    // STRICTLY NEWER INFORMATION — a higher current bid or a higher bid
+    // count (both are monotone on a live lot, so "higher" ⇒ "later"). A bid
+    // that is strictly newer is never discarded; an older overlay can never
+    // LOWER a bid the base already knows.
+    const overlayNewer = !!cb?.bids && (!upGen || !cb.generatedAt || cb.generatedAt > upGen);
+    if (cb?.bids && up?.lots) {
       for (const l of up.lots) {
-        const o = cb.bids[String((l as { id?: string }).id)];
+        const o = cb.bids[String((l as { id?: string }).id)] as (typeof cb.bids)[string] & { t?: string } | undefined;
         if (!o) continue;
         const lw = l as AuctionLot & { bidProj?: { g: number; allIn: number; floor?: number; below?: boolean } };
-        if (o.b > 0) lw.currentBid = o.b;
-        if (o.n > 0) lw.bidCount = o.n;
+        const baseBid = lw.currentBid ?? 0;
+        const baseN = lw.bidCount ?? 0;
+        const entryNewer = overlayNewer
+          || (!!o.t && (!upGen || o.t > upGen))
+          || o.b > baseBid
+          || o.n > baseN;
+        if (!entryNewer) continue;
+        if (o.b > 0 && o.b >= baseBid) lw.currentBid = o.b;
+        if (o.n > 0 && o.n >= baseN) lw.bidCount = o.n;
         if (o.proj) lw.bidProj = { g: lw.bidProj?.g ?? 1, allIn: o.proj, ...(o.floor ? { floor: o.floor, below: o.below } : {}) };
         // the lot's bid state is now INTRADAY-fresh — stamp the overlay's
         // generatedAt so surfaces can say "LIVE · refreshed Nh ago" instead
         // of letting close-day bids read as last night's numbers
-        if (cb.generatedAt) lw.overlayAt = cb.generatedAt;
+        const stamp = o.t || cb.generatedAt;
+        if (stamp) lw.overlayAt = stamp;
       }
-      if (cb.deepValue?.length && up.deepValue) {
+      // the market-level deep-value rows are a snapshot of the overlay's
+      // moment — only a newer overlay may replace the base's per-market lists
+      if (overlayNewer && cb.deepValue?.length && up.deepValue) {
         const byM: Record<string, typeof cb.deepValue> = {};
         for (const r of cb.deepValue) { const m = r.m || 'sports'; (byM[m] || (byM[m] = [])).push(r); }
         for (const m of Object.keys(byM)) (up.deepValue as DeepValueByMarket)[m] = byM[m] as DeepValueRow[];
@@ -610,7 +652,18 @@ function loadSoldArchive() {
         } catch {
           archive = await fetchJson(`/data/ray/sold-archive.json${ver}`, { cache: cacheMode }) as AuctionLot[];
         }
-        const merged = archive.map(l => (soldComps.has(l.id) ? { ...l, soldComp: soldComps.get(l.id) } : l));
+        // DEDUPE (Sep 2 2026): the archive can carry ids the main shards also
+        // ship (17 goldin-2026* ids were duplicated main↔archive in the audit)
+        // and, across a shard boundary, itself. Drop self-duplicates here;
+        // main-wins against allLots happens in useSoldArchive's merge, which
+        // is the only place that sees phase 2 land AFTER the archive did.
+        const seenIds = new Set<string>();
+        const merged: AuctionLot[] = [];
+        for (const l of archive) {
+          if (seenIds.has(l.id)) continue;
+          seenIds.add(l.id);
+          merged.push(soldComps.has(l.id) ? { ...l, soldComp: soldComps.get(l.id) } : l);
+        }
         cachedArchive = merged;
         archiveLoadedState = true;
         archiveErrorState = false;
@@ -774,10 +827,17 @@ export function useSoldArchive(): SoldArchive {
 
   // Memoized so identity is stable across renders — an un-memoized new array
   // each render drives ArchiveLoader's effect into an infinite setState loop.
-  const allLotsWithArchive = useMemo(
-    () => (state.soldArchive.length ? [...base.allLots, ...state.soldArchive] : base.allLots),
-    [base.allLots, state.soldArchive],
-  );
+  const allLotsWithArchive = useMemo(() => {
+    if (!state.soldArchive.length) return base.allLots;
+    // MAIN WINS: an id present in the main pool (eager lots, then the phase-2
+    // shards once they land) is dropped from the archive side — the main row
+    // carries the live signal/bid state and the archive copy is stale history
+    // of the same lot. Recomputed only when either pool changes.
+    const mainIds = new Set<string>();
+    for (const l of base.allLots) mainIds.add(l.id);
+    const archiveOnly = state.soldArchive.filter(l => !mainIds.has(l.id));
+    return [...base.allLots, ...archiveOnly];
+  }, [base.allLots, state.soldArchive]);
   return {
     soldArchive: state.soldArchive,
     archiveLoaded: state.archiveLoaded,

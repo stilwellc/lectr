@@ -45,8 +45,16 @@ export default function HammerWeek({
   todayIso?: string;
 }) {
   const week = useMemo(() => {
-    // crawl-day = the data's "today" — one edition date across the page
-    const today = todayIso || new Date().toISOString().slice(0, 10);
+    // crawl-day = the data's "today" — one edition date across the page.
+    // FRESHNESS GATE (the velocity rule): a crawl stamp that is not today's
+    // date, or a full ISO older than 24h, is a stale edition — its column
+    // must not wear the "today" lift, so the client clock takes over.
+    const clientToday = new Date().toISOString().slice(0, 10);
+    const stampFresh = !!todayIso && (
+      todayIso.slice(0, 10) === clientToday
+      || (todayIso.length > 10 && !isNaN(Date.parse(todayIso)) && Date.now() - Date.parse(todayIso) < 86_400_000)
+    );
+    const today = stampFresh ? todayIso!.slice(0, 10) : clientToday;
     const days = weekDaysFor(today);
     const daySet = new Set(days);
     const counts = new Map<string, number>();

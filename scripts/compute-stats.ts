@@ -6,7 +6,17 @@
  */
 import type { AuctionLot, MarketStats, PricePoint, HouseCount, AuctionHouse } from '../app/types';
 
-export function computeStats(lots: AuctionLot[], existingStats: MarketStats | null): MarketStats {
+/** The trailing-year sales count on a TRUE calendar window. The UI used to
+ *  print "12 mo sold" from priceHistory.slice(-4) — the last four NON-EMPTY
+ *  quarters, which for a thin maker spans years. sold12m counts sales whose
+ *  saleDate falls inside [from, to]; sold12mWindow states the window so a
+ *  reader can only print "12 mo" when days === 365. */
+export interface Sold12m {
+  sold12m: number;
+  sold12mWindow: { from: string; to: string; days: number };
+}
+
+export function computeStats(lots: AuctionLot[], existingStats: MarketStats | null): MarketStats & Sold12m {
   const sold = lots.filter(l => l.status === 'sold' && l.priceUsd);
   const now = new Date();
   const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
@@ -20,6 +30,10 @@ export function computeStats(lots: AuctionLot[], existingStats: MarketStats | nu
   const oneYearAgoMs = oneYearAgo.getTime();
 
   const recentSold = sold.filter((_l, i) => !isNaN(saleMs[i]) && saleMs[i] >= oneYearAgoMs);
+  // calendar-365-day window (not "the last four quarters that had sales")
+  const win365Ms = now.getTime() - 365 * 86_400_000;
+  const sold12m = sold.filter((_l, i) => !isNaN(saleMs[i]) && saleMs[i] >= win365Ms && saleMs[i] <= now.getTime()).length;
+  const sold12mWindow = { from: new Date(win365Ms).toISOString().slice(0, 10), to: now.toISOString().slice(0, 10), days: 365 };
 
   const prices = recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
   const avg = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : existingStats?.avgPriceLast12Months || 0;
@@ -87,6 +101,8 @@ export function computeStats(lots: AuctionLot[], existingStats: MarketStats | nu
     lastUpdated: now.toISOString(),
     totalLotsTracked: lots.length,
     totalSoldTracked: sold.length,
+    sold12m,
+    sold12mWindow,
     avgPriceLast12Months: avg,
     medianPriceLast12Months: median,
     recordPrice: record?.priceUsd || existingStats?.recordPrice || 0,

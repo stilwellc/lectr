@@ -14,6 +14,7 @@
  *     "the houses ran their art estimates N% light."
  */
 import type { AuctionLot } from '../types';
+import { inferHammerUsd } from './premiums';
 
 export interface IndexPoint { period: string; value: number; n: number; }
 export interface MarketSeries {
@@ -89,16 +90,18 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
   // ── house accuracy ──
   // HAMMER basis: estimates are hammer-basis while realized is premium-inclusive
   // (~1.25×), so realized/mid ran ~1.18 from premium alone and could never say
-  // the houses "missed". hammerUsd where published, else realized/1.25.
+  // the houses "missed". hammerUsd where published, else realized ÷ the
+  // per-house premium schedule (app/lib/premiums.inferHammerUsd).
   const accByQ = new Map<string, number[]>();
   for (const l of soldPriced) {
     if (!l.estLowUsd || !l.estHighUsd) continue;
     const mid = (l.estLowUsd + l.estHighUsd) / 2;
     if (!(mid > 0)) continue; // guard against corrupt (negative/zero) estimates
     const q = QUARTER(l.saleDate); if (!q) continue;
-    const hammer = ((l as { hammerUsd?: number | null }).hammerUsd || 0) > 0
-      ? (l as { hammerUsd?: number | null }).hammerUsd!
-      : l.realizedUsd! / 1.25;
+    // ONE hammer inference (premiums.inferHammerUsd): published hammer, else
+    // realized ÷ the lot's own premium factor — never a flat /1.25 (P1-5)
+    const hammer = inferHammerUsd(l as { auctionHouse?: string | null; buyerPremiumPct?: number | null; hammerUsd?: number | null; realizedUsd?: number | null });
+    if (!(hammer > 0)) continue;
     (accByQ.get(q) || accByQ.set(q, []).get(q)!).push(hammer / mid);
   }
   const houseAccuracy = Array.from(accByQ.entries()).filter(([, v]) => v.length >= MIN_PER_QUARTER)

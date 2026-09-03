@@ -21,7 +21,7 @@ on:
         options: [archive, idwalk]
         default: 'archive'
 concurrency:
-  group: backfill-mlbauction
+  group: segments-mlbauction
   cancel-in-progress: false
 permissions:
   contents: read

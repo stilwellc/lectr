@@ -5,7 +5,7 @@ import './globals.css';
 import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
 import { AccountProvider } from './lib/account';
-import { ARTISTS } from './constants';
+import { ROSTER_PHRASE } from './constants';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -44,10 +44,10 @@ export const metadata: Metadata = {
     default: 'lectr — auction intelligence',
     template: '%s — lectr',
   },
-  description: `Auction intelligence for the collectibles market — ${ARTISTS.length} makers tracked across major houses, crawled nightly.`,
+  description: `Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`,
   openGraph: {
     title: 'lectr — auction intelligence',
-    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} makers tracked across major houses, crawled nightly.`,
+    description: `Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`,
     siteName: 'lectr',
     type: 'website',
     locale: 'en_US',
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'lectr — auction intelligence',
-    description: `Auction intelligence for the collectibles market — ${ARTISTS.length} makers tracked across major houses, crawled nightly.`,
+    description: `Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`,
   },
 };
 

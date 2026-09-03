@@ -51,6 +51,11 @@ on:
         type: choice
         options: [auto, incremental, full]
         default: auto
+      backtest_mode:
+        description: "backtest: auto (Sunday = full per-market legs, else incremental) / full / incremental"
+        type: choice
+        options: [auto, full, incremental]
+        default: auto
 
 permissions:
   contents: read
@@ -69,6 +74,23 @@ env:
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
 jobs:
+  # Decides once, for every downstream job, whether tonight is the FULL
+  # per-market replay (Sunday UTC) or the incremental append. A job-level
+  # output (not a per-step `date` call) so the leg matrix can be skipped
+  # on weekdays without evaluating shell in an `if:`.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      full: ${{ steps.dow.outputs.full }}
+    steps:
+      - id: dow
+        run: |
+          if [ "${{ github.event.inputs.backtest_mode }}" = "full" ]; then echo "full=true" >> "$GITHUB_OUTPUT";
+          elif [ "${{ github.event.inputs.backtest_mode }}" = "incremental" ]; then echo "full=false" >> "$GITHUB_OUTPUT";
+          elif [ "$(date -u +%u)" = "7" ]; then echo "full=true" >> "$GITHUB_OUTPUT";
+          else echo "full=false" >> "$GITHUB_OUTPUT"; fi
+
   crawl:
     if: ${{ github.event.inputs.skip_crawl != 'true' }}   # assemble-only recovery reuses last-good segments
     strategy:
@@ -89,6 +111,17 @@ jobs:
         # houses). rea/hugginsscott/scp = curl legs. All additive to sports/pop.
         house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, lelands, memorylane, lotg, nflauction, mlbauction]
     runs-on: ubuntu-latest
+    # SEGMENT LOCK (Sep 2 2026): every writer of latest/segments/<house> —
+    # this leg, gallery-heal, nflauction-heal, backfill-*, resolve-rrauction —
+    # must sit in the SAME per-house group so a pull→mutate→push can never
+    # interleave with another writer's and drop its rows (the lost-update
+    # race). Queue, never cancel. The exact group names the other workflows
+    # must adopt are listed in docs/data-pipeline.md ("Segment locks").
+    # Belt-and-braces: data-store.sh push-segment also refuses to overwrite a
+    # segment that changed in R2 since it was pulled (etag compare-and-swap).
+    concurrency:
+      group: segments-${{ matrix.house }}
+      cancel-in-progress: false
     # RAISED 60→90 (Aug 4 2026): christies measured 43.9min (Aug 3) / 34.6min
     # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
     # pushes no segment, and the seedless/last-good guards then have to catch
@@ -243,6 +276,24 @@ jobs:
         run: npx tsx scripts/build-upcoming.ts
       # Emit the value book for Starling (the buy-side sibling) → PRIVATE R2.
       # Best-effort: a failure here must never break lectr's own nightly.
+      # ENGINE GATE (Sep 2 2026): temporal holdout through the production
+      # replay path. Exits non-zero on: non-monotonic beat-rate (global or any
+      # market with ≥2 buckets at n≥30), a 'high' tier worse than 1.6× median
+      # error or less accurate than 'low' in any market at n≥30, or <10%
+      # coverage. Runs BEFORE the R2 push so a failed gate keeps last-good live.
+      # ~3 min at --sample 30000 (stratified per market, incl. culture/tcg).
+      - name: Validate engine (temporal holdout gate)
+        run: |
+          mkdir -p data/qa
+          NODE_OPTIONS=--max-old-space-size=10240 npx tsx scripts/validate-engine.ts --sample 30000 --json data/qa/validate-engine.json
+      - name: Upload engine validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validate-engine
+          path: data/qa/validate-engine.json
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Emit value book → private R2 (Starling)
         run: npx tsx scripts/emit-value-book.ts
         continue-on-error: true
@@ -275,48 +326,39 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # The point-in-time backtest. The record is CUMULATIVE history that barely
-  # moves night to night, so the nightly path (Mon–Sat) runs the FAST INCREMENTAL
-  # (build-backtest-incremental.ts): it scores ONLY the lots that closed since the
-  # last run and APPENDS them, finishing in a small fraction of the full replay.
-  # SUNDAY runs the FULL replay (build-backtest.ts) as the correctness backstop —
-  # it re-scores every concluded lot from scratch, which is the only thing that
-  # corrects retroactive-prior drift (a backfilled lot dated before an
-  # already-scored target; see build-backtest-incremental.ts for the exact
-  # bound) and refreshes the recency-weighting anchor. Both paths call identical
-  # scoring code (backtest-core.ts), so incremental rows are byte-identical to a
-  # full replay's, and both carry forward the sidecar state (backtest-state.json)
-  # the incremental rehydrates. Runs OFF the critical path in parallel with deploy.
-  backtest:
-    needs: assemble
-    if: always()
+  # The point-in-time backtest (Sep 2 2026): weekdays run the incremental append
+  # (build-backtest-incremental.ts — rehydrates the sidecar state, scores only
+  # never-attempted targets); Sunday runs the FULL replay as per-market legs
+  # (backtest-leg matrix → build-backtest.ts --market) merged by the backtest
+  # job (--merge). Every path applies the PRIOR quarter's calibration at score
+  # time, so the record measures the engine production actually ran. BLOCKING:
+  # a night that cannot produce a fresh record (script exit ≠ 0, or generatedAt
+  # older than 3 days) fails the run. deploy does not depend on this job.
+  # ── FULL REPLAY LEGS (Sunday, or backtest_mode=full) ──────────────────────
+  # One leg per market. Each scores ONLY its market's targets from scratch,
+  # with point-in-time calibration, and uploads its state as an artifact; the
+  # `backtest` job below merges them. Legs are independent — a failed market
+  # fails the merge (partial records are never published), but never another
+  # leg. Markets are the roster's market keys + 'other' (unrostered slugs;
+  # legitimately empty → the leg exits 1 on "no targets" and is allowed to).
+  backtest-leg:
+    needs: [plan, assemble]
+    if: needs.plan.outputs.full == 'true' && needs.assemble.result == 'success'
     runs-on: ubuntu-latest
-    # NON-BLOCKING by design: the backtest is a standalone replay that refreshes
-    # backtest.json for the NEXT cycle — it is NOT on the deploy critical path
-    # (deploy needs assemble, not this), and the record barely moves night to
-    # night. continue-on-error means a slow-or-failed backtest can NEVER cancel
-    # the run or mask the fact that the crawl+assemble+deploy already shipped.
-    # (Root cause of the 2026-07-24/25 "cancelled" nights: this replay outgrew
-    # its 70min cap as the corpus passed ~500k lots — the job self-cancelled on
-    # timeout and dragged the whole run's conclusion to "cancelled" even though
-    # the site had already deployed fresh data successfully. The nightly
-    # incremental now finishes in minutes; only the weekly full needs headroom.)
-    continue-on-error: true
-    # Headroom sized for the WEEKLY full replay (the O(targets×priors) pass runs
-    # well past 70min at current corpus size). Aug 16 2026 the full replay was
-    # KILLED at the old 300-min cap (corpus growth outran it) — 350 rides just
-    # under GH's hard 360-min job ceiling. If a Sunday hits THIS cap, the replay
-    # must be split (per-market legs), not re-capped. continue-on-error is the
-    # belt-and-braces so even an overrun can't gate the run.
-    timeout-minutes: 350
+    # measured: the largest leg (culture, ~94k targets) is ~5 min of scoring +
+    # ~1 min prep at ~460 targets/s; 60 gives 10× headroom. If a leg ever
+    # nears this, the fix is the pre-filter (backtest-core.candidatePriors),
+    # not a bigger cap.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        market: [art, design, watches, sports, science, culture, tcg, other]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version: '22', cache: 'npm' }
       - run: npm ci
-      # Same-run artifacts from assemble — immediately consistent, no R2 read.
-      # continue-on-error: absent on a rerun after expiry / manual dispatch,
-      # where the R2 fallback below takes over.
       - name: Fetch served payload (same-run artifact)
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -336,22 +378,92 @@ jobs:
           else
             bash scripts/data-store.sh pull
           fi
-      # Sunday (day-of-week 7) → FULL rebuild backstop; Mon–Sat → fast incremental
-      # append. A day-of-week guard in the ONE step (not a separate scheduled
-      # job) keeps the artifact-first + R2-fallback plumbing above shared by both
-      # paths and lets BOTH ride the same-run corpus-payload artifact — a separate
-      # Sunday cron would be its own run with no assemble artifacts, forcing the
-      # slow R2 fallback every week. The incremental self-falls-back to a full
-      # build when no prior state exists (first run, or after a state-file gap).
-      - name: Rebuild point-in-time backtest (full on Sun, incremental Mon–Sat)
+      - name: Replay leg ${{ matrix.market }}
         run: |
-          if [ "$(date -u +%u)" = "7" ]; then
-            echo "[backtest] Sunday — running FULL rebuild (correctness backstop)"
-            npx tsx scripts/build-backtest.ts
+          set +e
+          NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/build-backtest.ts --market ${{ matrix.market }} --leg-dir data/backtest-legs
+          rc=$?
+          # 'other' holds only unrostered slugs and may have zero targets; every
+          # rostered market must produce a leg.
+          if [ $rc -ne 0 ] && [ "${{ matrix.market }}" = "other" ]; then echo "leg other: no targets (allowed)"; exit 0; fi
+          exit $rc
+      - name: Upload leg state
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-leg-${{ matrix.market }}
+          path: data/backtest-legs/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  # ── THE RECORD (every night) ──────────────────────────────────────────────
+  # Weekdays: incremental append (rehydrates the sidecar state, scores only
+  # never-attempted targets inside the trailing 120-day window or first seen
+  # since the prior run). Sunday: merge the legs into the canonical state +
+  # backtest.json. BLOCKING now: a night that cannot produce a record fails the
+  # run — that is the point. Not on the deploy critical path (deploy needs
+  # assemble, not this), so a red backtest never withholds a fresh site.
+  backtest:
+    needs: [plan, assemble, backtest-leg]
+    # runs after the legs on Sunday (legs skipped on weekdays still satisfy
+    # `needs` via always()); requires a successful assemble either way
+    if: always() && needs.assemble.result == 'success' && (needs.plan.outputs.full != 'true' || needs.backtest-leg.result == 'success')
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    # incremental measured ~3 min (prep) + scoring at ~460/s; merge is seconds.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Fetch served payload (same-run artifact)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: served-payload
+          path: public/data/ray
+      - name: Fetch corpus (same-run artifact)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: corpus-payload
+          path: data/corpus
+      - name: Pull corpus + served from R2 (fallback if artifacts absent)
+        run: |
+          if [ -f public/data/ray/meta.json ] && [ -f data/corpus/lots.json.gz ]; then
+            echo "payloads delivered by same-run artifacts — skipping R2 pull"
           else
-            echo "[backtest] weekday — running INCREMENTAL append"
-            npx tsx scripts/build-backtest-incremental.ts
+            bash scripts/data-store.sh pull
           fi
+      - name: Fetch leg states (Sunday)
+        if: needs.plan.outputs.full == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: backtest-leg-*
+          merge-multiple: true
+          path: data/backtest-legs/
+      - name: Build the record (merge legs on Sunday · incremental append weekdays)
+        run: |
+          if [ "${{ needs.plan.outputs.full }}" = "true" ]; then
+            echo "[backtest] FULL — merging per-market legs"
+            NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/build-backtest.ts --merge --leg-dir data/backtest-legs
+          else
+            echo "[backtest] weekday — INCREMENTAL append"
+            NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/build-backtest-incremental.ts
+          fi
+      # STALE-RECORD CHECK: a record older than 3 days means the append did not
+      # happen, whatever the exit code said. Fails the job (and therefore the
+      # night's conclusion) so it is seen.
+      - name: Refuse a stale record (generatedAt older than 3 days)
+        run: |
+          node -e '
+            const bt = JSON.parse(require("fs").readFileSync("public/data/ray/backtest.json", "utf8"));
+            const age = (Date.now() - Date.parse(bt.generatedAt)) / 864e5;
+            console.log(`[backtest] generatedAt ${bt.generatedAt} (${age.toFixed(1)}d old) · engine ${bt.engineVersion} · rows on version ${bt.rowsOnVersionPct}% · n ${bt.calibration.n}`);
+            if (!(age <= 3)) { console.error("::error title=stale backtest::backtest.json generatedAt is older than 3 days"); process.exit(1); }
+            const dead = Object.entries(bt.byMarket || {}).filter(([, v]) => (v.flagged.n + v.unflagged.n) === 0).map(([k]) => k);
+            if (dead.length) { console.error(`::error title=empty byMarket::${dead.join(",")} carry n=0`); process.exit(1); }
+          '
       - name: Push refreshed backtest.json (+ accumulator state)
         run: bash scripts/data-store.sh push-backtest
 
@@ -419,7 +531,9 @@ jobs:
           [ "$missing" -eq 0 ] || { echo "::error::$missing missing chunk ref(s)"; exit 1; }
       - name: Deploy to Cloudflare Pages
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "no CF token — skipping deploy"; exit 0; fi
+          # RED, never a green "skipped": assemble already pushed tonight's
+          # data to R2, so a silent skip here leaves prod stale with no signal
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "::error::CLOUDFLARE_API_TOKEN secret is not set — fresh data in R2 but NOT deployed"; exit 1; fi
           npx wrangler@4.120.1 pages deploy out --project-name collectr --branch main --commit-dirty=true
 
   sync:
@@ -462,14 +576,15 @@ jobs:
           else
             bash scripts/data-store.sh pull
           fi
+      # Each script retries Supabase calls with bounded backoff internally
+      # (4 tries, 2s→4s→8s); a failure that survives that is real and must go
+      # RED here — the old `|| echo` masked every failure green for weeks.
+      # The job stays off the deploy critical path (deploy needs assemble
+      # only), so a red sync never blocks the site. NO EMAIL FEATURES
+      # (standing law): the digest step that used to follow was deleted.
       - name: Sync lots table
-        run: npx tsx scripts/sync-lots-db.ts || echo "sync-lots failed (non-fatal)"
+        run: npx tsx scripts/sync-lots-db.ts
       - name: Match saved-search alerts
-        run: npx tsx scripts/match-alerts.ts || echo "match-alerts failed (non-fatal)"
+        run: npx tsx scripts/match-alerts.ts
       - name: Match signal alerts (watchlist flips + your-markets flags)
-        run: npx tsx scripts/match-signal-alerts.ts || echo "signal-alerts failed (non-fatal)"
-      - name: Send alert digests
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM: ${{ secrets.RESEND_FROM }}
-        run: npx tsx scripts/send-digest.ts || echo "send-digest failed (non-fatal)"
+        run: npx tsx scripts/match-signal-alerts.ts

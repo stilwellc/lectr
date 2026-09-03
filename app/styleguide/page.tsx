@@ -113,7 +113,44 @@ export default function Styleguide() {
                 <AnnoChip k="2026 Q2" v={tab === 1 ? '44,508 settled' : '99% found a buyer'} dir="up" />
               </span>
             </div>
-            <FigCap>The styleguide's dummy pane — the shape is the spec, the numbers are props.</FigCap>
+            <FigCap>The styleguide&rsquo;s dummy pane — the shape is the spec, the numbers are props.</FigCap>
+          </div>
+        </Room>
+
+        <Room title="The vault card" note="a white card inside the ink band — folio + headline figure must read (P1-2 / P0-1 guard)">
+          {/* the shot rig captures this: the band re-tokens butter to true butter
+              for its dark plate, so anything gold or white on a white card inside
+              it goes invisible unless the ink-density arms hold. Both are here. */}
+          <div className="ray-band" style={{ padding: '26px 28px 28px', borderRadius: 14 }}>
+            <span className="kicker" style={{ display: 'block', marginBottom: 12 }}>The record — a plate in the vault</span>
+            <div className="glass glass-quiet" style={{ padding: 'var(--card-pad)' }}>
+              <div className="rcp-tiles" style={{ marginBottom: 6 }}>
+                <div className="rcp-tile">
+                  <span className="kicker">Card-comp reads</span>
+                  <span className="rcp-fig">+33%</span>
+                  <span className="rcp-sub">hammer vs our read, median · the figure is ink on white</span>
+                </div>
+                <div className="rcp-tile">
+                  <span className="kicker">The gap · shelf calls</span>
+                  <span className="rcp-fig">19/62</span>
+                  <span className="rcp-sub">62 calls on the tape · 19 settled</span>
+                </div>
+              </div>
+              <div style={{ position: 'relative', height: 90, borderBottom: '1px solid var(--chart-grid)' }}>
+                <svg width="100%" height="90" preserveAspectRatio="none" viewBox="0 0 600 90">
+                  <polyline points="0,60 100,58 200,64 300,40 400,46 500,30 600,24" fill="none" stroke="var(--color-fg)" strokeWidth="1.6" />
+                  <polyline points="0,70 100,72 200,70 300,66 400,68 500,62 600,60" fill="none" stroke="var(--chart-line-2)" strokeWidth="1.2" strokeDasharray="3 3" />
+                </svg>
+              </div>
+              <FigCap>The folio reads in ink-density gold on this white card; the comparison stroke is the 3:1 gray.</FigCap>
+            </div>
+          </div>
+          <div style={{ marginTop: 18 }}>
+            <span className="kicker">The headline figure on eggshell</span>
+            <div className="rcp-tiles" style={{ maxWidth: 560 }}>
+              <div className="rcp-tile"><span className="rcp-fig">+33%</span><span className="rcp-sub">.rcp-fig on the page ground</span></div>
+              <div className="rcp-tile"><span className="rcp-fig">0/1</span><span className="rcp-sub">a zero reads too</span></div>
+            </div>
           </div>
         </Room>
 

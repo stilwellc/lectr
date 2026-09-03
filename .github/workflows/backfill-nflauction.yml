@@ -9,13 +9,8 @@ on:
       pages:
         description: 'max closed pages per sweep (100 rows each)'
         default: '200'
-      mode:
-        description: 'archive = windowed closed sweep · idwalk = deep wayback-id walk'
-        type: choice
-        options: [archive, idwalk]
-        default: 'archive'
 concurrency:
-  group: backfill-nflauction
+  group: segments-nflauction
   cancel-in-progress: false
 permissions:
   contents: read
@@ -33,11 +28,10 @@ jobs:
       - run: npm ci
       - name: Pull last-good segment
         run: bash scripts/data-store.sh pull-segment nflauction || echo "no prior segment (first run)"
+      # (the idwalk mode was RETIRED Aug 30 2026 — its price scrape read the
+      # Hot-Items sidebar widget, not the lot; crawl-nflauction.ts exits 1 on
+      # --idwalk. See scripts/heal-nflauction-idwalk.ts.)
       - name: Back-crawl closed archive
-        if: ${{ (inputs.mode || 'archive') == 'archive' }}
         run: RAY_SKIP_MAIN=1 npx tsx scripts/crawl-nflauction.ts --backfill --closed-pages ${{ inputs.pages || 200 }} --delay 150 --write
-      - name: Deep id-walk (wayback-recovered ids vs the live site)
-        if: ${{ inputs.mode == 'idwalk' }}
-        run: RAY_SKIP_MAIN=1 npx tsx scripts/crawl-nflauction.ts --idwalk --closed-pages 0 --delay 120 --write
       - name: Push segment
         run: bash scripts/data-store.sh push-segment nflauction

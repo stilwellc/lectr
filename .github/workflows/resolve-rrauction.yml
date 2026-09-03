@@ -9,7 +9,7 @@ name: Resolve RR Auction (on demand)
 on:
   workflow_dispatch: {}
 concurrency:
-  group: crawl-rrauction
+  group: segments-rrauction
   cancel-in-progress: false
 permissions:
   contents: read

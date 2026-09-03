@@ -29,8 +29,16 @@ export interface SkipLot {
 
 const TERMINAL = new Set(['sold', 'bought_in']);
 
-/** Mirror of ray-crawl.ts's RESULT_PENDING_MS (houses post hammers late). */
-export const SKIP_RESULT_PENDING_MS = 14 * 86_400_000;
+/**
+ * THE late-result window (single source — ray-crawl.ts imports it). A closed
+ * lot with no posted result inside this window is held VISIBLE as pending
+ * (upcoming) rather than flipped to bought-in; beyond it, a still-resultless
+ * lot is a genuine bought-in. Two weeks covers every house's posting lag while
+ * limiting how long a real bought-in can masquerade as pending.
+ */
+export const RESULT_PENDING_MS = 14 * 86_400_000;
+/** @deprecated alias kept for older call sites — same constant. */
+export const SKIP_RESULT_PENDING_MS = RESULT_PENDING_MS;
 
 /** True when every lot of a sale is a terminal, old, non-online result. */
 export function saleFullyResolved(

@@ -1,3 +1,5 @@
+-- SUPERSEDED (Sep 2 2026) by supabase/migrations/0001_saved_lots.sql.
+-- Historical record only.
 -- Collection tracking: a saved past lot can be marked as OWNED, joining the
 -- user's collection (tracked with an assumed value client-side).
 -- APPLIED 2026-07-17 via the management API — kept here as the record.

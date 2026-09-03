@@ -124,7 +124,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           <span className="ray-sect-mark" aria-hidden><SalesMark size={18} /></span>Top <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>sales</span>
         </h2>
         <span style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
-          top {topSales.length} · ranked over {fromCorpus ? 'the full corpus' : 'the loaded lots'} · % over est. on hammer basis — buyer&rsquo;s premium divided out
+          top {topSales.length} · ranked over {fromCorpus ? 'the full corpus' : 'the loaded lots'} · % over est. is the all-in price vs. the estimate mid
         </span>
       </div>
 
@@ -140,7 +140,7 @@ export default function TopSales({ allLots, market, series }: Props) {
             <tr>
               <th style={{
                 fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
-                color: 'var(--color-text-faint)', fontWeight: 600,
+                color: 'var(--color-text-faint)', fontWeight: 500,
                 padding: '14px 16px 10px', textAlign: 'left', width: 40,
                 borderBottom: '1px solid var(--color-border)',
               }}>
@@ -148,7 +148,7 @@ export default function TopSales({ allLots, market, series }: Props) {
               </th>
               <th style={{
                 fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
-                color: 'var(--color-text-faint)', fontWeight: 600,
+                color: 'var(--color-text-faint)', fontWeight: 500,
                 padding: '14px 16px 10px', textAlign: 'left',
                 borderBottom: '1px solid var(--color-border)',
               }}>
@@ -156,7 +156,7 @@ export default function TopSales({ allLots, market, series }: Props) {
               </th>
               <th style={{
                 fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
-                color: 'var(--color-text-faint)', fontWeight: 600,
+                color: 'var(--color-text-faint)', fontWeight: 500,
                 padding: '14px 16px 10px', textAlign: 'right',
                 borderBottom: '1px solid var(--color-border)',
               }}>
@@ -164,7 +164,7 @@ export default function TopSales({ allLots, market, series }: Props) {
               </th>
               <th style={{
                 fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
-                color: 'var(--color-text-faint)', fontWeight: 600,
+                color: 'var(--color-text-faint)', fontWeight: 500,
                 padding: '14px 16px 10px', textAlign: 'right',
                 borderBottom: '1px solid var(--color-border)',
               }}>
@@ -172,7 +172,7 @@ export default function TopSales({ allLots, market, series }: Props) {
               </th>
               <th className="ray-top-hide-mobile" style={{
                 fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
-                color: 'var(--color-text-faint)', fontWeight: 600,
+                color: 'var(--color-text-faint)', fontWeight: 500,
                 padding: '14px 16px 10px', textAlign: 'left',
                 borderBottom: '1px solid var(--color-border)',
               }}>
@@ -180,7 +180,7 @@ export default function TopSales({ allLots, market, series }: Props) {
               </th>
               <th className="ray-top-hide-mobile" style={{
                 fontSize: 12, letterSpacing: '-0.01em', textTransform: 'none',
-                color: 'var(--color-text-faint)', fontWeight: 600,
+                color: 'var(--color-text-faint)', fontWeight: 500,
                 padding: '14px 16px 10px', textAlign: 'right',
                 borderBottom: '1px solid var(--color-border)',
               }}>
@@ -192,17 +192,17 @@ export default function TopSales({ allLots, market, series }: Props) {
             {shown.map((lot, i) => {
               const ct = craftTitle(lot.title);
               const title = ct.length > 50 ? ct.slice(0, 47) + '…' : ct;
-              // precomputed at build (hammer basis, premium divided out;
-              // null when the lot carries no estimate)
+              // precomputed at build — overEstimatePct's basis: the all-in
+              // published price vs the estimate mid (null when the lot
+              // carries no estimate)
               const overEst = lot.overEst;
               return (
                 <tr key={lot.id} className="ray-top-row">
-                  {/* Rank 1 is the single wine record marker for this view */}
                   <td className="ray-top-td" style={{
-                    fontFamily: "var(--font-serif), serif",
-                    fontSize: 20,
-                    fontWeight: 300,
-                    color: i === 0 ? 'var(--color-butter-text)' : 'var(--color-text-faint)',
+                    fontFamily: 'var(--font-mono), monospace',
+                    fontSize: 12.5,
+                    fontVariantNumeric: 'tabular-nums',
+                    color: i === 0 ? 'var(--color-fg)' : 'var(--color-text-faint)',
                   }}>
                     {i + 1}
                   </td>
@@ -212,7 +212,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                       letterSpacing: '-0.01em',
                       textTransform: 'none',
                       color: 'var(--color-text-muted)',
-                      fontWeight: 600,
+                      fontWeight: 400,
                       marginBottom: 3,
                     }}>
                       {ARTIST_LABEL[lot.artist] || lot.artist}
@@ -224,9 +224,10 @@ export default function TopSales({ allLots, market, series }: Props) {
                       href={`/lot?id=${encodeURIComponent(lot.id)}`}
                       className="ray-maker-link"
                       style={{
-                        fontFamily: "var(--font-serif), serif",
-                        fontSize: 17,
-                        fontWeight: 400,
+                        fontFamily: 'var(--font-sans), sans-serif',
+                        fontSize: 15,
+                        fontWeight: 450,
+                        letterSpacing: '-0.01em',
                         lineHeight: 1.3,
                         display: 'inline',
                       }}
@@ -310,7 +311,7 @@ export default function TopSales({ allLots, market, series }: Props) {
               letterSpacing: '-0.01em',
               textTransform: 'none',
               color: 'var(--color-text-muted)',
-              fontWeight: 600,
+              fontWeight: 500,
               cursor: 'pointer',
               fontFamily: 'var(--font-sans), sans-serif',
               transition: 'border-color var(--duration-fast) var(--ease-signature)',

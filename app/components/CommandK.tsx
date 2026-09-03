@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from './useDialogFocus';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
@@ -169,6 +170,10 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     };
   }, []);
 
+  // Tab stays inside the palette; focus returns to the opener on close
+  // (the input takes initial focus itself, below)
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(open, dialogRef, { initial: 'none' });
   useEffect(() => {
     if (open) {
       setQ('');
@@ -196,6 +201,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   return createPortal(
     <div className="ray-ck-overlay" onClick={() => setOpen(false)} role="presentation">
       <div
+        ref={dialogRef}
         className="ray-ck"
         role="dialog"
         aria-modal="true"

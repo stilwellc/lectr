@@ -385,8 +385,33 @@ function dropMisattributed(lots: Lot[]): number {
   return drop.size;
 }
 
+/* ── RR AUCTION URL BACKFILL (Sep 2 2026) — the 30-year archive crawl
+   (resolve-rrauction.ts --archive, 251,825 lots) never carried a url, so
+   every served RR archive row shipped without a source link (252,429 rows
+   in the audit). The id encodes what the link needs: `rrauction-<sale>-<lotId>`
+   (verified: every archive id matches /^rrauction-\d+-\d+$/), and the site
+   resolves `https://www.rrauction.com/auctions/lot-detail/<lotId>` to the
+   lot page (302 → the slugged canonical; verified in a real Chrome session
+   against lot 351547607463093 = sale #746 lot #3093). Fill ONLY a null/empty
+   url and only for RR-shaped ids — a house-set url always wins. */
+const RR_ID = /^rrauction-\d+-(\d+)~?$/;
+export function deriveRRAuctionUrls(lots: Lot[]): number {
+  let n = 0;
+  for (const l of lots) {
+    const w = l as { id?: string; url?: string | null; auctionHouse?: string };
+    if (w.url) continue;
+    const m = RR_ID.exec(String(w.id || ''));
+    if (!m) continue;
+    w.url = `https://www.rrauction.com/auctions/lot-detail/${m[1]}`;
+    n++;
+  }
+  return n;
+}
+
 export function normalizeCorpus(lots: AuctionLot[]): void {
   const ls = lots as Lot[];
+  const rrUrls = deriveRRAuctionUrls(ls);
+  if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const mirrorDupes = dedupeWrightFamilyMirrors(ls);
   // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
   // isMisattributed reads the raw title (car marques / life-dates survive any

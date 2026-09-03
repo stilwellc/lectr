@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * SubPage — the sub-market dossier. /sub?id=<drill slug> renders one tracked
+ * SubPage — the sub-market dossier. /sub/<group>/<part> renders one tracked
  * sub-market row from market.json's `drills` (per vertical, A-vs-B splits) as a
- * certificate in the leader grammar: the strongest honest read it supports as
- * the hero figure, a chart when a series exists, then the record / volume /
- * sell-through / coverage as leader rows.
+ * certificate in the north-star grammar: quiet kicker → light title → byline
+ * ledger → the strongest honest read as a color cell (the lamp) → the series
+ * in a framed chart → the record / volume / sell-through / coverage as dotted
+ * spec rows.
  *
  * Honesty ladder (sacred, mirrors SubMarketDrills + SubMarketDirectory):
  *   · readType 'index'  → CI'd move, mono %, green/red allowed (a REAL CI'd delta)
@@ -25,13 +26,14 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { MARKETS } from '../constants';
 import { subCatLabel } from '../lib/subcat-labels';
 import { formatPrice, formatDate, getUpcomingCounts } from '../utils';
+import { signedPct, dirOf } from '../components/SubMarketDirectory';
+import '../northstar-pages.css';
 
 type DrillRow = SubMarketRead & { parent: string };
 
 const MARKET_LABEL: Record<string, string> = {};
 for (const m of MARKETS) MARKET_LABEL[m.key] = m.label;
 
-const fmtPct0 = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`;
 
 /** Rebase a base-100 level series to Δ% off the first visible reading, so the
     index line reads as a move (labeled Δ%), never an unlabeled level. */
@@ -62,67 +64,64 @@ function pickChart(row: DrillRow, label: string): HeroLine | null {
   return null;
 }
 
-/** The hero read — the strongest honest figure the row supports. Only index &
-    demand may color; descriptive typical-$ is plain ink, always. */
+/** The hero read as a color cell — the strongest honest figure the row
+    supports, on the ground the signal earns. dir comes strictly from the
+    read's own sign: index & demand may light up (a real measured delta);
+    descriptive typical-$ is the ink cell, always. */
 function HeroRead({ row }: { row: DrillRow }) {
   if (row.readType === 'index' && row.index) {
     const v = row.index.changePct;
     return (
-      <div style={{ marginTop: 14 }}>
-        <span
-          style={{ fontFamily: 'var(--font-mono, ui-monospace), monospace', fontSize: 'clamp(34px, 6vw, 52px)', fontWeight: 700, letterSpacing: '-0.02em', color: v >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}
-        >
-          {fmtPct0(v)}
+      <div className="ns-cell ns-cell-color nsp-read" data-dir={dirOf(v) ?? 'ink'}>
+        <span className="ns-cell-label">Verified index · {row.index.horizon}</span>
+        <span className="nsp-read-stat">{signedPct(v)}</span>
+        <span className="ns-cell-body">
+          95% interval [{row.index.ciLoPct.toFixed(0)}, {row.index.ciHiPct.toFixed(0)}]
+          {row.indexMethod ? ` · ${row.indexMethod === 'repeat-sale' ? 'repeat-sale' : 'hedonic'} fit` : ''}
+          {' · publishes only when the interval clears the sign'}
         </span>
-        <div style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-          {row.index.horizon} verified
-          {' · '}
-          <span style={{ color: 'var(--color-text-faint)' }}>
-            CI [{row.index.ciLoPct.toFixed(0)}, {row.index.ciHiPct.toFixed(0)}]
-          </span>
-          {row.indexMethod ? ` · ${row.indexMethod === 'repeat-sale' ? 'repeat-sale' : 'hedonic'}` : ''}
-        </div>
       </div>
     );
   }
   if (row.readType === 'demand' && row.demandNow != null) {
     const v = row.demandNow;
     return (
-      <div style={{ marginTop: 14 }}>
-        <span
-          style={{ fontFamily: 'var(--font-mono, ui-monospace), monospace', fontSize: 'clamp(34px, 6vw, 52px)', fontWeight: 700, letterSpacing: '-0.02em', color: v >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}
-        >
-          {fmtPct0(v)}
+      <div className="ns-cell ns-cell-color nsp-read" data-dir={dirOf(v) ?? 'ink'}>
+        <span className="ns-cell-label">Demand · vs estimate</span>
+        <span className="nsp-read-stat">{signedPct(v)}</span>
+        <span className="ns-cell-body">
+          median realized price over the house estimate, trailing year — an observed fact, not a forecast
         </span>
-        <div style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 6 }}>
-          measured, vs estimate
-        </div>
       </div>
     );
   }
-  // descriptive — typical price, PLAIN ink (never colored)
+  // descriptive — typical price, the INK cell (never colored)
   return (
-    <div style={{ marginTop: 14 }}>
-      <span style={{ fontSize: 'clamp(30px, 5.5vw, 46px)', fontWeight: 750, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-        {row.typicalUsd != null ? formatPrice(row.typicalUsd) : '—'}
+    <div className="ns-cell ns-cell-color nsp-read" data-dir="ink">
+      <span className="ns-cell-label">{row.typicalUsd != null ? 'Typical price · last 12 months' : 'No verified read'}</span>
+      <span className="nsp-read-stat">{row.typicalUsd != null ? formatPrice(row.typicalUsd) : '—'}</span>
+      <span className="ns-cell-body">
+        {row.typicalUsd != null
+          ? 'a descriptive read — the median sale, with no move claimed where the evidence can’t verify one'
+          : 'abstaining — no split here clears the evidence gate'}
       </span>
-      <div style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 6 }}>
-        {row.typicalUsd != null ? 'typical price · last 12 months' : 'no verified read — abstaining'}
-      </div>
     </div>
   );
 }
 
-/** A leader row: label + base on the left, figure on the right. Tones honest —
-    only pass a color for real deltas; volume/count/reference figures stay ink. */
-function LeaderRow({ label, base, children }: { label: string; base?: string; children: React.ReactNode }) {
+/** A spec row on the dotted ledger: label (+ base) left, figure right. Tones
+    honest — only pass a tone for real deltas; volume/count/reference figures
+    stay ink. */
+function SpecRow({ label, title, base, mono, children }: { label?: string; title?: string; base?: string; mono?: boolean; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 14, alignItems: 'baseline', padding: '11px 0', borderBottom: '2px dotted rgba(255,255,255,0.09)' }}>
-      <span style={{ fontSize: 13.5 }}>
-        {label}
-        {base && <span style={{ color: 'var(--color-text-faint)', fontSize: 12, marginLeft: 8 }}>{base}</span>}
+    <div className="ns-ledger-row">
+      <span className="nsp-lk">
+        {title ? <span className="t">{title}</span> : label}
+        {base && <span className="nsp-lsub">{base}</span>}
       </span>
-      <span style={{ fontSize: 13.5, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{children}</span>
+      <span className="nsp-lval">
+        <span className={`nsp-lv${mono ? ' mono' : ''}`}>{children}</span>
+      </span>
     </div>
   );
 }
@@ -149,27 +148,28 @@ export default function SubPage({ slug }: { slug: string }) {
   const nav = <ArtistNav activeSlug="analytics" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
 
   if (!row) {
+    const loading = market === null;
     return (
       <div className="terminal-shell">
         {nav}
         {/* while market.json loads, fill the viewport so the colophon never
             paints on screen and then gets shoved down by the dossier (CLS) */}
-        <div className="rail" style={{ paddingBlock: 80, textAlign: 'center', minHeight: market === null ? '100dvh' : undefined, boxSizing: 'border-box' }}>
-          {market === null ? (
-            <p style={{ color: 'var(--color-text-faint)', fontSize: 14 }}>Loading the sub-market book&hellip;</p>
+        <div className="rail nsp-empty" style={{ minHeight: loading ? '100dvh' : undefined }}>
+          {loading ? (
+            <p>Loading the sub-market book&hellip;</p>
           ) : (
             <>
-              <p style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Not a tracked sub-market</p>
-              <p style={{ color: 'var(--color-text-faint)', fontSize: 13.5, marginTop: 8 }}>
-                lectr keeps a dossier only where a split clears its evidence gate.
-              </p>
-              <p style={{ marginTop: 18 }}>
-                <Link href="/analytics" style={{ color: 'var(--color-fg)', fontSize: 13.5 }}>← All sub-markets on Analytics</Link>
-              </p>
+              <span className="ns-kicker">Sub-market dossier</span>
+              <h1>Not a tracked sub-market</h1>
+              <p>lectr keeps a dossier only where a split clears its evidence gate.</p>
+              <div className="nsp-links">
+                <Link href="/sub" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>Every sub-market</Link>
+                <Link href="/analytics" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>The research desk</Link>
+              </div>
             </>
           )}
         </div>
-        <Colophon record={null} />
+        <Colophon lotCount={totalLots || allLots.length} record={null} />
       </div>
     );
   }
@@ -178,79 +178,125 @@ export default function SubPage({ slug }: { slug: string }) {
   const part = slug.split(':')[1] || slug;
   const label = row.label || subCatLabel(part);
   const verticalLabel = MARKET_LABEL[row.vertical] || row.vertical;
-  const parentLabel = subCatLabel(row.parent);
+  // the parent names a grouping only when it isn't the vertical itself
+  // ('tcg' under TCG, 'art' under Art print nothing)
+  const rawParent = subCatLabel(row.parent);
+  const parentLabel = rawParent.toLowerCase() === row.vertical.toLowerCase() || rawParent.toLowerCase() === verticalLabel.toLowerCase() ? '' : rawParent;
+  const readWord = row.readType === 'index' ? 'a verified index move'
+    : row.readType === 'demand' ? 'measured demand against the house estimate'
+    : 'the typical price and the record';
 
   return (
     <div className="terminal-shell">
       {nav}
-      <div className="rail" style={{ paddingTop: 'var(--space-4)', paddingBottom: 40 }}>
+      <div className="rail nsp-doss">
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
-        <p className="ray-hero2-label" style={{ marginBottom: 6 }}>
-          <Link href="/analytics" style={{ color: 'inherit', textDecoration: 'none' }}>{verticalLabel}</Link>
-          {' · sub-market dossier'}
+
+        <div className="nsp-kicker-row">
+          <span className="ns-kicker">
+            <Link href="/sub">Sub-markets</Link>
+            {' · '}
+            <Link href={`/analytics/${row.vertical}`}>{verticalLabel}</Link>
+            {parentLabel && parentLabel !== label ? <>{' · '}{parentLabel}</> : null}
+          </span>
+          <span className="no">{row.lots.toLocaleString()} lots</span>
+        </div>
+        <h1 className="nsp-h1">{label}</h1>
+        <p className="nsp-dek">
+          One tracked sub-market, read at the strength its data supports — {readWord}, with the record and the
+          coverage behind it. Measured, never modeled.
         </p>
-        <h1 style={{ fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 750, letterSpacing: '-0.02em', margin: 0 }}>
-          {label}
-        </h1>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: 13.5, margin: '10px 0 0', lineHeight: 1.55 }}>
-          {parentLabel && parentLabel !== label ? <>{parentLabel} · </> : null}
-          {row.lots.toLocaleString()} lots tracked
-          {row.estCoverage != null && row.estCoverage > 0 && <> · {Math.round(row.estCoverage * 100)}% carry estimates</>}
-        </p>
+
+        {/* the byline ledger — the split's provenance columns */}
+        <div className="ns-byline nsp-byline">
+          <div>
+            <div className="k">Market</div>
+            <div className="v">{verticalLabel}</div>
+            {parentLabel && parentLabel !== label && <div className="s">{parentLabel}</div>}
+          </div>
+          <div>
+            <div className="k">Lots tracked</div>
+            <div className="v">{row.lots.toLocaleString()}</div>
+            <div className="s">observed volume</div>
+          </div>
+          <div>
+            <div className="k">Read</div>
+            <div className="v">{row.readType === 'index' ? 'Verified index' : row.readType === 'demand' ? 'Measured demand' : 'Descriptive'}</div>
+            <div className="s">
+              {row.readType === 'index' ? 'CI-resolved, sign verified' : row.readType === 'demand' ? 'vs the house estimate' : 'no move claimed'}
+            </div>
+          </div>
+          {row.estCoverage != null && row.estCoverage > 0 && (
+            <div>
+              <div className="k">Carry estimates</div>
+              <div className="v"><span className="mono">{Math.round(row.estCoverage * 100)}%</span></div>
+              <div className="s">of lots, a house estimate</div>
+            </div>
+          )}
+        </div>
 
         <HeroRead row={row} />
 
         {chart && (
-          <section style={{ marginTop: 30 }} aria-label={`${label} series`}>
-            <div className="lectr-lot-comps-head">
-              <span>
-                {row.readType === 'index' ? 'Verified index · rebased Δ%'
-                  : row.readType === 'demand' ? 'Demand vs estimate · quarterly'
-                  : chart.unit === 'money' ? 'Typical price · yearly'
-                  : 'Sales volume · quarterly'}
-              </span>
-              <span className="ctx">every point a real reading</span>
+          <section className="nsp-section ns-plate" aria-label={`${label} series`}>
+            <div className="nsp-shead">
+              <div>
+                <span className="ns-kicker">The line</span>
+                <h2 className="nsp-h2">
+                  {row.readType === 'index' ? 'Verified index, rebased Δ%'
+                    : row.readType === 'demand' ? 'Demand vs estimate, quarterly'
+                    : chart.unit === 'money' ? 'Typical price, yearly'
+                    : 'Sales volume, quarterly'}
+                </h2>
+              </div>
+              <span className="nsp-shctx">every point a real reading</span>
             </div>
-            <div style={{ marginTop: 10 }}>
+            <div className="nsp-chart">
               <HeroChart anchor={chart} play={false} height={220} />
             </div>
           </section>
         )}
 
-        <section style={{ marginTop: 34 }} aria-label="The record behind the read">
-          <div className="lectr-lot-comps-head">
-            <span>The record</span>
-            <span className="ctx">measured, never modeled</span>
+        <section className="nsp-section ns-plate" aria-label="The record behind the read">
+          <div className="nsp-shead">
+            <div>
+              <span className="ns-kicker">The record</span>
+              <h2 className="nsp-h2">What the book shows</h2>
+            </div>
+            <span className="nsp-shctx">measured, never modeled</span>
           </div>
-          <div style={{ marginTop: 6 }}>
+          <div className="nsp-ledger">
             {row.record && (
-              <LeaderRow label={row.record.title || 'Top result'} base={[row.record.house || null, row.record.date ? formatDate(row.record.date, { month: 'short', year: 'numeric' }) : null].filter(Boolean).join(' · ') || undefined}>
-                <span style={{ fontWeight: 650 }}>{formatPrice(row.record.usd)}</span>
-              </LeaderRow>
+              <SpecRow
+                title={row.record.title || 'Top result'}
+                base={[row.record.house || null, row.record.date ? formatDate(row.record.date, { month: 'short', year: 'numeric' }) : null].filter(Boolean).join(' · ') || undefined}
+              >
+                {formatPrice(row.record.usd)}
+              </SpecRow>
             )}
-            <LeaderRow label="Lots tracked" base="observed volume">
+            <SpecRow label="Lots tracked" base="observed volume">
               {row.lots.toLocaleString()}
-            </LeaderRow>
+            </SpecRow>
             {row.sellThroughPct != null && (
-              <LeaderRow label="Sell-through" base="of lots offered">
-                <span style={{ fontFamily: 'var(--font-mono, ui-monospace), monospace' }}>{Math.round(row.sellThroughPct)}%</span>
-              </LeaderRow>
+              <SpecRow label="Sell-through" base="of lots offered" mono>
+                {Math.round(row.sellThroughPct)}%
+              </SpecRow>
             )}
-            <LeaderRow label="Estimate coverage" base="carry a house estimate">
-              <span style={{ fontFamily: 'var(--font-mono, ui-monospace), monospace' }}>{Math.round((row.estCoverage || 0) * 100)}%</span>
-            </LeaderRow>
+            <SpecRow label="Estimate coverage" base="carry a house estimate" mono>
+              {Math.round((row.estCoverage || 0) * 100)}%
+            </SpecRow>
             {row.typicalUsd != null && row.readType !== 'descriptive' && (
-              <LeaderRow label="Typical price" base="median, last 12 months">
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPrice(row.typicalUsd)}</span>
-              </LeaderRow>
+              <SpecRow label="Typical price" base="median, last 12 months">
+                {formatPrice(row.typicalUsd)}
+              </SpecRow>
             )}
             {row.bidCompNow != null && (
-              <LeaderRow label="Bid competition" base="median bids/lot, latest qtr">
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{row.bidCompNow.toLocaleString()}</span>
-              </LeaderRow>
+              <SpecRow label="Bid competition" base="median bids per lot, latest quarter">
+                {row.bidCompNow.toLocaleString()}
+              </SpecRow>
             )}
           </div>
-          <p style={{ fontSize: 11.5, color: 'var(--color-text-faint)', margin: '16px 0 0', lineHeight: 1.5 }}>
+          <p className="nsp-note">
             {row.readType === 'index'
               ? 'The move is a CI-resolved index — it publishes only when the confidence interval clears the sign.'
               : row.readType === 'demand'
@@ -259,13 +305,13 @@ export default function SubPage({ slug }: { slug: string }) {
           </p>
         </section>
 
-        <p style={{ marginTop: 30 }}>
-          <Link href="/analytics" style={{ color: 'var(--color-fg)', fontSize: 13.5, textDecoration: 'none' }}>← All sub-markets on Analytics</Link>
-          <span style={{ color: 'var(--color-text-faint)', margin: '0 10px' }}>·</span>
-          <Link href="/makers" style={{ color: 'var(--color-text-muted)', fontSize: 13.5, textDecoration: 'none' }}>The taxonomy on Makers</Link>
-        </p>
+        <div className="nsp-links">
+          <Link href="/sub" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>Every sub-market</Link>
+          <Link href={`/analytics/${row.vertical}`} className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>{verticalLabel} on the desk</Link>
+          <Link href="/makers" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>The taxonomy on Makers</Link>
+        </div>
       </div>
-      <Colophon record={null} />
+      <Colophon lotCount={totalLots || allLots.length} record={null} />
     </div>
   );
 }

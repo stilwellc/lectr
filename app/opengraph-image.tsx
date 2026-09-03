@@ -92,9 +92,11 @@ export default function OG() {
         </svg>
         {backtest.flagged.n > 500 && (
           <div style={{ display: 'flex', fontSize: 21, color: '#59544F', marginTop: 'auto', gap: 7 }}>
-            <span>flagged calls hammered</span>
+            {/* the record's basis, stated: all-in realized against the
+                hammer-basis estimate midpoint — "hammered" said hammer price */}
+            <span>flagged calls sold</span>
             <span style={{ color: '#0F7C43', fontWeight: 600 }}>{`+${backtest.flagged.medianPerfPct}% median`}</span>
-            <span>{`over estimates · ${backtest.flagged.n.toLocaleString()} replayed sales`}</span>
+            <span>{`over estimate, all-in · ${backtest.flagged.n.toLocaleString()} replayed sales`}</span>
           </div>
         )}
       </div>

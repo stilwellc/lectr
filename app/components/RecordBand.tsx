@@ -58,8 +58,8 @@ export default function RecordBand({
         }
         .ray-recband-k {
           color: var(--paper-muted);
-          font-size: 10.5px; font-weight: 700;
-          letter-spacing: 0.13em; text-transform: uppercase;
+          font-size: 12.5px; font-weight: 400;
+          letter-spacing: 0;
           margin-bottom: 8px;
         }
         .ray-recband-v {
@@ -79,9 +79,9 @@ export default function RecordBand({
       {/* certificate double rule + microcap title row */}
       <div style={{ borderTop: '2px solid currentColor', marginBottom: 2 }} />
       <div style={{ borderTop: '1px solid var(--paper-line)', marginBottom: 10 }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, fontSize: 12.5, fontWeight: 500, marginBottom: 10 }}>
         <span>{title}</span>
-        {context && <span style={{ color: 'var(--paper-muted)', fontWeight: 600, textAlign: 'right' }}>{context}</span>}
+        {context && <span style={{ color: 'var(--paper-muted)', fontWeight: 400, textAlign: 'right' }}>{context}</span>}
       </div>
 
       {/* the figures, ruled and centered like a catalogue's front matter */}
@@ -104,7 +104,7 @@ export default function RecordBand({
       </div>
 
       {/* microtype footer, dated like every certificate on the site */}
-      <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--paper-muted)' }}>
+      <div style={{ borderTop: '1px solid var(--paper-line)', marginTop: 2, paddingTop: 7, display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11.5, color: 'var(--paper-muted)' }}>
         <span>{footer}</span>
         {/* no serial → no line: a dangling "no. " is a misprint */}
         {no && <span style={{ whiteSpace: 'nowrap' }}>no. {no}</span>}

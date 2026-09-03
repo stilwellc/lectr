@@ -50,6 +50,23 @@ type BidSortKey = 'name' | 'totalRevenue' | 'medianSale' | 'recordPrice' | 'move
 const BID_SORT_KEYS: readonly BidSortKey[] = ['name', 'totalRevenue', 'medianSale', 'recordPrice', 'movement', 'soldLots'];
 const ARTIST_SORT_KEYS: readonly SortKey[] = ['name', 'totalRevenue', 'avgPrice', 'recordPrice', 'demand', 'overEstimate', 'totalLots', 'sellThrough'];
 
+/** The maker-level "% over est." read — median of overEstimatePct across
+    sold lots with estimates (the ALL-IN published price vs the estimate mid,
+    the same basis as the demand index). −999 abstains under 3 sales. Shared
+    by the rankings table, the roster wall and the book header so a maker
+    never prints two different numbers for one question. */
+export function medianOverEstimatePct(lots: AuctionLot[]): number {
+  const pcts = lots
+    .filter(l => l.status === 'sold')
+    .map(l => overEstimatePct(l))
+    .filter((v): v is number => v != null)
+    .sort((x, y) => x - y);
+  if (pcts.length < 3) return -999;
+  return pcts.length % 2
+    ? pcts[(pcts.length - 1) / 2]
+    : (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2;
+}
+
 const COLLAPSED_ROWS = 10;
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -81,19 +98,12 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         ? Math.round((soldCount / concluded.length) * 100)
         : -1;
 
-      // hammer basis: overEstimatePct divides the buyer's premium out before
-      // comparing to the (hammer-basis) estimate mid — median over the
-      // maker's sold lots that carry estimates.
-      const overPcts = artistLots
-        .filter(l => l.status === 'sold')
-        .map(l => overEstimatePct(l))
-        .filter((v): v is number => v != null)
-        .sort((x, y) => x - y);
-      const overEstimate = overPcts.length >= 3
-        ? (overPcts.length % 2
-            ? overPcts[(overPcts.length - 1) / 2]
-            : (overPcts[overPcts.length / 2 - 1] + overPcts[overPcts.length / 2]) / 2)
-        : -999;
+      // ONE number, everywhere: the engine's realized-vs-estimate read
+      // (overEstimatePct — the all-in published price against the estimate
+      // mid, the demand index's own basis), median over the maker's sold
+      // lots that carry estimates. The roster wall and the book header
+      // print this same helper.
+      const overEstimate = medianOverEstimatePct(artistLots);
 
       return {
         slug: a.slug,
@@ -215,7 +225,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
     letterSpacing: '-0.01em',
     textTransform: 'none',
     color: sortKey === key ? 'var(--color-beige-text)' : 'var(--color-text-faint)',
-    fontWeight: 600,
+    fontWeight: 500,
     padding: '14px 16px 10px',
     textAlign: align,
     whiteSpace: 'nowrap',
@@ -296,7 +306,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         .ray-rankings-lens {
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           padding: 6px 16px;
           border-radius: 100px;
@@ -356,7 +366,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           gap: 10px;
           min-width: 0;
           font-size: 14px;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           white-space: nowrap;
           overflow: hidden;
@@ -375,7 +385,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           display: block;
           margin-top: 2px;
           font-size: 11.5px;
-          font-weight: 600;
+          font-weight: 500;
           font-variant-numeric: tabular-nums;
         }
         @media (max-width: 768px) {
@@ -425,7 +435,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               alignItems: 'center',
               gap: 7,
               fontSize: 13.5,
-              fontWeight: 600,
+              fontWeight: 500,
               color: 'var(--color-text-muted)',
               textDecoration: 'none',
               transition: 'color var(--duration-fast) var(--ease-signature)',
@@ -517,7 +527,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               {sortTh('avgPrice', 'Avg (12mo)')}
               {sortTh('recordPrice', 'Record', { hideMobile: true })}
               {sortTh('demand', 'Demand')}
-              {sortTh('overEstimate', '% over est.', { title: "Hammer basis — buyer's premium divided out; median across the maker's sold lots with estimates" })}
+              {sortTh('overEstimate', '% over est.', { title: "All-in price vs. estimate — the published sold price (buyer's premium included where the house reports it) against the estimate mid; median across the maker's sold lots with estimates" })}
               {sortTh('totalLots', 'Lots')}
               {sortTh('sellThrough', 'Sell-through', { hideMobile: true })}
             </tr>
@@ -635,7 +645,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
               letterSpacing: '-0.01em',
               textTransform: 'none',
               color: 'var(--color-text-muted)',
-              fontWeight: 600,
+              fontWeight: 500,
               cursor: 'pointer',
               fontFamily: 'var(--font-sans), sans-serif',
               transition: 'border-color var(--duration-fast) var(--ease-signature)',
@@ -651,7 +661,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         </p>
       ) : (
         <p style={{ marginTop: 10, fontSize: 11.5, color: 'var(--color-text-faint)' }}>
-          % over est. is hammer basis — the buyer&rsquo;s premium is divided out before comparing to the estimate mid; median across each maker&rsquo;s sold lots with estimates.
+          % over est. is the all-in price vs. estimate — the published sold price (buyer&rsquo;s premium included where the house reports it) against the estimate mid, the demand index&rsquo;s own basis; median across each maker&rsquo;s sold lots with estimates.
         </p>
       )}
     </section>

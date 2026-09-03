@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useDialogFocus } from './useDialogFocus';
 
 /**
  * MethodologyNote — "How Ray calls it." The comps engine is the moat; this
@@ -10,6 +11,8 @@ import { createPortal } from 'react-dom';
  */
 export default function MethodologyNote({ trigger = 'How lectr calls it' }: { trigger?: string }) {
   const [open, setOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(open, cardRef, { initial: 'first' });
 
   useEffect(() => {
     if (!open) return;
@@ -25,21 +28,23 @@ export default function MethodologyNote({ trigger = 'How lectr calls it' }: { tr
       </button>
       {open && typeof document !== 'undefined' && createPortal(
         <div className="ray-ck-overlay" onClick={() => setOpen(false)} role="presentation">
-          <div className="ray-method" role="dialog" aria-modal="true" aria-label="How lectr calls it" onClick={e => e.stopPropagation()}>
+          <div ref={cardRef} className="ray-method" role="dialog" aria-modal="true" aria-label="How lectr calls it" onClick={e => e.stopPropagation()}>
             <h3>How lectr calls it</h3>
             <p className="ray-method-lede">
               <b style={{ color: 'var(--color-fg)' }}>The Demand Index</b> is how the
               typical sale performs against its own estimate over the trailing twelve
-              months. +30% means the median lot hammered 30% above the estimate
-              midpoint; 0% means the market pays exactly what the houses ask; below
+              months. +30% means the median lot sold all-in (premium included) for
+              30% over the estimate midpoint, which the houses quote on hammer;
+              0% means the market pays exactly what the houses ask; below
               zero, lots are clearing under estimate. Because every sale is measured
               against its own ask, a $900 print and a $3M canvas count equally —
               the index can’t be skewed by what happened to come up for sale.
             </p>
             <p className="ray-method-lede">
               <b style={{ color: 'var(--color-fg)' }}>Deal signals</b> flag a lot when
-              the median of its true comparables sits at least 20% above the estimate
-              midpoint — and a comparable has to earn the name.
+              the median of its true comparables — what they sold for all-in — sits at
+              least 30% above the estimate midpoint, and a comparable has to earn the
+              name.
             </p>
             <ul>
               <li>

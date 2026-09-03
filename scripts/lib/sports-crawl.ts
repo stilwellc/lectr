@@ -60,6 +60,13 @@ export function writeMergedSegmentWithLive(
   freshLive: AuctionLot[],
   liveLegOk: boolean,
 ): { total: number; added: number; upcoming: number } {
+  // A crash-guarded run (installCrashGuard swallowed an uncaught network
+  // error) may have lost an arbitrary slice of its live enumeration — its
+  // snapshot is NOT authoritative, so never let it evict last night's rows.
+  if (liveLegOk && crashGuardTripped()) {
+    console.error(`[${name}] live leg downgraded to NOT-ok: ${crashGuardCount()} uncaught error(s) were swallowed by the crash guard — keeping the prior upcoming snapshot`);
+    liveLegOk = false;
+  }
   const existing = readSegment(name) as unknown as AuctionLot[];
   const byId = new Map<string, AuctionLot>();
   const prevById = new Map<string, AuctionLot>();
@@ -148,15 +155,40 @@ export function liveOnly(lots: AuctionLot[]): { good: AuctionLot[]; dropped: num
 export const REAL_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
+/** Per-process fetch health for the sports crawlers: every non-2xx answer is
+ *  counted (and logged — a silent null is how a rate-limited night used to
+ *  read as "the archive ended") so a run can tell "nothing to fetch" from
+ *  "the house said no". */
+export const FETCH_STATS = { non2xx: 0, rateLimited: 0, failed: 0 };
+const RATE_LIMIT_BACKOFF_MS = [2000, 6000]; // 429/503: 2 tries, 2s then 6s
+let non2xxLogged = 0;
+
 export async function getHtml(url: string, timeoutMs = 30000, retries = 2): Promise<string | null> {
+  let rateLimitTries = 0;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const r = await fetch(url, { headers: { 'User-Agent': REAL_UA }, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
-      if (!r.ok) return null; // a real 404/4xx is a fact, not a transient error — don't retry
-      return await r.text();
-    } catch {
+      if (r.ok) return await r.text();
+      // 429/503 = the house is throttling us, not answering — back off (2s, 6s)
+      // and retry before believing it. Does not consume a transient retry.
+      if ((r.status === 429 || r.status === 503) && rateLimitTries < RATE_LIMIT_BACKOFF_MS.length) {
+        const wait = RATE_LIMIT_BACKOFF_MS[rateLimitTries++];
+        FETCH_STATS.rateLimited++;
+        console.warn(`[getHtml] HTTP ${r.status} ${url} — backing off ${wait}ms (try ${rateLimitTries}/${RATE_LIMIT_BACKOFF_MS.length})`);
+        await new Promise((res) => setTimeout(res, wait));
+        attempt--;
+        continue;
+      }
+      // a real 404/4xx (or an exhausted 429/503) is a fact — count + log it,
+      // don't retry. Log the first 20 per process, then one line per 100 so a
+      // 5k-lot archive gap can't drown the run log.
+      FETCH_STATS.non2xx++;
+      if (++non2xxLogged <= 20 || non2xxLogged % 100 === 0) console.warn(`[getHtml] HTTP ${r.status} ${url}${non2xxLogged === 20 ? ' (further non-2xx logged every 100th)' : ''}`);
+      return null;
+    } catch (e) {
       // transient (UND_ERR_SOCKET, HTTP/2 stream reset, timeout) — back off + retry
       if (attempt < retries) await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
+      else { FETCH_STATS.failed++; console.warn(`[getHtml] FAILED ${url}: ${(e as Error)?.message || e}`); }
     }
   }
   return null;
@@ -169,24 +201,45 @@ export async function getHtml(url: string, timeoutMs = 30000, retries = 2): Prom
 // Bounded-concurrency map: run fn over items with at most `conc` in flight.
 // The full-depth per-lot crawls are I/O-bound, so N-way concurrency is ~N×
 // faster; keep N moderate on small-business servers to avoid rate-limit/blocks.
-export async function mapPool<T, R>(items: T[], conc: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+// Errors thrown by `fn` are COUNTED (process-wide + per call), logged for the
+// first few items, and summarized — a pool that swallowed 500 failures used to
+// look exactly like a pool that found 500 gaps.
+export const POOL_STATS = { errors: 0 };
+export async function mapPool<T, R>(items: T[], conc: number, fn: (item: T, i: number) => Promise<R>, label = 'mapPool'): Promise<R[]> {
   const out: R[] = new Array(items.length);
-  let next = 0;
+  let next = 0, errors = 0;
   async function worker() {
     while (next < items.length) {
       const i = next++;
-      try { out[i] = await fn(items[i], i); } catch { out[i] = undefined as unknown as R; }
+      try { out[i] = await fn(items[i], i); } catch (e) {
+        out[i] = undefined as unknown as R;
+        errors++; POOL_STATS.errors++;
+        if (errors <= 5) console.warn(`[${label}] item ${i} threw: ${(e as Error)?.message || e}`);
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(conc, items.length) }, () => worker()));
+  if (errors) console.warn(`[${label}] ${errors}/${items.length} items threw (counted in POOL_STATS.errors)`);
   return out;
 }
+/** Errors swallowed by mapPool since process start. */
+export function mapPoolErrors(): number { return POOL_STATS.errors; }
 
+// The guard keeps the process alive but the run is no longer trustworthy: an
+// uncaught error may have dropped part of a live enumeration mid-flight. It
+// COUNTS every trip; writeMergedSegmentWithLive reads crashGuardTripped() and
+// refuses to treat that run's live snapshot as authoritative (liveOk=false).
+let crashGuardTrips = 0;
 export function installCrashGuard(label: string) {
-  const noop = (e: unknown) => console.error(`[${label}] non-fatal network error (continuing):`, (e as Error)?.message || e);
-  process.on('uncaughtException', noop);
-  process.on('unhandledRejection', noop);
+  const onErr = (e: unknown) => {
+    crashGuardTrips++;
+    console.error(`[${label}] uncaught error #${crashGuardTrips} swallowed by crash guard (run marked NOT-ok for live replace):`, (e as Error)?.message || e);
+  };
+  process.on('uncaughtException', onErr);
+  process.on('unhandledRejection', onErr);
 }
+export function crashGuardTripped(): boolean { return crashGuardTrips > 0; }
+export function crashGuardCount(): number { return crashGuardTrips; }
 
 export function decodeHtml(s: string): string {
   return s
@@ -262,7 +315,11 @@ export function pseudoArtist(cat: SportsCategory): string {
 export interface AuthRead { cert: string | null; grade: string | null; confidence: 'high' | 'low'; marks: string[]; }
 
 const CERT_RE = /\b(PSA\/?DNA|PSA|SGC|BGS|BVG|CGC|CBCS|JSA|Beckett|GAI)\b/gi;
-const GRADE_RE = /\b(?:PSA|SGC|BGS|CGC)\s*(GEM[- ]?MT|MINT|NM[- ]?MT|NM|EX[- ]?MT|EX|VG[- ]?EX|VG|GOOD|PR|AUTHENTIC|\d{1,2}(?:\.\d)?)\b/i;
+// A descriptor grade may carry its numeric ("PSA NM 7", "SGC EX-MT 6",
+// "BGS GEM MT 9.5") — capture the number too, or "PSA NM 7" reads as "PSA NM"
+// and every NM 7/8/9 collapses into one ladder rung. The 1–2 digit cap keeps a
+// following year ("PSA NM 1952 Topps") out of the grade.
+const GRADE_RE = /\b(?:PSA|SGC|BGS|CGC)\s*(?:(?:GEM[- ]?MT|MINT|NM[- ]?MT|NM|EX[- ]?MT|EX|VG[- ]?EX|VG|GOOD|PR|AUTHENTIC)(?:\s+\d{1,2}(?:\.\d)?)?|\d{1,2}(?:\.\d)?)\b/i;
 const PHOTOMATCH_RE = /\b(photo[- ]?match(?:ed|ing)?|MeiGray|Resolution Photomatching|ResMatch|Sports Investors Auth|SIA)\b/i;
 const BBCE_RE = /\bBBCE\b/i;
 

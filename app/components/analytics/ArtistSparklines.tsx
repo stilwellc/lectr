@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip } from 'recharts';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice, fmtSignedPct, toneOf } from '../../utils';
+import { medianOverEstimatePct } from './ArtistRankingsTable';
 import { ARTISTS, marketArtists, Market, rosterNoun } from '../../constants';
 import { useChartDraw } from '../../hooks/useChartDraw';
 import { demandSeries, formatDemand } from '../../lib/demand';
@@ -75,17 +76,17 @@ function SparkTooltip({ active, payload, priceBasis, rebased }: { active?: boole
           start, so the point is a change-from-start, never a $ level or a
           %-over-estimate. Caption it as exactly that. */}
       {rebased ? (
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 500, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
           {`${fmtSignedPct(Math.round(d.avgPrice))} from window start`}
         </div>
       ) : priceBasis ? (
         /* bid-market fallback: avgPrice is a median $ LEVEL (no estimates to
            divide by), so caption the price — never "% vs estimate". */
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-fg)' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-fg)' }}>
           {`${formatPrice(d.avgPrice)} median realized`}
         </div>
       ) : (
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 500, color: toneOf(d.avgPrice) === 'flat' ? 'var(--color-text-muted)' : toneOf(d.avgPrice) === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }}>
           {`${fmtSignedPct(Math.round(d.avgPrice))} vs estimate`}
         </div>
       )}
@@ -150,7 +151,7 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
       }}>
         <div style={{
           fontSize: 13.5,
-          fontWeight: 600,
+          fontWeight: 500,
           color: 'var(--color-fg)',
           letterSpacing: '-0.01em',
           overflow: 'hidden',
@@ -176,17 +177,15 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
               : 'Demand: median price realized vs the houses’ estimate.'}
           >
             <span style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: 'var(--color-text-faint)',
+              fontSize: 11,
+              fontWeight: 400,
+              color: 'var(--color-text-muted)',
             }}>
               {artist.priceBasis ? 'appr. est.' : 'demand'}
             </span>
             <span style={{
               fontSize: 12.5,
-              fontWeight: 600,
+              fontWeight: 500,
               // appr. est. is descriptive — plain ink, no directional glyph;
               // only the measured demand read wears the up/down grammar
               color: artist.priceBasis ? 'var(--color-text-muted)'
@@ -268,7 +267,7 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
         borderTop: '1px solid var(--color-border)',
       }}>
         <div>
-          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 400, marginBottom: 3 }}>
             Sales value
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-fg)' }}>
@@ -276,7 +275,7 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
           </div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 400, marginBottom: 3 }}>
             Avg (12mo)
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-muted)' }}>
@@ -284,7 +283,7 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600, marginBottom: 3 }}>
+          <div style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 400, marginBottom: 3 }}>
             % over est.
           </div>
           <div style={{
@@ -356,16 +355,10 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
         if (pts.length >= 2) { sparkData = pts; priceBasis = true; }
       }
 
-      const withEstimate = artistLots.filter(l =>
-        l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0
-      );
-      // HAMMER basis: estimates are hammer-basis but priceUsd includes the
-      // buyer's premium (~1.25×) — comparing raw overstated "over estimate" by
-      // ~25pts. Divide out the measured flat premium (matches PortfolioHeader).
-      const overEstimate = withEstimate.length >= 3
-        ? withEstimate.reduce((s, l) =>
-            s + ((l.priceUsd! / 1.25 - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / withEstimate.length
-        : -999;
+      // ONE number, everywhere: the same maker-level read the rankings table
+      // prints (median all-in price vs estimate mid, overEstimatePct's basis)
+      // — never a second local statistic that disagrees with it
+      const overEstimate = medianOverEstimatePct(artistLots);
 
       return {
         slug: a.slug,
@@ -447,7 +440,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
           background: var(--color-bg-elevated);
         }
         .ray-cert-verified .num {
-          font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 600;
+          font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 500;
         }
         .ray-cert-verified[data-dir="up"] .num { color: var(--color-up); }
         .ray-cert-verified[data-dir="down"] .num { color: var(--color-down); }
@@ -456,7 +449,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
           display: inline-flex; align-items: center;
           padding: 2px 8px; border-radius: 999px;
           border: 1px solid var(--color-border);
-          font-size: 10.5px; font-weight: 600; color: var(--color-text-muted);
+          font-size: 10.5px; font-weight: 500; color: var(--color-text-muted);
           font-variant-numeric: tabular-nums;
         }
         .ray-roster-controls {
@@ -465,9 +458,9 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
         .ray-roster-controls .ray-seg-btn { padding: 5px 11px; font-size: 11.5px; }
         .ray-roster-compare {
           display: inline-flex; align-items: center; gap: 7px;
-          font-size: 11.5px; font-weight: 600; color: var(--color-text-muted);
+          font-size: 11.5px; font-weight: 500; color: var(--color-text-muted);
           cursor: pointer; user-select: none;
-          padding: 5px 11px; border-radius: 8px;
+          padding: 5px 11px; border-radius: 999px;
           border: 1px solid var(--color-border); background: none;
           transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
         }
@@ -485,15 +478,22 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
         }
       `}</style>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        <h2 style={{
-          fontFamily: 'var(--font-serif), serif',
-          fontSize: 24,
-          fontWeight: 400,
-          letterSpacing: '-0.015em',
-        }}>
-          {market && market !== 'all' ? rosterNoun(market).charAt(0).toUpperCase() + rosterNoun(market).slice(1) : 'Roster'} <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>performance</span>
-        </h2>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+        {/* north-star head — quiet kicker over a big LIGHT headline
+            (matches the rankings table and TopSales) */}
+        <div style={{ minWidth: 0 }}>
+          <span className="ns-kicker" style={{ marginBottom: 4 }}>Demand by maker, one spark each</span>
+          <h2 style={{
+            margin: 0,
+            fontFamily: 'var(--font-sans), sans-serif',
+            fontSize: 30,
+            fontWeight: 340,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.12,
+          }}>
+            {market && market !== 'all' ? rosterNoun(market).charAt(0).toUpperCase() + rosterNoun(market).slice(1) : 'Roster'} performance
+          </h2>
+        </div>
         <a
           href="/analytics#artist-rankings"
           style={{

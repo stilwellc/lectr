@@ -1,3 +1,5 @@
+-- SUPERSEDED (Sep 2 2026) by supabase/migrations/0001_saved_lots.sql.
+-- Historical record only.
 -- Cost basis + private notes on saved lots (Aug 28 2026).
 -- "I won it" books a piece at the realized hammer price; paid_usd lets the
 -- collector record what THEY actually paid (private sale, different premium,

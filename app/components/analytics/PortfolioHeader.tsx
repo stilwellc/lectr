@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice, fmtSignedPct } from '../../utils';
+import { medianOverEstimatePct } from './ArtistRankingsTable';
 import { MARKETS, marketOf } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData } from '../../hooks/useRayData';
@@ -37,14 +38,13 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
     const lotsWithEstimate = allLots.filter(l =>
       l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0
     );
-    // HAMMER basis: estimates are hammer-basis while priceUsd includes the
-    // buyer's premium (~1.25×) — comparing them raw overstated "over estimate"
-    // by ~25pts. Served lots don't carry hammerUsd, so divide by the measured
-    // flat premium factor.
-    const avgOverEstimate = lotsWithEstimate.length
-      ? lotsWithEstimate.reduce((s, l) =>
-          s + ((l.priceUsd! / 1.25 - l.estimateHigh!) / l.estimateHigh!) * 100, 0) / lotsWithEstimate.length
-      : 0;
+    // ONE number, everywhere: the engine's realized-vs-estimate read (the
+    // all-in published price vs the estimate mid — overEstimatePct, the
+    // demand index's basis), MEDIAN over the market's sold lots with
+    // estimates — the same helper the rankings table and roster wall print.
+    // No second local statistic (the old mean of price/1.25 − estHigh
+    // disagreed with every other surface on the page).
+    const medianOverEstimate = medianOverEstimatePct(allLots);
 
     // makers tracked in THIS market — derived from the filtered stats passed
     // in, never the global roster
@@ -55,8 +55,8 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
     // honest realized figure instead.
     const soldLots = allLots.filter(l => l.status === 'sold' && l.priceUsd);
     const estimateCoverage = soldLots.length ? lotsWithEstimate.length / soldLots.length : 0;
-    const estimateCard = estimateCoverage >= 0.05
-      ? { label: 'Avg. hammer vs estimate', value: fmtSignedPct(avgOverEstimate, 1), sub: `${lotsWithEstimate.length.toLocaleString()} lots · hammer basis`, tone: '' }
+    const estimateCard = estimateCoverage >= 0.05 && medianOverEstimate > -999
+      ? { label: 'Median sale vs. estimate', value: fmtSignedPct(medianOverEstimate, 1), sub: `${lotsWithEstimate.length.toLocaleString()} lots · all-in price vs. estimate mid`, tone: '' }
       : (() => {
           // STATS-FIRST: the loaded array is a slim sample on these verticals,
           // so median across the market's slug priceHistory (trailing 4 quarters'
@@ -143,7 +143,7 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
         <RecordBand
           title="The book"
           context={contextLabel}
-          footer="hammer basis where estimates exist"
+          footer="all-in price vs. estimate mid where estimates exist"
           cells={cards.map(card => ({ k: card.label, v: card.value, sub: card.sub }))}
         />
       </div>

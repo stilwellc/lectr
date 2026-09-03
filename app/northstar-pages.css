@@ -1,0 +1,181 @@
+/* ════════════════════════════════════════════════════════════════════
+   NORTH STAR — the dossier pages (ref / sub / player / sub index / the
+   sub-market directory / the comparable modal). One grammar, taken from
+   LotPage's north-star pass (docs/NORTHSTAR_UI.md): light display type,
+   quiet gray sentence-case kickers, byline provenance ledgers, dotted
+   spec rows, cream wells, pill controls, ring shadows only. Builds on
+   the ns-* primitives in globals.css; nothing here re-declares them.
+   Imported by the components that speak it, never by layout.tsx.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── the dossier head ─────────────────────────────────────────────── */
+.nsp-doss { padding-block: 22px 64px; }
+.nsp-kicker-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px 18px; flex-wrap: wrap;
+}
+.nsp-kicker-row .ns-kicker { margin-bottom: 0; }
+.nsp-kicker-row a { color: inherit; text-decoration: none; }
+.nsp-kicker-row a:hover { color: var(--color-fg); }
+.nsp-kicker-row .no { font-size: 12.5px; color: var(--color-text-faint); font-variant-numeric: tabular-nums; }
+.nsp-title-row {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 12px 24px; flex-wrap: wrap;
+}
+.nsp-h1 {
+  font-size: clamp(32px, 4.6vw, 52px);
+  font-weight: 320;
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+  color: var(--color-fg);
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.nsp-dek {
+  font-size: 15px; line-height: 1.55; color: var(--color-text-secondary);
+  margin: 10px 0 0; max-width: 64ch;
+}
+.nsp-byline { margin: 22px 0 0; }
+.nsp-byline .s { font-size: 11px; line-height: 1.45; color: var(--color-text-faint); margin-top: 3px; max-width: 240px; }
+.nsp-byline .v.up { color: var(--color-up); }
+.nsp-byline .v.down { color: var(--color-down-text); }
+.nsp-byline .v .mono { font-family: var(--font-mono), monospace; font-size: 13.5px; }
+
+/* ── the read as color — compact ns-cell-color face; the ground IS the
+      signal (lamp-lawful by construction: up / down / ink only) ─────── */
+.nsp-read { min-height: 0; padding: 22px 24px; border-radius: 16px; margin: 22px 0 0; }
+.nsp-read-stat {
+  font-family: var(--font-mono), monospace;
+  font-size: clamp(34px, 4vw, 52px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin: 12px 0 8px;
+}
+.nsp-read .ns-cell-label { font-size: 13px; }
+.nsp-read .ns-cell-body { font-size: 13.5px; font-weight: 450; line-height: 1.5; max-width: 44ch; }
+
+/* ── sections: registration plate + quiet kicker + light headline ── */
+.nsp-section { margin-top: 40px; }
+.nsp-shead {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 8px 18px; flex-wrap: wrap; padding-top: 14px;
+}
+.nsp-shead .ns-kicker { margin-bottom: 4px; }
+.nsp-h2 {
+  font-size: clamp(20px, 2.3vw, 24px);
+  font-weight: 350;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--color-fg);
+  margin: 0;
+}
+.nsp-shctx { font-size: 11.5px; color: var(--color-text-faint); padding-bottom: 2px; }
+
+/* ── the spec ledger (rides .ns-ledger-row) ───────────────────────── */
+.nsp-ledger { margin-top: 8px; }
+.nsp-ledger .ns-ledger-row { padding: 10px 0; }
+.nsp-lk { font-size: 13.5px; color: var(--color-text-muted); min-width: 0; flex: 1 1 auto; }
+.nsp-lk .t { color: var(--color-fg); }
+.nsp-lsub { font-size: 11px; color: var(--color-text-faint); margin-left: 8px; white-space: nowrap; }
+.nsp-lval { display: flex; align-items: baseline; justify-content: flex-end; gap: 10px; flex: none; text-align: right; }
+.nsp-lv { font-size: 13.5px; font-weight: 550; font-variant-numeric: tabular-nums; color: var(--color-fg); white-space: nowrap; }
+.nsp-lv.mono { font-family: var(--font-mono), monospace; font-weight: 500; }
+.nsp-lv.up { color: var(--color-up); }
+.nsp-lv.down { color: var(--color-down-text); }
+
+/* ── comp rows (LOTPAGE_CSS grammar) re-voiced: dotted, no serif ──── */
+.nsp-doss .lectr-lot-comp { border-bottom: 1px dotted var(--color-border-mid); }
+.nsp-doss .lectr-lot-comp-title { font-weight: 500; }
+.nsp-doss .lectr-lot-comp-p { font-weight: 550; }
+.nsp-doss .lectr-lot-comp-thumb { border-color: var(--hairline); }
+.nsp-doss .lectr-lot-comp-thumb span {
+  font-family: var(--font-sans), sans-serif; font-weight: 400; font-size: 15px;
+  color: var(--color-text-faint);
+}
+.nsp-rows { margin-top: 6px; }
+
+/* ── the chart frame: a right-hand y-axis gutter so the tick labels
+      HeroChart draws at its right edge sit beside the plot instead of
+      on the endpoint dot. The svg already overflows visible; the ticks
+      are the only text carrying the hcTick module class. ───────────── */
+.nsp-chart { --nsp-ygut: 44px; padding-right: var(--nsp-ygut); margin-top: 12px; }
+.nsp-chart svg text[class*="hcTick"] { transform: translateX(var(--nsp-ygut)); }
+@media (max-width: 640px) { .nsp-chart { --nsp-ygut: 32px; } }
+
+/* ── footnotes + the cross-link row (pill controls) ───────────────── */
+.nsp-note { font-size: 11.5px; color: var(--color-text-faint); margin: 14px 0 0; line-height: 1.5; }
+.nsp-links {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-top: 36px; padding-top: 18px; border-top: 1px dotted var(--color-border-mid);
+}
+
+/* ── empty / loading states ───────────────────────────────────────── */
+.nsp-empty { padding-block: 80px; text-align: center; box-sizing: border-box; }
+.nsp-empty h1 {
+  font-size: clamp(26px, 4vw, 36px); font-weight: 340; letter-spacing: -0.02em;
+  color: var(--color-fg); margin: 0 0 10px;
+}
+.nsp-empty p { color: var(--color-text-muted); font-size: 14px; margin: 0; line-height: 1.6; }
+.nsp-empty .nsp-links { justify-content: center; border-top: none; margin-top: 22px; padding-top: 0; }
+
+/* ── the sub-market wells (the /sub index + the makers directory):
+      cream well, gray title / ink rows — the inverted hierarchy ────── */
+.nsp-wells {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+.nsp-well-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.nsp-well-head .ns-well-label { margin-bottom: 0; }
+.nsp-well-meta { font-size: 11.5px; color: var(--color-text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nsp-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 8px 0; border-top: 1px dotted var(--color-border-mid);
+  color: inherit; text-decoration: none; font-size: 13.5px;
+  transition: color 150ms var(--ease-house);
+}
+.nsp-well-rows > .nsp-row:first-child { border-top: none; }
+.nsp-row-name { color: var(--color-fg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.nsp-row:hover .nsp-row-name { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
+.nsp-read-cell { font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--color-fg); text-align: right; flex: none; }
+.nsp-read-cell .num { font-family: var(--font-mono), monospace; }
+.nsp-read-cell[data-dir="up"] .num { color: var(--color-up); }
+.nsp-read-cell[data-dir="down"] .num { color: var(--color-down-text); }
+.nsp-read-cell .tag { color: var(--color-text-faint); font-size: 10.5px; margin-left: 5px; }
+.nsp-more { display: inline-block; margin-top: 8px; font-size: 11.5px; color: var(--color-text-muted); text-decoration: none; }
+a.nsp-more:hover { color: var(--color-fg); }
+
+/* the directory head (SubMarketDirectory on /makers) */
+.nsp-dir-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap; }
+.nsp-dir-head .ns-kicker { margin-bottom: 0; }
+
+/* ── the comparable modal: light title, quiet captions ────────────── */
+.nsp-modal-title {
+  font-family: var(--font-sans), sans-serif;
+  font-size: clamp(20px, 2.4vw, 24px);
+  font-weight: 340;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 6px;
+  color: var(--color-fg);
+}
+.nsp-modal-cap { font-size: 13px; color: var(--color-text-muted); font-weight: 400; }
+.nsp-modal-stat { font-size: 20px; font-weight: 400; color: var(--color-fg); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.nsp-modal-stat.mono { font-family: var(--font-mono), monospace; }
+.nsp-modal-stat.up { color: var(--color-up); }
+.nsp-modal-stat-k { font-size: 12px; color: var(--color-text-muted); margin-top: 3px; }
+
+@media (max-width: 640px) {
+  .nsp-doss { padding-block: 14px 48px; }
+  .nsp-h1 { font-size: clamp(28px, 8.4vw, 36px); }
+  .nsp-byline .s { max-width: 100%; }
+  .nsp-read-stat { font-size: 32px; }
+  .nsp-section { margin-top: 32px; }
+  .nsp-lval { flex-wrap: wrap; }
+  .nsp-lsub { white-space: normal; }
+  .nsp-lv { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .nsp-links { gap: 8px; }
+}

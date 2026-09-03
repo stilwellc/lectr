@@ -42,7 +42,7 @@ const CSS = `
 }
 .lectr-inbox-dot {
   width: 6px; height: 6px; border-radius: 50%; flex: none;
-  background: var(--color-up); /* new = a verb — mint, like the nav's alert dots */
+  background: var(--color-fg); /* new = a verb, not a market direction — ink (lamp law) */
 }
 .lectr-inbox-search {
   display: flex; align-items: baseline; gap: 10px;
@@ -54,7 +54,7 @@ const CSS = `
   background: none; border: none; cursor: pointer; padding: 0 2px;
   font-size: 12.5px; color: var(--color-text-faint); line-height: 1;
 }
-.lectr-inbox-del:hover { color: var(--color-down-text); }
+.lectr-inbox-del:hover { color: var(--color-fg); }
 .lectr-inbox-auto {
   font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--color-text-faint); border: 1px solid var(--color-border);
@@ -72,8 +72,36 @@ export default function AlertsInbox() {
   const { searches, ready: searchesReady, remove } = useSavedSearches();
   const { alerts, ready: alertsReady, markAllSeen, unseen } = useAlerts();
   const [lots, setLots] = useState<Record<string, SlimLot>>({});
+  // EXACT per-search totals. `alerts` is a .limit(200) fetch and the digest
+  // below slices 40 of it — a search whose rows fall outside that window has
+  // NO rows here, which used to print as "No new matches yet" (a cap
+  // masquerading as an empty state), and "+N more" was the cap remainder.
+  // One HEAD count per search (RLS-scoped, row-free — the same shape
+  // useAlerts uses for the unseen total) is the number; null = not known
+  // yet, and nothing derived from a count prints until it is.
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
 
   const shownAlerts = useMemo(() => alerts.slice(0, 40), [alerts]);
+
+  useEffect(() => {
+    let dead = false;
+    (async () => {
+      if (!supabase || !searches.length) { setCounts(searches.length ? null : {}); return; }
+      const results = await Promise.all(searches.map(s =>
+        supabase!.from('alerts').select('id', { count: 'exact', head: true }).eq('search_id', s.id)
+      ));
+      if (dead) return;
+      const map: Record<string, number> = {};
+      let complete = true;
+      results.forEach((r, i) => {
+        if (r.error || r.count == null) { complete = false; return; }
+        map[searches[i].id] = r.count;
+      });
+      // a partial answer is no answer — never let one failed count read as 0
+      setCounts(complete ? map : null);
+    })();
+    return () => { dead = true; };
+  }, [searches]);
 
   useEffect(() => {
     let dead = false;
@@ -139,6 +167,10 @@ export default function AlertsInbox() {
         // SIX rows per search — the inbox is a digest, not the archive; a
         // 40-row Pokémon wall drowned every other search's matches
         const rows = allRows.slice(0, 6);
+        // the REAL remainder — exact head count minus what's printed; with
+        // no count yet there is no honest number, so no "+N more" at all
+        const total = counts?.[s.id];
+        const more = total != null ? Math.max(0, total - rows.length) : 0;
         // synthetic signal feeds (query._signal) are standing sections the
         // nightly maintains — no delete (it would re-create tomorrow)
         const auto = !!(s.query as { _signal?: string } | null)?._signal;
@@ -151,8 +183,8 @@ export default function AlertsInbox() {
               ) : (
                 <button className="lectr-inbox-del" title="Delete this saved search" aria-label={`Delete saved search: ${s.name}`} onClick={() => remove(s.id)}>×</button>
               )}
-              {allRows.length > rows.length && (
-                <span style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>+{allRows.length - rows.length} more</span>
+              {more > 0 && (
+                <span style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none' }}>+{more.toLocaleString()} more</span>
               )}
             </div>
             {(
@@ -176,13 +208,16 @@ export default function AlertsInbox() {
                       {lot?.artist ? `${ARTIST_LABEL[lot.artist] || lot.artist} · ` : ''}
                       {est ? `est. ${formatPrice(est)}` : 'no estimate'}
                       {lot?.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}
-                      {/* measured comp signal only — green/red never decorates anything else */}
+                      {/* measured comp signal only — the lamp is Below Market
+                          (the deal); Above Market is not a down-signal for a
+                          buyer, so it prints in ink with its sign (signed-
+                          signal law), never red */}
                       {sig && (
                         <b style={{
                           marginLeft: 8,
                           fontFamily: 'var(--font-mono), monospace',
                           fontWeight: 700,
-                          color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down-text)',
+                          color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-fg)',
                         }}>
                           {fmtSignedPct(sig.pct)}
                         </b>
@@ -196,13 +231,33 @@ export default function AlertsInbox() {
         );
       })}
       {(() => {
-        // the quiet searches, folded into ONE line — repeating "no new
-        // matches yet" once per search read as a wall of empty states
-        const quiet = searches.filter(s => (bySearch.get(s.id) || []).length === 0);
+        // searches with matches that fell OUTSIDE the 40-row digest window:
+        // they have a count, not rows — say so, never "no matches"
+        const beyond = searches.filter(s => (bySearch.get(s.id) || []).length === 0 && (counts?.[s.id] ?? 0) > 0);
+        if (!beyond.length) return null;
+        return (
+          <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', padding: '14px 0 0' }}>
+            Older than this digest:{' '}
+            {beyond.map((s, i) => (
+              <span key={s.id} style={{ whiteSpace: 'nowrap' }}>
+                {i > 0 && ' · '}
+                {s.name} ({counts![s.id].toLocaleString()} {counts![s.id] === 1 ? 'match' : 'matches'})
+              </span>
+            ))}
+          </div>
+        );
+      })()}
+      {(() => {
+        // the quiet searches, folded into ONE line — repeating "no matches
+        // yet" once per search read as a wall of empty states. Quiet is an
+        // EXACT zero from the head count; while counts are unknown nothing
+        // here claims emptiness.
+        if (!counts) return null;
+        const quiet = searches.filter(s => counts[s.id] === 0);
         if (!quiet.length) return null;
         return (
           <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', padding: '14px 0 0' }}>
-            {quiet.length === searches.length ? 'No new matches yet' : 'Quiet'}:{' '}
+            {quiet.length === searches.length ? 'No matches yet' : 'Quiet'}:{' '}
             {quiet.map((s, i) => {
               const auto = !!(s.query as { _signal?: string } | null)?._signal;
               return (
@@ -219,11 +274,19 @@ export default function AlertsInbox() {
           </div>
         );
       })()}
-      {alerts.length > shownAlerts.length && (
-        <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 8 }}>
-          and {alerts.length - shownAlerts.length} older matches
-        </div>
-      )}
+      {(() => {
+        // the archive remainder from the exact totals — `alerts.length` is a
+        // 200-row fetch cap and would print "160 older" for a 5,000-row archive
+        if (!counts) return null;
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
+        const older = total - shownAlerts.length;
+        if (older <= 0) return null;
+        return (
+          <div style={{ fontSize: 11.5, color: 'var(--color-text-faint)', marginTop: 8 }}>
+            and {older.toLocaleString()} older {older === 1 ? 'match' : 'matches'}
+          </div>
+        );
+      })()}
     </section>
   );
 }

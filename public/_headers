@@ -27,9 +27,10 @@
 #
 # _headers matches on PATH, not query string, so these globs match the whole
 # family (lots-0.json … lots-5.json AND lots-index.json; sold-archive-0/1.json
-# AND sold-archive-index.json) — all of which are ?v=-busted in useRayData.ts
-# (lots-index L242, lots-<i> L245, sold-archive-index L337, sold-archive-<i>
-# L339, sold-archive.json fallback L342).
+# AND sold-archive-index.json; sold-ledger-0/1.json AND sold-ledger-index.json)
+# — all of which are ?v=<lastCrawl>-busted in useRayData.ts (loadFull,
+# loadSoldArchive, loadSoldLedger). sold-ledger-* was missing from this list
+# until Sep 2 2026 and revalidated on every /profile load for nothing.
 #
 # Deliberately NOT `/data/ray/*.json` (too broad): the phase-1 files
 # meta/upcoming/stats/market/backtest.json are fetched WITHOUT ?v= (L179-183)
@@ -38,4 +39,6 @@
 /data/ray/lots-*
   Cache-Control: public, max-age=31536000, immutable
 /data/ray/sold-archive-*
+  Cache-Control: public, max-age=31536000, immutable
+/data/ray/sold-ledger-*
   Cache-Control: public, max-age=31536000, immutable

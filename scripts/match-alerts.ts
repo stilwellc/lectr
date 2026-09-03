@@ -5,9 +5,21 @@
  * and writes alert rows. Duplicate (search, lot) pairs are ignored, so a lot
  * alerts once per search, ever.
  *
+ * INPUT (Sep 2 2026): the eager served payload public/data/ray/upcoming.json
+ * — every live lot with the fields matched here (artist / playerSlug / sport
+ * / category / title / value.signal / firstSeen / resultsPending all survive
+ * slimForClient). Loading the full 1.1M-lot corpus just to filter it down to
+ * the live book cost a 10GB heap for nothing. The corpus is the fallback only
+ * when upcoming.json is absent (an older served payload).
+ *
+ * Every PostgREST call retries with bounded backoff; an exhausted retry
+ * THROWS so the workflow step goes red instead of masking the failure.
+ *
  * Needs SUPABASE_URL + SUPABASE_SERVICE_KEY (skips silently without them).
  */
-import { readCorpus } from './corpus-io';
+import fs from 'fs';
+import path from 'path';
+import { readCorpus, SERVED_DIR } from './corpus-io';
 import { marketOf } from '../app/constants';
 
 const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -47,27 +59,61 @@ function matches(q: Query, lot: any): boolean {
   return true;
 }
 
-async function rest(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${url}/rest/v1/${path}`, {
-    ...init,
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-  });
-  if (!res.ok) throw new Error(`[match-alerts] ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`);
-  return res;
+/** the live book: upcoming.json's lots (eager, slim), else the corpus filtered.
+ *  (Duplicated in match-signal-alerts.ts on purpose — each script stays a
+ *  standalone entry point with no cross-import that would run the other's
+ *  main().) */
+function readLiveLots(tag: string): any[] {
+  const p = path.join(SERVED_DIR, 'upcoming.json');
+  if (fs.existsSync(p)) {
+    try {
+      const up = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (Array.isArray(up?.lots)) {
+        console.log(`${tag} live book from upcoming.json: ${up.lots.length} lots (generated ${up.generatedAt || '?'})`);
+        return up.lots;
+      }
+    } catch (e) {
+      console.warn(`${tag} upcoming.json unreadable (${(e as Error).message}) — falling back to the corpus`);
+    }
+  } else {
+    console.warn(`${tag} upcoming.json absent — falling back to the full corpus`);
+  }
+  return (readCorpus() as any[]).filter(l => l.status === 'upcoming');
+}
+
+// ── PostgREST with bounded retry (4 tries, 2s → 4s → 8s) ────────────────────
+class Fatal extends Error {}
+const RETRIES = 4;
+async function rest(p: string, init: RequestInit = {}): Promise<Response> {
+  let last: unknown = null;
+  for (let attempt = 0; attempt < RETRIES; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * 2 ** (attempt - 1)));
+    try {
+      const res = await fetch(`${url}/rest/v1/${p}`, {
+        ...init,
+        headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (res.ok) return res;
+      const msg = `[match-alerts] ${init.method || 'GET'} ${p.split('?')[0]}: ${res.status} ${(await res.text()).slice(0, 200)}`;
+      if (res.status < 500 && res.status !== 408 && res.status !== 429) throw new Fatal(msg);
+      last = new Error(msg);
+    } catch (e) {
+      if (e instanceof Fatal) throw e;
+      last = e;
+    }
+    console.warn(`[match-alerts] attempt ${attempt + 1}/${RETRIES} failed: ${(last as Error)?.message || last}`);
+  }
+  throw last instanceof Error ? last : new Error(String(last));
 }
 
 /** page a read past PostgREST's 1000-row default cap (order=id keeps the
  *  offset windows stable while paging) */
-async function restAll(path: string): Promise<any[]> {
+async function restAll(p: string): Promise<any[]> {
   const PAGE = 1000;
   const out: any[] = [];
   for (let offset = 0; ; offset += PAGE) {
-    const page = await (await rest(`${path}&order=id&limit=${PAGE}&offset=${offset}`)).json();
+    const page = await (await rest(`${p}&order=id&limit=${PAGE}&offset=${offset}`)).json();
     out.push(...page);
     if (page.length < PAGE) break;
   }
@@ -81,13 +127,14 @@ async function main() {
   if (!searches.length) { console.log('[match-alerts] no saved searches'); return; }
 
   const now = Date.now();
-  const fresh = (readCorpus() as any[]).filter(l =>
+  const fresh = readLiveLots('[match-alerts]').filter(l =>
     l.status === 'upcoming' && !l.resultsPending && l.firstSeen &&
     now - Date.parse(String(l.firstSeen)) < FRESH_MS);
   console.log(`[match-alerts] ${searches.length} searches vs ${fresh.length} fresh lots`);
 
   let written = 0;
   for (const s of searches) {
+    if (s.query?._signal) continue; // synthetic signal searches belong to match-signal-alerts
     const hits = fresh.filter(l => matches(s.query || {}, l)).slice(0, MAX_PER_SEARCH);
     if (!hits.length) continue;
     const rows = hits.map(l => ({ user_id: s.user_id, search_id: s.id, lot_id: String(l.id) }));

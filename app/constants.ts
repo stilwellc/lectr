@@ -93,6 +93,18 @@ export const ARTISTS = [
   { slug: 'pop-memorabilia', label: 'Pop Memorabilia', market: 'culture' },
 ] as const;
 
+/** The roster splits two ways and the platform counts must say so: NAMED
+ *  makers (artists, designers, watch houses) versus CATEGORY pseudo-artists
+ *  (science collections, sports/culture/tcg categories registered above so
+ *  their rows feed a vertical). "54 makers tracked" counted both — the honest
+ *  phrase is derived here, never hardcoded: "32 makers · 22 categories". */
+export const MAKER_MARKETS: ReadonlySet<Market> = new Set<Market>(['art', 'design', 'watches']);
+export const ROSTER = {
+  makers: ARTISTS.filter(a => MAKER_MARKETS.has(a.market as Market)).length,
+  categories: ARTISTS.filter(a => !MAKER_MARKETS.has(a.market as Market)).length,
+} as const;
+export const ROSTER_PHRASE = `${ROSTER.makers} makers · ${ROSTER.categories} categories`;
+
 export const ARTIST_LABEL: Record<string, string> = Object.fromEntries(
   ARTISTS.map(a => [a.slug, a.label])
 );

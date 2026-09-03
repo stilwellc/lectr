@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# One emit at a time (queue, never cancel): two overlapping runs would race
+# the same private R2 key with whichever finished last winning.
+concurrency:
+  group: emit-value-book
+  cancel-in-progress: false
+
 env:
   NODE_OPTIONS: --max-old-space-size=10240
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -17,6 +23,10 @@ env:
 jobs:
   emit:
     runs-on: ubuntu-latest
+    # pull (pointer read can lag ~14min worst case) + the emit itself; the
+    # nightly runs the same step in minutes. Uncapped, a wedged pull sat on
+    # GitHub's 360-min default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

@@ -35,8 +35,8 @@ function fmt(n: number): string {
 }
 
 function card(label: string, s: ArtistStats) {
-  const appr = s.appreciationRate || 0;
   const hist = (s.priceHistory || []).map(p => p.avgPrice);
+  const salesCount = (s.priceHistory || []).reduce((x, p) => x + (p.totalSales || 0), 0);
   const W = 1080, H = 200;
   // true series min/max (an empty series falls back to a flat 0..1) — seeding
   // min with 0 previously flattened real price variation into the top sliver.
@@ -62,9 +62,11 @@ function card(label: string, s: ArtistStats) {
         <div style={{ display: 'flex', gap: 40, marginTop: 10, fontSize: 24, color: '#59544F' }}>
           <div style={{ display: 'flex' }}>{`avg sale ${fmt(s.avgPriceLast12Months || 0)}`}</div>
           <div style={{ display: 'flex' }}>{`record ${fmt(s.recordPrice || 0)}`}</div>
-          <div style={{ display: 'flex', color: appr >= 0 ? '#0F7C43' : '#A5341F', fontWeight: 600 }}>
-            {`prices ${appr >= 0 ? 'up' : 'down'} ${Math.abs(appr).toFixed(1)}% this year`}
-          </div>
+          {/* the third figure used to print "prices up X.X% this year" green/red
+              from appreciationRate — a 3-year CAGR over non-empty quarters
+              wearing the verified-move grammar ("0.0%" on thin makers). Removed
+              exactly as app/opengraph-image.tsx did; the sales count is a fact. */}
+          <div style={{ display: 'flex' }}>{`${salesCount.toLocaleString()} tracked sales`}</div>
         </div>
         {hist.length >= 2 && (
           <svg width={W} height={H + 16} style={{ marginTop: 30 }}>

@@ -85,12 +85,18 @@ export default function AnalyticsPage() {
   const { savedIds } = useSavedLots();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
+  // SUB-MARKETS TRACKED — one definition, the home board's (SubMarketBoard
+  // resolveRows): on the all view the taxonomy drills PLUS the maker- and
+  // collection-level reads in market.subMarkets (the two pools the home
+  // board lists); on a scoped market, that vertical's drills. The desk and
+  // the home page must print the same count for the same question.
   const drillCount = useMemo(() => {
     const d = marketData?.drills;
     if (!d) return 0;
-    return activeKey === 'all'
-      ? Object.values(d).reduce((s, rows) => s + rows.length, 0)
-      : (d[activeKey] || []).length;
+    if (activeKey !== 'all') return (d[activeKey] || []).length;
+    const drills = Object.values(d).reduce((s, rows) => s + rows.length, 0);
+    const makerRows = Object.values(marketData?.subMarkets ?? {}).reduce((s, rows) => s + rows.length, 0);
+    return drills + makerRows;
   }, [marketData, activeKey]);
 
   const sections: [string, React.ReactNode][] = [
@@ -223,8 +229,8 @@ export default function AnalyticsPage() {
           serial={lastCrawl || meta.lastCrawl}
           title={<>Every market, read as one book.</>}
           sub={<>Indexes, relative strength, microstructure and the engine&rsquo;s own science —{' '}
-            <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{bookLots.toLocaleString()} lots</b>,{' '}
-            <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{drillCount} tracked sub-markets</b>
+            <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{bookLots.toLocaleString()} lots</b>,{' '}
+            <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{drillCount} sub-markets tracked</b>
             {lastCrawl ? <>, read {formatDate(lastCrawl)}</> : null}.</>}
         />
         <DeskNote market={activeKey} style={{ marginTop: 12 }} />
@@ -258,7 +264,7 @@ export default function AnalyticsPage() {
           <div>
             <div className="k">Sub-markets tracked</div>
             <div className="v">{drillCount || '—'}</div>
-            <div className="s">{activeKey === 'all' ? 'across every vertical' : `in ${activeKey}`}</div>
+            <div className="s">{activeKey === 'all' ? 'taxonomy splits and maker reads, every vertical' : `taxonomy splits in ${activeKey}`}</div>
           </div>
           {/* always rendered: this column arriving LATE would shift every
               sibling sideways (CLS). Until backtest lands it abstains with

@@ -6,7 +6,7 @@ import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
 import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
-import { lotFitsMarket, signalMagnitude } from '../lib/comps';
+import { dealScore, lotFitsMarket, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
 import Flick from './Flick';
 import CloseClock from './CloseClock';
@@ -66,13 +66,12 @@ export function pickCall(lots: AuctionLot[], allLots: AuctionLot[], market: Mark
     .filter(l => market === 'all' || lotFitsMarket(l, market))
     .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
     .filter(d => d.signal && d.signal.label === 'Below Market' && CONF_RANK[d.signal.confidence || 'low'] >= 1)
-    .sort((a, b) =>
-      (CONF_RANK[b.signal!.confidence || 'low'] - CONF_RANK[a.signal!.confidence || 'low'])
-      || (b.signal!.pct - a.signal!.pct));
-  // stay within the top confidence tier when choosing for the photograph
-  const topRank = deals.length ? CONF_RANK[deals[0].signal!.confidence || 'low'] : 0;
-  const tier = deals.filter(d => CONF_RANK[d.signal!.confidence || 'low'] === topRank);
-  return tier.slice(0, 8).find(d => d.lot.imageUrl) || tier[0] || null;
+    // THE ONE FLAGGED RANKING — dealScore (calibrated odds, then the capped
+    // gap), the same order /value and the lander's wall print. Confidence
+    // stays a GATE above (never low), not a second sort key.
+    .sort((a, b) => dealScore(b.lot, b.signal!.pct) - dealScore(a.lot, a.signal!.pct));
+  // the photograph: the best-ranked lot that has one, within the top eight
+  return deals.slice(0, 8).find(d => d.lot.imageUrl) || deals[0] || null;
 }
 
 /* The catalogue-plate layout, scoped to this component. Two ideas:
@@ -270,7 +269,7 @@ export function CallPlate({
               </LeaderRow>
               <LeaderRow k={closingWord ? 'Closing' : 'Hammers'} sub={lot.auctionHouse}>
                 {closingWord
-                  ? <span style={{ color: 'var(--color-up)' }}>
+                  ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
                       {closingWord}
                       {lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}
                     </span>
@@ -384,7 +383,7 @@ export function CallPlate({
             </LeaderRow>
             <LeaderRow k={closingWord ? 'Closing' : 'Hammers'}>
               {closingWord
-                ? <span style={{ color: 'var(--color-up)' }}>{closingWord}</span>
+                ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{closingWord}</span>
                 : `${formatDate(saleDay)} · ${daysWord(saleDay)}`}
             </LeaderRow>
           </div>
@@ -422,21 +421,28 @@ export function CallPlate({
  *  facts print on EVERY page, not only the ones that thread props. Module-
  *  cached: one fetch per session. */
 let colophonMetaCache: { lots: number; lastCrawl: string } | null = null;
-function useColophonMeta(): { lots: number; lastCrawl: string } | null {
+// the in-flight request is cached too: two colophons mounting in the same
+// tick (or StrictMode's double effect) each fired their own fetch before the
+// first could populate the cache — one request per session, by construction
+let colophonMetaInflight: Promise<{ lots: number; lastCrawl: string } | null> | null = null;
+function useColophonMeta(skip = false): { lots: number; lastCrawl: string } | null {
   const [meta, setMeta] = useState(colophonMetaCache);
   useEffect(() => {
-    if (colophonMetaCache) return;
+    if (colophonMetaCache || skip) return;
     let dead = false;
-    fetch('/data/ray/meta.json')
-      .then(r => (r.ok ? r.json() : null))
-      .then(j => {
-        if (!j || dead) return;
-        colophonMetaCache = { lots: j.totalLots || 0, lastCrawl: j.lastCrawl || '' };
-        setMeta(colophonMetaCache);
-      })
-      .catch(() => { /* the spec line simply prints fewer segments */ });
+    if (!colophonMetaInflight) {
+      colophonMetaInflight = fetch('/data/ray/meta.json')
+        .then(r => (r.ok ? r.json() : null))
+        .then(j => {
+          if (!j) return null;
+          colophonMetaCache = { lots: j.totalLots || 0, lastCrawl: j.lastCrawl || '' };
+          return colophonMetaCache;
+        })
+        .catch(() => null /* the spec line simply prints fewer segments */);
+    }
+    colophonMetaInflight.then(m => { if (m && !dead) setMeta(m); });
     return () => { dead = true; };
-  }, []);
+  }, [skip]);
   return meta;
 }
 
@@ -539,17 +545,20 @@ function specDate(iso: string): string | null {
  * Butter appears exactly once — the Starling channel (the one outbound
  * product link). The footer carries no lamp.
  */
-export function Colophon({ lotCount, houseCount, record }: {
+export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
   /** corpus facts — optional; the colophon self-serves meta.json when absent */
   lotCount?: number;
   houseCount?: number;
+  /** the crawl stamp — when a page already holds it (useRayData) the
+      colophon prints it and never re-fetches meta.json */
+  lastCrawl?: string;
   /** the backtest's flagged record — the spec line prints it when passed;
       otherwise the line ends in a quiet SEE THE RECORD citation */
   record?: { n: number; medianPerfPct: number } | null;
 }) {
   const [inView, setInView] = useState(false);
   const ref = useRef<HTMLElement | null>(null);
-  const meta = useColophonMeta();
+  const meta = useColophonMeta(!!(lotCount && lastCrawl));
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return; }
@@ -562,7 +571,8 @@ export function Colophon({ lotCount, houseCount, record }: {
   }, []);
 
   const lots = lotCount || meta?.lots || null;
-  const read = meta?.lastCrawl ? specDate(meta.lastCrawl) : null;
+  const crawl = lastCrawl || meta?.lastCrawl;
+  const read = crawl ? specDate(crawl) : null;
 
   return (
     <footer className={`ray-close${inView ? ' ray-close-on' : ''}`} ref={ref}>

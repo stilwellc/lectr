@@ -86,6 +86,9 @@ async function main() {
         if (raw) { const lot = buildLot(raw, id, cfg); if (lot) { buffer.push(lot); sold++; } }
       } catch { /* transient — skip id */ }
       processed++;
+      // per-nav pacing: 8 persistent contexts at zero delay is a burst CF
+      // reads as abuse (Sep 2 2026 audit) — 250ms between gotos per context
+      await new Promise(r => setTimeout(r, 250));
       if (buffer.length >= 400) await flush();
     }
     if (held) await held.ctx.close();

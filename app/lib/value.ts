@@ -22,6 +22,31 @@
  */
 import type { AuctionLot } from '../types';
 import { similarity, sizeRatio, type IdfTable, type Match } from './similarity';
+import { lotAllInFactor } from './premiums';
+
+/** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
+ *  lanes.ts; UI files that hardcode the strings should import from there
+ *  (app/makers/[slug]/page.tsx, ComparableModal.tsx, LotCard.tsx,
+ *  app/preview/terminal/TerminalHome.tsx — listed in docs/ENGINE_SPEC_V2.md). */
+export const SIGNAL_LABEL = {
+  below: 'below comparable market',
+  above: 'above comparable market',
+  at: 'at comparable market',
+} as const;
+export type SignalLabel = (typeof SIGNAL_LABEL)[keyof typeof SIGNAL_LABEL];
+
+/** THE basis caption every UI surface that prints a realized-vs-estimate or
+ *  bid-vs-value figure should use (P1-5). Realized prices are all-in
+ *  (premium-inclusive); house estimates are hammer-basis; the engine's
+ *  compValue is all-in (a median of realized prices); bid comparisons gross
+ *  the bid to all-in through the house premium before comparing. */
+export function basisNote(kind: 'estimate' | 'bid' | 'value' = 'estimate'): string {
+  switch (kind) {
+    case 'bid': return 'bid grossed to all-in (house premium) vs all-in comp value';
+    case 'value': return 'comp value is all-in (median of premium-inclusive realized prices)';
+    default: return 'all-in realized vs hammer-basis estimate — the gap carries the buyer\'s premium by design';
+  }
+}
 
 export interface Comp { id: string; match: Match; realizedUsd: number; saleDate: string; }
 
@@ -36,7 +61,7 @@ export interface ValueResult {
   high: number;
   /** DIRECTIONAL (estimate lots): comps vs the lot's estimate midpoint */
   compRatio: number | null;
-  signal: { label: 'below comparable market' | 'above comparable market' | 'at comparable market'; strength: 'strong' | 'moderate' | 'slight'; beatRatePct: number } | null;
+  signal: { label: SignalLabel; strength: 'strong' | 'moderate' | 'slight'; beatRatePct: number } | null;
   /** ABSOLUTE (Goldin/no-estimate): the value estimate + under/over vs live bid */
   estimateUsd: number | null;
   vsBid: { label: 'below recent comps' | 'above recent comps' | 'in line'; pct: number } | null;
@@ -55,7 +80,27 @@ export interface ValueResult {
   /** count of exact-identity comps (same watch reference / same art edition)
    *  in the top pool — the non-card analogue of a card tier-1 match */
   idn?: number;
+  /** PARTIAL abstention (P1-6): a value exists but a product on top of it was
+   *  withheld and why (e.g. a tier-3 card median that carries no vsBid call).
+   *  Full abstentions come back as { value: null, abstain } from
+   *  estimateValueEx and are stamped on the LOT as `abstain`. */
+  abstain?: string;
+  /** card-comp tier that produced this value (build-market §3e) */
+  cardTier?: 'exact' | 'grade-adj' | 'player' | 'tcg-exact' | 'tcg-grade-adj';
 }
+
+/** Why the engine declined to value a lot (P1-6). Stable, greppable codes —
+ *  served on the lot as `abstain` so a client can tell "abstained" from
+ *  "never ran" (a lot with neither `value` nor `abstain` was never scored). */
+export type AbstainReason =
+  | 'pool<3'            // fewer than 3 comps cleared even the relaxed gate
+  | 'no-candidates'     // nothing to compare against (empty prior roster)
+  | 'no-identity'       // card/TCG tiers: the title yields no comp key
+  | 'dispersion'        // pool disagrees with itself past the guard
+  | 'no-value'          // weighted median collapsed to 0
+  | 'card:pool<2'       // card tiers: exact/ladder pools too thin, no player pool
+  | 'card:player<5'     // card tier 3: player pool under the floor
+  | 'tcg:pool<2';       // TCG tier: exact/ladder pools too thin
 
 const MIN_COS = 0.65;   // comp-pool inclusion (calibrated: below this is a different object)
 const TOP_K = 10;
@@ -94,20 +139,19 @@ function weightedMedian(pairs: [number, number][]): number {
   for (const [v, w] of s) { c += w; if (c >= total / 2) return v; }
   return s.length ? s[s.length - 1][0] : 0;
 }
-function quantile(sortedVals: number[], q: number): number {
+/** THE quantile (P2, Sep 2 2026): linear interpolation on a SORTED array —
+ *  the one convention shared by the engine band, the comps.ts dispersion
+ *  guards, the backtest's conformal bands and the value book. The old
+ *  round-index / floor-index variants made an n=3 band [median, max] (showed
+ *  the median as "low") and disagreed with each other by up to one rank. */
+export function quantile(sortedVals: number[], q: number): number {
   if (!sortedVals.length) return 0;
-  const i = Math.min(sortedVals.length - 1, Math.max(0, Math.round(q * (sortedVals.length - 1))));
-  return sortedVals[i];
-}
-/** Linear-interpolation quantile for the DISPLAYED band — the round-index one
- *  makes an n=3 band [median, max] (shows the median as "low"). */
-function lerpQuantile(sortedVals: number[], q: number): number {
-  if (!sortedVals.length) return 0;
-  const pos = q * (sortedVals.length - 1);
+  const pos = Math.min(1, Math.max(0, q)) * (sortedVals.length - 1);
   const lo = Math.floor(pos), hi = Math.ceil(pos);
   if (lo === hi) return sortedVals[lo];
   return sortedVals[lo] + (sortedVals[hi] - sortedVals[lo]) * (pos - lo);
 }
+const lerpQuantile = quantile;
 
 /**
  * AUTO-CALIBRATION (set at build time by build-market from the previous
@@ -120,8 +164,16 @@ export interface EngineCalibration {
   edges: number[];
   beatRate: Record<string, number[]>;
   band: Record<string, { lo: number; hi: number }>;
+  /** per-market tier bands where the market had ≥150 rows for the tier (P1-2);
+   *  a missing market/tier falls back to `band` */
+  bandByMarket?: Record<string, Record<string, { lo: number; hi: number }>>;
+  /** per-market MdAPE by tier from the record (P2): 'high' is demoted where
+   *  the market's own high-tier error runs past 30% */
+  mdape?: Record<string, Record<string, number | null>>;
   marketBySlug?: Record<string, string>;
 }
+/** 'high' must mean ≤~30% MdAPE in the lot's own market; 'medium' ≤~50%. */
+export const CONF_MDAPE_CEIL = { high: 0.30, medium: 0.50 } as const;
 let CAL: EngineCalibration | null = null;
 export function setCalibration(cal: EngineCalibration | null) { CAL = cal; }
 
@@ -158,6 +210,16 @@ export function estimateValue(
   comps: Comp[],
   tbl: IdfTable,
 ): ValueResult | null {
+  return estimateValueEx(lot, comps, tbl).value;
+}
+
+/** estimateValue with the abstention reason surfaced (P1-6). `value` is the
+ *  exact object estimateValue returns (null on abstention); `abstain` names why. */
+export function estimateValueEx(
+  lot: AuctionLot & { _v?: Record<string, number> },
+  comps: Comp[],
+  tbl: IdfTable,
+): { value: ValueResult | null; abstain: AbstainReason | null } {
   // rank by match score; keep the comp-worthy pool. If the strict gate can't
   // seat 3 comps, retry once at the relaxed tier-b gate (validated: marginal
   // quality indistinguishable from the main engine) — never mix the two.
@@ -169,7 +231,7 @@ export function estimateValue(
     const relaxed = comps
       .filter(c => passesGateWith(FALLBACK_GATE, c.match) && c.realizedUsd > 0)
       .sort((a, b) => b.match.score - a.match.score);
-    if (relaxed.length < 3) return null;
+    if (relaxed.length < 3) return { value: null, abstain: comps.length ? 'pool<3' : 'no-candidates' };
     pool = relaxed;
     tier = 'fallback';
   }
@@ -193,6 +255,7 @@ export function estimateValue(
     return Math.pow(0.5, ageYears / halflife);
   };
   let compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
+  if (!(compValueUsd > 0)) return { value: null, abstain: 'no-value' };
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
   // Displayed band widened to q0.15..q0.85 (lerp) so it honestly covers ~50% of
   // realized outcomes; the round q1..q3 only covered ~37% and mislabeled the
@@ -217,6 +280,16 @@ export function estimateValue(
   else if (pool.length >= 4 && (bestCos >= 0.72 || idn >= 3) && disp <= 2.5) confidence = 'medium';
   // a relaxed-gate pool never claims the top tier
   if (tier === 'fallback' && confidence === 'high') confidence = 'medium';
+  // PER-MARKET HONESTY (P2): the record's own MdAPE for this market × tier
+  // decides whether the tier label is earned — 'high' must run ≤30% MdAPE in
+  // this market, 'medium' ≤50%; otherwise demote one notch. No calibration →
+  // the structural ladder above stands alone.
+  const market = CAL?.marketBySlug?.[lot.artist];
+  const md = market ? CAL?.mdape?.[market] : undefined;
+  if (md) {
+    if (confidence === 'high' && typeof md.high === 'number' && md.high > CONF_MDAPE_CEIL.high) confidence = 'medium';
+    if (confidence === 'medium' && typeof md.medium === 'number' && md.medium > CONF_MDAPE_CEIL.medium) confidence = 'low';
+  }
 
 
   // strongest identity match → "this exact item sold for $Z"
@@ -260,9 +333,9 @@ export function estimateValue(
     // market — a 'below' flag must carry ≥50% calibrated odds, 'strong' ≥60%.
     // This deletes the weak tail per-vertical automatically as calibration
     // refits, and keeps every strong flag.
-    const label = compRatio >= 1.3 && br >= 50 ? 'below comparable market'
-      : compRatio <= 0.75 ? 'above comparable market'
-        : 'at comparable market';
+    const label: SignalLabel = compRatio >= 1.3 && br >= 50 ? SIGNAL_LABEL.below
+      : compRatio <= 0.75 ? SIGNAL_LABEL.above
+        : SIGNAL_LABEL.at;
     const strength = (compRatio >= 2 && br >= 60) || compRatio <= 0.55 ? 'strong'
       : compRatio >= 1.3 || compRatio <= 0.75 ? 'moderate' : 'slight';
     signal = { label, strength, beatRatePct: br };
@@ -273,7 +346,7 @@ export function estimateValue(
   // honest ~70% outcome band (the comp-price quantile band only covered
   // ~42-51%, and "high" confidence was the LEAST honest at 41.8%).
   let bandLow = low, bandHigh = high;
-  const bandCal = CAL?.band?.[confidence];
+  const bandCal = (market && CAL?.bandByMarket?.[market]?.[confidence]) || CAL?.band?.[confidence];
   if (bandCal && compValueUsd > 0) {
     bandLow = compValueUsd * bandCal.lo;
     bandHigh = compValueUsd * bandCal.hi;
@@ -285,13 +358,10 @@ export function estimateValue(
   if (!estMid) {
     estimateUsd = compValueUsd;
     const bid = lot.currentBid || 0;
-    if (bid > 0) {
-      const pct = Math.round((bid / compValueUsd - 1) * 100);
-      vsBid = { label: pct <= -12 ? 'below recent comps' : pct >= 12 ? 'above recent comps' : 'in line', pct };
-    }
+    if (bid > 0) vsBid = vsBidRead(lot, bid, compValueUsd);
   }
 
-  return {
+  return { value: {
     poolIds: top.map(c => c.id),
     n: pool.length,
     compValueUsd: Math.round(compValueUsd),
@@ -305,7 +375,19 @@ export function estimateValue(
     tier,
     exact,
     idn: idn || undefined,
-  };
+  }, abstain: null };
+}
+
+/** BASIS-CONSISTENT bid read (P1-5): compValue is all-in (a median of
+ *  premium-inclusive realized prices), so the live bid is grossed to all-in
+ *  through the lot's house premium BEFORE the comparison — a raw hammer bid
+ *  read ~20% "below comps" on every lot by construction. Shared by the
+ *  hedonic path and the card tiers (build-market) so the ±12% band means one
+ *  thing everywhere. */
+export function vsBidRead(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null }, bid: number, compValueUsd: number): NonNullable<ValueResult['vsBid']> {
+  const bidAllIn = bid * lotAllInFactor(lot, bid);
+  const pct = Math.round((bidAllIn / compValueUsd - 1) * 100);
+  return { label: pct <= -12 ? 'below recent comps' : pct >= 12 ? 'above recent comps' : 'in line', pct };
 }
 
 /**

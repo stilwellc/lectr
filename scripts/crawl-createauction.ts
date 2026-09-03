@@ -82,8 +82,14 @@ export async function extract(page: Page): Promise<RawLot | null> {
   }).catch(() => null);
 }
 
+// Retry pacing for the throwaway-context navs: a re-challenge is CF telling us
+// to slow down — back off (3s, then 6s) before the fresh context, instead of
+// hammering the same URL twice in a row.
+const NAV_BACKOFF_MS = (attempt: number) => 3000 * attempt;
+
 async function nav(browser: Browser, url: string): Promise<{ ok: boolean; raw: RawLot | null; challenged: boolean }> {
   for (let attempt = 1; attempt <= 2; attempt++) {
+    if (attempt > 1) await new Promise(r => setTimeout(r, NAV_BACKOFF_MS(attempt - 1)));
     const ctx = await browser.newContext({ userAgent: UA });
     try {
       const page = await ctx.newPage();
@@ -211,10 +217,14 @@ async function extractLiveCards(page: Page): Promise<LiveCard[]> {
       const wd = /\bwithdrawn\b/i.test(txt); // neither live nor a sale — reported so any ghost row gets purged
       const bid = (txt.match(/current bid[:\s]*\$[\d,]+(?:\.\d+)?/i) || [])[0] || '';
       const sold = (txt.match(/sold for\s*\$[\d,]+(?:\.\d+)?/i) || [])[0] || '';
-      const fallback = txt.replace(/sold for\s*\$[\d,.]+/i, '').replace(/current bid.*/i, '').trim();
+      // the boxed lot number is only ever part of the card BLOB (fallback) —
+      // stripping a leading number off the anchor's own text would eat the
+      // year of "1952 Topps …"
+      const fallback = txt.replace(/sold for\s*\$[\d,.]+/i, '').replace(/current bid.*/i, '').trim()
+        .replace(/^(best of the best|highlight|featured|premier)\s+/i, '')
+        .replace(/^\d{1,4}\s+(?=\D)/, '');
       const title = (v.title || fallback)
         .replace(/^(best of the best|highlight|featured|premier)\s+/i, '')
-        .replace(/^\d{1,4}\s+(?=\D)/, '') // the boxed lot number
         .trim().slice(0, 200);
       out.push({ id, title, bid, sold, img: v.img, wd });
     });
@@ -259,6 +269,7 @@ function endToDateTime(endLine: string): string | null {
  *  nav — reusing a context for a second nav gets re-challenged). */
 async function galleryPage(browser: Browser, url: string): Promise<{ cards: LiveCard[]; ok: boolean }> {
   for (let attempt = 1; attempt <= 2; attempt++) {
+    if (attempt > 1) await new Promise(r => setTimeout(r, NAV_BACKOFF_MS(attempt - 1)));
     const ctx = await browser.newContext({ userAgent: UA });
     try {
       const page = await ctx.newPage();
@@ -297,17 +308,48 @@ async function crawlLive(browser: Browser, cfg: { host: string; house: AuctionHo
   const wdIds = new Set(cards.filter(c => c.wd).map(c => `${cfg.prefix}-${c.id}`));
   console.log(`[CA:${cfg.seg}] gallery: ${cards.length} cards (${liveCards.length} live, ${soldCards.length} soft-closed sold, ${wdIds.size} withdrawn)`);
 
+  // `ok` is the LIVE-REPLACE gate (writeMergedSegmentWithLive evicts every
+  // prior upcoming row when it is true), so it must be EARNED by a snapshot
+  // we can actually vouch for — a page-1 CF clear alone is not that (Sep 2
+  // 2026 audit: 0 cards after the 12s poll, or a sample nav with no End: line,
+  // used to return {live:[], ok:true} and silently wipe the house's book).
+  if (!cards.length) {
+    console.warn(`[CA:${cfg.seg}] gallery rendered 0 cards after the poll — NOT ok; keeping the prior upcoming snapshot (resolve still runs)`);
+    ok = false;
+  }
+
   // one sample lot page gives the auction's End date (shared by the sale)
   let saleDate: string | null = null, saleDateTime: string | null = null;
   const sample = liveCards[0] || soldCards[0];
   if (sample) {
     const r = await nav(browser, `${cfg.host}/bids/bidplace.aspx?itemid=${sample.id}`);
     if (r.ok && r.raw?.endLine) { saleDate = endToDate(r.raw.endLine); saleDateTime = endToDateTime(r.raw.endLine); }
+    else console.warn(`[CA:${cfg.seg}] sample lot ${sample.id}: nav ${r.ok ? 'ok but no End: line' : r.challenged ? 'CF-walled' : 'failed'}`);
   }
   if (!saleDate) {
-    if (liveCards.length) console.log(`[CA:${cfg.seg}] live: no End date readable — skipping ${liveCards.length} live cards this pass`);
-    return { live: [], soldNow: [], resolved: [], ok, wdIds };
+    if (liveCards.length) console.error(`[CA:${cfg.seg}] live: no End date readable — ${liveCards.length} live cards unusable this pass; NOT ok, prior upcoming snapshot rides`);
+    ok = false;
   }
+
+  // resolve is shared by every exit below: prior upcoming ids gone from
+  // tonight's gallery → per-lot re-read (their pages flip to "SOLD FOR" once
+  // settled; buildLot handles the rest). Runs even on a NOT-ok pass so a sale
+  // that closed between crawls still settles instead of lingering.
+  const prevUpcoming = (readSegment(cfg.seg) as unknown as AuctionLot[]).filter(l => (l as { status?: string }).status === 'upcoming');
+  const nowIds = new Set(cards.map(c => `${cfg.prefix}-${c.id}`));
+  const gone = prevUpcoming.filter(l => l.id.startsWith(`${cfg.prefix}-`) && !nowIds.has(l.id));
+  const resolved: AuctionLot[] = [];
+  for (const prev of gone) {
+    const rawId = parseInt(prev.id.slice(cfg.prefix.length + 1), 10);
+    if (!rawId) continue;
+    const r = await nav(browser, `${cfg.host}/bids/bidplace.aspx?itemid=${rawId}`);
+    if (!r.ok || !r.raw) continue;
+    const lot = buildLot(r.raw, rawId, cfg);
+    if (lot) resolved.push(lot);
+  }
+  if (gone.length) console.log(`[CA:${cfg.seg}] resolve: ${gone.length} closed upcoming ids → ${resolved.length} settled sales`);
+
+  if (!saleDate) return { live: [], soldNow: [], resolved, ok, wdIds };
 
   const live = saleDate >= TODAY_ISO
     ? liveCards.map(c => buildLiveLot(c, saleDate!, saleDateTime, cfg)).filter((x): x is AuctionLot => !!x)
@@ -337,21 +379,6 @@ async function crawlLive(browser: Browser, cfg: { host: string; house: AuctionHo
     } as unknown as AuctionLot;
   }).filter((x): x is AuctionLot => !!x);
 
-  // resolve: prior upcoming ids gone from tonight's gallery → per-lot re-read
-  // (their pages flip to "SOLD FOR" once settled; buildLot handles the rest)
-  const prevUpcoming = (readSegment(cfg.seg) as unknown as AuctionLot[]).filter(l => (l as { status?: string }).status === 'upcoming');
-  const nowIds = new Set(cards.map(c => `${cfg.prefix}-${c.id}`));
-  const gone = prevUpcoming.filter(l => l.id.startsWith(`${cfg.prefix}-`) && !nowIds.has(l.id));
-  const resolved: AuctionLot[] = [];
-  for (const prev of gone) {
-    const rawId = parseInt(prev.id.slice(cfg.prefix.length + 1), 10);
-    if (!rawId) continue;
-    const r = await nav(browser, `${cfg.host}/bids/bidplace.aspx?itemid=${rawId}`);
-    if (!r.ok || !r.raw) continue;
-    const lot = buildLot(r.raw, rawId, cfg);
-    if (lot) resolved.push(lot);
-  }
-  if (gone.length) console.log(`[CA:${cfg.seg}] resolve: ${gone.length} closed upcoming ids → ${resolved.length} settled sales`);
   return { live, soldNow, resolved, ok, wdIds };
 }
 

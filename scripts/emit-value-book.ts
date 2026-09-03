@@ -56,19 +56,9 @@ function weightedMedian(pairs: [number, number][]): number {
   }
   return s.length ? s[s.length - 1][0] : 0;
 }
-function quantile(sortedVals: number[], q: number): number {
-  if (!sortedVals.length) return 0;
-  const i = Math.min(sortedVals.length - 1, Math.max(0, Math.round(q * (sortedVals.length - 1))));
-  return sortedVals[i];
-}
-function lerpQuantile(sortedVals: number[], q: number): number {
-  if (!sortedVals.length) return 0;
-  const pos = q * (sortedVals.length - 1);
-  const lo = Math.floor(pos);
-  const hi = Math.ceil(pos);
-  if (lo === hi) return sortedVals[lo];
-  return sortedVals[lo] + (sortedVals[hi] - sortedVals[lo]) * (pos - lo);
-}
+// THE quantile (P2): the engine's lerp convention, imported — no local copies
+import { quantile } from '../app/lib/value';
+const lerpQuantile = quantile;
 
 // ── card + pokemon keys (module-private in sub-markets.ts — copied, minus the
 //    /serial suffix Starling doesn't carry) ──────────────────────────────────

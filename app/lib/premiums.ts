@@ -61,3 +61,29 @@ export function lotAllInFactor(lot: { auctionHouse?: string | null; buyerPremium
 export function maxHammerFor(allInUsd: number, lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null }): number {
   return Math.floor(allInUsd / lotAllInFactor(lot, allInUsd));
 }
+
+/** THE hammer inference (P1-5, Sep 2 2026): the lot's published hammer when
+ *  it has one, else realized ÷ the lot's own premium factor (stamped
+ *  buyerPremiumPct, then the house schedule; the tiered houses read the band
+ *  off the realized figure, the closest proxy for the hammer band). Every
+ *  hammer-basis read — indices.houseAccuracy, build-market houseCal +
+ *  seasonality, the backtest's hammer perfs — goes through here; there is no
+ *  flat /1.25 left in the engine. */
+export function inferHammerUsd(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; hammerUsd?: number | null; realizedUsd?: number | null; priceUsd?: number | null }): number {
+  const h = lot.hammerUsd;
+  if (typeof h === 'number' && h > 0) return h;
+  const realized = (lot.realizedUsd && lot.realizedUsd > 0 ? lot.realizedUsd : lot.priceUsd) || 0;
+  if (!(realized > 0)) return 0;
+  return realized / lotAllInFactor(lot, realized);
+}
+
+/** Is `hammer` a round bid increment? Poisoned feeds stamp one arbitrary
+ *  price across a batch ($10,050 ×3,622); honest repeats are increment ×
+ *  premium ties ($1,000 × 1.22 = $1,220 ×40 inside one sale). Absolute
+ *  tolerance on purpose: a relative one would bless any large number. */
+export function isRoundIncrement(hammer: number, tolUsd = 1): boolean {
+  if (!(hammer > 0)) return false;
+  const step = hammer < 5_000 ? 50 : hammer < 50_000 ? 100 : hammer < 500_000 ? 500 : 1_000;
+  const r = Math.round(hammer / step) * step;
+  return Math.abs(hammer - r) <= tolUsd;
+}

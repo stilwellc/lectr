@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useDialogFocus } from './useDialogFocus';
 import { sportOfLot } from '../lib/submarkets';
 import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
@@ -167,6 +168,9 @@ export default function FeedToolbar({
     setSheetOpen(false);
     sheetReturnRef.current?.focus();
   };
+  // Tab cycles inside the sheet; restore goes to the opener (the sheet's
+  // own close path already focuses sheetReturnRef — the trap covers Tab)
+  useDialogFocus(sheetOpen, sheetRef, { initial: 'none', restoreTo: sheetReturnRef });
   useEffect(() => {
     if (!sheetOpen) return;
     sheetRef.current?.focus();
@@ -189,6 +193,8 @@ export default function FeedToolbar({
   const [catOpen, setCatOpen] = useState(false);
   const catTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [catPos, setCatPos] = useState<{ top: number; left: number } | null>(null);
+  const catMenuRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(catOpen, catMenuRef, { initial: 'first', restoreTo: catTriggerRef });
   const openCat = () => {
     const r = catTriggerRef.current?.getBoundingClientRect();
     if (r) setCatPos({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 240) });
@@ -215,6 +221,7 @@ export default function FeedToolbar({
   // absolute child in there gets clipped/masked (the original sin of v1).
   const catMenu = catOpen && catPos && typeof document !== 'undefined' ? createPortal(
     <div
+      ref={catMenuRef}
       role="menu"
       aria-label="Categories"
       onClick={e => e.stopPropagation()}

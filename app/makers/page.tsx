@@ -90,6 +90,8 @@ interface Row {
   median: number | null;
   revenue: number;
   velocity: number;
+  /** the tail's start year when velocity is NOT a true 12-month count */
+  velocitySince: string | null;
   record: number | null;
   verified: VerifiedMover | null;
   thin: boolean;
@@ -339,7 +341,11 @@ const MakerRowItem = React.memo(function MakerRowItem({
       );
       case 'record': return <span key={k} className="mk-cell">{r.record ? fmtUsd(r.record) : '—'}</span>;
       case 'settled': return <span key={k} className="mk-cell mk-faint">{r.revenue > 0 ? fmtUsd(r.revenue) : '—'}</span>;
-      case 'velocity': return <span key={k} className="mk-cell mk-faint">{r.velocity > 0 ? r.velocity.toLocaleString() : '—'}</span>;
+      case 'velocity': return (
+        <span key={k} className="mk-cell mk-faint" title={r.velocitySince ? `last ${r.velocity} sales, since ${r.velocitySince} — not a 12-month window` : undefined}>
+          {r.velocity > 0 ? (r.velocitySince ? `${r.velocity.toLocaleString()} since ${r.velocitySince}` : r.velocity.toLocaleString()) : '—'}
+        </span>
+      );
     }
   };
   return (
@@ -447,7 +453,9 @@ const MakerRowItem = React.memo(function MakerRowItem({
               <p>
                 {r.sold != null && <><b>{r.sold.toLocaleString()}</b> sold tracked</>}
                 {r.revenue > 0 && <> · <b>{fmtUsd(r.revenue)}</b> settled</>}
-                {r.velocity > 0 && <> · {r.velocity.toLocaleString()} in 12mo</>}
+                {r.velocity > 0 && (r.velocitySince
+                  ? <> · last {r.velocity.toLocaleString()} sales · since {r.velocitySince}</>
+                  : <> · {r.velocity.toLocaleString()} in 12mo</>)}
               </p>
             </div>
             {(r.stats?.houseDistribution?.length ?? 0) > 0 && (
@@ -504,7 +512,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
                       <span className="mkx-lot-est">{formatEstimate(l)}</span>
                       <span className="mkx-lot-close">
                         {closeSoon
-                          ? <span style={{ color: 'var(--color-up)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
+                          ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
                           : <>closes {formatDate(l.saleDate)}</>}
                       </span>
                     </span>
@@ -677,6 +685,11 @@ export default function MakersPage() {
     const recDate = st?.recordDate ? Date.parse(String(st.recordDate)) : NaN;
     const recordFresh = !isNaN(recDate) && (Date.now() - recDate) < 365 * 86400e3
       ? String(st!.recordDate).slice(0, 4) : null;
+    const st12 = st as (typeof st & { sold12m?: number; sold12mWindow?: { days: number } }) | null;
+    const velocityTrue = !!st12 && typeof st12.sold12m === 'number' && st12.sold12mWindow?.days === 365;
+    const tail = hist.slice(-4);
+    const tailCount = tail.reduce((s, p) => s + (p.totalSales || 0), 0);
+    const tailSince = tail.length ? String(tail[0].date).slice(0, 4) : null;
     return {
       slug: a.slug, label: a.label, market: a.market as Market,
       discipline: DISCIPLINE[a.slug] || null,
@@ -688,7 +701,11 @@ export default function MakersPage() {
       sold,
       median: st?.medianPriceLast12Months || null,
       revenue: st?.totalAuctionRevenue || 0,
-      velocity: st ? st.priceHistory.slice(-4).reduce((s, p) => s + (p.totalSales || 0), 0) : 0,
+      // "12mo sold" only from compute-stats' calendar-365 field; the old
+      // slice(-4) (last four NON-EMPTY quarters) spans years on a thin maker
+      // and prints with its true span instead
+      velocity: velocityTrue ? st12!.sold12m! : tailCount,
+      velocitySince: velocityTrue ? null : tailSince,
       record: st?.recordPrice || null,
       verified: verifiedBySlug.get(a.slug) || null,
       thin: sold != null && sold > 0 && sold < 50,
@@ -920,7 +937,7 @@ export default function MakersPage() {
               sub={
                 <>
                   <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{totalLive.toLocaleString()} live lots</b> on the block
-                  {totalFlags > 0 && <> · <b style={{ color: 'var(--color-up)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{totalFlags}</b> flagged by the engine</>}
+                  {totalFlags > 0 && <> · <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{totalFlags}</b> flagged by the engine</>}
                   {verifiedCount > 0 && <> · {verifiedCount} CI-verified indexes</>}
                 </>
               }
@@ -1161,7 +1178,7 @@ const MAKERS_CSS = `
 .mk-cock-name{font-size:11px;font-weight:550;letter-spacing:0.02em;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mk-cock-v{font-family:var(--font-mono),monospace;font-size:21px;font-weight:500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.15;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px}
 .mk-cock-v i{font-style:normal;font-size:10.5px;color:var(--color-text-faint);letter-spacing:0.06em}
-.mk-cock-v em{font-style:normal;font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:700;color:var(--color-up);letter-spacing:0.02em}
+.mk-cock-v em{font-style:normal;font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:700;color:var(--color-fg);letter-spacing:0.02em}
 .mk-cock-s{font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .mk-cock-s b{font-weight:700;font-family:var(--font-mono),monospace}
 .mk-cock-s b[data-dir="up"]{color:var(--color-up)}
@@ -1202,7 +1219,7 @@ const MAKERS_CSS = `
 .mk-display-item{display:flex;align-items:center;gap:8px;padding:6px 8px;background:none;border:none;border-radius:7px;font-family:var(--font-sans),sans-serif;font-size:12px;color:var(--color-text-muted);cursor:pointer;text-align:left;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
 .mk-display-item:hover{background:var(--color-hover-item);color:var(--color-fg)}
 .mk-display-item[data-on]{color:var(--color-fg)}
-.mk-display-check{width:13px;flex:none;font-size:11px;color:var(--color-up)}
+.mk-display-check{width:13px;flex:none;font-size:11px;color:var(--color-fg)}
 .mk-display-reset{margin-top:5px;padding:6px 8px;background:none;border:none;border-top:1px solid var(--color-hair,rgba(255,255,255,0.06));font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.06em;color:var(--color-text-faint);cursor:pointer;text-align:left}
 .mk-display-reset:hover{color:var(--color-fg)}
 
@@ -1224,7 +1241,14 @@ const MAKERS_CSS = `
 .mk-group-read b{font-weight:700;font-family:var(--font-mono),monospace}
 .mk-group-read b[data-dir="up"]{color:var(--color-up)}
 .mk-group-read b[data-dir="down"]{color:var(--color-down-text)}
-.mk-group-flags{color:var(--color-up)}
+@media(max-width:939px){
+  /* the read shrinks and ellipsizes inside the head instead of running past
+     the 390px viewport (right edge measured at 466–509px) */
+  .mk-group-head{min-width:0}
+  .mk-group-rule{flex:1 1 8px;min-width:8px}
+  .mk-group-read{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+}
+.mk-group-flags{color:var(--color-fg)}
 
 /* ── rows ── */
 .mk-item{position:relative;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06));background:transparent}
@@ -1257,7 +1281,7 @@ const MAKERS_CSS = `
   .mk-faint{color:var(--color-text-faint)}
   .mk-cell[data-live]{font-weight:700}
   .mk-flags{color:var(--color-text-faint)}
-  .mk-flags[data-hot]{color:var(--color-up);font-weight:700}
+  .mk-flags[data-hot]{color:var(--color-fg);font-weight:700}
   .mk-delta{color:var(--color-text-faint)}
   .mk-delta[data-dir="up"]{color:var(--color-up);font-weight:700}
   .mk-delta[data-dir="down"]{color:var(--color-down-text);font-weight:700}
@@ -1320,7 +1344,7 @@ const MAKERS_CSS = `
 /* ── the live book inside the dossier ── */
 .mkx-live{margin:14px 16px 0;border:1px solid var(--color-hair,rgba(255,255,255,0.07));border-radius:12px;overflow:clip}
 .mkx-live-head{font-size:10px;letter-spacing:0.14em;padding:9px 12px 8px;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}
-.mkx-live-flagn{color:var(--color-up);font-weight:700;letter-spacing:0.06em}
+.mkx-live-flagn{color:var(--color-fg);font-weight:700;letter-spacing:0.06em}
 .mkx-lot{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;color:inherit;text-decoration:none;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.05));transition:background var(--duration-fast) var(--ease-signature)}
 .mkx-lot:last-of-type{border-bottom:none}
 .mkx-lot:hover{background:var(--color-hover-item)}
@@ -1330,7 +1354,7 @@ const MAKERS_CSS = `
 .mkx-lot-main{min-width:0}
 .mkx-lot-title{display:block;font-size:12px;font-weight:550;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mkx-lot-sub{display:block;font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mkx-lot-flag{color:var(--color-up);font-weight:600}
+.mkx-lot-flag{color:var(--color-fg);font-weight:600}
 .mkx-lot-cells{text-align:right;flex:none}
 .mkx-lot-est{display:block;font-family:var(--font-mono),monospace;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg)}
 .mkx-lot-close{display:block;font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}

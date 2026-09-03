@@ -43,7 +43,7 @@ export default function FollowButton({ slug, name }: { slug: string; name: strin
       style={{
         cursor: busy ? 'default' : 'pointer',
         background: existing ? 'var(--color-bg-elevated)' : 'var(--color-bg)',
-        color: existing ? 'var(--color-up)' : 'var(--color-butter-text)',
+        color: existing ? 'var(--color-fg)' : 'var(--color-butter-text)',
         display: 'inline-flex', alignItems: 'center', gap: 7,
       }}
     >

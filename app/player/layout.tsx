@@ -2,7 +2,7 @@ import React from 'react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Player',
+  title: 'Player dossier',
   description: 'One athlete, the whole market — cards, game-worn and memorabilia read together. lectr auction intelligence.',
 };
 

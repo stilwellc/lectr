@@ -48,7 +48,7 @@ export default function SaveSearch({ filters, market }: { filters: FeedFilters; 
   return (
     <button
       className="ray-toolbar-reset"
-      style={{ color: state === 'saved' ? 'var(--color-up)' : state === 'error' ? 'var(--color-down-text)' : 'var(--color-butter-text)' }}
+      style={{ color: state === 'saved' ? 'var(--color-fg)' : state === 'error' ? 'var(--color-text-secondary)' : 'var(--color-butter-text)' }}
       title={`Watch for new lots matching: ${name}`}
       onClick={onSave}
       disabled={state === 'busy'}

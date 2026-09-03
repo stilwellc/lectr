@@ -190,6 +190,18 @@ function tapeTag(r: SubMarketRead): string {
 // signed integer for CI terminals: +79 / −4
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
+/** The volume an INDEX read was fitted on. A repeat-sale CI is estimated
+ *  from resale PAIRS (indexSeries.n is pairs per period — MarketTape prints
+ *  the same fact); captioning it with the row's lot count overstated the
+ *  evidence by an order of magnitude. Hedonic reads regress over lots. */
+function indexVolume(r: SubMarketRead): string {
+  if (r.indexMethod === 'repeat-sale') {
+    const pairs = (r.indexSeries || []).reduce((s, p) => s + (p.n || 0), 0);
+    return pairs > 0 ? `${fmtInt(pairs)} pairs` : 'repeat-sale pairs';
+  }
+  return `${fmtInt(r.lots)} lots`;
+}
+
 export { CIBeam };
 
 /* ── the demand line — the real quarterly series over its median. */
@@ -263,7 +275,7 @@ function Monument({ r, play }: { r: SubMarketRead; play: boolean }) {
         <m.div className={styles.monBeamStamp} {...stamp}>
           <CIBeam lo={r.index.ciLoPct} hi={r.index.ciHiPct} point={r.index.changePct} dir={dir} play={play} large />
         </m.div>
-        <div className={styles.monChip}>{tapeTag(r)} · {r.index.horizon} · {fmtInt(r.lots)} lots</div>
+        <div className={styles.monChip}>{tapeTag(r)} · {r.index.horizon} · {indexVolume(r)}</div>
         {r.bidCompNow != null && <div className={styles.monBids}>{r.bidCompNow} median bids per lot</div>}
       </div>
     );
@@ -542,7 +554,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
               <span className={styles.tri} data-dir={dir} aria-hidden />
               {fmtPct(r.index!.changePct)} · {r.index!.horizon}
             </span>
-            <span className={styles.tapeSub}>CI {fmtCI(r.index!.ciLoPct)} to {fmtCI(r.index!.ciHiPct)} · {fmtInt(r.lots)} lots</span>
+            <span className={styles.tapeSub}>CI {fmtCI(r.index!.ciLoPct)} to {fmtCI(r.index!.ciHiPct)} · {indexVolume(r)}</span>
           </>
         ) : r.readType === 'demand' && r.demandNow != null ? (
           <>
@@ -572,6 +584,16 @@ export default function SubMarketBoard({
   const [ref] = useInView<HTMLDivElement>();
   const [receiptsRef, receiptsSeen] = useInView<HTMLDivElement>();
   const rows = useMemo(() => resolveRows(market, activeKey), [market, activeKey]);
+  // "154 sub-markets" was rows.length — the 100 taxonomy drills PLUS the 54
+  // per-maker reads appended for the marquee. The tracked count is the
+  // drills taxonomy itself (every vertical, deduped by slug), the same list
+  // /analytics enumerates from market.json.
+  const subMarketCount = useMemo(() => {
+    const sm = market?.drills as Record<string, SubMarketRead[]> | undefined;
+    if (!sm) return 0;
+    const pool = activeKey === 'all' ? Object.values(sm).flat() : (sm[activeKey] || []);
+    return new Set(pool.map((r) => r.slug)).size;
+  }, [market, activeKey]);
 
   const CAP = 8;
   const [expanded, setExpanded] = useState(false);
@@ -657,7 +679,7 @@ export default function SubMarketBoard({
             {/* the cross-market enumeration is true only at full scope — a
                 scoped lander (culture: 17 sub-markets) must not claim cards
                 and watch families it doesn't show */}
-            {fmtInt(rows.length)} sub-markets{activeKey === 'all' ? ' — cards by era and sport, watch model families, art and design kinds —' : ','} each read at the strength its data supports:{' '}
+            {fmtInt(subMarketCount)} sub-markets tracked{activeKey === 'all' ? ' — cards by era and sport, watch model families, art and design kinds —' : ','} each read at the strength its data supports:{' '}
             <svg className={styles.legendGlyph} viewBox="0 0 34 12" aria-label="confidence-range glyph">
               <line x1="3" y1="6" x2="31" y2="6" /><line x1="3" y1="2.5" x2="3" y2="9.5" /><line x1="31" y1="2.5" x2="31" y2="9.5" />
               <path d="M20 2.8 L23.2 6 L20 9.2 L16.8 6 Z" className={styles.legendFill} />

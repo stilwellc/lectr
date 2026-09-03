@@ -14,6 +14,7 @@ import { Colophon, daysUntil as daysUntilOrNull } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate, LiveStamp } from '../components/LotCard';
 import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
+import { sleeperRead } from '../lib/lanes';
 import HeroChart from '../preview/terminal/HeroChart';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
@@ -113,17 +114,17 @@ function idAliases(id: string): string[] {
    that tag rows (Today's reads and the Watching ledger) read THESE
    thresholds; a tuning change lands in both or in neither. ── */
 const TAG_SOON_DAYS = 2;      // "Lands soon": hammers within 2 days
-const TAG_QUIET_BIDS = 3;     // "Quiet": a published count of ≤3 bids…
-const TAG_QUIET_DAYS = 7;     // …landing within the week
+// "Quiet" IS the engine's sleeper read (app/lib/lanes.ts sleeperRead: a dead
+// room — zero bids — on a lot whose fairness the engine VERIFIED from its own
+// appraisal, closing within the week). The old local rule (≤3 bids, no
+// fairness check) was a second sleeper classifier; one-source law.
 type WatchTag = { tag: 'Lands soon' | 'Below market' | 'Most bids' | 'Quiet'; rank: number };
-function watchTagOf(l: AuctionLot, sig: { label: string } | null | undefined): WatchTag | null {
+function watchTagOf(l: AuctionLot, sig: { label: string } | null | undefined, now = Date.now()): WatchTag | null {
   const d = daysUntil(l.saleDate);
   if (d >= 0 && d <= TAG_SOON_DAYS) return { tag: 'Lands soon', rank: 0 };
   if (sig?.label === 'Below Market') return { tag: 'Below market', rank: 1 };
   if (l.bidVelocity && l.bidVelocity.delta > 0) return { tag: 'Most bids', rank: 2 };
-  if (typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= TAG_QUIET_BIDS && d >= 0 && d <= TAG_QUIET_DAYS) {
-    return { tag: 'Quiet', rank: 3 };
-  }
+  if (sleeperRead(l, now)) return { tag: 'Quiet', rank: 3 };
   return null;
 }
 
@@ -808,16 +809,20 @@ export default function SavedPage() {
   /* ── WATCHING summary ── */
   const summary = useMemo(() => {
     const withEst = upcoming.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
+    // a sum of estimate MIDPOINTS over the estimate-bearing subset — every
+    // surface that prints it labels it so ("at estimate midpoint · N of M
+    // lots priced"); a bid-only lot contributes nothing and must say so
     const totalEst = withEst.reduce((s, l) => {
       const lo = l.estimateLow || l.estimateHigh || 0;
       const hi = l.estimateHigh || l.estimateLow || 0;
       return s + (lo + hi) / 2;
     }, 0);
+    const priced = withEst.length;
     const flagged = upcoming.filter(l => signalById.get(l.id)?.label === 'Below Market').length;
     const todayIso = localToday();
     const next = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= todayIso) || null;
     const closesToday = upcoming.filter(l => daysUntil(l.saleDate) === 0).length;
-    return { totalEst, flagged, next, closesToday };
+    return { totalEst, priced, flagged, next, closesToday };
   }, [upcoming, signalById]);
 
   const changes = useMemo(() => {
@@ -867,17 +872,19 @@ export default function SavedPage() {
     }
     // the sleeper read: bid-platform lots landing THIS WEEK with a published
     // near-zero count — absent bidCount is absent data, never "no interest"
+    // the sleeper lane's own read (lanes.ts) — verified-fair, dead room
+    const nowMs = Date.now();
     const quiet = upcoming
-      .filter(l => typeof l.bidCount === 'number' && (l.bidCount ?? 0) <= TAG_QUIET_BIDS)
       .filter(l => !used.has(l.id))
-      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= TAG_QUIET_DAYS; })
-      .sort((a, b) => (a.bidCount ?? 0) - (b.bidCount ?? 0) || daysUntil(a.saleDate) - daysUntil(b.saleDate))
+      .map(l => ({ l, read: sleeperRead(l, nowMs) }))
+      .filter((x): x is { l: AuctionLot; read: NonNullable<ReturnType<typeof sleeperRead>> } => !!x.read)
+      .sort((a, b) => daysUntil(a.l.saleDate) - daysUntil(b.l.saleDate))
       .slice(0, 2);
-    for (const l of quiet) {
+    for (const { l, read } of quiet) {
       const d = daysUntil(l.saleDate);
       rows.push({
         key: `q-${claim(l).id}`, tag: 'Quietest', lot: l,
-        fact: <>{(l.bidCount ?? 0) === 0 ? 'no bids yet' : `only ${l.bidCount} ${l.bidCount === 1 ? 'bid' : 'bids'}`} · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{(l.currentBid || 0) > 0 ? <> · at {formatPrice(l.currentBid!)}</> : null}</>,
+        fact: <>no bids yet · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{read.entry != null ? <> · opens at {formatPrice(read.entry)}</> : null} · appraised {formatPrice(read.cvu)}{read.anchor === 'fair-est' ? ', at estimate' : ''}</>,
       });
     }
     const soon = upcoming
@@ -1252,11 +1259,15 @@ export default function SavedPage() {
                       {' '}·{' '}
                     </>
                   )}
+                  {summary.totalEst > 0 && (
+                    <>at estimate midpoint · {summary.priced} of {upcoming.length} lots priced · </>
+                  )}
                   {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
                   {summary.flagged > 0 && (
                     <>
                       {' '}·{' '}
-                      <b style={{ color: 'var(--color-up)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                      {/* a count of flags, not a market direction — ink (lamp law) */}
+                      <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {summary.flagged} below market
                       </b>
                     </>
@@ -1349,7 +1360,7 @@ export default function SavedPage() {
                 {unseenAlerts > 0 && (
                   <a href="#inbox" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
                     <div className="k">Inbox</div>
-                    <div className="v">{unseenAlerts}<em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: 'var(--color-up)' }}>new</em></div>
+                    <div className="v">{unseenAlerts}<em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: 'var(--color-fg)' }}>new</em></div>
                     <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>nightly matches to your searches</div>
                   </a>
                 )}
@@ -1602,7 +1613,7 @@ export default function SavedPage() {
                     statNote="watching, live"
                     label="On the block"
                     body={summary.totalEst > 0
-                      ? `${formatPrice(summary.totalEst)} in estimates tracked to the hammer${summary.flagged > 0 ? ` — ${summary.flagged} flagged below market now.` : '.'}`
+                      ? `${formatPrice(summary.totalEst)} at estimate midpoint · ${summary.priced} of ${upcoming.length} lots priced${summary.flagged > 0 ? ` — ${summary.flagged} flagged below market now.` : '.'}`
                       : 'Tracked to the hammer — signals and bids follow every watch.'}
                     href="#watching"
                   />

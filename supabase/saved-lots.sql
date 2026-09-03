@@ -1,3 +1,6 @@
+-- SUPERSEDED (Sep 2 2026) by supabase/migrations/0001_saved_lots.sql, which
+-- folds in add-owned-column.sql + add-costbasis-note.sql + the saved_title /
+-- saved_artist columns. Historical record only — run the migrations/ files.
 -- lectr · saved-lots schema. Run once in the Supabase SQL editor.
 -- Saved lots are scoped per user by row-level security: a signed-in user can
 -- only ever read/write their own rows. No server code trusts the client — the

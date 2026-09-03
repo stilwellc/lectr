@@ -5,7 +5,7 @@ import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg } from '../utils';
+import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
@@ -147,8 +147,12 @@ function LotCard({
   // firstSeen ships from the crawler diff — read defensively: older data
   // files (and lots crawled before the stamp existed) don't carry it.
   const firstSeen = (lot as AuctionLot & { firstSeen?: string }).firstSeen;
+  // "New today" means TODAY: firstSeen === lastCrawl says only "new as of the
+  // last crawl", and a crawl that stalled kept every lot from that edition
+  // "new" for days. Same freshness gate as bid velocity — the crawl stamp
+  // must be today's date-slice, or a full ISO within 24h. Stale → nothing.
   const isNewToday = Boolean(
-    firstSeen && lastCrawl && firstSeen.slice(0, 10) === lastCrawl.slice(0, 10)
+    firstSeen && lastCrawl && crawlIsFresh(lastCrawl) && firstSeen.slice(0, 10) === lastCrawl.slice(0, 10)
   );
 
   function handleAddToCalendar(e: React.MouseEvent) {
@@ -678,3 +682,14 @@ function LotCard({
 // the query, so every keystroke remounts the cards outright — that's the
 // parent's key strategy, not reconciliation.
 export default memo(LotCard);
+
+/** The velocity freshness gate, for crawl stamps: a date-only stamp counts
+ *  only on its own day (localToday); a full ISO counts within 24h. Exported
+ *  so every "today"/"new" caption reads the same clock. */
+export function crawlIsFresh(stamp: string | undefined | null, nowMs = Date.now()): boolean {
+  if (!stamp) return false;
+  if (stamp.slice(0, 10) === localToday()) return true;
+  if (stamp.length <= 10) return false;
+  const t = Date.parse(stamp);
+  return !isNaN(t) && nowMs - t < 86_400_000 && nowMs >= t;
+}

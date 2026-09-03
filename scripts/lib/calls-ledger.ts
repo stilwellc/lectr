@@ -24,8 +24,10 @@ export type Call = {
   f?: number;           // the floor ('gap'/'vsbid') or opening ask ('quiet')
   m?: string;           // market at call time
   /** lane marker: gap shelf 'w'|'f' (wire/forming) · quiet anchor 'e'|'v'
-      (fair-est/appraised). First call wins, so a lot first seen forming
-      grades on its forming-day projection — earlier claims are harder. */
+      (fair-est/appraised) · card TIER 'x'|'g'|'p'|'t'|'m' (exact / grade-adj /
+      player / tcg / raw cardComps median — P0-2 per-tier grading). First call
+      wins, so a lot first seen forming grades on its forming-day projection —
+      earlier claims are harder. */
   s?: string;
   // grading (filled once the lot sells)
   r?: number;           // realized USD
@@ -80,8 +82,14 @@ export function emitReceipts(
   return rows.length;
 }
 
+export type TierCell = { n: number; graded: number; medRatio: number | null; within30Pct: number | null };
+export const CARD_TIER_CODE: Record<string, string> = { exact: 'x', 'grade-adj': 'g', player: 'p', 'tcg-exact': 't', 'tcg-grade-adj': 't', median: 'm' };
 export type CallsRecord = {
-  card: { n: number; graded: number; medRatio: number | null; within30Pct: number | null };
+  card: TierCell & {
+    /** per-tier split (P0-2): exact 'x' · grade-adj 'g' · player 'p' · tcg 't'
+        · raw cardComps median 'm' (legacy rows without a marker) */
+    byTier: Record<string, TierCell>;
+  };
   vsbid: { n: number; graded: number; medRatio: number | null; belowHit: number | null };
   /** THE GAP: medRatio = realized/projected close · floorHit = % of graded
       floor-carrying rows where realized ≥ floor (the claimed floor held).
@@ -104,8 +112,8 @@ export function gradeCalls(soldById: Map<string, { realizedUsd: number; saleDate
   }
   if (changed) fs.writeFileSync(LEDGER, gzipNdjson(rows as unknown as Record<string, unknown>[]));
 
-  const summarize = (k: Call['k']) => {
-    const all = rows.filter(c => c.k === k);
+  const summarize = (k: Call['k'], s?: string) => {
+    const all = rows.filter(c => c.k === k && (s === undefined || (c.s || 'm') === s));
     const g = all.filter(c => typeof c.r === 'number' && c.r! > 0 && c.p > 0);
     const ratios = g.map(c => c.r! / c.p).sort((a, b) => a - b);
     const med = ratios.length >= 20 ? ratios[Math.floor(ratios.length / 2)] : null;
@@ -123,6 +131,15 @@ export function gradeCalls(soldById: Map<string, { realizedUsd: number; saleDate
       medRatio: card.med !== null ? Math.round(card.med * 1000) / 1000 : null,
       within30Pct: card.ratios.length >= 20
         ? Math.round(100 * card.ratios.filter(x => x >= 0.7 && x <= 1.3).length / card.ratios.length) : null,
+      byTier: Object.fromEntries(['x', 'g', 'p', 't', 'm'].map(code => {
+        const t = summarize('card', code);
+        return [code, {
+          n: t.all.length, graded: t.g.length,
+          medRatio: t.med !== null ? Math.round(t.med * 1000) / 1000 : null,
+          within30Pct: t.ratios.length >= 20
+            ? Math.round(100 * t.ratios.filter(x => x >= 0.7 && x <= 1.3).length / t.ratios.length) : null,
+        }];
+      })),
     },
     vsbid: {
       n: vsbid.all.length, graded: vsbid.g.length,

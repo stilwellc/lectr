@@ -80,14 +80,12 @@ const revealLine = {
   hidden: {},
   visible: { transition: { delayChildren: 0.04, staggerChildren: 0.048 } },
 };
+// a plain fade per word (§2.6: no blur, no scale — the words simply arrive)
 const revealWord = {
-  hidden: { opacity: 0, scaleY: 0.95, scaleX: 0.92, filter: 'blur(12px)' },
+  hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    scaleY: 1,
-    scaleX: 1,
-    filter: 'blur(0px)',
-    transition: { duration: 0.62, ease: REVEAL_EASE },
+    transition: { duration: 0.5, ease: REVEAL_EASE },
   },
 };
 

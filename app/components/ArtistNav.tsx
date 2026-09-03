@@ -7,6 +7,7 @@ import { ARTISTS, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import CommandK, { OPEN_CK_EVENT } from './CommandK';
 import Flick from './Flick';
+import { useDialogFocus } from './useDialogFocus';
 import { useAuth } from '../lib/account';
 import { useUnseenAlertCount } from '../lib/alerts';
 
@@ -134,6 +135,10 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
   // The sheet (the only surface `open` still gates — the desktop finder now
   // opens CommandK): reset the filter, and let Escape or the scrim dismiss.
   // No focus-steal on open — the keyboard must not pop over the list.
+  // the sheet keeps Tab inside itself and hands focus back to the menu
+  // button on close; 'container' = no keyboard pop over the list
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(open && isMobile, sheetRef, { initial: 'container' });
   useEffect(() => {
     if (!open) return;
     setQuery('');
@@ -565,11 +570,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
               {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
               {unseenAlerts > 0 && (
-                // mint marker: "something new happened" is a verb, not the
-                // view's lamp — butter stays with the rail's active cell
+                // ink marker: "something new happened" is a verb — the lamp
+                // law keeps green for the market's up-read only
                 <span aria-label={`${unseenAlerts} new matches`} style={{
                   display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
-                  background: 'var(--color-up)', marginLeft: 6, verticalAlign: '2px',
+                  background: 'var(--color-fg)', marginLeft: 6, verticalAlign: '2px',
                 }} />
               )}
             </button>
@@ -634,6 +639,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       {open && isMobile && typeof document !== 'undefined' && createPortal(
         <div className="ray-maker-scrim" onClick={() => setOpen(false)} role="presentation">
           <div
+            ref={sheetRef}
             className="ray-maker-sheet"
             role="dialog"
             aria-modal="true"
@@ -658,7 +664,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     {s.path === '/profile' && unseenAlerts > 0 && (
                       <span aria-label={`${unseenAlerts} new matches`} style={{
                         display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
-                        background: 'var(--color-up)', marginLeft: 7, verticalAlign: '2px',
+                        background: 'var(--color-fg)', marginLeft: 7, verticalAlign: '2px',
                       }} />
                     )}
                   </button>

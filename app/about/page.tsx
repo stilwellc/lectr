@@ -497,10 +497,17 @@ function ProofCase({ c }: { c: typeof proof.cases[number] }) {
  *  the story — §05's restraint stated as tonight's number. */
 function LiveBand({ book }: { book: LiveBook }) {
   const share = (book.called / book.total) * 100;
+  // the book is read at BUILD time (live.ts) — "tonight" is the edition the
+  // page was built from, so its date prints beside the kicker
+  const asOf = book.generatedAt && !isNaN(Date.parse(book.generatedAt))
+    ? new Date(book.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    : null;
   return (
     <section className="deck-live">
       <div className="rail dk-s">
-        <span className="kicker dk-kick">Tonight&rsquo;s book</span>
+        <span className="kicker dk-kick">
+          Tonight&rsquo;s book{asOf && <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}> · as of {asOf}</span>}
+        </span>
         <h2 className="deck-h">
           <b data-count>{fmt(book.total)}</b> lots are on the book. lectr has something to say
           about <b data-count>{String(book.called)}</b>.

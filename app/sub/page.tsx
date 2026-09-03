@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import SubPage from './SubPage';
+import SubIndex from './SubIndex';
 
 /**
  * LEGACY query shell — /sub?id=<group>:<part> now lives at /sub/<group>/<part>
@@ -11,7 +12,8 @@ import SubPage from './SubPage';
  * path: a well-formed ?id= is router.replace()'d to the path form; keep for
  * at least one crawl cycle. No/malformed id keeps the old inline not-found
  * rendering (SubPage's own empty state) — kinder than bouncing a junk id
- * onto the site 404.
+ * onto the site 404. No id at all is the INDEX — every tracked sub-market,
+ * grouped by category (SubIndex).
  */
 function SubFromQuery() {
   const router = useRouter();
@@ -31,6 +33,7 @@ function SubFromQuery() {
     // of the dossier that is about to be replaced
     return <div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} />;
   }
+  if (!id) return <SubIndex />;
   return <SubPage key={id} slug={id} />;
 }
 

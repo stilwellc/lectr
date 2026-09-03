@@ -15,7 +15,15 @@ import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampReali
 import { readSegment } from './corpus-io';
 
 const LOT_BASE = 'https://bid.collectrea.com/lots';
+// The archive CDN host (rea-image-archive.nyc3.cdn.digitaloceanspaces.com). The
+// match starts AT the host, so the capture is scheme-less — stamp https: on it
+// (verified Sep 2026: the pages themselves link the https:// form).
 const IMG_HINT = /rea-image-archive[^"'\s]+\.(?:jpg|jpeg|png|webp)/i;
+function archiveImageUrl(html: string): string | null {
+  const m = html.match(IMG_HINT);
+  if (!m) return null;
+  return `https://${m[0].replace(/^(?:https?:)?\/\//i, '')}`;
+}
 // live lots image off Cloudinary (folder = the running auction, e.g. 2026-Summer)
 const LIVE_IMG = /res\.cloudinary\.com\/robertedwardauctions\/image\/upload[^"'\s]+\.(?:jpg|jpeg|png|webp)/i;
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -81,8 +89,7 @@ export function parseReaLot(html: string, id: number | string, house: 'REA' | 'H
   const bodyText = $('main').text() || $('body').text() || '';
   const auth = readAuth(cat, title, bodyText.slice(0, 4000));
 
-  const imgMatch = html.match(IMG_HINT);
-  const imageUrl = imgMatch ? imgMatch[0] : null;
+  const imageUrl = archiveImageUrl(html);
 
   const idPrefix = house === 'REA' ? 'rea' : 'hugginsscott';
   const url = urlOverride || `${LOT_BASE}/${id}`;
@@ -172,48 +179,86 @@ export function parseReaLive(html: string, id: number | string, house: 'REA' | '
  *  ids are NOT contiguous (2026 Summer spans 185118..195743), so the listing —
  *  not an id window — is the enumerator. `resolve` then re-fetches last night's
  *  upcoming ids that vanished from the grid: a closed lot's page flips to the
- *  archive markup and parseReaLot returns its settled sale — that same-id sold
- *  record is what retires the upcoming row (and is how new sold history now
- *  reaches the segment without a hand-tuned id window). */
+ *  archive markup (bid.* 302s to collectrea.com/archives/… — getHtml follows
+ *  it) and parseReaLot returns its settled sale — that same-id sold record is
+ *  what retires the upcoming row (and is how new sold history now reaches the
+ *  segment without a hand-tuned id window).
+ *
+ *  `ok` (the live-replace gate) is EARNED, not assumed (Sep 2 2026 audit — REA
+ *  Summer 2026, ~10K lots, was lost when a 200 grid with zero parseable lots
+ *  read as "the sale is empty" and evicted every upcoming row):
+ *   - grid unreachable → ok=false, nothing else runs
+ *   - grid answered with 0 ids ("Opening Soon" shell, or a markup change) →
+ *     ok=false; the resolve pass STILL runs so closed rows settle to sold
+ *   - lot pages fetched but NOTHING parsed (neither live nor closed) → ok=false
+ *  A lot the grid still lists but whose page reads status:'closed' (or has
+ *  already flipped to archive markup) is routed through parseReaLot right
+ *  here — it is a settled sale, not a gap. */
 export async function crawlReaLive(
   site: string,
   house: 'REA' | 'Huggins & Scott',
   prevUpcoming: AuctionLot[],
 ): Promise<{ live: AuctionLot[]; resolved: AuctionLot[]; ok: boolean }> {
   const ids = new Set<string>();
-  let ok = false;
+  let gridReached = false;
   for (let page = 1; page <= 200; page++) {
     const html = await getHtml(`${site}/lots?page=${page}`);
     if (!html) break;
-    ok = true; // the grid answered — an empty grid ("opening soon") is a fact, not a failure
+    gridReached = true;
     const before = ids.size;
     for (const m of Array.from(html.matchAll(/\/lots\/(\d+)/g))) ids.add(m[1]);
     if (ids.size === before) break; // page past the end repeats/empties → done
     await new Promise(r => setTimeout(r, 150));
   }
-  console.log(`[${house}] live grid: ${ids.size} lot ids${ok ? '' : ' (grid unreachable)'}`);
-  if (!ok) return { live: [], resolved: [], ok: false };
+  console.log(`[${house}] live grid: ${ids.size} lot ids${gridReached ? '' : ' (grid unreachable)'}`);
+  if (!gridReached) return { live: [], resolved: [], ok: false };
 
-  const live = (await mapPool(Array.from(ids), 3, async (id) => {
-    const html = await getHtml(`${site}/lots/${id}`);
-    if (!html) return null;
-    await new Promise(r => setTimeout(r, 120));
-    try { return parseReaLive(html, id, house, `${site}/lots/${id}`); } catch { return null; }
-  })).filter((x): x is AuctionLot => !!x);
-
-  // resolve: prior upcoming ids gone from tonight's grid → re-read as archive
   const idPrefix = house === 'REA' ? 'rea' : 'hugginsscott';
+  let fetched = 0, parsedLive = 0, parsedClosed = 0, nulls = 0;
+  const closedOnGrid: AuctionLot[] = [];
+  const tried = new Set<string>();
+  const live = (await mapPool(Array.from(ids), 3, async (id) => {
+    tried.add(id);
+    const url = `${site}/lots/${id}`;
+    const html = await getHtml(url);
+    if (!html) return null;
+    fetched++;
+    await new Promise(r => setTimeout(r, 120));
+    try {
+      const lv = parseReaLive(html, id, house, url);
+      if (lv) { parsedLive++; return lv; }
+      // still on the grid but not live: status:'closed' (or already the
+      // archive page) → its settled sale, via the sold parser
+      const sold = parseReaLot(html, id, house, url);
+      if (sold) { parsedClosed++; closedOnGrid.push(sold); } else nulls++;
+      return null;
+    } catch { nulls++; return null; }
+  }, `${house} live`)).filter((x): x is AuctionLot => !!x);
+  console.log(`[${house}] live pages: fetched ${fetched}/${ids.size} · live ${parsedLive} · closed→sold ${parsedClosed} · unparsed ${nulls}`);
+
+  // the gate: an empty grid or a grid whose pages parse to nothing is NOT an
+  // empty sale — keep last night's snapshot (the resolve below still settles
+  // whatever has actually closed)
+  let ok = true;
+  if (ids.size === 0) { ok = false; console.warn(`[${house}] live grid returned 0 lot ids — NOT ok; prior upcoming snapshot rides`); }
+  else if (parsedLive + parsedClosed === 0) { ok = false; console.error(`[${house}] live grid listed ${ids.size} ids but ${fetched} fetched pages parsed to NOTHING — NOT ok (markup change or wall?); prior upcoming snapshot rides`); }
+
+  // resolve: prior upcoming ids gone from tonight's grid (not re-fetching ids
+  // this pass already read) → re-read as archive
   const liveIds = new Set(live.map(l => l.id));
-  const gone = prevUpcoming.filter(l => l.id.startsWith(`${idPrefix}-`) && !liveIds.has(l.id));
-  const resolved = (await mapPool(gone, 3, async (prev) => {
+  const gone = prevUpcoming.filter(l => l.id.startsWith(`${idPrefix}-`) && !liveIds.has(l.id) && !tried.has(l.id.slice(idPrefix.length + 1)));
+  let resolveFetched = 0;
+  const resolvedGone = (await mapPool(gone, 3, async (prev) => {
     const rawId = prev.id.slice(idPrefix.length + 1);
     const url = (prev as { url?: string }).url || `${site}/lots/${rawId}`;
     const html = await getHtml(url);
     if (!html) return null;
+    resolveFetched++;
     await new Promise(r => setTimeout(r, 120));
     try { return parseReaLot(html, rawId, house, url); } catch { return null; }
-  })).filter((x): x is AuctionLot => !!x);
-  if (gone.length) console.log(`[${house}] resolve: ${gone.length} closed upcoming ids → ${resolved.length} settled sales`);
+  }, `${house} resolve`)).filter((x): x is AuctionLot => !!x);
+  if (gone.length) console.log(`[${house}] resolve: ${gone.length} closed upcoming ids → ${resolveFetched} fetched → ${resolvedGone.length} settled sales`);
+  const resolved = closedOnGrid.concat(resolvedGone);
   return { live, resolved, ok };
 }
 

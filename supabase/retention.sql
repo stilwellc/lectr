@@ -1,3 +1,14 @@
+-- ╔══════════════════════════════════════════════════════════════════════════╗
+-- ║ SUPERSEDED (Sep 2 2026) by supabase/migrations/0003_retention_loop.sql  ║
+-- ║ (+ 0004 indexes/unique, 0005 drops emailed_at, 0006 the actual purge).  ║
+-- ║ Kept as the historical record only — run the migrations/ files instead. ║
+-- ║                                                                          ║
+-- ║ NAMING NOTE: despite its name this file is a SCHEMA file for the         ║
+-- ║ "retention loop" (saved searches → alerts). It contains NO retention     ║
+-- ║ DELETES — no row was ever purged by it. Real data retention (seen        ║
+-- ║ alerts > 90d, collection_snapshots capped at 400/user) lives in          ║
+-- ║ migrations/0006_retention_purge.sql.                                     ║
+-- ╚══════════════════════════════════════════════════════════════════════════╝
 -- lectr · retention-loop schema: saved searches, alerts, collection snapshots.
 -- Run once in the Supabase SQL editor. These tables were live in prod before
 -- this file existed; it was reconstructed for the GA audit from every code
@@ -60,11 +71,10 @@ create policy "alerts owner select" on public.alerts
 create policy "alerts owner update" on public.alerts
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- emailed_at — the digest dedupe marker: send-digest selects emailed_at is
--- null and stamps it after a successful send, so a rerun of the sync job
--- never re-emails the same alerts. Written by the service key only; additive,
--- safe on the live table.
-alter table public.alerts add column if not exists emailed_at timestamptz;
+-- emailed_at — REMOVED. It was the email digest's dedupe marker; the digest
+-- was deleted under the NO EMAIL FEATURES law and migrations/0005 drops the
+-- column. The statement is kept commented so the historical record is honest:
+--   alter table public.alerts add column if not exists emailed_at timestamptz;
 
 -- ── collection_snapshots — one row per user per day (client upsert on
 --    user_id,snap_date) powering the profile over-time chart.

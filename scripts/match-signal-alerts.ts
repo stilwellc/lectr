@@ -5,23 +5,35 @@
  *      below-market signal it did NOT carry when they saved it.
  *   2. YOUR MARKETS — a fresh below-market flag landed in a market the user
  *      demonstrably watches (derived from their saved lots' artists).
+ *   3. HAMMER DAY — a watched lot closes within 24h.
  *
  * Rides the EXISTING alerts plumbing with zero schema changes: alerts.search_id
  * is NOT NULL with a UNIQUE(search_id, lot_id) — so each kind lives under a
- * per-user SYNTHETIC saved_search (marker in query._signal). The inbox and the
- * digest already render alerts grouped under their search's name, so these
- * appear as standing sections ("Watchlist signals", "Below market in your
- * markets") with zero client changes required; dedupe (one alert per
- * search×lot, ever) comes free from the same unique index.
+ * per-user SYNTHETIC saved_search (marker in query._signal). The inbox renders
+ * alerts grouped under their search's name, so these appear as standing
+ * sections ("Watchlist signals", "Below market in your markets", "Hammer day")
+ * with zero client changes required; dedupe (one alert per search×lot, ever)
+ * comes free from the same unique index.
  *
  * Honesty: an alert states a measured signal (label + the engine's read),
  * never advice. The vertical feed is capped so a big crawl night can't bury
  * the inbox.
  *
+ * INPUT (Sep 2 2026): the eager served payload public/data/ray/upcoming.json
+ * (every live lot, with value.signal / firstSeen / saleDateTime / artist —
+ * all the fields read here). Every signal kind fires on LIVE lots only, so
+ * the live book is sufficient; the full corpus is loaded lazily ONLY to
+ * recover the market of a watched lot that has already sold and predates
+ * the saved_artist snapshot (legacy rows, pre-Aug 27 2026), and never at all
+ * once those age out. Every PostgREST call retries with bounded backoff; an
+ * exhausted retry THROWS so the workflow step goes red.
+ *
  * Needs SUPABASE_URL + SUPABASE_SERVICE_KEY (skips silently without them).
  * Runs after sync-lots-db + match-alerts in the nightly sync job.
  */
-import { readCorpus } from './corpus-io';
+import fs from 'fs';
+import path from 'path';
+import { readCorpus, SERVED_DIR } from './corpus-io';
 import { marketOf } from '../app/constants';
 
 const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -35,29 +47,61 @@ const WATCH_NAME = 'Watchlist signals';
 const VERT_NAME = 'Below market in your markets';
 const HAMMER_NAME = 'Hammer day';
 
-async function rest(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${url}/rest/v1/${path}`, {
-    ...init,
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-  });
-  if (!res.ok) throw new Error(`[signal-alerts] ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`);
-  return res;
+// ── PostgREST with bounded retry (4 tries, 2s → 4s → 8s) ────────────────────
+class Fatal extends Error {}
+const RETRIES = 4;
+async function rest(p: string, init: RequestInit = {}): Promise<Response> {
+  let last: unknown = null;
+  for (let attempt = 0; attempt < RETRIES; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * 2 ** (attempt - 1)));
+    try {
+      const res = await fetch(`${url}/rest/v1/${p}`, {
+        ...init,
+        headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (res.ok) return res;
+      const msg = `[signal-alerts] ${init.method || 'GET'} ${p.split('?')[0]}: ${res.status} ${(await res.text()).slice(0, 200)}`;
+      if (res.status < 500 && res.status !== 408 && res.status !== 429) throw new Fatal(msg);
+      last = new Error(msg);
+    } catch (e) {
+      if (e instanceof Fatal) throw e;
+      last = e;
+    }
+    console.warn(`[signal-alerts] attempt ${attempt + 1}/${RETRIES} failed: ${(last as Error)?.message || last}`);
+  }
+  throw last instanceof Error ? last : new Error(String(last));
 }
 
-async function restAll(path: string): Promise<any[]> {
+async function restAll(p: string): Promise<any[]> {
   const PAGE = 1000;
   const out: any[] = [];
   for (let offset = 0; ; offset += PAGE) {
-    const page = await (await rest(`${path}&limit=${PAGE}&offset=${offset}`)).json();
+    const page = await (await rest(`${p}&limit=${PAGE}&offset=${offset}`)).json();
     out.push(...page);
     if (page.length < PAGE) break;
   }
   return out;
+}
+
+/** the live book: upcoming.json's lots (eager, slim), else the corpus filtered
+ *  (duplicated from match-alerts.ts on purpose — standalone entry points) */
+function readLiveLots(tag: string): any[] {
+  const p = path.join(SERVED_DIR, 'upcoming.json');
+  if (fs.existsSync(p)) {
+    try {
+      const up = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (Array.isArray(up?.lots)) {
+        console.log(`${tag} live book from upcoming.json: ${up.lots.length} lots (generated ${up.generatedAt || '?'})`);
+        return up.lots;
+      }
+    } catch (e) {
+      console.warn(`${tag} upcoming.json unreadable (${(e as Error).message}) — falling back to the corpus`);
+    }
+  } else {
+    console.warn(`${tag} upcoming.json absent — falling back to the full corpus`);
+  }
+  return (readCorpus() as any[]).filter(l => l.status === 'upcoming');
 }
 
 /** find-or-create the per-user synthetic search a signal kind hangs under */
@@ -90,6 +134,8 @@ async function insertAlerts(rows: { user_id: string; search_id: string; lot_id: 
   });
 }
 
+const altId = (id: string) => (id.endsWith('~') ? id.slice(0, -1) : `${id}~`);
+
 async function main() {
   if (!url || !key) { console.log('[signal-alerts] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — skipping'); return; }
 
@@ -107,15 +153,20 @@ async function main() {
     synthetic.get(s.user_id)!.set(kind, s.id);
   }
 
-  const corpus = readCorpus() as any[];
+  const live = readLiveLots('[signal-alerts]');
   const byId = new Map<string, any>();
-  for (const l of corpus) byId.set(String(l.id), l);
-  const resolve = (id: string) =>
-    byId.get(id) ?? byId.get(id.endsWith('~') ? id.slice(0, -1) : `${id}~`);
+  for (const l of live) byId.set(String(l.id), l);
+  const resolve = (id: string) => byId.get(id) ?? byId.get(altId(id));
 
   const now = Date.now();
   const isBelow = (l: any) => String(l?.value?.signal?.label || '').startsWith('below');
   const isLive = (l: any) => l && l.status === 'upcoming' && !l.resultsPending;
+
+  const byUser = new Map<string, any[]>();
+  for (const r of saved) {
+    if (!byUser.has(r.user_id)) byUser.set(r.user_id, []);
+    byUser.get(r.user_id)!.push(r);
+  }
 
   // ── 1 · WATCHLIST SIGNALS — watched lots newly reading below market.
   // "Newly": the save's baseline (signed convention: positive = below at
@@ -123,11 +174,6 @@ async function main() {
   // pre-2026-08-27) can't prove direction, so a positive legacy value is
   // treated as possibly-already-below and does NOT alert (never cry wolf).
   let watchWritten = 0;
-  const byUser = new Map<string, any[]>();
-  for (const r of saved) {
-    if (!byUser.has(r.user_id)) byUser.set(r.user_id, []);
-    byUser.get(r.user_id)!.push(r);
-  }
   for (const [userId, rows] of Array.from(byUser.entries())) {
     const hits: string[] = [];
     for (const r of rows) {
@@ -144,18 +190,35 @@ async function main() {
   }
 
   // ── 2 · YOUR MARKETS — fresh below-market flags in markets the user watches
-  const freshBelow = corpus.filter(l =>
+  const freshBelow = live.filter(l =>
     isLive(l) && isBelow(l) && l.firstSeen &&
     now - Date.parse(String(l.firstSeen)) < FRESH_MS);
   let vertWritten = 0;
   if (freshBelow.length) {
+    // A watched lot that is no longer live is not in upcoming.json. Its market
+    // comes from the saved_artist snapshot; ONLY legacy rows without one need
+    // the corpus, loaded once and lazily — and only for those ids.
+    let settledArtist: Map<string, string> | null = null;
+    const needCorpus = new Set<string>();
+    for (const rows of Array.from(byUser.values())) {
+      for (const r of rows) if (!resolve(String(r.lot_id)) && !r.saved_artist) needCorpus.add(String(r.lot_id));
+    }
+    if (needCorpus.size) {
+      console.log(`[signal-alerts] ${needCorpus.size} watched lots are settled with no saved_artist snapshot — reading the corpus once for their makers`);
+      settledArtist = new Map();
+      for (const l of readCorpus() as any[]) {
+        const id = String(l.id);
+        if (l.artist && (needCorpus.has(id) || needCorpus.has(altId(id)))) settledArtist.set(id, String(l.artist));
+      }
+    }
     for (const [userId, rows] of Array.from(byUser.entries())) {
-      // the user's markets, from their watched lots' artists (corpus first,
-      // saved_artist snapshot as the fallback for rolled-off lots)
+      // the user's markets, from their watched lots' artists (live book first,
+      // saved_artist snapshot next, corpus for legacy settled rows)
       const markets = new Set<string>();
       for (const r of rows) {
-        const lot = resolve(String(r.lot_id));
-        const artist = lot?.artist ?? r.saved_artist;
+        const id = String(r.lot_id);
+        const lot = resolve(id);
+        const artist = lot?.artist ?? r.saved_artist ?? settledArtist?.get(id) ?? settledArtist?.get(altId(id));
         if (artist) { const m = marketOf(String(artist)); if (m) markets.add(m); }
       }
       if (!markets.size) continue;

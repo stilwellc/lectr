@@ -22,6 +22,8 @@
  *     anything (IQR/median guard) or too thin (< 3)
  */
 import { AuctionLot, ObjectType, SoldComp } from '../types';
+// THE quantile (P2): one lerp convention shared with the engine band/backtest
+import { quantile } from './value';
 
 export type Form =
   | 'book' | 'ephemera' | 'poster' | 'photograph' | 'textile'
@@ -643,8 +645,8 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   const med = median(prices);
 
   // dispersion guard: if the pool disagrees with itself, say nothing
-  const q1 = prices[Math.floor(prices.length * 0.25)];
-  const q3 = prices[Math.floor(prices.length * 0.75)];
+  const q1 = quantile(prices, 0.25);
+  const q3 = quantile(prices, 0.75);
   if (med > 0 && (q3 - q1) / med > 2.5) return null;
 
   // FORM-pool sanity (same ×5 band the edition path enforces): a same-form
@@ -1015,8 +1017,8 @@ export function soldCompBand(lot: AuctionLot, allLots: AuctionLot[]): SoldComp |
 
   const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
   const med = median(prices);
-  const q1 = prices[Math.floor(prices.length * 0.25)];
-  const q3 = prices[Math.floor(prices.length * 0.75)];
+  const q1 = quantile(prices, 0.25);
+  const q3 = quantile(prices, 0.75);
   // dispersion guard — same shape as the frozen engine
   if (med > 0 && (q3 - q1) / med > 2.5) return null;
 
@@ -1142,8 +1144,8 @@ export function scienceReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Re
     .map(x => x[1]);
   const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
   const med = median(prices);
-  const q1 = prices[Math.floor(prices.length * 0.25)];
-  const q3 = prices[Math.floor(prices.length * 0.75)];
+  const q1 = quantile(prices, 0.25);
+  const q3 = quantile(prices, 0.75);
   if (med > 0 && (q3 - q1) / med > 2.5) return null;
   const est = estUsdBand(lot);
   const em = est.low && est.high ? (est.low + est.high) / 2 : null;
@@ -1183,8 +1185,8 @@ export function makerReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Refe
     .slice(0, 60);
   const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
   const med = median(prices);
-  const q1 = prices[Math.floor(prices.length * 0.25)];
-  const q3 = prices[Math.floor(prices.length * 0.75)];
+  const q1 = quantile(prices, 0.25);
+  const q3 = quantile(prices, 0.75);
   if (!(med > 0) || (q3 - q1) / med > 6) return null;
   return { kind: 'reference', confidence: 'low', med, q1, q3, n: pool.length, scope };
 }
@@ -1203,8 +1205,8 @@ export function cultureReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Re
     if (pool.length < 3) return null;
     const prices = pool.map(l => l.priceUsd!).sort((a, b) => a - b);
     const med = median(prices);
-    const q1 = prices[Math.floor(prices.length * 0.25)];
-    const q3 = prices[Math.floor(prices.length * 0.75)];
+    const q1 = quantile(prices, 0.25);
+    const q3 = quantile(prices, 0.75);
     if (med > 0 && (q3 - q1) / med > 2.5) return null;
     const est = estUsdBand(lot);
     const em = est.low && est.high ? (est.low + est.high) / 2 : null;
