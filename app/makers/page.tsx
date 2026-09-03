@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTISTS, MARKETS, marketArtists, marketOf, rosterNoun, type Market } from '../constants';
+import { ARTISTS, MARKETS, ROSTER, marketArtists, marketOf, rosterNoun, type Market } from '../constants';
 import { useMarket } from '../lib/market';
 import { classifyForm, formsForMarket } from '../lib/comps';
 import { isMisattributed } from '../lib/attribution';
@@ -932,7 +932,11 @@ export default function MakersPage() {
             <div style={{ marginBottom: 22 }}><MarketSwitch compact /></div>
             <Masthead
               kicker={`The roster · ${activeLabel} market`}
-              datum={<CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
+              datum={activeKey === 'all'
+                // the full roster is 32 named makers + 22 category pseudo-
+                // artists — "54 tracked names" counted categories as names
+                ? `${ROSTER.makers} makers · ${ROSTER.categories} categories`
+                : <CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
               title={<>Every maker, one <Accent>ledger</Accent>.</>}
               sub={
                 <>
@@ -997,8 +1001,8 @@ export default function MakersPage() {
                 />
               )}
               <Cell
-                stat={rosterCount.toLocaleString()}
-                statNote={noun}
+                stat={activeKey === 'all' ? ROSTER.makers.toLocaleString() : rosterCount.toLocaleString()}
+                statNote={activeKey === 'all' ? `makers · ${ROSTER.categories} categories` : noun}
                 mark={<FigPools size={96} />}
                 label="The roster"
                 body={`Every maker lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.`}
