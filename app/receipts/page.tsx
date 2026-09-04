@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useFullLots } from '../hooks/useRayData';
+import { useFullLotsOnDemand, retryFullLoad } from '../hooks/useRayData';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -50,7 +50,14 @@ interface CallsRecord {
 interface ReceiptsFile { record: CallsRecord; rows: ReceiptRow[]; generatedAt: string }
 
 export default function ReceiptsPage() {
-  const { allLots, lastCrawl, loading, fullLoaded, backtest, market } = useFullLots();
+  // LAZY CORPUS (Sep 2026 perf pass). Everything on this page except the
+  // Settled-flags tape — the forward ledger (receipts.json, 1KB), the replayed
+  // record (backtest.json), the market summary — is phase-1 eager. Only
+  // section 3 reads the sold corpus, so the corpus now opens on the reader's
+  // ask (see the block below) instead of streaming at first paint. Measured:
+  // 256.4MB → 10.8-11.0MB before network idle.
+  const { allLots, lastCrawl, loading, fullLoaded, fullError, fullRequested, requestFullLots, backtest, market } =
+    useFullLotsOnDemand(false);
 
   const [tape, setTape] = useState<ReceiptsFile | null | 'missing'>(null);
   useEffect(() => {
@@ -249,39 +256,106 @@ export default function ReceiptsPage() {
               </div>
             )}
 
-            {/* ── 3 · SETTLED FLAGS — stamped live, judged at the hammer ── */}
-            {settledFlags.length > 0 && (
-              <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }}>
-                <div className="rcp-head">
-                  <span className="kicker">Recently settled flags · the signal was in the nightly data before the sale</span>
-                  <i className="rcp-rule" />
-                </div>
-                <div className="rcp-tape">
-                  <div className="rcp-cols kicker" aria-hidden>
-                    <span>Hammered</span>
-                    <span>Work</span>
-                    <span style={{ textAlign: 'right' }}>Flagged</span>
-                    <span style={{ textAlign: 'right' }}>Realized</span>
-                    <span style={{ textAlign: 'right' }}>vs est</span>
-                  </div>
-                  {settledFlags.map(({ l, sig, vsEst }) => (
-                    <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="rcp-cols rcp-row">
-                      <span className="rcp-date">{formatDate(l.saleDate)}</span>
-                      <span className="rcp-work"><b>{ARTIST_LABEL[l.artist] || l.artist}</b> {craftTitle(l.title)}</span>
-                      <span className="rcp-num" style={{ color: 'var(--color-up)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind">vs comps</span></span>
-                      <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(l.priceUsd!)}</span>
-                      <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 } : { color: 'var(--color-text-faint)' }}>
-                        {vsEst != null ? fmtSignedPct(Math.round(vsEst)) : '—'}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-                <p className="rcp-note" style={{ marginTop: 14 }}>
-                  Two different records, never blended: the forward tape grades calls logged before each hammer;
-                  the replayed record re-runs the whole history. Both print their n and abstain below it.
-                </p>
+            {/* ── 3 · SETTLED FLAGS — stamped live, judged at the hammer ──
+                THE ONE corpus-fed block on this page (everything above is
+                receipts.json + backtest.json + market.json, all eager). It is
+                also the page's cheapest content to defer: at most 20 rows of
+                already-settled history, against the whole sold book. So it
+                opens on the ask — home's "Show the archive" pattern — instead
+                of streaming the corpus at first paint. Nothing is withheld:
+                the head, the promise and the button are always printed, and
+                the tape is one click away.
+
+                HONESTY: the list is `fullLoaded`-gated, never drawn from a
+                half-arrived corpus — a settled-flags tape missing shards is a
+                silently short record, not a slow one. */}
+            <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }} aria-busy={fullRequested && !fullLoaded ? true : undefined}>
+              <div className="rcp-head">
+                <span className="kicker">Recently settled flags · the signal was in the nightly data before the sale</span>
+                <i className="rcp-rule" />
               </div>
-            )}
+
+              {!fullRequested ? (
+                <p className="rcp-note">
+                  Every lot that carried a Below Market flag while live and has since hammered, judged against its
+                  estimate. Reading them means loading the full sold book, so it waits to be asked for.{' '}
+                  <button
+                    type="button"
+                    className="rcp-link"
+                    aria-expanded={false}
+                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+                    onClick={requestFullLots}
+                  >
+                    Show the settled flags <Flick size={9} />
+                  </button>
+                </p>
+              ) : fullError && !fullLoaded ? (
+                <p className="rcp-note">
+                  The sold book didn&rsquo;t load, so the settled flags can&rsquo;t be read.{' '}
+                  <button
+                    type="button"
+                    className="rcp-link"
+                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+                    onClick={() => retryFullLoad()}
+                  >
+                    Try again
+                  </button>
+                </p>
+              ) : !fullLoaded ? (
+                /* the quiet arrival state — the tape's own shape, held at its
+                   own height. No spinner, no shifted layout, no partial rows. */
+                <>
+                  <div className="rcp-tape">
+                    <div className="rcp-cols kicker" aria-hidden>
+                      <span>Hammered</span>
+                      <span>Work</span>
+                      <span style={{ textAlign: 'right' }}>Flagged</span>
+                      <span style={{ textAlign: 'right' }}>Realized</span>
+                      <span style={{ textAlign: 'right' }}>vs est</span>
+                    </div>
+                    {[0, 1, 2, 3, 4, 5].map(i => (
+                      <div key={i} className="rcp-cols rcp-row" aria-hidden>
+                        <span className="ray-sk" style={{ width: 68, height: 11 }} />
+                        <span className="ray-sk" style={{ width: '58%', height: 11 }} />
+                        <span className="ray-sk" style={{ width: 52, height: 11, marginLeft: 'auto' }} />
+                        <span className="ray-sk" style={{ width: 62, height: 11, marginLeft: 'auto' }} />
+                        <span className="ray-sk" style={{ width: 44, height: 11, marginLeft: 'auto' }} />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="rcp-note" style={{ marginTop: 14 }}>Reading the settled flags off the full book&hellip;</p>
+                </>
+              ) : settledFlags.length === 0 ? (
+                <p className="rcp-note">No flagged lot on the current book has settled yet.</p>
+              ) : (
+                <>
+                  <div className="rcp-tape">
+                    <div className="rcp-cols kicker" aria-hidden>
+                      <span>Hammered</span>
+                      <span>Work</span>
+                      <span style={{ textAlign: 'right' }}>Flagged</span>
+                      <span style={{ textAlign: 'right' }}>Realized</span>
+                      <span style={{ textAlign: 'right' }}>vs est</span>
+                    </div>
+                    {settledFlags.map(({ l, sig, vsEst }) => (
+                      <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="rcp-cols rcp-row">
+                        <span className="rcp-date">{formatDate(l.saleDate)}</span>
+                        <span className="rcp-work"><b>{ARTIST_LABEL[l.artist] || l.artist}</b> {craftTitle(l.title)}</span>
+                        <span className="rcp-num" style={{ color: 'var(--color-up)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind">vs comps</span></span>
+                        <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(l.priceUsd!)}</span>
+                        <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 } : { color: 'var(--color-text-faint)' }}>
+                          {vsEst != null ? fmtSignedPct(Math.round(vsEst)) : '—'}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                  <p className="rcp-note" style={{ marginTop: 14 }}>
+                    Two different records, never blended: the forward tape grades calls logged before each hammer;
+                    the replayed record re-runs the whole history. Both print their n and abstain below it.
+                  </p>
+                </>
+              )}
+            </div>
           </section>
         </RayEntrance>
       )}

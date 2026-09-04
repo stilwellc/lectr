@@ -1,0 +1,66 @@
+# Wayback backfill for the two Struts-platform houses — Propstore and Julien's.
+#
+# Both live hosts are walled (juliensauctions.com = Cloudflare 403;
+# propstoreauction.com = AWS-WAF 202-empty; julienslive.com 301s to a host that
+# no longer resolves), so realized prices come from Wayback captures of their
+# lot-details pages. Recon, CDX counts and MEASURED yields live in
+# scripts/_qa/JULIENS_PROPSTORE_PLAN.md — headline: Julien's ≈ 14,038 captured
+# lots at a 76% sold-rate (≈10K rows); Propstore ≈ 6,899 at 14% (≈1K rows,
+# because the Archive mostly captured its lots BEFORE the sale closed).
+#
+# The walk unions into the house's segment on R2 (fresh id wins, nothing is
+# evicted); tonight's assemble picks it up. Dispatch-only, and sliceable:
+# web.archive.org throttles hard, so a full Julien's walk is several dispatches
+# with --skip/--cap (the MLB idwalk pattern) rather than one job.
+name: Backfill Struts houses (Wayback)
+on:
+  workflow_dispatch:
+    inputs:
+      house:
+        description: 'which house to walk'
+        type: choice
+        options: [propstore, juliens]
+        default: propstore
+      skip:
+        description: 'skip the first N manifest rows (slice a long walk across dispatches)'
+        default: '0'
+      cap:
+        description: 'walk at most N rows this dispatch (0 = no cap)'
+        default: '4000'
+      delay:
+        description: 'ms between requests, per worker (the Archive throttles — keep >= 400)'
+        default: '400'
+# SEGMENT LOCK: the same per-house group nightly.yml's crawl matrix uses, so a
+# pull → mutate → push here can never interleave with another writer's.
+concurrency:
+  group: segments-${{ inputs.house }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      # STRICT pull (no `|| echo` fallback): a failed pull followed by a
+      # merge-and-push would publish a slice-only segment over the real one.
+      - name: Pull last-good segment
+        run: bash scripts/data-store.sh pull-segment ${{ inputs.house }}
+      # The manifest is derived, not checked in: one CDX query, reduced to the
+      # LATEST capture per (catalog, lot). "Latest" is the whole yield story —
+      # an earlier capture of the same lot usually predates its sale close.
+      - name: Build the Wayback manifest
+        timeout-minutes: 30
+        run: npx tsx scripts/backfill-struts-wayback.ts --house ${{ inputs.house }} --build-manifest
+      - name: Walk the archived lot pages
+        timeout-minutes: 300
+        run: npx tsx scripts/backfill-struts-wayback.ts --house ${{ inputs.house }} --skip ${{ inputs.skip || 0 }} --cap ${{ inputs.cap || 0 }} --conc 2 --delay ${{ inputs.delay || 400 }} --write
+      - name: Push segment
+        run: bash scripts/data-store.sh push-segment ${{ inputs.house }}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
@@ -47,7 +47,7 @@ export interface BacktestBucket {
   beatHighHonestPct?: number;
 }
 
-interface RayData {
+export interface RayData {
   statsByArtist: Record<string, MarketStats>;
   allLots: AuctionLot[];
   tape: TapeByMarket;
@@ -791,6 +791,92 @@ export function useFullLots(): RayData {
   const base = useRayData();
   useEffect(() => { triggerFullLoad(); }, []);
   return base;
+}
+
+/** The on-demand shape of the phase-2 tier: everything useRayData() returns,
+    plus the trigger and its request state — so a surface can hold the corpus
+    back until a section that actually reads it is reachable. */
+export interface OnDemandLots extends RayData {
+  /** a surface has ASKED for the corpus this session. NOT arrival — the
+      fetch may still be in flight; `fullLoaded` is arrival. */
+  fullRequested: boolean;
+  /** ask for the corpus now. Idempotent per session; safe from an event
+      handler, an effect, or an IntersectionObserver callback. */
+  requestFullLots: () => void;
+}
+
+/**
+ * THE ONE LAZY MECHANISM (Sep 2026 perf pass).
+ *
+ * `useFullLots()` streams the entire sold corpus (14 `lots-*.json` shards,
+ * ~257MB raw / ~35MB brotli) the moment it mounts. Four surfaces paid that on
+ * FIRST PAINT — /profile, /lot/*, /makers, /receipts — for figures most
+ * visits never reach (a signed-out desk, a lot whose certificate already
+ * resolved from Supabase, a maker face photo, a settled-flags tape three
+ * screens down). This hook is the same tier, DEMAND-DRIVEN:
+ *
+ *   const { allLots, fullLoaded, fullRequested, requestFullLots } =
+ *     useFullLotsOnDemand(needItNow);
+ *
+ * `enabled` requests immediately — pass a CHEAP, CORPUS-FREE predicate ("this
+ * desk has saved lots", "this lot carries no stamped engine call"). The
+ * returned trigger covers everything else: a section scrolling into view
+ * (useVisibilityTrigger below), a dossier opening, a hover pre-warm.
+ *
+ * The eager `useFullLots()` is unchanged for callers that legitimately need
+ * the corpus at mount (/analytics, /makers/[slug], ComparableModal), and
+ * `retryFullLoad()` still works from either.
+ *
+ * HONESTY LAW: `fullRequested` is not `fullLoaded`. Any count, median or
+ * total derived from the corpus must still gate on `fullLoaded` — a pool that
+ * is still arriving must abstain (quiet loading state), never print small.
+ */
+export function useFullLotsOnDemand(enabled = false): OnDemandLots {
+  const base = useRayData();
+  // seeded from the module flag so a second surface in the same session
+  // (or a warm back-nav) renders its arrived state rather than replaying a
+  // "not asked yet" frame
+  const [requested, setRequested] = useState(() => fullRequested);
+  const requestFullLots = useCallback(() => {
+    triggerFullLoad();
+    setRequested(true);
+  }, []);
+  useEffect(() => { if (enabled) requestFullLots(); }, [enabled, requestFullLots]);
+  return { ...base, fullRequested: requested, requestFullLots };
+}
+
+/**
+ * Attach the returned ref to the element that GATES a lazy read (the comps
+ * section, the settled-flags block): `onVisible` fires ONCE, `rootMargin`
+ * ahead of that element entering the viewport, so a multi-second stream
+ * starts before the reader arrives instead of at first paint.
+ *
+ * `onVisible` must be stable (useCallback / requestFullLots). Where
+ * IntersectionObserver is absent (old Safari, jsdom) it fires immediately —
+ * degrading to today's eager behaviour rather than withholding content.
+ */
+export function useVisibilityTrigger(
+  onVisible: () => void,
+  { enabled = true, rootMargin = '600px 0px' }: { enabled?: boolean; rootMargin?: string } = {},
+): (el: Element | null) => void {
+  const fired = useRef(false);
+  const ioRef = useRef<IntersectionObserver | null>(null);
+  useEffect(() => () => { ioRef.current?.disconnect(); ioRef.current = null; }, []);
+  return useCallback((el: Element | null) => {
+    // React hands null on unmount / re-attach — drop the old observer first
+    if (ioRef.current) { ioRef.current.disconnect(); ioRef.current = null; }
+    if (!el || fired.current || !enabled) return;
+    if (typeof IntersectionObserver === 'undefined') { fired.current = true; onVisible(); return; }
+    const io = new IntersectionObserver(entries => {
+      if (!entries.some(e => e.isIntersecting)) return;
+      fired.current = true;
+      io.disconnect();
+      ioRef.current = null;
+      onVisible();
+    }, { rootMargin });
+    io.observe(el);
+    ioRef.current = io;
+  }, [enabled, rootMargin, onVisible]);
 }
 
 export interface SoldArchive {

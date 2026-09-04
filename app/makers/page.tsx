@@ -8,7 +8,7 @@ import { classifyForm, formsForMarket } from '../lib/comps';
 import { isMisattributed } from '../lib/attribution';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
-import { useFullLots } from '../hooks/useRayData';
+import { useFullLotsOnDemand } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
 import { useAuth } from '../lib/account';
@@ -547,12 +547,18 @@ const MakerRowItem = React.memo(function MakerRowItem({
 });
 
 export default function MakersPage() {
-  // useFullLots triggers the corpus in the BACKGROUND: every figure still
-  // paints from phase 1 (stats/eager upcoming) instantly, but the maker
-  // photos — drawn from real lot images — fill in for makers with no live
-  // lot as the sold history lands. An image appearing is decorative
-  // progressive enhancement, never a figure that could mislead.
-  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand } = useFullLots();
+  // LAZY CORPUS (Sep 2026 perf pass). EVERY FIGURE on this page is phase-1
+  // eager: the directory rows read statsByArtist (stats.json), the verified
+  // reads read market.json, and the live book / flags read the eager upcoming
+  // lots — which carry every live lot, so those counts are complete without
+  // the corpus. The ONLY corpus consumer is heroBySlug: the maker face photo
+  // (and the dossier's hero banner), sourced from the maker's own highest-
+  // value photographed lot. That is decorative progressive enhancement, never
+  // a figure that could mislead — so the ~35MB stream now waits for a reader
+  // who is actually looking: opening a dossier, or the first scroll/keypress/
+  // pointer on the directory. A bounce pays nothing.
+  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand, requestFullLots } =
+    useFullLotsOnDemand(false);
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -788,7 +794,12 @@ export default function MakersPage() {
   }, [rows, mktSet]);
 
   // ── stable callbacks for the memoized rows ──
-  const onToggleOpen = useCallback((slug: string) => setOpen(o => (o === slug ? null : slug)), []);
+  // opening a dossier is the explicit ask for the maker's own photograph —
+  // the corpus is the only place that image comes from
+  const onToggleOpen = useCallback((slug: string) => {
+    requestFullLots();
+    setOpen(o => (o === slug ? null : slug));
+  }, [requestFullLots]);
   const onToggleCompare = useCallback((slug: string) => {
     setCompare(c => c.includes(slug) ? c.filter(s => s !== slug) : c.length >= 4 ? c : [...c, slug]);
   }, []);
@@ -798,6 +809,19 @@ export default function MakersPage() {
     if (existing) void removeSearch(existing.id);
     else void saveSearch(`Following ${label}`, { player: slug, playerName: label });
   }, [user, openLogin, searches, removeSearch, saveSearch]);
+
+  /* PRE-WARM on the first sign of engagement — one shot, passive listeners,
+     removed the moment it fires. First paint stays free of the corpus; a
+     reader who scrolls or reaches for the keyboard gets the faces streaming
+     before they open anything. (Deep-linked ?open= asks for it outright.) */
+  useEffect(() => {
+    if (deepLinked.current) { requestFullLots(); return; }
+    const ev = ['scroll', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+    const fire = () => { off(); requestFullLots(); };
+    const off = () => ev.forEach(e => window.removeEventListener(e, fire));
+    ev.forEach(e => window.addEventListener(e, fire, { passive: true, once: true }));
+    return off;
+  }, [requestFullLots]);
 
   // deep link ?open= — land on the dossier once the ledger has painted.
   // `open` is a dep too: on a WARM cache loading is already false at mount,

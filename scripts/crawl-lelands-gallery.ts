@@ -121,6 +121,9 @@ async function main() {
   // hobby season is ~a quarter; the exact close day isn't in the name);
   // --auction narrows on the dropdown name itself
   const saleDateArg = argStr('sale-date', '');
+  // --dump <path>: write every crawled lot as NDJSON for offline inspection
+  // (diagnosing the price bleed: compare crawled prices against the served ledger).
+  const dumpPath = argStr('dump', '');
   const auctionArg = argStr('auction', '').toLowerCase();
   if (saleDateArg && !/^\d{4}-\d{2}-\d{2}$/.test(saleDateArg)) { console.error('--sale-date must be YYYY-MM-DD'); process.exit(1); }
   const WINDOW_MS = 75 * 86_400_000;
@@ -214,6 +217,30 @@ async function main() {
   const rep = assertInvariants(settledOnly(all).good);
   console.log(`[gal:${cfg.seg}] invariant FATALs: ${rep.fatal.length}`);
   rep.fatal.slice(0, 6).forEach((f) => console.error('  FATAL', f));
+  if (dumpPath) {
+    const fs = await import('fs');
+    fs.writeFileSync(dumpPath, all.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    console.log(`[gal] dumped ${all.length} lots → ${dumpPath}`);
+  }
   if (!write) console.log('[gal] dry run (pass --write to persist; it writes incrementally per auction)');
+
+  // SILENT-ZERO GUARD (Sep 3 2026). A heal that reads nothing must not report
+  // success. The Sep 3 Memory Lane run crawled its one targeted auction for
+  // 12.7 min, extracted 0 sold lots, exited 0, and the workflow pushed the
+  // segment — the same failure shape that let the Aug 13 run be written off as
+  // "done". CF cleared on that run (clearCF would have exited 1), so an empty
+  // read means the settled-lot view never surfaced sold cards: the postback
+  // pattern moved, or the targeted auction has no settled lots to read. Either
+  // way it is a fact to fix, not a success to push. Only guards a TARGETED run
+  // (--sale-date / --auction), where finding nothing is by definition wrong;
+  // an untargeted sweep may legitimately find every auction already settled.
+  // Broadened after the Sep 3 diagnosis: the Aug 13 run logged "106 auctions,
+  // 0 sold lots" and was written off as done, and the Sep 3 targeted run did
+  // the same with 1 auction. ANY run that opens auctions and reads no sold lot
+  // is broken — a settled CreateAuction auction always has sold lots.
+  if (done > 0 && all.length === 0) {
+    console.error(`::error title=gallery heal read nothing::[gal:${cfg.seg}] opened ${done} settled auction(s) and extracted 0 sold lots. This is the CI signature: from a GitHub Actions address the CF interstitial clears but the gallery serves empty content, so the crawl "succeeds" with nothing. The same auction yields lots from a residential address. Run this heal locally with an R2 token, not on CI.`);
+    process.exit(1);
+  }
 }
 main().catch((e) => { console.error('[gal] fatal', e); process.exit(1); });

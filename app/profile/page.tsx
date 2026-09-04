@@ -3,7 +3,7 @@
 import React, { useMemo, useCallback, useEffect, useLayoutEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { retryFullLoad, retrySoldLedger, useFullLots, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
+import { retryFullLoad, retrySoldLedger, useFullLotsOnDemand, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { signalCallOf } from '../lib/account';
 import { useAuth } from '../lib/account';
@@ -530,9 +530,21 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
 });
 
 export default function SavedPage() {
-  const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
+  // ORDER MATTERS: the saves answer whether this desk needs the corpus at all,
+  // so they are read BEFORE the data layer.
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned, setSavedFields } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
+  // LAZY CORPUS (Sep 2026 perf pass). Everything corpus-fed on this desk is
+  // ABOUT THE SAVES — resolving each saved id to its live row, appraising the
+  // collection, the reference bands, the settled record. An empty desk (signed
+  // out, or signed in with nothing saved) needs none of it, and used to stream
+  // ~35MB to render a ghost desk and two buttons. So the request is gated on
+  // there being something to resolve. Once there is, it fires immediately:
+  // every figure below is already `fullLoaded`-gated, and a saved lot must
+  // never resolve against half a corpus and be printed as an orphan.
+  const deskNeedsCorpus = savedReady && (savedIds.length > 0 || ownedIds.length > 0);
+  const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } =
+    useFullLotsOnDemand(deskNeedsCorpus);
   const { unseen: unseenAlerts } = useAlerts();
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');

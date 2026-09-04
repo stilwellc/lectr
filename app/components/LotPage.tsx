@@ -7,7 +7,7 @@ import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
-import { useFullLots, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
+import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
@@ -359,10 +359,16 @@ export default function LotPage({ lotId, initialLot }: {
       and the crawler sees real content; live data supersedes it on arrival */
   initialLot?: AuctionLot | null;
 }) {
-  // useFullLots: a permalink to a lot outside the eager slice (rolled-off or
-  // sold) settles only once fullLoaded||fullError, and comps/appraisal read the
-  // full corpus — so this route must trigger phase 2.
-  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots } = useFullLots();
+  // LAZY CORPUS (Sep 2026 perf pass). This page used to stream the whole sold
+  // corpus (~35MB brotli) on mount — even when the certificate had already
+  // resolved from the eager tape, the prerendered initialLot, or the Supabase
+  // fast path below, and even for a reader who never scrolled to the comps.
+  // Now the corpus is requested only when THIS lot's own stamped fields say
+  // the page will compute a number from it (needsCorpusRead), or when the
+  // comps section becomes reachable (compsSentinel). Nothing this page can
+  // eventually show has been given up — it just arrives on demand.
+  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots, sources, requestFullLots } =
+    useFullLotsOnDemand(false);
   const { savedIds, isSaved, toggle } = useSavedLots();
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
@@ -415,13 +421,48 @@ export default function LotPage({ lotId, initialLot }: {
   );
   const lot = preResolved || archiveLot;
 
+  /* ── THE CORPUS GATE ───────────────────────────────────────────────────
+     Read off the lot's OWN stamped fields — never off the pool, which is the
+     thing we are deciding whether to fetch.
+
+     `engineCalled` = the nightly engine made this call over the whole corpus
+     and stamped its n / median / poolIds onto the lot. Those numbers are
+     honest with zero shards on the wire, and the evidence rows behind them
+     have a build-shipped fallback (loadCompEvidence). Everything else — an
+     uncalled lot's client-computed read, an "at comparable market" lot's
+     appraisal, the science/culture reference band, the repeat-sale
+     provenance ledger, and resolving a permalink the fast paths all missed —
+     is computed here, over the corpus, so it must ask for it. */
+  const engineCall = lot?.value;
+  const engineCalled = !!(engineCall && engineCall.signal && engineCall.compRatio != null
+    && (engineCall.compRatio <= 5 && engineCall.compRatio >= 1 / 5));
+  const needsCorpusRead = useMemo(() => {
+    if (!lot) return dbSettled;                               // last-resort resolution
+    if (lot.repeatSaleGroupId) return true;                   // provenance ledger
+    const mkt = ARTIST_MARKET[lot.artist];
+    if (mkt === 'science' || mkt === 'culture') return true;  // reference band
+    if (isSportsScienceObject(lot)) return false;             // the archive tier answers
+    // a fair call ('at comparable market') prints no engine median — the
+    // certificate falls through to appraiseLot, which is corpus-fed
+    if (engineCalled) return !!engineCall?.signal?.label.startsWith('at');
+    return true;                                              // client-computed read
+  }, [lot, dbSettled, engineCalled, engineCall]);
+  useEffect(() => { if (needsCorpusRead) requestFullLots(); }, [needsCorpusRead, requestFullLots]);
+  const corpusSettled = fullLoaded || fullError;
+
   // set the tab title on the query route (the static set gets real metadata)
   useEffect(() => {
     if (lot) document.title = `${craftTitle(lot.title)} — lectr`;
   }, [lot]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
-  const houseCount = useMemo(() => new Set(allLots.map(l => l.auctionHouse)).size, [allLots]);
+  // meta.json's source list first (the honest full-corpus house count, eager);
+  // the pool scan is only a fallback, and would print SMALL before the shards
+  // land — PlayerPage's exact pattern.
+  const houseCount = useMemo(
+    () => sources.length || new Set(allLots.map(l => l.auctionHouse)).size,
+    [sources, allLots],
+  );
 
   // ── the certificate's numbers ─────────────────────────────────────────
   const isUpcoming = lot?.status === 'upcoming';
@@ -522,16 +563,24 @@ export default function LotPage({ lotId, initialLot }: {
 
   // Comps median: the signal's own median first (crawl-time signals carry it),
   // else the appraisal through the same pools, else the realized band.
+  // HONESTY GATE (the standing law): a comp median / count may print from a
+  // STAMPED read — the crawl-time signal, or an engine call whose n and
+  // median were computed over the whole corpus at build time — or from a
+  // SETTLED corpus. A client read taken over the eager slice alone is a small
+  // number wearing a big one's clothes; it abstains into the loading state
+  // below instead. (Before the lazy pass this hole was a few seconds wide on
+  // every lot page; it is now closed outright.)
+  const calledIsHonest = !!called && (engineCalled || corpusSettled);
   const compsMed = useMemo(() => {
     if (!lot) return null;
     const sigMed = (sig as (NonNullable<typeof sig> & { med?: number }) | null)?.med;
     if (sigMed != null) return sigMed;
-    if (called?.med != null) return called.med;
+    if (calledIsHonest && called?.med != null) return called.med;
     if (band) return band.median;
     if (fullLoaded) return appraiseLot(lot, allLots)?.value ?? null;
     return null;
-  }, [lot, sig, called, band, fullLoaded, allLots]);
-  const compsN = sig?.basis ?? (band ? band.n : called?.n) ?? null;
+  }, [lot, sig, called, calledIsHonest, band, fullLoaded, allLots]);
+  const compsN = sig?.basis ?? (band ? band.n : (calledIsHonest ? called?.n : null)) ?? null;
 
   // ── reference comps: a low-confidence measured RANGE, never a flag ──
   // scienceReferenceBand/cultureReferenceBand scan the whole corpus, so gate
@@ -544,6 +593,29 @@ export default function LotPage({ lotId, initialLot }: {
     if (mkt === 'culture') return cultureReferenceBand(lot, allLots);
     return null;
   }, [lot, fullLoaded, allLots]);
+
+  /* ── THE COMPS SENTINEL ────────────────────────────────────────────────
+     The comps block has a CHEAPER source than the corpus for its first paint:
+     an engine call stamps its own n and median, and comp-evidence.json
+     (370KB) ships that call's evidence rows — title, house, date, realized
+     price — for pools whose ids live off the wire. Measured: all 160
+     prerendered lot pages are covered, so a flagged permalink paints nine
+     real comp rows with zero shards. The corpus is still what UPGRADES those
+     rows (the comp photograph, the medium line, a pool the evidence file
+     doesn't carry), so the sentinel is armed whenever it has something to
+     add, and the reader who actually engages with the block gets it.
+
+     rootMargin is NEGATIVE at the bottom, not positive: this section starts
+     at the fold on a 1440x900 desk (measured top 897px — it is the right
+     column's second block), so a normal "is it visible" test fires on every
+     desktop load and gates nothing. -180px means the block has to be 180px
+     INTO the viewport, which is height-independent (a threshold would fail on
+     a section taller than the viewport) and holds at both 1440 and 390 (where
+     the comps sit 1,370px down, two screens in). */
+  const poolPartial = !!called && !corpusSettled
+    && (!engineCalled || (called.pool.length > 0 && called.n > called.pool.length));
+  const compsNeedCorpus = !corpusSettled && (poolPartial || needEvidence || (!band && !called));
+  const compsSentinel = useVisibilityTrigger(requestFullLots, { rootMargin: '0px 0px -180px 0px', enabled: compsNeedCorpus });
 
   // ── resolution states ─────────────────────────────────────────────────
   if (!lot) {
@@ -590,11 +662,24 @@ export default function LotPage({ lotId, initialLot }: {
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
   const beatRate = lot.value?.signal?.beatRatePct ?? null;
   const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
+  // poolPartial (above): an engine pool that resolved only PART of its stamped
+  // ids is the same fault as a client read — the rows under an honest
+  // "N comparable sales" head would be a silent subset. (An EMPTY pool is
+  // different: the ids live off-wire, and loadCompEvidence ships those rows.)
+  const compsPending = (!band && !called && !corpusSettled)
+    || poolPartial
+    || (needEvidence && evRows === undefined)
+    // the evidence file shipped nothing for this lot: the rows exist only in
+    // the corpus, so hold the quiet loading state rather than print "the
+    // evidence rows couldn't be loaded" at a reader who simply hasn't
+    // reached the block yet (the sentinel above is armed for exactly this)
+    || (needEvidence && evRows === null && !corpusSettled);
+  // the head reads from the pending-safe call, so a partial read never sets
+  // the headline count either
+  const headCalled = compsPending ? null : called;
   const formLabel = (band && ((FORM_LABEL as Record<string, string>)[band.form] || band.form))
-    || (called?.form && (FORM_LABEL as Record<string, string>)[called.form])
+    || (headCalled?.form && (FORM_LABEL as Record<string, string>)[headCalled.form])
     || 'sales';
-  const compsPending = (!band && !called && !fullLoaded && !fullError)
-    || (needEvidence && evRows === undefined);
   // D2 P1 — ComparableModal's isCardComp suppression, mirrored: a card-comp
   // lot's proof surface IS the exact-card rows + grade ladder already on the
   // certificate (its poolIds are sold-card ids outside the client corpus), so
@@ -979,17 +1064,17 @@ export default function LotPage({ lotId, initialLot }: {
               Suppressed for card-comp lots with no client-resolvable pool —
               the exact-card certificate rows are their proof surface. */}
           {!hideComps && (
-          <section className="lectr-lot-comps lectr-lot-pool ns-plate" aria-label="Comparable sales">
+          <section ref={compsSentinel} className="lectr-lot-comps lectr-lot-pool ns-plate" aria-label="Comparable sales">
           <div className="lectr-lot-shead">
             <div>
               <span className="ns-kicker">{band ? 'Recent sold' : 'The comps'}</span>
               <h2 className="lectr-lot-h2">
                 {band
                   ? `${band.n} comparable ${formLabel}`
-                  : called
-                    ? called.kind === 'edition'
-                      ? `This exact work, sold ${called.n} times`
-                      : `${called.n} comparable ${formLabel}`
+                  : headCalled
+                    ? headCalled.kind === 'edition'
+                      ? `This exact work, sold ${headCalled.n} times`
+                      : `${headCalled.n} comparable ${formLabel}`
                     : 'Comparable sales'}
               </h2>
             </div>
@@ -1020,8 +1105,8 @@ export default function LotPage({ lotId, initialLot }: {
                         Try again
                       </button>
                     </>
-                  : (called && called.n > 0) || (lot?.status === 'upcoming' && (lot?.signal?.basis || 0) > 0)
-                    ? <>The {(called && called.n) || lot?.signal?.basis} sales behind this call sit in the deep corpus — the evidence rows couldn&rsquo;t be loaded right now.</>
+                  : (calledIsHonest && called && called.n > 0) || (lot?.status === 'upcoming' && (lot?.signal?.basis || 0) > 0)
+                    ? <>The {(calledIsHonest && called && called.n) || lot?.signal?.basis} sales behind this call sit in the deep corpus — the evidence rows couldn&rsquo;t be loaded right now.</>
                     : <>No comparable sales clear the gates for this lot — lectr doesn&rsquo;t manufacture a pool.</>}
               </div>
             </div>

@@ -7,6 +7,7 @@ import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { ARTIST_LABEL, type Market } from '../../constants';
 import type { AuctionLot } from '../../types';
 import { formatPrice, httpsImg } from '../../utils';
+import { countSubMarkets } from '../../lib/submarkets';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
 import { daysWord } from '../../components/Terminal';
@@ -588,12 +589,7 @@ export default function SubMarketBoard({
   // per-maker reads appended for the marquee. The tracked count is the
   // drills taxonomy itself (every vertical, deduped by slug), the same list
   // /analytics enumerates from market.json.
-  const subMarketCount = useMemo(() => {
-    const sm = market?.drills as Record<string, SubMarketRead[]> | undefined;
-    if (!sm) return 0;
-    const pool = activeKey === 'all' ? Object.values(sm).flat() : (sm[activeKey] || []);
-    return new Set(pool.map((r) => r.slug)).size;
-  }, [market, activeKey]);
+  const subMarketCount = useMemo(() => countSubMarkets(market, activeKey), [market, activeKey]);
 
   const CAP = 8;
   const [expanded, setExpanded] = useState(false);

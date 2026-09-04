@@ -6,6 +6,7 @@ import { MARKETS, marketArtists } from '../constants';
 import type { Market } from '../constants';
 import type { MarketStats } from '../types';
 import { useMarket } from '../lib/market';
+import { countSubMarkets } from '../lib/submarkets';
 import MarketSwitch from '../components/MarketSwitch';
 import { useRayData, useFullLots, useSoldArchive, retryArchiveLoad, retryFullLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
@@ -85,19 +86,10 @@ export default function AnalyticsPage() {
   const { savedIds } = useSavedLots();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
-  // SUB-MARKETS TRACKED — one definition, the home board's (SubMarketBoard
-  // resolveRows): on the all view the taxonomy drills PLUS the maker- and
-  // collection-level reads in market.subMarkets (the two pools the home
-  // board lists); on a scoped market, that vertical's drills. The desk and
-  // the home page must print the same count for the same question.
-  const drillCount = useMemo(() => {
-    const d = marketData?.drills;
-    if (!d) return 0;
-    if (activeKey !== 'all') return (d[activeKey] || []).length;
-    const drills = Object.values(d).reduce((s, rows) => s + rows.length, 0);
-    const makerRows = Object.values(marketData?.subMarkets ?? {}).reduce((s, rows) => s + rows.length, 0);
-    return drills + makerRows;
-  }, [marketData, activeKey]);
+  // SUB-MARKETS TRACKED — one definition for the whole app, shared with the
+  // home board: countSubMarkets() in lib/submarkets.ts. The desk and the
+  // home page must print the same number for the same question.
+  const drillCount = useMemo(() => countSubMarkets(marketData, activeKey), [marketData, activeKey]);
 
   const sections: [string, React.ReactNode][] = [
     ['lab', <IndexLab key="lab" marketData={marketData} scope={activeKey} />],

@@ -13,6 +13,28 @@ import { sportOf } from '../utils';
 
 export type DrillRow = SubMarketRead & { parent: string };
 
+/**
+ * THE ONE SUB-MARKET COUNT (Sep 3 2026). Home and /analytics printed 154 and
+ * 100 for the same sentence: the home board counted `rows.length`, which is
+ * the taxonomy drills PLUS the per-maker reads appended for the marquee, and
+ * the desk counted drills + subMarkets. A sub-market is a TAXONOMY DRILL —
+ * cards by era and sport, watch model families, art and design kinds. The
+ * per-maker reads are makers; the roster already prints those separately
+ * ("32 makers · 22 categories"), so counting them here double-counts the
+ * roster under a different word. Deduped by slug because a drill can appear
+ * under more than one vertical.
+ * Both surfaces MUST call this — never re-derive a count inline.
+ */
+export function countSubMarkets(
+  marketData: Pick<MarketData, 'drills'> | null | undefined,
+  scope: string = 'all',
+): number {
+  const d = marketData?.drills as Record<string, SubMarketRead[]> | undefined;
+  if (!d) return 0;
+  const pool = scope === 'all' ? Object.values(d).flat() : (d[scope] || []);
+  return new Set(pool.map(r => r.slug)).size;
+}
+
 const DRILL_SPORT: Record<string, string> = {
   basketball: 'Basketball', baseball: 'Baseball', football: 'Football',
   soccer: 'Soccer', hockey: 'Hockey', 'boxing-mma': 'Boxing / MMA',

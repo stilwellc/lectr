@@ -37,7 +37,17 @@ Run: `RAY_SKIP_MAIN=1 npx tsx scripts/crawl-<house>.ts [args] --write`
 - robots: allow-all but `ai-train=no` content-signal; **ClaudeBot named-blocked → use neutral UA, reference-use only.**
 - Archives: Lelands→Dec 2000; ML→~2011; LOTG→2013.
 
-### Hake's — SimpleAuctionSite (auction.io family), separate crawler
+### Hake's — ⚠️ OBSOLETE (superseded Sep 3 2026): Hake's MIGRATED TO BIDSQUARE
+> Everything in this section is DEAD. `www.hakes.com` is now a Bidsquare
+> white-label — the same platform SCP runs on — served as plain 200 HTML with
+> no Akamai wall. `/{SLUG}-LOT{id}.aspx` and `pastauctionlanding.aspx` both 404.
+> The live crawler is `scripts/crawl-hakes.ts` on the shared
+> `scripts/lib/bidsquare.ts`. NOTE: their Bidsquare instance carried ZERO past
+> auctions as of Sep 3 2026 (first sale on the platform closes 2026-09-30), so
+> there is no sold backfill to run — sold rows arrive as sales close. Kept below
+> only as a record of the pre-migration site.
+
+#### (historical) Hake's — SimpleAuctionSite (auction.io family), separate crawler
 - Engine: **SimpleAuctionSite** (ASP.NET). Bot wall: **Akamai Bot Manager** (`csidetm.com` sensor) — harder than CF; needs headless minting a valid `_abck` cookie.
 - Host: `www.hakes.com`. Lot URL: **slug-based** `/{TITLE_SLUG}-LOT{id}.aspx`.
 - Price: `Price Realized: $581` / `Final prices include buyers premium: $581`. Also `Estimate:`, `Number Bids:`.

@@ -109,7 +109,7 @@ jobs:
         # lelands/memorylane/lotg = the CreateAuction trio — HEADLESS legs (same
         # Cloudflare-clearing Playwright pattern as rrauction; one crawler, three
         # houses). rea/hugginsscott/scp = curl legs. All additive to sports/pop.
-        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, lelands, memorylane, lotg, nflauction, mlbauction]
+        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, hakes, lelands, memorylane, lotg, nflauction, mlbauction]
     runs-on: ubuntu-latest
     # SEGMENT LOCK (Sep 2 2026): every writer of latest/segments/<house> —
     # this leg, gallery-heal, nflauction-heal, backfill-*, resolve-rrauction —
@@ -157,7 +157,7 @@ jobs:
       # every fetch-based house crawls via the monolith; RR runs its headless
       # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
-        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","lelands","memorylane","lotg","nflauction","mlbauction"]'), matrix.house) }}
+        if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","hakes","lelands","memorylane","lotg","nflauction","mlbauction"]'), matrix.house) }}
         run: npx tsx scripts/ray-crawl.ts
       - name: Crawl rrauction (headless)
         if: matrix.house == 'rrauction'
@@ -181,6 +181,13 @@ jobs:
         if: matrix.house == 'scp'
         # past sweep is ALSO the sold-resolve for closed live sales (same ids)
         run: npx tsx scripts/crawl-scp.ts --auctions 3 --cap 600 --delay 150 --live --write
+      # Hake's rides the SAME Bidsquare crawler as SCP (scripts/lib/bidsquare.ts).
+      # Their Bidsquare instance carries no past auctions yet (they migrated off
+      # ASP.NET in 2026), so today this leg is the LIVE catalogue only; the past
+      # sweep starts resolving sold rows the night after their first sale closes.
+      - name: Crawl Hake's
+        if: matrix.house == 'hakes'
+        run: npx tsx scripts/crawl-hakes.ts --auctions 3 --cap 600 --delay 150 --live --write
       - name: Crawl NFL Auction
         if: matrix.house == 'nflauction'
         # GAME-USED only (league charity house; iSynApp JSON api, plain curl).
@@ -259,7 +266,7 @@ jobs:
         run: |
           mkdir -p data/corpus/segments
           pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp lelands memorylane lotg nflauction mlbauction; do
+          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp hakes lelands memorylane lotg nflauction mlbauction; do
             if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
               echo "segment $h fresh from artifact — skipping R2"
             else

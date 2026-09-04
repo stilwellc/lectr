@@ -91,6 +91,8 @@ first writer's rows. Two defences, both required:
    concurrency: { group: segments-nflauction, cancel-in-progress: false }
    # backfill-mlbauction.yml
    concurrency: { group: segments-mlbauction, cancel-in-progress: false }
+   # backfill-struts-wayback.yml (dispatch input picks the house)
+   concurrency: { group: segments-${{ inputs.house }}, cancel-in-progress: false }
    # resolve-rrauction.yml (live segment) — and the --archive dispatch,
    # which writes rrauction-archive:
    concurrency: { group: segments-rrauction, cancel-in-progress: false }
@@ -102,8 +104,9 @@ first writer's rows. Two defences, both required:
    `segments-sothebys`, `segments-christies`, `segments-bonhams`,
    `segments-phillips`, `segments-wright`, `segments-rrauction`,
    `segments-rrauction-archive`, `segments-rea`, `segments-hugginsscott`,
-   `segments-scp`, `segments-lelands`, `segments-memorylane`, `segments-lotg`,
-   `segments-nflauction`, `segments-mlbauction`. Note a job-level group on a
+   `segments-scp`, `segments-hakes`, `segments-lelands`, `segments-memorylane`,
+   `segments-lotg`, `segments-nflauction`, `segments-mlbauction`,
+   `segments-juliens`, `segments-propstore`. Note a job-level group on a
    matrix job composes with the workflow-level group (nightly keeps its
    run-level `nightly` group).
 
