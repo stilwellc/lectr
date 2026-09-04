@@ -16,8 +16,12 @@
  *
  * Gates (each evaluated only where n ≥ 30):
  *   G1 directional monotonicity, global: beat-high rate must not fall by more
- *      than 1pt across ascending compRatio buckets.
- *   G2 directional monotonicity, per market: same test per market.
+ *      than 1pt across ascending compRatio buckets, and the top bucket must
+ *      beat the bottom by ≥10pt.
+ *   G2 per market: the rate must not fall by more than max(5pt, 2 standard
+ *      errors of the difference) between consecutive measured buckets — a
+ *      strict 1pt rule reds on n≈40 noise every night, which is how a gate
+ *      dies — and the top measured bucket must beat the bottom by ≥5pt.
  *   G3 tier honesty, per market: 'high' median error < 1.6× AND high ≤ low
  *      (a tier that isn't more accurate than 'low' is mislabeled).
  *   G4 coverage sanity: ≥ 10% of holdout lots valued globally (an engine that
@@ -57,15 +61,32 @@ const bucketOf = (cr: number) => (cr < 0.6 ? '<0.6' : cr < 0.9 ? '0.6-0.9' : cr 
 const mkSig = () => Object.fromEntries(BUCKETS.map(b => [b, { beat: 0, n: 0 }])) as Record<string, { beat: number; n: number }>;
 const MIN_N = 30;
 
-function monotonic(sig: Record<string, { beat: number; n: number }>): { ok: boolean; rates: string } {
-  let prev = -1, ok = true;
+/** Monotonicity with a SAMPLING-ERROR tolerance. A per-market bucket can hold
+ *  n=40 in a nightly run, where a 10pt dip is pure noise — a gate that reds on
+ *  that flaps every night and gets ignored, which is how a dead gate is born.
+ *  A drop only counts against the signal when it exceeds BOTH 2 standard errors
+ *  of the difference in rates AND a 5pt floor. `tolPt` overrides for the global
+ *  test (n in the thousands → the strict 1pt rule the record has always used).
+ *  `spread` additionally requires the top measured bucket to beat the bottom. */
+function monotonic(sig: Record<string, { beat: number; n: number }>, opts: { fixedTolPt?: number } = {}): { ok: boolean; rates: string; spread: number | null; measured: number } {
   const parts: string[] = [];
+  const seen: { rate: number; n: number }[] = [];
+  let ok = true;
   for (const b of BUCKETS) {
     const s = sig[b]; const rate = s.n ? s.beat / s.n * 100 : 0;
     parts.push(`${b} ${rate.toFixed(0)}% (n${s.n})`);
-    if (s.n >= MIN_N) { if (rate + 1 < prev) ok = false; prev = rate; }
+    if (s.n < MIN_N) continue;
+    const prev = seen[seen.length - 1];
+    if (prev) {
+      const p1 = prev.rate / 100, p2 = rate / 100;
+      const se = 100 * Math.sqrt(Math.max(1e-6, p1 * (1 - p1) / prev.n + p2 * (1 - p2) / s.n));
+      const tol = opts.fixedTolPt ?? Math.max(5, 2 * se);
+      if (rate + tol < prev.rate) ok = false;
+    }
+    seen.push({ rate, n: s.n });
   }
-  return { ok, rates: parts.join(' · ') };
+  const spread = seen.length >= 2 ? seen[seen.length - 1].rate - seen[0].rate : null;
+  return { ok, rates: parts.join(' · '), spread, measured: seen.length };
 }
 
 function main() {
@@ -143,18 +164,21 @@ function main() {
       if (hi >= 1.6) failures.push(`G3 ${m}: 'high' median error ${hi.toFixed(2)}× ≥ 1.6× (n${valErr[m].high.length})`);
       if (lo != null && hi > lo) failures.push(`G3 ${m}: 'high' (${hi.toFixed(2)}×) is less accurate than 'low' (${lo.toFixed(2)}×) — tiers inverted`);
     }
-    // G2 per-market monotonicity
+    // G2 per-market: monotone within sampling error, AND the top bucket must
+    // actually beat the bottom one (the claim the market's flags rest on)
     const mono = monotonic(sigByM[m]);
-    const measured = BUCKETS.filter(b => sigByM[m][b].n >= MIN_N).length;
-    if (measured >= 2 && !mono.ok) failures.push(`G2 ${m}: beat-high rate not monotonic — ${mono.rates}`);
-    if (measured >= 2) console.log(`    signal  ${mono.ok ? 'monotonic' : 'NOT monotonic'} — ${mono.rates}`);
-    else console.log(`    signal  thin (${measured} buckets ≥ n${MIN_N})`);
+    if (mono.measured >= 2) {
+      if (!mono.ok) failures.push(`G2 ${m}: beat-high rate falls past sampling error — ${mono.rates}`);
+      if (mono.spread != null && mono.spread < 5) failures.push(`G2 ${m}: top bucket beats the bottom by only ${mono.spread.toFixed(0)}pt (<5pt) — ${mono.rates}`);
+      console.log(`    signal  ${mono.ok && (mono.spread ?? 0) >= 5 ? `OK (+${mono.spread!.toFixed(0)}pt bottom→top)` : 'FAILS'} — ${mono.rates}`);
+    } else console.log(`    signal  thin (${mono.measured} buckets ≥ n${MIN_N})`);
   }
 
   console.log('\nDIRECTIONAL SIGNAL calibration, global (compRatio → beat-high rate; must be monotonic to ship):');
-  const g = monotonic(sigGlobal);
+  const g = monotonic(sigGlobal, { fixedTolPt: 1 });
   for (const b of BUCKETS) { const s = sigGlobal[b]; console.log(`    comps ${b.padEnd(8)} beat-high ${(s.n ? s.beat / s.n * 100 : 0).toFixed(0)}% (n${s.n})`); }
   if (!g.ok) failures.push(`G1 global: beat-high rate not monotonic — ${g.rates}`);
+  if (g.spread != null && g.spread < 10) failures.push(`G1 global: top bucket beats the bottom by only ${g.spread.toFixed(0)}pt (<10pt) — the directional claim is not carried`);
   if (BUCKETS.filter(b => sigGlobal[b].n >= MIN_N).length < 3) warnings.push(`G1 global: fewer than 3 buckets at n≥${MIN_N} — monotonicity unmeasured`);
   if (coveragePct < 10) failures.push(`G4 coverage: only ${coveragePct.toFixed(1)}% of holdout lots valued`);
 
@@ -169,8 +193,8 @@ function main() {
   if (outPath) {
     fs.writeFileSync(outPath, JSON.stringify({
       generatedAt: new Date().toISOString(), cutoff: cutoff.slice(0, 10), test: test.length, coveragePct: Math.round(coveragePct * 10) / 10,
-      global: sigGlobal, byMarket: Object.fromEntries(markets.filter(m => testN[m]).map(m => [m, {
-        test: testN[m], signal: sigByM[m],
+      global: { buckets: sigGlobal, monotonic: g.ok, spreadPt: g.spread }, byMarket: Object.fromEntries(markets.filter(m => testN[m]).map(m => [m, {
+        test: testN[m], signal: sigByM[m], spreadPt: monotonic(sigByM[m]).spread, monotonic: monotonic(sigByM[m]).ok,
         tiers: Object.fromEntries(['high', 'medium', 'low'].map(c => [c, { n: valErr[m][c].length, medErr: tierMed(valErr[m][c]) }])),
         house: houseErr[m].length >= 15 ? Math.exp(pctile(houseErr[m], 0.5)) : null,
       }])),
