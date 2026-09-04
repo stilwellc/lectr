@@ -1,0 +1,65 @@
+# Push a LOCALLY crawled heal into a segment on R2.
+#
+# The CreateAuction houses (lelands / memorylane / lotg) cannot be crawled from
+# a GitHub runner: the Cloudflare interstitial clears but the gallery then
+# serves empty content, so a heal run here reads nothing and reports success
+# (Aug 13: "106 auctions, 0 sold lots"; Sep 3: 1 targeted auction, 0 sold lots —
+# both false greens, now caught by the silent-zero guard in
+# crawl-lelands-gallery.ts). The same crawl from a residential address works.
+# R2 credentials, meanwhile, exist only here. So the heal is split:
+#
+#   1. locally:  npx tsx scripts/crawl-lelands-gallery.ts --house memorylane \
+#                  --auction "spring rarities 2026" \
+#                  --dump data/healed/memorylane-162.ndjson
+#   2. commit data/healed/<file>.ndjson
+#   3. dispatch this workflow with that path
+#
+# It pulls the last-good segment, unions the healed rows in by lot id (nothing
+# is evicted), and pushes under the segment lock. apply-healed-rows.ts refuses
+# an empty input, a shrink, or ids the segment has never seen unless allow_new
+# is set — the guards that stop a partial local crawl replacing a full segment.
+name: Apply healed rows to a segment
+on:
+  workflow_dispatch:
+    inputs:
+      house:
+        description: 'segment to heal'
+        type: choice
+        options: [memorylane, lelands, lotg]
+        default: memorylane
+      file:
+        description: 'committed NDJSON of healed lots (repo-relative)'
+        required: true
+        default: 'data/healed/memorylane-162.ndjson'
+      allow_new:
+        description: 'permit ids not already in the segment (adds lots, not just repricing)'
+        type: boolean
+        default: false
+concurrency:
+  group: segments-${{ inputs.house }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      # STRICT pull, same reasoning as backfill-rea.yml: a failed pull followed
+      # by a merge-and-push would publish the heal file ALONE over a segment
+      # holding ~11K real rows.
+      - name: Pull last-good segment
+        run: bash scripts/data-store.sh pull-segment ${{ inputs.house }}
+      - name: Dry run (prints the diff this would make)
+        run: npx tsx scripts/apply-healed-rows.ts --segment ${{ inputs.house }} --file ${{ inputs.file }} ${{ inputs.allow_new && '--allow-new' || '' }}
+      - name: Apply healed rows
+        run: npx tsx scripts/apply-healed-rows.ts --segment ${{ inputs.house }} --file ${{ inputs.file }} ${{ inputs.allow_new && '--allow-new' || '' }} --write
+      - name: Push segment
+        run: bash scripts/data-store.sh push-segment ${{ inputs.house }}
