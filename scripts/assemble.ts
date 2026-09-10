@@ -27,6 +27,38 @@ const isGoldinSold = (l: Record<string, unknown>) => l.auctionHouse === 'Goldin'
 // client shards so served payload stays lean.
 const isArchiveTier = (l: Record<string, unknown>) => isGoldinSold(l) || l.archived === true;
 
+export type SentinelSignature = { house: string; price: number; n: number; top: number; topDate: string; hammer: number; honest: boolean };
+
+/**
+ * The price-bleed sentinel's DECISION, extracted pure so it is testable
+ * (scripts/__tests__/sentinel-gate.test.ts). See the long note at the call site
+ * for why this is a DELTA gate and not an absolute one.
+ *
+ * `prevSigs` is the last PUBLISHED signature set keyed `house|price`.
+ */
+export function sentinelVerdict(
+  sentinel: SentinelSignature[],
+  prevSigs: Map<string, number>,
+  opts: { catastrophicN?: number; newPoisonAbort?: number } = {},
+): { abort: boolean; reason: 'catastrophic' | 'new-poison' | null; poison: SentinelSignature[]; freshPoison: SentinelSignature[]; catastrophic: SentinelSignature[]; hasBaseline: boolean } {
+  const CATASTROPHIC_N = opts.catastrophicN ?? 500;
+  const NEW_POISON_ABORT = opts.newPoisonAbort ?? 2;
+  const hasBaseline = prevSigs.size > 0;
+  const poison = sentinel.filter(s => !s.honest);
+  // A known cluster may legitimately grow as a house's sale is re-crawled and
+  // more lots resolve at the same rung — only a MATERIAL jump reads as new.
+  const freshPoison = poison.filter(s => {
+    const prevN = prevSigs.get(`${s.house}|${s.price}`);
+    return prevN === undefined || s.n > Math.max(prevN + 25, prevN * 1.5);
+  });
+  // Absolute backstop that survives ANY baseline: no honest bid ladder stamps
+  // one price across 500+ lots. Aborts even if already in the baseline.
+  const catastrophic = poison.filter(s => s.n >= CATASTROPHIC_N);
+  if (catastrophic.length) return { abort: true, reason: 'catastrophic', poison, freshPoison, catastrophic, hasBaseline };
+  if (hasBaseline && freshPoison.length >= NEW_POISON_ABORT) return { abort: true, reason: 'new-poison', poison, freshPoison, catastrophic, hasBaseline };
+  return { abort: false, reason: null, poison, freshPoison, catastrophic, hasBaseline };
+}
+
 async function main() {
   const DATA_DIR = SERVED_DIR;
   const allLotsRaw = readAllSegments() as unknown as AuctionLot[];
@@ -68,7 +100,12 @@ async function main() {
   // and even with NO baseline an absolute floor guards a catastrophic reunion.
   const CORPUS_FLOOR = 100_000; // the corpus is ~455k; anything near-empty is a bug
   const metaPath = path.join(DATA_DIR, 'meta.json');
-  let prev: { totalLots?: number; totalSold?: number } | null = null;
+  let prev: {
+    totalLots?: number; totalSold?: number;
+    // the sentinel signature set from the LAST PUBLISHED corpus — the baseline
+    // the price-bleed gate diffs against (see SENTINEL PRICE WATCH below)
+    sentinel?: { checkedAt?: string; signatures?: SentinelSignature[] };
+  } | null = null;
   if (fs.existsSync(metaPath)) {
     try {
       prev = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
@@ -131,16 +168,60 @@ async function main() {
     }));
     sentinel.sort((a, b) => b.n - a.n);
     const poison = sentinel.filter(s => !s.honest);
+
+    // ── DELTA GATE (Sep 9 2026) ────────────────────────────────────────────
+    // The absolute form of this gate (`poison.length >= 2` → abort, added Sep 2
+    // in fdd9791) wedged EVERY publish for a week: a 1.14M-lot corpus spanning
+    // 25 years legitimately carries dozens of standing repeat-price clusters —
+    // a 10% GEOMETRIC bid ladder at Lelands (1050/1155/1271/1398/1538/1692…)
+    // that isRoundIncrement() can't see because it only knows FLAT round steps;
+    // REA backfill rows stamped with a placeholder April-15 saleDate, which
+    // piles lots onto one date and trips the ≥60%-one-date rule; 2002-2020
+    // Christie's/Sotheby's whose implied hammer never looks round because the
+    // honesty test divides an OLD price by TODAY's premium factor. None of that
+    // is bleed, and none of it is actionable — it's the standing shape of the
+    // book. Gating on the ABSOLUTE count just means never publishing again.
+    //
+    // What actually signals a broken crawler is a repeat cluster that WASN'T
+    // THERE YESTERDAY ($10,050 ×3,622 appeared the night NFL's idwalk broke).
+    // So diff against the last published signature set (meta.json `sentinel`,
+    // pulled by the "Pull previous totals" step) and abort only on NEW ones.
+    // Mirrors the corpus-shrink gate directly above, which is delta and works.
+    const prevSigs = new Map<string, number>();
+    for (const s of prev?.sentinel?.signatures ?? []) {
+      if (s && typeof s.house === 'string' && typeof s.price === 'number') prevSigs.set(`${s.house}|${s.price}`, Number(s.n) || 0);
+    }
+    const verdict = sentinelVerdict(sentinel, prevSigs);
+    const { hasBaseline, freshPoison, catastrophic } = verdict;
+
     for (const s of sentinel) {
-      const msg = `[assemble] SENTINEL ${s.honest ? 'honest tie' : 'POISON'}: ${s.house} $${s.price.toLocaleString()} ×${s.n} (${s.top} on ${s.topDate}; hammer ${s.hammer}${s.honest ? ' = round increment' : ''})`;
-      if (s.honest) console.log(msg);
-      else { console.warn(msg); console.log(`::warning title=sentinel price bleed::${s.house} $${s.price.toLocaleString()} x${s.n} (${s.top} on ${s.topDate}) — possible price bleed; inspect before trusting comps`); }
+      const known = prevSigs.has(`${s.house}|${s.price}`);
+      const tag = s.honest ? 'honest tie' : (known ? 'POISON (known/standing)' : 'POISON (NEW)');
+      const msg = `[assemble] SENTINEL ${tag}: ${s.house} $${s.price.toLocaleString()} ×${s.n} (${s.top} on ${s.topDate}; hammer ${s.hammer}${s.honest ? ' = round increment' : ''})`;
+      if (s.honest || known) console.log(msg);
+      else { console.warn(msg); console.log(`::warning title=sentinel price bleed::${s.house} $${s.price.toLocaleString()} x${s.n} (${s.top} on ${s.topDate}) — NEW repeat cluster; inspect before trusting comps`); }
     }
-    if (poison.length >= 2 && process.env.RAY_SENTINEL_WARN_ONLY !== '1') {
-      console.log(`::error title=sentinel abort::${poison.length} distinct poison price signatures — refusing to publish`);
-      throw new Error(`[assemble] SENTINEL ABORT: ${poison.length} distinct poison signatures (${poison.slice(0, 4).map(s => `${s.house} $${s.price} ×${s.n}`).join('; ')}) — refusing to publish (RAY_SENTINEL_WARN_ONLY=1 to override after inspection)`);
+
+    const override = process.env.RAY_SENTINEL_WARN_ONLY === '1';
+    if (verdict.abort && !override) {
+      if (verdict.reason === 'catastrophic') {
+        const d = catastrophic.map(s => `${s.house} $${s.price} ×${s.n}`).join('; ');
+        console.log(`::error title=sentinel abort::catastrophic repeat cluster — refusing to publish (${d})`);
+        throw new Error(`[assemble] SENTINEL ABORT (catastrophic): ${d} — one price on 500+ lots is a stamped feed, not bidding. Refusing to publish (RAY_SENTINEL_WARN_ONLY=1 to override after inspection).`);
+      }
+      const d = freshPoison.slice(0, 4).map(s => `${s.house} $${s.price} ×${s.n}`).join('; ');
+      console.log(`::error title=sentinel abort::${freshPoison.length} NEW poison price signatures — refusing to publish`);
+      throw new Error(`[assemble] SENTINEL ABORT: ${freshPoison.length} NEW poison signatures vs the last published baseline (${d}) — refusing to publish (RAY_SENTINEL_WARN_ONLY=1 to override after inspection).`);
     }
-    console.log(`[assemble] sentinel: ${sentinel.length} repeat signatures, ${poison.length} poison, ${sentinel.length - poison.length} honest increment×premium ties`);
+    if (verdict.abort && override) console.log(`[assemble] sentinel WOULD have aborted (${verdict.reason}) — RAY_SENTINEL_WARN_ONLY=1 override in effect`);
+    if (!hasBaseline) {
+      // First run after this change, or a baseline with no sentinel block. We
+      // can't diff, so we DON'T gate on the standing set (that's the wedge we
+      // just removed) — the catastrophic backstop above still applies, and this
+      // run's signatures become tomorrow's baseline.
+      console.log(`::warning title=sentinel bootstrap::no sentinel baseline in meta.json — recording ${sentinel.length} signatures as the baseline; only the catastrophic backstop applied this run`);
+    }
+    console.log(`[assemble] sentinel: ${sentinel.length} repeat signatures, ${poison.length} poison (${freshPoison.length} NEW vs baseline of ${prevSigs.size}), ${sentinel.length - poison.length} honest increment×premium ties${override ? ' — WARN_ONLY override active' : ''}`);
   }
 
   // ── corpus-hygiene normalization (idempotent) ──
@@ -206,4 +287,7 @@ async function main() {
   console.log(`[assemble] done — corpus in ${CORPUS_DIR}, served in ${SERVED_DIR}`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+// RAY_SKIP_MAIN=1 lets the module be IMPORTED without running the pipeline —
+// the repo-wide convention (close-board, the crawlers, the backfills all use
+// it). scripts/__tests__/sentinel-gate.test.ts imports sentinelVerdict this way.
+if (process.env.RAY_SKIP_MAIN !== '1') main().catch(e => { console.error(e); process.exit(1); });

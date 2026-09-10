@@ -1,0 +1,740 @@
+[
+ {
+  "house": "REA",
+  "price": 1508,
+  "n": 77,
+  "top": 48,
+  "topDate": "2005-04-15",
+  "hammer": 1283.4,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 2962,
+  "n": 65,
+  "top": 65,
+  "topDate": "2013-04-15",
+  "hammer": 2520.85,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 4640,
+  "n": 61,
+  "top": 37,
+  "topDate": "2005-04-15",
+  "hammer": 3948.94,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1540,
+  "n": 61,
+  "top": 61,
+  "topDate": "2013-04-15",
+  "hammer": 1310.64,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 2014,
+  "n": 57,
+  "top": 57,
+  "topDate": "2013-04-15",
+  "hammer": 1714.04,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1066,
+  "n": 54,
+  "top": 54,
+  "topDate": "2013-04-15",
+  "hammer": 907.23,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1050,
+  "n": 52,
+  "top": 35,
+  "topDate": "2026-08-15",
+  "hammer": 875,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 4930,
+  "n": 52,
+  "top": 36,
+  "topDate": "2005-04-15",
+  "hammer": 4195.74,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1155,
+  "n": 46,
+  "top": 36,
+  "topDate": "2026-08-15",
+  "hammer": 962.5,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1840,
+  "n": 38,
+  "top": 38,
+  "topDate": "2004-04-15",
+  "hammer": 1565.96,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 7540,
+  "n": 36,
+  "top": 26,
+  "topDate": "2006-04-15",
+  "hammer": 6417.02,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 5510,
+  "n": 36,
+  "top": 24,
+  "topDate": "2005-04-15",
+  "hammer": 4689.36,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1271,
+  "n": 34,
+  "top": 24,
+  "topDate": "2026-08-15",
+  "hammer": 1059.17,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 4025,
+  "n": 32,
+  "top": 32,
+  "topDate": "2004-04-15",
+  "hammer": 3425.53,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1265,
+  "n": 32,
+  "top": 32,
+  "topDate": "2004-04-15",
+  "hammer": 1076.6,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 2458,
+  "n": 31,
+  "top": 19,
+  "topDate": "2026-08-15",
+  "hammer": 2048.33,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 2588,
+  "n": 31,
+  "top": 31,
+  "topDate": "2004-04-15",
+  "hammer": 2202.55,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 3162,
+  "n": 31,
+  "top": 31,
+  "topDate": "2004-04-15",
+  "hammer": 2691.06,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 3450,
+  "n": 30,
+  "top": 30,
+  "topDate": "2004-04-15",
+  "hammer": 2936.17,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1725,
+  "n": 30,
+  "top": 30,
+  "topDate": "2004-04-15",
+  "hammer": 1468.09,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 5332,
+  "n": 30,
+  "top": 30,
+  "topDate": "2013-04-15",
+  "hammer": 4537.87,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 21793.75,
+  "n": 29,
+  "top": 23,
+  "topDate": "2012-06-25",
+  "hammer": 17296.63,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1692,
+  "n": 29,
+  "top": 25,
+  "topDate": "2026-08-15",
+  "hammer": 1410,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1387,
+  "n": 28,
+  "top": 21,
+  "topDate": "2026-08-15",
+  "hammer": 1155.83,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1035,
+  "n": 27,
+  "top": 27,
+  "topDate": "2004-04-15",
+  "hammer": 880.85,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1398,
+  "n": 26,
+  "top": 17,
+  "topDate": "2026-08-15",
+  "hammer": 1165,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 4600,
+  "n": 26,
+  "top": 26,
+  "topDate": "2004-04-15",
+  "hammer": 3914.89,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 4312,
+  "n": 26,
+  "top": 26,
+  "topDate": "2004-04-15",
+  "hammer": 3669.79,
+  "honest": false
+ },
+ {
+  "house": "Memory Lane",
+  "price": 6510,
+  "n": 25,
+  "top": 15,
+  "topDate": "2026-06-06",
+  "hammer": 5425,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 5420,
+  "n": 25,
+  "top": 17,
+  "topDate": "2016-04-05",
+  "hammer": 4267.72,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 3738,
+  "n": 24,
+  "top": 24,
+  "topDate": "2004-04-15",
+  "hammer": 3181.28,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 13897.5,
+  "n": 24,
+  "top": 15,
+  "topDate": "2008-04-01",
+  "hammer": 10942.91,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 3915,
+  "n": 23,
+  "top": 14,
+  "topDate": "2009-11-23",
+  "hammer": 3107.14,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1043,
+  "n": 23,
+  "top": 16,
+  "topDate": "2026-08-15",
+  "hammer": 869.17,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1538,
+  "n": 23,
+  "top": 18,
+  "topDate": "2026-08-15",
+  "hammer": 1281.67,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 2300,
+  "n": 23,
+  "top": 23,
+  "topDate": "2004-04-15",
+  "hammer": 1957.45,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 2875,
+  "n": 23,
+  "top": 23,
+  "topDate": "2004-04-15",
+  "hammer": 2446.81,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1150,
+  "n": 23,
+  "top": 23,
+  "topDate": "2004-04-15",
+  "hammer": 978.72,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 2031,
+  "n": 22,
+  "top": 14,
+  "topDate": "2026-08-15",
+  "hammer": 1692.5,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1847,
+  "n": 22,
+  "top": 14,
+  "topDate": "2026-08-15",
+  "hammer": 1539.17,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 2070,
+  "n": 22,
+  "top": 22,
+  "topDate": "2004-04-15",
+  "hammer": 1761.7,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 2349,
+  "n": 21,
+  "top": 13,
+  "topDate": "2009-11-23",
+  "hammer": 1864.29,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1610,
+  "n": 21,
+  "top": 21,
+  "topDate": "2004-04-15",
+  "hammer": 1370.21,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 5747.47,
+  "n": 20,
+  "top": 17,
+  "topDate": "2002-10-09",
+  "hammer": 4561.48,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1495,
+  "n": 20,
+  "top": 20,
+  "topDate": "2004-04-15",
+  "hammer": 1272.34,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 19720,
+  "n": 20,
+  "top": 13,
+  "topDate": "2006-04-15",
+  "hammer": 16782.98,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 13920,
+  "n": 20,
+  "top": 13,
+  "topDate": "2006-04-15",
+  "hammer": 11846.81,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 40987.5,
+  "n": 19,
+  "top": 12,
+  "topDate": "2014-05-11",
+  "hammer": 32529.76,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1526,
+  "n": 19,
+  "top": 15,
+  "topDate": "2026-08-15",
+  "hammer": 1271.67,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 12760,
+  "n": 19,
+  "top": 14,
+  "topDate": "2006-04-15",
+  "hammer": 10859.57,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 7470,
+  "n": 19,
+  "top": 13,
+  "topDate": "2013-02-25",
+  "hammer": 5881.89,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 5810,
+  "n": 19,
+  "top": 17,
+  "topDate": "2013-02-25",
+  "hammer": 4574.8,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 41025,
+  "n": 18,
+  "top": 15,
+  "topDate": "2021-05-09",
+  "hammer": 32559.52,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 27325,
+  "n": 18,
+  "top": 13,
+  "topDate": "2014-11-09",
+  "hammer": 21686.51,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 16395,
+  "n": 18,
+  "top": 11,
+  "topDate": "2014-05-11",
+  "hammer": 13011.9,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 3396,
+  "n": 18,
+  "top": 13,
+  "topDate": "2026-08-15",
+  "hammer": 2830,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 2185,
+  "n": 18,
+  "top": 18,
+  "topDate": "2004-04-15",
+  "hammer": 1859.57,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 11737.5,
+  "n": 18,
+  "top": 14,
+  "topDate": "2013-03-19",
+  "hammer": 9242.13,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 16900,
+  "n": 17,
+  "top": 11,
+  "topDate": "2015-11-08",
+  "hammer": 13412.7,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 3130,
+  "n": 17,
+  "top": 11,
+  "topDate": "2013-06-25",
+  "hammer": 2484.13,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 6325,
+  "n": 17,
+  "top": 17,
+  "topDate": "2004-04-15",
+  "hammer": 5382.98,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 4888,
+  "n": 17,
+  "top": 17,
+  "topDate": "2004-04-15",
+  "hammer": 4160,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 1955,
+  "n": 17,
+  "top": 17,
+  "topDate": "2004-04-15",
+  "hammer": 1663.83,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 10072,
+  "n": 17,
+  "top": 17,
+  "topDate": "2013-04-15",
+  "hammer": 8571.91,
+  "honest": false
+ },
+ {
+  "house": "REA",
+  "price": 7702,
+  "n": 17,
+  "top": 17,
+  "topDate": "2013-04-15",
+  "hammer": 6554.89,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 7222.5,
+  "n": 17,
+  "top": 11,
+  "topDate": "2020-02-06",
+  "hammer": 5687.01,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 12739.38,
+  "n": 17,
+  "top": 14,
+  "topDate": "2008-04-01",
+  "hammer": 10031.01,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 6907.5,
+  "n": 16,
+  "top": 13,
+  "topDate": "2009-05-10",
+  "hammer": 5482.14,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 12663.75,
+  "n": 16,
+  "top": 10,
+  "topDate": "2009-05-10",
+  "hammer": 10050.6,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 2704,
+  "n": 16,
+  "top": 14,
+  "topDate": "2026-08-15",
+  "hammer": 2253.33,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 6775,
+  "n": 16,
+  "top": 10,
+  "topDate": "2016-04-05",
+  "hammer": 5334.65,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 7113.75,
+  "n": 16,
+  "top": 10,
+  "topDate": "2016-04-05",
+  "hammer": 5601.38,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 4980,
+  "n": 16,
+  "top": 16,
+  "topDate": "2013-02-25",
+  "hammer": 3921.26,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 4833.28,
+  "n": 16,
+  "top": 10,
+  "topDate": "2002-10-30",
+  "hammer": 3805.73,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 17325,
+  "n": 15,
+  "top": 9,
+  "topDate": "2008-05-11",
+  "hammer": 13750,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 9240,
+  "n": 15,
+  "top": 9,
+  "topDate": "2008-05-11",
+  "hammer": 7333.33,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 8980.42,
+  "n": 15,
+  "top": 10,
+  "topDate": "2002-10-09",
+  "hammer": 7127.32,
+  "honest": false
+ },
+ {
+  "house": "Christie's",
+  "price": 5029.04,
+  "n": 15,
+  "top": 11,
+  "topDate": "2002-10-09",
+  "hammer": 3991.3,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1743,
+  "n": 15,
+  "top": 9,
+  "topDate": "2026-08-15",
+  "hammer": 1452.5,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 2253,
+  "n": 15,
+  "top": 12,
+  "topDate": "2026-08-15",
+  "hammer": 1877.5,
+  "honest": false
+ },
+ {
+  "house": "Lelands",
+  "price": 1147,
+  "n": 15,
+  "top": 14,
+  "topDate": "2026-08-15",
+  "hammer": 955.83,
+  "honest": false
+ },
+ {
+  "house": "Sotheby's",
+  "price": 4173,
+  "n": 15,
+  "top": 9,
+  "topDate": "2020-06-18",
+  "hammer": 3285.83,
+  "honest": false
+ }
+]
