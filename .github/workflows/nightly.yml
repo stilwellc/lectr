@@ -130,7 +130,9 @@ jobs:
     # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
     # pushes no segment, and the seedless/last-good guards then have to catch
     # it; cheaper to give the slow houses room. Ceiling costs nothing.
-    timeout-minutes: 90
+    # Sep 10 2026: 90 → 120. Christie's measured 77m on the Aug 25 nightly
+    # (86% of the ceiling) and Huggins & Scott 80m on Sep 2. Same reasoning.
+    timeout-minutes: 120
     env:
       SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
       RAY_HOUSE: ${{ matrix.house }}
