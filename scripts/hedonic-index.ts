@@ -345,8 +345,9 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
     // ridge on non-intercept (col 0 is intercept — leave it un-penalized)
     for (let c = 1; c < p; c++) ATWA[c * p + c] += RIDGE;
 
-    const A = new Matrix(p, p);
-    for (let r = 0; r < p; r++) for (let c = 0; c < p; c++) A.set(r, c, ATWA[r * p + c]);
+    // Sep 10 2026: build the matrix from the accumulator in one call instead of
+    // p² set() calls (25M for Patek's p≈5,000) — identical values, no copy loop.
+    const A = Matrix.from1DArray(p, p, Array.from(ATWA));
     const B = Matrix.columnVector(Array.from(ATWy));
     const sol = solveSPD(A, B);
     beta = sol.to1DArray();
