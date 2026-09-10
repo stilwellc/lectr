@@ -16,12 +16,14 @@ import { hasConditionFlag } from '../app/lib/condition';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';
-import { buildIdf, buildVectors, similarity, idf } from '../app/lib/similarity';
+import { buildIdf, buildVectors } from '../app/lib/similarity';
+import { groupRepeatSales } from './lib/repeat-sale';
+import { buildMakerIndicesParallel } from './lib/maker-pool';
 import { resolveComps, estimateValueEx, setCalibration, vsBidRead, quantile, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
 import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
-import { buildHedonicIndex, buildMakerIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
+import { buildHedonicIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
 import { buildSubMarkets, buildDrillRows, buildVerticalRepeatSale } from './sub-markets';
 import { fitGradeLadder } from './lib/grade-ladder';
 import { sportOf, overEstimatePct } from '../app/utils';
@@ -80,7 +82,7 @@ function readGz(f: string): AuctionLot[] {
   return readGzRows(path.join(CORPUS, f + '.gz')) as AuctionLot[];
 }
 
-export function runMarketBuild() {
+export async function runMarketBuild() {
   const t0 = Date.now();
   console.log('[market] reading corpus…');
   const lots = readGz('lots.json');
@@ -381,109 +383,13 @@ export function runMarketBuild() {
   }
 
   // ── 2 · repeat-sale groups: physical matches among SOLD lots ──
-  // union-find over physicalMatch pairs (title-justified, per the doctrine).
-  // BLOCKING (measured Jul 2026): the old maker∪rare-token CandidateIndex made
-  // this loop 96% of the whole build (~19 min at 110k sold — the same-maker
-  // union alone is ~400M similarity calls once Picasso/Patek/Rolex pass 10k
-  // each). Physical matches must share evidence, so we block on exactly that:
-  // shared rare title token ∪ same maker+reference ∪ same maker+serialNo.
-  // Recall was validated against the full-blocking ground truth (244 pairs):
-  // rare tokens alone find 241; the ref/serial blocks recover the other 3
-  // (watch pairs whose titles are written in different catalog styles).
-  const tRs = Date.now();
-  const RARE_K = 6;
-  const byToken = new Map<string, number[]>();
-  const byMakerRef = new Map<string, number[]>();
-  const bySerial = new Map<string, number[]>();
-  const rareTokens: string[][] = [];
-  soldSorted.forEach((l, i) => {
-    const rare = Array.from(new Set(l.titleTokens || []))
-      .map(t => [t, idf(t, tbl)] as [string, number])
-      .sort((x, y) => y[1] - x[1]).slice(0, RARE_K).map(x => x[0]);
-    rareTokens[i] = rare;
-    for (const t of rare) (byToken.get(t) || byToken.set(t, []).get(t)!).push(i);
-    const ref = (l as AuctionLot & { reference?: string | null }).reference;
-    if (ref) { const k = `${l.artist}|${ref}`; (byMakerRef.get(k) || byMakerRef.set(k, []).get(k)!).push(i); }
-    const ser = (l as AuctionLot & { serialNo?: string | null }).serialNo;
-    if (ser) { const k = `${l.artist}|${ser}`; (bySerial.get(k) || bySerial.set(k, []).get(k)!).push(i); }
-  });
-  const candidatesOf = (i: number): number[] => {
-    const l = soldSorted[i];
-    const set = new Set<number>();
-    for (const t of rareTokens[i]) for (const j of byToken.get(t) || []) set.add(j);
-    const ref = (l as AuctionLot & { reference?: string | null }).reference;
-    if (ref) for (const j of byMakerRef.get(`${l.artist}|${ref}`) || []) set.add(j);
-    const ser = (l as AuctionLot & { serialNo?: string | null }).serialNo;
-    if (ser) for (const j of bySerial.get(`${l.artist}|${ser}`) || []) set.add(j);
-    set.delete(i);
-    return Array.from(set);
-  };
-  // CHEAP PRE-CHECK — a pair can classify as 'physicalMatch' ONLY through one of
-  // similarity.ts::classify's physical branches, each gated on a hard STRUCTURED
-  // discriminator (matching real serial / real edition for makers, or
-  // both-photo-matched + same entity for sports/science objects). Those
-  // predicates are O(1) field reads; the full similarity() (cosine over the token
-  // vectors + the structured battery) is far heavier. Since the grouper unions
-  // ONLY on cls==='physicalMatch', skipping any pair that fails ALL physical
-  // branches here can never change a union — it just avoids scoring a pair whose
-  // best possible outcome is model/similar. Predicates are copied VERBATIM from
-  // classify() so the skip set is exactly the non-physical complement.
-  const SPORTS_SCIENCE_SLUGS = new Set([
-    'game-used', 'trophies-awards', 'tickets-passes',
-    'space-exploration', 'meteorites', 'fossils', 'scientific-instruments',
-  ]);
-  const realSerial = (s?: string | null) => !!s && s.length >= 4 && /\d/.test(s) && /^[a-z0-9./-]+$/i.test(s);
-  const canPhysicalMatch = (a: AuctionLot, b: AuctionLot): boolean => {
-    const isSportsSci = (SPORTS_SCIENCE_SLUGS.has(a.artist) || a.category === 'object') && a.entityClass !== 'maker';
-    if (isSportsSci) {
-      return !!(a.photoMatched && b.photoMatched && a.entity && a.entity === b.entity);
-    }
-    if (a.entityClass === 'maker') {
-      if (realSerial(a.serialNo) && a.serialNo === b.serialNo) return true;
-      const realEdition = a.editionMarker != null && a.editionOf && a.editionTotal
-        && a.editionOf <= a.editionTotal && a.editionTotal <= 500
-        && (a.category === 'print' || a.category === 'original');
-      return !!(realEdition && a.editionMarker === b.editionMarker
-        && a.editionOf === b.editionOf && a.editionTotal === b.editionTotal);
-    }
-    return false;
-  };
-  const parent = new Map<string, string>();
-  const find = (x: string): string => { let r = x; while (parent.get(r) && parent.get(r) !== r) r = parent.get(r)!; return r; };
-  const union = (a: string, b: string) => { parent.set(find(a), find(b)); };
-  let physPairs = 0;
-  for (let i = 0; i < soldSorted.length; i++) {
-    const lot = soldSorted[i];
-    if (!parent.has(lot.id)) parent.set(lot.id, lot.id);
-    const cands = candidatesOf(i).map(j => soldSorted[j]);
-    for (const c of cands) {
-      if (c.id <= lot.id) continue;   // dedup pair direction
-      // fast structured pre-check: skip the full score for any pair that can't
-      // reach 'physicalMatch' (the only class the grouper unions on) — identical
-      // union set, far fewer cosine evaluations.
-      if (!canPhysicalMatch(lot, c)) continue;
-      const m = similarity(lot, c, tbl);
-      if (m.cls === 'physicalMatch') {
-        // price-sanity: the same physical object shouldn't swing >3x between two
-        // sales close in the corpus — a wild gap means different objects that
-        // share the identifier (e.g. a player's jersey vs shorts from one game).
-        const r = (lot.realizedUsd || 0) / (c.realizedUsd || 1);
-        if (r > 3 || r < 1 / 3) continue;
-        if (!parent.has(c.id)) parent.set(c.id, c.id);
-        union(lot.id, c.id); physPairs++;
-      }
-    }
+  // Extracted to scripts/lib/repeat-sale.ts (Sep 10 2026) so the grouping can be
+  // validated offline (scripts/_qa/repeat-sale-equiv.ts) and so the eligibility
+  // hoist that took it from ~28min to seconds is provably result-identical.
+  {
+    const rs = groupRepeatSales(soldSorted, engineAll, tbl);
+    console.log(`[market] repeat-sale: ${rs.physPairs} physical pairs → ${rs.physGroups} groups · ${rs.seconds}s (${rs.eligible}/${soldSorted.length} eligible, ${rs.candidatePairs} pairs scored)`);
   }
-  const groups = new Map<string, string[]>();
-  for (const l of soldSorted) { const r = find(l.id); (groups.get(r) || groups.set(r, []).get(r)!).push(l.id); }
-  let physGroups = 0;
-  const idToLot = new Map(engineAll.map(l => [l.id, l]));
-  for (const [root, ids] of Array.from(groups.entries())) {
-    if (ids.length < 2) continue;
-    physGroups++;
-    for (const id of ids) (idToLot.get(id) as AuctionLot & { repeatSaleGroupId?: string }).repeatSaleGroupId = 'rs_' + root.slice(-10);
-  }
-  console.log(`[market] repeat-sale: ${physPairs} physical pairs → ${physGroups} groups · ${((Date.now() - tRs) / 1000).toFixed(0)}s`);
 
   // ── 3 · market series (the dashboards) ──
   // Series run over `all` (INCLUDING cards): the analytics are O(n) aggregation,
@@ -511,13 +417,22 @@ export function runMarketBuild() {
   for (const slug of rosterSlugs) {
     const ls = lotsForSlug(slug).filter(l => !HEDONIC_EXCLUDE(l));
     makerLotsBySlug.set(slug, ls);
-    makerIndex[slug] = buildMakerIndex(ls);
     makerRealized[slug] = ls.reduce((s, l) => s + (l.status === 'sold' ? (l.realizedUsd || 0) : 0), 0);
-    const h1 = makerIndex[slug].horizons['1Y'];
-    const anyPub = Object.values(makerIndex[slug].horizons).some(h => h.publishable);
-    if (anyPub) console.log(`[market] maker ${slug.padEnd(18)} lastComplete=${makerIndex[slug].lastCompleteQuarter} 1Y=${h1.publishable ? `${h1.changePct!.toFixed(1)}% [${h1.ciLoPct!.toFixed(1)},${h1.ciHiPct!.toFixed(1)}]` : `(3Y/5Y only)`} cov=${makerIndex[slug].coverageMakerLots}`);
   }
-  console.log(`[market] maker indices: ${Object.keys(makerIndex).length} built, ${Object.values(makerIndex).filter(mi => Object.values(mi.horizons).some(h => h.publishable)).length} with ≥1 publishable horizon`);
+  // Sep 10 2026: the 54 per-maker indices are independent pure computations
+  // (~1,700s sequential on the Aug 25 nightly — 40% of assemble). They now run
+  // across a worker pool (scripts/lib/maker-pool.ts); results and their shape
+  // are identical to the sequential loop (scripts/_qa/maker-pool-equiv.ts).
+  {
+    const pool = await buildMakerIndicesParallel(makerLotsBySlug);
+    Object.assign(makerIndex, pool.makerIndex);
+    for (const slug of rosterSlugs) {
+      const h1 = makerIndex[slug].horizons['1Y'];
+      const anyPub = Object.values(makerIndex[slug].horizons).some(h => h.publishable);
+      if (anyPub) console.log(`[market] maker ${slug.padEnd(18)} lastComplete=${makerIndex[slug].lastCompleteQuarter} 1Y=${h1.publishable ? `${h1.changePct!.toFixed(1)}% [${h1.ciLoPct!.toFixed(1)},${h1.ciHiPct!.toFixed(1)}]` : `(3Y/5Y only)`} cov=${makerIndex[slug].coverageMakerLots}`);
+    }
+    console.log(`[market] maker indices: ${Object.keys(makerIndex).length} built in ${pool.seconds}s on ${pool.workers} workers, ${Object.values(makerIndex).filter(mi => Object.values(mi.horizons).some(h => h.publishable)).length} with ≥1 publishable horizon`);
+  }
 
   // helper: build a market's composite from its component maker indices
   const compositeFor = (slugs: string[]): CompositeInput[] =>

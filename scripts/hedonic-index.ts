@@ -322,6 +322,7 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
 
   let beta = new Array(p).fill(0);
   let ATWAinv: Matrix | null = null;
+  let Afinal: Matrix | null = null;
   let sigma2 = 1;
 
   for (let pass = 0; pass < HUBER_PASSES; pass++) {
@@ -372,13 +373,46 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
     let wrss = 0, wsum = 0;
     for (let i = 0; i < n; i++) { wrss += weights[i] * resid[i] * resid[i]; wsum += weights[i]; }
     sigma2 = wrss / Math.max(wsum - p, 1);
-    ATWAinv = pseudoInverse(A); // (X'WX + ridge)^-1 for the covariance
+    // (X'WX + ridge)^-1 for the covariance. Sep 10 2026: computed ONCE, on the
+    // final pass — the loop overwrote it every pass and only the last value is
+    // ever read, so 4 of the 5 p×p eigendecompositions (the dominant cost for
+    // makers with thousands of refModel dummies) were pure waste. Result is
+    // bit-identical: same A, same call, same final pass.
+    if (pass === HUBER_PASSES - 1) Afinal = A;
   }
 
-  // covariance = σ̂²·(X'WX)^-1
-  const covM = ATWAinv!.mul(sigma2);
+  // covariance = σ̂²·(X'WX)^-1 — but ONLY the quarter columns are ever read
+  // (varOfDiff below indexes cov at quarter cols; nothing else touches it).
+  // Sep 10 2026: instead of the full p×p eigen pseudo-inverse (Patek: p in the
+  // thousands, 572s), solve A·X = E for the q unit vectors of the quarter cols
+  // with the same Cholesky factor the fit already uses — O(p²·q), exact for
+  // an SPD A (ridge guarantees PD). Rows for non-quarter columns are a shared
+  // zero row. RAY_COV_EIGEN=1 forces the old full-inverse path (equivalence
+  // harness: scripts/_qa/maker-cov-equiv.ts); a non-PD A also falls back.
+  let cov: number[][] = [];
+  const qcols = Array.from(design.quarterCols.values());
+  let fast = process.env.RAY_COV_EIGEN !== '1' && qcols.length > 0;
+  if (fast) {
+    try {
+      const cho = new CholeskyDecomposition(Afinal!);
+      const E = new Matrix(p, qcols.length);
+      qcols.forEach((c, k) => E.set(c, k, 1));
+      const X = cho.solve(E);
+      const zero: number[] = new Array(p).fill(0);
+      cov = new Array(p);
+      for (let r = 0; r < p; r++) cov[r] = zero;
+      for (const a of qcols) {
+        const row = new Array(p).fill(0);
+        qcols.forEach((b, k) => { row[b] = X.get(a, k) * sigma2; });
+        cov[a] = row;
+      }
+    } catch { fast = false; }
+  }
+  if (!fast) {
+    ATWAinv = pseudoInverse(Afinal!);
+    cov = ATWAinv.mul(sigma2).to2DArray();
+  }
   // sigma2 escapes with the fit (diagnostics, Aug 6 2026)
-  const cov: number[][] = covM.to2DArray();
   return { beta, cov, p, sigma2 };
 }
 
