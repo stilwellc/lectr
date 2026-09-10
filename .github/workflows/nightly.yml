@@ -56,6 +56,10 @@ on:
         type: choice
         options: [auto, full, incremental]
         default: auto
+      sentinel_warn_only:
+        description: 'Downgrade the price-bleed SENTINEL from abort to warnings for THIS run (manual recovery only — inspect the signatures first). The corpus-shrink sanity gate and the engine holdout gate still apply.'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -278,7 +282,13 @@ jobs:
       - name: Pull previous totals + backtest (gate baseline + carry the record + incremental state)
         run: bash scripts/data-store.sh pull-meta && bash scripts/data-store.sh pull-backtest
       - name: Assemble + engine (sanity-gated)
+        # sentinel_warn_only is the MANUAL recovery valve for the price-bleed
+        # sentinel only (Sep 9 2026: the absolute-count gate added Sep 2 wedged
+        # every publish on 25 yrs of legitimate repeat-price clusters). It does
+        # NOT relax the corpus-shrink sanity gate or the engine holdout gate.
         run: npx tsx scripts/assemble.ts
+        env:
+          RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
       - name: Rebuild eager upcoming payload
         run: npx tsx scripts/build-upcoming.ts
       # Emit the value book for Starling (the buy-side sibling) → PRIVATE R2.
