@@ -247,7 +247,12 @@ jobs:
     # restored), which adds markets to every per-market pass, so this job's
     # cost only goes up. A timeout here kills the night mid-assemble; the
     # ceiling is free (Actions bills minutes USED, not reserved).
-    timeout-minutes: 120
+    # Sep 9 2026: 120 → 180. Measured assemble on the last two SUCCESSFUL
+    # nightlies was 76m (Aug 25) and 89m (Aug 24) — only ~31m of margin at the
+    # worst observation, on a corpus that has grown ~19k lots since and keeps
+    # growing. A kill here costs a whole night and publishes nothing (the R2
+    # push is the last step), so buy the headroom.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
