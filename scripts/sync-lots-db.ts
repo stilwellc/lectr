@@ -135,21 +135,47 @@ async function main() {
     for (const r of stale) {
       const l = byId.get(String(r.id)) ?? byId.get(String(r.id).endsWith('~') ? String(r.id).slice(0, -1) : `${r.id}~`);
       if (!l) { unknown++; continue; }
+      // Sep 10 2026: carry the identity columns too. Postgres runs NOT NULL
+      // checks on the PROPOSED insert row before ON CONFLICT resolves to an
+      // update, so a settled payload that omits artist/title/house fails the
+      // whole batch (23502 on bonhams-31790-1 took the sync job down) even
+      // though the existing row has them. Same mapping as the upcoming row.
       settled.push({
         id: String(r.id),
+        artist: l.artist ?? null,
+        market: l.artist ? marketOf(String(l.artist)) : null,
         status: l.status ?? null,
         sale_date: dayOf(l),
         price_usd: l.priceUsd ?? null,
+        est_low_usd: l.estLowUsd ?? l.estimateLow ?? null,
+        est_high_usd: l.estHighUsd ?? l.estimateHigh ?? null,
+        title: l.title ?? null,
+        image_url: l.imageUrl ?? null,
+        house: l.auctionHouse ?? null,
+        sport: l.sport ?? null,
         results_pending: !!l.resultsPending,
         signal_label: null,          // a settled lot carries no live flag
         signal_pct: null,
         value: null,
+        url: l.url ?? null,
         data: slimForClient(l),
         updated_at: now,
       });
     }
     console.log(`[sync-lots] ${stale.length} rows left the live book: ${settled.length} settled from the corpus, ${unknown} unknown to the corpus (left for the age sweep)`);
-    if (settled.length) await upsert(settled, 'settled');
+    if (settled.length) {
+      try { await upsert(settled, 'settled'); }
+      catch (e) {
+        // one row with a null identity column must not sink the other 1,600:
+        // retry without the rows missing artist/title/house and say which.
+        const msg = (e as Error).message || '';
+        if (!/23502/.test(msg)) throw e;
+        const keep = settled.filter(r => r.artist && r.title && r.house);
+        const dropped = settled.filter(r => !(r.artist && r.title && r.house)).map(r => r.id);
+        console.warn(`[sync-lots] settled batch hit NOT NULL (23502); retrying without ${dropped.length} incomplete row(s): ${dropped.slice(0, 10).join(', ')}`);
+        if (keep.length) await upsert(keep, 'settled');
+      }
+    }
   } else {
     console.log('[sync-lots] no rows left the live book since the last sync');
   }
