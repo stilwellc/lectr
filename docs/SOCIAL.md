@@ -90,37 +90,56 @@ State lives in R2, never git:
   so this is how a receipt weeks later still shows the piece. Forgets after a
   year.
 
-## Setup — the three things only a human can do
+## Setup — the part only a human can do
 
-The code is complete and runs tonight in dry-run: it renders the cards, prints
-the exact copy, and posts nothing. To go live, add these repository secrets.
-Either platform works alone; a platform with no secrets stays dry.
+The code is complete and runs tonight in dry run: it renders the cards, prints
+the exact copy, and posts nothing. Six repository secrets turn it on, with no
+code change. Add them under **Settings → Secrets and variables → Actions**.
+Either platform works alone; a platform whose secrets are absent stays dry.
 
-### X
+These steps need you signed into your own developer accounts, so they cannot
+be automated from here.
 
-1. developer.x.com → create a project + app. Enable **Read and Write** under
-   User authentication settings (OAuth 1.0a). Set any callback URL; it is
-   unused.
-2. Buy credits in the Developer Console (pay-per-use; no plan needed).
-3. Keys and tokens → generate **API Key and Secret** and **Access Token and
-   Secret** for the @lectr account. The access token must be generated *after*
-   Read and Write is enabled, or it is read-only.
-4. Secrets: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_SECRET`.
+### X — four secrets
 
-### Instagram
+1. **developer.x.com → Developer Console → create a Project and an App.**
+   The API Key and Secret are shown **once** at creation: *"we only display
+   these credentials once, so make sure to save them in a password manager or
+   somewhere secure."* If you lose them, regenerate from the app's **Keys and
+   tokens** tab (Apps dropdown → your app).
+2. **Set the app to Read and Write** under User authentication settings before
+   generating any token. A token minted while the app is read-only stays
+   read-only, and the failure looks like a permissions error at post time, not
+   at setup. If you change the permission afterwards, regenerate the access
+   token.
+3. **Generate the Access Token and Secret for the @lectr account itself** from
+   the same Keys and tokens tab. This is the app owner's own token — no
+   three-legged OAuth flow is needed, because lectr is posting as itself.
+4. **Buy credits** in the Developer Console. X is pay-per-use now: no plan, no
+   subscription, but posting requires a positive credit balance.
+5. Secrets: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_SECRET`.
 
-1. The lectr Instagram account must be a **Professional** account (Business
-   or Creator) and linked to a Facebook Page.
-2. developers.facebook.com → app → add **Instagram** product → "API setup
-   with Instagram login" → add the account as an Instagram tester and accept
-   in the app.
-3. Generate a token with `instagram_business_basic` and
-   `instagram_business_content_publish`, then exchange it for a **long-lived**
-   token (60 days; refresh via `GET /refresh_access_token` before expiry —
-   the poster logs the expiry error plainly if it lapses).
-4. Read the numeric **Instagram user id** from `GET /me?fields=id`.
-5. Secrets: `IG_USER_ID`, `IG_ACCESS_TOKEN`.
-6. Put `lectr.bid` in the bio.
+### Instagram — two secrets
+
+1. The lectr Instagram account must be a **professional account** (Business or
+   Creator). Personal accounts cannot publish through the API.
+2. **developers.facebook.com → create an app, choosing the _Business_ app
+   type**, then in the App Dashboard go to **Instagram → API setup with
+   Instagram business login** and connect the lectr account.
+3. Generate the token from **the App Dashboard**, not from the login flow.
+   This matters: *"Access tokens from the business login flow are short-lived
+   and valid for 1 hour. Access tokens from the App Dashboard are long-lived
+   and are valid for 60 days."* The scope needed for posting is
+   `instagram_business_content_publish`.
+4. **The token expires every 60 days.** Refresh it before expiry and update
+   the secret. When it lapses the poster does not crash — it logs the Graph
+   API's own error and the X post still goes out. Put a calendar reminder at
+   50 days.
+5. Read the account id from `GET /me?fields=user_id,username` — the `user_id`
+   field is what `IG_USER_ID` wants.
+6. Secrets: `IG_USER_ID`, `IG_ACCESS_TOKEN`.
+7. Put `lectr.bid` in the bio. It is the only clickable path Instagram gives a
+   feed post.
 
 ### Preview before going live
 
