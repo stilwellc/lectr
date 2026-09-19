@@ -1,9 +1,11 @@
-name: User count (aggregates only)
+name: Ops numbers (aggregates only)
 
-# Manual only. The anon key cannot see past row-level security and the service
-# key lives here as a secret, so the only way to read how many people actually
-# use the desk is to count inside a run. Prints COUNTS ONLY — never an email,
-# never a name, never a user id.
+# Manual only. Two questions the outside world cannot answer for us:
+#   accounts — the anon key cannot see past row-level security, and the service
+#              key is a secret, so the count has to happen inside a run
+#   traffic  — lectr carries no analytics script at all, so Cloudflare's edge
+#              logs are the only record that anyone visited
+# Prints AGGREGATES ONLY — never an email, a name, a user id, or an IP.
 
 on:
   workflow_dispatch:
@@ -80,4 +82,57 @@ jobs:
                   print(f'\n{table}: {total} rows across {distinct} accounts')
               except Exception as e:
                   print(f'\n{table}: unreadable ({type(e).__name__})')
+          PY
+
+  traffic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the edge's own record
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, datetime
+
+          tok = os.environ['CF_TOKEN']
+          def cf(url, data=None):
+              req = urllib.request.Request(
+                  url,
+                  data=json.dumps(data).encode() if data else None,
+                  headers={'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json'},
+              )
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.loads(r.read())
+
+          # the zone behind lectr.bid
+          z = cf('https://api.cloudflare.com/client/v4/zones?name=lectr.bid')
+          if not z.get('success') or not z.get('result'):
+              print('no zone for lectr.bid on this token:', json.dumps(z.get('errors', []))[:300]); raise SystemExit(0)
+          zone = z['result'][0]['id']
+          print('zone found ·', z['result'][0]['name'], '· plan', z['result'][0].get('plan', {}).get('name', '?'))
+
+          end = datetime.date.today() + datetime.timedelta(days=1)
+          start = end - datetime.timedelta(days=31)
+          q = '''query($zone:String!,$start:Date!,$end:Date!){viewer{zones(filter:{zoneTag:$zone}){
+                httpRequests1dGroups(limit:40,filter:{date_geq:$start,date_lt:$end},orderBy:[date_ASC]){
+                  dimensions{date} sum{requests pageViews} uniq{uniques}}}}}'''
+          r = cf('https://api.cloudflare.com/client/v4/graphql',
+                 {'query': q, 'variables': {'zone': zone, 'start': str(start), 'end': str(end)}})
+          if r.get('errors'):
+              print('graphql refused:', json.dumps(r['errors'])[:400]); raise SystemExit(0)
+          days = r['data']['viewer']['zones'][0]['httpRequests1dGroups']
+          if not days:
+              print('no rows returned for the window'); raise SystemExit(0)
+
+          print(f"\n{'date':12}{'requests':>10}{'pageviews':>11}{'uniques':>9}")
+          for d in days:
+              print(f"{d['dimensions']['date']:12}{d['sum']['requests']:>10,}{d['sum']['pageViews']:>11,}{d['uniq']['uniques']:>9,}")
+          tot_r = sum(d['sum']['requests'] for d in days)
+          tot_p = sum(d['sum']['pageViews'] for d in days)
+          peak  = max(days, key=lambda d: d['uniq']['uniques'])
+          last7 = days[-7:]
+          print(f"\n{len(days)} days · {tot_r:,} requests · {tot_p:,} pageviews")
+          print(f"last 7 days · {sum(d['sum']['pageViews'] for d in last7):,} pageviews · "
+                f"{sum(d['uniq']['uniques'] for d in last7):,} unique visitors (sum of daily, so repeat visitors recount)")
+          print(f"busiest day · {peak['dimensions']['date']} · {peak['uniq']['uniques']:,} uniques")
           PY
