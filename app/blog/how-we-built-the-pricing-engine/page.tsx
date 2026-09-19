@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import BookTotal from '../../components/BookTotal';
 import Link from 'next/link';
 import ArtistNav from '../../components/ArtistNav';
 import meta from '../../../public/data/ray/meta.json';
@@ -88,8 +89,8 @@ export default function PricingEnginePost() {
               <span className="v" style={{ display: 'block' }}>Technical</span>
             </div>
             <div>
-              <span className="k" style={{ display: 'block' }}>Corpus at build</span>
-              <span className="v" style={{ display: 'block' }}>{meta.totalLots.toLocaleString()} lots</span>
+              <span className="k" style={{ display: 'block' }}>Corpus</span>
+              <span className="v" style={{ display: 'block' }}><BookTotal fallback={meta.totalLots} /> lots</span>
             </div>
           </div>
           <p className="lectr-dropcap" style={{ ...p, fontSize: 17 }}>
@@ -357,7 +358,7 @@ change%  =  100 · ( exp( τ_end − τ_start ) − 1 )`}
           <h2 style={h2}>8 · What this costs, and what it buys</h2>
           <p style={p}>
             The cost is coverage: {countWord(movers.length)} verified mover{movers.length === 1 ? '' : 's'} across a corpus of{' '}
-            <span style={strong}>{meta.totalLots.toLocaleString()} lots</span> from {meta.sources.length}{' '}
+            <span style={strong}><BookTotal fallback={meta.totalLots} /> lots</span> from <BookTotal fallback={meta.sources.length} field="sources" format={false} />{' '}
             sources. Most verticals never seat enough measurable components to assemble a composite
             at all. That is a small published surface for a very large amount of data — and it is
             the point. Every appreciation figure the site shows has a 95% interval behind it that

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useBookTotals } from '../lib/book';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
@@ -417,33 +418,12 @@ export function CallPlate({
  * light when the reader arrives, over the provenance the whole product
  * stands on. One gesture, then quiet.
  */
-/** meta.json is tiny (~2KB) — the colophon self-serves its provenance so the
- *  facts print on EVERY page, not only the ones that thread props. Module-
- *  cached: one fetch per session. */
-let colophonMetaCache: { lots: number; lastCrawl: string } | null = null;
-// the in-flight request is cached too: two colophons mounting in the same
-// tick (or StrictMode's double effect) each fired their own fetch before the
-// first could populate the cache — one request per session, by construction
-let colophonMetaInflight: Promise<{ lots: number; lastCrawl: string } | null> | null = null;
+/** The colophon self-serves its provenance so the facts print on EVERY page,
+ *  not only the ones that thread props — but through the shared book module,
+ *  so it can never disagree with the figure in the body copy above it. */
 function useColophonMeta(skip = false): { lots: number; lastCrawl: string } | null {
-  const [meta, setMeta] = useState(colophonMetaCache);
-  useEffect(() => {
-    if (colophonMetaCache || skip) return;
-    let dead = false;
-    if (!colophonMetaInflight) {
-      colophonMetaInflight = fetch('/data/ray/meta.json')
-        .then(r => (r.ok ? r.json() : null))
-        .then(j => {
-          if (!j) return null;
-          colophonMetaCache = { lots: j.totalLots || 0, lastCrawl: j.lastCrawl || '' };
-          return colophonMetaCache;
-        })
-        .catch(() => null /* the spec line simply prints fewer segments */);
-    }
-    colophonMetaInflight.then(m => { if (m && !dead) setMeta(m); });
-    return () => { dead = true; };
-  }, [skip]);
-  return meta;
+  const totals = useBookTotals(skip);
+  return totals ? { lots: totals.totalLots, lastCrawl: totals.lastCrawl } : null;
 }
 
 /* NORTH STAR FOOTER (docs/NORTHSTAR_UI.md) — the ink vault flattens onto the

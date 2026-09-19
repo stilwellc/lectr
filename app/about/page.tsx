@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import BookTotal from '../components/BookTotal';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
@@ -666,8 +667,8 @@ export default function AboutPage() {
             </div>
             <p className="dk-free">Public and free. No account needed.</p>
             <div className="dk-statband dk-s">
-              <Stat figure={<span data-count>{fmt(meta.totalLots)}</span>} label="Lots under tracking" note="live and settled, one graph" />
-              <Stat figure={<span data-count>{String(meta.sources.length)}</span>} label="Auction houses" note="named, with their coverage, below" />
+              <Stat figure={<span data-count><BookTotal fallback={meta.totalLots} /></span>} label="Lots under tracking" note="live and settled, one graph" />
+              <Stat figure={<span data-count><BookTotal fallback={meta.sources.length} field="sources" format={false} /></span>} label="Auction houses" note="named, with their coverage, below" />
               <Stat figure={<span data-count>{fmt(F.n)}</span>} label="Replayed calls" note="scored against what happened next" />
             </div>
           </div>

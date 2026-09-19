@@ -198,6 +198,29 @@ function bidVel(lot: AuctionLot): { delta: number; hours: number } | null {
   const v = lot.bidVelocity;
   return v && v.delta > 0 && lot.status === 'upcoming' ? { delta: v.delta, hours: Math.round(v.hours) } : null;
 }
+// A blank Bids cell means one of two very different things, and the table used
+// to print the same em-dash for both: this house publishes a live bid book and
+// nobody has bid yet (→ 0), or the house never publishes one at all (→ not
+// tracked). `housesWithBids` is derived from the pool itself, so a house that
+// starts publishing is picked up on the next crawl with no code change.
+function housePublishesBids(lot: AuctionLot, houses: Set<string>): boolean {
+  return houses.has(String(lot.auctionHouse || ''));
+}
+function bidCellFace(lot: AuctionLot, houses: Set<string>): string {
+  if (typeof lot.bidCount === 'number') return lot.bidCount.toLocaleString();
+  if (bidVel(lot)) return '';                       // velocity carries the read
+  return housePublishesBids(lot, houses) ? '0' : '—';
+}
+function bidCellTitle(lot: AuctionLot, houses: Set<string>): string {
+  if (typeof lot.bidCount === 'number') {
+    const v = bidVel(lot);
+    return v ? `${lot.bidCount} bids · ${v.delta} added in the last ${v.hours}h` : `${lot.bidCount} bids`;
+  }
+  if (bidVel(lot)) return `${lot.auctionHouse} posts bid activity but not a running count`;
+  return housePublishesBids(lot, houses)
+    ? 'No bids yet'
+    : `${lot.auctionHouse} does not publish a live bid count`;
+}
 function BidVelChip({ lot }: { lot: AuctionLot }) {
   const v = bidVel(lot);
   if (!v) return null;
@@ -462,6 +485,13 @@ export default function TerminalHomePage() {
       .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
   }, [marketLots]);
 
+  // Which houses publish a live bid book at all — measured, not hardcoded.
+  const housesWithBids = useMemo(() => {
+    const s = new Set<string>();
+    for (const l of upcoming) if (typeof l.bidCount === 'number') s.add(String(l.auctionHouse || ''));
+    return s;
+  }, [upcoming]);
+
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   // THE RAIL'S MICRO-READS — one standardized read per cell: live lots on
@@ -610,10 +640,17 @@ export default function TerminalHomePage() {
       const seen = (l: AuctionLot) => l.firstSeen || '';
       arr = [...arr].sort((a, b) => (seen(a) < seen(b) ? 1 : seen(a) > seen(b) ? -1 : 0));
     } else if (f.sort === 'bids-desc') {
-      // fresh momentum leads (bids added since the last crawl), then raw
-      // live counts; lots with no bid state at all sink to the end
-      const heat = (l: AuctionLot) => (l.bidVelocity && l.bidVelocity.delta > 0 ? 100_000 + l.bidVelocity.delta : 0) + (typeof l.bidCount === 'number' ? Math.min(l.bidCount, 99_999) : 0);
-      arr = [...arr].sort((a, b) => heat(b) - heat(a));
+      // The pill says "Most bids", so the BID COUNT is the rank — velocity is
+      // only the tiebreaker. (Until Sep 2026 this added the two terms, so a
+      // 42-bid lot moving +29 outranked a 69-bid lot moving +1 and the column
+      // read 89, 72, 84, 83 — sorted, but visibly not by the number shown.)
+      // Lots with no bid state at all sink below every lot that has one.
+      const count = (l: AuctionLot) => (typeof l.bidCount === 'number' ? l.bidCount : -1);
+      const delta = (l: AuctionLot) => (l.bidVelocity && l.bidVelocity.delta > 0 ? l.bidVelocity.delta : 0);
+      const known = (l: AuctionLot) => (count(l) >= 0 || delta(l) > 0 ? 1 : 0);
+      arr = [...arr].sort((a, b) =>
+        (known(b) - known(a)) || (count(b) - count(a)) || (delta(b) - delta(a))
+      );
     } else {
       const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
       arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];
@@ -1029,7 +1066,8 @@ export default function TerminalHomePage() {
                             >
                               <td style={{ width: 56 }}>
                                 <span className="thumb-plate" data-tone={feedTone(lot, belowIds, belowSignal.hasSig)} style={{ position: 'relative' }}>
-                                  {(lot.title || '?').charAt(0)}
+                                  {/* monogram under the photo — decoration, never a column */}
+                                  <span aria-hidden="true">{(lot.title || '?').charAt(0)}</span>
                                   {lot.imageUrl && (
                                     <img
                                       className="thumb"
@@ -1076,8 +1114,8 @@ export default function TerminalHomePage() {
                               <td className="num t-days">
                                 {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
                               </td>
-                              <td className="num t-bids">
-                                {typeof lot.bidCount === 'number' ? lot.bidCount.toLocaleString() : '—'}
+                              <td className="num t-bids" title={bidCellTitle(lot, housesWithBids)}>
+                                {bidCellFace(lot, housesWithBids)}
                                 {bidVel(lot) && <span className="ray-bidvel-sub">+{bidVel(lot)!.delta}/{bidVel(lot)!.hours}h</span>}
                               </td>
                               <td className="num t-est">

@@ -10,6 +10,8 @@
  */
 
 import Masthead from '../components/Masthead';
+import BookTotal from '../components/BookTotal';
+import meta from '../../public/data/ray/meta.json';
 import FigCap from '../components/FigCap';
 import {
   CellGrid, Cell, ColorCell, FigureCell, StatRow, AnnoChip,
@@ -47,7 +49,7 @@ export default function Styleguide() {
             <span className="ns-kicker" style={{ marginBottom: 0 }}>The kicker — quiet gray, sentence case, never tracked</span>
             <span style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--color-text-secondary)', maxWidth: 560 }}>
               Body secondary at 15/1.6 — the reading voice. Numerals that count money ride the mono register:{' '}
-              <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)' }}>1,122,103</span>.
+              <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)' }}><BookTotal fallback={meta.totalLots} /></span>.
             </span>
           </div>
         </Room>
@@ -62,7 +64,7 @@ export default function Styleguide() {
 
         <Room title="The ledgers" note="byline · dotted spec rows">
           <div className="ns-byline" style={{ marginBottom: 22 }}>
-            <div><span className="k">On the book</span><span className="v">1,122,103</span></div>
+            <div><span className="k">On the book</span><span className="v"><BookTotal fallback={meta.totalLots} /></span></div>
             <div><span className="k">Sub-markets tracked</span><span className="v">100</span></div>
             <div><span className="k">The record</span><span className="v" style={{ color: 'var(--color-up)' }}>+41%</span></div>
             <div><span className="k">Makers ranked</span><span className="v">54</span></div>
