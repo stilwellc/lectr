@@ -538,6 +538,21 @@ jobs:
           else
             bash scripts/data-store.sh pull
           fi
+      # Tonight's social cards ride inside the export so Instagram can fetch
+      # them from lectr.bid/social/ — the public URL its API insists on. A
+      # render failure must never hold the data deploy: continue-on-error, and
+      # the `social` job simply finds no today.json and does nothing.
+      - name: Render tonight's social cards
+        continue-on-error: true
+        run: npx tsx scripts/social/render.tsx
+      - name: Hand the cards to the social job
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: social-cards
+          path: public/social/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Build static export
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
@@ -612,3 +627,37 @@ jobs:
         run: npx tsx scripts/match-alerts.ts
       - name: Match signal alerts (watchlist flips + your-markets flags)
         run: npx tsx scripts/match-signal-alerts.ts
+
+  # ── the social desk ───────────────────────────────────────────────────────
+  # Posts tonight's card to X and Instagram AFTER the deploy is live, so every
+  # link resolves and the JPEG is fetchable. Idempotent via the R2 ledger; no
+  # secrets → dry run, prints the copy, posts nothing. Never blocks the run.
+  social:
+    needs: deploy
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: social
+      cancel-in-progress: false
+    env:
+      X_API_KEY: ${{ secrets.X_API_KEY }}
+      X_API_SECRET: ${{ secrets.X_API_SECRET }}
+      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+      X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+      IG_USER_ID: ${{ secrets.IG_USER_ID }}
+      IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: Fetch tonight's cards (rendered by deploy)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: social-cards
+          path: public/social
+      - name: Post
+        run: npx tsx scripts/social/post.ts
+

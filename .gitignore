@@ -42,3 +42,5 @@ data/rr-archive/
 # the intraday close-board overlay IS committed (CI writes it; deploy ships it)
 !public/data/ray/close-board.json
 shots/
+# tonight's social cards are rendered by the deploy job, never committed
+/public/social/
