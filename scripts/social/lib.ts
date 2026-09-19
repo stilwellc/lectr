@@ -377,6 +377,45 @@ export function pickTonight(d: Data, exclude: Set<string>, force?: PostType, mem
   return null;
 }
 
+// ── photo strips: an item wherever one exists, even on the market posts ────
+
+export interface Thumb { image: string; maker: string; line: string; id: string }
+
+/** Up to n photographed live lots in a market, one per maker, flags first —
+ *  the faces of the market the index is describing. */
+export function marketPhotos(d: Data, market: string, n = 4): Thumb[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const live = d.upcoming.filter(l => l.imageUrl && isLiveUpcoming(l, today) && (market === 'all' || marketOf(l.artist) === market));
+  const ranked = [
+    ...live.filter(l => l.signal?.label === 'Below Market').sort((a, b) => dealScore(b, b.signal!.pct) - dealScore(a, a.signal!.pct)),
+    ...live.filter(l => l.signal?.label !== 'Below Market').sort((a, b) => (b.estimateHigh || b.currentBid || 0) - (a.estimateHigh || a.currentBid || 0)),
+  ];
+  const out: Thumb[] = []; const seen = new Set<string>();
+  for (const l of ranked) {
+    if (seen.has(l.artist)) continue;
+    seen.add(l.artist);
+    const line = l.signal?.label === 'Below Market' ? `${gapMultiple(l.signal.pct)} the ask` : houseEstimate(l) || (l.currentBid ? `bid ${money(l.currentBid)}` : l.auctionHouse);
+    out.push({ image: l.imageUrl!, maker: makerLine(l.artist, l.auctionHouse, marketOf(l.artist)), line, id: l.id });
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+/** The record's faces: recently graded calls we can still photograph (the
+ *  flag memory), newest first; if the memory is thin, tonight's flags. */
+export function recordPhotos(d: Data, memory: FlagMemory, n = 4): Thumb[] {
+  const out: Thumb[] = []; const seen = new Set<string>();
+  const graded = d.receipts.filter(r => r.k === 'card' && r.p > 0 && r.r > 0).sort((a, b) => (b.sd || b.d).localeCompare(a.sd || a.d));
+  for (const r of graded) {
+    const m = memory[r.id]; if (!m || seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push({ image: m.image, maker: makerLine(m.artist, m.house, r.m), line: `${money(r.p)} → ${money(r.r)}`, id: r.id });
+    if (out.length >= n) break;
+  }
+  if (out.length < n) for (const t of marketPhotos(d, 'all', n * 2)) { if (out.length >= n) break; if (!seen.has(t.id)) { seen.add(t.id); out.push(t); } }
+  return out.slice(0, n);
+}
+
 // ── formatting shared by copy + cards ───────────────────────────────────────
 
 /** Exact dollars below six figures — a receipt is a receipt, and a comps
@@ -405,6 +444,41 @@ export function whenLabel(iso: string): string {
   return `${day}, ${time} ET`;
 }
 
+/** House photographs arrive with the house's own margins — a small object in
+ *  a field of white. Crop to the object (plus 5%) so it fills the plate.
+ *  Background is taken from the corners; anything within tolerance of it is
+ *  margin. Bails to the original on anything unexpected. */
+function trimMargins(buf: Buffer, isJpeg: boolean): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const jpeg = require('jpeg-js') as { decode: (b: Buffer, o: { useTArray: boolean }) => { data: Uint8Array; width: number; height: number }; encode: (i: { data: Uint8Array; width: number; height: number }, q: number) => { data: Buffer } };
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PNG } = require('pngjs') as { PNG: { sync: { read: (b: Buffer) => { data: Buffer; width: number; height: number } } } };
+    const img = isJpeg ? jpeg.decode(buf, { useTArray: true }) : PNG.sync.read(buf);
+    const { data, width: W, height: H } = img;
+    if (W < 200 || H < 200) return null;
+    const px = (x: number, y: number) => { const i = (y * W + x) * 4; return [data[i], data[i + 1], data[i + 2]]; };
+    const corners = [px(2, 2), px(W - 3, 2), px(2, H - 3), px(W - 3, H - 3)];
+    const bg = corners.reduce((a, c) => [a[0] + c[0] / 4, a[1] + c[1] / 4, a[2] + c[2] / 4], [0, 0, 0]);
+    // only trim a light, uniform field — a photographed backdrop is content
+    if (Math.min(...bg) < 200) return null;
+    const far = (x: number, y: number) => { const c = px(x, y); return Math.abs(c[0] - bg[0]) + Math.abs(c[1] - bg[1]) + Math.abs(c[2] - bg[2]) > 48; };
+    let x0 = W, x1 = -1, y0 = H, y1 = -1;
+    const step = Math.max(1, Math.floor(Math.min(W, H) / 400));
+    for (let y = 0; y < H; y += step) for (let x = 0; x < W; x += step) if (far(x, y)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0 || x1 - x0 < W * 0.15 || y1 - y0 < H * 0.15) return null;
+    const mx = Math.round((x1 - x0) * 0.05), my = Math.round((y1 - y0) * 0.05);
+    x0 = Math.max(0, x0 - mx); x1 = Math.min(W - 1, x1 + mx); y0 = Math.max(0, y0 - my); y1 = Math.min(H - 1, y1 + my);
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+    if (cw / W > 0.92 && ch / H > 0.92) return null; // nothing worth trimming
+    const out = new Uint8Array(cw * ch * 4);
+    for (let y = 0; y < ch; y++) out.set(data.subarray(((y + y0) * W + x0) * 4, ((y + y0) * W + x0 + cw) * 4), y * cw * 4);
+    return 'data:image/jpeg;base64,' + jpeg.encode({ data: out, width: cw, height: ch }, 90).data.toString('base64');
+  } catch {
+    return null;
+  }
+}
+
 /** Fetch a house photograph as a data URI for satori. Real Chrome UA — the
  *  house CDNs refuse a bare fetch. Returns null on webp/gif/anything satori
  *  cannot decode, so the card falls back to its type-only layout. */
@@ -424,7 +498,7 @@ export async function imageDataUri(url: string | null | undefined, width = 1200)
     const isJpeg = buf[0] === 0xff && buf[1] === 0xd8;
     const isPng = buf[0] === 0x89 && buf[1] === 0x50;
     if (!isJpeg && !isPng) return null;
-    return `data:image/${isJpeg ? 'jpeg' : 'png'};base64,${buf.toString('base64')}`;
+    return trimMargins(buf, isJpeg) || `data:image/${isJpeg ? 'jpeg' : 'png'};base64,${buf.toString('base64')}`;
   } catch {
     return null;
   }
