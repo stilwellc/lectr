@@ -1,0 +1,83 @@
+name: User count (aggregates only)
+
+# Manual only. The anon key cannot see past row-level security and the service
+# key lives here as a secret, so the only way to read how many people actually
+# use the desk is to count inside a run. Prints COUNTS ONLY — never an email,
+# never a name, never a user id.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Count users and saved work
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, datetime, collections
+
+          base = os.environ['SUPABASE_URL'].rstrip('/')
+          key  = os.environ['SUPABASE_SERVICE_KEY']
+
+          def get(path):
+              req = urllib.request.Request(base + path, headers={
+                  'apikey': key, 'Authorization': 'Bearer ' + key,
+                  'Prefer': 'count=exact',
+              })
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.loads(r.read() or b'[]'), dict(r.headers)
+
+          # ── accounts ────────────────────────────────────────────────────
+          users, page, per = [], 1, 200
+          while True:
+              batch, _ = get(f'/auth/v1/admin/users?page={page}&per_page={per}')
+              rows = batch.get('users', batch) if isinstance(batch, dict) else batch
+              if not rows: break
+              users += rows
+              if len(rows) < per: break
+              page += 1
+
+          now = datetime.datetime.now(datetime.timezone.utc)
+          def days_ago(ts):
+              if not ts: return 9999
+              try: return (now - datetime.datetime.fromisoformat(ts.replace('Z','+00:00'))).days
+              except Exception: return 9999
+
+          signed_in_30 = sum(1 for u in users if days_ago(u.get('last_sign_in_at')) <= 30)
+          signed_in_7  = sum(1 for u in users if days_ago(u.get('last_sign_in_at')) <= 7)
+          new_30       = sum(1 for u in users if days_ago(u.get('created_at')) <= 30)
+          ever_signed  = sum(1 for u in users if u.get('last_sign_in_at'))
+
+          print(f'accounts total          {len(users)}')
+          print(f'  signed in at least once {ever_signed}')
+          print(f'  created in last 30d     {new_30}')
+          print(f'  active last 30d         {signed_in_30}')
+          print(f'  active last 7d          {signed_in_7}')
+
+          # first and last signup, month by month — shape of growth, no identities
+          months = collections.Counter()
+          for u in users:
+              c = (u.get('created_at') or '')[:7]
+              if c: months[c] += 1
+          if months:
+              print('\nsignups by month')
+              for m in sorted(months): print(f'  {m}  {months[m]}')
+
+          # ── what they saved ─────────────────────────────────────────────
+          for table in ('saved_lots', 'alerts', 'saved_searches', 'collection_snapshots'):
+              try:
+                  _, h = get(f'/rest/v1/{table}?select=id&limit=1')
+                  total = (h.get('content-range') or '*/?').split('/')[-1]
+                  rows, _ = get(f'/rest/v1/{table}?select=user_id')
+                  distinct = len({r.get('user_id') for r in rows if isinstance(r, dict)})
+                  print(f'\n{table}: {total} rows across {distinct} accounts')
+              except Exception as e:
+                  print(f'\n{table}: unreadable ({type(e).__name__})')
+          PY
