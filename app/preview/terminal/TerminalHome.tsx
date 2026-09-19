@@ -203,6 +203,17 @@ function bidVel(lot: AuctionLot): { delta: number; hours: number } | null {
 // nobody has bid yet (→ 0), or the house never publishes one at all (→ not
 // tracked). `housesWithBids` is derived from the pool itself, so a house that
 // starts publishing is picked up on the next crawl with no code change.
+// "Oct 14, 2026" is not enough for a timed online sale — the hour decides
+// whether you are bidding or reading results. When the crawl parsed a real
+// timestamp, the cell carries the exact close in the READER's zone, named.
+function saleWhenTitle(lot: AuctionLot): string | undefined {
+  const t = lot.saleDateTime ? Date.parse(lot.saleDateTime) : NaN;
+  if (!Number.isFinite(t)) return lot.saleDate ? `Sale date ${lot.saleDate} — the house did not publish a close time` : undefined;
+  return `Hammers ${new Date(t).toLocaleString(undefined, {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  })} · your local time`;
+}
 function housePublishesBids(lot: AuctionLot, houses: Set<string>): boolean {
   return houses.has(String(lot.auctionHouse || ''));
 }
@@ -1110,7 +1121,7 @@ export default function TerminalHomePage() {
                               </td>
                               <td>{lot.auctionHouse}</td>
                               <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
-                              <td className="t-date">{formatDate(lot.saleDate)}</td>
+                              <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
                               <td className="num t-days">
                                 {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
                               </td>

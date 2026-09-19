@@ -965,7 +965,9 @@ export default function ComparableModal({
             </div>
 
             {/* the maker's own book — internal link; the house URL lives on
-                the "View lot" CTA only */}
+                the "View at <house>" CTA only. The two CTAs read as near-
+                duplicates until the house is named: one opens lectr's lot
+                page, the other leaves for the auctioneer. */}
             <Link
               href={`/makers/${lot.artist}`}
               className="comp-modal-maker"
@@ -1044,7 +1046,7 @@ export default function ComparableModal({
                     textDecoration: 'none',
                   }}
                 >
-                  View lot <Flick size={10} style={{ marginLeft: 0 }} />
+                  View at {lot.auctionHouse} <Flick size={10} style={{ marginLeft: 0 }} />
                 </a>
               )}
               {/* the share point — every card's modal can mint the permalink */}
