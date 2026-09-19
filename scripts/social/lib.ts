@@ -28,21 +28,21 @@ export const SITE = 'https://lectr.bid';
 export const SERVED = path.join(process.cwd(), 'public', 'data', 'ray');
 export const OUT = path.join(process.cwd(), 'public', 'social');
 
-export type PostType = 'call' | 'receipt' | 'index' | 'record';
+export type PostType = 'call' | 'receipt' | 'board' | 'index' | 'record' | 'abstain';
 
 /** Weekday rotation (UTC). Calls carry the traffic, so they take three days;
  *  the receipt is the trust post and takes two; the two market posts take the
  *  weekend when nothing is closing. */
 export const ROTATION: Record<number, PostType> = {
-  0: 'record', // Sun
+  0: 'record',  // Sun
   1: 'call',
   2: 'receipt',
-  3: 'call',
+  3: 'board',   // the whole desk, mid-week
   4: 'index',
   5: 'call',
-  6: 'receipt',
+  6: 'board',
 };
-export const FALLBACK: PostType[] = ['call', 'receipt', 'index', 'record'];
+export const FALLBACK: PostType[] = ['call', 'board', 'receipt', 'index', 'record', 'abstain'];
 
 // ── data ────────────────────────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ export interface ReceiptRow {
   h: string | null; // house
 }
 
-interface Horizon { publishable?: boolean; changePct: number | null; ciLoPct?: number | null; ciHiPct?: number | null; nEnd?: number }
+interface Horizon { publishable?: boolean; changePct: number | null; ciLoPct?: number | null; ciHiPct?: number | null; nEnd?: number; reason?: string }
 interface Series { period: string; value: number }
 interface RepeatSale { basis: string; scope: string | null; nPairs: number; horizons: Record<string, Horizon>; series?: Series[] }
 interface Hedonic { horizons: Record<string, Horizon>; series?: Series[] }
@@ -279,6 +279,75 @@ export function pickReceipt(d: Data, exclude: Set<string>, memory: FlagMemory = 
   return found[0] ? build(found[0].row, found[0].lot) : null;
 }
 
+export interface BoardPost {
+  type: 'board';
+  key: string;
+  lots: { lot: Lot; pct: number; multiple: string; maker: string; title: string; estimate: string | null; med: number; closes: string }[];
+  liveCount: number;
+  url: string;
+}
+
+/** The desk in one frame: the best flagged lots, one per maker so it reads as
+ *  a market rather than one seller's consignment. Every row is photographed —
+ *  a board with a missing picture is not a board. */
+export function pickBoard(d: Data, exclude: Set<string>, n = 6): BoardPost | null {
+  const today = new Date().toISOString().slice(0, 10);
+  const pool = d.upcoming
+    .filter(l => l.imageUrl && isLiveUpcoming(l, today) && !l.resultsPending && (!l.saleDateTime || Date.parse(l.saleDateTime) > Date.now()))
+    .filter(l => l.signal && l.signal.label === 'Below Market' && CONF_RANK[l.signal.confidence || 'low'] >= 1)
+    .sort((a, b) => dealScore(b, b.signal!.pct) - dealScore(a, a.signal!.pct));
+  const picked: Lot[] = []; const makers = new Set<string>();
+  for (const l of pool) { if (makers.has(l.artist)) continue; makers.add(l.artist); picked.push(l); if (picked.length >= n) break; }
+  if (picked.length < 4) return null; // fewer than four and it is not a board
+  const key = `board:${picked.map(l => l.id).join(',').slice(0, 60)}`;
+  if (exclude.has(key)) return null;
+  return {
+    type: 'board',
+    key,
+    liveCount: pool.length,
+    lots: picked.map(l => ({
+      lot: l, pct: l.signal!.pct, multiple: gapMultiple(l.signal!.pct),
+      maker: makerLine(l.artist, l.auctionHouse, marketOf(l.artist)),
+      title: shortTitle(craftTitle(l.title), 48), estimate: houseEstimate(l), med: l.signal!.med,
+      closes: l.saleDateTime || trueSaleDay(l),
+    })),
+    url: `${SITE}/value`,
+  };
+}
+
+/** What the desk refuses to publish, and why — the abstention is the proof
+ *  that the numbers it DOES publish mean something. Reasons are the engine's
+ *  own strings, never paraphrased. */
+export interface AbstainPost {
+  type: 'abstain';
+  key: string;
+  market: string;
+  horizon: string;
+  reason: string;
+  published: { horizon: string; changePct: number } | null;
+  url: string;
+}
+
+export function pickAbstain(d: Data, exclude: Set<string>): AbstainPost | null {
+  if (!d.market?.hedonic) return null;
+  for (const m of ['art', 'design', 'watches', 'sports', 'tcg', 'science', 'culture']) {
+    const hz = d.market.hedonic[m]?.horizons || {};
+    for (const h of ['1Y', '3Y', '5Y']) {
+      const x = hz[h];
+      if (!x || x.publishable || !x.reason) continue;
+      const key = `abstain:${m}:${h}`;
+      if (exclude.has(key)) continue;
+      const okH = ['1Y', '3Y', '5Y'].find(k => hz[k]?.publishable && hz[k].changePct != null);
+      return {
+        type: 'abstain', key, market: m, horizon: h, reason: x.reason,
+        published: okH ? { horizon: okH, changePct: hz[okH].changePct! } : null,
+        url: `${SITE}/analytics`,
+      };
+    }
+  }
+  return null;
+}
+
 export interface IndexPost {
   type: 'index';
   key: string;
@@ -361,7 +430,7 @@ export function pickRecord(d: Data, exclude: Set<string>): RecordPost | null {
   };
 }
 
-export type Post = CallPost | ReceiptPost | IndexPost | RecordPost;
+export type Post = CallPost | ReceiptPost | BoardPost | IndexPost | RecordPost | AbstainPost;
 
 export function pickTonight(d: Data, exclude: Set<string>, force?: PostType, memory: FlagMemory = {}): Post | null {
   const want = force || ROTATION[new Date().getUTCDay()];
@@ -370,7 +439,9 @@ export function pickTonight(d: Data, exclude: Set<string>, force?: PostType, mem
     const p =
       t === 'call' ? pickCall(d, exclude) :
       t === 'receipt' ? pickReceipt(d, exclude, memory) :
+      t === 'board' ? pickBoard(d, exclude) :
       t === 'index' ? pickIndex(d, exclude) :
+      t === 'abstain' ? pickAbstain(d, exclude) :
       pickRecord(d, exclude);
     if (p) return p;
   }

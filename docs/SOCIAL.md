@@ -12,13 +12,22 @@ qualifies, nothing posts. A silent night is correct behaviour.
 
 | day (UTC) | post | the number | the link |
 |---|---|---|---|
-| Mon · Wed · Fri | **Tonight's call** | the best live lot flagged below its comparables: `pickCall()` from `app/components/Terminal.tsx` — live, close time ahead, confidence ≥ medium, ranked by `dealScore`, photographed | `/lot/<id>` |
-| Tue · Sat | **The receipt** | the newest graded call from the comp-flag lane: called at $p, hammered at $r, and whether the hammer landed within the record's own ±30% band. **Misses post exactly like hits.** | `/receipts` |
-| Thu | **The index** | one market's lead number by the site's honesty ladder (repeat-sale over hedonic, publishable horizons only) with its 95% interval and n | `/analytics` |
+| Mon · Fri | **Tonight's call** | the best live lot flagged below its comparables: `pickCall()` from `app/components/Terminal.tsx` — live, close time ahead, confidence ≥ medium, ranked by `dealScore`, photographed. The gap is drawn as two bars to scale. | `/lot/<id>` |
+| Tue | **The receipt** | the newest graded call from the comp-flag lane: called at $p, hammered at $r, drawn as two marks on a rail with the record's ±30% band painted. **Misses post exactly like hits.** | `/receipts` |
+| Wed · Sat | **The board** | the whole desk in one frame: six photographed flags, one per maker so it reads as a market rather than one consignment, over the night's total flag count | `/value` |
+| Thu | **The index** | one market's lead number by the site's honesty ladder, its 95% interval, and the series drawn and labelled at both ends | `/analytics` |
 | Sun | **The record, replayed** | the backtest: flagged median vs unflagged, beat-the-high %, fail-to-sell % | `/receipts` |
+| fallback | **What we won't publish** | an abstention, in the engine's own words, with the unresolved interval drawn straddling zero | `/analytics` |
 
-Calls carry the traffic, so they take three days. The receipt is the trust post
-and takes two. The two market posts take the weekend, when nothing is closing.
+Calls and the board carry the traffic and take two days each. The receipt is
+the trust post. The index and the record take Thursday and Sunday. The
+abstention has no fixed day — it fills in whenever a scheduled type has no
+honest candidate, which is exactly when a post about restraint belongs.
+
+**An item, always.** Every post carries a photograph, including the market
+posts: the index, the record and the abstention each carry a strip of four
+pieces from the market they describe, one per maker. A text-only card is a
+bug. House photographs are auto-cropped to the object so it fills the plate.
 
 The same key (lot id, receipt id, index horizon) is never posted twice inside
 21 days. Only the comp-flag lane (`k: 'card'`) is ever posted as a receipt —

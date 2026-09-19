@@ -189,6 +189,37 @@ function Line({ series, periods, w, h, s }: { series: number[]; periods: [string
   );
 }
 
+/** The abstention's picture: a zero axis with the unresolved interval laid
+ *  across it. When the reason carries a CI, the bar is drawn to those bounds
+ *  and you can see it straddle zero — the whole argument, in one mark. */
+function NullPlot({ reason, w, h, s }: { reason: string; w: number; h: number; s: Size }) {
+  const m = reason.match(/\(?(-?\d+(?:\.\d+)?)%\s*(?:…|\.\.\.|to)\s*(-?\d+(?:\.\d+)?)%/);
+  const lab = s.tall ? 15 : 12;
+  const mid = Math.round(h / 2);
+  if (!m) {
+    return (
+      <div style={{ position: 'relative', width: w, height: h, ...F }}>
+        <div style={{ position: 'absolute', left: 0, top: mid, width: w, height: 1, background: ON_HAIR }} />
+        <div style={{ position: 'absolute', left: 0, top: mid + 12, ...mono(lab, 400, ON3) }}>no publishable estimate</div>
+      </div>
+    );
+  }
+  const lo = parseFloat(m[1]), hi = parseFloat(m[2]);
+  const span = Math.max(Math.abs(lo), Math.abs(hi)) * 1.25 || 1;
+  const X = (v: number) => Math.round(((v + span) / (span * 2)) * w);
+  const zero = X(0), x0 = Math.min(X(lo), zero), x1 = Math.max(X(hi), zero);
+  return (
+    <div style={{ position: 'relative', width: w, height: h, ...F }}>
+      <div style={{ position: 'absolute', left: x0, top: mid - 9, width: x1 - x0, height: 18, background: ON_BAND }} />
+      <div style={{ position: 'absolute', left: x0, top: mid - 1, width: x1 - x0, height: 2, background: ON2 }} />
+      <div style={{ position: 'absolute', left: zero - 1, top: 0, width: 2, height: h - 22, background: ON }} />
+      <div style={{ position: 'absolute', left: Math.max(0, zero - 14), top: h - 20, ...mono(lab, 500, ON) }}>zero</div>
+      <div style={{ position: 'absolute', left: x0, top: mid - 34, ...mono(lab, 400, ON3) }}>{`${lo}%`}</div>
+      <div style={{ position: 'absolute', left: Math.max(0, x1 - 50), top: mid - 34, ...mono(lab, 400, ON3) }}>{`+${hi}%`}</div>
+    </div>
+  );
+}
+
 // ── the four shapes ─────────────────────────────────────────────────────────
 interface Assets { photo: string | null; strip: { t: Thumb; src: string | null }[]; periods: [string, string]; folio: string; date: string }
 
@@ -324,6 +355,7 @@ function Card({ p, s, a }: { p: Post; s: Size; a: Assets }) {
 
   // ── INDEX / RECORD: the cell is the picture, the strip is the proof ─────
   const isIndex = p.type === 'index';
+  if (p.type === 'board' || p.type === 'abstain') return <Wide p={p} s={s} a={a} />;
   const dir: keyof typeof CELL = isIndex ? (p.changePct >= 0 ? 'up' : 'down') : 'ink';
   const kicker = `${isIndex ? 'The index' : 'The record, replayed'} · ${a.date}`;
   const hasStrip = a.strip.length > 0;
@@ -369,6 +401,92 @@ function Card({ p, s, a }: { p: Post; s: Size; a: Assets }) {
   );
 }
 
+/** THE BOARD — the desk in one frame. Six photographed flags in a grid, each
+ *  with its multiple; the whole market's flag count on the cell above. This is
+ *  the most feed-native thing the desk makes: every tile is an object.
+ *  THE ABSTENTION — what the desk refuses to publish, in the engine's own
+ *  words. The empty plot IS the picture. */
+function Wide({ p, s, a }: { p: Extract<Post, { type: 'board' | 'abstain' }>; s: Size; a: Assets }) {
+  const W = s.w, H = s.h, pad = s.pad, inner = W - pad * 2, headH = HEAD(s), footH = FOOT(s);
+  const ground = { ...F, width: W, height: H, background: EGG, position: 'relative' as const, fontFamily: 'Inter' };
+  const px = 28;
+
+  if (p.type === 'abstain') {
+    // the abstention still shows the market it is refusing to price — an item
+    // always, even when the post is about the absence of a number
+    const hasStrip = s.tall && a.strip.length > 0;
+    const cellY = headH, cellH = hasStrip ? 720 : H - footH - cellY;
+    const stripY = cellY + cellH, stripH = hasStrip ? H - footH - stripY : 0;
+    return (
+      <div style={ground}>
+        <Cell dir="ink" x={pad + 1} y={cellY + 1} w={inner - 1} h={cellH - 1}>
+          <div style={{ ...F, flexDirection: 'column', padding: `${s.tall ? 28 : 20}px ${px}px 0` }}>
+            <div style={sans(s.tall ? 38 : 26, 300, ON)}>{headline(p)}</div>
+            <div style={{ ...sans(s.tall ? 17 : 13, 400, ON2), marginTop: 10 }}>{`hedonic index · ${marketLabel(p.market)} · ${p.horizon}`}</div>
+          </div>
+          {/* the empty plot IS the picture: the axis the number would have sat
+              on, the interval that failed to resolve drawn across zero, and
+              the engine's own sentence beneath it */}
+          <div style={{ ...F, flexDirection: 'column', justifyContent: 'center', flexGrow: 1, padding: `0 ${px}px` }}>
+            <NullPlot reason={p.reason} w={inner - px * 2 - 2} h={s.tall ? 150 : 96} s={s} />
+            <div style={{ ...sans(s.tall ? 32 : 20, 300, ON), marginTop: s.tall ? 30 : 18, lineHeight: 1.3 }}>{p.reason}</div>
+          </div>
+          <div style={{ ...F, justifyContent: 'space-between', alignItems: 'flex-end', padding: `0 ${px}px ${s.tall ? 24 : 16}px` }}>
+            <div style={{ ...sans(s.tall ? 18 : 14, 400, ON3), maxWidth: inner - px * 2 - 220 }}>
+              {p.published ? `${marketLabel(p.market)} does publish at ${p.published.horizon}` : 'no horizon clears the bar today'}
+            </div>
+            {p.published && <div style={mono(s.tall ? 30 : 22, 500, ON)}>{signed(p.published.changePct, 1)}</div>}
+          </div>
+        </Cell>
+        {hasStrip && <Strip thumbs={a.strip} x={pad + 1} y={stripY + 1} w={inner - 1} h={stripH - 1} s={s} />}
+        <Head s={s} kicker={`What we won't publish · ${a.date}`} /><Foot s={s} folio={a.folio} />
+        <Frame s={s} rules={hasStrip ? [headH, stripY, H - footH] : [headH, H - footH]} dark={[[cellY, stripY || H - footH]]} />
+      </div>
+    );
+  }
+
+  // the board
+  const cols = s.tall ? 2 : 3, rows = Math.ceil(Math.min(p.lots.length, s.tall ? 6 : 3) / cols);
+  const cellY = headH, cellH = s.tall ? 230 : 150;
+  const gridY = cellY + cellH, gridH = H - footH - gridY;
+  const tileW = Math.floor((inner - (cols - 1)) / cols), tileH = Math.floor((gridH - (rows - 1)) / rows);
+  const capH = s.tall ? 92 : 74;
+  const shown = p.lots.slice(0, cols * rows);
+  return (
+    <div style={ground}>
+      <Cell dir="up" x={pad + 1} y={cellY + 1} w={inner - 1} h={cellH - 1}>
+        <div style={{ ...F, flexDirection: 'column', justifyContent: 'center', flexGrow: 1, padding: `0 ${px}px` }}>
+          <div style={{ ...F, alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <div style={{ ...sans(s.tall ? 92 : 62, 300, ON), lineHeight: 0.92, marginLeft: -4 }}>{p.liveCount.toLocaleString()}</div>
+            <div style={{ ...sans(s.tall ? 19 : 15, 400, ON2), textAlign: 'right' }}>{`one per maker · ${shown.length} shown`}</div>
+          </div>
+          <div style={{ ...sans(s.tall ? 21 : 16, 400, ON2), marginTop: 10 }}>lots on the block priced under their comparable sales</div>
+        </div>
+      </Cell>
+      {shown.map((it, i) => {
+        const cx = pad + 1 + (i % cols) * (tileW + 1), cy = gridY + 1 + Math.floor(i / cols) * (tileH + 1);
+        const src = a.strip[i]?.src || null;
+        return (
+          <div key={it.lot.id} style={{ position: 'absolute', top: cy, left: cx, width: tileW - 1, height: tileH - 1, ...F, flexDirection: 'column' }}>
+            <div style={{ ...F, flexGrow: 1, background: CREAM, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {src && <img src={src} style={{ objectFit: 'contain', maxWidth: tileW - 44, maxHeight: tileH - capH - 36 }} alt="" />}
+            </div>
+            <div style={{ ...F, height: capH, alignItems: 'center', justifyContent: 'space-between', padding: `0 ${s.tall ? 20 : 14}px` }}>
+              <div style={{ ...F, flexDirection: 'column', minWidth: 0 }}>
+                <div style={{ ...sans(s.tall ? 19 : 15, 400, INK), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: tileW - 150 }}>{it.maker}</div>
+                <div style={{ ...mono(s.tall ? 14 : 12, 400, MUTED), marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: tileW - 150 }}>{`${it.lot.auctionHouse} · ${whenLabel(it.closes)}`}</div>
+              </div>
+              <div style={{ ...sans(s.tall ? 34 : 26, 300, INK), flexShrink: 0 }}>{it.multiple}</div>
+            </div>
+          </div>
+        );
+      })}
+      <Head s={s} kicker={`The board · ${a.date}`} /><Foot s={s} folio={a.folio} />
+      <Frame s={s} rules={[headH, gridY, H - footH]} dark={[[cellY, gridY]]} />
+    </div>
+  );
+}
+
 // ── render + grain + encode ─────────────────────────────────────────────────
 function grain(png: { data: Buffer; width: number; height: number }) {
   const d = png.data; let seed = 0x9e3779b9;
@@ -404,15 +522,19 @@ export async function renderTonight(opts: { force?: PostType; exclude?: Set<stri
 
   // the pictures — an item wherever one exists, even on the market posts
   const photo = post.type === 'call' ? await imageDataUri(post.lot.imageUrl) : post.type === 'receipt' ? await imageDataUri(post.lot?.imageUrl) : null;
-  const thumbs: Thumb[] = post.type === 'index' ? marketPhotos(d, post.market) : post.type === 'record' ? recordPhotos(d, memory) : [];
-  const strip = (await Promise.all(thumbs.map(async t => ({ t, src: await imageDataUri(t.image, 600) })))).filter(x => x.src);
+  const thumbs: Thumb[] = post.type === 'index' ? marketPhotos(d, post.market)
+    : post.type === 'record' ? recordPhotos(d, memory)
+    : post.type === 'board' ? post.lots.map(l => ({ image: l.lot.imageUrl!, maker: l.maker, line: `${l.multiple} the ask`, id: l.lot.id }))
+    : post.type === 'abstain' ? marketPhotos(d, post.market)
+    : [];
+  const strip = (await Promise.all(thumbs.map(async t => ({ t, src: await imageDataUri(t.image, post.type === 'board' ? 800 : 600) })))).filter(x => x.src);
   let periods: [string, string] = ['', ''];
   if (post.type === 'index') {
     const src = d.market?.[post.method === 'repeat-sale' ? 'repeatSale' : 'hedonic']?.[post.market]?.series || [];
     if (src.length) periods = [src[0].period, src[src.length - 1].period];
   }
   if ((post.type === 'call' || post.type === 'receipt') && !photo) console.warn('[social] photograph unavailable — card renders without a plate');
-  if ((post.type === 'index' || post.type === 'record') && !strip.length) console.warn('[social] no photographs for the strip — card renders cell-only');
+  if ((post.type === 'index' || post.type === 'record' || post.type === 'board' || post.type === 'abstain') && !strip.length) console.warn('[social] no photographs for the strip — card renders cell-only');
 
   fs.mkdirSync(OUT, { recursive: true });
   const files: Record<string, string> = {};

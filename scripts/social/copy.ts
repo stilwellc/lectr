@@ -37,6 +37,8 @@ export function headline(p: Post): string {
     case 'receipt': return `Called ${money(p.row.p)}. Hammered ${money(p.row.r)}.`;
     case 'index': return `${marketLabel(p.market)}, ${signed(p.changePct, 1)} over ${({ '1Y': 'one year', '3Y': 'three years', '5Y': 'five years' } as Record<string, string>)[p.horizon] || p.horizon}.`;
     case 'record': return `${p.n.toLocaleString()} calls, replayed against the hammer.`;
+    case 'board': return `${p.liveCount} lots on the block are priced under their comparables.`;
+    case 'abstain': return `We can't publish a ${p.horizon} number for ${marketLabel(p.market)}.`;
   }
 }
 
@@ -113,6 +115,52 @@ export function writeCopy(p: Post): Copy {
           NO_ADVICE,
         ].join('\n'),
         alt: `${mk} ${p.method} index: ${signed(p.changePct, 1)} over ${span}, 95% interval ${signed(p.ciLo)} to ${signed(p.ciHi)}, ${p.n.toLocaleString()} ${p.nLabel}.`,
+      };
+    }
+    case 'board': {
+      const lead = p.lots[0];
+      const x = [
+        `${p.liveCount} lots on the block are priced under their comparables tonight. Six of them:`,
+        p.lots.slice(0, 6).map(l => `${l.maker} — ${l.multiple} the ask`).join('\n'),
+      ].join('\n\n');
+      return {
+        x: clamp(x),
+        xReply: `The whole board, with the comps behind every flag: ${utm(p.url, 'x', 'board')}`,
+        ig: [
+          `The board.`,
+          ``,
+          `${p.liveCount} lots on the block are priced under their comparables tonight. Six of them, one per maker:`,
+          ``,
+          ...p.lots.slice(0, 6).map(l => `${l.maker} · ${l.multiple} the ask · ${l.lot.auctionHouse}`),
+          ``,
+          `Every flag is a comparable-sale median against the ask, not a hunch. The board is at lectr.bid/value`,
+          ``,
+          NO_ADVICE,
+        ].join('\n'),
+        alt: `Six lots priced below their comparable sales: ${p.lots.slice(0, 6).map(l => `${l.maker} at ${l.multiple} the ask`).join(', ')}.`,
+      };
+    }
+    case 'abstain': {
+      const mk = marketLabel(p.market);
+      const also = p.published ? `We do publish ${mk} at ${p.published.horizon}: ${signed(p.published.changePct, 1)}.` : `No horizon clears the bar for ${mk} right now.`;
+      const x = [
+        `What we won't publish.`,
+        `${mk}, ${p.horizon}: no number. ${p.reason}`,
+        also,
+      ].join('\n\n');
+      return {
+        x: clamp(x),
+        xReply: `Every index either prints its interval or says nothing. The method: ${utm(p.url, 'x', 'abstain')}`,
+        ig: [
+          `What we won't publish.`,
+          ``,
+          `${mk}, ${p.horizon}: no number. ${p.reason}`,
+          ``,
+          `${also} An index that always has an answer isn't measuring anything. The method is at lectr.bid/analytics`,
+          ``,
+          NO_ADVICE,
+        ].join('\n'),
+        alt: `lectr abstains from publishing a ${p.horizon} figure for ${mk}. Reason: ${p.reason}`,
       };
     }
     case 'record': {
