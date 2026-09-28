@@ -42,25 +42,41 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      HOUSE: ${{ inputs.house }}
+      SKIP: ${{ inputs.skip || '0' }}
+      CAP: ${{ inputs.cap || '0' }}
+      DELAY: ${{ inputs.delay || '400' }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Validate inputs
+        run: |
+          case "$HOUSE" in propstore|juliens) ;; *) echo "::error::bad house '$HOUSE'"; exit 1 ;; esac
+          for v in SKIP CAP DELAY; do [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "::error::$v must be a non-negative integer"; exit 1; }; done
       # STRICT pull (no `|| echo` fallback): a failed pull followed by a
       # merge-and-push would publish a slice-only segment over the real one.
       - name: Pull last-good segment
-        run: bash scripts/data-store.sh pull-segment ${{ inputs.house }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull-segment "$HOUSE"
       # The manifest is derived, not checked in: one CDX query, reduced to the
       # LATEST capture per (catalog, lot). "Latest" is the whole yield story —
       # an earlier capture of the same lot usually predates its sale close.
       - name: Build the Wayback manifest
         timeout-minutes: 30
-        run: npx tsx scripts/backfill-struts-wayback.ts --house ${{ inputs.house }} --build-manifest
+        run: npx tsx scripts/backfill-struts-wayback.ts --house "$HOUSE" --build-manifest
       - name: Walk the archived lot pages
         timeout-minutes: 300
-        run: npx tsx scripts/backfill-struts-wayback.ts --house ${{ inputs.house }} --skip ${{ inputs.skip || 0 }} --cap ${{ inputs.cap || 0 }} --conc 2 --delay ${{ inputs.delay || 400 }} --write
+        run: npx tsx scripts/backfill-struts-wayback.ts --house "$HOUSE" --skip "$SKIP" --cap "$CAP" --conc 2 --delay "$DELAY" --write
       - name: Push segment
-        run: bash scripts/data-store.sh push-segment ${{ inputs.house }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh push-segment "$HOUSE"

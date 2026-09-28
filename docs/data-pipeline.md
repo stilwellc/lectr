@@ -19,6 +19,11 @@ sidesteps R2's GET-lag on overwritten keys — see the header of
 | `latest/segments/<house>.ndjson.gz` | per-house corpus segments (`data/corpus/segments/`) — the staged nightly's unit of crawl; `assemble.ts` reunions them into the full corpus |
 | `latest/backtest.json`, `latest/backtest-state.json.gz`, `latest/calls-ledger.json.gz` | the backtest record + its accumulator + the forward-calls ledger, carried night to night |
 | `snapshots/YYYYMMDD/corpus.tar` | nightly corpus snapshot, auto-expired after 30 days (lifecycle rule `expire-snapshots`) — the rollback ladder |
+| `ci-handoff/<run_id>/<name>/a<attempt>-<UTC>.{bin,tar}` | same-run job→job handoffs of the nightly (crawl segments, backtest leg states) — write-once, deleted at the end of the run (see *CI handoff* below) |
+| `fixtures/ui-shots/<stamp>/served.tar.gz` | the frozen served payload the ui-shots rig builds against (key committed in `tests/ui-baseline/FIXTURE`); never pruned |
+
+The bucket is **private**: its `r2.dev` URL is disabled and it has no custom
+domain (verified Sep 27 2026) — only the API token can read it.
 
 (The pre-migration `latest/corpus.tar` / `latest/served.tar.gz` keys are
 frozen — no longer written; `pull` keeps them only as a last-resort fallback
@@ -43,7 +48,15 @@ Moved by `scripts/data-store.sh` (`npm run data:pull` / `npm run data:push`):
   listing confirms the key is absent (and, for `meta.json`, no pointer
   exists). A listed key that can't be read, or a listing that won't answer,
   is **fatal** — assemble never silently runs without its baseline.
-- **pull-segment / push-segment** — see *Segment locks* below.
+- **pull-segment / push-segment** — see *Segment locks* below. `pull-segment`
+  retries 3× (20s/40s backoff) on a transient failure; a read still stale
+  after the full GET-lag window (rc 75) is not retried.
+- **pull-version `<versions/…>` [served-only]** — installs exactly that
+  write-once version (no pointer read, no freshness compare). `push` prints
+  the version it wrote as the step output `version` in CI.
+- **handoff-put / handoff-get / handoff-clean / handoff-prune [days]** and
+  **assemble-segments `<house…>`** — the nightly's CI handoff (below).
+- **pin-fixture / pull-fixture** — the ui-shots data fixture (below).
 - **prune** — keeps the newest 14 `versions/` prefixes.
 
 Auth: locally wrangler's OAuth session; in CI `CLOUDFLARE_API_TOKEN` +
@@ -51,25 +64,117 @@ Auth: locally wrangler's OAuth session; in CI `CLOUDFLARE_API_TOKEN` +
 Edit** in addition to Pages).
 
 Flow:
-- `nightly.yml` — crawl (one job per house: pull-segment → crawl →
-  push-segment) → assemble (sanity gate, engine, `push`) → deploy / sync /
-  backtest. Same-run artifacts carry segments and payloads between jobs;
-  R2 is the recovery source and tomorrow's baseline.
+- `nightly.yml` (cron `17 4 * * *` UTC — off the top of the hour, which
+  GitHub delays by hours; publishes ~1–2am ET) — plan → crawl (one job per
+  house: pull-segment → crawl → push-segment → handoff-put) → assemble
+  (unit tests, `assemble-segments`, sanity gate, engine, `push`) → deploy /
+  sync / backtest (all read assemble's exact version via `pull-version`) →
+  health (non-blocking) → handoff-cleanup. R2 `latest/` is the recovery
+  source and tomorrow's baseline.
 - `ray-crawl.yml` (manual fallback monolith) pulls before the crawl, pushes
   after the payload builds, then builds and deploys the site itself.
-- `deploy.yml` pulls the served payloads before `next build` so any code
-  push bakes the freshest data — and **refuses to deploy data older than
+- `deploy.yml` (push to main, dispatch, and `workflow_call`) pulls the served
+  payloads, seeds the freshest close-board overlay, runs **typecheck + unit
+  tests + lint** (lint is a notice-only no-op until an `eslint.config.*`
+  exists), builds, and ships — and **refuses to deploy data older than
   production** (it compares the pulled `meta.json` `lastCrawl` against
   `https://lectr.bid/data/ray/meta.json`; `DEPLOY_ALLOW_OLDER=1` repo
-  variable for a deliberate rollback). It fires on every close-board bot
-  commit (6×/day), which is exactly when a stale pull would otherwise
-  regress prod.
-- `close-board.yml` commits the intraday bid overlay to git every 4h; the
-  on-push deploy ships it. The client applies an overlay entry when the
+  variable for a deliberate rollback). Every production deploy (this,
+  nightly's `deploy` job, ray-crawl) shares the job-level concurrency group
+  `deploy-collectr` (queue, never cancel).
+- `close-board.yml` (every 4h at :43) builds the intraday bid overlay and
+  **deploys it directly** by calling `deploy.yml` as a reusable workflow
+  (the overlay rides as a tiny same-run artifact). It no longer commits to
+  git: a `GITHUB_TOKEN` push can never trigger `on: push`, so from Sep 19 the
+  overlay only shipped with the next nightly. Every deploy bakes the newest
+  of {the caller's overlay, production's live copy, the nightly's served
+  copy} via `scripts/ci/seed-close-board.mjs`, so a code-push deploy between
+  boards never regresses it. The client applies an overlay entry when the
   overlay is newer than the base `upcoming.json` OR when the entry's bid /
   bid count is strictly higher than the base lot's (a bid can only rise, so
   higher is later) — a strictly-newer bid is never discarded.
 - Local dev: `npm run data:pull` when your checkout's data is stale.
+
+### CI handoff (no corpus in GitHub artifacts)
+
+The repo is **public**, so any GitHub user can download a run's Actions
+artifacts. Until Sep 27 2026 the nightly handed the whole corpus between jobs
+that way (`corpus-payload` ~215MB, `served-payload` ~64MB, one
+`segment-<house>` per leg). Now:
+
+- **crawl → assemble**: each leg `handoff-put segment-<house>` to
+  `ci-handoff/<run_id>/segment-<house>/a<attempt>-<UTC>.bin` — a NEW key per
+  write, so reads are immediately consistent (no overwrite GET-lag), and a
+  re-run attempt writes beside, never over, the first. `assemble-segments`
+  reads the newest key per house and falls back to the R2 last-good
+  (`latest/segments/…`) for `other`, `rrauction-archive`, a failed leg, or
+  `skip_crawl`.
+- **assemble → deploy / sync / backtest(-leg)**: no upload at all. assemble's
+  `push` already writes the payloads to a write-once `versions/<UTC>-<sha>/`
+  prefix; the job output `version` names it and every consumer runs
+  `data-store.sh pull-version <version>` (deploy: `served-only`).
+- **backtest-leg → backtest**: `ci-handoff/<run_id>/backtest-leg-<market>/…tar`.
+- **Cleanup**: the last job, `handoff-cleanup` (`if: always()`), runs
+  `handoff-clean` (deletes `ci-handoff/<run_id>/`) when no job failed or was
+  cancelled — a failed run keeps its prefix so *Re-run failed jobs* still
+  finds it — and always runs `handoff-prune 2` (deletes any `ci-handoff/`
+  object older than 2 days, by `last_modified`). Recommended backstop, **not
+  yet configured** (the bucket's rules are `expire-snapshots` + the default
+  multipart abort): an R2 lifecycle rule `expire-ci-handoff` on prefix
+  `ci-handoff/`, delete after 3 days —
+  `npx wrangler r2 bucket lifecycle add lectr-data expire-ci-handoff ci-handoff/ --expire-days 3`.
+
+Artifacts that remain are small and non-sensitive: `validate-engine`
+(the holdout report), `health-<house>` (leg-health.json counts),
+`social-cards` (the public JPEGs), `close-board-overlay` (the public
+overlay), `ui-drift` / `ui-baseline` (screenshots of the public site).
+
+### Nightly checks that go red without blocking the publish
+
+- **health** — aggregates each crawl leg's `leg-health.json`
+  (`{house, ok, fetched, parsed, settled, reason}`, uploaded as artifact
+  `health-<house>` from `leg-health.json` or `data/qa/leg-health*.json`) into
+  the run summary and fails when any leg reported `ok=false`. Nothing
+  depends on it.
+- **backtest** — Sunday full replay: a market with no targets is
+  legitimately empty for ANY market (tcg: Pokémon lots carry no estimate).
+  `scripts/ci/backtest-leg.sh` exits 0 with an `EMPTY.<market>` marker for
+  both engine behaviours (throw "no targets", or an explicit empty record);
+  `scripts/ci/backtest-merge.sh` merges exactly the markets that carry state
+  (`--markets`), refuses if any leg's output is missing or a roster market
+  has no leg, and the n=0 check exempts the empty markets. After the push,
+  a Sunday record with `rowsOnVersionPct < 90` fails the job (the record
+  still publishes; deploy never depends on it).
+- **resolver / prune** — a failed Christie's/Sotheby's gated-results
+  resolver or R2 prune is a `::warning::` + job-summary line, not a silent
+  `|| echo`.
+- **social** — missing `X_*` / `IG_*` secrets → the desk runs dry with a
+  `::warning::` (scripts/ci/social-desk-check.sh).
+
+### Code checks (`npm test`, `npm run typecheck`, `npm run lint`)
+
+`npm test` runs every `*.test.ts` under `scripts/__tests__/` and
+`app/**/__tests__/` with `node --test` via tsx (`scripts/ci/run-tests.mjs`,
+`RAY_SKIP_MAIN=1`). `npm run typecheck` is `tsc --noEmit` — it needs the
+served JSON the app imports (`public/data/ray/*.json`), so CI runs it after
+the R2 pull (deploy.yml). `npm run lint` runs ESLint only once a flat config
+(`eslint.config.*`) exists; until then it prints a notice and passes.
+
+### ui-shots (visual regression on pinned data)
+
+`ui-shots.yml` builds the site from the frozen payload named in
+`tests/ui-baseline/FIXTURE` (`data-store.sh pull-fixture`), serves `out/`
+with `wrangler pages dev`, freezes the page clock at the fixture's
+`lastCrawl` + 1h, stubs external images, masks `[data-volatile]` /
+`[data-shot-mask]`, and diffs against `tests/ui-baseline/`. A missing
+baseline FAILS. Re-baseline (Linux fonts — approve in CI, not on a Mac):
+
+```
+bash scripts/data-store.sh pin-fixture          # only to move the pinned data (R2 write)
+gh workflow run ui-shots.yml -f approve=true
+gh run download <run-id> -n ui-baseline -D tests/ui-baseline
+git add tests/ui-baseline && git commit -m "ui-shots: re-baseline"
+```
 
 ### Segment locks (the lost-update race)
 

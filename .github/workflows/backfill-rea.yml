@@ -34,20 +34,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      START: ${{ inputs.start || '185118' }}
+      END: ${{ inputs.end || '195743' }}
+      CONC: ${{ inputs.conc || '4' }}
+      DELAY: ${{ inputs.delay || '150' }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Validate inputs
+        run: |
+          for v in START END CONC DELAY; do [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "::error::$v must be a non-negative integer"; exit 1; }; done
       # STRICT pull (no `|| echo` fallback): the rea segment holds ~200K lots
       # on R2. A failed pull followed by a merge-and-push would publish a
       # window-only segment over it — fail the job instead.
       - name: Pull last-good segment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-segment rea
       - name: Back-crawl the itemid window
         timeout-minutes: 300
-        run: RAY_SKIP_MAIN=1 npx tsx scripts/backfill-rea.ts --start ${{ inputs.start || 185118 }} --end ${{ inputs.end || 195743 }} --conc ${{ inputs.conc || 4 }} --delay ${{ inputs.delay || 150 }} --write
+        run: RAY_SKIP_MAIN=1 npx tsx scripts/backfill-rea.ts --start "$START" --end "$END" --conc "$CONC" --delay "$DELAY" --write
       - name: Push segment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-segment rea
