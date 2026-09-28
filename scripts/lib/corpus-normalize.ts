@@ -9,6 +9,7 @@ import { isMisattributed } from '../../app/lib/attribution';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
 import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
+import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -807,6 +808,10 @@ export type HygieneReport = {
 
 export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date } = {}): HygieneReport {
   const ls = lots as Lot[];
+  // LLM extraction (advisory, Sep 28 2026): attach cached, validated fields
+  // keyed by id + hash of the CRAWLED text — before any pass rewrites a title.
+  // Inert (one log line, zero mutation) without the extraction gate.
+  attachExtractions(ls);
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const rrStubs = dropRRStubRows(ls);
@@ -835,6 +840,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date } = {}): 
   const relic = rerouteRelicCards(ls);
   const cat = normalizeArtCategory(ls);
   const refsFilled = enrichWatchReferences(ls);
+  // regex first; the extraction fills only a reference still empty (src:'llm')
+  fillWatchReferencesFromExtract(ls);
   const players = recoverPlayerSlugs(ls);
   const signers = recoverAutographSigners(ls);
   const cultureStamped = stampCultureAxes(ls);
