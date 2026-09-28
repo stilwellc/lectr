@@ -15,7 +15,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { readCorpus as readCorpusShared, slimForClient } from './corpus-io';
+import { readCorpus as readCorpusShared, slimForClient, isServedUpcoming } from './corpus-io';
 import {
   computeDeepSignal, signalWithPool, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
@@ -74,7 +74,6 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // at the UTC-day boundary, shipping lots the client always hides (and mis-
   // parsing 'YYYY-MM-DD' as UTC midnight). The build always precedes the client
   // load, so `>= today` here never drops a lot the client would still show.
-  const today = new Date().toISOString().slice(0, 10);
   // close-day growth curve (analytics.closeCurve) — the projection factor for
   // bid-house lots. Absent (first build) → no projections stamped.
   let closeCurve: { buckets: (number | null)[]; edges: number[] } | null = null;
@@ -88,15 +87,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // results-pending grace: keep a just-closed lot visible only through the day
   // after its sale while results post; anything older that never resolved (e.g.
   // Christie's results gated behind login and never scraped) drops, not lingers.
-  const graceCut = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const upcomingLots = lots
-    .filter(l => {
-      if (l.status !== 'upcoming') return false;
-      // A just-closed lot awaiting results is held 'upcoming' with a past sale
-      // date — keep it visible only within the grace window.
-      if ((l as { resultsPending?: boolean }).resultsPending) return !!l.saleDate && l.saleDate.slice(0, 10) >= graceCut;
-      return !!l.saleDate && l.saleDate.slice(0, 10) >= today;
-    });
+  // ONE predicate (corpus-io isServedUpcoming) shared with sync-lots-db, so the
+  // Supabase live book is exactly the set this payload serves.
+  const upcomingLots = lots.filter(l => isServedUpcoming(l));
 
   // ── BID-VELOCITY precompute (Goldin live lots; corpus-only bidHistory) ──────
   // lot.bidHistory is Snap[] (Snap = {d:ISO, b:currentBid, n:bidCount}), up to

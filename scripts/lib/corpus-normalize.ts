@@ -8,6 +8,7 @@ import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
 import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
+import { leadsWithSetCode } from './set-codes';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -408,16 +409,421 @@ export function deriveRRAuctionUrls(lots: Lot[]): number {
   return n;
 }
 
-export function normalizeCorpus(lots: AuctionLot[]): void {
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA-QUALITY PASSES (Sep 27 2026 audit, scratchpad audit-data/). Every rule
+   below was measured on the served corpus (626k rows) before it was written;
+   the counts in the comments are that night's numbers.
+
+   CONTRACT with the engine (comps/value/lanes/backtest read these, never
+   recompute them):
+     · compExclude?: string — a short reason code; the lot must NEVER be used as
+       a comp (it still renders — it is a real row with an untrustworthy price
+       or date). First reason wins; normalize only ever SETS it (inputs are the
+       raw segments, re-read fresh every night, so a stale code can't linger).
+     · datePrecision?: 'day' | 'month' | 'year' — absent = 'day'. A crawler-
+       stamped value is always respected; normalize only fills an absent one.
+   ═══════════════════════════════════════════════════════════════════════════ */
+type DQLot = Lot & {
+  compExclude?: string;
+  datePrecision?: 'day' | 'month' | 'year';
+  resultsPending?: boolean;
+  realizedUsd?: number | null;
+  hammerUsd?: number | null;
+  hammerNative?: number | null;
+  estLowUsd?: number | null;
+  estHighUsd?: number | null;
+  nativeCurrency?: string;
+  buyerPremiumPct?: number | null;
+  lotNumber?: number | string | null;
+};
+
+export const COMP_EXCLUDE = {
+  staleUpcoming: 'stale-upcoming',          // never resolved >3d past close
+  priceUnder10: 'price-under-10',           // sold < $10 — fee rows, stubs, lot-of-magazines
+  priceVsEstimate: 'price-vs-estimate',     // > 50× high est or < 2% low est
+  fxUnconverted: 'fx-unconverted',          // native HKD/CNY figure stored as USD
+  lastTrackedBid: 'last-tracked-bid',       // Goldin provisional price, not a hammer
+  seedNonLotUrl: 'seed-nonlot-url',         // hand-entered seed pointing at a search/artist page
+  estimateUponRequest: 'estimate-upon-request', // artist-page scrape, title carried the est. label
+} as const;
+
+const markExclude = (l: DQLot, reason: string): boolean => {
+  if (l.compExclude) return false;
+  l.compExclude = reason;
+  return true;
+};
+const compact = (lots: Lot[], drop: Set<number>): number => {
+  if (!drop.size) return 0;
+  let w = 0;
+  for (let i = 0; i < lots.length; i++) if (!drop.has(i)) lots[w++] = lots[i];
+  lots.length = w;
+  return drop.size;
+};
+const priceOf = (l: DQLot): number | null => {
+  const p = l.realizedUsd ?? l.priceUsd;
+  return typeof p === 'number' && p > 0 ? p : null;
+};
+const normTitle = (t: unknown) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const STATUS_KEEP_RANK: Record<string, number> = { sold: 0, bought_in: 1, upcoming: 2, 'unknown-result': 3, withdrawn: 4 };
+
+// ── RR sale-level STUB rows (84): the 2002-03 archive pages carry a sale-level
+// row per consignor with no lot id — id `rrauction-<sale>-0`, url lot-detail/0,
+// title "Lot #. Procul Harem", the missing.png image. Not a lot; drop entirely.
+export function dropRRStubRows(lots: Lot[]): number {
+  const drop = new Set<number>();
+  for (let i = 0; i < lots.length; i++) {
+    const l = lots[i] as DQLot;
+    if (l.auctionHouse !== 'RR Auction') continue;
+    if (/^rrauction-\d+-0~?$/.test(String(l.id || '')) || /\/lot-detail\/0\/?$/.test(String(l.url || '')) || /^Lot #\./.test(String(l.title || ''))) drop.add(i);
+  }
+  return compact(lots, drop);
+}
+
+// ── RR SAME-ITEM DUPES (788 groups / 821 extra rows): RR re-lists one consigned
+// item under two lot numbers inside ONE sale (a catalogue cross-reference, or a
+// relist after a pass). The id's lotId packing isn't a reliable item key (its
+// width varies 12–16 digits), but the preview image is: cdn…/auction/<sale>/
+// preview/<itemId>_1.jpg. Key = sale + itemId. Guards: every title in the group
+// must be prefix-compatible ("Bette Davis" ⊂ "Bette Davis Signed Photograph") —
+// 6 groups share an image across unrelated items and are left alone — and a
+// group with 2+ SOLD rows at different prices (5) is two real sales, untouched.
+// Keeper: sold > bought_in > …, then the longer (fuller) title, then lower lot#.
+export function dedupeRRSameSaleItems(lots: Lot[]): number {
+  const groups = new Map<string, number[]>();
+  for (let i = 0; i < lots.length; i++) {
+    const l = lots[i] as DQLot;
+    if (l.auctionHouse !== 'RR Auction') continue;
+    const sm = /^rrauction-(\d+)-/.exec(String(l.id || ''));
+    const im = /\/preview\/(\d+)(?:_\d+[a-z]?)?\.(?:jpe?g|png)/i.exec(String(l.imageUrl || ''));
+    if (!sm || !im) continue;
+    const k = `${sm[1]}|${im[1]}`;
+    const g = groups.get(k); if (g) g.push(i); else groups.set(k, [i]);
+  }
+  const drop = new Set<number>();
+  groups.forEach(idx => {
+    if (idx.length < 2) return;
+    const rows = idx.map(i => lots[i] as DQLot);
+    const ts = rows.map(r => normTitle(r.title));
+    if (!ts.every(t => t.startsWith(ts[0]) || ts[0].startsWith(t))) return;
+    const soldPrices = new Set(rows.filter(r => r.status === 'sold').map(r => priceOf(r)));
+    if (soldPrices.size > 1) return;
+    const order = idx.slice().sort((a, b) => {
+      const A = lots[a] as DQLot, B = lots[b] as DQLot;
+      return (STATUS_KEEP_RANK[A.status] ?? 9) - (STATUS_KEEP_RANK[B.status] ?? 9)
+        || String(B.title || '').length - String(A.title || '').length
+        || (Number(A.lotNumber) || 0) - (Number(B.lotNumber) || 0)
+        || (String(A.id) < String(B.id) ? -1 : 1);
+    });
+    for (const i of order.slice(1)) drop.add(i);
+  });
+  return compact(lots, drop);
+}
+
+// ── SOTHEBY'S / CHRISTIE'S ID-SCHEME COLLISIONS (74 URLs): Sotheby's rows arrive
+// under three id schemes — `sothebys-alg-<uuid>` (Algolia archive), `sothebys-
+// <uuid>` (live crawl), and `sothebys-<slug>` (artist-page scrape / hand seeds,
+// June-1 placeholder dates). The same lot page under two schemes = one lot twice.
+// Canonical key = the lot URL PATH (query/fragment stripped, lower-cased), lot-
+// shaped paths only — a seed's shared /artists/<name> or results?query= page is
+// NOT a lot key (5 distinct Condo seeds share one). Keeper: the CRAWLED row
+// (alg/uuid; Christie's numeric) over a slug/seed row — for sold pairs whose
+// dates disagree the crawled date is the real one — then status, then id.
+const LOT_PATH: Record<string, RegExp> = {
+  "Sotheby's": /^\/(?:[a-z]{2}\/)?buy\/auction\/\d{4}\/[^/]+\/[^/]+$/,
+  "Christie's": /^\/(?:[a-z]{2}\/)?lot\/lot-\d+$/,
+};
+const isCrawledId = (house: string, id: string): boolean =>
+  house === "Sotheby's" ? /^sothebys-(?:alg-|[0-9a-f]{8}-[0-9a-f]{4}-)/i.test(id)
+    : house === "Christie's" ? /^christies-(?:auc-)?\d+~?$/.test(id) : true;
+export function dedupeUrlSchemeCollisions(lots: Lot[]): number {
+  const best = new Map<string, number>();
+  const drop = new Set<number>();
+  const rank = (l: DQLot) => [isCrawledId(l.auctionHouse, String(l.id)) ? 0 : 1, STATUS_KEEP_RANK[l.status] ?? 9];
+  for (let i = 0; i < lots.length; i++) {
+    const l = lots[i] as DQLot;
+    const re = LOT_PATH[l.auctionHouse];
+    if (!re || !l.url) continue;
+    const p = String(l.url).replace(/^https?:\/\/[^/]+/i, '').split(/[?#]/)[0].replace(/\/+$/, '').toLowerCase();
+    if (!re.test(p)) continue;
+    const k = `${l.auctionHouse}|${p}`;
+    const prev = best.get(k);
+    if (prev === undefined) { best.set(k, i); continue; }
+    const [ca, sa] = rank(lots[prev] as DQLot), [cb, sb] = rank(l);
+    const keepNew = cb < ca || (cb === ca && (sb < sa || (sb === sa && String(l.id) < String(lots[prev].id))));
+    if (keepNew) { drop.add(prev); best.set(k, i); } else drop.add(i);
+  }
+  return compact(lots, drop);
+}
+
+// ── BRUUN RASMUSSEN filed as Bonhams (131 rows, `bonhams-brk_<sale>-<hex>`):
+// Bonhams owns Bruun Rasmussen and cross-lists some BR sales on bonhams.com,
+// so the Bonhams crawler picked BR lots up under the Bonhams house. Only BR sale
+// 1008817 is ALSO in the corpus under its bonhams.com number (33077 — same date,
+// same lot numbers, same estimates): those brk rows are duplicates → dropped.
+// The rest are unique BR lots (Copenhagen) → relabelled to their real house so
+// Bonhams' stats/calibration stop absorbing another house's sales.
+export const BRUUN_HOUSE = 'Bruun Rasmussen';
+export function dedupeBruunUnderBonhams(lots: Lot[]): { dropped: number; relabelled: number } {
+  // several Bonhams sales can share a date, so a (date, lot#) slot holds a LIST
+  // and the twin must also agree on content: the same estimate band, or ≥3
+  // shared title words (the BR title prefixes the maker: "Pablo Picasso: …").
+  const bonhamsSlot = new Map<string, DQLot[]>();
+  for (const l of lots as DQLot[]) {
+    if (l.auctionHouse !== 'Bonhams' || /^bonhams-brk_/.test(String(l.id))) continue;
+    if (!l.saleDate || l.lotNumber == null) continue;
+    const k = `${String(l.saleDate).slice(0, 10)}|${Number(l.lotNumber)}`;
+    const arr = bonhamsSlot.get(k); if (arr) arr.push(l); else bonhamsSlot.set(k, [l]);
+  }
+  const words = (t: unknown) => normTitle(t).split(' ').filter(w => w.length > 3);
+  const drop = new Set<number>();
+  let relabelled = 0;
+  for (let i = 0; i < lots.length; i++) {
+    const l = lots[i] as DQLot;
+    if (!/^bonhams-brk_/.test(String(l.id))) continue;
+    const cands = l.saleDate && l.lotNumber != null ? bonhamsSlot.get(`${String(l.saleDate).slice(0, 10)}|${Number(l.lotNumber)}`) || [] : [];
+    const mine = words(l.title);
+    const twin = cands.find(t => {
+      const sameEst = t.estimateLow != null && t.estimateLow === l.estimateLow && t.estimateHigh === l.estimateHigh;
+      const tw = new Set(words(t.title));
+      return sameEst || mine.filter(w => tw.has(w)).length >= 3;
+    });
+    if (twin) { drop.add(i); continue; }
+    if (l.auctionHouse !== BRUUN_HOUSE) { l.auctionHouse = BRUUN_HOUSE; relabelled++; }
+  }
+  return { dropped: compact(lots, drop), relabelled };
+}
+
+// ── FOREIGN LEADING MAKER (Chagall under Picasso, Basquiat/Cocteau under Warhol,
+// Miró under Matisse): a title that LEADS with a different artist's full name —
+// "Jean-Michel Basquiat", "MIRÓ, Joan et René CHAR", "After Marc Chagall" — and
+// never names the slug's own maker anywhere is that other artist's lot. Re-route
+// to the named artist when it is a tracked slug, else drop (untracked makers are
+// never kept — same doctrine as rerouteScienceMisroutes). Rule-based and
+// anchored at the title START only; "…at the Basquiat Opening" is untouched.
+const FOREIGN_MAKERS: [string, string, string | null][] = [
+  // [first, last, tracked slug | null]
+  ['Marc', 'Chagall', null], ['Joan', 'Mir[oó]', null], ['Salvador', 'Dal[ií]', null],
+  ['Georges', 'Braque', null], ['Fernand', 'L[ée]ger', null], ['Jean', 'Cocteau', null],
+  ['Jean-Michel', 'Basquiat', null], ['Roy', 'Lichtenstein', null], ['David', 'Hockney', null],
+  ['Jean', 'Dubuffet', null], ['Paul', 'C[ée]zanne', null], ['Pierre-Auguste', 'Renoir', null],
+  ['Amedeo', 'Modigliani', null], ['Wassily', 'Kandinsky', null], ['Paul', 'Klee', null],
+  ['Ren[ée]', 'Magritte', null], ['Robert', 'Rauschenberg', null], ['Jasper', 'Johns', null],
+  ['Damien', 'Hirst', null], ['Jeff', 'Koons', null], ['Yayoi', 'Kusama', null], ['Alexander', 'Calder', null],
+  ['Henri', 'Matisse', 'henri-matisse'], ['Pablo', 'Picasso', 'pablo-picasso'], ['Andy', 'Warhol', 'andy-warhol'],
+  ['Keith', 'Haring', 'keith-haring'], ['Ed', 'Ruscha', 'ed-ruscha'], ['George', 'Condo', 'george-condo'],
+];
+const FOREIGN_LEAD = FOREIGN_MAKERS.map(([first, last, slug]) => ({
+  re: new RegExp(`^\\s*(?:after|attributed to|circle of|school of|follower of|manner of)?\\s*(?:${first}\\s+${last}|${last},\\s*${first})\\b`, 'i'),
+  slug,
+}));
+const OWN_NAME = new Map(ART_MAKER_SLUG.map(([re, slug]) => [slug, re]));
+export function rerouteForeignLeadMaker(lots: Lot[]): { rerouted: number; dropped: number } {
+  const drop = new Set<number>();
+  let rerouted = 0;
+  for (let i = 0; i < lots.length; i++) {
+    const l = lots[i];
+    const own = OWN_NAME.get(l.artist);
+    if (!own) continue;
+    const title = String(l.title || '');
+    const hit = FOREIGN_LEAD.find(f => f.re.test(title));
+    if (!hit || hit.slug === l.artist) continue;
+    if (own.test(`${title} ${l.medium ?? ''}`)) continue; // names its own maker too — leave it
+    if (hit.slug) { l.artist = hit.slug; if (l.makerSlug) l.makerSlug = hit.slug; rerouted++; }
+    else drop.add(i);
+  }
+  return { rerouted, dropped: compact(lots, drop) };
+}
+
+// ── PRE-WAR SET CODES → cards (≈13k rows): REA/H&S/Lelands/LOTG/Memory Lane
+// filed "1909-11 T206 … with Bat", "1887 N172 Old Judge …", "1933 R319 Goudey"
+// under memorabilia / game-used / autographs because classifySports only knew
+// t20x/e9x (the crawler side is fixed in sports-crawl.ts; this heals the rows
+// already in the segments). Same leading-anchored detector (set-codes.ts), the
+// expansion houses only (their pseudo-artist taxonomy), never unopened wax.
+const SET_CODE_HOUSES = new Set(['REA', 'Huggins & Scott', 'SCP', 'Lelands', 'Memory Lane', 'Love of the Game', "Hake's"]);
+const SET_CODE_FROM = new Set(['memorabilia', 'game-used', 'autographs', 'pop-memorabilia', 'type-1-photos', 'equipment-artifacts', 'trophies-awards', 'programs-publications', 'tickets-passes']);
+export function rerouteSetCodeCards(lots: Lot[]): number {
+  let n = 0;
+  for (const l of lots) {
+    if (!SET_CODE_HOUSES.has(l.auctionHouse) || !SET_CODE_FROM.has(l.artist)) continue;
+    const t = String(l.title || '');
+    if (/\b(unopened|wax box|wax pack|sealed)\b/i.test(t) || !leadsWithSetCode(t)) continue;
+    l.artist = 'graded-cards';
+    if (l.makerSlug) l.makerSlug = 'graded-cards';
+    n++;
+  }
+  return n;
+}
+
+// ── STALE UPCOMING (3,732 on Sep 27: H&S 2,350 · REA 1,068 · MLB 193 · Phillips
+// 74 · Bonhams 25 · Sotheby's 15 · Christie's 7): a lot still 'upcoming' more
+// than 3 days past its close never had its result resolved (REA/H&S closed-sale
+// markup the parser rejects, MLB's CI block, login-gated results). It is not on
+// the block and has no known outcome: demote to the existing 'unknown-result'
+// state (the LotCard no-sale state already renders it), drop resultsPending, and
+// keep it out of comps. The crawler segment is untouched — if the house's
+// results pass later resolves the lot, tomorrow's row arrives 'sold' and wins.
+export function demoteStaleUpcoming(lots: Lot[], now: Date = new Date(), graceDays = 3): { total: number; byHouse: Record<string, number> } {
+  const cut = new Date(now.getTime() - graceDays * 864e5).toISOString().slice(0, 10);
+  const byHouse: Record<string, number> = {};
+  let total = 0;
+  for (const l of lots as DQLot[]) {
+    if (l.status !== 'upcoming') continue;
+    const d = typeof l.saleDate === 'string' ? l.saleDate.slice(0, 10) : '';
+    const dt = typeof l.saleDateTime === 'string' ? l.saleDateTime.slice(0, 10) : '';
+    const close = dt > d ? dt : d;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(close) || close >= cut) continue;
+    (l as { status: string }).status = 'unknown-result';
+    if ('resultsPending' in l) l.resultsPending = false;
+    markExclude(l, COMP_EXCLUDE.staleUpcoming);
+    byHouse[l.auctionHouse || '?'] = (byHouse[l.auctionHouse || '?'] || 0) + 1;
+    total++;
+  }
+  return { total, byHouse };
+}
+
+// ── COMP-EXCLUDE PRICE / PROVENANCE RULES ──
+// Genuine blow-out single-owner sales (celebrity provenance; charity) whose
+// prices legitimately run 50–275× a nominal estimate — verified in the corpus:
+// Freddie Mercury "A World of His Own" (Sotheby's 2023, ~45 rows), Elizabeth
+// Taylor (Christie's 2011), Karl Lagerfeld estate, Bowie/Collector, Only Watch.
+const OUTLIER_WHITELIST_SALE = /freddie mercury|elizabeth taylor|lagerfeld|bowie|only watch/i;
+// currencies whose USD rate is far enough from 1 that an unconverted native
+// figure is detectable (a GBP/EUR/CHF slip is within noise — not claimed)
+const FX_DETECTABLE: Record<string, number> = { HKD: 7.8, CNY: 7.1, JPY: 150 };
+export function stampCompExcludes(lots: Lot[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  const bump = (l: DQLot, r: string) => { if (markExclude(l, r)) out[r] = (out[r] || 0) + 1; };
+  for (const l of lots as DQLot[]) {
+    const title = String(l.title || '');
+    // artist-page scrape: "Arlequin (Buste) Estimate Upon Request" — clean the
+    // title (the label is not the work) and keep it out of comps.
+    if (/\s*\bEstimate Upon Request\b\s*$/i.test(title)) {
+      l.title = title.replace(/\s*\bEstimate Upon Request\b\s*$/i, '').trim();
+      bump(l, COMP_EXCLUDE.estimateUponRequest);
+    }
+    // hand-entered seed whose url is a search / artist page — no lot to verify
+    if (l.url && /results\?query=|\/artists?\/|[?&](?:q|query)=|\/search\b/i.test(String(l.url))) bump(l, COMP_EXCLUDE.seedNonLotUrl);
+    if ((l as { priceBasis?: string }).priceBasis === 'last-tracked-bid') bump(l, COMP_EXCLUDE.lastTrackedBid);
+    if (l.status !== 'sold') continue;
+    const p = priceOf(l);
+    if (p === null) continue;
+    if (p < 10) { bump(l, COMP_EXCLUDE.priceUnder10); continue; }
+    const hi = l.estHighUsd ?? l.estimateHigh, lo = l.estLowUsd ?? l.estimateLow;
+    const cur = String(l.nativeCurrency || l.currency || 'USD');
+    const rate = FX_DETECTABLE[cur];
+    if (rate && hi && hi > 0 && p > 20 * hi) {
+      const conv = p / rate;
+      if (conv >= 0.5 * (lo || hi) && conv <= 20 * hi) { bump(l, COMP_EXCLUDE.fxUnconverted); continue; }
+    }
+    if (OUTLIER_WHITELIST_SALE.test(String(l.saleName || ''))) continue;
+    if ((hi && hi > 0 && p > 50 * hi) || (lo && lo > 0 && p < 0.02 * lo)) bump(l, COMP_EXCLUDE.priceVsEstimate);
+  }
+  return out;
+}
+
+// ── PLACEHOLDER IMAGES → null (the UI's no-image state, not a fake photo):
+// Christie's NoImage alert (18,431) + generic wine-lot image, RR missing.png
+// (2,183), Sotheby's one shared generic lot.jpg (3,862) + "under copyright"
+// cards, and Lelands/LOTG thumbs truncated to a bare `thumb_` (61).
+const PLACEHOLDER_IMG: [string, RegExp][] = [
+  ['christies-noimage', /christies\.com\/img\/LotImages\/Alert\/(?:NoImage|WineLot)\//i],
+  ['rr-missing', /rrauction\.com\/assets\/img\/missing\.png/i],
+  ['sothebys-generic', /59fa5b71fac41f69087283fc636e351464ae6e590e9c1cb5f016306f9a%2Flot\.jpg|undercopyright\.jpg|image-under-copyright\.png/i],
+  ['truncated-thumb', /\/thumbs\/thumb_(?:[?#].*)?$/i],
+];
+export function nullPlaceholderImages(lots: Lot[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const l of lots) {
+    const u = l.imageUrl;
+    if (!u) continue;
+    const hit = PLACEHOLDER_IMG.find(([, re]) => re.test(u));
+    if (hit) { l.imageUrl = null; out[hit[0]] = (out[hit[0]] || 0) + 1; }
+  }
+  return out;
+}
+
+// ── DATE PRECISION: synthesized dates must not pose as a real sale day.
+//  · 'month' — REA / H&S / Lelands / LOTG / Memory Lane dates built by
+//    seasonToDate ("2018 Spring" → 2018-04-15; crawl-lelands-gallery.ts:120,167)
+//    are always the 15th; a row on the 15th of those houses with no parsed
+//    saleDateTime is that synthesized month stamp.
+//  · 'year' — Sotheby's artist-page scrape (ray-crawl slug-scheme ids) dates
+//    every lot June 1 of the URL's year (246 rows).
+// A crawler-stamped datePrecision (e.g. crawler emits 'month') always wins.
+const MONTH_DATE_HOUSES = new Set(['REA', 'Huggins & Scott', 'Lelands', 'Love of the Game', 'Memory Lane']);
+export function stampDatePrecision(lots: Lot[]): { month: number; year: number } {
+  let month = 0, year = 0;
+  for (const l of lots as DQLot[]) {
+    if (l.datePrecision) continue;
+    const d = typeof l.saleDate === 'string' ? l.saleDate : '';
+    if (!/^\d{4}-\d{2}-\d{2}/.test(d)) continue;
+    if (MONTH_DATE_HOUSES.has(l.auctionHouse) && d.slice(8, 10) === '15' && !l.saleDateTime) { l.datePrecision = 'month'; month++; continue; }
+    if (l.auctionHouse === "Sotheby's" && d.slice(5, 10) === '06-01' && !isCrawledId("Sotheby's", String(l.id)) && !l.saleDateTime) { l.datePrecision = 'year'; year++; }
+  }
+  return { month, year };
+}
+
+// ── HAMMER == ALL-IN (Wright 989 · LAMA 338): older Wright-platform rows copied
+// the premium-inclusive price into the hammer field, so every hammer-basis read
+// (inferHammerUsd, houseCal, max-bid guidance) took a realized price as the
+// hammer. Recompute from the lot's OWN stamped buyer's premium when it has one;
+// otherwise null the hammer (inferHammerUsd then derives it from the house
+// schedule — an inference, labelled as such, instead of a wrong fact).
+// priceBasis 'hammer-only' rows are genuinely hammer = price and are skipped.
+export function fixFamilyHammerEqualsPrice(lots: Lot[]): { recomputed: number; nulled: number } {
+  let recomputed = 0, nulled = 0;
+  for (const l of lots as DQLot[]) {
+    if (!(l.auctionHouse === 'Wright' || l.auctionHouse === 'LAMA' || l.auctionHouse === 'Rago')) continue;
+    if (l.status !== 'sold' || (l as { priceBasis?: string }).priceBasis === 'hammer-only') continue;
+    const p = priceOf(l);
+    const h = l.hammerUsd ?? l.hammerPrice;
+    if (p === null || !(typeof h === 'number' && h > 0) || Math.abs(h - p) >= 0.5) continue;
+    const bp = l.buyerPremiumPct;
+    if (typeof bp === 'number' && bp > 0 && bp < 60) {
+      const ham = Math.round((p / (1 + bp / 100)) * 100) / 100;
+      l.hammerUsd = ham; l.hammerPrice = ham;
+      if (l.hammerNative != null) l.hammerNative = ham;
+      recomputed++;
+    } else {
+      l.hammerUsd = null; l.hammerPrice = null; l.hammerNative = null;
+      nulled++;
+    }
+  }
+  return { recomputed, nulled };
+}
+
+export type HygieneReport = {
+  rrStubs: number; rrDupes: number; urlDupes: number;
+  bruun: { dropped: number; relabelled: number };
+  foreignMaker: { rerouted: number; dropped: number };
+  setCodeCards: number;
+  staleUpcoming: { total: number; byHouse: Record<string, number> };
+  compExclude: Record<string, number>;
+  images: Record<string, number>;
+  datePrecision: { month: number; year: number };
+  hammer: { recomputed: number; nulled: number };
+};
+
+export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date } = {}): HygieneReport {
   const ls = lots as Lot[];
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
+  const rrStubs = dropRRStubRows(ls);
   const mirrorDupes = dedupeWrightFamilyMirrors(ls);
+  // the Sep 27 dedupe family (next to the Wright mirrors — same compaction):
+  const rrDupes = dedupeRRSameSaleItems(ls);
+  const urlDupes = dedupeUrlSchemeCollisions(ls);
+  const bruun = dedupeBruunUnderBonhams(ls);
+  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled}`);
   // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
   // isMisattributed reads the raw title (car marques / life-dates survive any
   // title clean), and dropping early shrinks every pass that follows.
   const misattr = dropMisattributed(ls);
   if (misattr) console.log(`[normalize] dropped ${misattr} misattributed lots (cars in art pools, name collisions)`);
+  const foreignMaker = rerouteForeignLeadMaker(ls);
+  const setCodeCards = rerouteSetCodeCards(ls);
+  console.log(`[normalize] category: foreign-lead-maker rerouted=${foreignMaker.rerouted} dropped=${foreignMaker.dropped} · pre-war set codes→graded-cards=${setCodeCards}`);
   // ENGINE SPEC v2 order: category flips (2c) run BEFORE identity work;
   // restampIdentityKeys (5) runs LAST so every flip re-derives its formKey.
   // healExpansionRows runs FIRST: it cleans titles (every parser below reads
@@ -459,6 +865,21 @@ export function normalizeCorpus(lots: AuctionLot[]): void {
   if (players.total >= 200 && players.coverage < 0.85) {
     throw new Error(`[normalize] game-used playerSlug coverage ${(players.coverage * 100).toFixed(1)}% < 85% floor — title parser drifted; refusing to publish`);
   }
+  // Sep 27 data-quality stamps — AFTER reconcileSaleDates (stale-upcoming reads
+  // the reconciled date) and healExpansionRows (images get their scheme first).
+  const staleUpcoming = demoteStaleUpcoming(ls, opts.now);
+  const compExclude = stampCompExcludes(ls);
+  const images = nullPlaceholderImages(ls);
+  const datePrecision = stampDatePrecision(ls);
+  const hammer = fixFamilyHammerEqualsPrice(ls);
+  const kv = (o: Record<string, number>) => Object.entries(o).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
+  console.log(
+    `[normalize] data-quality: stale upcoming→unknown-result=${staleUpcoming.total} (${kv(staleUpcoming.byHouse)}) · ` +
+    `compExclude ${kv(compExclude)} · placeholder images nulled ${kv(images)} · ` +
+    `datePrecision month=${datePrecision.month} year=${datePrecision.year} · ` +
+    `wright-family hammer==all-in recomputed=${hammer.recomputed} nulled=${hammer.nulled}`
+  );
+  return { rrStubs, rrDupes, urlDupes, bruun, foreignMaker, setCodeCards, staleUpcoming, compExclude, images, datePrecision, hammer };
 }
 
 /* ── CULTURE→SCIENCE REROUTE (Aug 14) — Apple/computing lots filed under the

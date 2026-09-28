@@ -77,13 +77,63 @@ export function inferHammerUsd(lot: { auctionHouse?: string | null; buyerPremium
   return realized / lotAllInFactor(lot, realized);
 }
 
+/** Houses whose bid ladder is PERCENTAGE-based, not flat: each next bid is the
+ *  current bid + 10%, unrounded (1,050 → 1,155 → 1,271 → 1,398 → 1,538 → 1,692 …).
+ *  Measured on the Sep 27 audit: Memory Lane / Lelands / Love of the Game
+ *  repeat-price clusters sit on exactly these rungs — a REAL geometric ladder,
+ *  not placeholder prices (a null rule there would have wiped ~7k honest rows). */
+export const BID_LADDER_PCT: Record<string, number> = {
+  'Lelands': 0.10,
+  'Memory Lane': 0.10,
+  'Love of the Game': 0.10,
+};
+
+/** A percentage bid ladder to test against: `pct` per step, and `peers` = the
+ *  OTHER prices that house repeatedly clears at (the ladder's observed rungs). */
+export type BidLadder = { pct: number; peers: Iterable<number> };
+
 /** Is `hammer` a round bid increment? Poisoned feeds stamp one arbitrary
  *  price across a batch ($10,050 ×3,622); honest repeats are increment ×
  *  premium ties ($1,000 × 1.22 = $1,220 ×40 inside one sale). Absolute
- *  tolerance on purpose: a relative one would bless any large number. */
-export function isRoundIncrement(hammer: number, tolUsd = 1): boolean {
+ *  tolerance on purpose: a relative one would bless any large number.
+ *
+ *  PERCENTAGE LADDERS (Sep 27 2026): a flat-step test can never see a 10%
+ *  geometric ladder — its rungs are unrounded by construction. When a `ladder`
+ *  is passed (the house's step pct + its other repeat prices), the value is ALSO
+ *  honest if it sits ON that ladder: at least two neighbouring rungs, each one
+ *  step (×(1+pct)) away, chained through the peer set (value ↔ rung ↔ rung, in
+ *  either direction). Requiring a 3-rung chain keeps an isolated bleed from being
+ *  blessed by one coincidental neighbour. Rung tolerance is ±max(1.5, 0.2%) —
+ *  the ladder rounds each step to the dollar, so rounding drifts by <1/step. */
+export function isRoundIncrement(hammer: number, tolUsd = 1, ladder?: BidLadder): boolean {
   if (!(hammer > 0)) return false;
   const step = hammer < 5_000 ? 50 : hammer < 50_000 ? 100 : hammer < 500_000 ? 500 : 1_000;
   const r = Math.round(hammer / step) * step;
-  return Math.abs(hammer - r) <= tolUsd;
+  if (Math.abs(hammer - r) <= tolUsd) return true;
+  if (!ladder || !(ladder.pct > 0)) return false;
+  return onPercentLadder(hammer, ladder);
+}
+
+function onPercentLadder(v: number, ladder: BidLadder): boolean {
+  const k = 1 + ladder.pct;
+  const peers = Array.from(ladder.peers).filter(p => p > 0 && p !== v).sort((a, b) => a - b);
+  if (peers.length < 2) return false;
+  const tolOf = (x: number) => Math.max(1.5, x * 0.002);
+  // binary-search a peer within tolerance of `target`
+  const has = (target: number, exclude: number): number | null => {
+    const tol = tolOf(target);
+    let lo = 0, hi = peers.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (peers[mid] < target - tol) lo = mid + 1; else hi = mid - 1;
+    }
+    for (let i = lo; i < peers.length && peers[i] <= target + tol; i++) if (peers[i] !== exclude) return peers[i];
+    return null;
+  };
+  const up = has(v * k, v), down = has(v / k, v);
+  // v sits between two rungs, or at the end of a 3-rung run in either direction
+  if (up !== null && down !== null) return true;
+  if (up !== null && has(up * k, v) !== null) return true;
+  if (down !== null && has(down / k, v) !== null) return true;
+  return false;
 }
