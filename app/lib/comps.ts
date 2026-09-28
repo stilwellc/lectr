@@ -439,6 +439,7 @@ const SHAPE_PART = new RegExp([
 const SHAPE_ORIGINAL = /\boriginal (?:comic |cover |splash |interior |strip |sunday |daily |production |animation |concept |pin[- ]up |illustration |poster |pencil |ink |published )?(?:art(?:work)?|page|cover|drawing|painting|illustration|sketch|cel|splash|strip)\b|\b(?:production|animation) cel\b|\bhand[- ]drawn\b|\bhand[- ]painted cel\b|\bcomic art\b|\bsplash page\b|\bcover art\b|\bpencils? and inks?\b|\binked page\b/i;
 const SHAPE_PRINTED = /\b(?:comic books?|comics? (?:#|no\.?|issue)|issue #\d|cgc \d|cbcs \d|cgc graded|pgx \d|newsstand|variant cover|first printing|reprint|facsimile|lithograph|offset|giclee|gicl[ée]e|poster|print(?:ed)?\b|trading cards?|magazine|paperback|hardcover)\b/i;
 
+const SHAPE_QTY_SUFFIX = /\((\d{1,2})\)\s*\.?\s*$/;
 const SHAPE_CACHE = new Map<string, LotShape>();
 /** Parse the lot's shape from its title (cached per title string). */
 export function lotShapeOf(title: string | null | undefined): LotShape {
@@ -446,7 +447,12 @@ export function lotShapeOf(title: string | null | undefined): LotShape {
   const hit = SHAPE_CACHE.get(t);
   if (hit) return hit;
   let count = 1;
-  if (SHAPE_PAIR.test(t)) count = 2;
+  // the catalogue quantity suffix: Bonhams/Christie's close a multi-piece lot
+  // with "(6)" / "(2)" ("American black walnut, sea-grass … (6)")
+  const qty = t.match(SHAPE_QTY_SUFFIX);
+  const qn = qty ? parseInt(qty[1], 10) : 0;
+  if (qn >= 2 && qn <= 48) count = qn;
+  else if (SHAPE_PAIR.test(t)) count = 2;
   else {
     const m = t.match(SHAPE_SET_N) || t.match(SHAPE_N_ITEMS);
     const n = m ? numOf(m[1]) : null;
