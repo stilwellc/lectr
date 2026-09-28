@@ -11,6 +11,7 @@ import type { AuctionLot, LotCategory, AuctionHouse } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
 import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, stampUpcomingUsd, writeMergedSegment, writeMergedSegmentWithLive, settledOnly, liveOnly, purgeFromSegment } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
+import { reportLegHealth, reportAndExit } from './lib/leg-health';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
@@ -397,6 +398,7 @@ async function main() {
   let liveOk = false;
   let wdIds = new Set<string>();
   let sold = 0, miss = 0, walled = 0;
+  let liveParsed = 0, liveReason: string | null = null;
   try {
     // --live without an explicit window skips the id sweep: the sold windows
     // are harvested, and new sold history arrives via gallery soft-closes +
@@ -415,6 +417,8 @@ async function main() {
     if (liveMode) {
       const r = await crawlLive(browser, cfg);
       liveOk = r.ok;
+      liveParsed = r.live.length + r.soldNow.length + r.resolved.length;
+      if (!r.ok) liveReason = 'live gallery NOT ok (CF-walled, 0 cards, or no End date readable)';
       lots.push(...r.soldNow, ...r.resolved);
       const lg = liveOnly(r.live);
       if (lg.dropped) console.log(`[CA:${houseKey}] dropped ${lg.dropped} malformed live lots`);
@@ -424,6 +428,13 @@ async function main() {
     }
   } finally { await browser.close(); }
   console.log(`[CA:${houseKey}] ${sold} sold, ${miss} skipped, ${walled} CF-walled`);
+  {
+    const reasons: string[] = [];
+    if (liveReason) reasons.push(liveReason);
+    if (sold + miss >= 20 && sold === 0) reasons.push(`id sweep read ${sold + miss} pages and settled 0`);
+    if (walled >= 20 && sold === 0) reasons.push(`id sweep CF-walled on ${walled} pages`);
+    reportLegHealth({ house: cfg.seg, ok: reasons.length === 0, fetched: sold + miss + (liveMode ? liveParsed : 0), parsed: sold + liveParsed, settled: lots.length, reason: reasons.join('; ') || null });
+  }
 
   const report = assertInvariants(lots.concat(liveLots));
   console.log(`[CA:${houseKey}] invariant FATALs: ${report.fatal.length} | warns: ${report.warn.length}`);
@@ -436,7 +447,10 @@ async function main() {
     const { good, dropped } = settledOnly(lots);
     if (dropped) console.log(`[CA:${houseKey}] dropped ${dropped} unsettled/future-dated lots`);
     const rep = assertInvariants(good.concat(liveLots));
-    if (rep.fatal.length) { console.error(`[CA] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f)); process.exit(1); }
+    if (rep.fatal.length) {
+      console.error(`[CA] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f));
+      reportAndExit({ house: cfg.seg, fetched: sold + miss, parsed: lots.length + liveLots.length, settled: 0, reason: `refused write: ${rep.fatal.length} invariant FATALs` });
+    }
     const res = liveMode
       ? writeMergedSegmentWithLive(cfg.seg, good, liveLots, liveOk)
       : { ...writeMergedSegment(cfg.seg, good), upcoming: undefined as number | undefined };
@@ -454,5 +468,5 @@ async function main() {
 // run main() ONLY when executed directly — importing extract/buildLot/HOUSES
 // (backfill-createauction) must NOT spawn a competing crawl.
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(e => { console.error('[CA] fatal', e); process.exit(1); });
+  main().catch(e => { console.error('[CA] fatal', e); reportAndExit({ house: (process.argv[process.argv.indexOf('--house') + 1] || 'lelands'), fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
 }

@@ -38,6 +38,7 @@ import {
   REAL_UA, mapPool,
 } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
+import { reportLegHealth, reportAndExit } from './lib/leg-health';
 
 const HOST = 'https://nflauction.nfl.com';
 const SID = '1100783';
@@ -62,13 +63,28 @@ interface ApiItem {
   totalSecondsLeft?: number;
 }
 
+/** API call accounting — a failed call logs its status + body snippet (the
+ *  MLB config of this platform started walling CI runners Sep 20 2026 with
+ *  no trace in the log; this house shares the platform). */
+const API_STATS = { calls: 0, ok: 0, fail: 0, lastStatus: '', lastSnippet: '' };
+let apiFailLogged = 0;
 async function getJson(url: string, retries = 2): Promise<{ items?: ApiItem[] } | null> {
+  API_STATS.calls++;
+  const fail = (status: string, body: string) => {
+    API_STATS.fail++; API_STATS.lastStatus = status;
+    API_STATS.lastSnippet = body.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (apiFailLogged++ < 6) console.warn(`[NFLAuction] API FAIL ${status} ${url.replace(HOST, '')} — body: ${API_STATS.lastSnippet || '(empty)'}`);
+  };
   for (let a = 0; a <= retries; a++) {
     try {
       const res = await fetch(url, { headers: { 'User-Agent': REAL_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(30000) });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch { if (a < retries) await new Promise(r => setTimeout(r, 800 * (a + 1))); }
+      const text = await res.text();
+      if (!res.ok) { fail(`HTTP ${res.status}`, text); return null; }
+      try { const j = JSON.parse(text); API_STATS.ok++; return j; } catch { fail(`HTTP ${res.status} (non-JSON body)`, text); return null; }
+    } catch (e) {
+      if (a < retries) await new Promise(r => setTimeout(r, 800 * (a + 1)));
+      else fail(`network ${(e as Error)?.message || e}`, '');
+    }
   }
   return null;
 }
@@ -205,7 +221,7 @@ async function main() {
     const [topPrice, topN] = Array.from(census.entries()).sort((a, b) => b[1] - a[1])[0] ?? [0, 0];
     if (topN > lots.length * 0.2) {
       console.error(`[NFLAuction] ABORT: $${topPrice} repeats on ${topN}/${lots.length} new sold rows — poisoned feed, nothing written.`);
-      process.exit(1);
+      reportAndExit({ house: 'nflauction', fetched: API_STATS.ok, parsed: lots.length, settled: 0, reason: `poisoned batch: $${topPrice} on ${topN}/${lots.length} rows` });
     }
   }
 
@@ -259,6 +275,13 @@ async function main() {
     const cf = (l as { authConfidence?: string }).authConfidence || '?'; byConf[cf] = (byConf[cf] || 0) + 1;
   }
   console.log('[NFLAuction] confidence:', byConf);
+  {
+    const reasons: string[] = [];
+    if (API_STATS.calls > 0 && API_STATS.ok === 0) reasons.push(`listing API down: ${API_STATS.fail}/${API_STATS.calls} calls failed, last ${API_STATS.lastStatus || '?'} "${API_STATS.lastSnippet.slice(0, 120)}"`);
+    else if (process.argv.includes('--live') && !liveOk) reasons.push('live leg not ok');
+    if (soldCands.length >= 20 && lots.length === 0 && miss < soldCands.length) reasons.push(`${soldCands.length} closed candidates, 0 settled`);
+    reportLegHealth({ house: 'nflauction', ok: reasons.length === 0, fetched: API_STATS.ok, parsed: lots.length + liveLots.length, settled: lots.length, reason: reasons.join('; ') || null });
+  }
 
   if (process.argv.includes('--write')) {
     const { good, dropped } = settledOnly(lots);
@@ -267,7 +290,7 @@ async function main() {
     if (rep.fatal.length) {
       console.error(`[NFLAuction] refusing to write: ${rep.fatal.length} FATALs`);
       rep.fatal.slice(0, 5).forEach(f => console.error('  ', f));
-      process.exit(1);
+      reportAndExit({ house: 'nflauction', fetched: API_STATS.ok, parsed: good.length + liveLots.length, settled: 0, reason: `refused write: ${rep.fatal.length} invariant FATALs` });
     }
     const r = process.argv.includes('--live')
       ? writeMergedSegmentWithLive('nflauction', good, liveLots, liveOk)
@@ -281,5 +304,5 @@ async function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(e => { console.error('[NFLAuction] fatal', e); process.exit(1); });
+  main().catch(e => { console.error('[NFLAuction] fatal', e); reportAndExit({ house: 'nflauction', fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
 }
