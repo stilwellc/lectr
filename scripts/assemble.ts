@@ -59,6 +59,60 @@ export function sentinelVerdict(
   return { abort: false, reason: null, poison, freshPoison, catastrophic, hasBaseline };
 }
 
+/**
+ * The sentinel's SIGNATURE SCAN, extracted pure (testable). A signature = one
+ * sold price ≥ $1,000 repeating ≥15× within a house with ≥60% of the repeats on
+ * ONE saleDate. `honest` = the implied hammer is a round flat increment, OR (for
+ * the percentage-ladder houses, BID_LADDER_PCT) the price sits on the house's
+ * observed 10% geometric ladder — peers are that house's other prices that clear
+ * ≥3× (a real rung repeats; a bleed has no ladder around it).
+ */
+export function computeSentinel(
+  lots: Array<{ status?: string; auctionHouse?: string | null; saleDate?: string | null; priceUsd?: number | null; realizedUsd?: number | null }>,
+  premiums: {
+    lotAllInFactor: (lot: { auctionHouse?: string | null }, usd?: number | null) => number;
+    isRoundIncrement: (h: number, tol?: number, ladder?: { pct: number; peers: Iterable<number> }) => boolean;
+    BID_LADDER_PCT: Record<string, number>;
+  },
+): SentinelSignature[] {
+  const { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT } = premiums;
+  const sentinel: SentinelSignature[] = [];
+  const byHouse = new Map<string, Map<number, Map<string, number>>>();
+  const ladderCounts = new Map<string, Map<number, number>>();
+  for (const l of lots) {
+    if (l.status !== 'sold') continue;
+    const p = l.realizedUsd ?? l.priceUsd;
+    if (!(typeof p === 'number' && p > 0)) continue;
+    const h = l.auctionHouse || '?';
+    if (BID_LADDER_PCT[h]) {
+      const lc = ladderCounts.get(h) || new Map<number, number>(); ladderCounts.set(h, lc);
+      lc.set(p, (lc.get(p) || 0) + 1);
+    }
+    if (!(p >= 1000)) continue;
+    const m = byHouse.get(h) || new Map<number, Map<string, number>>(); byHouse.set(h, m);
+    const d = m.get(p) || new Map<string, number>(); m.set(p, d);
+    d.set(l.saleDate || '?', (d.get(l.saleDate || '?') || 0) + 1);
+  }
+  const ladderPeers = new Map<string, number[]>();
+  ladderCounts.forEach((lc, h) => {
+    const peers: number[] = [];
+    lc.forEach((c, p) => { if (c >= 3) peers.push(p); });
+    ladderPeers.set(h, peers);
+  });
+  byHouse.forEach((m, h) => m.forEach((d, p) => {
+    let n = 0, top = 0, topDate = '';
+    d.forEach((c, dt) => { n += c; if (c > top) { top = c; topDate = dt; } });
+    if (n >= 15 && top / n >= 0.6) {
+      const hammer = p / lotAllInFactor({ auctionHouse: h }, p);
+      const pct = BID_LADDER_PCT[h];
+      const honest = isRoundIncrement(hammer) || (!!pct && isRoundIncrement(p, 1, { pct, peers: ladderPeers.get(h) || [] }));
+      sentinel.push({ house: h, price: p, n, top, topDate, hammer: Math.round(hammer * 100) / 100, honest });
+    }
+  }));
+  sentinel.sort((a, b) => b.n - a.n);
+  return sentinel;
+}
+
 async function main() {
   const DATA_DIR = SERVED_DIR;
   const allLotsRaw = readAllSegments() as unknown as AuctionLot[];
@@ -143,30 +197,12 @@ async function main() {
   // meta.json (`sentinel`); ≥2 DISTINCT poison signatures abort the publish
   // (exit non-zero — the last-good payload stays live). RAY_SENTINEL_WARN_ONLY=1
   // downgrades to warnings for a deliberate re-run after inspection.
-  const sentinel: { house: string; price: number; n: number; top: number; topDate: string; hammer: number; honest: boolean }[] = [];
+  // (Sep 27 2026) the scan is computeSentinel() above; it now also knows the
+  // 10% GEOMETRIC ladders at Lelands / Memory Lane / LOTG (BID_LADDER_PCT), so
+  // those standing rungs read as honest ties instead of POISON (known/standing).
+  let sentinel: SentinelSignature[] = [];
   {
-    const { lotAllInFactor, isRoundIncrement } = await import('../app/lib/premiums');
-    const byHouse = new Map<string, Map<number, Map<string, number>>>();
-    for (const l of allLots) {
-      if (l.status !== 'sold') continue;
-      const p = (l as { realizedUsd?: number; priceUsd?: number }).realizedUsd
-        ?? (l as { priceUsd?: number }).priceUsd;
-      if (!(p! >= 1000)) continue;
-      const h = l.auctionHouse || '?';
-      const m = byHouse.get(h) || new Map<number, Map<string, number>>(); byHouse.set(h, m);
-      const d = m.get(p!) || new Map<string, number>(); m.set(p!, d);
-      d.set(l.saleDate || '?', (d.get(l.saleDate || '?') || 0) + 1);
-    }
-    byHouse.forEach((m, h) => m.forEach((d, p) => {
-      let n = 0, top = 0, topDate = '';
-      d.forEach((c, dt) => { n += c; if (c > top) { top = c; topDate = dt; } });
-      if (n >= 15 && top / n >= 0.6) {
-        const hammer = p / lotAllInFactor({ auctionHouse: h }, p);
-        const honest = isRoundIncrement(hammer);
-        sentinel.push({ house: h, price: p, n, top, topDate, hammer: Math.round(hammer * 100) / 100, honest });
-      }
-    }));
-    sentinel.sort((a, b) => b.n - a.n);
+    sentinel = computeSentinel(allLots as never, await import('../app/lib/premiums'));
     const poison = sentinel.filter(s => !s.honest);
 
     // ── DELTA GATE (Sep 9 2026) ────────────────────────────────────────────
@@ -231,7 +267,15 @@ async function main() {
   // and flow through stats/market/hedonic. build-market re-runs the same pass
   // idempotently on the corpus it reads.
   const preNormalize = allLots.length;
-  normalizeCorpus(allLots);
+  const hygiene = normalizeCorpus(allLots);
+  // STALE-UPCOMING annotation (Sep 27 2026): lots a crawler left 'upcoming' >3
+  // days past their close were demoted to 'unknown-result' by normalize (kept
+  // out of the live book + comps). A non-zero count means a house's results
+  // pass isn't resolving its closed sales — surface it per house on the run.
+  if (hygiene.staleUpcoming.total) {
+    const per = Object.entries(hygiene.staleUpcoming.byHouse).sort((a, b) => b[1] - a[1]).map(([h, n]) => `${h} ${n}`).join(', ');
+    console.log(`::warning title=stale upcoming demoted::${hygiene.staleUpcoming.total} lots still 'upcoming' >3d past close → unknown-result (${per}) — that house's results pass is not resolving closed sales`);
+  }
   // The sanity gate above ran on the PRE-normalize array; normalize passes can
   // now compact it (mirror dedupe, science evictions). Re-assert so a runaway
   // pass can never ship an eviscerated corpus that becomes tomorrow's baseline.

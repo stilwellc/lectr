@@ -14,6 +14,7 @@
 import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
 import { readSegment, writeSegment } from '../corpus-io';
 import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
+import { leadsWithSetCode } from './set-codes';
 
 // Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
 // good segment, union the fresh lots over it (fresh id wins), write the union.
@@ -286,6 +287,10 @@ export function classifySports(catLabel: string, title: string): SportsCategory 
   const t = (title || '').toLowerCase();
   const both = c + ' ' + t;
   if (/\b(unopened|sealed|wax box|wax pack|cello|rack pack|vending)\b/.test(both)) return 'unopened-wax';
+  // a leading vintage set code (T206, E224, N172, R319 …) is a CARD whatever
+  // follows — "T206 … with Bat" must not fall into game-used below (Sep 27 audit:
+  // ~13k pre-war cards filed as memorabilia/game-used). See set-codes.ts.
+  if (leadsWithSetCode(title)) return 'graded-card';
   if (/\b(ticket|stub|pass|full ticket)\b/.test(both)) return 'ticket';
   if (/\b(game[- ]?used|game[- ]?worn|match[- ]?worn|player[- ]?worn|jersey|bat|glove|cleats|helmet|worn)\b/.test(both)) return 'game-used';
   if (/\b(trophy|award|ring|medal|championship ring|mvp)\b/.test(both)) return 'trophy-award';
@@ -293,7 +298,7 @@ export function classifySports(catLabel: string, title: string): SportsCategory 
   if (/\b(program|yearbook|magazine|publication|pennant|scorecard)\b/.test(both)) return 'program-publication';
   if (/\b(seat|turnstile|base|stadium|signage|display)\b/.test(both)) return 'equipment';
   if (/\b(signed|autograph|auto|cut signature|inscribed)\b/.test(both) && !/\bcard\b/.test(c)) return 'autograph';
-  if (/\bcard\b/.test(both) || /\b(psa|sgc|bgs|cgc)\s*(gem|mint|nm|ex|vg|\d)/.test(both) || /\b(topps|bowman|leaf|fleer|donruss|upper deck|panini|goudey|cracker jack|t20[0-9]|e9[0-9])\b/.test(both)) return 'graded-card';
+  if (/\bcard\b/.test(both) || /\b(psa|sgc|bgs|cgc)\s*(gem|mint|nm|ex|vg|good|fair|poor|pr|\d)/.test(both) || /\b(topps|bowman|leaf|fleer|donruss|upper deck|panini|goudey|cracker jack|t20[0-9]|e9[0-9])\b/.test(both)) return 'graded-card';
   if (/\b(poster|prop|costume|comic|toy|figure|record|album|guitar|memorabilia)\b/.test(both)) return 'pop-memorabilia';
   return 'other-memorabilia';
 }

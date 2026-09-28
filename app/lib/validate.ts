@@ -64,6 +64,9 @@ const HOUSE_ID_SLUGS: Record<AuctionHouse, string[]> = {
   Propstore: ['propstore'],
   'NFL Auction': ['nflauction'],
   'MLB Auctions': ['mlbauction'],
+  // Bruun Rasmussen lots arrive via the Bonhams crawler (`bonhams-brk_<sale>-…`
+  // permalink ids) and are relabelled to their real house by corpus-normalize.
+  'Bruun Rasmussen': ['bonhams'],
 };
 
 const SALE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
