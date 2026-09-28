@@ -217,6 +217,23 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   // ── auth session ──
   useEffect(() => {
     if (!supabase) { setEntries(readStored()); setSavedReady(true); return; } // localStorage-only mode
+    // PKCE callback: init exchanges ?code= and strips it on success. On failure
+    // (magic link opened in a different browser than the one that asked for
+    // it — no stored verifier, so supabase-js ignores the code entirely — an
+    // expired/reused code, or ?error= from the provider) the params would
+    // linger and the sign-in would fail silently: clear them and say why.
+    const sb = supabase;
+    sb.auth.initialize().then(async () => {
+      const u = new URL(window.location.href);
+      const keys = ['code', 'error', 'error_code', 'error_description'];
+      const hashErr = u.hash.includes('error=');
+      if (!hashErr && !keys.some(k => u.searchParams.has(k))) return;
+      keys.forEach(k => u.searchParams.delete(k));
+      if (hashErr) u.hash = '';
+      window.history.replaceState(window.history.state, '', u.toString());
+      const { data } = await sb.auth.getSession();
+      if (!data.session) flash('That sign-in link didn’t work — open it in the browser you requested it from, or request a new one.');
+    });
     supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user ?? null); setAuthReady(true); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);

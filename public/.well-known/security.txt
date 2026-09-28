@@ -1,0 +1,5 @@
+Contact: https://github.com/stilwellc/lectr/security/advisories/new
+Contact: https://www.linkedin.com/in/collin-stilwell/
+Expires: 2027-09-27T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://lectr.bid/.well-known/security.txt

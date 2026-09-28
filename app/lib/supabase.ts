@@ -12,7 +12,13 @@ const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 export const supabase: SupabaseClient | null =
   url && anon
     ? createClient(url, anon, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+        // PKCE, not the implicit flow: the redirect back from Google / the
+        // magic link carries a one-time ?code= that supabase-js exchanges
+        // (with the verifier it stashed in localStorage) during init, then
+        // strips from the URL — tokens never ride in the URL fragment, so
+        // they can't leak via history, Referer or a copied link. Caveat: a
+        // magic link must be opened in the same browser that requested it.
+        auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
       })
     : null;
 
