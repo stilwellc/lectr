@@ -44,3 +44,6 @@ data/rr-archive/
 shots/
 # tonight's social cards are rendered by the deploy job, never committed
 /public/social/
+
+# per-leg crawl health record (scripts/lib/leg-health.ts) — a CI artifact, never committed
+/leg-health.json
