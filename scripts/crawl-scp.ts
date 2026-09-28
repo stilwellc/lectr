@@ -24,6 +24,7 @@
 // Run: RAY_SKIP_MAIN=1 npx tsx scripts/crawl-scp.ts --auctions 1 --cap 40 [--write]
 import { crawlBidsquare, optsFromArgv, parseBidsquareSold, parseBidsquareLive, type BidsquareHouse } from './lib/bidsquare';
 import type { AuctionLot } from '../app/types';
+import { reportAndExit } from './lib/leg-health';
 
 const SCP: BidsquareHouse = {
   segment: 'scp',
@@ -45,7 +46,7 @@ export const parseScpLive = (html: string, url: string): AuctionLot | null => pa
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   crawlBidsquare(SCP, optsFromArgv({ auctions: 1, cap: 40, delayMs: 200 }))
-    .catch(e => { console.error('[SCP] fatal', e); process.exit(1); });
+    .catch(e => { console.error('[SCP] fatal', e); reportAndExit({ house: 'scp', fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
 }
 
 export { SCP };

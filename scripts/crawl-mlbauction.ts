@@ -46,6 +46,8 @@ import {
   REAL_UA, mapPool,
 } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
+import { reportLegHealth, reportAndExit } from './lib/leg-health';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -73,15 +75,110 @@ interface ApiItem {
   totalSecondsLeft?: number | string;
 }
 
-async function getJson(url: string, retries = 2): Promise<{ items?: ApiItem[] } | null> {
-  for (let a = 0; a <= retries; a++) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': REAL_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(30000) });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch { if (a < retries) await new Promise(r => setTimeout(r, 800 * (a + 1))); }
+// ── API transport ────────────────────────────────────────────────────────────
+// Since Sep 20 2026 the listing API answers GitHub-hosted runner IPs with the
+// WAF's "Human Verification" interstitial (HTML, often 200) instead of JSON —
+// every night read as `api DOWN` with ZERO diagnostics, while the same call
+// from a residential IP returns JSON. Every failed call now logs its HTTP
+// status + a body snippet (first few, then counted), and on failure the crawl
+// retries the call THROUGH A REAL BROWSER (system Chrome via playwright-core —
+// the RR Auction resolver's launch path): the page loads the site origin,
+// lets any JS challenge run, then fetches the API from inside the page with
+// the browser's own cookies/TLS fingerprint. Whether that clears the WAF on a
+// runner IP can only be proven on CI (from a residential Mac the plain fetch
+// already works). `--browser` forces the browser path (local testing).
+export const API_STATS = { calls: 0, ok: 0, fail: 0, browserCalls: 0, browserOk: 0, lastStatus: '' as string, lastSnippet: '' as string };
+let failLogged = 0;
+const snippet = (t: string) => t.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+function noteApiFail(url: string, status: string, body: string) {
+  API_STATS.fail++;
+  API_STATS.lastStatus = status;
+  API_STATS.lastSnippet = snippet(body);
+  if (failLogged++ < 6) console.warn(`[MLBAuction] API FAIL ${status} ${url.replace(HOST, '')} — body: ${API_STATS.lastSnippet || '(empty)'}`);
+}
+
+let browserMode = process.argv.includes('--browser');
+let browser: Browser | null = null;
+let bctx: BrowserContext | null = null;
+let bpage: Page | null = null;
+let browserDead = false;
+async function browserPage(): Promise<Page | null> {
+  if (bpage) return bpage;
+  if (browserDead) return null;
+  try {
+    browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
+    bctx = await browser.newContext({ userAgent: REAL_UA, locale: 'en-US' });
+    bpage = await bctx.newPage();
+    await bpage.goto(`${HOST}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    // give a JS challenge up to ~20s to clear itself
+    for (let i = 0; i < 20; i++) {
+      const t = await bpage.title().catch(() => '');
+      if (!/human verification|just a moment|access denied/i.test(t)) break;
+      await bpage.waitForTimeout(1000);
+    }
+    console.log(`[MLBAuction] browser path up (origin title: "${(await bpage.title().catch(() => '')).slice(0, 60)}")`);
+    return bpage;
+  } catch (e) {
+    browserDead = true;
+    console.warn(`[MLBAuction] browser path unavailable: ${(e as Error)?.message?.split('\n')[0] || e}`);
+    return null;
   }
+}
+export async function closeBrowser() { try { await browser?.close(); } catch { /* already gone */ } browser = null; bpage = null; bctx = null; }
+
+/** GET through the page (same-origin fetch — browser cookies + fingerprint) */
+async function browserGet(url: string): Promise<{ status: number; text: string } | null> {
+  const page = await browserPage();
+  if (!page) return null;
+  API_STATS.browserCalls++;
+  try {
+    return await page.evaluate(async (u) => {
+      const r = await fetch(u, { credentials: 'include', headers: { Accept: 'application/json, text/html;q=0.9' } });
+      return { status: r.status, text: await r.text() };
+    }, url);
+  } catch (e) {
+    return { status: 0, text: String((e as Error)?.message || e) };
+  }
+}
+
+function parseApi(text: string): { items?: ApiItem[] } | null {
+  const t = text.trim();
+  if (!t.startsWith('{')) return null; // the WAF interstitial is HTML
+  try { return JSON.parse(t); } catch { return null; }
+}
+
+async function getJson(url: string, retries = 2): Promise<{ items?: ApiItem[] } | null> {
+  API_STATS.calls++;
+  if (!browserMode) {
+    for (let a = 0; a <= retries; a++) {
+      try {
+        const res = await fetch(url, { headers: { 'User-Agent': REAL_UA, Accept: 'application/json', 'Accept-Language': 'en-US,en;q=0.9', Referer: `${HOST}/` }, signal: AbortSignal.timeout(30000) });
+        const text = await res.text();
+        const j = res.ok ? parseApi(text) : null;
+        if (j) { API_STATS.ok++; return j; }
+        noteApiFail(url, `HTTP ${res.status}${res.ok ? ' (non-JSON body)' : ''}`, text);
+        if (res.status === 403 || /human verification/i.test(text)) break; // a wall, not a blip — go to the browser
+      } catch (e) {
+        if (a < retries) await new Promise(r => setTimeout(r, 800 * (a + 1)));
+        else noteApiFail(url, `network ${(e as Error)?.message || e}`, '');
+      }
+    }
+    // plain fetch walled/failed → switch the rest of the run to the browser
+    if (!browserDead) { console.warn('[MLBAuction] plain API fetch failed — retrying through a real browser (playwright-core, system Chrome)'); browserMode = true; }
+  }
+  const b = await browserGet(url);
+  if (!b) return null;
+  const j = b.status >= 200 && b.status < 300 ? parseApi(b.text) : null;
+  if (j) { API_STATS.ok++; API_STATS.browserOk++; return j; }
+  noteApiFail(url, `browser HTTP ${b.status}${b.status >= 200 && b.status < 300 ? ' (non-JSON body)' : ''}`, b.text);
   return null;
+}
+
+/** lot-page HTML via the same transport the API is using tonight */
+async function getPage(url: string): Promise<string | null> {
+  if (!browserMode) return getHtml(url);
+  const b = await browserGet(url);
+  return b && b.status >= 200 && b.status < 300 ? b.text : null;
 }
 
 const money = (s: string | null | undefined): number | null => {
@@ -239,7 +336,7 @@ async function wafGate(): Promise<boolean> {
  *  actually closed with a winner — the sold gate on a reserve-blind API) */
 async function readLotPage(id: number | string): Promise<PageRead | null> {
   if (!(await wafGate())) return null;
-  const html = await getHtml(`${HOST}/iSynApp/auctionDisplay.action?sid=${SID}&auctionId=${id}`);
+  const html = await getPage(`${HOST}/iSynApp/auctionDisplay.action?sid=${SID}&auctionId=${id}`);
   if (!html || challenged(html)) return null;
   const d = html.match(/id="auction-description"[^>]*>([\s\S]{0,4000}?)<\/div>/i);
   const desc = d ? decodeHtml(d[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim() : '';
@@ -303,6 +400,14 @@ function toLot(it: ApiItem, ident: { title: string; desc: string }, kind: 'sold'
 }
 
 async function main() {
+  // --probe: one API call through tonight's transport (plain → browser
+  // fallback), print what came back, exit. The CI diagnostic for "api DOWN".
+  if (process.argv.includes('--probe')) {
+    const j = await getJson(`${HOST}/iSynApp/allAuction.action?sid=${SID}&viewType=api&qMode=open&query=${encodeURIComponent('game used')}&rc=3&rs=0`);
+    console.log(`[MLBAuction] probe: ${j ? `OK — ${(j.items || []).length} items via ${browserMode ? 'browser' : 'plain fetch'}: ${(j.items || []).map(i => i.id).join(', ')}` : 'FAILED'}`, JSON.stringify(API_STATS));
+    await closeBrowser();
+    return;
+  }
   if (process.argv.includes('--write')) installCrashGuard('MLBAuction');
   const delayMs = arg('delay', 150);
   const closedPages = arg('closed-pages', 30);
@@ -362,7 +467,7 @@ async function main() {
     let walked = 0, kept = 0;
     await mapPool(rows, conc, async (r) => {
       if (!(await wafGate())) return;
-      const html = await getHtml(`${HOST}/x/isynmv1/aucd/${r.id}`);
+      const html = await getPage(`${HOST}/x/isynmv1/aucd/${r.id}`);
       await new Promise(res => setTimeout(res, delayMs));
       walked++;
       if (html && challenged(html)) return;
@@ -436,7 +541,8 @@ async function main() {
       .filter(it => ['auction', 'bid'].includes(String(it.type || 'auction')))
       .filter(it => GAME_USED_RE.test(bestTitle(it)))
       .filter(it => num(it.totalSecondsLeft ?? 1) > 0);
-    console.log(`[MLBAuction] live candidates: ${cands.length} (api ${liveOk ? 'ok' : 'DOWN'})`);
+    console.log(`[MLBAuction] live candidates: ${cands.length} (api ${liveOk ? 'ok' : 'DOWN'}${browserMode ? ', via browser' : ''})`);
+    if (!liveOk) console.error(`[MLBAuction] API DOWN — last answer ${API_STATS.lastStatus || 'none'}: ${API_STATS.lastSnippet || '(empty)'} — prior upcoming rows older than 3 days (or past close) are demoted, not re-served`);
     await mapPool(cands, conc, async (it) => {
       // live lots don't need the settled gate; fetch the page once per NEW id
       // for the description (auth read) — known ids ride the API title
@@ -464,6 +570,18 @@ async function main() {
   }
   console.log('[MLBAuction] confidence:', byConf);
 
+  await closeBrowser();
+  // ── leg health: the API answering is the whole leg ──
+  {
+    const apiDown = API_STATS.calls > 0 && API_STATS.ok === 0;
+    const reasons: string[] = [];
+    if (apiDown) reasons.push(`listing API down: ${API_STATS.fail}/${API_STATS.calls} calls failed (plain + ${API_STATS.browserCalls} browser), last ${API_STATS.lastStatus || '?'} "${API_STATS.lastSnippet.slice(0, 120)}"`);
+    else if (process.argv.includes('--live') && !liveOk) reasons.push('live leg not ok');
+    if (soldCands.length >= 20 && lots.length === 0 && !wafTripped()) reasons.push(`${soldCands.length} closed candidates, 0 settled`);
+    if (wafTripped()) reasons.push('lot-page WAF challenge tripped');
+    reportLegHealth({ house: 'mlbauction', ok: reasons.length === 0, fetched: API_STATS.ok + soldCands.length, parsed: lots.length + liveLots.length, settled: lots.length, reason: reasons.join('; ') || null });
+  }
+
   if (process.argv.includes('--write')) {
     const { good, dropped } = settledOnly(lots);
     if (dropped) console.log(`[MLBAuction] dropped ${dropped} unsettled/future-dated lots`);
@@ -471,13 +589,13 @@ async function main() {
     const poison = poisonedBatch(good);
     if (poison) {
       console.error(`[MLBAuction] ABORT: $${poison.price} repeats on ${poison.n}/${good.length} new sold rows — poisoned feed, nothing written.`);
-      process.exit(1);
+      reportAndExit({ house: "mlbauction", fetched: API_STATS.ok, parsed: good.length + liveLots.length, settled: 0, reason: `poisoned batch: $${poison.price} on ${poison.n}/${good.length} rows` });
     }
     const rep = assertInvariants(good.concat(liveLots));
     if (rep.fatal.length) {
       console.error(`[MLBAuction] refusing to write: ${rep.fatal.length} FATALs`);
       rep.fatal.slice(0, 5).forEach(f => console.error('  ', f));
-      process.exit(1);
+      reportAndExit({ house: "mlbauction", fetched: API_STATS.ok, parsed: good.length + liveLots.length, settled: 0, reason: `refused write: ${rep.fatal.length} invariant FATALs` });
     }
     const r = process.argv.includes('--live')
       ? writeMergedSegmentWithLive('mlbauction', good, liveLots, liveOk)
@@ -491,5 +609,5 @@ async function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(e => { console.error('[MLBAuction] fatal', e); process.exit(1); });
+  main().catch(e => { console.error('[MLBAuction] fatal', e); reportAndExit({ house: 'mlbauction', fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
 }

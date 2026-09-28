@@ -55,6 +55,26 @@ export function writeMergedSegment(name: string, fresh: AuctionLot[]): { total: 
 // `liveLegOk` gates the replace exactly like Goldin gates eviction on a good
 // auctions fetch: when the live enumeration itself failed (site down, CF wall),
 // keep last night's upcoming rows rather than mass-evict on a transient error.
+/** A kept-on-failure upcoming row older than this (last successful live
+ *  observation) is not served as live any more. */
+export const STALE_UPCOMING_DAYS = 3;
+
+/** true when a prior 'upcoming' row must NOT ride a failed live leg: its close
+ *  day has passed, or no successful live read has seen it for more than
+ *  STALE_UPCOMING_DAYS. A row with no lastSeen stamp (pre-dates the stamp)
+ *  falls back to its newest bid snapshot, then firstSeen; with none of them it
+ *  is unobservable → stale. */
+export function isStaleUpcoming(l: AuctionLot, todayDay = new Date().toISOString().slice(0, 10)): boolean {
+  const r = l as { saleDate?: string; lastSeen?: string; firstSeen?: string; bidHistory?: { d: string }[] };
+  const sd = (r.saleDate || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(sd) && sd < todayDay) return true;
+  const hist = r.bidHistory || [];
+  const seen = r.lastSeen || (hist.length ? String(hist[hist.length - 1].d).slice(0, 10) : '') || r.firstSeen || '';
+  if (!/^\d{4}-\d{2}-\d{2}/.test(seen)) return true;
+  const ageDays = (Date.parse(`${todayDay}T00:00:00Z`) - Date.parse(`${seen.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
+  return !(ageDays <= STALE_UPCOMING_DAYS);
+}
+
 export function writeMergedSegmentWithLive(
   name: string,
   freshSettled: AuctionLot[],
@@ -71,12 +91,29 @@ export function writeMergedSegmentWithLive(
   const existing = readSegment(name) as unknown as AuctionLot[];
   const byId = new Map<string, AuctionLot>();
   const prevById = new Map<string, AuctionLot>();
+  const todayDay = new Date().toISOString().slice(0, 10);
+  let demoted = 0;
   for (const l of existing) {
     if (!l || !l.id) continue;
     prevById.set(l.id, l);
-    if ((l as { status?: string }).status === 'upcoming' && liveLegOk) continue; // replaced by tonight's snapshot
+    if ((l as { status?: string }).status === 'upcoming') {
+      if (liveLegOk) continue; // replaced by tonight's snapshot
+      // A FAILED live leg keeps last night's snapshot — but never a stale one
+      // (Sep 27 audit: 2,350 H&S / 1,068 REA / 646 MLB 'upcoming' rows rode
+      // for weeks behind failed grids, served as live lots that had long
+      // closed). A kept row must be (a) not past its own close day and (b)
+      // actually observed by a successful live leg within STALE_UPCOMING_DAYS.
+      // Anything else is demoted to 'unknown-result': out of the live feed,
+      // still in the segment so a later good night can settle it by id.
+      if (isStaleUpcoming(l, todayDay)) {
+        byId.set(l.id, { ...l, status: 'unknown-result', staleSince: todayDay } as AuctionLot);
+        demoted++;
+        continue;
+      }
+    }
     byId.set(l.id, l);
   }
+  if (demoted) console.warn(`[${name}] live leg NOT ok — demoted ${demoted} stale upcoming row(s) (closed, or unobserved >${STALE_UPCOMING_DAYS}d) to unknown-result instead of re-serving them`);
   const before = byId.size;
   // live first, settled second: a lot that closed mid-crawl and parsed BOTH
   // ways settles as sold (a live bid is not a sale; the sold record wins).
@@ -95,7 +132,9 @@ export function writeMergedSegmentWithLive(
     const n = (l as { bidCount?: number }).bidCount || 0;
     const last = hist[hist.length - 1];
     if (!last || last.b !== b || last.n !== n) hist.push({ d: todayIso, b, n });
-    byId.set(l.id, { ...l, firstSeen, ...(hist.length ? { bidHistory: hist } : {}) } as AuctionLot);
+    // lastSeen = the last night a SUCCESSFUL live read observed this lot —
+    // what the stale gate above ages on (bidHistory only appends on change)
+    byId.set(l.id, { ...l, firstSeen, lastSeen: todayDay, ...(hist.length ? { bidHistory: hist } : {}) } as AuctionLot);
   }
   for (const l of freshSettled) if (l && l.id) byId.set(l.id, l);
   const union = Array.from(byId.values());

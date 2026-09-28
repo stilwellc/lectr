@@ -13,19 +13,20 @@ import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
 import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, stampUpcomingUsd, seasonToDate, writeMergedSegment, writeMergedSegmentWithLive, settledOnly, liveOnly, mapPool } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
+import { reportLegHealth, reportAndExit } from './lib/leg-health';
 
 const LOT_BASE = 'https://bid.collectrea.com/lots';
-// The archive CDN host (rea-image-archive.nyc3.cdn.digitaloceanspaces.com). The
-// match starts AT the host, so the capture is scheme-less — stamp https: on it
-// (verified Sep 2026: the pages themselves link the https:// form).
-const IMG_HINT = /rea-image-archive[^"'\s]+\.(?:jpg|jpeg|png|webp)/i;
+// The archive CDN hosts: REA rea-image-archive.nyc3.cdn.digitaloceanspaces.com,
+// H&S hs-image-archive.nyc3.cdn.digitaloceanspaces.com (verified Sep 27 2026 —
+// the old REA-only pattern left 49,901 H&S rows imageless). The match starts AT
+// the host, so the capture is scheme-less — stamp https: on it (the pages
+// themselves link the https:// form).
+const IMG_HINT = /(?:rea|hs)-image-archive[^"'\s]+\.(?:jpg|jpeg|png|webp)/i;
 function archiveImageUrl(html: string): string | null {
   const m = html.match(IMG_HINT);
   if (!m) return null;
   return `https://${m[0].replace(/^(?:https?:)?\/\//i, '')}`;
 }
-// live lots image off Cloudinary (folder = the running auction, e.g. 2026-Summer)
-const LIVE_IMG = /res\.cloudinary\.com\/robertedwardauctions\/image\/upload[^"'\s]+\.(?:jpg|jpeg|png|webp)/i;
 const TODAY = new Date().toISOString().slice(0, 10);
 
 function arg(name: string, def: number): number {
@@ -82,6 +83,9 @@ export function parseReaLot(html: string, id: number | string, house: 'REA' | 'H
 
   const catLabel = map['category'] || map['auction category'] || '';
   const auctionLabel = map['auction'] || '';
+  // the archive posts only the auction's season/month ("2026 Summer") — the
+  // day is a mid-month stub, flagged datePrecision:'month' so nothing reads it
+  // as a real close day (the live bid page, when read, carries the real one)
   const saleDate = seasonToDate(auctionLabel) || seasonToDate(rawTitle) || null;
   if (!saleDate) return null; // can't date it → skip (invariant needs YYYY-MM-DD)
 
@@ -108,6 +112,7 @@ export function parseReaLot(html: string, id: number | string, house: 'REA' | 'H
     auctionHouse: house,
     saleName: auctionLabel || null,
     saleDate,
+    datePrecision: 'month',
     lotNumber: map['lot #'] ? parseInt(map['lot #'].replace(/[^0-9]/g, ''), 10) || null : null,
     ...stampRealizedUsd(soldNum, saleDate),
     // v2 auth fields (existing schema): the grade + who certified it
@@ -122,86 +127,204 @@ export function parseReaLot(html: string, id: number | string, house: 'REA' | 'H
   } as unknown as AuctionLot;
 }
 
-/** Parse one LIVE lot page into a status:'upcoming' AuctionLot (or null when
- *  the page isn't a live lot — archive pages fall through to parseReaLot).
- *  Live markup (verified Aug 2026, both REA + the new bid.hugginsandscott.com —
- *  same Livewire stack): an Alpine miniCountdown({lotId, endTime, totalBids,
- *  status}) block plus an entity-encoded Livewire snapshot carrying
- *  {"currentBid":N,"nextBid":M,...}. */
-export function parseReaLive(html: string, id: number | string, house: 'REA' | 'Huggins & Scott' = 'REA', urlOverride?: string): AuctionLot | null {
-  const mc = html.match(/miniCountdown\(\{[\s\S]{0,400}?\}\)/);
-  if (!mc) return null;
+// ── the bid.* Livewire lot page (REA bid.collectrea.com + H&S
+// bid.hugginsandscott.com — same stack) ───────────────────────────────────────
+// Verified Sep 27 2026 on both hosts. A CLOSED sale keeps serving this same
+// live markup (it does NOT flip to the archive for weeks — REA September 2026
+// closed Sep 21 and every lot still renders here); the subject lot carries
+//   miniCountdown({ lotId, endTime:'2026-09-21T00:09:22-04:00', totalBids, status:'sold' })
+//   x-data="{ lotId, currentBid:46000, …, status:'sold', …, soldFor:'56580.00', … }"
+// status: live|open|ending = running; 'sold' = settled (the page prints
+// "SOLD FOR $56,580 — Includes Buyers Premium"); 'closed' = UNSOLD (the page
+// prints "UNSOLD"). soldFor is premium-INCLUSIVE and is byte-for-byte the
+// figure the archive later prints as "Sold For" (H&S Summer 2026 lot 1:
+// soldFor 72000.00 = archive $72,000; REA: 46,000 × 1.23 = 56,580) — so it is
+// stamped on the SAME 'realized' basis as every archive row (stampRealizedUsd).
+// The Livewire snapshot's buyersPremium is NOT used: it can include fees the
+// archive figure doesn't (REA 200938: 46,000 + 10,810 ≠ 56,580).
+
+const MINI_RE = /miniCountdown\(\{[\s\S]{0,400}?\}\)/;
+const CLOUD_IMG_RE = /https?:\/\/res\.cloudinary\.com\/(?:robertedwardauctions|hugginsandscott)\/image\/upload\/[^"'\s]+?\.(?:jpg|jpeg|png|webp)/gi;
+/** the subject's gallery image — prefer the untransformed full-size asset
+ *  (`/upload/v<ver>/…`) over the 300px c_fill thumbnail strip */
+function bidSiteImage(html: string): string | null {
+  const all = html.match(CLOUD_IMG_RE) || [];
+  return all.find(u => /\/upload\/v\d+\//.test(u)) || all[0] || null;
+}
+const stripText = (s: string) => decodeHtml(s.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+
+export type BidPageRead =
+  | { kind: 'live'; lot: AuctionLot }
+  | { kind: 'sold'; lot: AuctionLot }
+  | { kind: 'unsold'; lot: AuctionLot }
+  | { kind: 'unparsed'; why: string };
+
+/** "September 2026" / "Summer 2026" → { word, year, saleName:'2026 September' }
+ *  (the archive's own saleName shape, e.g. '2026 June', '2026 Summer') */
+function auctionLabel(text: string): { word: string; year: string; saleName: string } | null {
+  const m = text.match(/Item was in Auction\s+([A-Za-z]+)\s+(20\d{2})\b/);
+  if (!m) return null;
+  const word = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+  return { word, year: m[2], saleName: `${m[2]} ${word}` };
+}
+
+/** Read ONE bid.* lot page: running → upcoming lot; status 'sold' → settled
+ *  sale dated from the lot's own endTime; status 'closed' → bought-in (unsold)
+ *  row. Anything else is 'unparsed' (with the reason — counted, never silent).
+ *  H&S settles under its ARCHIVE id (hugginsscott-{yr}-{season}-{lot#}, the
+ *  id the monthly archive crawl mints for the same lot) so a closed live lot
+ *  and its archive page can never become two sales. */
+export function parseReaBidPage(html: string, id: number | string, house: 'REA' | 'Huggins & Scott' = 'REA', urlOverride?: string): BidPageRead {
+  const mc = html.match(MINI_RE);
+  if (!mc) return { kind: 'unparsed', why: 'no-countdown' };
   const block = mc[0];
-  const status = (block.match(/status:\s*'([a-z]+)'/) || [])[1] || '';
-  if (!/^(live|open|ending)$/.test(status)) return null; // 'closed' → the sold parser's problem
+  const status = (block.match(/status:\s*'([a-z_]+)'/) || [])[1] || '';
   const endTime = (block.match(/endTime:\s*'([^']+)'/) || [])[1] || '';
+  // the lot's OWN close, in house-local time: its calendar day is the sale day
   const saleDate = endTime.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(saleDate)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(saleDate)) return { kind: 'unparsed', why: 'no-endTime' };
   const bidCount = parseInt((block.match(/totalBids:\s*(\d+)/) || [])[1] || '0', 10);
-  // currentBid lives in the Livewire snapshot, HTML-entity-encoded
-  const bidM = html.replace(/&quot;/g, '"').match(/"currentBid":\s*([0-9]+(?:\.[0-9]+)?)/);
+  const decoded = html.replace(/&quot;/g, '"');
+  const bidM = decoded.match(/"currentBid":\s*([0-9]+(?:\.[0-9]+)?)/);
   const currentBid = bidM ? Math.round(parseFloat(bidM[1])) : 0;
 
   const $ = cheerio.load(html);
   const title = decodeHtml(($('title').first().text() || '')).replace(/\s*\|\s*(REA|Robert Edward|Huggins).*$/i, '').trim();
-  if (!title || /auction archive|^search$|opening soon/i.test(title)) return null;
-
-  const cat = classifySports('', title);
-  const auth = readAuth(cat, title, ($('main').text() || $('body').text() || '').slice(0, 4000));
-  const imgM = html.match(LIVE_IMG);
+  if (!title || /auction archive|^search$|opening soon/i.test(title)) return { kind: 'unparsed', why: 'no-title' };
   const idPrefix = house === 'REA' ? 'rea' : 'hugginsscott';
-  return {
-    id: `${idPrefix}-${id}`,
+  const url = urlOverride || `${LOT_BASE}/${id}`;
+  const imageUrl = bidSiteImage(html);
+
+  if (/^(live|open|ending)$/.test(status)) {
+    const cat = classifySports('', title);
+    const auth = readAuth(cat, title, ($('main').text() || $('body').text() || '').slice(0, 4000));
+    return { kind: 'live', lot: {
+      id: `${idPrefix}-${id}`,
+      artist: pseudoArtist(cat),
+      title,
+      year: null, medium: null, dimensions: null, description: null, platform: null,
+      category: 'object' as LotCategory,
+      imageUrl,
+      auctionHouse: house,
+      saleName: null,
+      saleDate,
+      saleDateTime: endTime || null, // ISO with house-local offset; Date-parseable
+      lotNumber: null,
+      ...stampUpcomingUsd(saleDate),
+      currentBid, bidCount,
+      gradeLabel: auth.grade,
+      authCert: auth.marks.length ? auth.marks.join(' · ') : null,
+      authConfidence: auth.confidence,
+      subCat: cat,
+      status: 'upcoming',
+      firstSeen: TODAY,
+      url,
+    } as unknown as AuctionLot };
+  }
+
+  if (status !== 'sold' && status !== 'closed') return { kind: 'unparsed', why: `status:${status || '?'}` };
+  if (saleDate > TODAY) return { kind: 'unparsed', why: 'closed-but-future-endTime' };
+
+  // settled / unsold: the closed page's own header + description
+  const text = stripText(html);
+  const lab = auctionLabel(text);
+  const lotNumM = text.match(/Lot #\s*(\d+)\s*:/);
+  const lotNumber = lotNumM ? parseInt(lotNumM[1], 10) : null;
+  const descM = html.match(/<h2[^>]*>\s*Description\s*<\/h2>\s*<div[^>]*>([\s\S]{0,8000}?)<\/div>/i);
+  const description = descM ? stripText(descM[1]).slice(0, 4000) : '';
+  let rowId = `${idPrefix}-${id}`;
+  if (house === 'Huggins & Scott') {
+    if (!lab || lotNumber == null) return { kind: 'unparsed', why: 'hs-no-archive-key' };
+    rowId = `hugginsscott-${lab.year}-${lab.word.toLowerCase()}-${lotNumber}`;
+  }
+  const cat = classifySports('', title);
+  const auth = readAuth(cat, title, description);
+  const base = {
+    id: rowId,
     artist: pseudoArtist(cat),
     title,
-    year: null, medium: null, dimensions: null, description: null, platform: null,
+    year: null, medium: null, dimensions: null,
+    description: null,
+    platform: null,
     category: 'object' as LotCategory,
-    imageUrl: imgM ? `https://${imgM[0]}` : null,
+    imageUrl,
     auctionHouse: house,
-    saleName: null,
+    saleName: lab ? lab.saleName : null,
     saleDate,
-    saleDateTime: endTime || null, // ISO with house-local offset; Date-parseable
-    lotNumber: null,
-    ...stampUpcomingUsd(saleDate),
-    currentBid, bidCount,
+    saleDateTime: endTime,
+    lotNumber,
+    bidCount,
     gradeLabel: auth.grade,
     authCert: auth.marks.length ? auth.marks.join(' · ') : null,
     authConfidence: auth.confidence,
     subCat: cat,
-    status: 'upcoming',
-    firstSeen: TODAY,
-    url: urlOverride || `${LOT_BASE}/${id}`,
-  } as unknown as AuctionLot;
+    url,
+  };
+
+  if (status === 'closed') {
+    // UNSOLD: a real closed-without-sale record (not a price) — it retires the
+    // upcoming row by id and tells the corpus the lot passed
+    return { kind: 'unsold', lot: { ...base, id: rowId, ...stampUpcomingUsd(saleDate), status: 'bought_in' } as unknown as AuctionLot };
+  }
+
+  // SOLD: the subject's own x-data block (anchored on ITS lotId) carries
+  // soldFor — premium-inclusive, the archive's "Sold For"
+  const sub = html.match(new RegExp(`lotId:\\s*${String(id).replace(/[^0-9]/g, '')},[\\s\\S]{0,400}?soldFor:\\s*'([0-9]+(?:\\.[0-9]+)?)'`));
+  const soldFor = sub ? Math.round(parseFloat(sub[1])) : 0;
+  if (!soldFor || soldFor <= 0) return { kind: 'unparsed', why: 'sold-without-soldFor' };
+  if (currentBid > 0 && soldFor < currentBid) return { kind: 'unparsed', why: `soldFor ${soldFor} < hammer ${currentBid}` };
+  return { kind: 'sold', lot: { ...base, ...stampRealizedUsd(soldFor, saleDate), status: 'sold' } as unknown as AuctionLot };
 }
 
-/** Enumerate + fetch the CURRENT auction's live lots off a bid.* Livewire site.
- *  The /lots grid is server-paginated and honors plain ?page=N GETs (24/page);
- *  ids are NOT contiguous (2026 Summer spans 185118..195743), so the listing —
- *  not an id window — is the enumerator. `resolve` then re-fetches last night's
- *  upcoming ids that vanished from the grid: a closed lot's page flips to the
- *  archive markup (bid.* 302s to collectrea.com/archives/… — getHtml follows
- *  it) and parseReaLot returns its settled sale — that same-id sold record is
- *  what retires the upcoming row (and is how new sold history now reaches the
- *  segment without a hand-tuned id window).
+/** Back-compat: the LIVE-only reader (null for anything not running). */
+export function parseReaLive(html: string, id: number | string, house: 'REA' | 'Huggins & Scott' = 'REA', urlOverride?: string): AuctionLot | null {
+  const r = parseReaBidPage(html, id, house, urlOverride);
+  return r.kind === 'live' ? r.lot : null;
+}
+
+export interface ReaLiveResult {
+  live: AuctionLot[];
+  /** settled rows (sold + bought_in) for the segment */
+  resolved: AuctionLot[];
+  ok: boolean;
+  stats: { gridIds: number; fetched: number; live: number; sold: number; unsold: number; known: number; unparsed: number; resolveTried: number; resolveFetched: number; resolveSettled: number; reason: string | null };
+}
+
+/** Enumerate + fetch the CURRENT auction's lots off a bid.* Livewire site.
+ *  The /lots grid is server-paginated and honors plain ?page=N GETs (12/page,
+ *  stable order); ids are NOT contiguous, so the listing — not an id window —
+ *  is the enumerator. REA's September 2026 grid runs ~385 pages (4.6K lots):
+ *  the old 200-page cap silently truncated it at 2,400.
  *
- *  `ok` (the live-replace gate) is EARNED, not assumed (Sep 2 2026 audit — REA
- *  Summer 2026, ~10K lots, was lost when a 200 grid with zero parseable lots
- *  read as "the sale is empty" and evicted every upcoming row):
- *   - grid unreachable → ok=false, nothing else runs
- *   - grid answered with 0 ids ("Opening Soon" shell, or a markup change) →
- *     ok=false; the resolve pass STILL runs so closed rows settle to sold
- *   - lot pages fetched but NOTHING parsed (neither live nor closed) → ok=false
- *  A lot the grid still lists but whose page reads status:'closed' (or has
- *  already flipped to archive markup) is routed through parseReaLot right
- *  here — it is a settled sale, not a gap. */
+ *  Every listed lot page is read with parseReaBidPage: running → upcoming;
+ *  'sold' → settled sale at soldFor, dated from its own endTime; 'closed' →
+ *  bought_in. A closed sale's grid keeps listing its lots for weeks, so THIS
+ *  is where closed sales settle (the Sep 27 audit found ~4,750 REA/H&S sales
+ *  lost because only live|open|ending parsed and the rest read as "nothing").
+ *  Lots whose BID id the segment already holds as a settled row (see
+ *  settledBidIds) are skipped — a settled sale never changes — and count
+ *  toward the gate.
+ *
+ *  `resolve` then re-reads prior upcoming (and stale unknown-result) ids that
+ *  tonight's pass did NOT settle — gone from the grid, or listed but their
+ *  page fetch failed — through the same reader, falling back to the archive
+ *  parser when the id has flipped to collectrea.com/archives/….
+ *
+ *  `ok` (the live-replace gate) is EARNED, not assumed:
+ *   - grid unreachable → ok=false
+ *   - grid answered with 0 ids → ok=false (resolve still runs)
+ *   - lot pages fetched but NOTHING recognized (live/sold/unsold/known) → ok=false */
 export async function crawlReaLive(
   site: string,
   house: 'REA' | 'Huggins & Scott',
-  prevUpcoming: AuctionLot[],
-): Promise<{ live: AuctionLot[]; resolved: AuctionLot[]; ok: boolean }> {
+  prevOpen: AuctionLot[],
+  knownBidIds: Set<string> = new Set(),
+): Promise<ReaLiveResult> {
   const ids = new Set<string>();
   let gridReached = false;
-  for (let page = 1; page <= 200; page++) {
+  const MAX_GRID_PAGES = 1000; // 12/page → 12K lots; REA Sep 2026 ≈ 385 pages
+  let page = 1;
+  for (; page <= MAX_GRID_PAGES; page++) {
     const html = await getHtml(`${site}/lots?page=${page}`);
     if (!html) break;
     gridReached = true;
@@ -210,56 +333,142 @@ export async function crawlReaLive(
     if (ids.size === before) break; // page past the end repeats/empties → done
     await new Promise(r => setTimeout(r, 150));
   }
+  if (page > MAX_GRID_PAGES) console.warn(`[${house}] live grid hit the ${MAX_GRID_PAGES}-page cap — enumeration may be truncated`);
   console.log(`[${house}] live grid: ${ids.size} lot ids${gridReached ? '' : ' (grid unreachable)'}`);
-  if (!gridReached) return { live: [], resolved: [], ok: false };
 
   const idPrefix = house === 'REA' ? 'rea' : 'hugginsscott';
-  let fetched = 0, parsedLive = 0, parsedClosed = 0, nulls = 0;
-  const closedOnGrid: AuctionLot[] = [];
-  const tried = new Set<string>();
-  const live = (await mapPool(Array.from(ids), 3, async (id) => {
-    tried.add(id);
+  const stats: ReaLiveResult['stats'] = { gridIds: ids.size, fetched: 0, live: 0, sold: 0, unsold: 0, known: 0, unparsed: 0, resolveTried: 0, resolveFetched: 0, resolveSettled: 0, reason: null };
+  const unparsedWhy: Record<string, number> = {};
+  const noteUnparsed = (why: string) => { stats.unparsed++; unparsedWhy[why] = (unparsedWhy[why] || 0) + 1; };
+  const resolved: AuctionLot[] = [];
+  const settledRaw = new Set<string>(); // raw bid ids settled (or known) tonight
+  const knownRaw = knownBidIds; // bid ids the segment already holds settled
+
+  const live = !gridReached ? [] : (await mapPool(Array.from(ids), 3, async (id) => {
+    if (knownRaw.has(id)) { stats.known++; settledRaw.add(id); return null; }
     const url = `${site}/lots/${id}`;
     const html = await getHtml(url);
     if (!html) return null;
-    fetched++;
+    stats.fetched++;
     await new Promise(r => setTimeout(r, 120));
     try {
-      const lv = parseReaLive(html, id, house, url);
-      if (lv) { parsedLive++; return lv; }
-      // still on the grid but not live: status:'closed' (or already the
-      // archive page) → its settled sale, via the sold parser
-      const sold = parseReaLot(html, id, house, url);
-      if (sold) { parsedClosed++; closedOnGrid.push(sold); } else nulls++;
+      const r = parseReaBidPage(html, id, house, url);
+      if (r.kind === 'live') { stats.live++; return r.lot; }
+      if (r.kind === 'sold') { stats.sold++; resolved.push(r.lot); settledRaw.add(id); return null; }
+      if (r.kind === 'unsold') { stats.unsold++; resolved.push(r.lot); settledRaw.add(id); return null; }
+      // not the bid markup at all → the id already flipped to the archive
+      const arch = parseReaLot(html, id, house, url);
+      if (arch) { stats.sold++; resolved.push(arch); settledRaw.add(id); return null; }
+      noteUnparsed(r.why);
       return null;
-    } catch { nulls++; return null; }
+    } catch (e) { noteUnparsed(`threw:${(e as Error)?.message?.slice(0, 40) || e}`); return null; }
   }, `${house} live`)).filter((x): x is AuctionLot => !!x);
-  console.log(`[${house}] live pages: fetched ${fetched}/${ids.size} · live ${parsedLive} · closed→sold ${parsedClosed} · unparsed ${nulls}`);
+  console.log(`[${house}] live pages: fetched ${stats.fetched}/${ids.size - stats.known} (+${stats.known} already settled, skipped) · live ${stats.live} · sold ${stats.sold} · unsold ${stats.unsold} · unparsed ${stats.unparsed}${stats.unparsed ? ' ' + JSON.stringify(unparsedWhy) : ''}`);
 
-  // the gate: an empty grid or a grid whose pages parse to nothing is NOT an
-  // empty sale — keep last night's snapshot (the resolve below still settles
-  // whatever has actually closed)
   let ok = true;
-  if (ids.size === 0) { ok = false; console.warn(`[${house}] live grid returned 0 lot ids — NOT ok; prior upcoming snapshot rides`); }
-  else if (parsedLive + parsedClosed === 0) { ok = false; console.error(`[${house}] live grid listed ${ids.size} ids but ${fetched} fetched pages parsed to NOTHING — NOT ok (markup change or wall?); prior upcoming snapshot rides`); }
+  if (!gridReached) { ok = false; stats.reason = 'live grid unreachable'; console.error(`[${house}] live grid unreachable — NOT ok; prior upcoming snapshot rides (stale rows age out)`); }
+  else if (ids.size === 0) { ok = false; stats.reason = 'live grid returned 0 lot ids'; console.warn(`[${house}] live grid returned 0 lot ids — NOT ok; prior upcoming snapshot rides (stale rows age out)`); }
+  else if (stats.live + stats.sold + stats.unsold + stats.known === 0) {
+    ok = false;
+    stats.reason = `grid listed ${ids.size} ids, ${stats.fetched} pages fetched, 0 recognized (${JSON.stringify(unparsedWhy)})`;
+    console.error(`[${house}] live grid listed ${ids.size} ids but ${stats.fetched} fetched pages parsed to NOTHING — NOT ok (markup change or wall?); prior upcoming snapshot rides`);
+  }
 
-  // resolve: prior upcoming ids gone from tonight's grid (not re-fetching ids
-  // this pass already read) → re-read as archive
-  const liveIds = new Set(live.map(l => l.id));
-  const gone = prevUpcoming.filter(l => l.id.startsWith(`${idPrefix}-`) && !liveIds.has(l.id) && !tried.has(l.id.slice(idPrefix.length + 1)));
-  let resolveFetched = 0;
+  // resolve: prior open ids tonight's pass did not settle or see live
+  const liveRaw = new Set(live.map(l => l.id.slice(idPrefix.length + 1)));
+  const gone = prevOpen.filter(l => {
+    if (!l.id.startsWith(`${idPrefix}-`)) return false;
+    const raw = rawBidId(l, idPrefix);
+    return !!raw && !liveRaw.has(raw) && !settledRaw.has(raw) && !knownRaw.has(raw);
+  });
+  stats.resolveTried = gone.length;
   const resolvedGone = (await mapPool(gone, 3, async (prev) => {
-    const rawId = prev.id.slice(idPrefix.length + 1);
+    const rawId = rawBidId(prev, idPrefix)!;
     const url = (prev as { url?: string }).url || `${site}/lots/${rawId}`;
     const html = await getHtml(url);
     if (!html) return null;
-    resolveFetched++;
+    stats.resolveFetched++;
     await new Promise(r => setTimeout(r, 120));
-    try { return parseReaLot(html, rawId, house, url); } catch { return null; }
+    try {
+      const r = parseReaBidPage(html, rawId, house, url);
+      if (r.kind === 'sold' || r.kind === 'unsold') return r.lot;
+      if (r.kind === 'live') { live.push(r.lot); return null; } // still running, just off the grid
+      return parseReaLot(html, rawId, house, url);
+    } catch { return null; }
   }, `${house} resolve`)).filter((x): x is AuctionLot => !!x);
-  if (gone.length) console.log(`[${house}] resolve: ${gone.length} closed upcoming ids → ${resolveFetched} fetched → ${resolvedGone.length} settled sales`);
-  const resolved = closedOnGrid.concat(resolvedGone);
-  return { live, resolved, ok };
+  stats.resolveSettled = resolvedGone.length;
+  if (gone.length) console.log(`[${house}] resolve: ${gone.length} open ids not settled on the grid → ${stats.resolveFetched} fetched → ${resolvedGone.length} settled`);
+  return { live, resolved: resolved.concat(resolvedGone), ok, stats };
+}
+
+/** the bid-site id behind a segment row: REA rows ARE `rea-{bidId}`; H&S
+ *  upcoming rows are `hugginsscott-{bidId}` too, but read the url to be sure */
+function rawBidId(l: AuctionLot, idPrefix: string): string | null {
+  const u = (l as { url?: string }).url || '';
+  const m = u.match(/\/lots\/(\d+)/);
+  if (m) return m[1];
+  const rest = l.id.slice(idPrefix.length + 1);
+  return /^\d+$/.test(rest) ? rest : null;
+}
+
+/** bid-site ids the segment already holds SETTLED (sold / bought_in rows whose
+ *  url is a bid.* /lots/{id} page) — the live pass never re-fetches these.
+ *  H&S archive rows (hugginsandscott.com/auction/… urls) are deliberately not
+ *  in here: the first closed-grid read re-dates them from the month stub to
+ *  the lot's real endTime, after which their url is the bid page. */
+export function settledBidIds(rows: AuctionLot[]): Set<string> {
+  const out = new Set<string>();
+  for (const l of rows) {
+    const st = (l as { status?: string }).status;
+    if (st !== 'sold' && st !== 'bought_in') continue;
+    const m = ((l as { url?: string }).url || '').match(/\/\/bid\.[^/]+\/lots\/(\d+)/);
+    if (m) out.add(m[1]);
+  }
+  return out;
+}
+
+/** prior rows the resolve pass should try to settle: tonight's-open
+ *  'upcoming' rows, plus rows a failed night demoted to 'unknown-result'
+ *  (writeMergedSegmentWithLive's stale gate) within the last 60 days */
+export function openRowsForResolve(rows: AuctionLot[]): AuctionLot[] {
+  const cut = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10);
+  return rows.filter(l => {
+    const st = (l as { status?: string }).status;
+    if (st === 'upcoming') return true;
+    return st === 'unknown-result' && String((l as { staleSince?: string }).staleSince || l.saleDate || '') >= cut;
+  });
+}
+
+/** dry-run / log evidence: settled counts per sale + a few priced samples */
+export function summarizeSettled(label: string, rows: AuctionLot[]): void {
+  if (!rows.length) return;
+  const bySale: Record<string, { sold: number; unsold: number; usd: number }> = {};
+  for (const l of rows) {
+    const k = `${l.saleName || '?'}`;
+    const b = bySale[k] || (bySale[k] = { sold: 0, unsold: 0, usd: 0 });
+    if (l.status === 'sold') { b.sold++; b.usd += (l as { realizedUsd?: number }).realizedUsd || 0; } else b.unsold++;
+  }
+  for (const [k, v] of Object.entries(bySale)) console.log(`[${label}] settled · ${k}: ${v.sold} sold ($${Math.round(v.usd).toLocaleString('en-US')} realized), ${v.unsold} unsold`);
+  const sold = rows.filter(l => l.status === 'sold');
+  const step = Math.max(1, Math.floor(sold.length / 5));
+  for (let i = 0; i < sold.length && i < step * 5; i += step) {
+    const l = sold[i] as AuctionLot & { realizedUsd?: number; saleDateTime?: string };
+    console.log(`[${label}] sample ${l.id} lot ${l.lotNumber ?? '?'} $${l.realizedUsd} ${l.saleDate} (${l.saleDateTime}) ${l.url} — ${l.title.slice(0, 60)}`);
+  }
+}
+
+/** one leg-health record for an REA-stack leg (live grid + optional archive) */
+export function reportReaLegHealth(house: string, st: ReaLiveResult['stats'] | null, archive: { fetched: number; parsed: number; settled?: number; reason?: string | null } = { fetched: 0, parsed: 0 }): void {
+  const fetched = (st ? st.fetched + st.resolveFetched : 0) + archive.fetched;
+  const parsed = (st ? st.live + st.sold + st.unsold + st.resolveSettled : 0) + archive.parsed;
+  const settled = (st ? st.sold + st.unsold + st.resolveSettled : 0) + (archive.settled ?? archive.parsed);
+  const reasons: string[] = [];
+  if (st && st.reason) reasons.push(st.reason);
+  if (archive.reason) reasons.push(archive.reason);
+  // a resolve that fetched pages for open ids and settled none of them is the
+  // exact Sep 2026 silent zero — even on a night the grid itself looked ok
+  if (st && st.resolveFetched >= 20 && st.resolveSettled === 0) reasons.push(`resolve fetched ${st.resolveFetched} closed-lot pages and settled 0`);
+  reportLegHealth({ house, ok: reasons.length === 0, fetched, parsed, settled, reason: reasons.join('; ') || null });
 }
 
 async function main() {
@@ -290,15 +499,18 @@ async function main() {
   // ── live leg: snapshot the running auction's lots as status:'upcoming' ────
   let liveLots: AuctionLot[] = [];
   let liveOk = false;
+  let liveStats: ReaLiveResult['stats'] | null = null;
   if (live) {
-    const prevUpcoming = (readSegment('rea') as unknown as AuctionLot[]).filter(l => (l as { status?: string }).status === 'upcoming');
-    const r = await crawlReaLive('https://bid.collectrea.com', 'REA', prevUpcoming);
+    const seg = readSegment('rea') as unknown as AuctionLot[];
+    const r = await crawlReaLive('https://bid.collectrea.com', 'REA', openRowsForResolve(seg), settledBidIds(seg));
     liveOk = r.ok;
-    lots.push(...r.resolved); // closed lots re-read as settled archive sales
+    liveStats = r.stats;
+    lots.push(...r.resolved); // closed lots: settled sales (sold) + passed (bought_in)
     const { good, dropped } = liveOnly(r.live);
     if (dropped) console.log(`[REA] dropped ${dropped} malformed live lots`);
     liveLots = good;
-    console.log(`[REA] live: ${liveLots.length} upcoming lots (grid ${liveOk ? 'ok' : 'FAILED — keeping prior snapshot'})`);
+    console.log(`[REA] live: ${liveLots.length} upcoming lots, ${r.resolved.length} settled (grid ${liveOk ? 'ok' : 'FAILED — keeping prior snapshot, stale rows age out'})`);
+    summarizeSettled('REA', r.resolved);
   }
 
   const report = assertInvariants(lots.concat(liveLots));
@@ -314,11 +526,16 @@ async function main() {
   console.log('[REA] by category:', byCat);
   console.log('[REA] by auth-confidence:', byConf);
 
+  reportReaLegHealth('rea', liveStats, { fetched: hit + miss, parsed: hit });
+
   if (process.argv.includes('--write')) {
     const { good, dropped } = settledOnly(lots);
     if (dropped) console.log(`[REA] dropped ${dropped} unsettled/future-dated lots`);
     const rep = assertInvariants(good.concat(liveLots));
-    if (rep.fatal.length) { console.error(`[REA] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f)); process.exit(1); }
+    if (rep.fatal.length) {
+      console.error(`[REA] refusing to write: ${rep.fatal.length} FATALs remain after filtering`); rep.fatal.slice(0, 5).forEach(f => console.error('  ', f));
+      reportAndExit({ house: 'rea', fetched: (liveStats?.fetched || 0) + hit + miss, parsed: lots.length + liveLots.length, settled: 0, reason: `refused write: ${rep.fatal.length} invariant FATALs` });
+    }
     const r = live
       ? writeMergedSegmentWithLive('rea', good, liveLots, liveOk)
       : { ...writeMergedSegment('rea', good), upcoming: undefined as number | undefined };
@@ -335,5 +552,5 @@ async function main() {
 // run main() ONLY when executed directly — importing parseReaLot (crawl-
 // hugginsscott, backfill-rea) must NOT spawn a competing crawl.
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(e => { console.error('[REA] fatal', e); process.exit(1); });
+  main().catch(e => { console.error('[REA] fatal', e); reportAndExit({ house: 'rea', fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
 }
