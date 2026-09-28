@@ -22,8 +22,10 @@
  *     anything (IQR/median guard) or too thin (< 3)
  */
 import { AuctionLot, ObjectType, SoldComp } from '../types';
-// THE quantile (P2): one lerp convention shared with the engine band/backtest
-import { quantile } from './value';
+// THE order statistics (stats.ts): one lerp quantile + one median shared with
+// the engine band/backtest. Imported from stats (not value) so value.ts can
+// import the shape gate below without a module cycle.
+import { quantileSorted as quantile, medianSorted } from './stats';
 
 export type Form =
   | 'book' | 'ephemera' | 'poster' | 'photograph' | 'textile'
@@ -367,6 +369,144 @@ export function lotFitsMarket(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   return !forms || forms.has(classifyForm(lot));
 }
 
+/* ── LOT SHAPE: the form/part gate (Sep 27 2026 engine pass) ──────────────
+   Title cosine cannot see WHAT KIND OF LOT a title describes: "Royal Oak
+   länkbit" (a bracelet link) shares every identity token with a Royal Oak
+   watch; "set of six Conoid chairs" shares them with one chair; an original
+   comic-art page shares them with a box of printed comic books. Each of
+   those comp pairs was a live miss (länkbit 2.4×, comic page 3.8× at 'high',
+   Nakashima set of six). The shape is three orthogonal axes, parsed once per
+   title, and a comp must agree on all three:
+     count    — 1 (a single object), N (a stated set/pair/lot of N), or
+                0 (an unstated multiple: collection/archive/box/bundle/lot)
+     part     — a part/fragment/accessory, never the whole object
+     original — hand-made original art vs a printed/mass-produced object,
+                only when the title SAYS so (art markets keep their own
+                print/painting forms; this axis is for comics/animation/pop)
+   Conservative by construction: every axis defaults to "single, whole,
+   unstated", so an unparsed title keeps comping exactly as before. */
+
+export interface LotShape {
+  /** 1 = single object · N>1 = a stated set/pair/lot of N · 0 = an unstated multiple */
+  count: number;
+  /** a part / fragment / accessory lot — never comps (or is comped by) a whole object */
+  part: boolean;
+  /** 'original' = hand-made original art · 'printed' = explicitly mass-produced · null = unstated */
+  original: 'original' | 'printed' | null;
+}
+
+const SHAPE_NUM: Record<string, number> = {
+  two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, fifteen: 15, twenty: 20, dozen: 12,
+  deux: 2, trois: 3, quatre: 4, cinq: 5, huit: 8, dix: 10, douze: 12,
+  zwei: 2, drei: 3, vier: 4, 'fünf': 5, sechs: 6, acht: 8,
+  'två': 2, tre: 3, fyra: 4, fem: 5, sex_sv: 6, 'åtta': 8,
+};
+const numOf = (w: string): number | null => {
+  if (/^\d{1,3}$/.test(w)) { const n = parseInt(w, 10); return n >= 2 && n <= 500 ? n : null; }
+  return SHAPE_NUM[w.toLowerCase()] ?? null;
+};
+const NUM_WORD = '(\\d{1,3}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|dozen|deux|trois|quatre|cinq|huit|dix|douze|zwei|drei|vier|fünf|sechs|acht|två|tre|fyra|fem|åtta)';
+// a stated set/pair/lot of N
+const SHAPE_PAIR = /\b(?:a |the )?pair of\b|\bpaire de\b|\bpar av\b|\bein paar\b/i;
+const SHAPE_SET_N = new RegExp(`\\b(?:set|suite|ensemble|lot|group|grouping|collection|archive|run|box|case|lot|bundle|stack|pile|series)\\s+(?:de|of|av|von)\\s+${NUM_WORD}\\b`, 'i');
+const SHAPE_NOUNS = '(?:pieces|pcs|items|objects|cards|photos|photographs|tickets|stubs|chairs|armchairs|stools|benches|tables|lamps|sconces|plates|bowls|vases|cups|glasses|prints|lithographs|etchings|posters|books|volumes|comics|comic books|issues|coins|stamps|pins|buttons|figures|figurines|toys|watches|pens|letters|documents|autographs|balls|bats|jerseys|helmets|bracelets|rings|earrings|cufflinks|brooches|necklaces)';
+const SHAPE_N_ITEMS = new RegExp(`\\b${NUM_WORD}\\s+(?:assorted\\s+|various\\s+|different\\s+|signed\\s+|vintage\\s+|original\\s+|matching\\s+)?${SHAPE_NOUNS}\\b`, 'i');
+// a LEADING spelled count ("Six Conoid Chairs", "Two Early LCW Chairs") — only
+// when a plural object noun follows within four words ("Three Musketeers" is
+// a title, not a count); a leading DIGIT is a year/lot number, never a count
+const SHAPE_LEAD_N = new RegExp(`^(?:an?\\s+)?(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen|deux|trois|quatre|cinq|huit|dix|douze|zwei|drei|vier|sechs|acht|två|tre|fyra|fem)\\s+(?:[\\w'’.-]+\\s+){0,4}?${SHAPE_NOUNS}\\b`, 'i');
+// an unstated multiple
+const SHAPE_MULTI = /\b(?:collection of|archive of|group of|grouping of|assortment of|assemblage of|bundle of|lot of|box of|case of|carton of|stack of|run of|complete run|large lot|mixed lot|job lot|comic (?:book )?lot|card lot|(?:complete|partial|near[- ]complete|master|team|factory|starter) sets?\b|(?:wax|hobby|blaster|retail|jumbo|sealed|unopened|factory[- ]sealed) (?:box|case|pack)s?|(?:lot|group|collection|archive|assortment)\s+\(\d+\))/i;
+// "(a|large|important|…) collection" as the LOT noun — never provenance ("from the collection of")
+const SHAPE_COLLECTION_LOT = /^(?:an?\s+|the\s+)?(?:(?:large|small|extensive|important|fine|rare|complete|comprehensive|significant|substantial|huge|vintage|family|personal)\s+){0,3}(?:collection|archive|group|grouping|assortment)\b/i;
+// parts, fragments and accessories — never the whole object
+const SHAPE_PART = new RegExp([
+  // Scandinavian/German link-piece nouns (the Royal Oak "länkbit" class)
+  '\\bl[äa]nk(?:bit|ar|en)?\\b', '\\bglieder?\\b',
+  // links as the lot noun, never "with a link bracelet"
+  `\\b(?:extra|spare|additional|replacement|loose|${NUM_WORD})\\s+(?:bracelet\\s+)?links?\\b`, '\\bbracelet links?\\b', '\\blinks? (?:for|from|to fit)\\b',
+  // an accessory named FOR / ONLY
+  '\\b(?:bracelet|strap|band|buckle|clasp|deployant|folding clasp|dial|movement|case|caseback|case back|bezel|crown|hands|crystal|box|boxes|papers|certificate|warranty card|winder|pouch|tool)\\s+(?:only|for|to fit|from a)\\b',
+  '\\bonly (?:the )?(?:strap|bracelet|dial|movement|case|box|papers)\\b',
+  '\\bempty (?:watch |presentation |fitted )?box(?:es)?\\b',
+  '\\b(?:box|boxes|papers|certificate)(?: (?:and|&) (?:papers|box|certificate))? only\\b',
+  // fragments and pieces of a thing
+  '\\bfragments?\\b', '\\b(?:a )?piece of (?:the |an? )?(?!art\\b|jewel|history\\b)', '\\bswatch(?:es)? (?:of|from|cut)\\b', '\\b(?:uniform|jersey|seat|floor|court|turf|net) (?:swatch|piece|section|remnant)\\b',
+  '\\bspare parts?\\b', '\\bparts? (?:for|from|of a)\\b', '\\bcomponents? (?:for|from|of a)\\b',
+].join('|'), 'i');
+// original hand-made art vs mass-produced — only when stated
+const SHAPE_ORIGINAL = /\boriginal (?:comic |cover |splash |interior |strip |sunday |daily |production |animation |concept |pin[- ]up |illustration |poster |pencil |ink |published )?(?:art(?:work)?|page|cover|drawing|painting|illustration|sketch|cel|splash|strip)\b|\b(?:production|animation) cel\b|\bhand[- ]drawn\b|\bhand[- ]painted cel\b|\bcomic art\b|\bsplash page\b|\bcover art\b|\bpencils? and inks?\b|\binked page\b/i;
+const SHAPE_PRINTED = /\b(?:comic books?|comics? (?:#|no\.?|issue)|issue #\d|cgc \d|cbcs \d|cgc graded|pgx \d|newsstand|variant cover|first printing|reprint|facsimile|lithograph|offset|giclee|gicl[ée]e|poster|print(?:ed)?\b|trading cards?|magazine|paperback|hardcover)\b/i;
+
+const SHAPE_CACHE = new Map<string, LotShape>();
+/** Parse the lot's shape from its title (cached per title string). */
+export function lotShapeOf(title: string | null | undefined): LotShape {
+  const t = (title || '').trim();
+  const hit = SHAPE_CACHE.get(t);
+  if (hit) return hit;
+  let count = 1;
+  if (SHAPE_PAIR.test(t)) count = 2;
+  else {
+    const m = t.match(SHAPE_SET_N) || t.match(SHAPE_N_ITEMS);
+    const n = m ? numOf(m[1]) : null;
+    if (n) count = n;
+    else if (SHAPE_MULTI.test(t) || SHAPE_COLLECTION_LOT.test(t)) count = 0;
+    else {
+      const lead = t.match(SHAPE_LEAD_N);
+      const ln = lead ? numOf(lead[1]) : null;
+      if (ln) count = ln;
+    }
+  }
+  const part = SHAPE_PART.test(t);
+  const original = SHAPE_ORIGINAL.test(t) ? 'original' : SHAPE_PRINTED.test(t) ? 'printed' : null;
+  const out: LotShape = { count, part, original };
+  if (SHAPE_CACHE.size > 200_000) SHAPE_CACHE.clear();
+  SHAPE_CACHE.set(t, out);
+  return out;
+}
+
+/** THE form/part gate: may `b` comp `a`? A part never comps a whole (and vice
+ *  versa); a single never comps a multiple (and vice versa); stated multiples
+ *  comp only the same stated count; stated original art never comps a stated
+ *  printed/mass-produced lot. `ignoreCount` is for pools that NORMALIZE set
+ *  size themselves (the client design path's measured per-unit scale). */
+export function shapesCompatible(a: LotShape, b: LotShape, opts: { ignoreCount?: boolean } = {}): boolean {
+  if (a.part !== b.part) return false;
+  if (!opts.ignoreCount) {
+    if ((a.count === 1) !== (b.count === 1)) return false;
+    if (a.count > 1 && b.count > 1 && a.count !== b.count) return false;
+  }
+  if (a.original && b.original && a.original !== b.original) return false;
+  return true;
+}
+
+/** A PLATE "…, from <Series>" is a part of the portfolio/book <Series>: the
+ *  single sheet "Sam, from 25 Cats Name(d) Sam and One Blue Pussy" was comped
+ *  by the whole book (a $40,000 exact). True when one title names a series and
+ *  the other title IS that series (and names none itself) — either direction. */
+export function plateOfWhole(aTitle: string | null | undefined, bTitle: string | null | undefined): boolean {
+  const check = (plate: string | null | undefined, whole: string | null | undefined) => {
+    const s = seriesOf(plate);
+    if (!s || s.length < 6 || seriesOf(whole)) return false;
+    const w = normalizeTitle(whole);
+    return w.length >= 6 && (w === s || w.startsWith(`${s} `) || s.startsWith(`${w} `));
+  };
+  return check(aTitle, bTitle) || check(bTitle, aTitle);
+}
+
+/** Convenience: the full shape gate on two lots' titles (shape axes + the
+ *  plate-vs-whole-portfolio rule). */
+export function sameShape(a: Pick<AuctionLot, 'title'>, b: Pick<AuctionLot, 'title'>): boolean {
+  return shapesCompatible(lotShapeOf(a.title), lotShapeOf(b.title)) && !plateOfWhole(a.title, b.title);
+}
+
+/** The data agent's comp-exclusion stamp (normalize): a lot carrying
+ *  `compExclude` (junk price, duplicate listing, …) is never a comp. */
+export function isCompExcluded(l: object): boolean {
+  return !!(l as { compExclude?: string | null }).compExclude;
+}
+
 /* ── persisted-key reads (additive) ──────────────────────────────────────
    A migrated lot carries its classifyForm/modelKey/watchKey outputs stamped as
    lot.formKey / lot.modelKey / lot.reference (identical values, computed once
@@ -494,9 +634,11 @@ export interface DeepSignal {
   confidence: 'very-high' | 'high' | 'medium' | 'low';
 }
 
+/** median of an ascending-sorted array (stats.medianSorted; 0 when empty so
+ *  the pool guards below keep their historical `med > 0` semantics) */
 function median(sorted: number[]): number {
-  const m = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[m - 1] + sorted[m]) / 2 : sorted[m];
+  const m = medianSorted(sorted);
+  return Number.isNaN(m) ? 0 : m;
 }
 
 /**
@@ -562,8 +704,15 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   const idKey = identityObject ? objectIdentityKey(lot) : null;
   if (identityObject && !idKey) return null;
 
+  // FORM/PART gate (lotShapeOf): a part never comps a whole, a single never a
+  // multiple, original art never a printed object. Furniture pools normalize
+  // set size per unit below (measured), so the COUNT axis is waived there.
+  const shapeA = lotShapeOf(lot.title);
+  const shapeOpts = { ignoreCount: FURNITURE.has(form) };
   const sold = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id
+    && !isCompExcluded(l)
+    && shapesCompatible(shapeA, lotShapeOf(l.title), shapeOpts)
     // Algolia-sourced Sotheby's lots are thin (title-only, no dimensions/medium/
     // reference/titleTokens) and are engine-EXCLUDED at build time; the client
     // re-derives comps here, so guard them out too or a title-only lot pollutes
@@ -971,8 +1120,10 @@ export function soldCompBand(lot: AuctionLot, allLots: AuctionLot[]): SoldComp |
   if (lot.artist === 'game-used' && !anchorObjType) return null;
 
   // same-slug sold, same comp form key (game-used: same OBJECT TYPE), SAME IDENTITY
+  const shapeA = lotShapeOf(lot.title);
   const same = allLots.filter(l =>
     l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id &&
+    !isCompExcluded(l) && shapesCompatible(shapeA, lotShapeOf(l.title)) &&
     isSportsScienceObject(l) &&
     (anchorObjType ? objTypeOf(l) === anchorObjType : compFormKey(l) === form) &&
     objectIdentityKey(l) === bandIdKey
@@ -1123,8 +1274,10 @@ export function scienceReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Re
   const tid = sciTitleIdentity(lot);
   const words = new Set(normalizeTitle(title).split(' ').filter(w => w.length > 3));
   const scored: [number, AuctionLot][] = [];
+  const shapeA = lotShapeOf(lot.title);
   for (const l of allLots) {
     if (l.id === lot.id || l.artist !== lot.artist || l.status !== 'sold' || !l.priceUsd) continue;
+    if (isCompExcluded(l) || !shapesCompatible(shapeA, lotShapeOf(l.title))) continue;
     if (!forms.has(formOf(l)) || sciLeakedArt(l)) continue;
     let idHit = false, sc = 0;
     if (ent && l.entity && l.entity.toLowerCase().trim() === ent) { idHit = true; sc += 3; }
@@ -1174,9 +1327,11 @@ export function makerReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Refe
   const form = formOf(lot);
   const scope = MAKER_BAND_FORMS[form];
   if (!scope) return null;
+  const shapeA = lotShapeOf(lot.title);
   const all = allLots.filter(l =>
     l.id !== lot.id && l.artist === lot.artist && l.status === 'sold'
-    && (l.priceUsd || 0) > 0 && formOf(l) === form);
+    && (l.priceUsd || 0) > 0 && formOf(l) === form
+    && !isCompExcluded(l) && shapesCompatible(shapeA, lotShapeOf(l.title)));
   if (all.length < 5) return null;
   const cutoff = new Date(Date.now() - 5 * 365.25 * 86_400_000).toISOString().slice(0, 10);
   const recent = all.filter(l => (l.saleDate || '') >= cutoff);
@@ -1197,9 +1352,11 @@ export function makerReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Refe
  *  within 2×; strict itemClass gate (loose degrades within-2× 72.3→66.5%). */
 export function cultureReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): ReferenceBand | null {
   if (!CULTURE_SLUGS_ENGINE.has(lot.artist)) return null;
+  const shapeA = lotShapeOf(lot.title);
   const sold = allLots.filter(l =>
     l.id !== lot.id && CULTURE_SLUGS_ENGINE.has(l.artist) && l.status === 'sold' && l.priceUsd
-    && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
+    && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia'
+    && !isCompExcluded(l) && shapesCompatible(shapeA, lotShapeOf(l.title)));
   const nt = normalizeTitle(cleanGoldinTitle(lot.title || ''));
   const bandOf = (pool: AuctionLot[], kind: ReferenceBand['kind']): ReferenceBand | null => {
     if (pool.length < 3) return null;

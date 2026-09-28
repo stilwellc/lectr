@@ -23,6 +23,8 @@
 import type { AuctionLot } from '../types';
 import { similarity, sizeRatio, type IdfTable, type Match } from './similarity';
 import { lotAllInFactor } from './premiums';
+import { weightedMedian, quantileSorted } from './stats';
+import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -87,6 +89,20 @@ export interface ValueResult {
   abstain?: string;
   /** card-comp tier that produced this value (build-market §3e) */
   cardTier?: 'exact' | 'grade-adj' | 'player' | 'tcg-exact' | 'tcg-grade-adj';
+  /** (Sep 27 2026) THE POOL'S OWN MEDIAN: the recency-weighted median of the
+   *  comp prices exactly as listed (unadjusted) — the statistic compRatio and
+   *  the Flags are computed on (= compRatio × estimate mid on estimate lots).
+   *  compValueUsd is now the published PREDICTION (on estimate lots the house
+   *  estimate × premium × a shrunk comp adjustment — see `blendW`; on
+   *  no-estimate lots the time-adjusted comp value), so every surface that
+   *  prints "the comps' median" next to the pool rows must read THIS field. */
+  compMedianUsd?: number;
+  /** (Sep 27 2026) the comp median with every comp carried to the valuation
+   *  date by its market's point-in-time index — the prediction's comp input */
+  compAdjUsd?: number;
+  /** weight the prediction put on the comps vs the house estimate (0 = pure
+   *  house × premium, 1 = pure comps); absent on no-estimate lots */
+  blendW?: number;
 }
 
 /** Why the engine declined to value a lot (P1-6). Stable, greppable codes —
@@ -99,7 +115,9 @@ export type AbstainReason =
   | 'dispersion'        // pool disagrees with itself past the guard
   | 'no-value'          // weighted median collapsed to 0
   | 'card:pool<2'       // card tiers: exact/ladder pools too thin, no player pool
-  | 'card:player<5'     // card tier 3: player pool under the floor
+  | 'card:player<5'     // card tier 3: player pool under the floor (legacy)
+  | 'card:player-tier'  // (Sep 27) only a PLAYER median exists — abstains (2.87× live)
+  | 'card:stale'        // (Sep 27) the card's pools hold no sale in the last 3 years
   | 'tcg:pool<2';       // TCG tier: exact/ladder pools too thin
 
 const MIN_COS = 0.65;   // comp-pool inclusion (calibrated: below this is a different object)
@@ -132,26 +150,82 @@ function passesGate(m: { cls: string; cosine: number; score: number }): boolean 
   return passesGateWith(COMP_GATE, m);
 }
 
-function weightedMedian(pairs: [number, number][]): number {
-  const s = [...pairs].sort((a, b) => a[0] - b[0]);
-  const total = s.reduce((t, p) => t + p[1], 0);
-  let c = 0;
-  for (const [v, w] of s) { c += w; if (c >= total / 2) return v; }
-  return s.length ? s[s.length - 1][0] : 0;
-}
 /** THE quantile (P2, Sep 2 2026): linear interpolation on a SORTED array —
  *  the one convention shared by the engine band, the comps.ts dispersion
- *  guards, the backtest's conformal bands and the value book. The old
- *  round-index / floor-index variants made an n=3 band [median, max] (showed
- *  the median as "low") and disagreed with each other by up to one rank. */
+ *  guards, the backtest's conformal bands and the value book. Defined once in
+ *  stats.ts (quantileSorted); this export keeps the legacy 0-on-empty
+ *  contract its existing callers rely on (emit-value-book). */
 export function quantile(sortedVals: number[], q: number): number {
-  if (!sortedVals.length) return 0;
-  const pos = Math.min(1, Math.max(0, q)) * (sortedVals.length - 1);
-  const lo = Math.floor(pos), hi = Math.ceil(pos);
-  if (lo === hi) return sortedVals[lo];
-  return sortedVals[lo] + (sortedVals[hi] - sortedVals[lo]) * (pos - lo);
+  const v = quantileSorted(sortedVals, q);
+  return Number.isNaN(v) ? 0 : v;
 }
 const lerpQuantile = quantile;
+
+/* ── POINT-IN-TIME DATE SEMANTICS (data contract, Sep 27 2026) ───────────
+   A lot may carry `datePrecision: 'month' | 'year'` (absent = 'day'). A sale
+   dated only to its month is KNOWN only once that month has ended; one dated
+   only to its year, once that year has ended. `knownKey` sorts after every
+   day of the sale's period and before the next period, so every
+   point-in-time cut in the engine is `knownKey(comp) < valuationDay`. */
+export function knownKey(l: { saleDate?: string | null; datePrecision?: string | null }): string {
+  const d = (l.saleDate || '').slice(0, 10);
+  const p = l.datePrecision;
+  // 'unknown' precision (undated Goldin lots, empty saleDate) or no parseable
+  // day: NEVER known at any cut — sorts after every real date
+  if (p === 'unknown' || !/^\d{4}/.test(d)) return UNKNOWN_KEY;
+  if (p === 'month' && d.length >= 7) return `${d.slice(0, 7)}-32`;
+  if (p === 'year' && d.length >= 4) return `${d.slice(0, 4)}-13`;
+  return d;
+}
+/** knownKey of an undated sale — greater than every real date */
+export const UNKNOWN_KEY = '9999-99-99';
+/** The data contract's precision union (app/types.ts) — absent = 'day'. */
+export type DatePrecision = 'day' | 'month' | 'year' | 'unknown';
+
+/* ── TIME ADJUSTMENT (Sep 27 2026) ──────────────────────────────────────
+   Each comp is carried to the valuation date by its MARKET's price index
+   before the median: a 2019 sale in a market that has since risen 30% is
+   evidence of a 30%-higher price today. The index is built point-in-time
+   (indices.buildTimeIndex over sales known before `asOf` only) and set here
+   by the caller — build-market for the live book, the backtest replay per
+   quarter. No index loaded → factor 1 everywhere (the pre-change engine). */
+export interface TimeIndex {
+  /** the valuation cut the index was built for (exclusive) */
+  asOf: string;
+  marketBySlug: Record<string, string>;
+  /** market → quarter ('2024Q3') → index level (any base) */
+  levels: Record<string, Record<string, number>>;
+  /** market → the last quarter with a level strictly before asOf's quarter */
+  lastQ: Record<string, string>;
+}
+let TIDX: TimeIndex | null = null;
+export function setTimeIndex(ti: TimeIndex | null) { TIDX = ti; }
+export function getTimeIndex(): TimeIndex | null { return TIDX; }
+export const quarterKey = (d: string | null | undefined): string =>
+  (d && d.length >= 7 ? `${d.slice(0, 4)}Q${Math.floor((+d.slice(5, 7) - 1) / 3) + 1}` : '');
+/** clamp for one comp's time factor — past ±2× an index move is a data fault
+ *  or a regime the index cannot carry, not a price adjustment */
+const TIME_ADJ_CLAMP = [0.5, 2] as const;
+/** Factor carrying a sale in `market` on `saleDate` to the index's asOf. */
+export function timeFactor(market: string | null | undefined, saleDate: string, ti: TimeIndex | null = TIDX): number {
+  if (!ti || !market) return 1;
+  const lv = ti.levels[market];
+  const last = ti.lastQ[market];
+  if (!lv || !last || !(lv[last] > 0)) return 1;
+  let q = quarterKey(saleDate);
+  if (!q || q >= last) return 1;
+  let l = lv[q];
+  if (!(l > 0)) {
+    // nearest earlier quarter with a level, else the index's first level
+    const qs = Object.keys(lv).filter(k => lv[k] > 0).sort();
+    let pick: string | null = null;
+    for (const k of qs) { if (k <= q) pick = k; else break; }
+    q = pick || qs[0];
+    l = lv[q];
+  }
+  if (!(l > 0)) return 1;
+  return Math.min(TIME_ADJ_CLAMP[1], Math.max(TIME_ADJ_CLAMP[0], lv[last] / l));
+}
 
 /**
  * AUTO-CALIBRATION (set at build time by build-market from the previous
@@ -171,11 +245,68 @@ export interface EngineCalibration {
    *  the market's own high-tier error runs past 30% */
   mdape?: Record<string, Record<string, number | null>>;
   marketBySlug?: Record<string, string>;
+  /** (Sep 27) THE ESTIMATE-LOT PREDICTOR, learned point-in-time from the
+   *  record: log(realized / estMid) = a[market:et] + w[tier] · log(comps /
+   *  estMid). `a` carries the house premium + the houses' own bias (per
+   *  market, per estimate kind — a single-point RR "$500+" low reads very
+   *  differently from a band mid), shrunk toward the global intercept; `w`
+   *  is the shrunk weight on the comps' disagreement with the estimate. */
+  blend?: { a: Record<string, number>; w: Record<string, number>; n?: number };
+  /** (Sep 27) per market × tier multiplicative bias of the PURE comp value on
+   *  NO-ESTIMATE lots (median realized / compMedian, recency-weighted, shrunk
+   *  toward 1), learned point-in-time. Missing cell → 1. */
+  bias?: Record<string, Record<string, number>>;
+  /** (Sep 27) outcome bands for the PUBLISHED value (realized / compValueUsd
+   *  15/85 quantiles, recency-weighted) by path ('e' estimate-blend, 'n'
+   *  no-estimate) × tier, and per market where n allows. */
+  valueBand?: Record<string, Record<string, { lo: number; hi: number }>>;
+  valueBandByMarket?: Record<string, Record<string, Record<string, { lo: number; hi: number }>>>;
 }
 /** 'high' must mean ≤~30% MdAPE in the lot's own market; 'medium' ≤~50%. */
 export const CONF_MDAPE_CEIL = { high: 0.30, medium: 0.50 } as const;
 let CAL: EngineCalibration | null = null;
 export function setCalibration(cal: EngineCalibration | null) { CAL = cal; }
+export function getCalibration(): EngineCalibration | null { return CAL; }
+
+/** Uncalibrated fallback comp weights for the estimate-lot predictor — the
+ *  2019–2024 fit of the record (scratch blend study, Sep 27): the comps earn
+ *  weight only where the pool is tight. */
+export const BLEND_W_DEFAULT: Record<string, number> = { high: 0.4, medium: 0.25, low: 0.05 };
+/** THE ESTIMATE-LOT PREDICTION: house estimate × premium × a shrunk comp
+ *  adjustment. `compMedian` is the time-adjusted comp value. Returns the
+ *  all-in prediction and the comp weight used. */
+export function blendPredict(
+  lot: { artist: string; auctionHouse?: string | null; buyerPremiumPct?: number | null },
+  estMid: number, estKind: 'b' | 'p', compMedian: number, confidence: string,
+  cal: EngineCalibration | null = CAL,
+): { value: number; w: number } {
+  const market = cal?.marketBySlug?.[lot.artist];
+  const ratio = compMedian > 0 && estMid > 0 ? compMedian / estMid : 1;
+  const b = cal?.blend;
+  if (b) {
+    const w = b.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1;
+    // house × market intercept (the house's own estimate habit) → market → global
+    const a = (market != null && lot.auctionHouse ? b.a[`${market}|${lot.auctionHouse}:${estKind}`] : undefined)
+      ?? (market != null ? b.a[`${market}:${estKind}`] : undefined) ?? b.a[`global:${estKind}`] ?? b.a['global:b'];
+    if (typeof a === 'number' && Number.isFinite(a)) {
+      return { value: estMid * Math.exp(a + w * Math.log(ratio)), w };
+    }
+  }
+  // uncalibrated: house mid × the lot's own premium × (comps vs house all-in)^w
+  const pm = lotAllInFactor(lot, estMid);
+  const w = BLEND_W_DEFAULT[confidence] ?? 0.1;
+  return { value: estMid * pm * Math.pow(ratio / pm, w), w };
+}
+
+/** Whether the engine applies the no-estimate bias (measured: not yet — see
+ *  estimateValueEx). The 'n' value band is fit on the SAME basis. */
+export const APPLY_NOEST_BIAS = false;
+/** The shrunk no-estimate bias multiplier for a market × tier (1 = none). */
+export function noEstimateBias(artist: string, confidence: string, cal: EngineCalibration | null = CAL): number {
+  const market = cal?.marketBySlug?.[artist];
+  const f = market != null ? cal?.bias?.[market]?.[confidence] : undefined;
+  return typeof f === 'number' && f > 0 && Number.isFinite(f) ? f : 1;
+}
 
 /** Calibrated beat-high rate as a function of compRatio (comps / estimate-mid).
  *  Falls back to the original holdout fit (n=5,215, monotonic 42% → 69%). */
@@ -254,14 +385,16 @@ export function estimateValueEx(
     const ageYears = Math.max(0, (refMs - t) / 31_557_600_000);
     return Math.pow(0.5, ageYears / halflife);
   };
-  let compValueUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
-  if (!(compValueUsd > 0)) return { value: null, abstain: 'no-value' };
+  const market = CAL?.marketBySlug?.[lot.artist] ?? TIDX?.marketBySlug?.[lot.artist];
+  // the comp's price carried to the valuation date by its market's index
+  const adjOf = (c: Comp) => c.realizedUsd * timeFactor(TIDX?.marketBySlug?.[lot.artist] ?? market, c.saleDate);
+  // the CERTIFIED statistic (compRatio → the Flags) stays on the unadjusted
+  // pool; the time-adjusted median is the value's comp input
+  let compRawUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)] as [number, number]));
+  let compAdjUsd = weightedMedian(top.map(c => [adjOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
+  if (!(compRawUsd > 0) || !(compAdjUsd > 0)) return { value: null, abstain: 'no-value' };
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
-  // Displayed band widened to q0.15..q0.85 (lerp) so it honestly covers ~50% of
-  // realized outcomes; the round q1..q3 only covered ~37% and mislabeled the
-  // median as "low" on tiny pools. (Measured: scripts/gate-ab band experiment.)
-  const low = lerpQuantile(vals, 0.15);
-  const high = lerpQuantile(vals, 0.85);
+  const adjVals = top.map(adjOf).sort((a, b) => a - b);
 
   // confidence from pool size, best-match strength, and dispersion. disp stays
   // on the tight q1..q3 (unchanged from the tier experiment); thresholds
@@ -284,7 +417,6 @@ export function estimateValueEx(
   // decides whether the tier label is earned — 'high' must run ≤30% MdAPE in
   // this market, 'medium' ≤50%; otherwise demote one notch. No calibration →
   // the structural ladder above stands alone.
-  const market = CAL?.marketBySlug?.[lot.artist];
   const md = market ? CAL?.mdape?.[market] : undefined;
   if (md) {
     if (confidence === 'high' && typeof md.high === 'number' && md.high > CONF_MDAPE_CEIL.high) confidence = 'medium';
@@ -300,12 +432,13 @@ export function estimateValueEx(
   const eLo = lot.estLowUsd ?? lot.estHighUsd;
   const eHi = lot.estHighUsd ?? lot.estLowUsd;
   const estMid = eLo && eHi ? (eLo + eHi) / 2 : null;
+  const estKind: 'b' | 'p' = (lot.estLowUsd && lot.estHighUsd) ? 'b' : 'p';
 
   // DIRECTIONAL signal (estimate lots)
   let signal: ValueResult['signal'] = null;
   let compRatio: number | null = null;
   if (estMid && estMid > 0) {
-    compRatio = compValueUsd / estMid;
+    compRatio = compRawUsd / estMid;
     // EXACT-MATCH CONSISTENCY GUARD (holdout-validated ADOPT): an extreme
     // ratio that contradicts the lot's own strongest evidence — an exact comp
     // realized inside the estimate band — is comp-pool pollution, not alpha.
@@ -320,13 +453,13 @@ export function estimateValueEx(
       const exactPool = top.filter(c => c.match.cls === 'physicalMatch'
         || (c.match.cls === 'modelMatch' && c.match.cosine >= 0.92));
       if (exactPool.length) {
-        compValueUsd = weightedMedian(exactPool.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)]));
-        compRatio = compValueUsd / estMid;
+        compRawUsd = weightedMedian(exactPool.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)] as [number, number]));
+        compAdjUsd = weightedMedian(exactPool.map(c => [adjOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
+        compRatio = compRawUsd / estMid;
         if (confidence === 'high') confidence = 'medium';
       }
     }
-    const br = beatRate(compRatio, CAL?.marketBySlug?.[lot.artist],
-      (lot.estLowUsd && lot.estHighUsd) ? 'b' : 'p');
+    const br = beatRate(compRatio, CAL?.marketBySlug?.[lot.artist], estKind);
     // ODDS GATE (Aug 13 value audit): admission by the market's CALIBRATED
     // beat rate, not the raw ratio alone. The 1.3 threshold was near a coin
     // flip in watches' low buckets (35-36%) while cr>2.0 runs 69-72% in every
@@ -341,30 +474,67 @@ export function estimateValueEx(
     signal = { label, strength, beatRatePct: br };
   }
 
-  // SPLIT-CONFORMAL band (when calibration is loaded): compValue × the
-  // per-tier 15/85 quantiles of realized/compValue from the holdout — an
-  // honest ~70% outcome band (the comp-price quantile band only covered
-  // ~42-51%, and "high" confidence was the LEAST honest at 41.8%).
-  let bandLow = low, bandHigh = high;
-  const bandCal = (market && CAL?.bandByMarket?.[market]?.[confidence]) || CAL?.band?.[confidence];
-  if (bandCal && compValueUsd > 0) {
-    bandLow = compValueUsd * bandCal.lo;
-    bandHigh = compValueUsd * bandCal.hi;
+  // THE PUBLISHED VALUE (Sep 27 2026 engine pass). Measured live (659 estimate
+  // lots, Sep 14 → 27): the pure comp median ran 0.60 median abs error vs the
+  // house midpoint × premium at 0.32 — comps lose to the specialist on
+  // heterogeneous objects. So on estimate lots the prediction IS the house
+  // estimate × premium, moved by a SHRUNK comp adjustment whose weight the
+  // record learns point-in-time (tight pools earn weight, loose ones ~none).
+  // No-estimate lots keep the pure comp value, bias-corrected per market ×
+  // tier (learned point-in-time, shrunk to 1).
+  let blendW: number | undefined;
+  let predUsd: number;
+  if (estMid && estMid > 0) {
+    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence);
+    predUsd = bp.value; blendW = bp.w;
+  } else {
+    // The no-estimate market×tier bias (calibration.bias) is FITTED and
+    // published but NOT applied: re-scored live (Sep 14 → 27, the same 187
+    // hedonic no-estimate lots) it moved median abs error 1.00 → 1.05 — the
+    // replay's no-estimate pools don't yet mirror production's same-player /
+    // roster-tier pools closely enough for its level to transfer. The time
+    // adjustment alone carries this path (0.97 → 1.00 vs 1.05 before).
+    predUsd = compAdjUsd * (APPLY_NOEST_BIAS ? noEstimateBias(lot.artist, confidence) : 1);
   }
+  if (!(predUsd > 0) || !Number.isFinite(predUsd)) return { value: null, abstain: 'no-value' };
+
+  // OUTCOME BAND for the published value. Calibrated: the prediction × the
+  // path×tier (per market where deep enough) 15/85 quantiles of realized /
+  // prediction — recency-weighted so the width tracks the current market
+  // (the uncalibrated comp-quantile band ran 48% coverage on 'high' live).
+  // Legacy calibration (no valueBand yet) → the conformal comp band on the
+  // pure comp value; nothing loaded → the pool's own 15/85 spread.
+  const path = estMid ? 'e' : 'n';
+  let bandLow: number, bandHigh: number;
+  const vb = (market && CAL?.valueBandByMarket?.[market]?.[path]?.[confidence]) || CAL?.valueBand?.[path]?.[confidence];
+  const bandCal = (market && CAL?.bandByMarket?.[market]?.[confidence]) || CAL?.band?.[confidence];
+  if (vb) {
+    bandLow = predUsd * vb.lo; bandHigh = predUsd * vb.hi;
+  } else if (bandCal) {
+    bandLow = predUsd * bandCal.lo; bandHigh = predUsd * bandCal.hi;
+  } else {
+    // Displayed band widened to q0.15..q0.85 (lerp) so it honestly covers
+    // ~50% of realized outcomes, re-centred on the prediction.
+    const scale = predUsd / compAdjUsd;
+    bandLow = lerpQuantile(adjVals, 0.15) * scale;
+    bandHigh = lerpQuantile(adjVals, 0.85) * scale;
+  }
+  if (bandLow > predUsd) bandLow = predUsd;
+  if (bandHigh < predUsd) bandHigh = predUsd;
 
   // ABSOLUTE value (Goldin / no estimate) + under/over vs live bid
   let estimateUsd: number | null = null;
   let vsBid: ValueResult['vsBid'] = null;
   if (!estMid) {
-    estimateUsd = compValueUsd;
+    estimateUsd = predUsd;
     const bid = lot.currentBid || 0;
-    if (bid > 0) vsBid = vsBidRead(lot, bid, compValueUsd);
+    if (bid > 0) vsBid = vsBidRead(lot, bid, predUsd);
   }
 
   return { value: {
     poolIds: top.map(c => c.id),
     n: pool.length,
-    compValueUsd: Math.round(compValueUsd),
+    compValueUsd: Math.round(predUsd),
     low: Math.round(bandLow),
     high: Math.round(bandHigh),
     compRatio,
@@ -375,6 +545,9 @@ export function estimateValueEx(
     tier,
     exact,
     idn: idn || undefined,
+    compMedianUsd: Math.round(compRawUsd),
+    compAdjUsd: Math.round(compAdjUsd),
+    ...(blendW != null ? { blendW: Math.round(blendW * 100) / 100 } : {}),
   }, abstain: null };
 }
 
@@ -393,6 +566,12 @@ export function vsBidRead(lot: { auctionHouse?: string | null; buyerPremiumPct?:
 /**
  * Score `lot` against candidate comps and return the in-pool Comp list. Used
  * by build-market.ts (and validate-engine.ts with a prior-only filter).
+ *
+ * Point-in-time: with `priorTo`, a comp is admitted only once its sale was
+ * KNOWN before that day (knownKey — month/year-precision dates count from the
+ * end of their period). Never admits a `compExclude`-stamped lot, and never a
+ * comp of a different SHAPE (comps.lotShapeOf: a part never comps a whole, a
+ * single never a set/lot, original art never a printed object).
  */
 export function resolveComps(
   lot: AuctionLot & { _v?: Record<string, number> },
@@ -401,10 +580,13 @@ export function resolveComps(
   priorTo?: string,
 ): Comp[] {
   const out: Comp[] = [];
+  const shapeA = lotShapeOf(lot.title);
   for (const c of candidates) {
     if (c.id === lot.id) continue;
-    if (priorTo && !(c.saleDate < priorTo)) continue;
+    if (priorTo && !(knownKey(c as { saleDate?: string; datePrecision?: string | null }) < priorTo)) continue;
     if (c.status !== 'sold' || !(c.realizedUsd! > 0)) continue;
+    if (isCompExcluded(c)) continue;
+    if (!shapesCompatible(shapeA, lotShapeOf(c.title))) continue;
     const m = similarity(lot, c, tbl);
     // admit down to the RELAXED tier-b gate — estimateValue applies the strict
     // gate first and only reaches for these when the strict pool is thin

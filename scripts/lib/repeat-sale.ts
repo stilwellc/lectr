@@ -24,6 +24,7 @@
 // of the book — the 230 pairs speak to that.
 import type { AuctionLot } from '../../app/types';
 import { similarity, idf, type IdfTable } from '../../app/lib/similarity';
+import { sameShape, isCompExcluded } from '../../app/lib/comps';
 
 const RARE_K = 6;
 const SPORTS_SCIENCE_SLUGS = new Set([
@@ -126,6 +127,10 @@ export function groupRepeatSales(
       // fast structured pre-check: skip the full score for any pair that can't
       // reach 'physicalMatch' (the only class the grouper unions on)
       if (!canPhysicalMatch(lot, c)) continue;
+      // Sep 27 2026: a compExclude-stamped sale (junk price / duplicate
+      // listing) is no repeat sale, and a part/set/original-vs-printed shape
+      // mismatch is never the SAME physical object (comps.lotShapeOf)
+      if (isCompExcluded(lot) || isCompExcluded(c) || !sameShape(lot, c)) continue;
       scored++;
       const m = similarity(lot, c, tbl);
       if (m.cls === 'physicalMatch') {
