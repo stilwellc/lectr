@@ -88,6 +88,29 @@ export interface FullBuildOpts {
   market?: string | null;      // one market leg; null = every target
   legDir?: string | null;      // where leg outputs go (state + summary per market)
   limit?: number | null;       // testing: cap targets
+  noNoEst?: boolean;           // skip the no-estimate targets (--no-noest)
+}
+
+/** Why a market leg can legitimately have nothing to replay — decided on the
+ *  evidence, printed into the leg summary so an empty leg is never mistaken
+ *  for a broken one. tcg: bid-only Pokémon were considered as targets and
+ *  rejected — the hedonic replay never values them (engine-excluded like
+ *  sports cards); their values come from the tcg card tiers, which the forward
+ *  calls ledger grades (k:'card', m:'tcg'). */
+const EMPTY_LEG_REASON: Record<string, string> = {
+  tcg: 'tcg lots carry no house estimate and are engine-excluded from the hedonic replay (mass-produced cards are valued by the tcg card tiers); the tcg record is the forward card tape (calls-ledger k=card, m=tcg)',
+};
+
+/** An explicit, mergeable empty leg: an empty accumulator state + a summary
+ *  that says why. Exit 0 — a market with nothing to replay is a result. */
+export function writeEmptyLeg(market: string, dir: string, reason: string): ReturnType<typeof summarizeState> {
+  const st = mkState(Date.now());
+  const out = summarizeState(st, new Date().toISOString().slice(0, 10));
+  fs.mkdirSync(dir, { recursive: true });
+  writeState(st, path.join(dir, `backtest-state.${market}.json.gz`));
+  fs.writeFileSync(path.join(dir, `backtest.${market}.json`), JSON.stringify({ ...out, empty: true, market, reason }));
+  console.log(`[backtest] leg ${market}: EMPTY — ${reason} → wrote an explicit empty leg to ${dir}`);
+  return out;
 }
 
 export function buildBacktest(dataDir: string, allLots?: AuctionLot[], opts: FullBuildOpts = {}): ReturnType<typeof summarizeState> {
@@ -101,15 +124,31 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[], opts: Ful
   console.log(`[backtest] loaded ${lots.length} lots (${elapsed()}) — engine ${ENGINE_VERSION}${opts.market ? ` · market leg ${opts.market}` : ''}`);
 
   const prep = prepare(lots, console.log, elapsed);
-  let { soldTargets, biTargets } = targetsOf(prep, opts.market);
-  if (opts.limit) { soldTargets = soldTargets.slice(-opts.limit); biTargets = biTargets.slice(-Math.ceil(opts.limit / 10)); }
-  console.log(`[backtest] replaying ${soldTargets.length} sold + ${biTargets.length} bought-in targets (${elapsed()})`);
-  if (!soldTargets.length) throw new Error(`[backtest] no targets${opts.market ? ` for market ${opts.market}` : ''} — refusing to write an empty record`);
+  let { soldTargets, biTargets, noEstTargets } = targetsOf(prep, opts.market);
+  if (opts.noNoEst) noEstTargets = [];
+  if (opts.limit) {
+    soldTargets = soldTargets.slice(-opts.limit);
+    biTargets = biTargets.slice(-Math.ceil(opts.limit / 10));
+    noEstTargets = noEstTargets.slice(-Math.ceil(opts.limit / 2));
+  }
+  console.log(`[backtest] replaying ${soldTargets.length} sold + ${biTargets.length} bought-in + ${noEstTargets.length} no-estimate targets (${elapsed()})`);
+  if (!soldTargets.length && !noEstTargets.length) {
+    // A MARKET LEG WITH NOTHING TO REPLAY IS A RECORD, NOT A FAILURE (Sep 27):
+    // tcg (Pokémon) lots carry no house estimate and are engine-excluded from
+    // the hedonic path (mass-produced — valued by the card tiers, graded on the
+    // forward 'card' tape), so the leg had 0 targets, threw, and the Sunday
+    // merge was skipped every week (Sep 13/20/27). Write an explicit empty leg
+    // — state + a summary naming the reason — and exit 0; the merge folds it
+    // in as zero rows. The unsharded full build still refuses an empty record.
+    if (opts.market) return writeEmptyLeg(opts.market, opts.legDir || path.join(process.cwd(), 'data', 'backtest-legs'),
+      EMPTY_LEG_REASON[opts.market] || `no concluded targets for market ${opts.market} (no estimate-carrying sold lots, no engine-valued no-estimate lots in the trailing window)`);
+    throw new Error('[backtest] no targets — refusing to write an empty record');
+  }
 
   // Freeze "now" at build start so the state file records the exact wall-clock
   // the calObs recency weighting used — an incremental re-weights against this.
   const st = mkState(Date.now());
-  const { scored, tried } = replayTargets(prep, st, soldTargets, biTargets, console.log);
+  const { scored, tried } = replayTargets(prep, st, soldTargets, biTargets, console.log, 20000, noEstTargets);
   console.log(`[backtest] replay complete (${elapsed()}) — ${scored} scored, ${tried} abstained`);
 
   const out = summarizeState(st, new Date().toISOString().slice(0, 10));
@@ -168,7 +207,7 @@ if (require.main === module) {
       const market = arg('market');
       if (market && !backtestMarkets().includes(market)) throw new Error(`[backtest] unknown market ${market} — one of ${backtestMarkets().join(', ')}`);
       const limit = arg('limit');
-      buildBacktest(dataDir, undefined, { market, legDir, limit: limit ? parseInt(limit, 10) : null });
+      buildBacktest(dataDir, undefined, { market, legDir, limit: limit ? parseInt(limit, 10) : null, noNoEst: flag('no-noest') });
     }
   } catch (e) {
     console.error('[backtest] FAILED:', (e as Error).message);

@@ -15,7 +15,7 @@ import * as path from 'path';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { marketOf } from '../app/constants';
 import { hasConditionFlag } from '../app/lib/condition';
-import { valueFloor } from '../app/lib/lanes';
+import { valueFloor, closeGrowth, type CloseCurve } from '../app/lib/lanes';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const GOLDIN_API = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';
@@ -43,7 +43,7 @@ async function main() {
   const src = argStr('source', 'https://lectr.bid');
   const up = await fetchJson(`${src}/data/ray/upcoming.json?cb=${Date.now()}`);
   const mj = await fetchJson(`${src}/data/ray/market.json?cb=${Date.now()}`);
-  const curve = mj?.markets?.all?.analytics?.closeCurve as { buckets: (number | null)[]; edges: number[] } | undefined;
+  const curve = mj?.markets?.all?.analytics?.closeCurve as CloseCurve | undefined;
   if (!curve?.buckets?.length) { console.log('[close-board] no close curve served — nothing to do'); return; }
 
   const now = Date.now();
@@ -106,7 +106,6 @@ async function main() {
   console.log(`[close-board] refreshed bids: goldin ${freshBid.size - reaOk}, rea ${reaOk}`);
 
   // ── recompute projections + deep value on the refreshed bids ─────────────
-  const bucketOf = (daysOut: number) => { let b = 0; for (const e of curve.edges) { if (daysOut < e) break; b++; } return b; };
   const overlay: Record<string, { b: number; n: number; proj?: number; floor?: number; below?: boolean }> = {};
   const deep: Array<{ id: string; depth: number; allIn: number; floor: number; closes: string; m?: string }> = [];
   for (const l of closing) {
@@ -116,7 +115,8 @@ async function main() {
     const entry: (typeof overlay)[string] = { b, n };
     const closeMs = new Date(String(l.saleDateTime || l.saleDate)).getTime();
     const daysOut = Math.max(0, (closeMs - now) / 86400000);
-    const g = curve.buckets[bucketOf(daysOut)];
+    // THE one projection factor (lanes.closeGrowth: bid band × days out)
+    const g = closeGrowth(curve, b, daysOut);
     if (b > 0 && g && g >= 1) {
       const projAllIn = Math.round(b * g * lotAllInFactor(l, b * g));
       // ONE floor rule (lanes.valueFloor — P1-4), shared with build-upcoming + gapRead

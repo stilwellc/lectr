@@ -19,9 +19,55 @@ export interface CardId {
   serialOf: number | null;    // print run from "(#04/15)" or "(#/841)" → 15, 841
   rookie: boolean;
   auto: boolean;              // autographed
+  /** (Sep 27) grade qualifier — PSA 9 (OC) trades far below a clean 9 */
+  gradeQual?: string | null;
+  /** (Sep 27) 'A' = slabbed Authentic/Altered (no numeric card grade) */
+  gradeTag?: string | null;
+  /** (Sep 27) a grading company is named but no card grade parsed — the
+   *  identity is too partial to key (never fall back to 'raw') */
+  gradeUnparsed?: boolean;
+  /** (Sep 27) sorted parallel/variant signature ('auto+gold+refractor') read
+   *  from the whole title outside the set name — a Silver Prizm is not the
+   *  base card; null when none */
+  variant?: string | null;
+  /** (Sep 27) the AUTOGRAPH grade on a signed slab ("PSA/DNA GEM MT 10",
+   *  "Auto 10", "PSA/DNA Authentic" → 'A') — a 10 auto and an Authentic auto
+   *  are different cards; null when none */
+  autoGrade?: string | null;
 }
+const AUTO_GRADE_RE = /\b(?:PSA\s*\/\s*DNA|auto(?:graph)?(?:\s+grade)?)\b[^0-9,;()]{0,20}?(\d{1,2}(?:\.5)?)(?![\d.])/i;
+const AUTO_AUTH_RE = /\b(?:PSA\s*\/\s*DNA|auto(?:graph)?)\s*[-:]?\s*(?:authentic|auth)\b/i;
 
-const GRADE_RE = /[-–—]\s*(PSA|BGS|SGC|CGC)\b[^0-9]*?(\d{1,2}(?:\.5)?)\s*(?:[-–—].*)?$/i;
+// the trailing "- PSA 10" Goldin form (the gap may not carry an autograph
+// grade: "- PSA Authentic, Auto 10" is NOT a card graded 10)
+const GRADE_RE = /[-–—]\s*(PSA|BGS|SGC|CGC)\b([^0-9]*?)(\d{1,2}(?:\.5)?)\s*(?:[-–—].*)?$/i;
+const GRADERS = 'PSA|BGS|SGC|CGC|BVG|CSG|HGA';
+// a grader ANYWHERE (REA / Memory Lane / H&S: "…Sandy Koufax Rookie PSA 9 MINT"),
+// never the autograph-authentication form PSA/DNA
+const GRADER_ANY_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)`, 'i');
+const GRADE_ANY_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)([^0-9()]{0,24}?)(\\d{1,2}(?:\\.5)?)(?![\\d.])`, 'gi');
+const GRADE_TAG_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)\\s*[-:]?\\s*(authentic|auth\\b|altered|a\\b)`, 'i');
+const GRADE_QUAL_RE = /^\s*\(?\s*(OC|MK|ST|PD|MC|OF)\s*\)?(?![a-z])/i;
+// a gap between the grader and the number that reads as an AUTOGRAPH grade
+const AUTO_GAP_RE = /auth|auto|dna|sig/i;
+// parallel / variant tokens (whole title, outside the set name). Team names
+// that carry a colour word are masked first ("Red Sox" is not a Red parallel).
+const TEAM_MASK_RE = /\b(red sox|white sox|blue jays|red wings|green bay|golden state|golden knights|blue devils|crimson tide|orange bowl|black knights|silver bullets|gold rush|browns|reds|blues|golden bears|redskins|green wave|royals)\b/gi;
+const VARIANT_TOKENS: [RegExp, string][] = [
+  [/\b(?:autograph(?:ed)?|signed|auto)\b/i, 'auto'],
+  [/\b(?:patch|jersey|relic|swatch|memorabilia)\b/i, 'relic'],
+  [/\b(?:super)fractor\b/i, 'superfractor'],
+  [/\b(?:x-?fractor|refractor)\b/i, 'refractor'],
+  [/\bprinting plate\b/i, 'plate'],
+  [/\b(?:1\/1|one of one)\b/i, '1of1'],
+  [/\b(?:variation|var\.|image variation|photo variation)\b/i, 'var'],
+  [/\berror\b/i, 'error'],
+  [/\bs?sp\b|\bshort print\b/i, 'sp'],
+  [/\bdie[- ]?cut\b/i, 'diecut'],
+  [/\bholo(?:foil|gram)?\b/i, 'holo'],
+  [/\b(?:shimmer|mojo|wave|cracked ice|atomic|camo|tie[- ]dye|neon|disco|hyper|pulsar|la[sz]er|snakeskin|zebra|tiger|scope|velocity|lucky envelopes?|fast break|choice|no huddle|sparkle|glitter)\b/i, 'pattern'],
+  [/\b(?:silver|gold|red|blue|green|orange|purple|pink|black|bronze|platinum|yellow|teal|aqua|emerald|ruby|sapphire)\b/i, 'color'],
+];
 const SERIAL_RE = /\(#?\s*\d*\s*\/\s*(\d+)\)/;
 // the player: capitalized-word run right after #CARDNO (cards) — allows
 // lowercase particles (de, van), diacritics, O'/Mc names, Jr/Sr/II suffixes
@@ -57,12 +103,48 @@ export function parseCard(title: string): CardId {
   const out: CardId = {
     player: null, playerSlug: null, year: null, setName: null, cardNo: null,
     gradeCo: null, gradeNum: null, serialOf: null, rookie: false, auto: false,
+    gradeQual: null, gradeTag: null, gradeUnparsed: false, variant: null, autoGrade: null,
   };
   const t = (title || '').trim();
   if (!t) return out;
 
+  // GRADE (Sep 27 2026 — the Koufax class): the trailing "- PSA 10" form
+  // first, else a grader ANYWHERE ("…Koufax Rookie PSA 9 MINT" — REA/ML/H&S
+  // titles carry no dash, parsed as RAW, and a PSA 9 comped the raw sales:
+  // $2,730 → sold $604,736). An autograph grade never reads as the card's
+  // ("PSA Authentic, Auto 10"); a named grader with no parseable card grade
+  // leaves the identity unkeyable instead of silently 'raw'.
+  const setGrade = (co: string, num: string, rest: string) => {
+    out.gradeCo = co.toUpperCase(); out.gradeNum = parseFloat(num);
+    const q = rest.match(GRADE_QUAL_RE);
+    if (q) out.gradeQual = q[1].toUpperCase();
+  };
   const g = t.match(GRADE_RE);
-  if (g) { out.gradeCo = g[1].toUpperCase(); out.gradeNum = parseFloat(g[2]); }
+  if (g && !AUTO_GAP_RE.test(g[2])) {
+    const headLen = g[0].indexOf(g[1]) + g[1].length + g[2].length + g[3].length;
+    setGrade(g[1], g[3], t.slice((g.index || 0) + headLen));
+  }
+  if (out.gradeNum == null) {
+    GRADE_ANY_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = GRADE_ANY_RE.exec(t))) {
+      const n = parseFloat(m[3]);
+      if (AUTO_GAP_RE.test(m[2]) || !(n >= 1 && n <= 10)) continue;
+      setGrade(m[1], m[3], t.slice(m.index + m[0].length));
+      break;
+    }
+  }
+  if (out.gradeNum == null) {
+    const tag = t.match(GRADE_TAG_RE);
+    if (tag) { out.gradeCo = tag[1].toUpperCase(); out.gradeTag = 'A'; }
+    else if (GRADER_ANY_RE.test(t)) out.gradeUnparsed = true;
+  }
+  // the AUTOGRAPH grade (dual-graded signed slabs)
+  {
+    const ag = t.match(AUTO_GRADE_RE);
+    if (ag) out.autoGrade = ag[1];
+    else if (AUTO_AUTH_RE.test(t)) out.autoGrade = 'A';
+  }
 
   const ser = t.match(SERIAL_RE);
   if (ser) out.serialOf = parseInt(ser[1], 10);
@@ -102,6 +184,15 @@ export function parseCard(title: string): CardId {
   const lead = !run ? (() => { const m = t.match(LEADING_PLAYER); return m ? trimNameRun(m[1]) : null; })() : null;
   out.player = run || lead;
   out.playerSlug = playerSlugOf(out.player);
+
+  // VARIANT signature (Sep 27): parallel / auto / relic / serial-class tokens
+  // anywhere in the title, with the player's own name and colour-word team
+  // names masked ("Vida Blue", "Red Sox" are not parallels)
+  let vt = t.replace(TEAM_MASK_RE, ' ');
+  if (out.player) vt = vt.split(out.player).join(' ');
+  const toks: string[] = [];
+  for (const [re, tok] of VARIANT_TOKENS) if (re.test(vt) && !toks.includes(tok)) toks.push(tok);
+  out.variant = toks.length ? toks.sort().join('+') : null;
   return out;
 }
 
@@ -266,17 +357,31 @@ export function looksLikeCard(title: string): boolean {
   return false;
 }
 
-/** The exact-identity key a card COMPS on: same player+year+set+number+grade =
- *  the same tradable thing. Null when the identity is too partial to trust. */
+/** The exact-identity key a card COMPS on (Sep 27 2026, tightened): same
+ *  player + year + set + card number + GRADE COMPANY + GRADE (+ qualifier
+ *  (OC/MK…) / Authentic tag) + the parallel/variant signature + the serial
+ *  print run when present = the same tradable thing. Null when the identity is
+ *  too partial to trust — including a title that NAMES a grader whose grade
+ *  didn't parse (it is never silently 'raw': that merged a PSA 9 Koufax
+ *  rookie with raw copies, $2,730 vs $604,736). */
 export function cardKey(id: CardId): string | null {
-  if (!id.playerSlug || !id.year || !id.cardNo) return null;
-  const set = (id.setName || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-  return `${id.playerSlug}|${id.year}|${set}|${id.cardNo.toLowerCase()}|${id.gradeCo || 'raw'}${id.gradeNum ?? ''}`;
+  const base = cardLadderKey(id);
+  if (!base) return null;
+  if (id.gradeUnparsed) return null;
+  const grade = id.gradeCo
+    ? `${id.gradeCo}${id.gradeNum ?? id.gradeTag ?? ''}${id.gradeQual ? `-${id.gradeQual.toLowerCase()}` : ''}`
+    : 'raw';
+  return `${base}|${grade}`;
 }
 
-/** Same card, any grade — the ladder key. */
+/** Same card, any grade — the ladder key: player + year + set + number +
+ *  variant signature + serial run (a /99 Gold parallel is a different card
+ *  from the base, at every grade). */
 export function cardLadderKey(id: CardId): string | null {
   if (!id.playerSlug || !id.year || !id.cardNo) return null;
   const set = (id.setName || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-  return `${id.playerSlug}|${id.year}|${set}|${id.cardNo.toLowerCase()}`;
+  const v = id.variant ? `|v:${id.variant}` : '';
+  const s = id.serialOf ? `|/${id.serialOf}` : '';
+  const ag = id.autoGrade ? `|ag:${id.autoGrade}` : '';
+  return `${id.playerSlug}|${id.year}|${set}|${id.cardNo.toLowerCase()}${v}${s}${ag}`;
 }

@@ -46,6 +46,36 @@ export function valueFloor(lot: {
   return null;
 }
 
+/* ── THE CLOSE-DAY GROWTH CURVE (one reader, Sep 27 2026) ──────────────── */
+
+/** market.json analytics.closeCurve. `buckets`/`edges`/`n` = the days-out
+ *  medians (unchanged meaning); `grid[bidBand][dayBucket]` = the same median
+ *  within a hammer-USD bid band (`bidEdges`), null where thin. */
+export interface CloseCurve {
+  buckets: (number | null)[];
+  edges: number[];
+  n?: number[];
+  bidEdges?: number[];
+  grid?: (number | null)[][];
+  gridN?: number[][];
+}
+
+/** THE projection factor for a live bid `daysOut` from close: the bid-band ×
+ *  days-out cell when fitted, else the days-out bucket (the pre-Sep 27 curve).
+ *  build-upcoming's bidProj stamp and close-board's overlay BOTH call this so
+ *  a lot never wears two projections. Null when no factor ≥ 1 exists. */
+export function closeGrowth(curve: CloseCurve | null | undefined, bid: number, daysOut: number): number | null {
+  if (!curve?.buckets?.length || !(bid > 0) || !(daysOut >= 0)) return null;
+  let d = 0; for (const e of curve.edges) { if (daysOut < e) break; d++; }
+  let g: number | null | undefined = null;
+  if (curve.grid && curve.bidEdges) {
+    let b = 0; for (const e of curve.bidEdges) { if (bid < e) break; b++; }
+    g = curve.grid[b]?.[d];
+  }
+  if (!(typeof g === 'number' && g >= 1)) g = curve.buckets[d];
+  return typeof g === 'number' && g >= 1 ? g : null;
+}
+
 /* ── THE GAP ────────────────────────────────────────────────────────────── */
 
 export interface GapRead {
@@ -112,11 +142,15 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
   const estMid = est.low && est.high ? (est.low + est.high) / 2 : (est.low ?? est.high);
   let anchor: SleeperRead['anchor'];
   if (estMid) {
-    // BASIS-CONSISTENT (P2): cvu is all-in (median of premium-inclusive
+    // BASIS-CONSISTENT (P2): the comps are all-in (median of premium-inclusive
     // realized), estMid is hammer-basis — gross the estimate to all-in
     // through the lot's premium before applying the engine's at-market band
-    // (the raw ratio silently carried ~20 points of premium).
-    const ratio = cvu / (estMid * lotAllInFactor(lot, estMid));
+    // (the raw ratio silently carried ~20 points of premium). Sep 27: the
+    // fairness test reads the POOL's own median (value.compMedianUsd) — on
+    // estimate lots compValueUsd is now the house-anchored prediction, and a
+    // number built from the estimate cannot verify the estimate.
+    const poolMed = (lot.value as { compMedianUsd?: number } | null | undefined)?.compMedianUsd;
+    const ratio = (poolMed && poolMed > 0 ? poolMed : cvu) / (estMid * lotAllInFactor(lot, estMid));
     if (ratio < 0.75 || ratio > 1.3) return null; // the engine's own at-market band
     anchor = 'fair-est';
   } else {
