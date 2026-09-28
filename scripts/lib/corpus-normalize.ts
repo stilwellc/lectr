@@ -425,7 +425,7 @@ export function deriveRRAuctionUrls(lots: Lot[]): number {
    ═══════════════════════════════════════════════════════════════════════════ */
 type DQLot = Lot & {
   compExclude?: string;
-  datePrecision?: 'day' | 'month' | 'year';
+  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
   resultsPending?: boolean;
   realizedUsd?: number | null;
   hammerUsd?: number | null;

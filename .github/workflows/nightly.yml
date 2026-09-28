@@ -173,7 +173,7 @@ jobs:
       # then the preinstalled stable channel — a failed install fails the LEG
       # in minutes (rides R2 last-good) instead of burning the crawl window.
       - name: Install Chrome (headless legs)
-        if: ${{ contains(fromJSON('["rrauction","lelands","memorylane","lotg"]'), matrix.house) }}
+        if: ${{ contains(fromJSON('["rrauction","lelands","memorylane","lotg","mlbauction"]'), matrix.house) }}
         timeout-minutes: 8
         run: npx playwright install chrome || npx playwright install --with-deps chrome || which google-chrome
       # every fetch-based house crawls via the monolith; RR runs its headless

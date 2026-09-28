@@ -160,7 +160,7 @@ export interface AuctionLot {
   /** How precise saleDate is. Absent = 'day'. 'month' = a synthesized mid-month
       stamp (seasonToDate: "2018 Spring" → 04-15); 'year' = a June-1 placeholder
       (Sotheby's artist-page scrape). Crawler-stamped values win over normalize. */
-  datePrecision?: 'day' | 'month' | 'year';
+  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
   url: string;
   /** Stamped at BUILD time by scripts/build-upcoming.ts onto the eager
       upcoming.json lots ONLY (comps median vs estimate midpoint, or the
