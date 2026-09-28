@@ -1,12 +1,39 @@
 # ── Security headers (site-wide) ─────────────────────────────────────────────
-# frame-ancestors 'none' blocks clickjacking overlays on the OAuth login modal;
-# X-Frame-Options is the legacy fallback for the same. HSTS pins https (the
-# site is https-only behind Cloudflare). Full CSP is deferred post-GA — the
-# static export leans on inline styles/scripts and needs a nonce strategy.
+# CONTENT-SECURITY-POLICY (enforced, Sep 27 2026). Keep it on ONE line —
+# scripts/csp-postbuild.ts parses it and fails the build if any inline script
+# left in out/ is not hash-listed here, or if the baked Supabase origin is not
+# in connect-src.
+#   script-src  'self' + ONE hash: the porcelain theme boot in app/layout.tsx
+#               (edit that script → the build prints the new hash to paste
+#               here). Next's per-page inline RSC flight scripts (3,600+ unique
+#               bodies) are moved into /_next/static/chunks/flight/<hash>.js by
+#               csp-postbuild, so no 'unsafe-inline' and no per-page hashes.
+#   style-src   'unsafe-inline' is required: the export carries ~13.5K style=""
+#               attributes (React SSR) plus <style> blocks per route. Style
+#               injection cannot execute script under this script-src.
+#   img-src     https: — lot photos come straight from 35+ auction-house CDNs
+#               (christies, brightspot, digitaloceanspaces, cloudfront, bonhams
+#               images1-3, cloudinary, bidsquare, …) and every new crawler adds
+#               more; an allow-list would silently blank a house's photos on
+#               the night it lands. Images cannot run script.
+#   connect-src same-origin data shards + the Supabase project (auth + saved
+#               lots + /rest/v1/lots). No analytics hosts are called.
+# frame-ancestors 'none' + X-Frame-Options block clickjacking of the login
+# modal. HSTS pins https; adding `preload` (and submitting to hstspreload.org)
+# is Collin's call — it is hard to undo.
 /*
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HE/v6bj/M7TOjC32nQkQiq+zDWeWUOfe3gzeMhLIQqA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://tiwrdomqydtnmgljsqsi.supabase.co; media-src 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+
+# Content-hashed build output (chunks, css, fonts, flight payloads, and the
+# per-build buildId dir) never changes under a given URL — freeze it.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
 
 # Next's static export emits the OG share card as an extensionless file
 # (/opengraph-image), which Cloudflare serves as application/octet-stream —

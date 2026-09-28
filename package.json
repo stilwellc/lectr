@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "tsx scripts/build-og.tsx && tsx scripts/gen-redirects.ts && next build",
+    "build": "tsx scripts/build-og.tsx && tsx scripts/gen-redirects.ts && next build && tsx scripts/csp-postbuild.ts",
     "start": "next start",
     "lint": "next lint",
     "crawl": "tsx scripts/ray-crawl.ts",
