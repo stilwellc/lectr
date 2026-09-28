@@ -364,6 +364,10 @@ push() {
   # ledger silently reset nightly from Aug 14–24 2026 because of exactly
   # this; grading always saw zero rows).
   test -f data/corpus/calls-ledger.json.gz && obj_put "latest/calls-ledger.json.gz" "data/corpus/calls-ledger.json.gz" || echo "[data-store] no calls ledger to push"
+  # the LLM extraction cache (scripts/lib/extract) persists the same way —
+  # paid-for results must survive the segments rebuild. Absent until the
+  # extraction layer is switched on (ANTHROPIC_API_KEY); then written nightly.
+  test -f data/corpus/extract-cache.json.gz && ! test -f data/corpus/.extract-cache-unreadable && obj_put "latest/extract-cache.json.gz" "data/corpus/extract-cache.json.gz" || true
   # dated corpus snapshot — the rollback ladder (replaces git history for data)
   day=$(stamp_of public/data/ray/meta.json | cut -c1-10 | tr -d '-')
   [ -n "$day" ] || day=$(date -u +%Y%m%d)
@@ -759,6 +763,8 @@ case "${1:-}" in
     obj_get_clean "latest/backtest.json" "public/data/ray/backtest.json" "[data-store] no prior backtest.json yet (first run)"
     obj_get_clean "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" "[data-store] no prior backtest state yet (incremental will full-build)"
     obj_get_clean "latest/calls-ledger.json.gz" "data/corpus/calls-ledger.json.gz" "[data-store] no prior calls ledger yet (accrual starts tonight)"
+    # advisory: an unreadable cache must never cost a night (it only re-spends)
+    obj_get_clean "latest/extract-cache.json.gz" "data/corpus/extract-cache.json.gz" "[data-store] no extraction cache yet (LLM extraction off, or its first night)" || { rm -f data/corpus/extract-cache.json.gz; touch data/corpus/.extract-cache-unreadable; echo "[data-store] WARNING: extraction cache unreadable — running without it, and tonight will NOT overwrite it in R2"; }
     ;;
   push-backtest)
     test -f public/data/ray/backtest.json && obj_put "latest/backtest.json" "public/data/ray/backtest.json" || echo "[data-store] no backtest.json to push"

@@ -22,6 +22,7 @@ import { buildMakerIndicesParallel } from './lib/maker-pool';
 import { resolveComps, estimateValueEx, setCalibration, setTimeIndex, vsBidRead, quantile, knownKey, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
+import { mergeCardExtract, pokemonKeyFromExtract, llmConditionFlag, sameObjectFilter, flushExtractQueue } from './lib/extract/apply';
 import { buildMarketSeries, buildTimeIndex, type MarketSeries } from '../app/lib/indices';
 import { median as statsMedian, weightedMedian } from '../app/lib/stats';
 import { isCompExcluded } from '../app/lib/comps';
@@ -657,6 +658,10 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       if (c === undefined) { c = parseCard(title); cardCache.set(title, c); }
       return c;
     };
+    // + the advisory LLM extraction (scripts/lib/extract): fills only fields
+    // the regex left null; returns the cached regex CardId itself when the lot
+    // carries no extraction (always, with extraction off)
+    const cardIdOf = (l: AuctionLot): ReturnType<typeof parseCard> => mergeCardExtract(parseCardCached(l.title || ''), l);
     const SPORT_SET = new Set(MARKETS.sports);
     // graded-cards (REA/H&S/SCP/Lelands/ML/LOTG — 165k sold, 30yr archive)
     // joins every card path: _card identity, cardKey cross-house comps, the
@@ -677,8 +682,8 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       if (CARD_SLUGS.has(l.artist)) {
         // condition-flagged sales never enter the comp medians clean lots
         // are valued against (the "Missing Back at clean prices" class)
-        if (hasConditionFlag(l.title)) continue;
-        const c = parseCardCached(l.title || '');
+        if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;
+        const c = cardIdOf(l);
         l._card = c; l._pid = c.playerSlug; l._pname = c.player;
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
         const lk = cardLadderKey(c); if (lk) (byLadderKey.get(lk) || byLadderKey.set(lk, []).get(lk)!).push(l);
@@ -844,11 +849,13 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     // the ladder key drops the grade segment. Grade adjustment borrows the
     // SPORTS ladder ratios (gradeMult) as a proxy — labeled tier 'tcg-grade-adj',
     // capped 'low' until a Pokémon ladder is fitted (docs/ENGINE_SPEC_V2.md).
+    // regex pokemonKey first; the advisory extraction keys only what it missed
+    const pkKey = (x: AuctionLot): string | null => pokemonKey(x) ?? pokemonKeyFromExtract(x);
     const tcgByKey = new Map<string, AuctionLot[]>();
     const tcgByLadder = new Map<string, AuctionLot[]>();
     for (const sPk of lotsForSlug('pokemon')) {
-      if (sPk.status !== 'sold' || !(sPk.realizedUsd! > 0) || !sPk.saleDate || hasConditionFlag(sPk.title)) continue;
-      const k = pokemonKey(sPk); if (!k) continue;
+      if (sPk.status !== 'sold' || !(sPk.realizedUsd! > 0) || !sPk.saleDate || hasConditionFlag(sPk.title) || llmConditionFlag(sPk)) continue;
+      const k = pkKey(sPk); if (!k) continue;
       (tcgByKey.get(k) || tcgByKey.set(k, []).get(k)!).push(sPk);
       const lk = k.slice(0, k.lastIndexOf('|'));
       (tcgByLadder.get(lk) || tcgByLadder.set(lk, []).get(lk)!).push(sPk);
@@ -860,10 +867,10 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       const bid = lv.currentBid || 0;
       if (!(bid > 0) || (lv.estLowUsd! > 0 && lv.estHighUsd! > 0)) continue;
       tcgCounts.bidOnly++;
-      if (hasConditionFlag(l.title)) { lv.abstain = 'no-identity'; tcgCounts.none++; continue; }
-      const k = pokemonKey(l);
+      if (hasConditionFlag(l.title) || llmConditionFlag(l)) { lv.abstain = 'no-identity'; tcgCounts.none++; continue; }
+      const k = pkKey(l);
       if (!k) { lv.abstain = 'no-identity'; tcgCounts.noKey++; continue; }
-      const exact = tcgByKey.get(k) || [];
+      const exact = sameObjectFilter(l, tcgByKey.get(k) || [], { queue: !opts.evalOnly });
       const gradeNum = parseFloat(k.slice(k.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
       let value: number | null = null, low = 0, high = 0, poolIds: string[] = [], poolN = 0;
       let confidence: 'high' | 'medium' | 'low' = 'low';
@@ -877,7 +884,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
         const ladder = (tcgByLadder.get(k.slice(0, k.lastIndexOf('|'))) || []).filter(x => x.id !== l.id);
         if (ladder.length >= 2 && isFinite(gradeNum)) {
           const adj = ladder.map(x => {
-            const xk = pokemonKey(x)!; const g = parseFloat(xk.slice(xk.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
+            const xk = pkKey(x)!; const g = parseFloat(xk.slice(xk.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
             return { p: x.realizedUsd! * (gradeMult(gradeNum) / gradeMult(g)), ms: saleMsOf(x) };
           }).filter(x => x.p > 0);
           if (adj.length >= 2) {
@@ -1020,7 +1027,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     const liveByCardKey = new Map<string, { id: string; house: string; bid: number }[]>();
     for (const l of all) {
       if (l.status !== 'upcoming' || !CARD_SLUGS.has(l.artist)) continue;
-      const ck = cardKey(parseCardCached(l.title || ''));
+      const ck = cardKey(cardIdOf(l));
       if (!ck) continue;
       const arr = liveByCardKey.get(ck) || [];
       arr.push({ id: String(l.id), house: String(l.auctionHouse), bid: (l as AuctionLot & { currentBid?: number }).currentBid || 0 });
@@ -1049,13 +1056,15 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       if (l.status !== 'upcoming') continue;
       const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null; cardComps?: unknown };
       if (CARD_SLUGS.has(l.artist)) {
-        const c = parseCardCached(l.title || '');
+        const c = cardIdOf(l);
         lw.playerSlug = c.playerSlug; lw.playerName = c.player;
         // a condition-flagged lot must not wear a clean-comp floor: no
         // cardComps → no deep-value seat, no misleading "med" on the page
-        if (hasConditionFlag(l.title)) continue;
+        if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;
         const ck = cardKey(c); const lk = cardLadderKey(c);
-        const exact: AuctionLot[] = (ck ? byCardKey.get(ck) : undefined) || [];
+        // same-object veto (advisory): drop exact comps the pair check judged
+        // a different item; the pool is returned untouched with extraction off
+        const exact: AuctionLot[] = sameObjectFilter(l, (ck ? byCardKey.get(ck) : undefined) || [], { queue: !opts.evalOnly });
         const ladder: AuctionLot[] = (lk ? byLadderKey.get(lk) : undefined) || [];
         const lastSales = exact.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 5)
           .map(s => ({ d: s.saleDate, p: Math.round(s.realizedUsd!) }));
@@ -1338,6 +1347,8 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   }
 
   fs.writeFileSync(path.join(SERVED, 'market.json'), JSON.stringify(market));
+  // persist same-object pairs queued for the next extraction run (no-op when off)
+  flushExtractQueue();
   console.log(`[market] wrote market.json (${(fs.statSync(path.join(SERVED, 'market.json')).size / 1024).toFixed(0)}KB)`);
 
   // ── 4 · persist: full corpus (gz) + slim served (value flows to the client) ──
