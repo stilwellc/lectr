@@ -3,7 +3,7 @@
 # between nightlies with published "Sold For" prices on its (still-live)
 # pages, and its rows sit frozen as status 'upcoming' until the next crawl.
 # resolve-rrauction's stale-sale pass settles them; this workflow lets that
-# happen NOW instead of at 07:00 UTC. Pair with a
+# happen NOW instead of at the next nightly. Pair with a
 # `nightly.yml -f skip_crawl=true` dispatch to bake the healed segment.
 name: Resolve RR Auction (on demand)
 on:
@@ -20,15 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       RAY_HOUSE: rrauction
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
       - name: Pull last-good segment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-segment rrauction
       - name: Install Chrome
         timeout-minutes: 8
@@ -36,4 +41,7 @@ jobs:
       - name: Resolve (live sales + stale closed sales)
         run: npx tsx scripts/resolve-rrauction.ts --write
       - name: Push segment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-segment rrauction

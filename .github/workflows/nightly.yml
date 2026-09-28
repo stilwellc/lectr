@@ -9,37 +9,51 @@ name: Nightly (segmented)
 #     → each pulls ONLY its own R2 segment, crawls ONLY its house, writes its
 #       segment back. A house failing can't touch another's data, and a crawl
 #       that collapses its own segment refuses to overwrite the last-good one.
-#   assemble (needs: crawl, if: always)
+#   assemble (needs: crawl)
 #     → reunions every segment (fresh OR last-good), runs the engine, and a
 #       SANITY GATE refuses to publish a corpus that shrank >10%. The only
 #       full-corpus job → carries the big heap.
-#   deploy (needs: assemble)  →  pull served → build → ship
-#   sync   (needs: assemble, if: always, non-blocking)  →  supabase + alerts
+#   deploy (needs: assemble)  →  pinned served payload → build → ship
+#   sync   (needs: assemble, non-blocking)  →  supabase + alerts
+#   backtest-leg / backtest  →  the point-in-time record (not on the deploy path)
+#   health (needs: crawl, non-blocking)  →  leg-health table, red on ok=false
+#   handoff-cleanup (last, always)  →  deletes this run's R2 handoff objects
 #
-# Segment handoff: crawl→assemble rides SAME-RUN GitHub artifacts (immediately
-# consistent — no R2 GET-lag wait, which cost ~12min/night). R2 keeps every
-# segment too: it's tomorrow's last-good baseline and the recovery source —
-# any house missing an artifact (crawl failed, skip_crawl, or `other`, which
-# no crawl job produces) falls back to its R2 last-good.
-#
-# Payload handoff: the SAME pattern now runs assemble→{deploy,sync,backtest}.
-# assemble uploads served-payload + corpus-payload as same-run artifacts; the
-# three downstream jobs try the artifact first and only fall back to
-# `data-store.sh pull` (R2) when it's absent — a job rerun after artifact
-# expiry, or a manual re-dispatch. That fallback is cheap now too: data-store
-# publishes to write-once versions/ keys behind a tiny pointer, so only the
-# pointer read can lag, never the 18MB payload GETs.
+# HANDOFFS NEVER RIDE GITHUB ARTIFACTS (Sep 27 2026). The repo is PUBLIC:
+# every Actions artifact is downloadable by any GitHub user, and this
+# workflow used to upload the whole corpus (corpus-payload ~215MB, one
+# segment-<house> per leg). Now, all inside the PRIVATE lectr-data bucket:
+#   crawl → assemble   `data-store.sh handoff-put segment-<house>` writes a
+#       WRITE-ONCE run-scoped key ci-handoff/<run_id>/segment-<house>/a<attempt>-<UTC>.bin
+#       (a new key per write → immediately consistent, no GET-lag), and
+#       `assemble-segments` reads it, falling back to the R2 last-good
+#       (latest/segments/…) for `other`, rrauction-archive, a failed leg or
+#       skip_crawl.
+#   assemble → deploy/sync/backtest   assemble's `push` already writes the
+#       payloads under a write-once versions/<UTC>-<sha>/ prefix; it emits that
+#       prefix as the job output `version`, and every downstream job runs
+#       `data-store.sh pull-version <version>` — the exact bytes assemble
+#       published, never the (movable) pointer, zero extra upload.
+#   backtest-leg → backtest   leg state via ci-handoff/<run_id>/backtest-leg-<m>/.
+#   Cleanup: handoff-cleanup deletes ci-handoff/<run_id>/ when nothing failed
+#   (a failed run keeps it so "re-run failed jobs" still finds it) and always
+#   prunes ci-handoff/ objects older than 2 days. See docs/data-pipeline.md.
+# Only small, non-sensitive artifacts remain: validate-engine.json,
+# health-<house> (leg-health.json), social-cards (the public JPEGs).
 #
 # Net: no single job scales with the TOTAL corpus, a partial failure can never
 # regress prod, and any stage is retryable in isolation.
 
 on:
   schedule:
-    # 06:00 UTC = 1am EST (2am EDT) — the overnight window: houses have closed
-    # their timed sessions, and the fresh corpus is live before the US morning.
-    # (GitHub cron is UTC-fixed; 06:00 keeps it in the 1–2am Eastern band
-    # year-round.)
-    - cron: '0 6 * * *'
+    # 04:17 UTC. Off the top of the hour on purpose: GitHub queues :00
+    # schedules behind the global rush — the old '0 6' started 11:20–11:50 UTC
+    # every night (Sep 2026), publishing at 8–9:30am ET. The run is ~60–90 min
+    # (crawl ~40–80, assemble ~45–90), so a 04:17 start publishes ~1–2am ET in
+    # summer (EDT) and ~12–1am in winter (EST). If GitHub's schedule lag keeps
+    # eating hours, the fix is an external trigger (a Cloudflare cron calling
+    # workflow_dispatch), not an earlier cron.
+    - cron: '17 4 * * *'
   workflow_dispatch:
     inputs:
       skip_crawl:
@@ -68,52 +82,55 @@ concurrency:
   group: nightly
   cancel-in-progress: false
 
+# NO SECRETS AT WORKFLOW SCOPE: CLOUDFLARE_* / SOTHEBYS_COOKIE / SUPABASE_* /
+# X_* / IG_* are bound on the individual steps that use them, so an `npm ci`
+# or a crawler never sees a credential it does not need.
 env:
   NODE_OPTIONS: --max-old-space-size=10240
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-  # playwright is a devDep for the one headless leg (rrauction). Skip its
-  # postinstall browser download in EVERY job's `npm ci` — only the rrauction
-  # leg installs a browser, explicitly, via `npx playwright install chrome`.
+  # playwright is a devDep for the headless legs; its browser download is
+  # never part of `npm ci` (which runs --ignore-scripts anyway) — only the
+  # headless legs install Chrome, explicitly.
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
 jobs:
-  # Decides once, for every downstream job, whether tonight is the FULL
-  # per-market replay (Sunday UTC) or the incremental append. A job-level
-  # output (not a per-step `date` call) so the leg matrix can be skipped
-  # on weekdays without evaluating shell in an `if:`.
+  # Decides once, for every downstream job: FULL per-market backtest replay
+  # (Sunday UTC) or the incremental append, plus the ONE list of crawl houses
+  # and backtest markets every job below reads.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      full: ${{ steps.dow.outputs.full }}
+      full: ${{ steps.plan.outputs.full }}
+      houses: ${{ steps.plan.outputs.houses }}
+      markets: ${{ steps.plan.outputs.markets }}
     steps:
-      - id: dow
+      - id: plan
+        env:
+          BACKTEST_MODE: ${{ github.event.inputs.backtest_mode }}
         run: |
-          if [ "${{ github.event.inputs.backtest_mode }}" = "full" ]; then echo "full=true" >> "$GITHUB_OUTPUT";
-          elif [ "${{ github.event.inputs.backtest_mode }}" = "incremental" ]; then echo "full=false" >> "$GITHUB_OUTPUT";
-          elif [ "$(date -u +%u)" = "7" ]; then echo "full=true" >> "$GITHUB_OUTPUT";
-          else echo "full=false" >> "$GITHUB_OUTPUT"; fi
+          case "$BACKTEST_MODE" in
+            full) full=true ;;
+            incremental) full=false ;;
+            *) if [ "$(date -u +%u)" = "7" ]; then full=true; else full=false; fi ;;
+          esac
+          # houses: rrauction + lelands/memorylane/lotg are the HEADLESS legs;
+          # rea/hugginsscott/scp/hakes/nflauction/mlbauction the standalone
+          # sports/pop crawlers; the rest ride the ray-crawl.ts monolith.
+          # markets: the engine roster's market keys + 'other' (backtest-merge.sh
+          # re-checks this against backtestMarkets() and fails on a gap).
+          {
+            echo "full=$full"
+            echo 'houses=["goldin","sothebys","christies","bonhams","phillips","wright","rrauction","rea","hugginsscott","scp","hakes","lelands","memorylane","lotg","nflauction","mlbauction"]'
+            echo 'markets=["art","design","watches","sports","science","culture","tcg","other"]'
+          } >> "$GITHUB_OUTPUT"
 
   crawl:
+    needs: plan
     if: ${{ github.event.inputs.skip_crawl != 'true' }}   # assemble-only recovery reuses last-good segments
     strategy:
       fail-fast: false          # one house failing must NOT cancel the others
       matrix:
-        # rrauction is the one HEADLESS leg (Cloudflare-gated — no fetch/API
-        # path): it installs Chrome + runs the Playwright resolver, isolated so
-        # its browser dependency and any CF flakiness can never touch the other
-        # houses' segments.
-        # rea/hugginsscott/scp = the sports+pop-culture expansion (Aug 2026).
-        # Each runs its own standalone crawler (curl, no headless), writes+merges
-        # its own segment, and rides the same pull/push/artifact plumbing. They
-        # crawl a bounded recent window and MERGE into their segment, so a run
-        # never wipes accumulated history. Additive: they can only add lots to
-        # the sports/pop verticals, never regress the existing corpus.
-        # lelands/memorylane/lotg = the CreateAuction trio — HEADLESS legs (same
-        # Cloudflare-clearing Playwright pattern as rrauction; one crawler, three
-        # houses). rea/hugginsscott/scp = curl legs. All additive to sports/pop.
-        house: [goldin, sothebys, christies, bonhams, phillips, wright, rrauction, rea, hugginsscott, scp, hakes, lelands, memorylane, lotg, nflauction, mlbauction]
+        house: ${{ fromJSON(needs.plan.outputs.houses) }}
     runs-on: ubuntu-latest
     # SEGMENT LOCK (Sep 2 2026): every writer of latest/segments/<house> —
     # this leg, gallery-heal, nflauction-heal, backfill-*, resolve-rrauction —
@@ -126,15 +143,10 @@ jobs:
     concurrency:
       group: segments-${{ matrix.house }}
       cancel-in-progress: false
-    # RAISED 60→90 (Aug 4 2026): christies measured 43.9min (Aug 3) / 34.6min
-    # (Aug 4) — it peaked at 73% of the old ceiling. A house that times out
-    # pushes no segment, and the seedless/last-good guards then have to catch
-    # it; cheaper to give the slow houses room. Ceiling costs nothing.
-    # Sep 10 2026: 90 → 120. Christie's measured 77m on the Aug 25 nightly
-    # (86% of the ceiling) and Huggins & Scott 80m on Sep 2. Same reasoning.
+    # 60→90 (Aug 4) → 120 (Sep 10): Christie's measured 77m, H&S 80m. A leg
+    # that times out pushes no segment and rides R2 last-good; the ceiling is free.
     timeout-minutes: 120
     env:
-      SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
       RAY_HOUSE: ${{ matrix.house }}
       # Read by the christies + sothebys houses. '' (scheduled runs / auto) lets
       # the crawler apply its default: incremental Mon–Sat, full sweep Sunday
@@ -142,20 +154,24 @@ jobs:
       # input maps onto exactly those three states.
       INCREMENTAL_CRAWL: ${{ github.event.inputs.incremental_crawl == 'incremental' && '1' || (github.event.inputs.incremental_crawl == 'full' && '0' || '') }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
       - name: Pull this house's segment (last-good)
-        run: bash scripts/data-store.sh pull-segment ${{ matrix.house }}
-      # Headless legs only: Chrome for the resolver. Scoped so no other house
-      # pays the install cost. Aug 18+19 2026 this step HUNG for the full 90-min
-      # job cap on lelands/lotg/rrauction (orphan `playwright install
-      # --with-deps` killed at timeout — apt dependency path stalls). Runners
-      # already ship system Chrome, so: hard 8-min step cap, try the dep-less
-      # install first, and fall through to the preinstalled stable channel —
-      # a failed install now fails the LEG in minutes (rides R2 last-good)
-      # instead of silently burning the whole crawl window.
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull-segment "$RAY_HOUSE"
+      # Headless legs only: Chrome for the resolver. Aug 18+19 2026 this step
+      # HUNG for the full job cap (`playwright install --with-deps` apt stall).
+      # Runners ship system Chrome: hard 8-min cap, dep-less install first,
+      # then the preinstalled stable channel — a failed install fails the LEG
+      # in minutes (rides R2 last-good) instead of burning the crawl window.
       - name: Install Chrome (headless legs)
         if: ${{ contains(fromJSON('["rrauction","lelands","memorylane","lotg"]'), matrix.house) }}
         timeout-minutes: 8
@@ -164,49 +180,42 @@ jobs:
       # resolver instead (writes the rrauction segment directly)
       - name: Crawl ${{ matrix.house }}
         if: ${{ !contains(fromJSON('["rrauction","rea","hugginsscott","scp","hakes","lelands","memorylane","lotg","nflauction","mlbauction"]'), matrix.house) }}
+        env:
+          # only the Sotheby's leg ever receives the cookie
+          SOTHEBYS_COOKIE: ${{ matrix.house == 'sothebys' && secrets.SOTHEBYS_COOKIE || '' }}
         run: npx tsx scripts/ray-crawl.ts
       - name: Crawl rrauction (headless)
         if: matrix.house == 'rrauction'
         run: npx tsx scripts/resolve-rrauction.ts --write
       # sports/pop expansion — standalone crawlers. --live snapshots the house's
-      # CURRENT auction as status:'upcoming' lots (same lifecycle as Goldin/RR:
-      # re-snapshotted + updated every night, replaced-not-unioned so closed
-      # lots never linger) and RESOLVES closed upcoming ids into settled sales —
-      # which is also how new sold history now arrives, replacing the old
-      # hand-tuned id windows (they sat fully-harvested at +0 new for weeks).
+      # CURRENT auction as status:'upcoming' lots (re-snapshotted nightly,
+      # replaced-not-unioned so closed lots never linger) and RESOLVES closed
+      # upcoming ids into settled sales.
       - name: Crawl REA
         if: matrix.house == 'rea'
-        # live grid enumerates the running auction (ids are NOT contiguous —
-        # 2026 Summer spans 185118..195743, so no id window can cover it)
+        # live grid enumerates the running auction (ids are NOT contiguous)
         run: npx tsx scripts/crawl-rea.ts --live --write
       - name: Crawl Huggins & Scott
         if: matrix.house == 'hugginsscott'
-        # archive months (settled) + the new bid.hugginsandscott.com live grid
+        # archive months (settled) + the bid.hugginsandscott.com live grid
         run: npx tsx scripts/crawl-hugginsscott.ts --months 3 --delay 150 --live --write
       - name: Crawl SCP
         if: matrix.house == 'scp'
         # past sweep is ALSO the sold-resolve for closed live sales (same ids)
         run: npx tsx scripts/crawl-scp.ts --auctions 3 --cap 600 --delay 150 --live --write
       # Hake's rides the SAME Bidsquare crawler as SCP (scripts/lib/bidsquare.ts).
-      # Their Bidsquare instance carries no past auctions yet (they migrated off
-      # ASP.NET in 2026), so today this leg is the LIVE catalogue only; the past
-      # sweep starts resolving sold rows the night after their first sale closes.
       - name: Crawl Hake's
         if: matrix.house == 'hakes'
         run: npx tsx scripts/crawl-hakes.ts --auctions 3 --cap 600 --delay 150 --live --write
       - name: Crawl NFL Auction
         if: matrix.house == 'nflauction'
-        # GAME-USED only (league charity house; iSynApp JSON api, plain curl).
-        # closed sweep is the sold-resolve — final bid IS all-in (no premium)
+        # GAME-USED only (iSynApp JSON api, plain curl); final bid IS all-in
         run: npx tsx scripts/crawl-nflauction.ts --closed-pages 30 --delay 150 --live --write
       - name: Crawl MLB Auctions
         if: matrix.house == 'mlbauction'
-        # GAME-USED only (same iSynApp platform, sid 1101001; winning-bid page
-        # render is the sold gate — the MLB config exposes no reserveAmt)
+        # GAME-USED only (same iSynApp platform, sid 1101001)
         run: npx tsx scripts/crawl-mlbauction.ts --closed-pages 30 --delay 400 --live --write
-      # CreateAuction trio — HEADLESS (Playwright clears Cloudflare, same as
-      # rrauction). --live reads the current sale off /Lots/Gallery (one nav,
-      # bids inline) + per-lot resolve of closed upcoming ids.
+      # CreateAuction trio — HEADLESS (Playwright clears Cloudflare).
       - name: Crawl Lelands (headless)
         if: matrix.house == 'lelands'
         run: npx tsx scripts/crawl-createauction.ts --house lelands --live --write
@@ -217,337 +226,313 @@ jobs:
         if: matrix.house == 'lotg'
         run: npx tsx scripts/crawl-createauction.ts --house lotg --live --write
       # Christie's online-only + Sotheby's ResultHidden sales gate results away
-      # from the crawl paths; the resolvers pull them from the public sources
-      # (onlineonly pages / the Algolia search index) so closed lots can't rot
-      # pending or mis-settle to bought_in. Non-fatal: a resolver hiccup must
-      # not lose the night's crawl.
+      # from the crawl paths; the resolvers pull them from the public sources.
+      # Non-fatal (a resolver hiccup must not lose the night's crawl) — but
+      # never silent: a failure is a ::warning:: + a job-summary line.
       - name: Resolve gated results
         if: matrix.house == 'christies' || matrix.house == 'sothebys'
-        run: npx tsx scripts/resolve-${{ matrix.house }}.ts --write || echo "resolver failed (non-fatal)"
+        run: |
+          if npx tsx "scripts/resolve-${RAY_HOUSE}.ts" --write; then exit 0; fi
+          msg="resolve-${RAY_HOUSE}.ts failed — tonight's crawl still ships; gated results stay pending until the next run"
+          echo "::warning title=resolver ${RAY_HOUSE} failed::${msg}"
+          echo "- ⚠️ ${msg}" >> "$GITHUB_STEP_SUMMARY"
       - name: Push this house's segment
-        run: bash scripts/data-store.sh push-segment ${{ matrix.house }}
-      # Same-run handoff to assemble (immediately consistent, no R2 GET-lag).
-      # The R2 push above stays: tomorrow's last-good baseline + recovery source.
-      - name: Upload segment artifact
-        uses: actions/upload-artifact@v4
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh push-segment "$RAY_HOUSE"
+      # Same-run handoff to assemble: a write-once, run-scoped key in the
+      # PRIVATE bucket (immediately consistent, unlike the overwritten
+      # latest/segments/ key the push above just wrote).
+      - name: Hand the segment to assemble (private R2, run-scoped)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh handoff-put "segment-${RAY_HOUSE}" "data/corpus/segments/${RAY_HOUSE}.ndjson.gz"
+      # {house, ok, fetched, parsed, settled, reason} from the crawler — tiny,
+      # counts only. Uploaded even when the leg fails (that's when it matters).
+      - name: Upload leg health
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: segment-${{ matrix.house }}
-          path: data/corpus/segments/${{ matrix.house }}.ndjson.gz
-          retention-days: 2
-          if-no-files-found: error
+          name: health-${{ matrix.house }}
+          path: |
+            leg-health.json
+            data/qa/leg-health*.json
+          retention-days: 14
+          if-no-files-found: ignore
 
   assemble:
-    needs: crawl
-    if: always()                # build from fresh-or-last-good segments even if some crawls failed
+    needs: [plan, crawl]
+    # build from fresh-or-last-good segments even if some crawls failed (or
+    # were skipped) — but not on a cancelled run
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
-    # Normal night: artifacts skip the pull-segments GET-lag (~12min) entirely.
-    # But skip_crawl / a failed house still pulls from R2 and can eat the lag,
-    # so keep headroom (engine ~21 + upcoming on top).
-    # RAISED 60→120 (Aug 4 2026): measured assemble wall-clock is 37.5min
-    # (Aug 3) → 42min (Aug 4) — 70% of the old ceiling and climbing with the
-    # corpus. build-market's MARKETS is now derived from ARTISTS (science-tech
-    # restored), which adds markets to every per-market pass, so this job's
-    # cost only goes up. A timeout here kills the night mid-assemble; the
-    # ceiling is free (Actions bills minutes USED, not reserved).
-    # Sep 9 2026: 120 → 180. Measured assemble on the last two SUCCESSFUL
-    # nightlies was 76m (Aug 25) and 89m (Aug 24) — only ~31m of margin at the
-    # worst observation, on a corpus that has grown ~19k lots since and keeps
-    # growing. A kill here costs a whole night and publishes nothing (the R2
-    # push is the last step), so buy the headroom.
+    # 60→120 (Aug 4) → 180 (Sep 9): measured 76–89m on a growing corpus. A kill
+    # here costs a whole night and publishes nothing (the R2 push is last).
     timeout-minutes: 180
+    outputs:
+      # the write-once versions/<UTC>-<sha> prefix this run published —
+      # deploy / sync / backtest read exactly this (data-store.sh pull-version)
+      version: ${{ steps.push.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      # Fresh segments from THIS run's crawl jobs — immediately consistent, no
-      # GET-lag. Absent for failed houses and in skip_crawl mode; continue-on-error
-      # lets the R2 fallback below fill every gap.
-      - name: Download fresh segments (same-run artifacts)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+      - uses: actions/checkout@v7
         with:
-          pattern: segment-*
-          merge-multiple: true
-          path: data/corpus/segments/
-      # R2 fallback: only segments NOT delivered as artifacts (crawl-failed
-      # house, skip_crawl, and always `other` — no crawl job produces it).
-      # Pulls run in parallel like pull-segments: worst case ONE lag window.
-      - name: Pull missing segments from R2 (last-good fallback)
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # cheap (~1s): the gate logic under test (sentinel decision table) must
+      # hold before it is trusted to gate tonight's publish. Typecheck runs in
+      # deploy.yml, where the served JSON the app imports is present.
+      - name: Unit tests
+        run: npm test
+      - name: Segments — this run's crawl handoff, else R2 last-good
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HOUSES: ${{ join(fromJSON(needs.plan.outputs.houses), ' ') }}
         run: |
-          mkdir -p data/corpus/segments
-          pids="" rc=0
-          for h in goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other rea hugginsscott scp hakes lelands memorylane lotg nflauction mlbauction; do
-            if [ -f "data/corpus/segments/$h.ndjson.gz" ]; then
-              echo "segment $h fresh from artifact — skipping R2"
-            else
-              bash scripts/data-store.sh pull-segment "$h" & pids="$pids $!"
-            fi
-          done
-          for p in $pids; do wait "$p" || rc=1; done
-          exit $rc
+          read -r -a houses <<< "$HOUSES"
+          bash scripts/data-store.sh assemble-segments "${houses[@]}" rrauction-archive other
       - name: Pull previous totals + backtest (gate baseline + carry the record + incremental state)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-meta && bash scripts/data-store.sh pull-backtest
       - name: Assemble + engine (sanity-gated)
         # sentinel_warn_only is the MANUAL recovery valve for the price-bleed
-        # sentinel only (Sep 9 2026: the absolute-count gate added Sep 2 wedged
-        # every publish on 25 yrs of legitimate repeat-price clusters). It does
-        # NOT relax the corpus-shrink sanity gate or the engine holdout gate.
+        # sentinel only. It does NOT relax the corpus-shrink sanity gate or
+        # the engine holdout gate.
         run: npx tsx scripts/assemble.ts
         env:
           RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
       - name: Rebuild eager upcoming payload
         run: npx tsx scripts/build-upcoming.ts
-      # Emit the value book for Starling (the buy-side sibling) → PRIVATE R2.
-      # Best-effort: a failure here must never break lectr's own nightly.
       # ENGINE GATE (Sep 2 2026): temporal holdout through the production
-      # replay path. Exits non-zero on: non-monotonic beat-rate (global or any
-      # market with ≥2 buckets at n≥30), a 'high' tier worse than 1.6× median
-      # error or less accurate than 'low' in any market at n≥30, or <10%
-      # coverage. Runs BEFORE the R2 push so a failed gate keeps last-good live.
-      # ~3 min at --sample 30000 (stratified per market, incl. culture/tcg).
+      # replay path. Runs BEFORE the R2 push so a failed gate keeps last-good live.
       - name: Validate engine (temporal holdout gate)
         run: |
           mkdir -p data/qa
           NODE_OPTIONS=--max-old-space-size=10240 npx tsx scripts/validate-engine.ts --sample 30000 --json data/qa/validate-engine.json
       - name: Upload engine validation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: validate-engine
           path: data/qa/validate-engine.json
           retention-days: 14
           if-no-files-found: ignore
+      # Emit the value book for Starling (the buy-side sibling) → PRIVATE R2.
+      # Best-effort: a failure here must never break lectr's own nightly.
       - name: Emit value book → private R2 (Starling)
-        run: npx tsx scripts/emit-value-book.ts
         continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx tsx scripts/emit-value-book.ts
       - name: Push corpus + served to R2
+        id: push
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push
-      # versions/ retention: each push adds ~176MB of write-once payloads; keep
-      # the newest 14 (a two-week manual-rollback ladder) and delete the rest.
-      # Non-fatal — a failed prune only defers cleanup to the next night.
+      # versions/ retention: keep the newest 14 (two-week rollback ladder).
+      # Non-fatal — a failed prune only defers cleanup — but never silent.
       - name: Prune old R2 versions (keep 14)
-        run: bash scripts/data-store.sh prune 14 || echo "prune failed (non-fatal, retries tomorrow)"
-      # Same-run handoff to deploy/sync/backtest — immediately consistent, no
-      # R2 round-trip at all. The R2 push above stays authoritative: it's what
-      # reruns, manual dispatches and push-triggered deploy.yml read.
-      - name: Upload served payload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: served-payload
-          path: public/data/ray/
-          retention-days: 1
-          if-no-files-found: error
-      # NOTE: the glob also carries data/corpus/backtest-state.json.gz (fetched
-      # by pull-backtest above) — the raw accumulator state the backtest job's
-      # NIGHTLY INCREMENTAL rehydrates to append newly-closed lots. Deliberate:
-      # the state must travel with the corpus it will be appended against.
-      - name: Upload corpus artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: corpus-payload
-          path: data/corpus/*.json.gz
-          retention-days: 1
-          if-no-files-found: error
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if bash scripts/data-store.sh prune 14; then exit 0; fi
+          echo "::warning title=R2 prune failed::versions/ prune failed — retries tomorrow; storage grows ~176MB/night until it succeeds"
+          echo "- ⚠️ R2 versions/ prune failed (retries tomorrow)" >> "$GITHUB_STEP_SUMMARY"
 
-  # The point-in-time backtest (Sep 2 2026): weekdays run the incremental append
-  # (build-backtest-incremental.ts — rehydrates the sidecar state, scores only
-  # never-attempted targets); Sunday runs the FULL replay as per-market legs
-  # (backtest-leg matrix → build-backtest.ts --market) merged by the backtest
-  # job (--merge). Every path applies the PRIOR quarter's calibration at score
-  # time, so the record measures the engine production actually ran. BLOCKING:
-  # a night that cannot produce a fresh record (script exit ≠ 0, or generatedAt
-  # older than 3 days) fails the run. deploy does not depend on this job.
+  # The point-in-time backtest: weekdays run the incremental append
+  # (build-backtest-incremental.ts); Sunday runs the FULL replay as per-market
+  # legs (backtest-leg matrix) merged by the backtest job. deploy does not
+  # depend on any of this.
   # ── FULL REPLAY LEGS (Sunday, or backtest_mode=full) ──────────────────────
-  # One leg per market. Each scores ONLY its market's targets from scratch,
-  # with point-in-time calibration, and uploads its state as an artifact; the
-  # `backtest` job below merges them. Legs are independent — a failed market
-  # fails the merge (partial records are never published), but never another
-  # leg. Markets are the roster's market keys + 'other' (unrostered slugs;
-  # legitimately empty → the leg exits 1 on "no targets" and is allowed to).
+  # One leg per market. A market with NO TARGETS (tcg: Pokémon lots carry no
+  # house estimate; `other` when every slug is rostered) is legitimately
+  # empty for ANY market — scripts/ci/backtest-leg.sh exits 0 and drops an
+  # EMPTY.<market> marker (tolerating both the engine's old "throw on no
+  # targets" and its explicit empty record). Any other failure still fails
+  # the leg, and a failed leg still blocks the merge (partial records are
+  # never published).
   backtest-leg:
     needs: [plan, assemble]
-    if: needs.plan.outputs.full == 'true' && needs.assemble.result == 'success'
+    if: ${{ needs.plan.outputs.full == 'true' && needs.assemble.result == 'success' }}
     runs-on: ubuntu-latest
-    # measured: the largest leg (culture, ~94k targets) is ~5 min of scoring +
-    # ~1 min prep at ~460 targets/s; 60 gives 10× headroom. If a leg ever
-    # nears this, the fix is the pre-filter (backtest-core.candidatePriors),
-    # not a bigger cap.
+    # largest leg (culture, ~94k targets) ≈ 6 min; 60 = 10× headroom
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        market: [art, design, watches, sports, science, culture, tcg, other]
+        market: ${{ fromJSON(needs.plan.outputs.markets) }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      - name: Fetch served payload (same-run artifact)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+      - uses: actions/checkout@v7
         with:
-          name: served-payload
-          path: public/data/ray
-      - name: Fetch corpus (same-run artifact)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
-          name: corpus-payload
-          path: data/corpus
-      - name: Pull corpus + served from R2 (fallback if artifacts absent)
-        run: |
-          if [ -f public/data/ray/meta.json ] && [ -f data/corpus/lots.json.gz ]; then
-            echo "payloads delivered by same-run artifacts — skipping R2 pull"
-          else
-            bash scripts/data-store.sh pull
-          fi
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Pull tonight's published version (corpus + served)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION: ${{ needs.assemble.outputs.version }}
+        run: bash scripts/data-store.sh pull-version "$VERSION"
       - name: Replay leg ${{ matrix.market }}
-        run: |
-          set +e
-          NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/build-backtest.ts --market ${{ matrix.market }} --leg-dir data/backtest-legs
-          rc=$?
-          # 'other' holds only unrostered slugs and may have zero targets; every
-          # rostered market must produce a leg.
-          if [ $rc -ne 0 ] && [ "${{ matrix.market }}" = "other" ]; then echo "leg other: no targets (allowed)"; exit 0; fi
-          exit $rc
-      - name: Upload leg state
-        uses: actions/upload-artifact@v4
-        with:
-          name: backtest-leg-${{ matrix.market }}
-          path: data/backtest-legs/
-          retention-days: 3
-          if-no-files-found: ignore
+        env:
+          MARKET: ${{ matrix.market }}
+        run: bash scripts/ci/backtest-leg.sh "$MARKET" data/backtest-legs
+      - name: Hand the leg state to the merge (private R2, run-scoped)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MARKET: ${{ matrix.market }}
+        run: bash scripts/data-store.sh handoff-put "backtest-leg-${MARKET}" data/backtest-legs
 
   # ── THE RECORD (every night) ──────────────────────────────────────────────
-  # Weekdays: incremental append (rehydrates the sidecar state, scores only
-  # never-attempted targets inside the trailing 120-day window or first seen
-  # since the prior run). Sunday: merge the legs into the canonical state +
-  # backtest.json. BLOCKING now: a night that cannot produce a record fails the
-  # run — that is the point. Not on the deploy critical path (deploy needs
-  # assemble, not this), so a red backtest never withholds a fresh site.
+  # Weekdays: incremental append. Sunday: merge the legs into the canonical
+  # state + backtest.json — runs once EVERY leg finished (scored, or
+  # legitimately empty). BLOCKING: a night that cannot produce a record fails
+  # the run. Not on the deploy critical path, so a red backtest never
+  # withholds a fresh site.
   backtest:
     needs: [plan, assemble, backtest-leg]
-    # runs after the legs on Sunday (legs skipped on weekdays still satisfy
-    # `needs` via always()); requires a successful assemble either way
-    if: always() && needs.assemble.result == 'success' && (needs.plan.outputs.full != 'true' || needs.backtest-leg.result == 'success')
+    # legs skipped on weekdays still satisfy `needs` via !cancelled()
+    if: ${{ !cancelled() && needs.assemble.result == 'success' && (needs.plan.outputs.full != 'true' || needs.backtest-leg.result == 'success') }}
     runs-on: ubuntu-latest
-    continue-on-error: false
     # incremental measured ~3 min (prep) + scoring at ~460/s; merge is seconds.
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      - name: Fetch served payload (same-run artifact)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+      - uses: actions/checkout@v7
         with:
-          name: served-payload
-          path: public/data/ray
-      - name: Fetch corpus (same-run artifact)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
-          name: corpus-payload
-          path: data/corpus
-      - name: Pull corpus + served from R2 (fallback if artifacts absent)
-        run: |
-          if [ -f public/data/ray/meta.json ] && [ -f data/corpus/lots.json.gz ]; then
-            echo "payloads delivered by same-run artifacts — skipping R2 pull"
-          else
-            bash scripts/data-store.sh pull
-          fi
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Pull tonight's published version (corpus + served)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION: ${{ needs.assemble.outputs.version }}
+        run: bash scripts/data-store.sh pull-version "$VERSION"
       - name: Fetch leg states (Sunday)
         if: needs.plan.outputs.full == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          pattern: backtest-leg-*
-          merge-multiple: true
-          path: data/backtest-legs/
-      - name: Build the record (merge legs on Sunday · incremental append weekdays)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MARKETS: ${{ join(fromJSON(needs.plan.outputs.markets), ' ') }}
         run: |
-          if [ "${{ needs.plan.outputs.full }}" = "true" ]; then
-            echo "[backtest] FULL — merging per-market legs"
-            NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/build-backtest.ts --merge --leg-dir data/backtest-legs
+          # a missing leg is caught by backtest-merge.sh (no state, no EMPTY marker)
+          for m in $MARKETS; do
+            bash scripts/data-store.sh handoff-get "backtest-leg-$m" data/backtest-legs || echo "::warning::leg $m: no handoff"
+          done
+      - name: Build the record (merge legs on Sunday · incremental append weekdays)
+        id: build
+        env:
+          FULL: ${{ needs.plan.outputs.full }}
+          MARKETS: ${{ join(fromJSON(needs.plan.outputs.markets), ',') }}
+        run: |
+          if [ "$FULL" = "true" ]; then
+            bash scripts/ci/backtest-merge.sh data/backtest-legs "$MARKETS"
           else
             echo "[backtest] weekday — INCREMENTAL append"
             NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/build-backtest-incremental.ts
           fi
       # STALE-RECORD CHECK: a record older than 3 days means the append did not
-      # happen, whatever the exit code said. Fails the job (and therefore the
-      # night's conclusion) so it is seen.
+      # happen, whatever the exit code said. Markets whose leg was
+      # legitimately empty are exempt from the byMarket n=0 check.
       - name: Refuse a stale record (generatedAt older than 3 days)
+        env:
+          EMPTY_MARKETS: ${{ steps.build.outputs.empty }}
         run: |
+          # shellcheck disable=SC2016  # JS template literals, not shell
           node -e '
             const bt = JSON.parse(require("fs").readFileSync("public/data/ray/backtest.json", "utf8"));
             const age = (Date.now() - Date.parse(bt.generatedAt)) / 864e5;
             console.log(`[backtest] generatedAt ${bt.generatedAt} (${age.toFixed(1)}d old) · engine ${bt.engineVersion} · rows on version ${bt.rowsOnVersionPct}% · n ${bt.calibration.n}`);
             if (!(age <= 3)) { console.error("::error title=stale backtest::backtest.json generatedAt is older than 3 days"); process.exit(1); }
-            const dead = Object.entries(bt.byMarket || {}).filter(([, v]) => (v.flagged.n + v.unflagged.n) === 0).map(([k]) => k);
+            const exempt = new Set((process.env.EMPTY_MARKETS || "").split(",").filter(Boolean));
+            const dead = Object.entries(bt.byMarket || {}).filter(([k, v]) => !exempt.has(k) && (v.flagged.n + v.unflagged.n) === 0).map(([k]) => k);
             if (dead.length) { console.error(`::error title=empty byMarket::${dead.join(",")} carry n=0`); process.exit(1); }
           '
       - name: Push refreshed backtest.json (+ accumulator state)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-backtest
+      # FRESHNESS (Sunday full replay only): after a full rebuild nearly every
+      # row should be scored by the CURRENT engine version. <90% means the
+      # replay did not really rebuild (the Sep 2026 state: 3%, legacy
+      # stateEngineVersion). Runs AFTER the push — the record still publishes
+      # — but turns the run red so it is seen. deploy never depends on it.
+      - name: Record is on the current engine (rowsOnVersionPct ≥ 90 after a full replay)
+        if: needs.plan.outputs.full == 'true'
+        run: |
+          # shellcheck disable=SC2016  # JS template literals, not shell
+          node -e '
+            const bt = JSON.parse(require("fs").readFileSync("public/data/ray/backtest.json", "utf8"));
+            const pct = Number(bt.rowsOnVersionPct);
+            console.log(`[backtest] rowsOnVersionPct ${pct}% · engine ${bt.engineVersion} · state engine ${bt.stateEngineVersion ?? "?"}`);
+            if (!(pct >= 90)) { console.error(`::error title=backtest not on current engine::rowsOnVersionPct ${pct}% < 90% after a FULL replay`); process.exit(1); }
+          '
 
   deploy:
     needs: assemble
-    # run whenever assemble succeeded — even in skip_crawl mode, where the
-    # skipped crawl would otherwise skip this whole downstream job.
+    # run whenever assemble succeeded — even in skip_crawl mode
     if: ${{ !cancelled() && needs.assemble.result == 'success' }}
-    # ONE production-deploy lane shared with deploy.yml (and ray-crawl.yml):
-    # never two wranglers racing Pages production — whichever finished last
-    # used to win, so this leg could silently revert a same-night hotfix.
-    # Queue, don't cancel: a nightly data deploy must not kill an in-flight
-    # code deploy or vice versa. (Job-level group composes with the run-level
-    # `nightly` group.)
+    # ONE production-deploy lane shared with deploy.yml (incl. its
+    # close-board workflow_call) and ray-crawl.yml: never two wranglers racing
+    # Pages production. Queue, don't cancel.
     concurrency:
       group: deploy-collectr
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    # 20 is plenty now: the served payload arrives as a same-run artifact, and
-    # even the R2 fallback no longer waits out GET-lag on the big payloads
-    # (write-once versions/ keys — only the tiny pointer can lag).
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-      # Serialization (the concurrency group above) fixes interleaving but not
-      # staleness: a queued deploy still holds the commit checked out at RUN
-      # start, which could post-date-revert a push that deployed while this
-      # leg sat in the queue. Always deploy origin/main as of NOW.
-      - name: Fast-forward to origin/main (never deploy a stale checkout)
-        run: |
-          git fetch --depth=1 origin main
-          git checkout --force origin/main
-          echo "deploying $(git rev-parse --short HEAD)"
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      # Same-run artifact from assemble — immediately consistent, no R2 read.
-      - name: Fetch served payload (same-run artifact)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+      # ref: main resolves when the STEP runs (after the concurrency queue),
+      # not at run creation — never deploys a checkout a later push superseded.
+      - uses: actions/checkout@v7
         with:
-          name: served-payload
-          path: public/data/ray
-      - name: Pull served payload from R2 (fallback if artifact absent)
-        run: |
-          if [ -f public/data/ray/meta.json ]; then
-            echo "served payload delivered by same-run artifact — skipping R2 pull"
-          else
-            bash scripts/data-store.sh pull
-          fi
+          ref: main
+          persist-credentials: false
+      - run: echo "deploying $(git rev-parse --short HEAD)"
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Pull tonight's published served payload
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION: ${{ needs.assemble.outputs.version }}
+        run: bash scripts/data-store.sh pull-version "$VERSION" served-only
+      # the intraday overlay is no longer in git — carry prod's (newer) copy
+      - name: Seed the freshest close-board overlay
+        run: node scripts/ci/seed-close-board.mjs
       # Tonight's social cards ride inside the export so Instagram can fetch
-      # them from lectr.bid/social/ — the public URL its API insists on. A
-      # render failure must never hold the data deploy: continue-on-error, and
-      # the `social` job simply finds no today.json and does nothing.
+      # them from lectr.bid/social/. A render failure must never hold the data
+      # deploy: continue-on-error, and the `social` job finds no today.json.
       - name: Render tonight's social cards
         continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx tsx scripts/social/render.tsx
       - name: Hand the cards to the social job
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: social-cards
           path: public/social/
@@ -563,12 +548,16 @@ jobs:
           test -f out/index.html || { echo "::error::out/index.html missing"; exit 1; }
           missing=0
           for f in out/*.html; do
-            for c in $(grep -oE '/_next/static/chunks/[a-z0-9/_.-]+\.js' "$f" | sort -u); do
+            while IFS= read -r c; do
+              [ -n "$c" ] || continue
               [ -f "out$c" ] || { echo "::error::$f references missing chunk $c"; missing=$((missing+1)); }
-            done
+            done < <(grep -oE '/_next/static/chunks/[a-z0-9/_.-]+\.js' "$f" | sort -u)
           done
           [ "$missing" -eq 0 ] || { echo "::error::$missing missing chunk ref(s)"; exit 1; }
       - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           # RED, never a green "skipped": assemble already pushed tonight's
           # data to R2, so a silent skip here leaves prod stale with no signal
@@ -577,61 +566,48 @@ jobs:
 
   sync:
     needs: assemble
-    if: always()                # non-blocking: alerts/supabase must never gate a deploy
+    if: ${{ !cancelled() && needs.assemble.result == 'success' }}   # non-blocking: never gates a deploy
     runs-on: ubuntu-latest
-    # Was 45 to survive the re-pull GET-lag (a 20 cap once timed out INSIDE the
-    # pull). The artifact handoff + write-once R2 keys removed that wait; 30
-    # still leaves generous room for sync + alerts on a slow night.
     timeout-minutes: 30
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      # Same-run artifacts from assemble — immediately consistent, no R2 read.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
       # BOTH payloads: sync-lots-db and match-alerts call readCorpus(), which
-      # refuses the stripped served files — without the corpus artifact this
-      # job was a silent no-op every normal night (masked green by the
-      # non-fatal echoes below).
-      - name: Fetch served payload (same-run artifact)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: served-payload
-          path: public/data/ray
-      - name: Fetch corpus (same-run artifact)
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: corpus-payload
-          path: data/corpus
-      - name: Pull corpus + served from R2 (fallback if artifacts absent)
-        run: |
-          if [ -f public/data/ray/meta.json ] && [ -f data/corpus/lots.json.gz ]; then
-            echo "payloads delivered by same-run artifacts — skipping R2 pull"
-          else
-            bash scripts/data-store.sh pull
-          fi
+      # refuses the stripped served files.
+      - name: Pull tonight's published version (corpus + served)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION: ${{ needs.assemble.outputs.version }}
+        run: bash scripts/data-store.sh pull-version "$VERSION"
       # Each script retries Supabase calls with bounded backoff internally
-      # (4 tries, 2s→4s→8s); a failure that survives that is real and must go
-      # RED here — the old `|| echo` masked every failure green for weeks.
-      # The job stays off the deploy critical path (deploy needs assemble
-      # only), so a red sync never blocks the site. NO EMAIL FEATURES
-      # (standing law): the digest step that used to follow was deleted.
+      # (4 tries, 2s→4s→8s); a failure that survives that is real and goes
+      # RED here. NO EMAIL FEATURES (standing law).
       - name: Sync lots table
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: npx tsx scripts/sync-lots-db.ts
       - name: Match saved-search alerts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: npx tsx scripts/match-alerts.ts
       - name: Match signal alerts (watchlist flips + your-markets flags)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: npx tsx scripts/match-signal-alerts.ts
 
   # ── the social desk ───────────────────────────────────────────────────────
-  # Posts tonight's card to X and Instagram AFTER the deploy is live, so every
-  # link resolves and the JPEG is fetchable. Idempotent via the R2 ledger; no
-  # secrets → dry run, prints the copy, posts nothing. Never blocks the run.
+  # Posts tonight's card to X and Instagram AFTER the deploy is live.
+  # Idempotent via the R2 ledger; no secrets → dry run (a ::warning:: says so).
   social:
     needs: deploy
     if: ${{ !cancelled() && needs.deploy.result == 'success' }}
@@ -640,24 +616,87 @@ jobs:
     concurrency:
       group: social
       cancel-in-progress: false
-    env:
-      X_API_KEY: ${{ secrets.X_API_KEY }}
-      X_API_SECRET: ${{ secrets.X_API_SECRET }}
-      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-      X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
-      IG_USER_ID: ${{ secrets.IG_USER_ID }}
-      IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
       - name: Fetch tonight's cards (rendered by deploy)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: social-cards
           path: public/social
       - name: Post
-        run: npx tsx scripts/social/post.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: |
+          bash scripts/ci/social-desk-check.sh
+          npx tsx scripts/social/post.ts
 
+  # ── crawl leg health (NON-BLOCKING) ───────────────────────────────────────
+  # Aggregates every leg's leg-health.json into the run summary and goes RED
+  # when any leg reported ok=false (e.g. "200 grid, 0 parsed" — the silent
+  # REA/H&S zero-ingest of Sep 2026). Nothing depends on this job.
+  health:
+    needs: [plan, crawl]
+    if: ${{ !cancelled() && needs.crawl.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Download leg health
+        uses: actions/download-artifact@v8
+        continue-on-error: true   # no leg wrote one → the summary says so
+        with:
+          pattern: health-*
+          path: health
+      - name: Summarize (red on any ok=false)
+        env:
+          HOUSES: ${{ join(fromJSON(needs.plan.outputs.houses), ',') }}
+        run: node scripts/ci/leg-health-summary.mjs health "$HOUSES"
+
+  # ── HANDOFF CLEANUP (always, last) ────────────────────────────────────────
+  # Deletes this run's ci-handoff/<run_id>/ prefix once every consumer is
+  # done — unless something failed, in which case it is KEPT so "re-run failed
+  # jobs" still finds it. Either way, prunes ci-handoff/ objects older than
+  # 2 days (cancelled/failed runs). Backstop: R2 lifecycle rule on ci-handoff/
+  # (docs/data-pipeline.md).
+  handoff-cleanup:
+    needs: [crawl, assemble, backtest-leg, backtest, deploy, sync]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+      - name: Delete this run's handoff (when nothing failed)
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh handoff-clean
+      - name: Prune handoffs older than 2 days (any run)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh handoff-prune 2

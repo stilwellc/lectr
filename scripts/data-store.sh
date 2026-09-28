@@ -208,10 +208,11 @@ apply_pulled() { # corpus_key getter — shared tail of pull(): extract, guard, 
     echo "[data-store] R2 data ($remote) is OLDER than local ($local_stamp) — keeping local"
     return 0
   fi
-  # The intraday close-board overlay is committed to git every 4h, but the R2
-  # served tarball only carries the copy from the last NIGHTLY — replacing the
-  # dir wholesale froze the overlay at ~1x/day (up to ~28h stale). Keep
-  # whichever generatedAt is newer.
+  # The R2 served tarball only carries the close-board overlay from the last
+  # NIGHTLY; a fresher local copy (a dev checkout, or one seeded before the
+  # pull) must survive the wholesale replace. Keep whichever generatedAt is
+  # newer. (Since Sep 27 2026 the overlay is not in git; CI deploys seed it
+  # AFTER the pull with scripts/ci/seed-close-board.mjs.)
   if [ -f public/data/ray/close-board.json ]; then cp public/data/ray/close-board.json "$TMP/cb-checkout.json"; fi
   rm -rf public/data/ray && mkdir -p public/data/ray
   cp -R "$TMP/served/." public/data/ray/
@@ -336,6 +337,9 @@ push() {
   # already fully stored and etag-verified above.
   printf '%s' "$ver" > "$TMP/pointer.txt"
   obj_put "latest/pointer.txt" "$TMP/pointer.txt"
+  # Same-run handoff (nightly.yml): downstream jobs read EXACTLY this version
+  # via `pull-version`, never the pointer (which a later push could move).
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "version=$ver" >> "$GITHUB_OUTPUT"; fi
   # standalone meta.json — a tiny object so assemble can read the PREVIOUS
   # totals for its sanity gate without unpacking the 18MB served tarball.
   # MONOTONE BASELINE: never write a SMALLER totalLots over a larger one —
@@ -471,6 +475,24 @@ push_segment() {
   { md5 -q "$f" 2>/dev/null || md5sum "$f" | cut -d' ' -f1; } > "$(seg_etag_file "$name")"
 }
 pull_segment() {
+  # RETRY (Sep 27 2026): a transient 5xx / reset on one segment GET used to
+  # redden the whole leg (and every backfill). Three tries with 20s/40s
+  # backoff. rc 75 (still stale after the full ~14min GET-lag poll) is NOT
+  # retried — a retry would only re-wait the same window.
+  local attempt rc=1
+  for attempt in 1 2 3; do
+    rc=0; pull_segment_once "$1" || rc=$?
+    [ "$rc" -eq 0 ] && return 0
+    [ "$rc" -eq 75 ] && return 75
+    if [ "$attempt" -lt 3 ]; then
+      echo "[data-store] pull-segment $1 attempt $attempt failed (rc $rc) — retrying in $((attempt * 20))s"
+      sleep $((attempt * 20))
+    fi
+  done
+  echo "[data-store] pull-segment $1 failed after 3 attempts"
+  return "$rc"
+}
+pull_segment_once() {
   # A failed GET must distinguish "not in R2 yet" (bootstrap — fine, crawl
   # seeds it) from "in R2 but unreachable" (transient — must go RED). The old
   # blanket `|| echo fresh` swallowed 5xx/network failures and left a
@@ -478,10 +500,11 @@ pull_segment() {
   # and proceeds seedless, and the 0-length floor bypasses the collapse guard —
   # one flaky GET could overwrite a house's last-good segment with a
   # fresh-only subset. The bucket LISTING is the authority on existence.
-  local name="$1" key="latest/segments/$1.ndjson.gz" f="data/corpus/segments/$1.ndjson.gz"
+  local name="$1" key="latest/segments/$1.ndjson.gz" f="data/corpus/segments/$1.ndjson.gz" grc=0
   mkdir -p data/corpus/segments
   rm -f "$(seg_etag_file "$name")"
-  if obj_get_fresh "$key" "$f"; then
+  obj_get_fresh "$key" "$f" || grc=$?
+  if [ "$grc" -eq 0 ]; then
     # CAS record for push_segment: what we pulled IS the etag (etag == md5 for
     # single-part uploads, and obj_get_fresh only returns 0 on a verified read)
     { md5 -q "$f" 2>/dev/null || md5sum "$f" | cut -d' ' -f1; } > "$(seg_etag_file "$name")"
@@ -501,6 +524,7 @@ pull_segment() {
     fi
   fi
   echo "[data-store] ERROR: segment $name pull failed and R2 does not confirm it absent — refusing a seedless crawl (would overwrite last-good)"
+  [ "$grc" -eq 75 ] && return 75
   return 1
 }
 # Small-file GET (meta/backtest) that can never poison with a zero-byte file:
@@ -543,8 +567,181 @@ pull_all_segments() {
   return $rc
 }
 
+# ── PINNED VERSION READ (nightly handoff) ────────────────────────────────────
+# assemble's `push` emits the exact versions/<stamp>-<sha> prefix it wrote
+# (step output `version`); deploy / sync / backtest read THAT version, never
+# the pointer. Write-once keys: the first GET is authoritative, so no lag
+# wait, and a later push moving the pointer cannot change what this run
+# consumes. Replaces the served-payload / corpus-payload Actions artifacts
+# (Sep 27 2026 — the repo is public, so artifacts were downloadable by any
+# GitHub user). Installs exactly what it names: no freshness compare.
+with_retry() { # cmd… — 3 tries, 10s/20s backoff (transient R2 blips)
+  local attempt
+  for attempt in 1 2 3; do
+    "$@" && return 0
+    [ "$attempt" -lt 3 ] && { echo "[data-store] $1 attempt $attempt failed — retrying in $((attempt * 10))s"; sleep $((attempt * 10)); }
+  done
+  return 1
+}
+pull_version() { # versions/<…> [served-only]
+  local ver="${1:-}" mode="${2:-all}"
+  case "$ver" in
+    versions/*) ;;
+    *) echo "[data-store] ERROR: pull-version needs a versions/<stamp>-<sha> prefix, got '$ver'"; return 1 ;;
+  esac
+  with_retry obj_get_once "$ver/served.tar.gz" "$TMP/served.tar.gz" \
+    || { echo "[data-store] ERROR: $ver/served.tar.gz unreadable"; return 1; }
+  rm -rf public/data/ray && mkdir -p public/data/ray
+  tar -xzf "$TMP/served.tar.gz" -C public/data/ray
+  echo "[data-store] served payloads installed from $ver (lastCrawl $(stamp_of public/data/ray/meta.json))"
+  [ "$mode" = "served-only" ] && return 0
+  with_retry obj_get_once "$ver/corpus.tar" "$TMP/corpus.tar" \
+    || { echo "[data-store] ERROR: $ver/corpus.tar unreadable"; return 1; }
+  mkdir -p data/corpus && tar -xf "$TMP/corpus.tar" -C data/corpus
+  echo "[data-store] corpus installed from $ver"
+}
+
+# ── CI HANDOFF (same-run, job → job) ─────────────────────────────────────────
+# Keys: ci-handoff/<GITHUB_RUN_ID>/<name>/a<attempt>-<UTC>.{bin,tar}
+#   * run-scoped + write-once: every put lands on a NEW key (attempt + stamp),
+#     so reads never hit the overwrite GET-lag and a re-run of a failed job
+#     (same run id, next attempt) finds the newest copy — readers take the
+#     lexicographically last key under <name>/.
+#   * private: lectr-data has no public domain (r2.dev disabled, no custom
+#     domain); only the API token can read it.
+#   * cleanup: nightly's final `handoff-cleanup` job runs `handoff-clean`
+#     (this run's prefix) + `handoff-prune 2` (any run's prefix older than
+#     2 days — cancelled runs whose cleanup never ran). Belt-and-braces: an
+#     R2 lifecycle rule on prefix ci-handoff/ (see docs/data-pipeline.md).
+# A directory is put as a tar and extracted back into the destination dir.
+handoff_root() {
+  [ -n "${GITHUB_RUN_ID:-}" ] || { echo "[data-store] ERROR: handoff needs GITHUB_RUN_ID (CI only)" >&2; return 1; }
+  echo "ci-handoff/$GITHUB_RUN_ID"
+}
+list_keys_retry() { # prefix — list_keys with 3 tries (a listing blip must not read as "absent")
+  local attempt out
+  for attempt in 1 2 3; do
+    if out=$(list_keys "$1"); then printf '%s' "$out"; return 0; fi
+    sleep $((attempt * 5))
+  done
+  return 1
+}
+handoff_put() { # name path(file|dir)
+  local name="$1" src="$2" root key tmpf
+  root=$(handoff_root) || return 1
+  [ -e "$src" ] || { echo "[data-store] ERROR: handoff-put $name: $src does not exist"; return 1; }
+  key="$root/$name/$(printf 'a%03d' "${GITHUB_RUN_ATTEMPT:-1}")-$(date -u +%Y%m%dT%H%M%SZ)"
+  if [ -d "$src" ]; then
+    tmpf=$(mktemp "$TMP/hput.XXXXXX")
+    tar -cf "$tmpf" -C "$src" .
+    obj_put "$key.tar" "$tmpf"
+  else
+    obj_put "$key.bin" "$src"
+  fi
+}
+handoff_get() { # name dest(file|dir) → 0 ok · 3 none in this run · 2 listing failed · 1 read failed
+  local name="$1" dest="$2" root keys key tmpf
+  root=$(handoff_root) || return 2
+  keys=$(list_keys_retry "$root/$name/") || { echo "[data-store] handoff $name: listing failed"; return 2; }
+  [ -n "$keys" ] || { echo "[data-store] handoff $name: none in this run"; return 3; }
+  key=$(printf '%s\n' "$keys" | sort | tail -n 1)
+  tmpf=$(mktemp "$TMP/hget.XXXXXX")
+  with_retry obj_get_once "$key" "$tmpf" || { echo "[data-store] handoff $name: read of $key failed"; return 1; }
+  case "$key" in
+    *.tar) mkdir -p "$dest" && tar -xf "$tmpf" -C "$dest" ;;
+    *) mkdir -p "$(dirname "$dest")" && mv "$tmpf" "$dest" ;;
+  esac
+  echo "[data-store] handoff $name ← $key"
+}
+handoff_clean() { # delete this run's whole prefix
+  local root keys k n=0
+  root=$(handoff_root) || return 1
+  keys=$(list_keys_retry "$root/") || { echo "[data-store] handoff-clean: listing failed"; return 1; }
+  for k in $keys; do obj_delete "$k"; n=$((n + 1)); done
+  echo "[data-store] handoff-clean: deleted $n object(s) under $root/"
+}
+handoff_prune() { # days — delete ci-handoff/ objects older than N days (any run)
+  local days="${1:-2}" enc cursor="" page doomed k n=0
+  enc=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "ci-handoff/")
+  doomed=""
+  while :; do
+    page=$(curl -sf -H "Authorization: Bearer $TOKEN" "$API?prefix=$enc&per_page=1000${cursor:+&cursor=$cursor}") \
+      || { echo "[data-store] handoff-prune: listing failed"; return 1; }
+    # objects without a parseable last_modified are never deleted
+    doomed="$doomed $(echo "$page" | python3 -c "
+import json, sys, datetime
+cut = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=float(sys.argv[1]))
+for o in json.load(sys.stdin).get('result', []):
+    lm = o.get('last_modified') or ''
+    try: t = datetime.datetime.fromisoformat(lm.replace('Z', '+00:00'))
+    except Exception: continue
+    if t < cut: print(o['key'])
+" "$days")"
+    cursor=$(echo "$page" | python3 -c "import json,sys;print(json.load(sys.stdin).get('result_info',{}).get('cursor') or '')" 2>/dev/null || true)
+    [ -n "$cursor" ] || break
+  done
+  for k in $doomed; do obj_delete "$k"; n=$((n + 1)); done
+  echo "[data-store] handoff-prune: deleted $n ci-handoff object(s) older than ${days}d"
+}
+# assemble's segment intake: this run's crawl handoff first (immediately
+# consistent), else the R2 last-good (`other`, rrauction-archive, a failed
+# or skipped leg). Parallel: worst case is one GET-lag window, not N.
+assemble_segments() { # houses…
+  mkdir -p data/corpus/segments
+  local h pids="" rc=0 p
+  for h in "$@"; do
+    (
+      hrc=0
+      if [ -n "${GITHUB_RUN_ID:-}" ]; then handoff_get "segment-$h" "data/corpus/segments/$h.ndjson.gz" || hrc=$?; else hrc=3; fi
+      if [ "$hrc" -eq 0 ]; then echo "[data-store] segment $h fresh from this run's crawl"; exit 0; fi
+      [ "$hrc" -ne 3 ] && echo "[data-store] WARNING: segment $h handoff unreadable (rc $hrc) — falling back to R2 last-good"
+      pull_segment "$h"
+    ) & pids="$pids $!"
+  done
+  for p in $pids; do wait "$p" || rc=1; done
+  return $rc
+}
+
+# ── UI-SHOTS FIXTURE (a pinned served payload the visual rig renders) ────────
+# The rig used to screenshot PROD, so every nightly's data drifted the frames
+# (red 28/28 days). Now it builds the site from a FROZEN served payload whose
+# R2 key is committed in tests/ui-baseline/FIXTURE, so only code moves pixels.
+# `pin-fixture` (run by a human, with R2 write access) copies the CURRENT
+# version's served.tar.gz to a write-once fixtures/ key (prune never touches
+# fixtures/) and records it; commit FIXTURE with the re-approved baselines.
+FIXTURE_FILE=tests/ui-baseline/FIXTURE
+pin_fixture() {
+  local ver key
+  obj_get_fresh "latest/pointer.txt" "$TMP/pointer.txt" || { echo "[data-store] pin-fixture: pointer unreadable"; return 1; }
+  ver=$(tr -d '[:space:]' < "$TMP/pointer.txt")
+  case "$ver" in versions/*) ;; *) echo "[data-store] pin-fixture: bad pointer '$ver'"; return 1 ;; esac
+  obj_get_once "$ver/served.tar.gz" "$TMP/served.tar.gz" || return 1
+  key="fixtures/ui-shots/${ver#versions/}/served.tar.gz"
+  obj_put "$key" "$TMP/served.tar.gz"
+  mkdir -p "$(dirname "$FIXTURE_FILE")"
+  printf '%s\n' "$key" > "$FIXTURE_FILE"
+  echo "[data-store] pinned $key → $FIXTURE_FILE (commit it with the re-approved baselines)"
+}
+pull_fixture() { # [key] — default: the key committed in tests/ui-baseline/FIXTURE
+  local key="${1:-}"
+  [ -n "$key" ] || key=$( { tr -d '[:space:]' < "$FIXTURE_FILE"; } 2>/dev/null || true)
+  [ -n "$key" ] || { echo "[data-store] ERROR: no UI fixture pinned ($FIXTURE_FILE missing) — run: bash scripts/data-store.sh pin-fixture"; return 1; }
+  with_retry obj_get_once "$key" "$TMP/fixture.tar.gz" || { echo "[data-store] ERROR: fixture $key unreadable"; return 1; }
+  rm -rf public/data/ray && mkdir -p public/data/ray
+  tar -xzf "$TMP/fixture.tar.gz" -C public/data/ray
+  echo "[data-store] UI fixture installed from $key (lastCrawl $(stamp_of public/data/ray/meta.json))"
+}
+
 case "${1:-}" in
   pull) pull ;;
+  pull-version) pull_version "${2:-}" "${3:-all}" ;;
+  handoff-put) handoff_put "$2" "$3" ;;
+  handoff-get) handoff_get "$2" "$3" ;;
+  handoff-clean) handoff_clean ;;
+  handoff-prune) handoff_prune "${2:-2}" ;;
+  assemble-segments) shift; assemble_segments "$@" ;;
+  pin-fixture) pin_fixture ;;
+  pull-fixture) pull_fixture "${2:-}" ;;
   push) push ;;
   push-segment) push_segment "$2" ;;
   pull-segment) pull_segment "$2" ;;
@@ -568,5 +765,5 @@ case "${1:-}" in
     test -f data/corpus/backtest-state.json.gz && obj_put "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" || echo "[data-store] no backtest state to push"
     ;;
   prune) prune "${2:-14}" ;;
-  *) echo "usage: $0 pull|push|push-segment <name>|pull-segment <name>|pull-segments|pull-meta|pull-backtest|push-backtest|prune [keep=14]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, DATA_FRESH_ALLOW_STALE=1)"; exit 1 ;;
+  *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…>|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, DATA_FRESH_ALLOW_STALE=1)"; exit 1 ;;
 esac

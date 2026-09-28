@@ -1,33 +1,104 @@
-# THE SHOT RIG — nightly visual regression against prod.
-# Captures the key routes (2 viewports x 2 modes) and diffs them against
-# the approved baselines in tests/ui-baseline/. Drift beyond the threshold
-# fails the run and uploads red-overlay diffs as an artifact.
-# Re-baseline deliberately: run scripts/ui-shots.mjs --approve locally and
-# commit tests/ui-baseline/.
+# THE SHOT RIG — nightly visual regression of the CODE, on PINNED data.
+#
+# Builds the site from a frozen served payload (R2 key committed in
+# tests/ui-baseline/FIXTURE — `data-store.sh pull-fixture`), serves out/
+# locally with `wrangler pages dev` (so _redirects/_headers behave like
+# Pages), freezes the browser clock at the fixture's lastCrawl, stubs
+# external images, masks [data-volatile] regions, and diffs every frame
+# against tests/ui-baseline/. It used to screenshot PROD, so each night's
+# data drifted the frames (red 28/28 days, catching nothing).
+#
+# A missing baseline FAILS (it used to seed itself silently).
+# Re-baseline deliberately — CI renders with Linux fonts, so approve HERE:
+#   gh workflow run ui-shots.yml -f approve=true
+#   gh run download <run-id> -n ui-baseline -D tests/ui-baseline
+#   git add tests/ui-baseline && git commit -m "ui-shots: re-baseline"
+# To move the pinned data as well, first run (needs R2 write)
+#   bash scripts/data-store.sh pin-fixture
+# and commit the rewritten tests/ui-baseline/FIXTURE with the new baselines.
 name: ui-shots
 on:
   schedule:
-    - cron: '20 9 * * *'   # nightly, after the crawl deploy settles
-  workflow_dispatch: {}
+    - cron: '37 9 * * *'   # daily; data is pinned, so the hour no longer matters
+  workflow_dispatch:
+    inputs:
+      approve:
+        description: 'Approve: write every frame as the new baseline and upload it as the ui-baseline artifact (commit it yourself)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-shots
+  cancel-in-progress: true
 
 jobs:
   shots:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      NODE_OPTIONS: --max-old-space-size=8192
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: 20
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: node scripts/ui-shots.mjs
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install the pinned data fixture
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull-fixture
+      # no NEXT_PUBLIC_SUPABASE_* → auth stays dormant: no account UI to drift
+      - name: Build the site against the fixture
+        run: npm run build
+      - name: Install Chromium
+        timeout-minutes: 8
+        run: npx playwright install --with-deps chromium
+      # --compatibility-date is pinned: without it pages dev uses TODAY, which
+      # a pinned wrangler's bundled workerd refuses once today passes its
+      # newest supported date (the server then never starts).
+      - name: Serve out/ like Pages (wrangler pages dev)
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          nohup npx wrangler@4.120.1 pages dev out --port 8788 --ip 127.0.0.1 --show-interactive-dev-session=false --compatibility-date=2026-08-01 > "$RUNNER_TEMP/pages-dev.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:8788/; then echo "pages dev up"; exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/pages-dev.log"; echo "::error::wrangler pages dev did not come up"; exit 1
+      - name: Capture + diff
+        env:
+          BASE_URL: http://127.0.0.1:8788
+          SHOT_OFFLINE: '1'
+          APPROVE: ${{ inputs.approve && '1' || '0' }}
+        run: |
+          # freeze the page clock one hour after the fixture's crawl
+          SHOT_NOW=$(node -e 'const m=require("./public/data/ray/meta.json");const t=Date.parse(m.lastCrawl);if(!t)process.exit(1);console.log(new Date(t+3600e3).toISOString())')
+          export SHOT_NOW
+          echo "clock frozen at $SHOT_NOW"
+          if [ "$APPROVE" = "1" ]; then node scripts/ui-shots.mjs --approve; else node scripts/ui-shots.mjs; fi
+      - name: Upload approved baselines
+        if: ${{ inputs.approve }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-baseline
+          path: tests/ui-baseline/
+          retention-days: 14
       - name: Upload diffs + captures on drift
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ui-drift
           path: |
             shots/diff/
             shots/current/
           retention-days: 14
+          if-no-files-found: ignore
