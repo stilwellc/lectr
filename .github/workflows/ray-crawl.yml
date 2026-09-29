@@ -26,7 +26,6 @@ permissions:
   contents: read
 
 env:
-  SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
   # the crawl loads the whole ~455k-lot corpus into memory (lotMap + allLots +
   # the engine pass) and OOM'd on Node's default ~2GB heap (exit 134). Runners
   # have 16GB — give node 10GB. Applies to every tsx/next step in the job.
@@ -47,16 +46,18 @@ jobs:
     # it real headroom.
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version-file: .nvmrc
+          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # R2 is the data store of record (bucket lectr-data). Pull the previous
       # corpus so enrichment/firstSeen/bid history carry forward — the guard
@@ -69,6 +70,8 @@ jobs:
         run: bash scripts/data-store.sh pull
 
       - name: Run crawler
+        env:
+          SOTHEBYS_COOKIE: ${{ secrets.SOTHEBYS_COOKIE }}
         run: npx tsx scripts/ray-crawl.ts
 
       # Derived payloads are rebuilt as explicit steps AFTER the crawl and

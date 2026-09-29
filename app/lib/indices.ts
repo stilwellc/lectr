@@ -15,6 +15,8 @@
  */
 import type { AuctionLot } from '../types';
 import { inferHammerUsd } from './premiums';
+import { median as statsMedian } from './stats';
+import { knownKey, quarterKey, type TimeIndex } from './value';
 
 export interface IndexPoint { period: string; value: number; n: number; }
 export interface MarketSeries {
@@ -33,11 +35,10 @@ const QUARTER = (d: string) => {
   if (!m) return null;
   return `${m[1]} Q${Math.ceil(+m[2] / 3)}`;
 };
+/** stats.median with this module's historical 0-on-empty contract */
 const median = (a: number[]) => {
-  if (!a.length) return 0;
-  const s = [...a].sort((x, y) => x - y);
-  const n = s.length;
-  return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  const m = statsMedian(a);
+  return Number.isNaN(m) ? 0 : m;
 };
 
 /** A tight like-for-like cohort key: same maker + form + coarse size band.
@@ -164,4 +165,95 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
     : 'insufficient like-for-like depth for a price index';
 
   return { method, label, index, volume, sellThrough, houseAccuracy, n: soldPriced.length };
+}
+
+/* ── THE TIME INDEX (Sep 27 2026 engine pass) ─────────────────────────────
+   The comp time-adjustment's index: the SAME fixed-base cohort method as the
+   dashboard series above (maker × form × size cohorts, each normalized to its
+   own median over the window, geometric mean of the relatives per quarter,
+   3-quarter trailing smooth) — but POINT-IN-TIME: an index built for `asOf`
+   reads only sales KNOWN before asOf (value.knownKey — month/year-precision
+   dates count from the end of their period; year-precision sales carry no
+   quarter and never enter), never a `compExclude` lot, and its levels stop
+   at the last complete quarter before asOf's own. The backtest replay
+   rebuilds it at every quarter boundary; build-market builds it for today. */
+type TIRow = { q: string; k: string; ck: string; p: number };
+const TI_WINDOW_Q = 24;
+const TI_MIN_COHORT_Q = 3;
+const TI_MIN_Q_N = 8;
+const TI_EXCLUDED = new Set(['sports-cards', 'graded-cards', 'pokemon']);
+
+/** the n quarters strictly before fromQ ('2026Q3'), ascending */
+function quarterSeq(fromQ: string, n: number): string[] {
+  let y = +fromQ.slice(0, 4), q = +fromQ.slice(5);
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) { q--; if (q < 1) { q = 4; y--; } out.push(`${y}Q${q}`); }
+  return out.reverse();
+}
+
+/** Pre-bucket the corpus once; the returned function builds the index for any
+ *  asOf in O(rows). */
+export function makeTimeIndexer(lots: AuctionLot[], marketBySlug: Record<string, string>): (asOf: string) => TimeIndex {
+  const byMarket = new Map<string, TIRow[]>();
+  for (const l of lots) {
+    if (l.status !== 'sold' || !((l.realizedUsd || 0) > 0) || !l.saleDate) continue;
+    // the index adjusts HEDONIC comps, so it is built from the engine's own
+    // population — never the mass-produced card slugs (300k+ cards would
+    // otherwise BE the sports index) or the thin algolia backfill
+    if (TI_EXCLUDED.has(l.artist) || (l as AuctionLot & { source?: string }).source === 'sothebys-algolia') continue;
+    const lx = l as AuctionLot & { datePrecision?: string | null; compExclude?: string | null };
+    if (lx.compExclude || lx.datePrecision === 'year' || lx.datePrecision === 'unknown') continue;
+    const m = marketBySlug[l.artist];
+    if (!m) continue;
+    const q = quarterKey(l.saleDate);
+    if (!q) continue;
+    const arr = byMarket.get(m) || byMarket.set(m, []).get(m)!;
+    arr.push({ q, k: knownKey(lx), ck: cohortKey(l), p: l.realizedUsd! });
+  }
+  return (asOf: string): TimeIndex => {
+    const asOfQ = quarterKey(asOf);
+    const window = new Set(quarterSeq(asOfQ, TI_WINDOW_Q));
+    const levels: Record<string, Record<string, number>> = {};
+    const lastQ: Record<string, string> = {};
+    byMarket.forEach((rows, m) => {
+      const cohorts = new Map<string, Map<string, number[]>>();
+      const volByQ = new Map<string, number>();
+      for (const r of rows) {
+        if (!window.has(r.q) || !(r.k < asOf)) continue;
+        const cm = cohorts.get(r.ck) || cohorts.set(r.ck, new Map()).get(r.ck)!;
+        (cm.get(r.q) || cm.set(r.q, []).get(r.q)!).push(r.p);
+        volByQ.set(r.q, (volByQ.get(r.q) || 0) + 1);
+      }
+      const rels = new Map<string, number[]>();
+      cohorts.forEach(cm => {
+        const all: number[] = [];
+        const qmed = new Map<string, number>();
+        cm.forEach((arr, q) => { if (arr.length >= 3) { qmed.set(q, median(arr)); for (const x of arr) all.push(x); } });
+        if (all.length < 8 || qmed.size < TI_MIN_COHORT_Q) return;
+        const base = median(all);
+        if (!(base > 0)) return;
+        qmed.forEach((v, q) => { if (v > 0) (rels.get(q) || rels.set(q, []).get(q)!).push(Math.log(v / base)); });
+      });
+      const raw: { q: string; v: number }[] = [];
+      for (const q of Array.from(window).sort()) {
+        const r = rels.get(q);
+        if (!r || r.length < 3 || (volByQ.get(q) || 0) < TI_MIN_Q_N) continue;
+        raw.push({ q, v: Math.exp(r.reduce((s, x) => s + x, 0) / r.length) });
+      }
+      if (raw.length < 4) return;
+      const lv: Record<string, number> = {};
+      raw.forEach((p, i) => {
+        const win = raw.slice(Math.max(0, i - 2), i + 1);
+        lv[p.q] = win.reduce((s, x) => s + x.v, 0) / win.length;
+      });
+      levels[m] = lv;
+      lastQ[m] = raw[raw.length - 1].q;
+    });
+    return { asOf, marketBySlug, levels, lastQ };
+  };
+}
+
+/** One-shot time index for `asOf` (see makeTimeIndexer). */
+export function buildTimeIndex(lots: AuctionLot[], marketBySlug: Record<string, string>, asOf: string): TimeIndex {
+  return makeTimeIndexer(lots, marketBySlug)(asOf);
 }

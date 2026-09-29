@@ -199,7 +199,10 @@ async function main() {
     const lots = cards.filter((c) => !c.wd).map((c) => {
       const prev = exactDates.get(`${cfg.prefix}-${c.id}`);
       const lot = buildLot(c, prev?.saleDate || saleDate, cfg);
-      return lot && prev ? ({ ...lot, saleDateTime: prev.saleDateTime } as AuctionLot) : lot;
+      // an exact close already on the row wins; otherwise the date is the
+      // dropdown season's mid-month stub → flag it month-precision
+      return lot && prev ? ({ ...lot, saleDateTime: prev.saleDateTime } as AuctionLot)
+        : lot ? ({ ...lot, datePrecision: 'month' } as AuctionLot) : lot;
     }).filter((x): x is AuctionLot => !!x);
     const wdIds = new Set(cards.filter((c) => c.wd).map((c) => `${cfg.prefix}-${c.id}`));
     all.push(...lots);

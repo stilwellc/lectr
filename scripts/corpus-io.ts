@@ -149,6 +149,8 @@ const STRIP = new Set([
   // buyerPremium/_pid/_pname/_card/photoMatched are pipeline-only. subCat/
   // drill/sport STAY — the feed lens, cat cell, and lot certificate read them.
   'premiumPrice', 'archived', 'auctionId', 'buyerPremium', '_pid', '_pname', '_card', 'photoMatched',
+  // advisory LLM extraction (scripts/lib/extract) — corpus-only pipeline input
+  'llm',
 ]);
 
 // The corpus files (lots.json.gz, sold-archive.json.gz) and segments are stored
@@ -202,6 +204,21 @@ export function slimForClient<T extends Record<string, unknown>>(lot: T): Record
   if (typeof hUsd === 'number' && hUsd > 0) out['hammerPrice'] = hUsd;
   else if ('hammerPrice' in out) delete out['hammerPrice']; // native-only ⇒ omit, never mislead
   return out;
+}
+
+/** THE served live book — ONE predicate for every consumer (Sep 27 2026). The
+ *  Supabase sync upserted every status==='upcoming' row (11,708) while the site
+ *  served only upcoming.json's filtered set (7,913): the DB carried ~3.8k closed
+ *  lots as "live". build-upcoming.ts and sync-lots-db.ts now both call this.
+ *  Rule: status 'upcoming' AND (a results-pending lot within its one-day grace,
+ *  else a sale day >= today) — the same timezone-safe day-string compare the
+ *  client feed uses. `now` is injectable for tests. */
+export function isServedUpcoming(l: { status?: unknown; saleDate?: unknown; resultsPending?: unknown }, now: Date = new Date()): boolean {
+  if (l.status !== 'upcoming') return false;
+  const day = typeof l.saleDate === 'string' ? l.saleDate.slice(0, 10) : '';
+  if (!day) return false;
+  if (l.resultsPending) return day >= new Date(now.getTime() - 864e5).toISOString().slice(0, 10);
+  return day >= now.toISOString().slice(0, 10);
 }
 
 /** Read the full corpus (gz first, then raw). NEVER falls back to the slim

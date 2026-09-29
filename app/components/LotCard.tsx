@@ -31,6 +31,25 @@ export function LiveStamp({ iso }: { iso?: string }) {
   );
 }
 
+/** The house ESTIMATE alone — for a column headed "Estimate". formatEstimate
+ *  leads with the live bid when the estimate is one-sided or absent (right for
+ *  an "ask" cell), which printed "$200 bid" under an Estimate header on /value.
+ *  Here a one-sided bound prints as that bound, and no estimate prints "—". */
+export function estimateOnly(lot: AuctionLot): string {
+  const fmt = (n: number) => {
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+    return `$${n.toLocaleString()}`;
+  };
+  if (lot.estimateLow && lot.estimateHigh) {
+    const lo = fmt(lot.estimateLow), hi = fmt(lot.estimateHigh);
+    return lo === hi ? lo : `${lo}–${hi}`;
+  }
+  if (lot.estimateLow) return `from ${fmt(lot.estimateLow)}`;
+  if (lot.estimateHigh) return `to ${fmt(lot.estimateHigh)}`;
+  return '—';
+}
+
 export function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
     if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -48,7 +67,7 @@ export function formatEstimate(lot: AuctionLot): string {
   // Goldin runs bid auctions with no estimates — the live bid is the honest
   // number, and it's real money on the lot right now.
   if (lot.currentBid && lot.currentBid > 0) {
-    return `${fmt(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} bids` : ''}`;
+    return `${fmt(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
   }
   // ONE-SIDED estimate (D2 P2): a published bound must never vanish into
   // "Estimate on request" — say which side the house put on paper. Live-bid

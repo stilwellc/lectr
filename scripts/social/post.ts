@@ -85,22 +85,43 @@ async function xPost(text: string, mediaId?: string, replyTo?: string): Promise<
 const IG = { user: process.env.IG_USER_ID || '', token: process.env.IG_ACCESS_TOKEN || '' };
 const G = 'https://graph.instagram.com/v21.0';
 
+// The long-lived IG token is a bearer credential. It must never reach a log:
+// POSTs carry it in the form body (not the URL), the one GET that needs it in
+// the query goes through igFetch, and every error string that leaves this
+// file passes through redact() — a network error or a Graph error body can
+// echo the request URL.
+function redact(s: string): string {
+  let out = s.replace(/access_token=[^&\s"']+/g, 'access_token=[redacted]');
+  for (const v of [IG.token, XK.key, XK.secret, XK.token, XK.tokenSecret]) if (v && v.length >= 8) out = out.split(v).join('[redacted]');
+  return out;
+}
+async function igFetch(url: string, params: Record<string, string>, method: 'GET' | 'POST'): Promise<Response> {
+  const q = new URLSearchParams({ ...params, access_token: IG.token });
+  try {
+    return method === 'POST'
+      ? await fetch(url, { method, headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: q })
+      : await fetch(`${url}?${q}`);
+  } catch (e) {
+    // rethrow WITHOUT the cause chain — undici's cause can carry the URL
+    throw new Error(`IG ${method} ${url.replace(G, '')} failed: ${redact((e as Error).message)}`);
+  }
+}
+
 async function igPublish(imageUrl: string, caption: string, alt: string): Promise<string> {
-  const q = new URLSearchParams({ image_url: imageUrl, caption, alt_text: alt.slice(0, 1000), access_token: IG.token });
-  const c = await fetch(`${G}/${IG.user}/media?${q}`, { method: 'POST' });
+  const c = await igFetch(`${G}/${IG.user}/media`, { image_url: imageUrl, caption, alt_text: alt.slice(0, 1000) }, 'POST');
   const cj = (await c.json()) as { id?: string; error?: { message?: string } };
-  if (!c.ok || !cj.id) throw new Error(`container ${c.status}: ${cj.error?.message || JSON.stringify(cj).slice(0, 200)}`);
+  if (!c.ok || !cj.id) throw new Error(redact(`container ${c.status}: ${cj.error?.message || JSON.stringify(cj).slice(0, 200)}`));
   // the container fetches the JPEG from lectr.bid; wait for it
   for (let i = 0; i < 20; i++) {
-    const s = await fetch(`${G}/${cj.id}?fields=status_code,status&access_token=${IG.token}`);
+    const s = await igFetch(`${G}/${cj.id}`, { fields: 'status_code,status' }, 'GET');
     const sj = (await s.json()) as { status_code?: string; status?: string };
     if (sj.status_code === 'FINISHED') break;
-    if (sj.status_code === 'ERROR' || sj.status_code === 'EXPIRED') throw new Error(`container ${sj.status_code}: ${sj.status || ''}`);
+    if (sj.status_code === 'ERROR' || sj.status_code === 'EXPIRED') throw new Error(redact(`container ${sj.status_code}: ${sj.status || ''}`));
     await new Promise(r => setTimeout(r, 3000));
   }
-  const p = await fetch(`${G}/${IG.user}/media_publish?creation_id=${cj.id}&access_token=${IG.token}`, { method: 'POST' });
+  const p = await igFetch(`${G}/${IG.user}/media_publish`, { creation_id: cj.id }, 'POST');
   const pj = (await p.json()) as { id?: string; error?: { message?: string } };
-  if (!p.ok || !pj.id) throw new Error(`publish ${p.status}: ${pj.error?.message || JSON.stringify(pj).slice(0, 200)}`);
+  if (!p.ok || !pj.id) throw new Error(redact(`publish ${p.status}: ${pj.error?.message || JSON.stringify(pj).slice(0, 200)}`));
   return pj.id;
 }
 
@@ -132,10 +153,10 @@ async function main() {
       const media = await xUploadMedia(path.join(OUT, plan.files.x), plan.copy.alt);
       const id = await xPost(plan.copy.x, media);
       let reply: string | undefined;
-      try { reply = await xPost(plan.copy.xReply, undefined, id); } catch (e) { console.warn('[social] X reply failed:', (e as Error).message); }
+      try { reply = await xPost(plan.copy.xReply, undefined, id); } catch (e) { console.warn('[social] X reply failed:', redact((e as Error).message)); }
       entry.x = { id, reply };
       console.log(`[social] X posted ${id}${reply ? ' + reply ' + reply : ''}`);
-    } catch (e) { console.error('[social] X failed:', (e as Error).message); }
+    } catch (e) { console.error('[social] X failed:', redact((e as Error).message)); }
   }
 
   // Instagram
@@ -149,7 +170,7 @@ async function main() {
       const id = await igPublish(plan.publicUrls.ig, plan.copy.ig, plan.copy.alt);
       entry.ig = { id };
       console.log(`[social] IG published ${id}`);
-    } catch (e) { console.error('[social] IG failed:', (e as Error).message); }
+    } catch (e) { console.error('[social] IG failed:', redact((e as Error).message)); }
   }
 
   ledger.posted = ledger.posted.filter(e => e.date >= new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10));
@@ -158,4 +179,5 @@ async function main() {
   if (igReady && !entry.ig) process.exitCode = 1;
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+// never console.error(e) the raw error: its cause chain can hold a request URL
+main().catch(e => { console.error(redact(String((e as Error)?.stack || e))); process.exit(1); });

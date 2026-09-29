@@ -24,7 +24,7 @@
  * Needs SUPABASE_URL + SUPABASE_SERVICE_KEY (skips silently without them —
  * the site works fine off the shards alone).
  */
-import { readCorpus, slimForClient } from './corpus-io';
+import { readCorpus, slimForClient, isServedUpcoming } from './corpus-io';
 import { marketOf } from '../app/constants';
 
 const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -95,8 +95,11 @@ async function main() {
   const lots = readCorpus() as any[];
   const now = new Date().toISOString();
 
-  // ── 1. the live book: every upcoming lot, full queryable columns ──────────
-  const rows = lots.filter(l => l.id && l.status === 'upcoming').map(l => {
+  // ── 1. the live book: EXACTLY the served upcoming set ────────────────────
+  // (Sep 27 2026) this used to take every status==='upcoming' row — 11,708
+  // pushed while upcoming.json served 7,913: ~3.8k closed-but-unresolved lots
+  // sat in the DB as live. Same predicate as build-upcoming now.
+  const rows = lots.filter(l => l.id && isServedUpcoming(l)).map(l => {
     const v = l.value ?? null;
     return {
       id: String(l.id),
@@ -129,7 +132,10 @@ async function main() {
   const stale = await restAll(`lots?select=id&updated_at=lt.${encodeURIComponent(now)}&status=eq.upcoming`);
   if (stale.length) {
     const byId = new Map<string, any>();
-    for (const l of lots) if (l.id && l.status !== 'upcoming') byId.set(String(l.id), l);
+    // every row NOT in tonight's served live book — incl. a closed lot still
+    // 'upcoming' in the corpus (inside normalize's 3-day window before it is
+    // demoted to unknown-result), which settles as results-pending below.
+    for (const l of lots) if (l.id && !isServedUpcoming(l)) byId.set(String(l.id), l);
     const settled: Record<string, unknown>[] = [];
     let unknown = 0;
     for (const r of stale) {
@@ -153,7 +159,7 @@ async function main() {
         image_url: l.imageUrl ?? null,
         house: l.auctionHouse ?? null,
         sport: l.sport ?? null,
-        results_pending: !!l.resultsPending,
+        results_pending: !!l.resultsPending || l.status === 'upcoming',
         signal_label: null,          // a settled lot carries no live flag
         signal_pct: null,
         value: null,

@@ -1976,6 +1976,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-call-title { font-size: 15.5px; color: var(--color-text-muted); margin: 3px 0 2px; line-height: 1.45; }
 
 .ray-call-ctas { display: flex; gap: 10px; margin-top: auto; }
+/* phones: pills keep their label on ONE line and wrap as whole pills —
+   three squeezed pills each broke to three lines on /value's call plate */
+.ray-call-ctas { flex-wrap: wrap; }
+.ray-call-ctas > .ray-call-btn { white-space: nowrap; flex: 0 0 auto; }
 .ray-call-btn {
   display: inline-flex;
   align-items: center;
@@ -4046,7 +4050,7 @@ html[data-lectr-light] .ray-figcap {
 }
 html[data-lectr-light] .ray-figcap-no::before {
   counter-increment: lectr-fig;
-  content: 'FIG. ' counter(lectr-fig, decimal-leading-zero);
+  content: 'FIG. ' counter(lectr-fig); /* unpadded — de-slop law 1 */
   font-family: var(--font-mono), monospace;
   font-size: 10px;
   font-weight: 600;
@@ -4080,20 +4084,9 @@ html[data-lectr-light] .ray-figcap-body {
    rules go from dotted terminal texture to matplotlib-quiet hairlines ── */
 html[data-lectr-light] .ray-chart-glow { display: none; }
 
-/* № — catalogue folio numbers on the value lanes (light only). FIG. numbers
-   the evidence; the folio numbers the rooms. */
-html[data-lectr-light] .terminal-shell { counter-reset: lectr-fig lectr-folio; }
-html[data-lectr-light] .vd-lane-name::before {
-  counter-increment: lectr-folio;
-  content: '\2116\a0' counter(lectr-folio, decimal-leading-zero);
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--color-butter-text);
-  margin-right: 10px;
-  vertical-align: 2px;
-}
+/* (The № 01/02/03 folio on the value lanes is retired — de-slop law 1: no
+   zero-padded ordinals; the lanes name themselves.) FIG. numbers the evidence. */
+html[data-lectr-light] .terminal-shell { counter-reset: lectr-fig; }
 
 /* the confidence ribbon — gold-wash on dark, ink-wash on porcelain */
 html[data-lectr-light] { --ci-ribbon: rgba(28, 25, 23, 0.07); }

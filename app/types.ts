@@ -2,7 +2,9 @@ export type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 
   // sports + pop-culture expansion (Aug 2026 — built isolated, wired in per house
   // as each clears verification; see scripts/crawl-<house>.ts + their segments)
   | 'REA' | 'Huggins & Scott' | 'SCP' | 'Lelands' | 'Memory Lane' | 'Love of the Game'
-  | "Julien's" | "Hake's" | 'Propstore' | 'NFL Auction' | 'MLB Auctions';
+  | "Julien's" | "Hake's" | 'Propstore' | 'NFL Auction' | 'MLB Auctions'
+  // Bonhams-owned Copenhagen house, relabelled out of 'Bonhams' by normalize (Sep 27)
+  | 'Bruun Rasmussen';
 /** 'withdrawn'/'unknown-result' are actively used post-migration for vanished
     or unreconciled non-Goldin lots (see §1d + W11). */
 export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn' | 'unknown-result';
@@ -150,6 +152,15 @@ export interface AuctionLot {
       yet — held as 'upcoming' and kept visible until results publish (then it
       flips to 'sold', or drops once the results window lapses). */
   resultsPending?: boolean;
+  /** Set by corpus-normalize (Sep 27 2026) when the lot must NEVER be used as a
+      comp — a short reason code ('stale-upcoming', 'price-vs-estimate',
+      'fx-unconverted', 'last-tracked-bid', 'price-under-10', 'seed-nonlot-url',
+      'estimate-upon-request'; see COMP_EXCLUDE). The row still renders. */
+  compExclude?: string;
+  /** How precise saleDate is. Absent = 'day'. 'month' = a synthesized mid-month
+      stamp (seasonToDate: "2018 Spring" → 04-15); 'year' = a June-1 placeholder
+      (Sotheby's artist-page scrape). Crawler-stamped values win over normalize. */
+  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
   url: string;
   /** Stamped at BUILD time by scripts/build-upcoming.ts onto the eager
       upcoming.json lots ONLY (comps median vs estimate midpoint, or the
@@ -309,7 +320,11 @@ export interface AuctionLot {
   /** Part-2 engine output, stamped at build time on upcoming lots. See
       app/lib/value.ts ValueResult. Structural to avoid a types↔value cycle. */
   value?: {
+    /** compValueUsd is the engine's PREDICTION (blended, Sep 2026); the comps
+        MEDIAN a "comps median" display prints is compMedianUsd (absent on
+        older data → fall back to compValueUsd, which was the median then). */
     poolIds: string[]; n: number; compValueUsd: number; low: number; high: number;
+    compMedianUsd?: number | null; compAdjUsd?: number | null; blendW?: number | null;
     compRatio: number | null;
     signal: { label: string; strength: string; beatRatePct: number } | null;
     estimateUsd: number | null;

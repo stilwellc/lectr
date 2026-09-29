@@ -97,7 +97,7 @@ export function buildBacktestIncremental(dataDir: string, allLots?: AuctionLot[]
   const prep = prepare(lots, console.log, elapsed);
   // legacy field drift → repair in place (never a forced full rebuild)
   rehydrateState(st, prep, console.log);
-  const { soldTargets, biTargets } = targetsOf(prep);
+  const { soldTargets, biTargets, noEstTargets } = targetsOf(prep);
 
   const scored = new Set(st.scoredIds);
   const tried = new Set(st.triedIds || []);
@@ -110,7 +110,10 @@ export function buildBacktestIncremental(dataDir: string, allLots?: AuctionLot[]
   };
   let newSold = soldTargets.filter(isNew);
   let newBi = biTargets.filter(isNew);
-  console.log(`[backtest] incremental: ${newSold.length} sold + ${newBi.length} bought-in targets not yet attempted (window since ${windowStart} or first seen after ${priorGeneratedAt}) (${elapsed()})`);
+  // no-estimate targets (Sep 27): same never-attempted rule; the first night
+  // on a legacy state folds the whole trailing window in (chunked by budget)
+  let newNoEst = noEstTargets.filter(isNew);
+  console.log(`[backtest] incremental: ${newSold.length} sold + ${newBi.length} bought-in + ${newNoEst.length} no-estimate targets not yet attempted (window since ${windowStart} or first seen after ${priorGeneratedAt}) (${elapsed()})`);
   if (newSold.length + newBi.length > NIGHTLY_TARGET_BUDGET) {
     // chunk oldest-first so the rolling calibration stays point-in-time; the
     // remainder is picked up tomorrow (they are still "not attempted")
@@ -119,8 +122,15 @@ export function buildBacktestIncremental(dataDir: string, allLots?: AuctionLot[]
     newBi = newBi.sort(byDate).slice(0, Math.max(0, NIGHTLY_TARGET_BUDGET - newSold.length));
     console.log(`[backtest] incremental: over the nightly budget — scoring the oldest ${newSold.length + newBi.length} tonight, the rest tomorrow`);
   }
+  {
+    const room = Math.max(0, NIGHTLY_TARGET_BUDGET - newSold.length - newBi.length);
+    if (newNoEst.length > room) {
+      newNoEst = newNoEst.sort((a, b) => (a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0)).slice(0, room);
+      console.log(`[backtest] incremental: no-estimate targets chunked to ${newNoEst.length} tonight`);
+    }
+  }
 
-  const res = replayTargets(prep, st, newSold, newBi, console.log, 5000);
+  const res = replayTargets(prep, st, newSold, newBi, console.log, 5000, newNoEst);
   st.engineVersion = st.engineVersion || 'legacy';
   console.log(`[backtest] incremental: ${res.scored} scored, ${res.tried} abstained (${elapsed()})`);
 

@@ -22,6 +22,7 @@ project converge on the same schema):
 | 0004 | `migrations/0004_indexes_and_constraints.sql` | alert/search indexes; **dedupes** `saved_searches` then adds `unique (user_id, query)` |
 | 0005 | `migrations/0005_drop_emailed_at.sql` | drops the dead email-digest column (NO EMAIL FEATURES) |
 | 0006 | `migrations/0006_retention_purge.sql` | `retention_purge()` (seen alerts > 90d, snapshots capped at 400/user) + its pg_cron schedule |
+| 0007 | `migrations/0007_abuse_limits.sql` | length/range CHECKs (`NOT VALID` — new writes only) + per-user row caps via trigger: 1000 saved lots, 200 searches, 500 snapshots (service key exempt) |
 
 For 0006 enable **pg_cron** first (Database → Extensions) so the schedule
 installs; without it the file still creates the function and prints a NOTICE
@@ -34,7 +35,21 @@ kept as the historical record — do not run them on a new project.
 ## 3. Configure auth URLs
 **Authentication → URL Configuration:**
 - **Site URL:** `https://lectr.bid`
-- **Redirect URLs:** add `https://lectr.bid/saved` and `http://localhost:3000/saved`
+- **Redirect URLs** — exactly these, nothing broader:
+  - `https://lectr.bid/**` — sign-in returns the user to the page they were on
+    (`redirectTo = window.location.href`, app/lib/account.tsx), so any path +
+    query string must be allowed. `/saved` alone is NOT enough.
+  - `http://localhost:3000/**` — local dev only; delete it if you never sign in locally.
+  - Do **not** add `https://*.pages.dev/**` or `https://www.lectr.bid/**` (www
+    should 301 to the apex before any auth happens).
+
+The client uses the **PKCE** flow (`flowType: 'pkce'`, app/lib/supabase.ts):
+the redirect lands with `?code=`, which supabase-js exchanges and strips on
+load. No template change is needed — the default *Magic Link* email template
+(`{{ .ConfirmationURL }}`) works with PKCE. The one behaviour change: a magic
+link must be opened in the **same browser** that requested it (the code
+verifier lives in that browser's localStorage); otherwise the app clears the
+dead `?code=` and tells the user to request a new link.
 
 Email (magic-link) sign-in is on by default — you're done for magic link.
 

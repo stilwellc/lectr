@@ -9,6 +9,7 @@ import { isMisattributed } from '../lib/attribution';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
 import { useFullLotsOnDemand } from '../hooks/useRayData';
+import { loadPageStats, type PageStats } from '../lib/page-data';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
 import { useAuth } from '../lib/account';
@@ -18,7 +19,7 @@ import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, local
 import { formatEstimate } from '../components/LotCard';
 import { formatDemand } from '../lib/demand';
 import { verifiedMovers, type VerifiedMover } from '../preview/terminal/verified';
-import { CellGrid, Cell, ColorCell, FigureCell, FigCalib, FigGate, FigPools } from '../components/cells';
+import { FigureCell, FigGate } from '../components/cells';
 import CountUp from '../components/CountUp';
 import CloseClock from '../components/CloseClock';
 import Masthead, { Accent } from '../components/Masthead';
@@ -639,8 +640,23 @@ export default function MakersPage() {
   // record). A real Rolex for Rolex, a real Basquiat for Basquiat — sourced
   // from the auction inventory we already display, so it never breaks and is
   // always genuinely that maker's work. ──
+  // THE FACES now ship precomputed (pages/page-stats.json makerFaces — the
+  // exact loop below, run once at build over the same served book). The
+  // corpus path survives only for a data build without page-stats.
+  const [pageStats, setPageStats] = useState<PageStats | null | undefined>(undefined);
+  useEffect(() => {
+    let on = true;
+    loadPageStats().then(p => { if (on) setPageStats(p); });
+    return () => { on = false; };
+  }, []);
+  const facesFallback = pageStats === null;
+  const askCorpus = useCallback(() => { if (facesFallback) requestFullLots(); }, [facesFallback, requestFullLots]);
   const heroBySlug = useMemo(() => {
     const best = new Map<string, { url: string; val: number }>();
+    if (pageStats?.makerFaces) {
+      for (const [slug, f] of Object.entries(pageStats.makerFaces)) best.set(slug, f);
+      return best;
+    }
     for (const l of allLots) {
       if (!l.imageUrl) continue;
       // the shared attribution guard drops cars in art pools + name-collision
@@ -659,7 +675,7 @@ export default function MakersPage() {
       if (!cur || val > cur.val) best.set(l.artist, { url: l.imageUrl, val });
     }
     return best;
-  }, [allLots]);
+  }, [allLots, pageStats]);
 
   // ── THE LIVE BOOK + THE ENGINE'S READ, one pass over the eager set ──
   const liveBySlug = useMemo(() => {
@@ -797,9 +813,9 @@ export default function MakersPage() {
   // opening a dossier is the explicit ask for the maker's own photograph —
   // the corpus is the only place that image comes from
   const onToggleOpen = useCallback((slug: string) => {
-    requestFullLots();
+    askCorpus();
     setOpen(o => (o === slug ? null : slug));
-  }, [requestFullLots]);
+  }, [askCorpus]);
   const onToggleCompare = useCallback((slug: string) => {
     setCompare(c => c.includes(slug) ? c.filter(s => s !== slug) : c.length >= 4 ? c : [...c, slug]);
   }, []);
@@ -815,13 +831,14 @@ export default function MakersPage() {
      reader who scrolls or reaches for the keyboard gets the faces streaming
      before they open anything. (Deep-linked ?open= asks for it outright.) */
   useEffect(() => {
+    if (!facesFallback) return;             // faces ship in page-stats — no corpus
     if (deepLinked.current) { requestFullLots(); return; }
     const ev = ['scroll', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
     const fire = () => { off(); requestFullLots(); };
     const off = () => ev.forEach(e => window.removeEventListener(e, fire));
     ev.forEach(e => window.addEventListener(e, fire, { passive: true, once: true }));
     return off;
-  }, [requestFullLots]);
+  }, [requestFullLots, facesFallback]);
 
   // deep link ?open= — land on the dossier once the ledger has painted.
   // `open` is a dep too: on a WARM cache loading is already false at mount,
@@ -1006,50 +1023,42 @@ export default function MakersPage() {
               abstention: no verified read on the book → the cell goes ink and
               says so. ══ */}
           <section className="rail ray-enter mk-cellroom" style={{ '--enter-delay': '35ms' } as React.CSSProperties}>
-            <CellGrid min={230} className="mk-cells">
-              {topVerified && topVerified.verified ? (
-                <ColorCell
-                  dir={topVerified.verified.changePct > 0 ? 'up' : topVerified.verified.changePct < 0 ? 'down' : 'ink'}
-                  span={2}
-                  stat={`${topVerified.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(topVerified.verified.changePct))}%`}
-                  label={`The verified read · ${topVerified.verified.horizon}`}
-                  body={`${topVerified.label} — the strongest CI-verified move on the ${activeLabel} book · 95% CI ${Math.round(topVerified.verified.ciLoPct)}% to ${Math.round(topVerified.verified.ciHiPct)}% · n ${topVerified.verified.n.toLocaleString()}`}
-                  href={`/makers/${topVerified.slug}`}
-                />
-              ) : (
-                <ColorCell
-                  dir="ink"
-                  span={2}
-                  label="The verified read"
-                  body={`No CI-verified index on the ${activeLabel} book yet — a maker publishes a move only when its 95% interval resolves the sign; everything else abstains.`}
-                />
-              )}
-              <Cell
-                stat={activeKey === 'all' ? ROSTER.makers.toLocaleString() : rosterCount.toLocaleString()}
-                statNote={activeKey === 'all' ? `makers · ${ROSTER.categories} categories` : noun}
-                mark={<FigPools size={96} />}
-                label="The roster"
-                body={`Every maker lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.`}
-              />
-              <Cell
-                stat={verifiedCount.toLocaleString()}
-                statNote="CI-verified indexes"
-                mark={<FigCalib size={96} />}
-                label="Verified indexes"
-                body="Repeat-sales reads whose 95% interval resolves the sign — the only price moves the engine will stand behind."
-              />
-              <Cell
-                stat={totalFlags.toLocaleString()}
-                statNote="flagged by the engine"
-                mark={<FigGate size={96} />}
-                label="On the block"
-                body={totalFlags > 0
-                  ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} priced under ${totalFlags === 1 ? 'its' : 'their'} comparables.`
-                  : totalLive > 0
-                    ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — none flagged under its comparables.`
-                    : 'The book is quiet — the crawl refreshes daily.'}
-              />
-            </CellGrid>
+            {/* hairline rows, not a bento (de-slop law 7): four facts, one
+                ruled ledger — no orphan card on a 4-track grid */}
+            <div className="mk-facts" role="list">
+              {(() => {
+                const v = topVerified && topVerified.verified ? topVerified.verified : null;
+                const dir = v ? (v.changePct > 0 ? 'up' : v.changePct < 0 ? 'down' : undefined) : undefined;
+                const facts: { k: string; stat: string; note: string; body: string; dir?: string; href?: string }[] = [
+                  v ? {
+                    k: `The verified read · ${v.horizon}`,
+                    stat: `${v.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(v.changePct))}%`,
+                    note: topVerified!.label,
+                    body: `The strongest CI-verified move on the ${activeLabel} book · 95% CI ${Math.round(v.ciLoPct)}% to ${Math.round(v.ciHiPct)}% · n ${v.n.toLocaleString()}`,
+                    dir, href: `/makers/${topVerified!.slug}`,
+                  } : {
+                    k: 'The verified read', stat: '—', note: 'abstaining',
+                    body: `No CI-verified index on the ${activeLabel} book yet — a maker publishes a move only when its 95% interval resolves the sign.`,
+                  },
+                  { k: 'The roster', stat: activeKey === 'all' ? ROSTER.makers.toLocaleString() : rosterCount.toLocaleString(), note: activeKey === 'all' ? `makers · ${ROSTER.categories} categories` : noun, body: `Every name lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.` },
+                  { k: 'Verified indexes', stat: verifiedCount.toLocaleString(), note: 'CI-verified indexes', body: 'Repeat-sales reads whose 95% interval resolves the sign — the only price moves the engine will stand behind.' },
+                  { k: 'On the block', stat: totalFlags.toLocaleString(), note: 'flagged by the engine', body: totalFlags > 0
+                    ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} priced under ${totalFlags === 1 ? 'its' : 'their'} comparables.`
+                    : totalLive > 0 ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — none flagged under its comparables.` : 'The book is quiet — the crawl refreshes daily.' },
+                ];
+                return facts.map(f => {
+                  const inner = (
+                    <>
+                      <span className="mk-fact-k">{f.k}<span className="mk-fact-body">{f.body}</span></span>
+                      <span className="mk-fact-v"><b data-dir={f.dir}>{f.stat}</b><span>{f.note}</span></span>
+                    </>
+                  );
+                  return f.href
+                    ? <Link key={f.k} role="listitem" href={f.href} className="mk-fact">{inner}</Link>
+                    : <div key={f.k} role="listitem" className="mk-fact">{inner}</div>;
+                });
+              })()}
+            </div>
           </section>
 
           {/* ── THE FILTER BAR ── */}
@@ -1219,7 +1228,19 @@ const MAKERS_CSS = `
    item in a one-track auto-fit grid forces an implicit column and overflows
    the 390px viewport (the home page's own rule; !important because the span
    rides an inline style) */
-@media(max-width:679px){.mk-cells > *{grid-column:auto !important}}
+/* the facts ledger — hairline rows (was a 5-unit bento with an orphan) */
+.mk-facts{border-top:1px solid var(--color-border)}
+.mk-fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 24px;align-items:baseline;padding:14px 2px;border-bottom:1px solid var(--color-border);color:inherit;text-decoration:none}
+a.mk-fact:hover{background:var(--color-hover-item)}
+a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
+.mk-fact-k{font-size:14px;font-weight:500;color:var(--color-fg);min-width:0}
+.mk-fact-body{display:block;font-size:12.5px;font-weight:400;color:var(--color-text-muted);line-height:1.5;margin-top:3px;max-width:68ch}
+.mk-fact-v{text-align:right;white-space:nowrap}
+.mk-fact-v b{display:block;font-family:var(--font-mono),monospace;font-size:26px;font-weight:500;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.1}
+.mk-fact-v b[data-dir="up"]{color:var(--color-up)}
+.mk-fact-v b[data-dir="down"]{color:var(--color-down-text)}
+.mk-fact-v span{display:block;font-size:11.5px;color:var(--color-text-faint);margin-top:2px}
+@media(max-width:560px){.mk-fact{grid-template-columns:1fr}.mk-fact-v{text-align:left;order:-1}.mk-fact-v b{display:inline;margin-right:8px}.mk-fact-v span{display:inline}}
 
 /* ── the filter bar ── */
 .mk-bar-wrap{position:sticky;top:54px;z-index:30;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
@@ -1227,7 +1248,7 @@ const MAKERS_CSS = `
 .mk-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 210px;min-width:140px;padding:0 12px;height:30px;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:999px;color:var(--color-text-faint)}
 .mk-search input{flex:1;min-width:0;background:none;border:none;outline:none;font-family:var(--font-sans),sans-serif;font-size:12.5px;color:var(--color-fg)}
 .mk-search input::placeholder{color:var(--color-text-faint)}
-.mk-search:focus-within{border-color:var(--color-border-mid)}
+.mk-search:focus-within{border-color:var(--color-fg);box-shadow:0 0 0 2px color-mix(in srgb,var(--color-fg) 22%,transparent)}
 .mk-clear{background:none;border:none;color:var(--color-text-faint);cursor:pointer;font-size:14px;padding:0 2px}
 .mk-kbd{font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);border:1px solid var(--color-border);border-radius:5px;padding:1px 5px;line-height:1.3}
 .mk-chip{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:0 12px;height:28px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer;transition:color var(--duration-fast) var(--ease-signature),border-color var(--duration-fast) var(--ease-signature),background var(--duration-fast) var(--ease-signature)}
@@ -1345,7 +1366,7 @@ const MAKERS_CSS = `
 .mkx-plot{position:relative;width:100%;height:100%}
 .mkx-plot svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
 .mkx-dot{position:absolute;width:5px;height:5px;border-radius:100px;background:var(--color-fg);transform:translate(-50%,-50%)}
-.mkx-tick{position:absolute;font-family:var(--font-mono),monospace;font-size:9.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mkx-tick{position:absolute;font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mkx-tick-y{left:-8px;transform:translate(-100%,-50%)}
 .mkx-tick-x{bottom:-16px;transform:translateX(-50%)}
 /* the no-curve explanation — a cream well (ns-well provides ground+radius+pad) */
@@ -1397,7 +1418,7 @@ const MAKERS_CSS = `
 .mkc-chip button{background:none;border:none;color:var(--color-text-faint);cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
 .mkc-chip button:hover{color:var(--color-fg)}
 .mkc-chip[data-thin]{color:var(--color-text-muted)}
-.mkc-chip-thin{font-family:var(--font-mono),monospace;font-size:9px;letter-spacing:0.06em;color:var(--color-text-faint);text-transform:uppercase}
+.mkc-chip-thin{font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:0.06em;color:var(--color-text-faint);text-transform:uppercase}
 .mkc-rule{flex:1}
 .mkc-btn{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:5px 11px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer}
 .mkc-btn:hover{color:var(--color-fg)}

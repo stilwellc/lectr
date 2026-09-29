@@ -47,12 +47,31 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
   // per-quarter confidence interval rides the chart as a shaded ribbon
   // (uncertainty as a shape, the lab grammar). Cohort index remains the
   // fallback for markets the hedonic engine can't yet carry.
-  const hed = marketData?.hedonic?.[scope]?.series;
-  const hasHedonic = Array.isArray(hed) && hed.length >= 8;
-  const idx = useMemo(
-    () => (hasHedonic ? hed! : (marketData?.markets?.[scope]?.index || [])),
-    [hasHedonic, hed, marketData, scope],
-  );
+  //
+  // THE MIX GATE (Sep 27 2026). The hedonic series is emitted for every
+  // quarter, but only its HORIZONS are gated — and /analytics drew the raw
+  // series regardless. On 'all' every horizon abstains (2023-Q2 is 75% one
+  // maker-slug, sports-cards; Goldin/Christie's composition breaks), so the
+  // 3Y window rebased to that mix trough and printed +791%, flattening every
+  // layer under it. Now: the hedonic line is drawn ONLY over a window whose
+  // horizon published, ONLY through the last complete quarter; otherwise the
+  // cohort index anchors and the abstention is printed verbatim.
+  const hEntry = marketData?.hedonic?.[scope] as (NonNullable<MarketData['hedonic']>[string] & { lastCompleteQuarter?: string }) | undefined;
+  const hed = hEntry?.series;
+  const lastQ = hEntry?.lastCompleteQuarter;
+  const horizon = hEntry?.horizons?.[tf === 'MAX' ? 'MAX' : tf];
+  const hedonicOk = Array.isArray(hed) && hed.length >= 8 && !!horizon?.publishable;
+  const hedonicAbstain = Array.isArray(hed) && hed.length >= 8 && !hedonicOk ? (horizon?.reason || 'the interval does not resolve over this window') : null;
+  const hasHedonic = hedonicOk;
+  const idx = useMemo(() => {
+    const norm = (p: string) => p.replace(/^(\d{4})-Q(\d)$/, '$1 Q$2');
+    const src = (hasHedonic
+      ? hed!.filter(p => !lastQ || p.period <= lastQ)
+      : (marketData?.markets?.[scope]?.index || [])) as { period: string; value: number }[];
+    // ONE period grammar on the axis ('2023 Q3') — hedonic ships '2023-Q3',
+    // the layers ship '2023 Q3'; mixed, the x axis interleaved both
+    return src.map(p => ({ ...p, period: norm(p.period) }));
+  }, [hasHedonic, hed, lastQ, marketData, scope]);
 
   const layerDefs = useMemo(() => resolveHeroLayers(scope, marketData), [scope, marketData]);
 
@@ -138,6 +157,11 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
         {hasHedonic
           ? <>hedonic index — like-for-like controls, IRLS fit, rebased Δ% over the window · the shaded ribbon is the model&rsquo;s own 95% interval</>
           : <>like-for-like cohort index, rebased Δ% over the window · layers: the market&rsquo;s tracked sub-markets</>}
+        {hedonicAbstain && (
+          <span style={{ display: 'block', marginTop: 4 }}>
+            The hedonic index abstains over {tf}: {hedonicAbstain}. It is not drawn.
+          </span>
+        )}
       </div>
       <HeroChart
         anchor={built.anchor}

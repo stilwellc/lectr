@@ -131,10 +131,19 @@ be automated from here.
    and valid for 1 hour. Access tokens from the App Dashboard are long-lived
    and are valid for 60 days."* The scope needed for posting is
    `instagram_business_content_publish`.
-4. **The token expires every 60 days.** Refresh it before expiry and update
-   the secret. When it lapses the poster does not crash — it logs the Graph
-   API's own error and the X post still goes out. Put a calendar reminder at
-   50 days.
+4. **The token expires every 60 days.** `scripts/social/refresh-ig-token.ts`
+   trades a still-valid token (≥ 24 h old) for a fresh 60-day one and writes
+   it back to the `IG_ACCESS_TOKEN` secret:
+   `GH_TOKEN=<PAT> IG_ACCESS_TOKEN=<current> npx tsx scripts/social/refresh-ig-token.ts`
+   (`--dry-run` checks without storing; `--out=<file>` writes a 0600 file for
+   a local run). `GITHUB_TOKEN` cannot write secrets, so a scheduled job needs
+   a fine-grained PAT with *Secrets: read and write* on this repo only, passed
+   as `GH_TOKEN` to that one step. Run it weekly. If the token has already
+   lapsed, refresh fails (exit 2) — mint a new one in the App Dashboard. When
+   it lapses the poster does not crash — it logs the Graph API's own error
+   (token redacted) and the X post still goes out.
+   The token never appears in a URL the poster logs: POSTs carry it in the
+   form body and every error string is passed through `redact()`.
 5. Read the account id from `GET /me?fields=user_id,username` — the `user_id`
    field is what `IG_USER_ID` wants.
 6. Secrets: `IG_USER_ID`, `IG_ACCESS_TOKEN`.

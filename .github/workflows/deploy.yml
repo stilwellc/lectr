@@ -2,74 +2,94 @@ name: Deploy to Cloudflare Pages
 
 # The site is a pure static export (output: 'export') hosted on Cloudflare
 # Pages as project "collectr" — no git integration, this workflow IS the
-# deploy pipeline. Fires on every push to main: code changes and the daily
-# crawl's data commit alike (data is baked into the export, so a data commit
-# must redeploy to go live).
+# deploy pipeline. Fires on every push to main (code changes; data lives in
+# R2 and is pulled at build time), on manual dispatch, and as a REUSABLE
+# workflow: close-board.yml calls it (workflow_call) with its freshly built
+# intraday overlay — a GITHUB_TOKEN push can never trigger `on: push`, which
+# is why the overlay used to wait for the next nightly (Sep 2026).
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      close_board_artifact:
+        description: 'name of a same-run artifact holding a fresh close-board.json to bake in'
+        type: string
+        required: false
+        default: ''
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: false
 
-# cancel-in-progress OFF: this group is now shared with nightly.yml's deploy
-# job and ray-crawl.yml — a push-triggered cancel would kill a nightly data
-# deploy mid-upload (or vice versa). Queueing is strictly safer; pushes are
-# rare enough that the wait is minutes.
-concurrency:
-  group: deploy-collectr
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # ONE production-deploy lane shared with nightly.yml's deploy job,
+    # close-board.yml (via this workflow) and ray-crawl.yml. Job-level so it
+    # also serializes when called as a reusable workflow. Queue, never cancel:
+    # a cancel could kill a nightly data deploy mid-upload.
+    concurrency:
+      group: deploy-collectr
+      cancel-in-progress: false
     # generous: the R2 GET-lag guard in data-store.sh can wait ~14min for the
-    # bucket's fresh object to become GET-visible before baking (prevents a
-    # stale-payload deploy from regressing prod).
-    timeout-minutes: 30
+    # pointer to become GET-visible before baking
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v5
-
-      # Serialization (the deploy-collectr group) queues runs but a queued run
-      # still holds the commit from RUN CREATION — it could deploy a checkout
-      # that a later push (or a bot commit) has already superseded, silently
-      # reverting prod. Always deploy origin/main as of NOW. (nightly.yml's
-      # deploy leg has carried this step since the same race bit a hotfix.)
-      - name: Fast-forward to origin/main (never deploy a stale checkout)
-        run: |
-          git fetch --depth=1 origin main
-          git checkout --force origin/main
-          echo "deploying $(git rev-parse --short HEAD)"
+      # ref: main resolves when the STEP runs (after the deploy-collectr queue),
+      # not at run creation — a queued run can never deploy a checkout that a
+      # later push already superseded (this replaced the manual fast-forward).
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - run: echo "deploying $(git rev-parse --short HEAD)"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version-file: .nvmrc
+          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # Data lives in R2 (bucket lectr-data), not git — pull the served
-      # payloads so the export bakes fresh data. Best-effort with a freshness
-      # guard: if R2 is unreachable or older than the checkout, the local
-      # copy builds instead (transition-safe).
+      # payloads so the export bakes fresh data (freshness-guarded).
       - name: Pull data from R2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull
 
+      # The intraday overlay (not in git since Sep 27 2026): the caller's fresh
+      # copy when close-board.yml invoked us, and production's live copy
+      # always — newest generatedAt wins over the nightly's served copy.
+      - name: Fetch the caller's close-board overlay
+        if: ${{ inputs.close_board_artifact != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.close_board_artifact }}
+          path: ${{ runner.temp }}/close-board
+      - name: Seed the freshest close-board overlay
+        env:
+          CANDIDATE: ${{ inputs.close_board_artifact != '' && format('{0}/close-board/close-board.json', runner.temp) || '' }}
+        run: |
+          if [ -n "$CANDIDATE" ]; then node scripts/ci/seed-close-board.mjs "$CANDIDATE"; else node scripts/ci/seed-close-board.mjs; fi
+
       # GUARD 0 — never deploy OLDER data than production already serves.
-      # This workflow fires on every close-board bot commit (6×/day) with no
-      # meta.json in git to defend with: if the R2 pull above fell back to a
-      # stale copy (pointer lag, R2 blip, a checkout that predates the last
-      # push), the export would bake yesterday's book over today's. Compare
-      # lastCrawl (ISO — lexicographic order IS chronological) against the
-      # live site's meta.json; the close-board overlay is committed to git
-      # and rides regardless. Prod unreachable → proceed (can't compare,
-      # but a code fix must still be able to ship); DEPLOY_ALLOW_OLDER=1 on
-      # a manual dispatch overrides a deliberate rollback.
+      # Compare lastCrawl (ISO — lexicographic order IS chronological) against
+      # the live site's meta.json. Prod unreachable → proceed (a code fix must
+      # still ship); DEPLOY_ALLOW_OLDER=1 repo variable for a deliberate rollback.
       - name: Refuse to deploy data older than production
+        env:
+          DEPLOY_ALLOW_OLDER: ${{ vars.DEPLOY_ALLOW_OLDER }}
         run: |
           local_stamp=$(python3 -c "import json;print(json.load(open('public/data/ray/meta.json')).get('lastCrawl',''))" 2>/dev/null || echo "")
           [ -n "$local_stamp" ] || { echo "::error::public/data/ray/meta.json missing or has no lastCrawl after the R2 pull — refusing to bake a data-less export"; exit 1; }
@@ -77,36 +97,41 @@ jobs:
           if [ -z "$prod_stamp" ]; then echo "prod meta.json unreadable — cannot compare; deploying local ($local_stamp)"; exit 0; fi
           if [[ "$local_stamp" < "$prod_stamp" ]]; then
             if [ "${DEPLOY_ALLOW_OLDER:-0}" = "1" ]; then echo "::warning::deploying OLDER data ($local_stamp) over prod ($prod_stamp) — DEPLOY_ALLOW_OLDER=1"; exit 0; fi
-            echo "::error::local data ($local_stamp) is OLDER than production ($prod_stamp) — refusing to regress prod. Re-run after \`data-store.sh pull\` resolves the fresh pointer, or dispatch with DEPLOY_ALLOW_OLDER=1 for a deliberate rollback."
+            echo "::error::local data ($local_stamp) is OLDER than production ($prod_stamp) — refusing to regress prod. Re-run after \`data-store.sh pull\` resolves the fresh pointer, or set DEPLOY_ALLOW_OLDER=1 for a deliberate rollback."
             exit 1
           fi
           echo "✓ local data $local_stamp ≥ prod $prod_stamp"
-        env:
-          DEPLOY_ALLOW_OLDER: ${{ vars.DEPLOY_ALLOW_OLDER }}
 
-      # build-og pre-renders the 33 artist share cards, then next exports
-      # the whole site to out/ (50 static pages + data)
+      # CODE GATE — typecheck needs the served JSON the app imports (pulled
+      # above), so it runs here, not before the pull. Lint is a notice-only
+      # no-op until an ESLint flat config lands (scripts/ci/lint.mjs).
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Lint
+        run: npm run lint
+
+      # build-og pre-renders the share cards, then next exports the site to out/
       - name: Build static export
-        # Supabase keys are inlined at build time to enable auth + per-user saved
-        # lots. Public-safe (RLS protects the data), so repo Variables not Secrets.
-        # Absent → auth stays dormant and the build still succeeds.
+        # Supabase keys are public-safe (RLS protects the data), so repo
+        # Variables not Secrets. Absent → auth stays dormant.
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      # GUARD 1 — never DEPLOY a broken build. Every JS chunk the exported HTML
-      # references must actually exist in out/. A build that emits HTML pointing
-      # at a missing chunk (the "Refused to execute script" break) fails here,
-      # before it can reach production.
+      # GUARD 1 — never DEPLOY a broken build: every JS chunk the exported HTML
+      # references must exist in out/.
       - name: Verify build self-consistency
         run: |
           test -f out/index.html || { echo "::error::out/index.html missing — build did not export"; exit 1; }
           missing=0
           for f in out/*.html; do
-            for c in $(grep -oE '/_next/static/chunks/[a-z0-9/_.-]+\.js' "$f" | sort -u); do
+            while IFS= read -r c; do
+              [ -n "$c" ] || continue
               [ -f "out$c" ] || { echo "::error::$f references missing chunk $c"; missing=$((missing+1)); }
-            done
+            done < <(grep -oE '/_next/static/chunks/[a-z0-9/_.-]+\.js' "$f" | sort -u)
           done
           if [ "$missing" -gt 0 ]; then echo "::error::$missing missing chunk reference(s) — refusing to deploy broken code"; exit 1; fi
           echo "✓ build self-consistent — all referenced chunks present in out/"
@@ -126,14 +151,13 @@ jobs:
           url=$(echo "$out" | grep -oE 'https://[a-z0-9]+\.collectr-2ks\.pages\.dev' | head -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      # GUARD 2 — never LEAVE a broken deploy live. Hit the exact deployment URL
-      # (no propagation lag on the unique host) and confirm the home HTML's JS
-      # chunk actually serves as executable JavaScript. If it 404s or serves the
-      # wrong content-type, the job FAILS loudly so a broken deploy is caught,
-      # not left in production silently.
+      # GUARD 2 — never LEAVE a broken deploy live: the exact deployment URL's
+      # home JS chunk must serve as executable JavaScript.
       - name: Verify deploy serves executable JS
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          url="${{ steps.deploy.outputs.url }}"
+          url="$DEPLOY_URL"
           [ -n "$url" ] || { echo "::error::could not capture deploy URL"; exit 1; }
           echo "verifying $url"
           for i in $(seq 1 8); do

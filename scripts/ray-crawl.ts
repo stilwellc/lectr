@@ -509,6 +509,10 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
     if (first.ok) {
       const j = await first.json();
       lotData = Array.isArray(j.data) ? j.data : [];
+      // the maker API IS the lot-bearing page (the hydration blob is only the
+      // fallback) — count it, or pages_fetched reads 0 every night and the
+      // SILENT-ZERO gate never arms for Phillips
+      noteFetched('phillips');
       const totalPages = j.totalPages || 1;
       const deep = process.env.PHILLIPS_DEEP === '1';
       const lastPage = deep ? totalPages : Math.min(totalPages, 2);
@@ -522,6 +526,7 @@ async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
           if (!r.ok) { console.warn(`  [Phillips] page ${p}: HTTP ${r.status}`); break; }
           const jp = await r.json();
           if (!Array.isArray(jp.data) || jp.data.length === 0) break;
+          noteFetched('phillips');
           lotData.push(...jp.data);
         } catch (e) { console.warn(`  [Phillips] page ${p} failed: ${(e as Error).message}`); break; }
       }
@@ -1368,7 +1373,8 @@ export async function crawlLama(artist: ArtistConfig): Promise<AuctionLot[]> {
   try {
     const res = await fetchWithRetry(base, { headers: { 'User-Agent': UA }, timeoutMs: 30000 });
     if (!res.ok) { console.log(`  [LAMA] HTTP ${res.status}`); return lots; }
-    noteFetched('wright'); // LAMA crawls inside the wright segment's job
+    noteFetched('wright'); // LAMA crawls inside the wright segment's job (arms its SILENT-ZERO gate)
+    noteFetched('lama');   // …and its own [health] line
     const $ = cheerio.load(await res.text());
     const dataPage = $('#app').attr('data-page');
     if (!dataPage) { console.log('  [LAMA] No data-page on #app'); return lots; }
@@ -1404,7 +1410,9 @@ export async function crawlLama(artist: ArtistConfig): Promise<AuctionLot[]> {
 
 function parseLamaItem(item: any, artistSlug: string): AuctionLot | null {
   // DOCTRINE: LAMA's buy-now / direct-sales lots are asks, not hammers — drop.
-  if (item.is_buy_now || item.is_direct_sales) { parseDrop('lama', 'buy-now/direct-sales (not an auction)', String(item.name || '').slice(0, 80)); return null; }
+  // A doctrine drop is NOT a parse error (it used to be counted as one, which
+  // is why the lama [health] line read parse_errors=1 every night).
+  if (item.is_buy_now || item.is_direct_sales) { console.log(`  [LAMA] skip buy-now/direct-sales (doctrine): ${String(item.name || '').slice(0, 80)}`); return null; }
 
   const title = item.name || 'Untitled';
   const lotNum = item.lot_number || null;
@@ -2331,6 +2339,14 @@ let goldinStatusOk = false;
 // delisted, so eviction is skipped for the run when this is false.
 let goldinFeedComplete = true;
 
+/** a close timestamp more than 5 years out is a house placeholder (Goldin
+ *  uses 2050-01-01 for lots not yet slotted into an auction), never a date */
+export function isPlaceholderClose(ts: string): boolean {
+  const t = Date.parse(ts);
+  if (isNaN(t)) return true;
+  return t > Date.now() + 5 * 365 * 86_400_000;
+}
+
 async function crawlGoldin(): Promise<AuctionLot[]> {
   const byId = new Map<string, AuctionLot>();
   console.log('  [Goldin] Fetching live auction lots (facet-driven: objects, never cards)...');
@@ -2377,8 +2393,14 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
     if (routed === 'blocked') { dropped++; return; }
     const artist = routed || fallback;
     if (!artist) { dropped++; return; }
-    const end = lot.end_timestamp || lot.start_timestamp;
-    if (!end) return;
+    const rawEnd = lot.end_timestamp || lot.start_timestamp;
+    if (!rawEnd) return;
+    // Goldin parks not-yet-scheduled lots on a far-future placeholder close
+    // (2050-01-01 — 9 live lots on Sep 27 2026). That is "no date yet", not a
+    // 2050 sale: carry the lot UNDATED (no saleDate/saleDateTime, flagged
+    // datePrecision:'unknown') instead of minting a 24-years-out close.
+    const undated = isPlaceholderClose(rawEnd);
+    const end = undated ? '' : rawEnd;
     const bp = lot.buyer_premium || 22;
     const bid = lot.current_price || 0;
 
@@ -2402,6 +2424,7 @@ async function crawlGoldin(): Promise<AuctionLot[]> {
       // full close timestamp is retained on saleDateTime.
       saleDate: (end || '').split('T')[0],
       saleDateTime: end || null,
+      ...(undated ? { datePrecision: 'unknown' } : {}),
       lotNumber: lot.lot_number || null,
       // v2 money: a live lot is NOT sold — all price fields null (a live bid is
       // never a sale). currentBid carries the running bid; buyerPremiumPct is
@@ -3083,6 +3106,17 @@ function stampMoney(m: MoneyIn): MoneyBlock {
 
 type EnrichResult = { medium?: string; dimensions?: string; year?: string };
 
+// Enrichment parse failures are COUNTED + sampled, never swallowed: a JSON-LD
+// / lotHeader blob that stops parsing (markup change, truncated embed) used to
+// vanish into `catch {}` and read as "this lot has no details".
+const ENRICH_FAILS: Record<string, { json: number; page: number }> = {};
+let enrichFailLogged = 0;
+function noteEnrichFail(house: string, kind: 'json' | 'page', lot: AuctionLot, e: unknown) {
+  const c = ENRICH_FAILS[house] || (ENRICH_FAILS[house] = { json: 0, page: 0 });
+  c[kind]++;
+  if (enrichFailLogged++ < 10) console.warn(`  [Enrich] ${house} ${kind === 'json' ? 'embedded JSON parse' : 'page'} failure on ${lot.id}: ${(e as Error)?.message?.slice(0, 120) || e}`);
+}
+
 const MEDIUM_PATTERNS = /(?:oil|acrylic|gouache|watercolor|watercolour|ink|charcoal|pencil|pastel|spray|enamel|screenprint|silkscreen|lithograph|etching|woodcut|woodblock|linocut|engraving|aquatint|monotype|monoprint|offset|poster|gicl[eé]e|print|photograph|gelatin silver|c-print|chromogenic|pigment print|inkjet|cibachrome|bronze|ceramic|porcelain|earthenware|stoneware|terracotta|glazed|mixed media|collage|canvas|linen|paper|board|panel|synthetic polymer|marker|crayon|felt[- ]?tip|tempera|encaustic|aluminum|steel|wood|glass|leather|fabric|textile|neon|plaster|resin|fiberglass|marble)/i;
 
 async function enrichPhillips(lot: AuctionLot): Promise<EnrichResult> {
@@ -3123,7 +3157,7 @@ async function enrichPhillips(lot: AuctionLot): Promise<EnrichResult> {
     }
 
     return result;
-  } catch { return {}; }
+  } catch (e) { noteEnrichFail('Phillips', 'page', lot, e); return {}; }
 }
 
 async function enrichChristies(lot: AuctionLot): Promise<EnrichResult> {
@@ -3154,7 +3188,7 @@ async function enrichChristies(lot: AuctionLot): Promise<EnrichResult> {
             if (lotData?.lot_assets?.[0]?.measurements_txt) {
               result.dimensions = lotData.lot_assets[0].measurements_txt;
             }
-          } catch {}
+          } catch (e) { noteEnrichFail("Christie's", 'json', lot, e); }
         }
       });
     }
@@ -3190,7 +3224,7 @@ async function enrichChristies(lot: AuctionLot): Promise<EnrichResult> {
     }
 
     return result;
-  } catch { return {}; }
+  } catch (e) { noteEnrichFail("Christie's", 'page', lot, e); return {}; }
 }
 
 async function enrichBonhams(lot: AuctionLot): Promise<EnrichResult> {
@@ -3208,7 +3242,7 @@ async function enrichBonhams(lot: AuctionLot): Promise<EnrichResult> {
       try {
         const json = JSON.parse($(script).html() || '{}');
         if (json.description) description = json.description;
-      } catch {}
+      } catch (e) { noteEnrichFail('Bonhams', 'json', lot, e); }
     });
 
     if (!description) return {};
@@ -3258,7 +3292,7 @@ async function enrichBonhams(lot: AuctionLot): Promise<EnrichResult> {
     }
 
     return result;
-  } catch { return {}; }
+  } catch (e) { noteEnrichFail('Bonhams', 'page', lot, e); return {}; }
 }
 
 async function enrichSothebys(lot: AuctionLot): Promise<EnrichResult> {
@@ -3275,7 +3309,7 @@ async function enrichSothebys(lot: AuctionLot): Promise<EnrichResult> {
       try {
         const json = JSON.parse($(script).html() || '{}');
         if (json.description) description = json.description;
-      } catch {}
+      } catch (e) { noteEnrichFail("Sotheby's", 'json', lot, e); }
     });
 
     // Fallback to og:description
@@ -3302,7 +3336,7 @@ async function enrichSothebys(lot: AuctionLot): Promise<EnrichResult> {
     }
 
     return result;
-  } catch { return {}; }
+  } catch (e) { noteEnrichFail("Sotheby's", 'page', lot, e); return {}; }
 }
 
 const ENRICH_MAX_PER_RUN = DEEP ? 6000 : 500;
@@ -3388,6 +3422,8 @@ async function enrichLots(lots: AuctionLot[]): Promise<void> {
   }
 
   console.log(`[Enrich] Enriched ${enriched}/${batch.length} lots.`);
+  const failHouses = Object.entries(ENRICH_FAILS);
+  if (failHouses.length) console.warn(`[Enrich] parse failures (counted, not swallowed): ${failHouses.map(([h, c]) => `${h} json=${c.json} page=${c.page}`).join(' · ')}`);
   for (const [house, counts] of Object.entries(houseCounts)) {
     console.log(`  [${house}] ${counts.success}/${counts.total} enriched`);
   }
@@ -3742,6 +3778,12 @@ async function main() {
           // final hammer (extended bidding runs after it). The recent-close
           // sold sweep (3b) overwrites with the true price, and downstream
           // consumers (ledger/UI) treat this basis as provisional.
+          // an UNDATED (placeholder-close) lot whose auction completed is
+          // dated on the Completed flip — a sold row must carry a real day
+          if (!lot.saleDate) {
+            lot.saleDate = todayIso;
+            delete (lot as { datePrecision?: string }).datePrecision;
+          }
           Object.assign(lot, stampMoney({
             isSold: true,
             nativeCurrency: 'USD',
@@ -4233,19 +4275,28 @@ async function main() {
   // that one watches verticals, this one watches houses.
   {
     const fetchedByHouse: Record<string, number> = {};
+    // LAMA rides the wright SEGMENT but reports its own line: its lots count
+    // toward BOTH (the segment line is what the write gates on). Keying LAMA's
+    // lots only by segment is why `house=lama lots_fetched=0` printed next to
+    // "LAMA: 250 lots" every night — a counter bug, no lots were lost.
+    const SUB_HOUSE: Record<string, string> = { LAMA: 'lama' };
     for (const l of freshLots) {
       const s = segOfHouse(l.auctionHouse);
       fetchedByHouse[s] = (fetchedByHouse[s] || 0) + 1;
+      const sub = SUB_HOUSE[l.auctionHouse];
+      if (sub && sub !== s) fetchedByHouse[sub] = (fetchedByHouse[sub] || 0) + 1;
     }
     const upcomingNowByHouse: Record<string, number> = {};
     for (const l of allLots) {
       if (l.status !== 'upcoming') continue;
       const s = segOfHouse(l.auctionHouse);
       upcomingNowByHouse[s] = (upcomingNowByHouse[s] || 0) + 1;
+      const sub = SUB_HOUSE[l.auctionHouse];
+      if (sub && sub !== s) upcomingNowByHouse[sub] = (upcomingNowByHouse[sub] || 0) + 1;
     }
     const housesSeen = Array.from(new Set<string>([
       ...Object.keys(fetchedByHouse), ...Object.keys(upcomingPrevByHouse),
-      ...Object.keys(HEALTH.expected), ...Object.keys(HEALTH.parseErrors),
+      ...Object.keys(HEALTH.expected), ...Object.keys(HEALTH.parseErrors), ...Object.keys(HEALTH.fetched),
     ])).sort();
     for (const h of housesSeen) {
       const expected = HEALTH.expected[h] != null ? String(HEALTH.expected[h]) : 'na';
@@ -4275,6 +4326,31 @@ async function main() {
   if (CRAWL_HOUSE) {
     const { writeSegment, segmentOf } = await import('./corpus-io');
     const segLots = allLots.filter(l => segmentOf((l as AuctionLot).auctionHouse) === CRAWL_HOUSE);
+    // LEG HEALTH (leg-health.json + ::error:: — scripts/lib/leg-health.ts):
+    // written BEFORE the hard guards below so a guarded abort still leaves a
+    // record. ok=false when the source answered but nothing parsed (silent
+    // zero), when nothing was fetched at all (source down / wall), or when the
+    // segment would collapse.
+    {
+      const { reportLegHealth } = await import('./lib/leg-health');
+      const pagesFetched = HEALTH.fetched[CRAWL_HOUSE] || 0;
+      const fresh = freshLots.filter(l => segmentOf(l.auctionHouse) === CRAWL_HOUSE);
+      const settled = fresh.filter(l => l.status === 'sold' || l.status === 'bought_in').length;
+      const reasons: string[] = [];
+      if (pagesFetched > 0 && fresh.length === 0) reasons.push(`${pagesFetched} lot-bearing page(s) fetched but 0 lots parsed (parse_errors=${HEALTH.parseErrors[CRAWL_HOUSE] || 0})`);
+      if (pagesFetched === 0 && fresh.length === 0) reasons.push('no lot-bearing page fetched and 0 lots parsed — source down or walled');
+      if (existingLots.length > 200 && segLots.length < existingLots.length * 0.7) reasons.push(`segment would collapse ${existingLots.length} → ${segLots.length}`);
+      reportLegHealth({ house: CRAWL_HOUSE, ok: reasons.length === 0, fetched: pagesFetched, parsed: fresh.length, settled, reason: reasons.join('; ') || null });
+      // sub-houses crawled inside this leg (LAMA rides the wright job)
+      for (const [house, sub] of [['LAMA', 'lama']] as const) {
+        if (segmentOf(house) !== CRAWL_HOUSE) continue;
+        const subFetched = HEALTH.fetched[sub] || 0;
+        const subFresh = freshLots.filter(l => l.auctionHouse === house);
+        const subSettled = subFresh.filter(l => l.status === 'sold' || l.status === 'bought_in').length;
+        const subOk = !(subFetched > 0 && subFresh.length === 0);
+        reportLegHealth({ house: sub, ok: subOk, fetched: subFetched, parsed: subFresh.length, settled: subSettled, reason: subOk ? null : `${subFetched} page(s) fetched but 0 lots parsed` });
+      }
+    }
     // SILENT-ZERO guard (Sep 2 2026 audit): the source ANSWERED — lot-bearing
     // pages came back 2xx (HEALTH.fetched, see noteFetched) — yet this run
     // parsed NOTHING for the house. That is a markup change, a wall page
@@ -4399,8 +4475,16 @@ async function main() {
 // RAY_SKIP_MAIN lets a test import the crawler's exported functions without
 // triggering a full corpus crawl. Default (unset) = normal run, unchanged.
 if (!process.env.RAY_SKIP_MAIN) {
-  main().catch(err => {
+  main().catch(async err => {
     console.error('[Ray] Fatal error:', err);
+    // a segmented leg that dies (or trips a hard guard — SILENT-ZERO, collapse)
+    // still leaves its health record; the exit code is unchanged
+    if (CRAWL_HOUSE) {
+      try {
+        const { reportLegHealth } = await import('./lib/leg-health');
+        reportLegHealth({ house: CRAWL_HOUSE, ok: false, fetched: HEALTH.fetched[CRAWL_HOUSE] || 0, parsed: 0, settled: 0, reason: String((err as Error)?.message || err).slice(0, 300) });
+      } catch { /* health is best-effort; never mask the real failure */ }
+    }
     process.exit(1);
   });
 }

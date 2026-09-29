@@ -51,7 +51,10 @@
  *    on the current version so drift is visible instead of silent.
  */
 import { buildIdf, buildVectors } from '../app/lib/similarity';
-import { resolveComps, estimateValue, setCalibration, FALLBACK_GATE, quantile, type EngineCalibration } from '../app/lib/value';
+import { resolveComps, estimateValue, setCalibration, setTimeIndex, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, quantile, type EngineCalibration, type TimeIndex } from '../app/lib/value';
+import { makeTimeIndexer } from '../app/lib/indices';
+import { weightedMedian, weightedQuantile, medianSorted } from '../app/lib/stats';
+import { isCompExcluded } from '../app/lib/comps';
 import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from '../app/lib/identity';
 import { ARTISTS } from '../app/constants';
 import type { AuctionLot } from '../app/types';
@@ -60,8 +63,10 @@ export type L = AuctionLot & { _v?: Record<string, number>; _vn?: number; estLow
 
 /** Bump whenever scoring/labeling logic changes in a way that makes older
  *  rows non-comparable. The summary reports the share of rows on this version;
- *  a per-market full leg (build-backtest --market) refreshes a market. */
-export const ENGINE_VERSION = '2026.09.02-pit-cal';
+ *  a per-market full leg (build-backtest --market) refreshes a market.
+ *  2026.09.27: time-adjusted comps + the estimate-lot blend + no-estimate
+ *  bias + form/part gate + compExclude + month/year-precision PIT cuts. */
+export const ENGINE_VERSION = '2026.09.27-blend-tadj';
 
 // global premium fallback where the house didn't publish a hammer — measured
 // median realized/hammer is 1.25. Kept as the last-resort constant; the
@@ -69,10 +74,11 @@ export const ENGINE_VERSION = '2026.09.02-pit-cal';
 export const PREMIUM_FALLBACK = 1.25;
 import { inferHammerUsd } from '../app/lib/premiums';
 
+/** median of an ascending-sorted array — stats.medianSorted with the record's
+ *  historical 0-on-empty contract (summaries print 0 for an empty bucket) */
 export function median(sorted: number[]): number {
-  if (!sorted.length) return 0;
-  const m = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[m - 1] + sorted[m]) / 2 : sorted[m];
+  const m = medianSorted(sorted);
+  return Number.isNaN(m) ? 0 : m;
 }
 
 export const hasEst = (l: L) => (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 && (l.estLowUsd! + l.estHighUsd!) / 2 > 0;
@@ -100,6 +106,29 @@ export type CalObs = {
   /** lot id + sale day + engine version (Sep 2): self-describing rows, so a
    *  future field can be rehydrated by lookup instead of arithmetic. */
   id?: string; sd?: string; ev?: string;
+  /** (Sep 27) time-adjusted comps / estimate mid — the blend's comp input
+   *  (absent on legacy rows → cr) */
+  ca?: number;
+  /** (Sep 27) realized / the PUBLISHED value (compValueUsd) */
+  rp?: number;
+  /** (Sep 27) the published band as multiples of the published value (the
+   *  band the lot WOULD have shown — its coverage is measured, not refit) */
+  bl?: number; bh?: number;
+  /** (Sep 27) auction house — the blend's house × market intercept */
+  h?: string;
+};
+/** (Sep 27) a NO-ESTIMATE hedonic observation — the pure comp path's record
+ *  (Goldin/no-estimate objects). Feeds the no-estimate bias correction and
+ *  the 'n' value band; never the beat-rate/flag record (no estimate, no flag). */
+export type NoEstObs = {
+  m: string; conf: string;
+  /** realized / the pure (time-adjusted) comp value */
+  rn: number;
+  /** realized / the published value */
+  rp?: number;
+  /** the published band as multiples of the published value */
+  bl?: number; bh?: number;
+  sd: string; id: string; ev: string;
 };
 export type YearObs = { flagged: number[]; unflagged: number[] };
 
@@ -124,6 +153,8 @@ export interface BacktestState {
    *  re-attempting the same abstentions every night. */
   triedIds?: string[];
   engineVersion?: string;
+  /** (Sep 27) no-estimate observations (trailing window only — see targetsOf) */
+  noEst?: NoEstObs[];
 }
 
 export const mkBucket = (): Bucket => ({ perfs: [], hammerPerfs: [], beat: 0, hammerBeat: 0, n: 0, boughtIn: 0 });
@@ -133,6 +164,7 @@ export function mkState(nowMs: number): BacktestState {
     flagged: mkBucket(), unflagged: mkBucket(), above: mkBucket(),
     flaggedMain: mkBucket(), flaggedFallback: mkBucket(),
     byYear: {}, calObs: [], nowMs, scoredIds: [], triedIds: [], engineVersion: ENGINE_VERSION,
+    noEst: [],
   };
 }
 
@@ -154,6 +186,7 @@ export function mergeStates(states: BacktestState[]): BacktestState {
       for (const p of s.byYear[+y].unflagged) yb.unflagged.push(p);
     }
     for (const o of s.calObs) out.calObs.push(o);
+    for (const o of s.noEst || []) out.noEst!.push(o);
     for (const id of s.scoredIds) out.scoredIds.push(id);
     for (const id of s.triedIds || []) out.triedIds!.push(id);
   }
@@ -194,7 +227,19 @@ export interface Prepared {
   sold: L[];
   marketBySlug: Record<string, string>;
   index: Map<string, ArtistIndex>;
+  /** point-in-time market index builder (value.timeFactor's input) — the
+   *  replay sets the index for each quarter from sales known before it */
+  timeIndexer?: (asOf: string) => TimeIndex;
 }
+
+/** SPORTS markets value a lot against its SAME-PLAYER comps only (build-market
+ *  §1 doctrine — a Jordan jersey never comps a LeBron one). The replay mirrors
+ *  it on the build-stamped identity (playerSlug, else entity). */
+const SPORTS_MARKET = 'sports';
+const playerIdOf = (l: L): string | null => {
+  const x = l as L & { playerSlug?: string | null; entity?: string | null };
+  return x.playerSlug || (x.entity ? x.entity.toLowerCase().trim() : null);
+};
 
 /** Exact structured identity key (the idExact path in similarity.ts): numeric
  *  watch reference for watch makers, edition identity for art editions. */
@@ -205,14 +250,20 @@ export function identityKeyOf(l: L): string | null {
 
 export function prepare(allLots: AuctionLot[], log: (m: string) => void, elapsed: () => string): Prepared {
   const lots = allLots as L[];
-  const sold = lots.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
+  // compExclude-stamped lots (data contract: junk price, duplicate listing)
+  // are never a comp and never a target
+  const sold = lots.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length && !isCompExcluded(l));
   const tbl = buildIdf(sold);
   buildVectors(lots as AuctionLot[], tbl); // attach _v/_vn to every lot (priors need it)
 
-  // same-maker sold, time-sorted — comp pools are always SOLD priors
+  // same-maker sold, sorted by the day each sale became KNOWN (knownKey: a
+  // month-precision sale is known once its month ends) — comp pools are
+  // always SOLD priors, and the cutoff bisect below runs on this order
   const byArtist = new Map<string, L[]>();
   for (const s of sold) (byArtist.get(s.artist) || byArtist.set(s.artist, []).get(s.artist)!).push(s);
-  byArtist.forEach(g => g.sort((a, b) => (a.saleDate < b.saleDate ? -1 : 1)));
+  const kk = new Map<L, string>();
+  for (const s of sold) kk.set(s, knownKey(s as L & { datePrecision?: string | null }));
+  byArtist.forEach(g => g.sort((a, b) => (kk.get(a)! < kk.get(b)! ? -1 : kk.get(a)! > kk.get(b)! ? 1 : 0)));
 
   const marketBySlug: Record<string, string> = {};
   for (const a of ARTISTS) marketBySlug[a.slug] = a.market;
@@ -225,7 +276,7 @@ export function prepare(allLots: AuctionLot[], log: (m: string) => void, elapsed
     const idPosting = new Map<string, number[]>();
     const dates = new Array<string>(roster.length);
     roster.forEach((l, i) => {
-      dates[i] = l.saleDate;
+      dates[i] = kk.get(l)!;
       for (const t of Array.from(new Set(l.titleTokens || []))) { (posting.get(t) || posting.set(t, []).get(t)!).push(i); postings++; }
       const k = identityKeyOf(l);
       if (k) (idPosting.get(k) || idPosting.set(k, []).get(k)!).push(i);
@@ -234,7 +285,8 @@ export function prepare(allLots: AuctionLot[], log: (m: string) => void, elapsed
   });
 
   log(`[backtest] vectors built (${elapsed()}) — corpus ${lots.length} lots, ${sold.length} sold, ${index.size} maker indices (${postings} postings)`);
-  return { lots, tbl, byArtist, sold, marketBySlug, index };
+  const timeIndexer = makeTimeIndexer(lots as AuctionLot[], marketBySlug);
+  return { lots, tbl, byArtist, sold, marketBySlug, index, timeIndexer };
 }
 
 /** first index i with dates[i] >= d (all j < i are STRICTLY earlier). */
@@ -293,8 +345,15 @@ export function candidatePriors(prep: Prepared, lot: L): { priors: number; cands
 export function valueOne(prep: Prepared, lot: L) {
   const { priors, cands } = candidatePriors(prep, lot);
   if (priors < 3) return null;
-  const comps = resolveComps(lot, cands, prep.tbl, lot.saleDate);
+  const comps = resolveComps(lot, samePlayerOnly(prep, lot, cands), prep.tbl, lot.saleDate);
   return estimateValue(lot, comps, prep.tbl);
+}
+
+/** Sports: a KNOWN player comps same-player only (build-market §1). */
+function samePlayerOnly(prep: Prepared, lot: L, cands: L[]): L[] {
+  if (prep.marketBySlug[lot.artist] !== SPORTS_MARKET) return cands;
+  const pid = playerIdOf(lot);
+  return pid ? cands.filter(c => playerIdOf(c) === pid) : cands;
 }
 
 /** The pre-filter-free reference path (kept for the equivalence harness only —
@@ -309,7 +368,7 @@ export function valueOneUnfiltered(prep: Prepared, lot: L) {
     priors.push(s);
   }
   if (priors.length < 3) return null;
-  const comps = resolveComps(lot, priors, prep.tbl, lot.saleDate);
+  const comps = resolveComps(lot, samePlayerOnly(prep, lot, priors), prep.tbl, lot.saleDate);
   return estimateValue(lot, comps, prep.tbl);
 }
 
@@ -344,11 +403,20 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
   }
 
   if (v.compRatio != null && v.compValueUsd > 0) {
+    // r stays "realized / the COMP value" (the pool's own error — mdape and
+    // the legacy conformal band read it); rp is realized / the PUBLISHED
+    // prediction; ca is the time-adjusted comp ratio the blend learns from
+    const compMed = v.compAdjUsd && v.compAdjUsd > 0 ? v.compAdjUsd : v.compValueUsd;
     st.calObs.push({
       m: prep.marketBySlug[lot.artist] || 'all',
       cr: v.compRatio,
       beat: realized > estTop,
-      r: realized / v.compValueUsd,
+      r: realized / compMed,
+      ca: compMed / estMid,
+      rp: realized / v.compValueUsd,
+      bl: v.low / v.compValueUsd,
+      bh: v.high / v.compValueUsd,
+      ...(lot.auctionHouse ? { h: String(lot.auctionHouse) } : {}),
       conf: v.confidence,
       ageY: Math.max(0, (st.nowMs - new Date(lot.saleDate).getTime()) / 31_557_600_000),
       pf: realized / estMid - 1,
@@ -372,6 +440,24 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
       st.byYear[y] = yb;
     }
   }
+  return true;
+}
+
+/** Fold ONE sold NO-ESTIMATE target (Sep 27): the pure comp path's outcome —
+ *  realized vs the time-adjusted comp value and vs the published value. */
+export function scoreNoEst(prep: Prepared, st: BacktestState, lot: L): boolean {
+  const v = valueOne(prep, lot);
+  if (!v || !(v.compValueUsd > 0)) return false;
+  const compMed = v.compAdjUsd && v.compAdjUsd > 0 ? v.compAdjUsd : v.compValueUsd;
+  (st.noEst || (st.noEst = [])).push({
+    m: prep.marketBySlug[lot.artist] || 'all',
+    conf: v.confidence,
+    rn: lot.realizedUsd! / compMed,
+    rp: lot.realizedUsd! / v.compValueUsd,
+    bl: v.low / v.compValueUsd,
+    bh: v.high / v.compValueUsd,
+    sd: lot.saleDate.slice(0, 10), id: lot.id, ev: ENGINE_VERSION,
+  });
   return true;
 }
 
@@ -404,11 +490,13 @@ export function obsDate(o: CalObs, nowMs: number): string {
 export function replayTargets(
   prep: Prepared, st: BacktestState, soldTargets: L[], biTargets: L[],
   log: (m: string) => void = () => {}, heartbeatEvery = 20000,
+  noEstTargets: L[] = [],
 ): { scored: number; tried: number } {
-  type T = { l: L; bi: boolean };
+  type T = { l: L; k: 'sold' | 'bi' | 'noest' };
   const all: T[] = [];
-  for (const l of soldTargets) all.push({ l, bi: false });
-  for (const l of biTargets) all.push({ l, bi: true });
+  for (const l of soldTargets) all.push({ l, k: 'sold' });
+  for (const l of biTargets) all.push({ l, k: 'bi' });
+  for (const l of noEstTargets) all.push({ l, k: 'noest' });
   all.sort((a, b) => (a.l.saleDate < b.l.saleDate ? -1 : a.l.saleDate > b.l.saleDate ? 1 : 0));
   let curQ = '';
   let scored = 0, tried = 0, done = 0;
@@ -417,14 +505,18 @@ export function replayTargets(
     const q = quarterOf(t.l.saleDate);
     if (q !== curQ) {
       curQ = q;
+      // the calibration AND the market time index production would have had
+      // loaded that quarter — both from data strictly before it
       setCalibration(calibrationFor(st, quarterStart(q), prep.marketBySlug));
+      setTimeIndex(prep.timeIndexer ? prep.timeIndexer(quarterStart(q)) : null);
     }
-    const ok = t.bi ? scoreBoughtIn(prep, st, t.l) : scoreSold(prep, st, t.l);
+    const ok = t.k === 'bi' ? scoreBoughtIn(prep, st, t.l) : t.k === 'noest' ? scoreNoEst(prep, st, t.l) : scoreSold(prep, st, t.l);
     if (ok) { st.scoredIds.push(t.l.id); scored++; }
     else { (st.triedIds || (st.triedIds = [])).push(t.l.id); tried++; }
     if (++done % heartbeatEvery === 0) log(`[backtest] replay ${done}/${all.length} (${((Date.now() - t0) / 1000).toFixed(0)}s, ${(done / ((Date.now() - t0) / 1000)).toFixed(1)}/s) — ${curQ}`);
   }
   setCalibration(null);
+  setTimeIndex(null);
   return { scored, tried };
 }
 
@@ -434,8 +526,12 @@ export function replayTargets(
 export function calibrationFor(st: BacktestState, before: string, marketBySlug: Record<string, string>): EngineCalibration | null {
   const rows = st.calObs.filter(o => obsDate(o, st.nowMs) < before);
   if (rows.length < 500) return null;
-  const c = calibrationOf(rows);
-  return { edges: c.edges, beatRate: c.beatRate, band: c.band, bandByMarket: c.bandByMarket, mdape: c.mdape, marketBySlug };
+  const ne = (st.noEst || []).filter(o => o.sd < before);
+  const c = calibrationOf(rows, ne, before);
+  return {
+    edges: c.edges, beatRate: c.beatRate, band: c.band, bandByMarket: c.bandByMarket, mdape: c.mdape, marketBySlug,
+    blend: c.blend, bias: c.bias, valueBand: c.valueBand, valueBandByMarket: c.valueBandByMarket,
+  };
 }
 
 // ── REHYDRATION (P0-1a) ──
@@ -468,6 +564,7 @@ export function rehydrateState(st: BacktestState, prep: Prepared | null, log: (m
     if (o.m === 'watches' && !o.kt) { const kt = watchKtByDay.get(o.sd); if (kt) { o.kt = kt; n.kt++; } }
   }
   if (!st.triedIds) st.triedIds = [];
+  if (!st.noEst) st.noEst = [];
   if (n.pf || n.fl || n.et || n.sd || n.kt) log(`[backtest] rehydrated legacy state: pf ${n.pf} · fl ${n.fl} · et ${n.et} · sd ${n.sd} · kt ${n.kt} (of ${st.calObs.length} rows)`);
   return n;
 }
@@ -560,7 +657,7 @@ function bandOfSorted(src: number[]) {
 }
 
 export type Band = { lo: number; hi: number };
-export function calibrationOf(calObs: CalObs[]) {
+export function calibrationOf(calObs: CalObs[], noEst: NoEstObs[] = [], asOf?: string) {
   const rate = (obs: CalObs[]) => {
     const acc = Array.from({ length: 6 }, () => ({ w: 0, wb: 0, n: 0 }));
     for (const o of obs) { const b = bucketOf(o.cr); const w = wOf(o); acc[b].w += w; acc[b].wb += o.beat ? w : 0; acc[b].n++; }
@@ -625,39 +722,289 @@ export function calibrationOf(calObs: CalObs[]) {
     const pt = calObs.filter(o => o.m === m && o.et === 'p');
     if (pt.length >= 200) beatRate[`${m}:pt`] = levelsOf(pt);
   }
-  return { edges: CAL_EDGES, beatRate, band, bandByMarket, mdape, bandFor, n: calObs.length };
+  // (Sep 27) the published-value layer: estimate-lot blend, no-estimate bias,
+  // and the outcome bands of the PUBLISHED value — all recency-weighted and
+  // fit only on the rows handed in (the replay hands in rows before the quarter)
+  const ref = asOf || latestDate(calObs, noEst);
+  const blend = fitBlend(calObs, ref);
+  const bias = fitNoEstBias(noEst, ref);
+  const vb = fitValueBands(calObs, noEst, blend, bias, ref);
+  return {
+    edges: CAL_EDGES, beatRate, band, bandByMarket, mdape, bandFor, n: calObs.length,
+    blend: blend ?? undefined, bias, valueBand: vb.valueBand, valueBandByMarket: vb.valueBandByMarket,
+  };
 }
 
-/** OUT-OF-SAMPLE band coverage (P1-2): per market, fit the 15/85 tier bands on
- *  the OLDER half of that market's rows (by sale day) and measure how many of
- *  the NEWER half's realized prices landed inside. Fit uses the market's own
- *  tier band when it has ≥150 fit rows, else the global fit-half band. */
-export function bandCoverageOOS(calObs: CalObs[], nowMs: number) {
-  const dated = calObs.filter(o => o.r > 0).map(o => ({ o, d: obsDate(o, nowMs) })).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
-  const out: Record<string, { high: number | null; medium: number | null; low: number | null; nFit: number; nTest: number; split: string | null }> = {};
-  if (!dated.length) return out;
-  for (const m of marketsOf(calObs).concat('all')) {
-    const rows = m === 'all' ? dated : dated.filter(x => x.o.m === m);
-    if (!rows.length) continue;
-    // the split is THIS market's median sale day, so every market is tested on
-    // its own newer half (a global split left thin/recent markets all-test)
-    const split = rows[Math.floor(rows.length / 2)].d;
-    const fit = rows.filter(x => x.d < split).map(x => x.o);
-    const test = rows.filter(x => x.d >= split).map(x => x.o);
-    const cell: (typeof out)[string] = { high: null, medium: null, low: null, nFit: fit.length, nTest: test.length, split: fit.length && test.length ? split : null };
-    if (fit.length && test.length) {
-      // global fallback bands are fit on EVERY market's rows before this split
-      const globalFit = calibrationOf(dated.filter(x => x.d < split).map(x => x.o));
-      for (const c of CONFS) {
-        const fitRows = fit.filter(o => o.conf === c);
-        const b = fitRows.length >= BAND_MIN_N ? globalFit.bandFor(c, fit) : globalFit.band[c];
-        const t = test.filter(o => o.conf === c);
-        cell[c] = t.length >= 100 ? Math.round(100 * t.filter(o => o.r >= b.lo && o.r <= b.hi).length / t.length) : null;
+/* ── THE PUBLISHED-VALUE CALIBRATION (Sep 27 2026) ─────────────────────── */
+const PV_HL_Y = 1.5;          // recency half-life for every fit below
+const PV_WINDOW_Y = 6;        // blend/band fit window
+const BIAS_WINDOW_Y = 4;
+const BLEND_K = 30;           // intercept shrink (effective weight) toward the global:et intercept
+const BIAS_K = 30;            // no-estimate bias shrink toward 1
+const VB_MIN_N = 100;         // a path×tier band needs this many rows
+const VB_MARKET_MIN_N = 150;  // a market's own band needs this many rows
+const VB_PER_MARKET = false;  // measured worse out of sample (see fitValueBands)
+const VB_WINDOW_Y = 6;        // band residual window
+const VB_HL_Y = 1.5;          // band residual recency half-life
+/** lower quantile (upper = 1 − VB_Q) of the in-sample residuals. 0.15/0.85
+ *  is nominally 70%, but out of sample (local PIT replay, test year Oct 25 →
+ *  Sep 26, n=8,554 estimate lots) it covered 65.7% (high 68 / medium 67 /
+ *  low 65) — residual spread grows out of sample. 0.13/0.87 delivered 70.1%
+ *  (72 / 72 / 69.5); window (3y vs 6y) and half-life (0.75y vs 1.5y) moved
+ *  coverage < 1pt. */
+const VB_Q = 0.13;
+const yrsBetween = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 31_557_600_000;
+const wmedian = (pairs: [number, number][]) => weightedMedian(pairs);
+
+function latestDate(calObs: CalObs[], noEst: NoEstObs[]): string {
+  let d = '';
+  for (const o of calObs) if (o.sd && o.sd > d) d = o.sd;
+  for (const o of noEst) if (o.sd > d) d = o.sd;
+  return d || new Date().toISOString().slice(0, 10);
+}
+
+type BlendPt = { cell: string; et: 'b' | 'p'; m: string; h?: string; conf: string; x: number; y: number; wt: number };
+function blendPoints(rows: CalObs[], ref: string): BlendPt[] {
+  const out: BlendPt[] = [];
+  for (const o of rows) {
+    const x0 = o.ca ?? o.cr;
+    if (!o.sd || typeof o.pf !== 'number' || !(o.pf > -1) || !(x0 > 0)) continue;
+    const age = yrsBetween(o.sd, ref);
+    if (!(age >= 0) || age > PV_WINDOW_Y) continue;
+    const et = o.et === 'p' ? 'p' : 'b';
+    out.push({ cell: `${o.m}:${et}`, et, m: o.m, h: o.h, conf: o.conf, x: Math.log(x0), y: Math.log(o.pf + 1), wt: Math.pow(0.5, age / PV_HL_Y) });
+  }
+  return out;
+}
+/** blend intercept key for a house within a market (value.blendPredict reads it) */
+export const houseCellKey = (market: string, house: string, et: string) => `${market}|${house}:${et}`;
+
+/** Point-in-time LAD fit of log(realized/estMid) = a[market:et] + w[tier]·log(comps/estMid).
+ *  w per tier on a 0.05 grid (the cell intercepts re-fit for each candidate w, so
+ *  single-point and band estimates never share an intercept), then each cell's
+ *  intercept is the weighted median residual shrunk toward its global:et
+ *  intercept. Null under 300 usable rows (the engine's uncalibrated
+ *  house × premium × comps^w fallback applies). */
+export function fitBlend(rows: CalObs[], ref: string): NonNullable<EngineCalibration['blend']> | null {
+  const pts = blendPoints(rows, ref);
+  if (pts.length < 300) return null;
+  const DEF: Record<string, number> = { high: 0.4, medium: 0.25, low: 0.05 };
+  const cellsOf = (ps: BlendPt[], wOf: (p: BlendPt) => number) => {
+    const acc = new Map<string, [number, number][]>();
+    for (const p of ps) (acc.get(p.cell) || acc.set(p.cell, []).get(p.cell)!).push([p.y - wOf(p) * p.x, p.wt]);
+    const a = new Map<string, number>();
+    acc.forEach((v, k) => a.set(k, wmedian(v)));
+    return a;
+  };
+  const w: Record<string, number> = {};
+  for (const c of CONFS) {
+    const cp = pts.filter(p => p.conf === c);
+    if (cp.length < 200) { w[c] = DEF[c]; continue; }
+    let best = { w: DEF[c], e: Infinity };
+    for (let k = 0; k <= 16; k++) {
+      const ww = k * 0.05;
+      const a = cellsOf(cp, () => ww);
+      const e = wmedian(cp.map(p => [Math.abs(p.y - ww * p.x - a.get(p.cell)!), p.wt] as [number, number]));
+      if (e < best.e - 1e-9) best = { w: ww, e };
+    }
+    w[c] = best.w;
+  }
+  const wOf = (p: BlendPt) => w[p.conf] ?? DEF[p.conf] ?? 0.1;
+  const aOut: Record<string, number> = {};
+  const glob: Record<string, number> = {};
+  for (const et of ['b', 'p'] as const) {
+    const ps = pts.filter(p => p.et === et);
+    if (ps.length) glob[et] = wmedian(ps.map(p => [p.y - wOf(p) * p.x, p.wt] as [number, number]));
+  }
+  if (glob.b != null) aOut['global:b'] = r4(glob.b);
+  if (glob.p != null) aOut['global:p'] = r4(glob.p);
+  const byCell = new Map<string, BlendPt[]>();
+  for (const p of pts) (byCell.get(p.cell) || byCell.set(p.cell, []).get(p.cell)!).push(p);
+  byCell.forEach((ps, cell) => {
+    const g = glob[ps[0].et];
+    const raw = wmedian(ps.map(p => [p.y - wOf(p) * p.x, p.wt] as [number, number]));
+    const W = ps.reduce((s, p) => s + p.wt, 0);
+    aOut[cell] = r4(g == null ? raw : (W * raw + BLEND_K * g) / (W + BLEND_K));
+  });
+  // HOUSE × MARKET intercepts (rows carrying `h`, i.e. scored on/after the
+  // Sep 27 engine): a house's own estimate conservativeness, shrunk toward its
+  // market:et intercept. Measured on the record's test year (Oct 25 → Sep 26)
+  // the market-level intercept left culture/science/sports band-estimate lots
+  // at 1.4–1.7× realized/predicted — new houses entering those markets price
+  // their estimates very differently from the archive the market cell learned.
+  const byHouse = new Map<string, BlendPt[]>();
+  for (const p of pts) if (p.h) { const k = houseCellKey(p.m, p.h, p.et); (byHouse.get(k) || byHouse.set(k, []).get(k)!).push(p); }
+  byHouse.forEach((ps, k) => {
+    if (ps.length < 30) return;
+    const parent = aOut[`${ps[0].m}:${ps[0].et}`] ?? glob[ps[0].et];
+    const raw = wmedian(ps.map(p => [p.y - wOf(p) * p.x, p.wt] as [number, number]));
+    const W = ps.reduce((s, p) => s + p.wt, 0);
+    aOut[k] = r4(parent == null ? raw : (W * raw + BLEND_K * parent) / (W + BLEND_K));
+  });
+  return { a: aOut, w, n: pts.length };
+}
+const r4 = (x: number) => Math.round(x * 10000) / 10000;
+
+/** Point-in-time no-estimate bias per market × tier: the recency-weighted
+ *  median of log(realized / comp value), shrunk toward 0 (factor 1). */
+export function fitNoEstBias(noEst: NoEstObs[], ref: string): Record<string, Record<string, number>> {
+  const acc = new Map<string, [number, number][]>();
+  for (const o of noEst) {
+    if (!(o.rn > 0)) continue;
+    const age = yrsBetween(o.sd, ref);
+    if (!(age >= 0) || age > BIAS_WINDOW_Y) continue;
+    const k = `${o.m}|${o.conf}`;
+    (acc.get(k) || acc.set(k, []).get(k)!).push([Math.log(o.rn), Math.pow(0.5, age / PV_HL_Y)]);
+  }
+  const out: Record<string, Record<string, number>> = {};
+  acc.forEach((pairs, k) => {
+    if (pairs.length < 20) return;
+    const [m, c] = k.split('|');
+    const W = pairs.reduce((s, p) => s + p[1], 0);
+    const f = Math.exp((W * wmedian(pairs)) / (W + BIAS_K));
+    (out[m] ||= {})[c] = Math.round(Math.min(3, Math.max(1 / 3, f)) * 1000) / 1000;
+  });
+  return out;
+}
+
+/** realized / published-value residual for a calObs row under a fitted blend */
+export function blendResidual(o: CalObs, blend: NonNullable<EngineCalibration['blend']>): number | null {
+  const x0 = o.ca ?? o.cr;
+  if (typeof o.pf !== 'number' || !(o.pf > -1) || !(x0 > 0)) return null;
+  const et = o.et === 'p' ? 'p' : 'b';
+  // the same intercept precedence value.blendPredict uses: house × market → market → global
+  const a = (o.h ? blend.a[houseCellKey(o.m, o.h, et)] : undefined)
+    ?? blend.a[`${o.m}:${et}`] ?? blend.a[`global:${et}`] ?? blend.a['global:b'];
+  if (a == null) return null;
+  const w = blend.w[o.conf] ?? 0.1;
+  return Math.exp(Math.log(o.pf + 1) - a - w * Math.log(x0));
+}
+
+type VB = { lo: number; hi: number };
+/** Outcome bands of the PUBLISHED value: recency-weighted 15/85 quantiles of
+ *  realized / prediction, per path ('e' blend, 'n' no-estimate) × tier, and
+ *  per market where deep enough. */
+export function fitValueBands(
+  calObs: CalObs[], noEst: NoEstObs[], blend: NonNullable<EngineCalibration['blend']> | null,
+  bias: Record<string, Record<string, number>>, ref: string,
+): { valueBand: Record<string, Record<string, VB>>; valueBandByMarket: Record<string, Record<string, Record<string, VB>>> } {
+  type P = { m: string; path: string; conf: string; z: number; wt: number };
+  const pts: P[] = [];
+  const VBW = VB_WINDOW_Y, VBHL = VB_HL_Y, VBQ = VB_Q;
+  if (blend) {
+    for (const o of calObs) {
+      if (!o.sd) continue;
+      const age = yrsBetween(o.sd, ref);
+      if (!(age >= 0) || age > VBW) continue;
+      const z = blendResidual(o, blend);
+      if (z == null || !(z > 0)) continue;
+      pts.push({ m: o.m, path: 'e', conf: o.conf, z, wt: Math.pow(0.5, age / VBHL) });
+    }
+  }
+  for (const o of noEst) {
+    const age = yrsBetween(o.sd, ref);
+    if (!(age >= 0) || age > VBW || !(o.rn > 0)) continue;
+    const b = APPLY_NOEST_BIAS ? (bias[o.m]?.[o.conf] ?? 1) : 1;
+    pts.push({ m: o.m, path: 'n', conf: o.conf, z: o.rn / b, wt: Math.pow(0.5, age / VBHL) });
+  }
+  const bandOf = (ps: P[]): VB => ({
+    lo: Math.round(Math.min(1, Math.max(0.15, weightedQuantile(ps.map(p => [p.z, p.wt] as [number, number]), VBQ))) * 1000) / 1000,
+    hi: Math.round(Math.min(8, Math.max(1, weightedQuantile(ps.map(p => [p.z, p.wt] as [number, number]), 1 - VBQ))) * 1000) / 1000,
+  });
+  const valueBand: Record<string, Record<string, VB>> = {};
+  const valueBandByMarket: Record<string, Record<string, Record<string, VB>>> = {};
+  for (const path of ['e', 'n']) {
+    for (const c of CONFS) {
+      const ps = pts.filter(p => p.path === path && p.conf === c);
+      if (ps.length >= VB_MIN_N) (valueBand[path] ||= {})[c] = bandOf(ps);
+    }
+    // PER-MARKET value bands are deliberately NOT emitted: refit quarterly on
+    // the record (valid Oct 24–Sep 25, test Oct 25–Sep 26), the global
+    // path×tier band held 70–72% coverage on every tier while per-market
+    // bands (≥150 rows) slipped 'high' to 66% out of sample — the market
+    // cells are fit on too few recent rows to track their own drift.
+    if (VB_PER_MARKET) {
+      const markets = Array.from(new Set(pts.filter(p => p.path === path).map(p => p.m)));
+      for (const m of markets) {
+        for (const c of CONFS) {
+          const ps = pts.filter(p => p.path === path && p.m === m && p.conf === c);
+          if (ps.length >= VB_MARKET_MIN_N) ((valueBandByMarket[m] ||= {})[path] ||= {})[c] = bandOf(ps);
+        }
       }
+    }
+  }
+  return { valueBand, valueBandByMarket };
+}
+
+/** OUT-OF-SAMPLE band coverage — RECENT (Sep 27 2026; was P1-2's per-market
+ *  median-day split, which tested 2006–2019 rows and certified bands the live
+ *  book then missed: high 48% / medium 66% vs nominal 70%). Now ONE global
+ *  split `OOS_TEST_DAYS` before the newest row: every band is fit ONLY on rows
+ *  before the split (calibrationOf, recency-weighted, exactly as the replay
+ *  would have loaded it) and scored on the most recent year — the published
+ *  value's own band (the blend for estimate lots, the bias-corrected comp for
+ *  no-estimate lots). `legacy` keeps the old comp-band read on the same split
+ *  for continuity. Cells need ≥50 test rows. */
+const OOS_TEST_DAYS = 365;
+const OOS_MIN_TEST = 50;
+export function bandCoverageOOS(calObs: CalObs[], nowMs: number, noEst: NoEstObs[] = []) {
+  type Cell = { high: number | null; medium: number | null; low: number | null; nFit: number; nTest: number; split: string | null; legacy?: { high: number | null; medium: number | null; low: number | null } };
+  const out: Record<string, Cell> = {};
+  const dated = calObs.filter(o => o.r > 0).map(o => ({ o, d: obsDate(o, nowMs) }));
+  if (!dated.length) return out;
+  let latest = '';
+  for (const x of dated) if (x.d > latest) latest = x.d;
+  for (const o of noEst) if (o.sd > latest) latest = o.sd;
+  const split = new Date(Date.parse(latest) - OOS_TEST_DAYS * 864e5).toISOString().slice(0, 10);
+  const fitRows = dated.filter(x => x.d < split).map(x => x.o);
+  const testRows = dated.filter(x => x.d >= split).map(x => x.o);
+  const fitNe = noEst.filter(o => o.sd < split);
+  const testNe = noEst.filter(o => o.sd >= split);
+  if (!fitRows.length || !testRows.length) return out;
+  const cal = calibrationOf(fitRows, fitNe, split);
+  const pct = (hits: number, n: number) => (n >= OOS_MIN_TEST ? Math.round(100 * hits / n) : null);
+  const vbFor = (m: string, path: string, c: string) => cal.valueBandByMarket?.[m]?.[path]?.[c] || cal.valueBand?.[path]?.[c] || null;
+  for (const m of marketsOf(calObs).concat('all')) {
+    const fit = m === 'all' ? fitRows : fitRows.filter(o => o.m === m);
+    const test = m === 'all' ? testRows : testRows.filter(o => o.m === m);
+    const cell: Cell = { high: null, medium: null, low: null, nFit: fit.length, nTest: test.length, split: fit.length && test.length ? split : null, legacy: { high: null, medium: null, low: null } };
+    for (const c of CONFS) {
+      const t = test.filter(o => o.conf === c);
+      let hit = 0, n = 0;
+      for (const o of t) {
+        const z = cal.blend ? blendResidual(o, cal.blend) : o.rp ?? null;
+        const b = vbFor(o.m, 'e', c) || (cal.bandByMarket[o.m]?.[c] ?? cal.band[c]);
+        if (z == null || !b) continue;
+        n++; if (z >= b.lo && z <= b.hi) hit++;
+      }
+      cell[c] = pct(hit, n);
+      // legacy comp band on the same recent split (continuity read)
+      const lb = (fit.filter(o => o.conf === c).length >= BAND_MIN_N ? cal.bandFor(c, fit) : cal.band[c]);
+      cell.legacy![c] = pct(t.filter(o => o.r >= lb.lo && o.r <= lb.hi).length, t.length);
     }
     out[m] = cell;
   }
-  return out;
+  if (testNe.length) {
+    const cell: Cell = { high: null, medium: null, low: null, nFit: fitNe.length, nTest: testNe.length, split };
+    for (const c of CONFS) {
+      const t = testNe.filter(o => o.conf === c);
+      let hit = 0, n = 0;
+      for (const o of t) {
+        const b = vbFor(o.m, 'n', c);
+        if (!b) continue;
+        const z = o.rn / (APPLY_NOEST_BIAS ? (cal.bias[o.m]?.[c] ?? 1) : 1);
+        n++; if (z >= b.lo && z <= b.hi) hit++;
+      }
+      cell[c] = pct(hit, n);
+    }
+    out.noEstimate = cell;
+  }
+  // tier-keyed headline (the 'all' cell) — the shape the UI reads
+  // (ComparableModal/LabFigures index bandCoverageOOS[confidence])
+  const all = out.all;
+  return Object.assign(out as Record<string, unknown>, {
+    high: all?.high ?? null, medium: all?.medium ?? null, low: all?.low ?? null,
+  }) as Record<string, Cell> & { high: number | null; medium: number | null; low: number | null };
 }
 
 /** Assemble the published backtest.json object from accumulator state. This is
@@ -684,7 +1031,7 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
     .filter(p => p.flaggedMedianPct !== null || p.unflaggedMedianPct !== null);
 
   const calObs = st.calObs;
-  const cal = calibrationOf(calObs);
+  const cal = calibrationOf(calObs, st.noEst || []);
   // PER-MARKET RECORD (Aug 13 value audit): the +41/+16 receipt was global-
   // only — a watches user read an art/design-dominant number. Split it.
   const byMarket: Record<string, { flagged: { n: number; medPct: number | null }; unflagged: { n: number; medPct: number | null } }> = {};
@@ -715,17 +1062,28 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
       ? Math.round(100 * rows.filter(o => o.r >= b.lo && o.r <= b.hi).length / rows.length)
       : null;
   }
+  // THE PUBLISHED-VALUE RECORD (Sep 27): how the number a lot WOULD have been
+  // served (compValueUsd, and the band it would have worn) landed — replayed
+  // point-in-time, so every row is out-of-sample for the calibration it ran
+  // under. Rows scored before this engine version carry no rp and are absent.
+  const valueRecord = valueRecordOf(calObs, st.noEst || []);
   const onVersion = calObs.filter(o => o.ev === ENGINE_VERSION).length;
   const calibration = {
     edges: cal.edges,
     watchKt,
     bandCoverage,
-    bandCoverageOOS: bandCoverageOOS(calObs, st.nowMs),
+    bandCoverageOOS: bandCoverageOOS(calObs, st.nowMs, st.noEst || []),
     beatRate: cal.beatRate,
     band: cal.band,
     bandByMarket: cal.bandByMarket,
     mdape: cal.mdape,
+    // (Sep 27) the published-value layer build-market loads into the engine
+    blend: cal.blend,
+    bias: cal.bias,
+    valueBand: cal.valueBand,
+    valueBandByMarket: cal.valueBandByMarket,
     n: calObs.length,
+    nNoEst: (st.noEst || []).length,
   };
 
   return {
@@ -741,10 +1099,44 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
     above: summarize(st.above),
     flaggedTiers: { main: summarize(st.flaggedMain), fallback: summarize(st.flaggedFallback) },
     byMarket,
+    valueRecord,
     calibration,
     series,
     distribution: distributionOf(st.flagged, st.unflagged),
   };
+}
+
+export type ValueCell = { n: number; medAbsErrPct: number | null; within30Pct: number | null; bias: number | null; bandCoveragePct: number | null };
+/** Accuracy of the PUBLISHED value by market × tier (+ 'all', + 'noEstimate'):
+ *  median |realized/value − 1| in log space, share within ±30%, median
+ *  realized/value (bias), and the share inside the band the lot wore. */
+export function valueRecordOf(calObs: CalObs[], noEst: NoEstObs[]): Record<string, Record<string, ValueCell>> {
+  const cell = (rows: { rp?: number; bl?: number; bh?: number }[]): ValueCell => {
+    const rs = rows.filter(o => typeof o.rp === 'number' && o.rp > 0);
+    if (rs.length < 20) return { n: rs.length, medAbsErrPct: null, within30Pct: null, bias: null, bandCoveragePct: null };
+    const la = rs.map(o => Math.abs(Math.log(o.rp!))).sort((a, b) => a - b);
+    const lr = rs.map(o => Math.log(o.rp!)).sort((a, b) => a - b);
+    const banded = rs.filter(o => typeof o.bl === 'number' && typeof o.bh === 'number');
+    return {
+      n: rs.length,
+      medAbsErrPct: Math.round((Math.exp(median(la)) - 1) * 1000) / 10,
+      within30Pct: Math.round(1000 * rs.filter(o => o.rp! >= 1 / 1.3 && o.rp! <= 1.3).length / rs.length) / 10,
+      bias: Math.round(Math.exp(median(lr)) * 1000) / 1000,
+      bandCoveragePct: banded.length >= 20 ? Math.round(1000 * banded.filter(o => o.rp! >= o.bl! && o.rp! <= o.bh!).length / banded.length) / 10 : null,
+    };
+  };
+  const out: Record<string, Record<string, ValueCell>> = {};
+  for (const m of marketsOf(calObs).concat('all')) {
+    const rows = m === 'all' ? calObs : calObs.filter(o => o.m === m);
+    if (!rows.some(o => typeof o.rp === 'number')) continue;
+    out[m] = { all: cell(rows) };
+    for (const c of CONFS) out[m][c] = cell(rows.filter(o => o.conf === c));
+  }
+  if (noEst.length) {
+    out.noEstimate = { all: cell(noEst) };
+    for (const c of CONFS) out.noEstimate[c] = cell(noEst.filter(o => o.conf === c));
+  }
+  return out;
 }
 
 /** The one-line console summary both entry points print on completion. */
@@ -768,9 +1160,22 @@ export function assertRecord(out: ReturnType<typeof summarizeState>): void {
 /** Split the corpus into the sold + bought-in TARGET sets (concluded lots with
  *  a usable estimate). Shared so both entry points draw targets from the same
  *  predicate; the incremental just filters these by close-date afterward. */
-export function targetsOf(prep: Prepared, market?: string | null): { soldTargets: L[]; biTargets: L[] } {
+export function targetsOf(prep: Prepared, market?: string | null): { soldTargets: L[]; biTargets: L[]; noEstTargets: L[] } {
   const inMarket = (l: L) => !market || (prep.marketBySlug[l.artist] || 'other') === market;
   const soldTargets = prep.sold.filter(l => hasAnyEst(l) && inMarket(l));   // band + single-point (RR)
   const biTargets = prep.lots.filter(l => l.status === 'bought_in' && l.saleDate && l.titleTokens && l.titleTokens.length && hasEst(l) && inMarket(l));
-  return { soldTargets, biTargets };
+  // (Sep 27) NO-ESTIMATE hedonic targets — the pure comp path's own record
+  // (bias + 'n' band). Bounded to the trailing NOEST_WINDOW_DAYS (the bias
+  // fit only reads 4 years and the replay budget is finite); the engine-
+  // excluded mass-produced slugs are valued by the card tiers, not here.
+  let latest = '';
+  for (const l of prep.sold) if (l.saleDate > latest) latest = l.saleDate;
+  const cut = latest ? new Date(Date.parse(latest.slice(0, 10)) - NOEST_WINDOW_DAYS * 864e5).toISOString().slice(0, 10) : '9999';
+  const noEstTargets = prep.sold.filter(l => !hasAnyEst(l) && l.saleDate >= cut && !NOEST_EXCLUDED.has(l.artist)
+    && (l as L & { source?: string }).source !== 'sothebys-algolia' && inMarket(l));
+  return { soldTargets, biTargets, noEstTargets };
 }
+/** trailing window for no-estimate targets (days) */
+export const NOEST_WINDOW_DAYS = 730;
+/** mass-produced slugs the hedonic engine never values (build-market) */
+const NOEST_EXCLUDED = new Set(['sports-cards', 'graded-cards', 'pokemon']);

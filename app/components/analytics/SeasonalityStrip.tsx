@@ -34,7 +34,7 @@ const CSS = `
 .ray-ss-cell[data-dir="up"] .ray-ss-pct{color:var(--color-up)}
 .ray-ss-cell[data-dir="down"] .ray-ss-pct{color:var(--color-down-text,var(--color-down))}
 .ray-ss-cell[data-dir="flat"] .ray-ss-pct{color:var(--color-text-muted)}
-.ray-ss-n{font-size:9.5px;color:var(--color-text-muted);font-variant-numeric:tabular-nums}
+.ray-ss-n{font-size:10px;color:var(--color-text-muted);font-variant-numeric:tabular-nums}
 .ray-ss-blank .ray-ss-pct{color:var(--color-text-muted);opacity:0.5}
 .ray-ss-take{font-size:12.5px;color:var(--color-text-secondary);line-height:1.5;margin:12px 0 0}
 .ray-ss-take b{font-weight:650;color:var(--color-fg)}

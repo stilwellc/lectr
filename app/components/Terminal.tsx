@@ -421,9 +421,12 @@ export function CallPlate({
 /** The colophon self-serves its provenance so the facts print on EVERY page,
  *  not only the ones that thread props — but through the shared book module,
  *  so it can never disagree with the figure in the body copy above it. */
-function useColophonMeta(skip = false): { lots: number; lastCrawl: string } | null {
-  const totals = useBookTotals(skip);
-  return totals ? { lots: totals.totalLots, lastCrawl: totals.lastCrawl } : null;
+function useColophonMeta(): { lots: number; lastCrawl: string; houses: number } | null {
+  // always read: the HOUSE count has exactly one source (meta.json sources via
+  // book.ts) — pages used to pass their own (a hardcoded 7 on /ref vs 18
+  // elsewhere). One fetch per session, module-cached, so this costs nothing.
+  const totals = useBookTotals();
+  return totals ? { lots: totals.totalLots, lastCrawl: totals.lastCrawl, houses: totals.sources } : null;
 }
 
 /* NORTH STAR FOOTER (docs/NORTHSTAR_UI.md) — the ink vault flattens onto the
@@ -538,7 +541,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
 }) {
   const [inView, setInView] = useState(false);
   const ref = useRef<HTMLElement | null>(null);
-  const meta = useColophonMeta(!!(lotCount && lastCrawl));
+  const meta = useColophonMeta();
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return; }
@@ -550,7 +553,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
     return () => io.disconnect();
   }, []);
 
-  const lots = lotCount || meta?.lots || null;
+  const lots = meta?.lots || lotCount || null;
   const crawl = lastCrawl || meta?.lastCrawl;
   const read = crawl ? specDate(crawl) : null;
 
@@ -564,7 +567,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
         {/* the engraved spec line — provenance printed, the record cited */}
         <p className="ray-close-spec">
           {lots && <span><b>{lots.toLocaleString()}</b> lots</span>}
-          {houseCount ? <span><b>{houseCount}</b> houses</span> : null}
+          {(meta?.houses || houseCount) ? <span><b>{meta?.houses || houseCount}</b> houses</span> : null}
           {read && <span>last read <b>{read}</b></span>}
           {record && record.n > 500 ? (
             <span>

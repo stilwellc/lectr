@@ -7,9 +7,11 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "tsx scripts/build-og.tsx && tsx scripts/gen-redirects.ts && next build",
+    "build": "tsx scripts/build-og.tsx && tsx scripts/gen-redirects.ts && next build && tsx scripts/csp-postbuild.ts",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "node scripts/ci/lint.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node scripts/ci/run-tests.mjs",
     "crawl": "tsx scripts/ray-crawl.ts",
     "build-og": "tsx scripts/build-og.tsx",
     "data:pull": "bash scripts/data-store.sh pull",
@@ -24,6 +26,7 @@
     "recharts": "^2.15.2"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@types/node": "^20.11.16",
     "@types/react": "^18.2.52",
     "@types/react-dom": "^18.2.18",

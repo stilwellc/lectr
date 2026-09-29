@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import LotPage, { LotPageSkeleton } from '../components/LotPage';
+import BookIndex from '../components/BookIndex';
 
 /**
  * The UNIVERSAL permalink — /lot?id=<lotId>. A pure client page: any lot in
@@ -37,6 +38,8 @@ function LotFromQuery() {
   // otherwise dbLot/dbSettled/imgFailed state from the previous lot leaks
   // under the new URL (a stale certificate, a false "isn't on the book"
   // flash, a sticky monogram fallback).
+  // bare /lot is the certificate directory, never a dead-end "not on the book"
+  if (!id) return <BookIndex kind="lot" />;
   return <LotPage key={id} lotId={id} />;
 }
 

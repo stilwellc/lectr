@@ -137,7 +137,9 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   // metadata title on a real navigation). The segment pages mirror their
   // [market] pages' generateMetadata titles.
   useEffect(() => {
-    if (onLander) document.title = MARKET_TITLE[urlMarket!];
+    // /collectibles is the all-market lander under its own name — keep its
+    // metadata title rather than the generic home title
+    if (onLander) document.title = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/collectibles' ? 'Collectibles — lectr' : MARKET_TITLE[urlMarket!];
     else if (segPage && urlMarket) {
       const label = MARKETS.find(mk => mk.key === urlMarket)!.label;
       document.title = `${label} ${segPage.noun} — lectr`;

@@ -46,6 +46,7 @@
 // the house's configured default basis and is COUNTED, so a platform change
 // shows up as a log line instead of a silent basis flip.
 // ─────────────────────────────────────────────────────────────────────────────
+import { reportLegHealth, reportAndExit } from './leg-health';
 import type { AuctionLot, LotCategory } from '../../app/types';
 import { assertInvariants } from '../../app/lib/validate';
 import {
@@ -400,7 +401,7 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
     if (opts.write && h.lots.length) {
       const { good } = settledOnly(h.lots);
       const p = poisonedBatch(good);
-      if (p) { console.error(`[${L}] ABORT (incremental flush): $${p.price} repeats on ${p.n}/${good.length} rows — poisoned feed, nothing written.`); process.exit(1); }
+      if (p) { console.error(`[${L}] ABORT (incremental flush): $${p.price} repeats on ${p.n}/${good.length} rows — poisoned feed, nothing written.`); reportAndExit({ house: cfg.segment, fetched: soldFetched, parsed: lots.length, settled: 0, reason: `poisoned batch: $${p.price} on ${p.n}/${good.length} rows` }); }
       if (good.length) { const r = writeMergedSegment(cfg.segment, good); console.log(`    [${L}] segment now ${r.total} lots`); }
     }
     for (const l of h.lots) lots.push(l);
@@ -411,12 +412,13 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
   // the markup moved. Refuse the run; the prior segment rides untouched.
   if (soldFetched >= 20 && lots.length === 0) {
     console.error(`[${L}] FATAL: fetched ${soldFetched} sold lot pages and parsed 0 — refusing to write (markup change?). Prior segment kept.`);
-    process.exit(1);
+    reportAndExit({ house: cfg.segment, fetched: soldFetched, parsed: 0, settled: 0, reason: `fetched ${soldFetched} sold lot pages and parsed 0 (markup change?)` });
   }
 
   // ── LIVE: the running/upcoming catalogs ───────────────────────────────────
   let liveLots: AuctionLot[] = [];
   let liveOk = false;
+  let liveFetchedTotal = 0;
   if (opts.live) {
     const currentCats = await catalogsFrom(cfg, `${cfg.host}/auctions`);
     // liveOk = the /auctions page ANSWERED with at least one catalog. A "coming
@@ -429,7 +431,7 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
       const urls = (await lotUrls(cfg, cu, opts.maxPages, opts.delayMs)).slice(0, opts.cap);
       console.log(`  [${L}] ${cu.split('/').slice(-2)[0]}: ${urls.length} live lot urls (cap ${opts.cap})`);
       const h = await harvest(`${L}:live`, urls, opts.conc, opts.delayMs, (html, u) => parseBidsquareLive(cfg, html, u));
-      liveFetched += h.fetched; liveNulls += h.nulls;
+      liveFetched += h.fetched; liveNulls += h.nulls; liveFetchedTotal += h.fetched;
       console.log(`  [${L}] batch: fetched ${h.fetched} / parsed ${h.lots.length} / null ${h.nulls} / miss ${h.misses}`);
       for (const l of h.lots) liveLots.push(l);
     }
@@ -443,6 +445,13 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
     if (lg.dropped) console.log(`[${L}] dropped ${lg.dropped} malformed live lots`);
     liveLots = lg.good;
     console.log(`[${L}] LIVE: fetched ${liveFetched}, ${liveLots.length} upcoming lots, null ${liveNulls} (${liveOk ? 'ok' : 'NOT ok — keeping prior snapshot'})`);
+  }
+
+  // ── leg health ────────────────────────────────────────────────────────────
+  {
+    const reasons: string[] = [];
+    if (opts.live && !liveOk) reasons.push(liveFetchedTotal >= 20 && !liveLots.length ? `live leg fetched ${liveFetchedTotal} pages and parsed 0` : 'live leg NOT ok (no current catalogs answered)');
+    reportLegHealth({ house: cfg.segment, ok: reasons.length === 0, fetched: soldFetched + liveFetchedTotal, parsed: lots.length + liveLots.length, settled: lots.length, reason: reasons.join('; ') || null });
   }
 
   // ── report ────────────────────────────────────────────────────────────────
@@ -481,13 +490,13 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
   const poison = poisonedBatch(good);
   if (poison) {
     console.error(`[${L}] ABORT: $${poison.price} repeats on ${poison.n}/${good.length} new sold rows — poisoned feed, nothing written.`);
-    process.exit(1);
+    reportAndExit({ house: cfg.segment, fetched: soldFetched, parsed: good.length, settled: 0, reason: `poisoned batch: $${poison.price} on ${poison.n}/${good.length} rows` });
   }
   const rep = assertInvariants(good.concat(liveLots));
   if (rep.fatal.length) {
     console.error(`[${L}] refusing to write: ${rep.fatal.length} FATALs remain after filtering`);
     rep.fatal.slice(0, 5).forEach(f => console.error('  ', f));
-    process.exit(1);
+    reportAndExit({ house: cfg.segment, fetched: soldFetched, parsed: good.length + liveLots.length, settled: 0, reason: `refused write: ${rep.fatal.length} invariant FATALs` });
   }
   // Nothing at all to persist and no live snapshot to replace → leave the
   // segment strictly alone (never rewrite it just to prove we ran).

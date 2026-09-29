@@ -16,6 +16,7 @@ permissions:
 jobs:
   count:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Count users and saved work
         env:
@@ -73,12 +74,21 @@ jobs:
               for m in sorted(months): print(f'  {m}  {months[m]}')
 
           # ── what they saved ─────────────────────────────────────────────
+          # select=user_id — the one column every table here has (saved_lots and
+          # collection_snapshots have NO `id`; selecting it 400'd and printed
+          # "unreadable"). Distinct owners are paged: PostgREST caps a single
+          # response (1000 rows on Supabase), which silently undercounted.
           for table in ('saved_lots', 'alerts', 'saved_searches', 'collection_snapshots'):
               try:
-                  _, h = get(f'/rest/v1/{table}?select=id&limit=1')
-                  total = (h.get('content-range') or '*/?').split('/')[-1]
-                  rows, _ = get(f'/rest/v1/{table}?select=user_id')
-                  distinct = len({r.get('user_id') for r in rows if isinstance(r, dict)})
+                  _, h = get(f'/rest/v1/{table}?select=user_id&limit=1')
+                  total = (h.get('content-range') or h.get('Content-Range') or '*/?').split('/')[-1]
+                  owners, off, page_n = set(), 0, 1000
+                  while True:
+                      rows, _ = get(f'/rest/v1/{table}?select=user_id&order=user_id&limit={page_n}&offset={off}')
+                      owners |= {r.get('user_id') for r in rows if isinstance(r, dict)}
+                      if len(rows) < page_n: break
+                      off += page_n
+                  distinct = len(owners)
                   print(f'\n{table}: {total} rows across {distinct} accounts')
               except Exception as e:
                   print(f'\n{table}: unreadable ({type(e).__name__})')
@@ -86,6 +96,7 @@ jobs:
 
   traffic:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Read the edge's own record
         env:

@@ -34,6 +34,7 @@
 //      [--auctions 3] [--cap 600] [--delay 150] [--conc 2]
 import { crawlBidsquare, optsFromArgv, type BidsquareHouse } from './lib/bidsquare';
 import type { SportsCategory } from './lib/sports-crawl';
+import { reportAndExit } from './lib/leg-health';
 
 /** Hake's is a POP-CULTURE house (comics, toys, original art, political
  *  Americana, movie material) — the shared sports classifier would file a
@@ -60,7 +61,7 @@ const HAKES: BidsquareHouse = {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   crawlBidsquare(HAKES, optsFromArgv({ auctions: 3, cap: 600, delayMs: 150 }))
-    .catch(e => { console.error("[Hake's] fatal", e); process.exit(1); });
+    .catch(e => { console.error("[Hake's] fatal", e); reportAndExit({ house: 'hakes', fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
 }
 
 export { HAKES };

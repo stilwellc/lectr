@@ -15,7 +15,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { readCorpus as readCorpusShared, slimForClient } from './corpus-io';
+import { readCorpus as readCorpusShared, slimForClient, isServedUpcoming } from './corpus-io';
 import {
   computeDeepSignal, signalWithPool, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
@@ -24,7 +24,7 @@ import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants
 import { lotAllInFactor } from '../app/lib/premiums';
 import { appendCalls, type Call } from './lib/calls-ledger';
 import { hasConditionFlag } from '../app/lib/condition';
-import { gapRead, sleeperRead, valueFloor } from '../app/lib/lanes';
+import { gapRead, sleeperRead, valueFloor, closeGrowth, type CloseCurve } from '../app/lib/lanes';
 import { CARD_TIER_CODE } from './lib/calls-ledger';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
@@ -74,10 +74,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // at the UTC-day boundary, shipping lots the client always hides (and mis-
   // parsing 'YYYY-MM-DD' as UTC midnight). The build always precedes the client
   // load, so `>= today` here never drops a lot the client would still show.
-  const today = new Date().toISOString().slice(0, 10);
   // close-day growth curve (analytics.closeCurve) — the projection factor for
   // bid-house lots. Absent (first build) → no projections stamped.
-  let closeCurve: { buckets: (number | null)[]; edges: number[] } | null = null;
+  let closeCurve: CloseCurve | null = null;
   try {
     const mj = JSON.parse(fs.readFileSync(path.join(dataDir, 'market.json'), 'utf8'));
     const cc = mj?.markets?.all?.analytics?.closeCurve;
@@ -88,15 +87,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   // results-pending grace: keep a just-closed lot visible only through the day
   // after its sale while results post; anything older that never resolved (e.g.
   // Christie's results gated behind login and never scraped) drops, not lingers.
-  const graceCut = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const upcomingLots = lots
-    .filter(l => {
-      if (l.status !== 'upcoming') return false;
-      // A just-closed lot awaiting results is held 'upcoming' with a past sale
-      // date — keep it visible only within the grace window.
-      if ((l as { resultsPending?: boolean }).resultsPending) return !!l.saleDate && l.saleDate.slice(0, 10) >= graceCut;
-      return !!l.saleDate && l.saleDate.slice(0, 10) >= today;
-    });
+  // ONE predicate (corpus-io isServedUpcoming) shared with sync-lots-db, so the
+  // Supabase live book is exactly the set this payload serves.
+  const upcomingLots = lots.filter(l => isServedUpcoming(l));
 
   // ── BID-VELOCITY precompute (Goldin live lots; corpus-only bidHistory) ──────
   // lot.bidHistory is Snap[] (Snap = {d:ISO, b:currentBid, n:bidCount}), up to
@@ -168,7 +161,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       // as the modal and the published record. The client computeDeepSignal
       // remains only as a fallback for lots the engine declined (its flags
       // still beat unflagged), with the contradiction guard as before.
-      type EngineValue = { signal?: { label: string; beatRatePct: number } | null; compRatio?: number | null; compValueUsd?: number; n?: number; confidence?: 'high' | 'medium' | 'low' } | null;
+      type EngineValue = { signal?: { label: string; beatRatePct: number } | null; compRatio?: number | null; compValueUsd?: number; compMedianUsd?: number; n?: number; confidence?: 'high' | 'medium' | 'low' } | null;
       const ev = (lot as { value?: EngineValue }).value;
       let signal = null as ReturnType<typeof computeDeepSignal>;
       // ×5 ESTIMATE-BAND SANITY (mirrors the comps.ts form-pool guard): a
@@ -183,14 +176,14 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
         if (ev.signal.label.startsWith('below') && ev.compRatio != null) {
           signal = {
             label: 'Below Market', pct: Math.round((ev.compRatio - 1) * 100),
-            basis: ev.n || 0, med: ev.compValueUsd, kind: 'form',
+            basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
             form: (lot as { formKey?: string }).formKey || 'unknown',
             confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
           } as NonNullable<ReturnType<typeof computeDeepSignal>>;
         } else if (ev.signal.label.startsWith('above') && ev.compRatio != null) {
           signal = {
             label: 'Above Market', pct: Math.round((1 - ev.compRatio) * 100),
-            basis: ev.n || 0, med: ev.compValueUsd, kind: 'form',
+            basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
             form: (lot as { formKey?: string }).formKey || 'unknown',
             confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
           } as NonNullable<ReturnType<typeof computeDeepSignal>>;
@@ -250,8 +243,8 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
         const closeMs = sdtP ? new Date(sdtP).getTime() : NaN;
         if (closeCurve && bid > 0 && !isNaN(closeMs)) {
           const daysOut = Math.max(0, (closeMs - Date.now()) / 86400000);
-          let b = 0; for (const e of closeCurve.edges) { if (daysOut < e) break; b++; }
-          const g = closeCurve.buckets[b];
+          // THE one projection factor (lanes.closeGrowth: bid band × days out)
+          const g = closeGrowth(closeCurve, bid, daysOut);
           if (g && g >= 1) {
             const projAllIn = Math.round(bid * g * lotAllInFactor(l as { auctionHouse?: string | null; buyerPremiumPct?: number | null }, bid * g));
             // ONE floor rule (lanes.valueFloor — P1-4): value.low at non-low
@@ -265,13 +258,13 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
         }
         // CARD CALL with its TIER (P0-2): the graded claim is the value the
         // card actually wears — the tiered card-comp value when one was
-        // stamped (s = tier code), else the raw exact-card median (s = 'm').
-        const cc = (l as { cardComps?: { med?: number | null; n?: number } }).cardComps;
+        // stamped (s = tier code). The raw exact-card median call (s = 'm')
+        // is RETIRED (Sep 27 2026): an all-time, undecayed, un-venue-adjusted
+        // median read 1.73× realized/value on the live book (n=615, 22%
+        // within ±30%) — where the tiers abstain, the tape abstains too.
         const cv = (l as { value?: { basis?: string; compValueUsd?: number; cardTier?: string } | null }).value;
         if (cv?.basis === 'card-comp' && (cv.compValueUsd || 0) > 0) {
           freshCalls.push({ id: String(l.id), d: todayCall, k: 'card', p: cv.compValueUsd!, s: CARD_TIER_CODE[cv.cardTier || ''] || 'm', m: marketOf(l.artist) });
-        } else if (cc?.med && (cc.n || 0) >= 3) {
-          freshCalls.push({ id: String(l.id), d: todayCall, k: 'card', p: cc.med, s: 'm', m: marketOf(l.artist) });
         }
         // THE GAP + THE SLEEPERS (multi-lane engine, Aug 25): both lanes log
         // the night a lot first enters their board — the SAME readers the

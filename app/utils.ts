@@ -67,6 +67,7 @@ export function cleanText(raw?: string | null): string {
 }
 export function craftTitle(raw: string): string {
   let t = cleanText(raw);
+  t = t.replace(/^[·•]\s*/, '');                  // a leading catalogue bullet  '· Femme nue'
   t = t.replace(/^\[(.+?)\]$/, '$1').trim();          // unwrap a fully-bracketed title  [Apollo 14] → Apollo 14
   t = t.replace(/^\[[^\]]{1,40}\]\s*/, '').trim();     // drop a leading [collection tag]
   t = t.replace(/\s*\(\d{1,3}\)\s*$/, '');             // drop trailing catalogue quantity  "…chairs (7)"
@@ -82,6 +83,65 @@ export function craftTitle(raw: string): string {
   }
   t = t.replace(/\s*[.,;]+\s*$/, '');
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
+}
+
+/** Re-space words a crawler glued together when it stripped a <br> with ''
+ *  ("Conoid Chair 1966American black walnut", "aquatint1937on Montval"). Only
+ *  the unambiguous shapes: a 4-digit year fused to a capitalised word, and a
+ *  year fused between two lowercase words. References like "126720vtnr" or
+ *  "5059R" never match (no 3+-letter lowercase word on the left). */
+/** A title the BUILD truncated at a fixed length (refs/players rows ship
+ *  title.slice(0, 80)) ends mid-word with no mark. Close it at the last
+ *  whole word with an ellipsis — never a silent mid-word cut. */
+export function closeCut(t: string, cap = 80): string {
+  if (!t || t.length < cap) return t;
+  const sp = t.lastIndexOf(' ');
+  return `${(sp > cap * 0.5 ? t.slice(0, sp) : t).replace(/[\s,;:.—–-]+$/, '')}…`;
+}
+
+export function deglue(raw: string): string {
+  return raw
+    .replace(/\b((?:1[5-9]|20)\d{2})([A-Z][a-z]{2,})/g, '$1 $2')
+    .replace(/([a-z]{3,})((?:1[5-9]|20)\d{2})([a-z]{2,})/g, '$1 $2 $3')
+    .replace(/([a-z]{3,})((?:1[5-9]|20)\d{2})\b/g, '$1 $2');
+}
+
+/** A lot title for DISPLAY: the short title the h1 carries, and the catalogue
+ *  description some houses (Bonhams) pour into the same field. Split rules, in
+ *  order, applied only to titles past 64 chars:
+ *   1. a year inside the first 60 chars followed by more prose → the title
+ *      ends at the year ("Conoid Chair, 1966" | "American black walnut, …");
+ *   2. the first "; " / " — " / ". " break after 16 chars;
+ *   3. the first ", " break after 24 chars;
+ *   4. past 140 chars, a word-boundary cut at 120 WITH an ellipsis (never mid-word,
+ *      never silent) — the full text rides in `rest`.
+ *  Short titles pass through untouched. */
+export function splitTitle(raw: string): { short: string; rest: string | null } {
+  const t = deglue(craftTitle(raw));
+  if (t.length <= 64) return { short: t, rest: null };
+  const tidy = (s: string) => s.replace(/^[\s,;:.—–-]+/, '').trim();
+  const y = t.slice(0, 60).match(/^(.{6,}?)[\s,]+((?:1[5-9]|20)\d{2}(?:[–-]\d{2,4})?)(?=[\s,.;]+\S)/);
+  if (y) {
+    const rest = tidy(t.slice(y[0].length));
+    if (rest.length > 12) return { short: `${y[1].replace(/[\s,]+$/, '')}, ${y[2]}`, rest };
+  }
+  for (const [re, min] of [[/;\s|\s—\s|\.\s/g, 16], [/,\s/g, 24]] as const) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(t))) {
+      if (m.index < min) continue;
+      if (m.index > 90) break;
+      const rest = tidy(t.slice(m.index + m[0].length));
+      if (rest.length > 12) return { short: t.slice(0, m.index).trim(), rest };
+      break;
+    }
+  }
+  // identity-dense titles (a graded card: set · number · player · grade) are
+  // the object itself — they wrap, and only a runaway past 140 is cut
+  if (t.length <= 140) return { short: t, rest: null };
+  const cut = t.slice(0, 120);
+  const sp = cut.lastIndexOf(' ');
+  return { short: `${(sp > 60 ? cut.slice(0, sp) : cut).replace(/[\s,;:.—–-]+$/, '')}…`, rest: t };
 }
 
 /**

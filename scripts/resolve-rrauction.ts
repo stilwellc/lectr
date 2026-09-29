@@ -36,6 +36,7 @@ import type { AuctionLot, LotCategory } from '../app/types';
 import { routeRRLot } from './rr-auction';
 import { ARTIST_MARKET } from '../app/constants';
 import { writeSegment, readSegment } from './corpus-io';
+import { reportLegHealth } from './lib/leg-health';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const BASE = 'https://www.rrauction.com';
@@ -519,6 +520,14 @@ async function main() {
     }
 
     console.log(`\n[rr] TOTAL ${lots.length} lots kept, ${dropped} dropped`);
+    reportLegHealth({
+      house: 'rrauction',
+      ok: lots.length + dropped > 0,
+      fetched: saleIds.length,
+      parsed: lots.length,
+      settled: lots.filter(l => l.status === 'sold' || l.status === 'bought_in').length,
+      reason: lots.length + dropped > 0 ? null : `${saleIds.length} sale(s) crawled but 0 lots extracted`,
+    });
     console.log('[rr] vertical distribution:');
     for (const [slug, n] of Object.entries(dist).sort((a, b) => b[1] - a[1])) {
       console.log(`   ${slug.padEnd(24)} ${n}   → ${ARTIST_MARKET[slug] || '?'}`);
@@ -558,4 +567,8 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error('[rr] FATAL', e); process.exit(1); });
+main().catch((e) => {
+  console.error('[rr] FATAL', e);
+  reportLegHealth({ house: 'rrauction', ok: false, fetched: 0, parsed: 0, settled: 0, reason: String((e as Error)?.message || e).slice(0, 300) });
+  process.exit(1);
+});

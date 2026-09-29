@@ -19,10 +19,16 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { resolveComps, estimateValueEx, setCalibration, vsBidRead, quantile, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { resolveComps, estimateValueEx, setCalibration, setTimeIndex, vsBidRead, quantile, knownKey, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
-import { buildMarketSeries, type MarketSeries } from '../app/lib/indices';
+import { mergeCardExtract, pokemonKeyFromExtract, llmConditionFlag, sameObjectFilter, flushExtractQueue } from './lib/extract/apply';
+import { buildMarketSeries, buildTimeIndex, type MarketSeries } from '../app/lib/indices';
+import { median as statsMedian, weightedMedian } from '../app/lib/stats';
+import { isCompExcluded } from '../app/lib/comps';
+import { fitCloseCurve } from './build-market-curve';
+import { appendValueTape } from './build-market-tape';
+import { ENGINE_VERSION } from './backtest-core';
 import { buildHedonicIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
 import { buildSubMarkets, buildDrillRows, buildVerticalRepeatSale } from './sub-markets';
 import { fitGradeLadder } from './lib/grade-ladder';
@@ -75,6 +81,29 @@ const SERVED = path.join(process.cwd(), 'public', 'data', 'ray');
 // maps (subMarkets, drills, stats) kept it — the two surfaces disagreed.
 const MARKETS: Record<string, string[]> = {};
 for (const a of ARTISTS) (MARKETS[a.market] ||= []).push(a.slug);
+/** card tier recency (Sep 27): pools keep sales ≤ CARD_WINDOW_Y old; a lone
+ *  exact sale counts only when ≤ CARD_SINGLE_Y; weights halve every CARD_HL_Y */
+const CARD_WINDOW_Y = 1;
+const CARD_SINGLE_Y = 0.5;
+const CARD_HL_Y = 0.25;
+const MARKET_BY_SLUG: Record<string, string> = {};
+for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) MARKET_BY_SLUG[s] = mkt;
+
+/** Options for the build (defaults = the production nightly). `evalOnly` +
+ *  `lots` + `nowMs` are the point-in-time evaluation seam: value a supplied
+ *  corpus as of a past day and return it WITHOUT writing any artifact
+ *  (scripts/_qa harnesses re-score the live snapshots through this). */
+export interface MarketBuildOpts {
+  lots?: AuctionLot[];
+  nowMs?: number;
+  evalOnly?: boolean;
+  /** calibration block to load instead of served backtest.json */
+  calibration?: Record<string, unknown> | null;
+  /** evalOnly: value only these upcoming lot ids (the scored targets) */
+  onlyIds?: Set<string>;
+  /** ablation: skip the comp time-adjustment */
+  noTimeAdjust?: boolean;
+}
 
 function readGz(f: string): AuctionLot[] {
   // buffer-safe NDJSON read — the sold-archive exceeds V8's max string length
@@ -82,12 +111,20 @@ function readGz(f: string): AuctionLot[] {
   return readGzRows(path.join(CORPUS, f + '.gz')) as AuctionLot[];
 }
 
-export async function runMarketBuild() {
+export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<AuctionLot[]> {
   const t0 = Date.now();
-  console.log('[market] reading corpus…');
-  const lots = readGz('lots.json');
-  const archive = readGz('sold-archive.json');
-  const all = lots.concat(archive);
+  // the valuation clock — Date.now() for the nightly; a past day for the
+  // point-in-time evaluation seam (every window/decay below reads NOW_MS)
+  const NOW_MS = opts.nowMs ?? Date.now();
+  const TODAY = new Date(NOW_MS).toISOString().slice(0, 10);
+  let all: AuctionLot[];
+  if (opts.lots) all = opts.lots;
+  else {
+    console.log('[market] reading corpus…');
+    const lots = readGz('lots.json');
+    const archive = readGz('sold-archive.json');
+    all = lots.concat(archive);
+  }
 
   // ── corpus-hygiene normalization (idempotent) ──
   // Fix defects already baked into the corpus BEFORE any market/hedonic/stats is
@@ -102,16 +139,19 @@ export async function runMarketBuild() {
   // beatRate relevel + conformal band multipliers) — displayed figures only,
   // never the signal label, so there is no feedback loop into the record.
   try {
-    const bt = JSON.parse(fs.readFileSync(path.join(SERVED, 'backtest.json'), 'utf8'));
-    if (bt.calibration?.beatRate?.global) {
-      const marketBySlug: Record<string, string> = {};
-      for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) marketBySlug[s] = mkt;
-      // carries beatRate + band + bandByMarket + mdape (P1-2/P2) — the
-      // engine reads per-market bands and demotes tiers whose MdAPE runs hot
-      setCalibration({ ...bt.calibration, marketBySlug });
-      console.log(`[market] calibration loaded (n=${bt.calibration.n}, generatedAt ${bt.generatedAt}, engine ${bt.engineVersion || 'legacy'}, per-market bands: ${Object.keys(bt.calibration.bandByMarket || {}).join(',') || 'none'})`);
-    }
-  } catch { /* no backtest yet — hardcoded fallbacks apply */ }
+    const bt = opts.calibration !== undefined
+      ? { calibration: opts.calibration, generatedAt: 'supplied', engineVersion: 'supplied' }
+      : JSON.parse(fs.readFileSync(path.join(SERVED, 'backtest.json'), 'utf8'));
+    const cal = bt.calibration as (Record<string, unknown> & { beatRate?: { global?: unknown }; n?: number; bandByMarket?: object; blend?: { w?: Record<string, number> }; bias?: object; valueBand?: object }) | null;
+    if (cal?.beatRate?.global) {
+      // carries beatRate + band + bandByMarket + mdape (P1-2/P2) + the Sep 27
+      // published-value layer (blend / bias / valueBand) — the engine reads
+      // per-market bands, demotes tiers whose MdAPE runs hot, blends estimate
+      // lots and bias-corrects no-estimate lots
+      setCalibration({ ...(cal as unknown as import('../app/lib/value').EngineCalibration), marketBySlug: MARKET_BY_SLUG });
+      console.log(`[market] calibration loaded (n=${cal.n}, generatedAt ${bt.generatedAt}, engine ${bt.engineVersion || 'legacy'}, per-market bands: ${Object.keys(cal.bandByMarket || {}).join(',') || 'none'}, blend: ${cal.blend ? JSON.stringify(cal.blend.w) : 'uncalibrated'}, no-estimate bias: ${cal.bias ? Object.keys(cal.bias).join(',') || 'none' : 'none'}, value bands: ${cal.valueBand ? 'yes' : 'legacy'})`);
+    } else setCalibration(null);
+  } catch { setCalibration(null); /* no backtest yet — hardcoded fallbacks apply */ }
 
   // clear any prior stamps so a re-run is idempotent (never inherits a looser
   // pass's groups)
@@ -150,8 +190,14 @@ export async function runMarketBuild() {
     l.artist !== EXP_CARDS &&
     (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
 
-  const sold = engineAll.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length);
+  // compExclude (data contract): junk prices / duplicate listings never comp
+  const sold = engineAll.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length && !isCompExcluded(l));
   const tbl = buildIdf(sold);
+  // THE TIME INDEX (Sep 27): each comp is carried to today by its market's
+  // point-in-time cohort index before the median (value.timeFactor) — built
+  // from sales known before today only, so the live book and the backtest
+  // replay adjust comps by the same construction.
+  setTimeIndex(opts.noTimeAdjust ? null : buildTimeIndex(all, MARKET_BY_SLUG, TODAY));
   buildVectors(engineAll, tbl);    // attach _v to every engine lot (upcoming need it too)
   const soldSorted = sold.slice().sort((a, b) => a.saleDate < b.saleDate ? -1 : 1);
   const soldPos = new Map(soldSorted.map((l, i) => [l.id, i]));
@@ -182,7 +228,7 @@ export async function runMarketBuild() {
   // upcoming lot reads its same-maker pool in O(1) instead of rescanning all 36k.
   const soldByArtist = new Map<string, AuctionLot[]>();
   for (const s of soldSorted) (soldByArtist.get(s.artist) || soldByArtist.set(s.artist, []).get(s.artist)!).push(s);
-  const upcoming = engineAll.filter(l => l.status === 'upcoming');
+  const upcoming = engineAll.filter(l => l.status === 'upcoming' && (!opts.onlyIds || opts.onlyIds.has(String(l.id))));
   let valued = 0;
   // artist-level sell-through (sold vs bought-in) — the bought-in shadow read
   const artistSellThrough = new Map<string, number>();
@@ -257,7 +303,7 @@ export async function runMarketBuild() {
       const arr = byPlayer.get(pp) || []; arr.push(rv!); byPlayer.set(pp, arr);
     }
     const meds: number[] = [];
-    const med = (a: number[]) => { const x = [...a].sort((q, w) => q - w); return x.length % 2 ? x[(x.length - 1) / 2] : (x[x.length / 2 - 1] + x[x.length / 2]) / 2; };
+    const med = (a: number[]) => statsMedian(a);
     const pm = new Map<string, number>();
     byPlayer.forEach((vals, pp) => { if (vals.length >= 2) { const m = med(vals); pm.set(pp, m); meds.push(m); } });
     const commodity = meds.length >= 8 ? med(meds) : null;
@@ -321,7 +367,9 @@ export async function runMarketBuild() {
         }
       }
     }
-    const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl);
+    // priorTo=TODAY: only sales KNOWN before today (month/year-precision
+    // dates count from the end of their period — value.knownKey)
+    const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl, TODAY);
     const { value: v, abstain } = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
     const lotW = lot as AuctionLot & { value?: ValueResult | null; abstain?: AbstainReason | string };
     if (v) {
@@ -358,7 +406,7 @@ export async function runMarketBuild() {
   // modal could print "8 sales" in the header and then resolve none of them —
   // a self-contradiction under a trust product. Ship the rows themselves for
   // every signal-carrying lot; the comps modal lazy-fetches this file.
-  {
+  if (!opts.evalOnly) {
     const soldByIdEv = new Map<string, AuctionLot>();
     for (const g of Array.from(soldByArtist.values())) for (const s of g) soldByIdEv.set(String(s.id), s);
     const byLot: Record<string, { i: string; t: string; h: string; d: string; p: number }[]> = {};
@@ -386,7 +434,7 @@ export async function runMarketBuild() {
   // Extracted to scripts/lib/repeat-sale.ts (Sep 10 2026) so the grouping can be
   // validated offline (scripts/_qa/repeat-sale-equiv.ts) and so the eligibility
   // hoist that took it from ~28min to seconds is provably result-identical.
-  {
+  if (!opts.evalOnly) {
     const rs = groupRepeatSales(soldSorted, engineAll, tbl);
     console.log(`[market] repeat-sale: ${rs.physPairs} physical pairs → ${rs.physGroups} groups · ${rs.seconds}s (${rs.eligible}/${soldSorted.length} eligible, ${rs.candidatePairs} pairs scored)`);
   }
@@ -423,7 +471,7 @@ export async function runMarketBuild() {
   // (~1,700s sequential on the Aug 25 nightly — 40% of assemble). They now run
   // across a worker pool (scripts/lib/maker-pool.ts); results and their shape
   // are identical to the sequential loop (scripts/_qa/maker-pool-equiv.ts).
-  {
+  if (!opts.evalOnly) {
     const pool = await buildMakerIndicesParallel(makerLotsBySlug);
     Object.assign(makerIndex, pool.makerIndex);
     for (const slug of rosterSlugs) {
@@ -438,6 +486,7 @@ export async function runMarketBuild() {
   const compositeFor = (slugs: string[]): CompositeInput[] =>
     slugs.map(slug => ({ slug, index: makerIndex[slug], realized: makerRealized[slug] || 0 }));
 
+  if (!opts.evalOnly) {
   for (const m in MARKETS) {
     const set = new Set(MARKETS[m]);
     const mLots = all.filter(l => set.has(l.artist));
@@ -464,6 +513,7 @@ export async function runMarketBuild() {
   console.log(`[market] all      index ${markets.all.index.length}pts · n${markets.all.n}`);
   console.log(`[market] all      hedonic: lastComplete=${hedonic.all.lastCompleteQuarter} 1Y=${hAll1.publishable ? `${hAll1.changePct!.toFixed(1)}%` : `NOT-PUB (${hAll1.reason})`}`);
   console.log(`[market] all      composite: pub=${cmpAll.publishable} components=${cmpAll.components.filter(c => c.publishable).length} 1Y=${cmpAll.horizons['1Y'].publishable ? `${cmpAll.horizons['1Y'].changePct!.toFixed(1)}% [${cmpAll.horizons['1Y'].ciLoPct!.toFixed(1)},${cmpAll.horizons['1Y'].ciHiPct!.toFixed(1)}]` : `NOT-PUB (${cmpAll.reason || cmpAll.horizons['1Y'].reason})`}`);
+  } // !evalOnly — the market series / hedonic / composite pass
 
   // per-maker mini-series for the big names (drill-down)
   const makers: Record<string, MarketSeries> = {};
@@ -484,10 +534,8 @@ export async function runMarketBuild() {
   // inclusive — so the honest "does this house's estimate hold" read is
   // HAMMER vs estimate-mid (hammerUsd when published, else realized ÷ the
   // per-house premium schedule — premiums.inferHammerUsd, the ONE inference).
-  const median = (a: number[]): number => {
-    const s = a.slice().sort((x, y) => x - y); const n = s.length;
-    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
-  };
+  // stats.median (THE median; NaN on empty — every caller here passes ≥1 value)
+  const median = (a: number[]): number => statsMedian(a);
   const marketOfSlug = new Map<string, string>();
   for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) marketOfSlug.set(s, mkt);
   type HouseCell = { n: number; hammerMedPct: number; allInMedPct: number };
@@ -584,9 +632,11 @@ export async function runMarketBuild() {
     });
   }
   refsOut.sort((a, b) => (b.n as number) - (a.n as number));
-  fs.mkdirSync(SERVED, { recursive: true });
-  fs.writeFileSync(path.join(SERVED, 'refs.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), refs: refsOut }));
-  console.log(`[market] refs.json: ${refsOut.length} references (${(fs.statSync(path.join(SERVED, 'refs.json')).size / 1024).toFixed(0)}KB) · ${((Date.now() - tRef) / 1000).toFixed(0)}s`);
+  if (!opts.evalOnly) {
+    fs.mkdirSync(SERVED, { recursive: true });
+    fs.writeFileSync(path.join(SERVED, 'refs.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), refs: refsOut }));
+    console.log(`[market] refs.json: ${refsOut.length} references (${(fs.statSync(path.join(SERVED, 'refs.json')).size / 1024).toFixed(0)}KB) · ${((Date.now() - tRef) / 1000).toFixed(0)}s`);
+  }
 
   // ── 3e · sports player dossiers (players.json) + live-card comps ──
   // The cross-market read Collin wants: one player, cards AND game-used AND
@@ -608,13 +658,20 @@ export async function runMarketBuild() {
       if (c === undefined) { c = parseCard(title); cardCache.set(title, c); }
       return c;
     };
+    // + the advisory LLM extraction (scripts/lib/extract): fills only fields
+    // the regex left null; returns the cached regex CardId itself when the lot
+    // carries no extraction (always, with extraction off)
+    const cardIdOf = (l: AuctionLot): ReturnType<typeof parseCard> => mergeCardExtract(parseCardCached(l.title || ''), l);
     const SPORT_SET = new Set(MARKETS.sports);
     // graded-cards (REA/H&S/SCP/Lelands/ML/LOTG — 165k sold, 30yr archive)
     // joins every card path: _card identity, cardKey cross-house comps, the
     // tiered card valuer, the grade ladder. It stays ENGINE-excluded (the
     // O(pool²) passes) — the card paths are linear.
     const CARD_SLUGS = new Set(['sports-cards', 'graded-cards']);
-    const sportsSold = all.filter(l => SPORT_SET.has(l.artist) && l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate);
+    // compExclude-stamped sales (junk prices, duplicate listings) never enter
+    // a card pool; the eval seam's clock bounds the pool to sales before it
+    const sportsSold = all.filter(l => SPORT_SET.has(l.artist) && l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate
+      && !isCompExcluded(l) && knownKey(l as AuctionLot & { datePrecision?: string | null }) <= TODAY);
 
     // one parse pass over every sold sports lot
     type PLot = AuctionLot & { _pid?: string | null; _pname?: string | null; _card?: ReturnType<typeof parseCard> };
@@ -625,8 +682,8 @@ export async function runMarketBuild() {
       if (CARD_SLUGS.has(l.artist)) {
         // condition-flagged sales never enter the comp medians clean lots
         // are valued against (the "Missing Back at clean prices" class)
-        if (hasConditionFlag(l.title)) continue;
-        const c = parseCardCached(l.title || '');
+        if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;
+        const c = cardIdOf(l);
         l._card = c; l._pid = c.playerSlug; l._pname = c.player;
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
         const lk = cardLadderKey(c); if (lk) (byLadderKey.get(lk) || byLadderKey.set(lk, []).get(lk)!).push(l);
@@ -682,7 +739,7 @@ export async function runMarketBuild() {
         raw[h] = `${f.toFixed(3)}(n${a.n}${a.n >= 300 ? ',±20%' : ',±10%'})`;
       });
       console.log('[market] venue factors RAW (shrunk, pre-clamp):', JSON.stringify(raw));
-      (markets.all.analytics as unknown as Record<string, unknown>).venueFactors =
+      if (markets.all?.analytics) (markets.all.analytics as unknown as Record<string, unknown>).venueFactors =
         Object.fromEntries(Array.from(venueFactor.entries()).map(([h, f]) => [h, f]));
       console.log('[market] venue factors (same-card cross-house):', JSON.stringify(Object.fromEntries(venueFactor)));
     }
@@ -735,8 +792,10 @@ export async function runMarketBuild() {
       playersOut.push({ slug, name, sport, n: ls.length, cats, yearly, objects, recent });
     }
     playersOut.sort((a, b) => (b.n as number) - (a.n as number));
-    fs.writeFileSync(path.join(SERVED, 'players.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), players: playersOut }));
-    console.log(`[market] players.json: ${playersOut.length} players (${(fs.statSync(path.join(SERVED, 'players.json')).size / 1048576).toFixed(1)}MB)`);
+    if (!opts.evalOnly) {
+      fs.writeFileSync(path.join(SERVED, 'players.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), players: playersOut }));
+      console.log(`[market] players.json: ${playersOut.length} players (${(fs.statSync(path.join(SERVED, 'players.json')).size / 1048576).toFixed(1)}MB)`);
+    }
 
     // ── TIERED CARD VALUE ESTIMATOR ──────────────────────────────────────
     // Goldin cards carry a live bid but NO house estimate, so the hedonic
@@ -759,13 +818,10 @@ export async function runMarketBuild() {
     //   9.5≈3, 10≈7) — scale = mult[target]/mult[nearest]. Defensible and simple;
     //   confidence 'medium'. If the target grade can't be scored (no gradeNum),
     //   fall back to the flat cross-grade ladder median.
-    // Tier 3 — that PLAYER's cards: median of the byPlayer sold-card pool,
-    //   filtered to a COMPARABLE grade tier (graded vs raw — a $5 raw common and
-    //   a $50K graded rookie must not average) AND recent (last 24 months, to
-    //   track the current market). Require n≥5. A broad player median is a weak
-    //   signal → confidence 'low'.
+    // Tier 3 — that PLAYER's cards: RETIRED Sep 27 2026 → abstain
+    //   ('card:player-tier'). A player median cannot price a specific card
+    //   (live 2.87× realized/value, forward tape 1.51×).
     // If none seat → no value (null). Never fabricated.
-    const GRADE_CUT = Date.now() - 730 * 864e5; // 24 months (tier-3 recency)
     // grade → relative value multiplier — now the EMPIRICAL ladder fitted above
     // (was a hardcoded constant curve). Only RATIOS between rungs are used, so
     // the absolute scale is irrelevant. Thin/off-ladder grades fall back to the
@@ -776,15 +832,11 @@ export async function runMarketBuild() {
     const tierCounts: Record<CardTier, number> = { exact: 0, 'grade-adj': 0, player: 0, none: 0 };
     // recency-decayed weighted median (half-life 1y — the Goldin absolute path's
     // measured optimum; memorabilia cycles faster than estimate lots)
-    const NOW_MS = Date.now();
     const saleMsOf = (s: AuctionLot) => (s as AuctionLot & { _saleMs?: number })._saleMs ?? new Date(s.saleDate as string).getTime();
+    // (stats.weightedMedian — the one lower-weighted-median definition)
     const decayedMedian = (pool: { p: number; ms: number }[]): number => {
-      const rows = pool.map(x => [x.p, isNaN(x.ms) ? 0.25 : Math.pow(0.5, Math.max(0, (NOW_MS - x.ms) / 31_557_600_000))] as [number, number])
-        .sort((a, b) => a[0] - b[0]);
-      const total = rows.reduce((t, r) => t + r[1], 0);
-      let c = 0;
-      for (const [v, w] of rows) { c += w; if (c >= total / 2) return v; }
-      return rows.length ? rows[rows.length - 1][0] : 0;
+      const m = weightedMedian(pool.map(x => [x.p, isNaN(x.ms) ? 0.25 : Math.pow(0.5, Math.max(0, (NOW_MS - x.ms) / 31_557_600_000))] as [number, number]));
+      return Number.isNaN(m) ? 0 : m;
     };
     // the pool's own dispersion as the band: 15/85 lerp quantiles; [min,max] at n=2
     const dispersionBand = (vals: number[]): [number, number] => {
@@ -797,11 +849,13 @@ export async function runMarketBuild() {
     // the ladder key drops the grade segment. Grade adjustment borrows the
     // SPORTS ladder ratios (gradeMult) as a proxy — labeled tier 'tcg-grade-adj',
     // capped 'low' until a Pokémon ladder is fitted (docs/ENGINE_SPEC_V2.md).
+    // regex pokemonKey first; the advisory extraction keys only what it missed
+    const pkKey = (x: AuctionLot): string | null => pokemonKey(x) ?? pokemonKeyFromExtract(x);
     const tcgByKey = new Map<string, AuctionLot[]>();
     const tcgByLadder = new Map<string, AuctionLot[]>();
     for (const sPk of lotsForSlug('pokemon')) {
-      if (sPk.status !== 'sold' || !(sPk.realizedUsd! > 0) || !sPk.saleDate || hasConditionFlag(sPk.title)) continue;
-      const k = pokemonKey(sPk); if (!k) continue;
+      if (sPk.status !== 'sold' || !(sPk.realizedUsd! > 0) || !sPk.saleDate || hasConditionFlag(sPk.title) || llmConditionFlag(sPk)) continue;
+      const k = pkKey(sPk); if (!k) continue;
       (tcgByKey.get(k) || tcgByKey.set(k, []).get(k)!).push(sPk);
       const lk = k.slice(0, k.lastIndexOf('|'));
       (tcgByLadder.get(lk) || tcgByLadder.set(lk, []).get(lk)!).push(sPk);
@@ -813,10 +867,10 @@ export async function runMarketBuild() {
       const bid = lv.currentBid || 0;
       if (!(bid > 0) || (lv.estLowUsd! > 0 && lv.estHighUsd! > 0)) continue;
       tcgCounts.bidOnly++;
-      if (hasConditionFlag(l.title)) { lv.abstain = 'no-identity'; tcgCounts.none++; continue; }
-      const k = pokemonKey(l);
+      if (hasConditionFlag(l.title) || llmConditionFlag(l)) { lv.abstain = 'no-identity'; tcgCounts.none++; continue; }
+      const k = pkKey(l);
       if (!k) { lv.abstain = 'no-identity'; tcgCounts.noKey++; continue; }
-      const exact = tcgByKey.get(k) || [];
+      const exact = sameObjectFilter(l, tcgByKey.get(k) || [], { queue: !opts.evalOnly });
       const gradeNum = parseFloat(k.slice(k.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
       let value: number | null = null, low = 0, high = 0, poolIds: string[] = [], poolN = 0;
       let confidence: 'high' | 'medium' | 'low' = 'low';
@@ -830,7 +884,7 @@ export async function runMarketBuild() {
         const ladder = (tcgByLadder.get(k.slice(0, k.lastIndexOf('|'))) || []).filter(x => x.id !== l.id);
         if (ladder.length >= 2 && isFinite(gradeNum)) {
           const adj = ladder.map(x => {
-            const xk = pokemonKey(x)!; const g = parseFloat(xk.slice(xk.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
+            const xk = pkKey(x)!; const g = parseFloat(xk.slice(xk.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
             return { p: x.realizedUsd! * (gradeMult(gradeNum) / gradeMult(g)), ms: saleMsOf(x) };
           }).filter(x => x.p > 0);
           if (adj.length >= 2) {
@@ -854,6 +908,114 @@ export async function runMarketBuild() {
     }
     console.log(`[market] tcg value estimator: ${tcgCounts.exact + tcgCounts['grade-adj']}/${tcgCounts.bidOnly} bid-only pokémon valued · exact=${tcgCounts.exact} · grade-adj=${tcgCounts['grade-adj']} · no-key=${tcgCounts.noKey} · thin=${tcgCounts.none} · keyed sold pools ${tcgByKey.size}`);
 
+    // ── THE CARD TIER PRICER (Sep 27 2026) — one function for the live book
+    // AND its own point-in-time calibration below, so the band/bias the live
+    // value wears are measured on exactly this pricer.
+    //
+    // RECENCY WINDOW: a card is priced ONLY by its recent sales. Measured on
+    // the live book (Sep 14 → 27, exact tier): the error grows with the pool's
+    // age — newest comp <6mo read 1.32× realized/value, 1–3y read 2.4×; the
+    // 1952 Topps Jackie Robinson PSA 4 comped $1,068 off two 2008-09 sales and
+    // sold $30,463. Decay re-weights WITHIN a pool but cannot age a pool that
+    // is old as a whole. Tier pools keep sales ≤ CARD_WINDOW_Y old (a lone
+    // exact sale only when ≤ CARD_SINGLE_Y), weighted with a short CARD_HL_Y
+    // half-life (exact tier 0.49 → 0.27 median abs error, bias 1.46 → 1.11 on
+    // that book). A keyed card whose pools hold only older sales abstains
+    // ('card:stale').
+    type CardPrice = {
+      value: number | null; low: number | null; high: number | null; poolIds: string[]; poolN: number;
+      confidence: 'high' | 'medium' | 'low'; tier: CardTier; stale: boolean;
+    };
+    const priceCard = (c: ReturnType<typeof parseCard>, exactAll: AuctionLot[], ladderAll: AuctionLot[], house: string, asOfMs: number, selfId?: string): CardPrice => {
+      const out: CardPrice = { value: null, low: null, high: null, poolIds: [], poolN: 0, confidence: 'low', tier: 'none', stale: false };
+      const ageY = (s: AuctionLot) => (asOfMs - saleMsOf(s)) / 31_557_600_000;
+      // strictly BEFORE asOf (the calibration pass prices past sales as of their own day)
+      const recentOf = (arr: AuctionLot[]) => arr.filter(s => { if (selfId && String(s.id) === selfId) return false; const a = ageY(s); return a > 0 && a <= CARD_WINDOW_Y; });
+      const olderExists = (arr: AuctionLot[]) => arr.some(s => ageY(s) > CARD_WINDOW_Y && String(s.id) !== selfId);
+      const recentMedian = (pool: { p: number; ms: number; w?: number }[]) => {
+        const m = weightedMedian(pool.map(x => [x.p, Math.pow(0.5, Math.max(0, (asOfMs - x.ms) / 31_557_600_000) / CARD_HL_Y) * (x.w ?? 1)] as [number, number]));
+        return Number.isNaN(m) ? 0 : m;
+      };
+      const exactR = recentOf(exactAll);
+      const ladderR = recentOf(ladderAll);
+      const exactOk = exactR.length >= 2 || (exactR.length === 1 && ageY(exactR[0]) <= CARD_SINGLE_Y);
+      if (exactOk) {
+        // Tier 1 — exact same card + grade, recent comps venue-adjusted to this house.
+        const pool = exactR.map(s => ({ p: venueAdj(s, house), ms: saleMsOf(s) }));
+        out.value = Math.round(recentMedian(pool));
+        [out.low, out.high] = dispersionBand(pool.map(x => x.p));
+        out.poolIds = exactR.map(s => s.id); out.poolN = exactR.length;
+        out.confidence = exactR.length >= 4 ? 'high' : 'medium';
+        out.tier = 'exact';
+        return out;
+      }
+      if (ladderR.length >= 2 && c.gradeNum != null && !c.gradeQual) {
+        // Tier 2 — same card (same variant + serial run: the ladder key),
+        // cross-grade → every CLEAN numeric recent rung grade-adjusted to THIS
+        // grade by the empirical ladder ratio, then the weighted median. Only
+        // a card with a numeric, unqualified grade is laddered — a raw /
+        // Authentic / (OC)-qualified card has no rung to scale to (the old
+        // flat-ladder fallback priced a raw card at its graded copies'
+        // median). GRADE PROXIMITY: a rung's vote halves per grade point from
+        // the target — a 1977 Ryan PSA 9 sale ($919) outvotes a stack of
+        // scaled-up PSA 4-5 copies (the ladder ratio is a market-wide
+        // average; far rungs carry its error multiplied).
+        const target = c.gradeNum;
+        const adj = ladderR
+          .filter(s => !(s as PLot)._card?.gradeQual)
+          .map(s => ({ g: (s as PLot)._card?.gradeNum ?? null, p: venueAdj(s, house), ms: saleMsOf(s) }))
+          .filter(r => r.p > 0 && r.g != null)
+          .map(r => ({ p: r.p * (gradeMult(target) / gradeMult(r.g!)), ms: r.ms, w: Math.pow(0.5, Math.abs(r.g! - target)) }));
+        if (adj.length >= 2) {
+          out.value = Math.round(recentMedian(adj));
+          [out.low, out.high] = dispersionBand(adj.map(x => x.p));
+          out.poolIds = ladderR.map(s => s.id); out.poolN = ladderR.length;
+          out.confidence = adj.length >= 4 ? 'medium' : 'low';
+          out.tier = 'grade-adj';
+          return out;
+        }
+      }
+      out.stale = olderExists(exactAll) || olderExists(ladderAll);
+      return out;
+    };
+
+    // ── CARD CALIBRATION, point-in-time (Sep 27 2026) — the tier pricer run on
+    // the most recent sold cards AS OF each one's own sale day (pools strictly
+    // before it), so realized / value is an honest out-of-sample residual.
+    // Per tier: a bias multiplier (median residual, shrunk toward 1) and the
+    // 15/85 outcome band around the bias-corrected value — the band the live
+    // value wears (the pool's own 15/85 spread covered ~30% live).
+    const cardCal: Record<string, { bias: number; lo: number; hi: number; n: number }> = {};
+    {
+      const CAL_DAYS = 120, CAL_MAX = 6000, K = 30;
+      const cut = NOW_MS - CAL_DAYS * 864e5;
+      const recentSold = (sportsSold as PLot[]).filter(s => CARD_SLUGS.has(s.artist) && s._card && saleMsOf(s) > cut && saleMsOf(s) < NOW_MS && !hasConditionFlag(s.title));
+      const step = Math.max(1, Math.ceil(recentSold.length / CAL_MAX));
+      const res: Record<string, number[]> = {};
+      for (let i = 0; i < recentSold.length; i += step) {
+        const s = recentSold[i];
+        const c = s._card!;
+        const ck = cardKey(c); const lk = cardLadderKey(c);
+        const pr = priceCard(c, (ck ? byCardKey.get(ck) : undefined) || [], (lk ? byLadderKey.get(lk) : undefined) || [], String(s.auctionHouse), saleMsOf(s), String(s.id));
+        if (pr.value && pr.value > 0 && s.realizedUsd! > 0) (res[pr.tier] ||= []).push(Math.log(s.realizedUsd! / pr.value));
+      }
+      for (const [tierK, logs] of Object.entries(res)) {
+        if (logs.length < 50) continue;
+        const b = statsMedian(logs);
+        const shrunk = (logs.length * b) / (logs.length + K);
+        const z = logs.map(x => x - shrunk).sort((a, b2) => a - b2);
+        cardCal[tierK] = {
+          bias: Math.round(Math.exp(shrunk) * 1000) / 1000,
+          lo: Math.round(Math.min(1, Math.exp(quantile(z, 0.15))) * 1000) / 1000,
+          hi: Math.round(Math.max(1, Math.exp(quantile(z, 0.85))) * 1000) / 1000,
+          n: logs.length,
+        };
+      }
+      console.log(`[market] card tier calibration (pit, ${recentSold.length} sold cards in ${CAL_DAYS}d, sampled 1/${step}): ${JSON.stringify(cardCal)}`);
+      if (markets.all?.analytics) (markets.all.analytics as unknown as Record<string, unknown>).cardCalibration = cardCal;
+    }
+
+
     // live-card comps: exact cardKey → last sales; ladderKey → grade ladder.
     // Stamped on the LIVE lot objects (they're in `all`, so the stamp flows to
     // corpus + served shards + upcoming.json). playerSlug stamps every live
@@ -865,7 +1027,7 @@ export async function runMarketBuild() {
     const liveByCardKey = new Map<string, { id: string; house: string; bid: number }[]>();
     for (const l of all) {
       if (l.status !== 'upcoming' || !CARD_SLUGS.has(l.artist)) continue;
-      const ck = cardKey(parseCardCached(l.title || ''));
+      const ck = cardKey(cardIdOf(l));
       if (!ck) continue;
       const arr = liveByCardKey.get(ck) || [];
       arr.push({ id: String(l.id), house: String(l.auctionHouse), bid: (l as AuctionLot & { currentBid?: number }).currentBid || 0 });
@@ -894,13 +1056,15 @@ export async function runMarketBuild() {
       if (l.status !== 'upcoming') continue;
       const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null; cardComps?: unknown };
       if (CARD_SLUGS.has(l.artist)) {
-        const c = parseCardCached(l.title || '');
+        const c = cardIdOf(l);
         lw.playerSlug = c.playerSlug; lw.playerName = c.player;
         // a condition-flagged lot must not wear a clean-comp floor: no
         // cardComps → no deep-value seat, no misleading "med" on the page
-        if (hasConditionFlag(l.title)) continue;
+        if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;
         const ck = cardKey(c); const lk = cardLadderKey(c);
-        const exact: AuctionLot[] = (ck ? byCardKey.get(ck) : undefined) || [];
+        // same-object veto (advisory): drop exact comps the pair check judged
+        // a different item; the pool is returned untouched with extraction off
+        const exact: AuctionLot[] = sameObjectFilter(l, (ck ? byCardKey.get(ck) : undefined) || [], { queue: !opts.evalOnly });
         const ladder: AuctionLot[] = (lk ? byLadderKey.get(lk) : undefined) || [];
         const lastSales = exact.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 5)
           .map(s => ({ d: s.saleDate, p: Math.round(s.realizedUsd!) }));
@@ -961,58 +1125,28 @@ export async function runMarketBuild() {
           let abstain: AbstainReason | null = null;
           const house = String(l.auctionHouse);
 
-          if (exact.length >= 2) {
-            // Tier 1 — exact same card + grade, comps venue-adjusted to this house.
-            const pool = exact.map(s => ({ p: venueAdj(s, house), ms: saleMsOf(s) }));
-            value = Math.round(decayedMedian(pool));
-            [low, high] = dispersionBand(pool.map(x => x.p));
-            poolIds = exact.map(s => s.id);
-            poolN = exact.length;
-            confidence = exact.length >= 4 ? 'high' : 'medium';
-            tier = 'exact';
-          } else if (ladder.length >= 2) {
-            // Tier 2 — same card, cross-grade → every rung grade-adjusted to
-            // THIS grade by the empirical ladder ratio, then the decayed
-            // weighted median (all rungs vote; was nearest-rung-only). If the
-            // live card's grade can't be scored, the flat ladder median.
-            const target = c.gradeNum;
-            const rungs = ladder.map(s => ({ g: (s as PLot)._card?.gradeNum ?? null, p: venueAdj(s, house), ms: saleMsOf(s) })).filter(r => r.p > 0);
-            const adj = target != null && rungs.some(r => r.g != null)
-              ? rungs.filter(r => r.g != null).map(r => ({ p: r.p * (gradeMult(target) / gradeMult(r.g!)), ms: r.ms }))
-              : rungs.map(r => ({ p: r.p, ms: r.ms }));
-            if (adj.length >= 2) {
-              value = Math.round(decayedMedian(adj));
-              [low, high] = dispersionBand(adj.map(x => x.p));
-              poolIds = ladder.map(s => s.id);
-              poolN = ladder.length;
-              confidence = adj.length >= 4 && target != null ? 'medium' : 'low';
-              tier = 'grade-adj';
-            }
+          // THE CARD TIER PRICER (above) + its point-in-time tier calibration:
+          // the value is bias-corrected and wears the measured outcome band
+          const pr = priceCard(c, exact, ladder, house, NOW_MS);
+          if (pr.value != null && pr.value > 0) {
+            const cal = cardCal[pr.tier];
+            if (cal) {
+              value = Math.round(pr.value * cal.bias);
+              low = Math.round(value * cal.lo); high = Math.round(value * cal.hi);
+            } else { value = pr.value; low = pr.low; high = pr.high; }
+            poolIds = pr.poolIds; poolN = pr.poolN; confidence = pr.confidence; tier = pr.tier;
           }
-          if (value == null && c.playerSlug) {
-            // Tier 3 — that player's cards. Match the live card's grade TIER
-            // (graded vs raw) so a raw common and a graded rookie don't average,
-            // and keep only the last ~24 months. Require n≥5. Weak → 'low'.
-            const isGraded = c.gradeNum != null;
-            const entry = byPlayer.get(c.playerSlug);
-            const pool = (entry?.lots || []).filter(s =>
-              (s.artist === 'sports-cards' || s.artist === 'graded-cards') &&
-              ((s as PLot)._card?.gradeNum != null) === isGraded &&
-              (s as AuctionLot & { _saleMs?: number })._saleMs! > GRADE_CUT &&
-              (s.realizedUsd || 0) > 0);
-            if (pool.length >= 5) {
-              value = Math.round(decayedMedian(pool.map(s => ({ p: s.realizedUsd!, ms: saleMsOf(s) }))));
-              [low, high] = dispersionBand(pool.map(s => s.realizedUsd!));
-              // cap the stamped ids at the 60 most recent (a player pool can be
-              // hundreds of sales) — keep `n` as the TRUE pool size for honesty.
-              poolIds = pool.slice().sort((a, b) =>
-                (b as AuctionLot & { _saleMs?: number })._saleMs! - (a as AuctionLot & { _saleMs?: number })._saleMs!)
-                .slice(0, 60).map(s => s.id);
-              poolN = pool.length;
-              confidence = 'low';
-              tier = 'player';
-            } else abstain = 'card:player<5';
-          } else if (value == null) abstain = (ck || lk) ? 'card:pool<2' : 'no-identity';
+          const staleSeen = pr.stale;
+
+          // Tier 3 — that player's cards — ABSTAINS (Sep 27 2026). A player
+          // median cannot price a specific card: measured on the live book
+          // (Sep 14 → 27, n=1,775) the tier ran realized/value 2.87× with a
+          // 3.10 median abs error and 12% within ±30% (the forward tape read
+          // 1.51× on its graded rows). A blank beats a wrong number: no value
+          // is published; the reason is served on the lot — 'card:pool<2'
+          // when the card is keyed but its exact/ladder pools are thin,
+          // 'card:player-tier' when only a player pool could have priced it.
+          if (value == null) abstain = staleSeen ? 'card:stale' : (ck || lk) ? 'card:pool<2' : c.playerSlug ? 'card:player-tier' : 'no-identity';
 
           if (value != null && value > 0) {
             lv.value = {
@@ -1054,6 +1188,13 @@ export async function runMarketBuild() {
     const cardBidOnly = cardValued + tierCounts.none;
     console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · none=${tierCounts.none}`);
     console.log(`[market] cross-house live collisions stamped: ${crossLiveStamped}`);
+  }
+  // the point-in-time evaluation seam stops here: every upcoming lot now
+  // carries the value/abstain/cardComps it would have been served
+  if (opts.evalOnly) {
+    for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; delete t._v; delete t._saleMs; }
+    setTimeIndex(null);
+    return all;
   }
 
   // ── 3f · stats.json rows for corpus-only / non-ARTISTS slugs ──
@@ -1184,44 +1325,30 @@ export async function runMarketBuild() {
     const nR = emitReceipts(path.join(SERVED, 'receipts.json'), lotIdent, rec);
     console.log(`[market] receipts tape — ${nR} graded rows served`);
   }
-  // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit) — how much of final hammer
-  // arrives in the last days, fitted from Goldin's own nightly bidHistory on
-  // SOLD lots: growth(bucket) = median(finalBid / bidAtSnapshot) for snapshots
-  // daysOut ∈ [<1, 1-2, 2-4, 4-8, 8+]. This is the honest projection factor
-  // that turns a stale nightly currentBid into an expected close, and the
-  // basis for the bid-house 'projected below comps' read. Served in
-  // market.json analytics.closeCurve; buildUpcoming stamps per-lot projections.
-  const CURVE_EDGES = [1, 2, 4, 8];
-  const curveBucket = (daysOut: number) => { let b = 0; for (const e of CURVE_EDGES) { if (daysOut < e) break; b++; } return b; };
+  // ── THE VALUE TAPE (Sep 27) — the first value every upcoming lot was served,
+  // engine-version tagged; validate-engine grades it as the live forward check
   {
-    const perBucket: number[][] = [[], [], [], [], []];
-    for (const l of all) {
-      if (l.status !== 'sold' || !(l.realizedUsd! > 0)) continue;
-      const bh = (l as AuctionLot & { bidHistory?: Array<{ d: string; b: number; n: number }> }).bidHistory;
-      if (!Array.isArray(bh) || bh.length < 2) continue;
-      const closeMs = new Date((l as AuctionLot & { saleDateTime?: string | null }).saleDateTime || l.saleDate || '').getTime();
-      if (isNaN(closeMs)) continue;
-      const { lotAllInFactor } = require('../app/lib/premiums');
-      const finalBid = l.realizedUsd! / lotAllInFactor(l, l.realizedUsd);
-      for (const snap of bh) {
-        if (!(snap.b > 0)) continue;
-        const daysOut = (closeMs - new Date(snap.d).getTime()) / 86400000;
-        if (daysOut < 0 || daysOut > 30) continue;
-        const g = finalBid / snap.b;
-        if (g >= 1 && g < 50) perBucket[curveBucket(daysOut)].push(g);
-      }
-    }
-    const closeCurve = perBucket.map(a => {
-      if (a.length < 200) return null;
-      a.sort((x, y) => x - y);
-      return Math.round(a[Math.floor(a.length / 2)] * 1000) / 1000;
-    });
-    (markets.all.analytics as unknown as Record<string, unknown>).closeCurve = { buckets: closeCurve, edges: CURVE_EDGES, n: perBucket.map(a => a.length) };
-    console.log('[market] close curve (median finalBid/bid by daysOut):', closeCurve.join(' '), '| n:', perBucket.map(a => a.length).join(' '));
+    const soldIds = new Set<string>();
+    for (const l of all) if (l.status === 'sold') soldIds.add(String(l.id));
+    const t = appendValueTape(all, TODAY, MARKET_BY_SLUG, ENGINE_VERSION, soldIds);
+    console.log(`[market] value tape — ${t.added} first-served values appended (${t.total} rows, ${t.pruned} pruned)`);
+  }
+  // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit; conditioned Sep 27) — how
+  // much of final hammer arrives in the last days, fitted from Goldin's own
+  // nightly bidHistory on SOLD lots, now per days-out bucket × bid-level band
+  // (scripts/build-market-curve.ts). Served in market.json
+  // analytics.closeCurve; build-upcoming + close-board project through
+  // lanes.closeGrowth.
+  {
+    const closeCurve = fitCloseCurve(all);
+    (markets.all.analytics as unknown as Record<string, unknown>).closeCurve = closeCurve;
+    console.log('[market] close curve (median finalBid/bid by daysOut):', closeCurve.buckets.join(' '), '| n:', (closeCurve.n || []).join(' '),
+      '| grid by bid band', JSON.stringify(closeCurve.grid));
   }
 
-
   fs.writeFileSync(path.join(SERVED, 'market.json'), JSON.stringify(market));
+  // persist same-object pairs queued for the next extraction run (no-op when off)
+  flushExtractQueue();
   console.log(`[market] wrote market.json (${(fs.statSync(path.join(SERVED, 'market.json')).size / 1024).toFixed(0)}KB)`);
 
   // ── 4 · persist: full corpus (gz) + slim served (value flows to the client) ──
@@ -1310,7 +1437,9 @@ export async function runMarketBuild() {
   // tipped that over the runner's ceiling (OOM, Aug 13 dispatch run).
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED, all as unknown as AuctionLot[]);
+  setTimeIndex(null);
   console.log(`[market] done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+  return all;
 }
 
 // standalone entry — fail loud with a clear message + non-zero exit rather than
