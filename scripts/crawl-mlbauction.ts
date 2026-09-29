@@ -65,7 +65,7 @@ function arg(name: string, def: number): number {
   return i >= 0 && process.argv[i + 1] ? parseInt(process.argv[i + 1], 10) : def;
 }
 
-interface ApiItem {
+export interface ApiItem {
   id: number | string; title: string; fullTitle?: string; url: string;
   currentBid: string; binAmt?: string; bidCount: number | string;
   teamName?: string; causeName?: string; seller?: string; reserveAmt?: string;
@@ -141,7 +141,7 @@ async function browserGet(url: string): Promise<{ status: number; text: string }
   }
 }
 
-function parseApi(text: string): { items?: ApiItem[] } | null {
+export function parseApi(text: string): { items?: ApiItem[] } | null {
   const t = text.trim();
   if (!t.startsWith('{')) return null; // the WAF interstitial is HTML
   try { return JSON.parse(t); } catch { return null; }
@@ -193,7 +193,7 @@ const num = (v: number | string | null | undefined): number => {
 const bestTitle = (it: ApiItem): string => (it.fullTitle || it.title || '').trim();
 
 /** closeTime is GMT on both platform configs; parse either print. */
-function closeIso(it: ApiItem): string | null {
+export function closeIso(it: ApiItem): string | null {
   const raw = String(it.closeTime || '').trim();
   if (!raw) return null;
   const sql = raw.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
@@ -358,7 +358,7 @@ function mlbAuth(cat: ReturnType<typeof classifySports>, title: string, desc: st
   return auth;
 }
 
-function toLot(it: ApiItem, ident: { title: string; desc: string }, kind: 'sold' | 'upcoming', realized?: number | null): AuctionLot | null {
+export function toLot(it: ApiItem, ident: { title: string; desc: string }, kind: 'sold' | 'upcoming', realized?: number | null): AuctionLot | null {
   const iso = closeIso(it);
   if (!iso) return null;
   const saleDate = iso.slice(0, 10);

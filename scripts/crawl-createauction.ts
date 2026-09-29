@@ -164,7 +164,7 @@ export function buildLot(raw: RawLot, id: number, cfg: { host: string; house: Au
 // date comes from a single sample lot page's "End:" line. Cards showing
 // "SOLD FOR" mid-sale are staggered soft-closes → parsed as settled sales via
 // buildLot (same prefix-{itemid} id retires any prior upcoming row).
-interface LiveCard { id: string; title: string; bid: string; sold: string; img: string | null; wd?: boolean; }
+export interface LiveCard { id: string; title: string; bid: string; sold: string; img: string | null; wd?: boolean; }
 
 async function clearCF(page: Page, maxMs = 30000): Promise<boolean> {
   const t0 = Date.now();
@@ -175,7 +175,7 @@ async function clearCF(page: Page, maxMs = 30000): Promise<boolean> {
   return false;
 }
 
-async function extractLiveCards(page: Page): Promise<LiveCard[]> {
+export async function extractLiveCards(page: Page): Promise<LiveCard[]> {
   // no named fns inside evaluate — the tsx/esbuild __name trap
   return page.evaluate(() => {
     const byId = new Map<string, { title: string; card: string; img: string | null }>();
