@@ -1,59 +1,27 @@
-// ESLint flat config — Next (App Router) + TypeScript.
+// ESLint flat config (eslint 9) — Next's own presets + a few repo rules.
 //
-// Deliberately small, and built only from plugins eslint-config-next already
-// installs (@typescript-eslint/*, eslint-plugin-react-hooks,
-// @next/eslint-plugin-next), so it works unchanged on eslint 8.57 (run with
-// ESLINT_USE_FLAT_CONFIG=true by scripts/ci/lint.mjs) and on eslint 9.
-// Rules that fire on large amounts of legacy code are set to "warn", never
-// "off", so the count stays visible while `npm run lint` gates on errors only.
-import js from '@eslint/js';
-import tsPlugin from '@typescript-eslint/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import reactHooks from 'eslint-plugin-react-hooks';
-import nextPlugin from '@next/eslint-plugin-next';
+// eslint-config-next 16 ships flat configs: core-web-vitals (next, react,
+// react-hooks, import, jsx-a11y) and typescript (typescript-eslint
+// recommended). Rules that fire on large amounts of legacy code are set to
+// "warn", never "off", so the count stays visible while `npm run lint`
+// (scripts/ci/lint.mjs) gates on errors only.
+import { defineConfig, globalIgnores } from 'eslint/config';
+import nextVitals from 'eslint-config-next/core-web-vitals';
+import nextTs from 'eslint-config-next/typescript';
 
-const nodeGlobals = {
-  process: 'readonly', console: 'readonly', Buffer: 'readonly', URL: 'readonly',
-  URLSearchParams: 'readonly', __dirname: 'readonly', __filename: 'readonly',
-  require: 'readonly', module: 'writable', exports: 'writable', setTimeout: 'readonly',
-  clearTimeout: 'readonly', setInterval: 'readonly', clearInterval: 'readonly',
-  setImmediate: 'readonly', fetch: 'readonly', AbortController: 'readonly',
-  TextEncoder: 'readonly', TextDecoder: 'readonly', structuredClone: 'readonly',
-  performance: 'readonly', queueMicrotask: 'readonly', AbortSignal: 'readonly',
-};
-const browserGlobals = {
-  window: 'readonly', document: 'readonly', navigator: 'readonly', location: 'readonly',
-  innerHeight: 'readonly', innerWidth: 'readonly', scrollTo: 'readonly',
-  localStorage: 'readonly', getComputedStyle: 'readonly', requestAnimationFrame: 'readonly',
-};
-
-const tsRecommended = tsPlugin.configs['flat/recommended'];
-
-export default [
+export default defineConfig([
+  globalIgnores([
+    'node_modules/**', '.next/**', 'out/**', 'build/**', 'public/**', 'data/**',
+    'coverage/**', 'shots/**', '.claude/**', 'next-env.d.ts', '**/*.d.ts',
+    // research harnesses, tsconfig-excluded and allowed to drift (see scripts/oneoff/README.md)
+    'scripts/oneoff/qa/**',
+  ]),
+  ...nextVitals,
+  ...nextTs,
   {
-    ignores: [
-      'node_modules/**', '.next/**', 'out/**', 'build/**', 'public/**', 'data/**',
-      'coverage/**', 'shots/**', '.claude/**', 'next-env.d.ts', '**/*.d.ts',
-      // research harnesses, tsconfig-excluded and allowed to drift (see scripts/oneoff/README.md)
-      'scripts/oneoff/qa/**',
-    ],
-  },
-  js.configs.recommended,
-  ...tsRecommended,
-  {
-    files: ['**/*.{js,mjs,cjs,jsx,ts,tsx}'],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      parser: tsParser,
-      parserOptions: { ecmaFeatures: { jsx: true } },
-      globals: { ...nodeGlobals, ...browserGlobals },
-    },
-    plugins: { '@next/next': nextPlugin },
-    linterOptions: { reportUnusedDisableDirectives: true },
+    files: ['**/*.{js,jsx,mjs,ts,tsx,mts,cts}'],
+    linterOptions: { reportUnusedDisableDirectives: 'warn' },
     rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs['core-web-vitals'].rules,
       // typography: thin / hair spaces inside strings, templates and JSX text are deliberate
       'no-irregular-whitespace': ['error', { skipStrings: true, skipTemplates: true, skipJSXText: true, skipComments: true }],
       '@typescript-eslint/no-unused-expressions': ['error', { allowShortCircuit: true, allowTernary: true, allowTaggedTemplates: true }],
@@ -64,32 +32,26 @@ export default [
         argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none', ignoreRestSiblings: true,
       }],
       '@typescript-eslint/no-require-imports': 'warn',
-      '@typescript-eslint/no-non-null-asserted-optional-chain': 'warn',
-      'no-empty': ['warn', { allowEmptyCatch: true }],
-      'no-useless-escape': 'warn',
-      'no-control-regex': 'warn',
-      'no-cond-assign': ['error', 'except-parens'],
       'prefer-const': 'warn',
+      // react-hooks 7 React-Compiler rules: new with the Next 16 preset, 69
+      // pre-existing hits in app/ components — surfaced, fixed incrementally.
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/refs': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
+      // global-error.tsx needs a full-reload <a href="/"> (the router may be the
+      // thing that broke); the other hit is a same-page #hash link.
+      '@next/next/no-html-link-for-pages': 'warn',
     },
   },
   {
-    // React rules only where React lives (scripts/ has plain functions named use*).
-    files: ['app/**/*.{js,jsx,ts,tsx}'],
-    plugins: { 'react-hooks': reactHooks },
-    rules: {
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
-    },
-  },
-  {
-    // TypeScript resolves identifiers itself; core no-undef misfires on types.
-    files: ['**/*.{ts,tsx}'],
-    rules: { 'no-undef': 'off' },
+    // scripts/ is Node tooling, not React: functions named use*() are not hooks.
+    files: ['scripts/**', 'tests/**', '*.config.*'],
+    rules: { 'react-hooks/rules-of-hooks': 'off' },
   },
   {
     // CommonJS files (maker-worker.cjs, next/postcss configs).
     files: ['**/*.cjs', 'next.config.js', 'postcss.config.js'],
-    languageOptions: { sourceType: 'commonjs' },
-    rules: { '@typescript-eslint/no-require-imports': 'off', '@typescript-eslint/no-var-requires': 'off' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
-];
+]);
