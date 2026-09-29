@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <title>Huggins And Scott Auction Archive</title>
+ </head>
+<body class="montserrat antialiased bg-white text-slate-800">
+ <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-WJ4TDHCH"
+ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+ <header >
+ <nav class="py-4 border-b-2 border-secondary-500 bg-white">
+ <div class="flex flex-wrap justify-between items-center mx-auto max-w-screen-xl">
+ <div class="flex items-center">
+ <button data-drawer-target="sidebar-multi-level-sidebar" data-drawer-toggle="sidebar-multi-level-sidebar" aria-controls="sidebar-multi-level-sidebar" type="button" class="inline-flex items-center p-2 mt-2 ml-3 text-sm text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600">
+ <span class="sr-only">Open sidebar</span>
+ </button>
+ <a href="/" class="">
+ <img src="/images/hs-brand.svg" class="h-16 mx-6" alt="Huggins & Scott" />
+ </a>
+ </div>
+ <div class="flex items-center hidden sm:block mr-2">
+ <a href="tel:3016080355" class="mr-6 text-lg text-gray-500 dark:text-white hover:underline">301-608-0355</a>
+ <a href="https://bid.hugginsandscott.com/" class="btn-primary group">
+ Bid Now
+ <span class="tracking-normal text-white group-hover:translate-x-0.5 transition-transform duration-150 ease-in-out ml-2">
+ </span>
+ </a>
+ </div>
+ </div>
+ </nav>
+</header>
+<aside id="sidebar-multi-level-sidebar" class="fixed top-0 left-0 z-40 w-64 h-screen transition-transform -translate-x-full" aria-label="Sidebar">
+ <div class="h-full px-3 py-4 overflow-y-auto bg-gray-50 dark:bg-gray-800">
+ <a href="/"><img src="/images/hs-brand.svg" class="h-12 mx-3 mb-4" alt="Huggins & Scott" /></a>
+ <ul class="space-y-2 font-medium">
+ <li>
+ <a href="https://bid.hugginsandscott.com/" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
+ <span class="ml-3">Bid Now</span>
+ </a>
+ </li>
+ <li>
+ <button type="button" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" aria-controls="auction-nav" data-collapse-toggle="auction-nav">
+ <span class="flex-1 ml-3 text-left whitespace-nowrap" sidebar-toggle-item>Auction</span>
+ </button>
+ <ul id="auction-nav" class="hidden py-2 space-y-2">
+ <li>
+ <a href="/schedule" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Upcoming Auctions</a>
+ </li>
+ <li>
+ <a href="/search" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Auction Archive</a>
+ </li>
+ <li> 
+ <a href="https://bid.hugginsandscott.com/register" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Register To Bid</a>
+ </li>
+ </ul>
+ </li>
+ <li>
+ <button type="button" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" aria-controls="consign-nav" data-collapse-toggle="consign-nav">
+ <span class="flex-1 ml-3 text-left whitespace-nowrap" sidebar-toggle-item>Consignment</span>
+ </button>
+ <ul id="consign-nav" class="hidden py-2 space-y-2">
+ <li>
+ <a href="/consign" class="flex items-center mx-4 p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700 border border-green-800">Consign Now</a>
+ </li>
+ <li>
+ <a href="/baseball-cards/" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Baseball Cards</a>
+ </li> 
+ <li>
+ <a href="/prewar-cards" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Prewar Baseball</a>
+ </li> 
+ <li>
+ <a href="/postwar-cards" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Postwar Baseball</a>
+ </li> 
+ <li>
+ <a href="/consign/basketball-cards" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Basketball Cards</a>
+ </li> 
+ <li>
+ <a href="/consign/football-cards" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Football Cards</a>
+ </li> 
+ <li>
+ <a href="/sports-memorabilia" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Sports Memorabilia</a>
+ </li> 
+ <li>
+ <a href="/comics" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg pl-11 group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Comics</a>
+ </li> 
+ </ul>
+ </li>
+ <li>
+ <a href="/faq" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
+ <span class="flex-1 ml-3 whitespace-nowrap">FAQs</span>
+ </a>
+ </li>
+ <li>
+ <a href="/contact" class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
+ <span class="flex-1 ml-3 whitespace-nowrap">Contact</span>
+ </a>
+ </li>
+ </ul>
+</div>
+</aside>
+<section class="bg-white dark:bg-gray-900">
+ <div class="max-w-screen-xl px-4 py-8 mx-auto">
+ <div class="font-light text-gray-500 sm:text-lg dark:text-gray-400">
+ <div wire:snapshot="{&quot;data&quot;:{&quot;auction&quot;:&quot;summer&quot;,&quot;year&quot;:&quot;2026&quot;,&quot;orderColumn&quot;:&quot;lotnum&quot;,&quot;sortOrder&quot;:&quot;asc&quot;,&quot;searchTerm&quot;:&quot;&quot;,&quot;pageSize&quot;:10,&quot;auctionEnd&quot;:[&quot;2026-09-10T21:00:00+00:00&quot;,{&quot;type&quot;:&quot;illuminate&quot;,&quot;s&quot;:&quot;cbn&quot;}],&quot;numberOfPaginatorsRendered&quot;:[{&quot;page&quot;:1},{&quot;s&quot;:&quot;arr&quot;}],&quot;paginators&quot;:[{&quot;page&quot;:1},{&quot;s&quot;:&quot;arr&quot;}]},&quot;memo&quot;:{&quot;id&quot;:&quot;qrDplcnCg8fyaP1Wchle&quot;,&quot;name&quot;:&quot;auction-table&quot;,&quot;path&quot;:&quot;auction\/2026\/summer&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;release&quot;:&quot;a-a-a&quot;,&quot;children&quot;:[],&quot;scripts&quot;:[],&quot;assets&quot;:[],&quot;errors&quot;:[],&quot;locale&quot;:&quot;en&quot;},&quot;checksum&quot;:&quot;c02d1942b436c9eccb6974e95c6ded06984e3fb0edaa240474837d42815f7ee9&quot;}" wire:effects="{&quot;url&quot;:{&quot;paginators.page&quot;:{&quot;as&quot;:&quot;page&quot;,&quot;use&quot;:&quot;push&quot;,&quot;alwaysShow&quot;:false,&quot;except&quot;:null}}}" wire:id="qrDplcnCg8fyaP1Wchle" class="bg-white dark:bg-gray-900">
+ <div class="max-w-screen-xl px-4 py-8 mx-auto">
+ <div class="font-light text-gray-500 sm:text-lg dark:text-gray-400">
+ <p class="my-4"><a href="/search" class="link">&laquo; Back to search</a></p>
+ <h2 class="mb-4 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white">Auction listing for Summer 2026 auction</h2>
+ <div class="flex flex-col justify-between gap-4 my-5 md:items-end md:flex-row">
+ <div class="flex flex-col">
+ <label for="source" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Number of results per page</label>
+ <select id="source" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full md:w-auto p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" wire:model.live="pageSize">
+ <option value="10">10 / page</option>
+ <option value="25">25 / page</option>
+ <option value="50">50 / page</option>
+ <option value="100">100 / page</option>
+ </select>
+ </div>
+ <div>
+ <label for="searchTerm" class="sr-only">Search</label>
+ <div class="relative mt-1">
+ <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+ </div>
+ </div>
+ </div>
+ </div>
+ <div class="relative overflow-x-auto">
+ <table class="table-auto">
+ <thead class="text-xs text-white uppercase bg-primary-500 dark:bg-gray-700 dark:text-gray-400">
+ <tr>
+ <th scope="col" class="px-6 py-3 cursor-pointer" wire:click="sortCol('lotnum')">
+ <div class="flex items-center gap-2">
+ Lot
+ </div>
+ </th>
+ <th scope="col" class="px-6 py-3 cursor-pointer" wire:click="sortCol('title')">
+ <div class="flex items-center gap-2 text-left">
+ Title
+ </div>
+ </th>
+ <th scope="col" class="px-6 py-3 cursor-pointer" wire:click="sortCol('category')">
+ <div class="flex items-center gap-2">
+ Category
+ </div>
+ </th>
+ <th scope="col" class="px-6 py-3 cursor-pointer" wire:click="sortCol('sold_for')">
+ <div class="flex items-center gap-2 whitespace-nowrap">
+ Sold for
+ </div>
+ </th>
+ </tr>
+ </thead>
+ <tbody>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">1</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/1/1961-topps-dice-game-brooks-robinson-sgc-exnm-6-highest-graded-example" class="link"> 
+ 1961 Topps Dice Game Brooks Robinson SGC EX/NM 6 - Highest Graded Example!
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Postwar Baseball Cards (1948-present)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$72,000</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">2</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/2/1921-tip-top-bread-baltimore-orioles-lefty-grove-pre-rookie-sgc-fair-15-newly-discovered" class="link"> 
+ 1921 Tip Top Bread Baltimore Orioles Lefty Grove Pre-Rookie SGC FAIR 1.5 - Newly Discovered!
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Prewar Baseball Cards (1900-1941)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$58,800</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">3</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/3/1967-topps-581-tom-seaver-rookie-psa-mint-9" class="link"> 
+ 1967 Topps #581 Tom Seaver Rookie PSA MINT 9
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Postwar Baseball Cards (1948-present)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$31,200</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">4</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/4/2001-bowman-chrome-340-albert-pujols-autograph-rookie-refractor-500-sgc-nmmt-8" class="link"> 
+ 2001 Bowman Chrome #340 Albert Pujols Autograph Rookie Refractor #/500 SGC NM/MT 8
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Postwar Baseball Cards (1948-present)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$15,600</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">5</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/5/1909-1911-t206-white-border-ty-cobb-green-portrait-psa-vg-3" class="link"> 
+ 1909-1911 T206 White Border Ty Cobb Green Portrait PSA VG 3
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Prewar Baseball Cards (1900-1941)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$13,200</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">6</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/6/1909-1911-t206-white-border-ty-cobb-red-portrait-psa-vg-3" class="link"> 
+ 1909-1911 T206 White Border Ty Cobb Red Portrait PSA VG 3
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Prewar Baseball Cards (1900-1941)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$7,200</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">7</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/7/1909-1911-t206-white-border-ty-cobb-bat-on-shoulder-psa-vg-3" class="link"> 
+ 1909-1911 T206 White Border Ty Cobb Bat on Shoulder PSA VG 3
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Prewar Baseball Cards (1900-1941)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$7,500</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">8</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/8/1909-1911-t206-white-border-christy-mathewson-portrait-psa-ex-5" class="link"> 
+ 1909-1911 T206 White Border Christy Mathewson Portrait PSA EX 5
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Prewar Baseball Cards (1900-1941)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$8,700</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">9</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/9/1933-sport-kings-gum-1-ty-cobb-psa-ex-mt-6" class="link"> 
+ 1933 Sport Kings Gum #1 Ty Cobb PSA EX-MT 6
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Prewar Baseball Cards (1900-1941)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$12,600</td>
+ </tr>
+ <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">10</td>
+ <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+ <a href="/auction/2026/Summer/10/1935-goudey-4-in-1-uncut-6-card-panel-with-11-hall-of-famers-including-babe-ruth-sgc-authentic" class="link"> 
+ 1935 Goudey 4-In-1 Uncut 6-Card Panel with 11 Hall of Famers Including Babe Ruth SGC Authentic
+ </a>
+ </td>
+ <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">Prewar Baseball Cards (1900-1941)</td>
+ <td class="px-6 py-4 font-medium text-right text-gray-900 whitespace-nowrap dark:text-white">$15,000</td>
+ </tr>
+ </tbody>
+ </table>
+ </div>
+ <div class="my-6">
+ <div>
+ <nav role="navigation" aria-label="Pagination Navigation" class="flex items-center justify-between">
+ <div class="flex justify-between flex-1 sm:hidden">
+ <span>
+ <span class="relative inline-flex items-center px-4 py-2 text-sm font-medium leading-5 text-gray-300 bg-white border border-gray-300 rounded-md cursor-default select-none">
+ &laquo; Previous
+ </span>
+ </span>
+ <span>
+ <button type="button" wire:click="nextPage('page')" wire:loading.attr="disabled" dusk="nextPage.before" class="relative inline-flex items-center px-4 py-2 ml-3 text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 rounded-md focus:shadow-outline-blue text-primary-500 rounded-l-md hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500">
+ Next &raquo;
+ </button>
+ </span>
+ </div>
+ <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+ <div>
+ <span class="relative z-0 inline-flex rounded-md shadow-sm">
+ <span>
+ <span aria-disabled="true" aria-label="&amp;laquo; Previous">
+ <span class="relative inline-flex items-center px-2 py-2 text-sm font-medium leading-5 text-gray-300 bg-white border border-gray-300 cursor-default rounded-l-md" aria-hidden="true">
+ </span>
+ </span>
+ </span>
+ <span wire:key="paginator-page-1-page1">
+ <span aria-current="page">
+ <span class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 border border-gray-300 cursor-default select-none text-primary-800 bg-primary-100">1</span>
+ </span>
+ </span>
+ <span wire:key="paginator-page-1-page2">
+ <button type="button" wire:click="gotoPage(2, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 2">
+ 2
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page3">
+ <button type="button" wire:click="gotoPage(3, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 3">
+ 3
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page4">
+ <button type="button" wire:click="gotoPage(4, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 4">
+ 4
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page5">
+ <button type="button" wire:click="gotoPage(5, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 5">
+ 5
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page6">
+ <button type="button" wire:click="gotoPage(6, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 6">
+ 6
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page7">
+ <button type="button" wire:click="gotoPage(7, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 7">
+ 7
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page8">
+ <button type="button" wire:click="gotoPage(8, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 8">
+ 8
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page9">
+ <button type="button" wire:click="gotoPage(9, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 9">
+ 9
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page10">
+ <button type="button" wire:click="gotoPage(10, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 10">
+ 10
+ </button>
+ </span>
+ <span aria-disabled="true">
+ <span class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 bg-white border border-gray-300 cursor-default select-none text-primary-500">...</span>
+ </span>
+ <span wire:key="paginator-page-1-page229">
+ <button type="button" wire:click="gotoPage(229, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 229">
+ 229
+ </button>
+ </span>
+ <span wire:key="paginator-page-1-page230">
+ <button type="button" wire:click="gotoPage(230, 'page')" class="relative inline-flex items-center px-4 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Go to page 230">
+ 230
+ </button>
+ </span>
+ <span>
+ <button type="button" wire:click="nextPage('page')" dusk="nextPage.after" rel="next" class="relative inline-flex items-center px-2 py-2 -ml-px text-sm font-medium leading-5 transition duration-150 ease-in-out bg-white border border-gray-300 rounded-r-md focus:shadow-outline-blue text-primary-500 hover:text-primary-800 hover:bg-primary-100 focus:z-5 focus:outline-none focus:border-primary-300 active:bg-gray-100 active:text-primary-500" aria-label="Next &amp;raquo;">
+ </button>
+ </span>
+ </span>
+ </div>
+ </div>
+ </nav>
+ </div>
+ </div>
+ </div>
+ </div>
+</div>
+ </div>
+ </div>
+</section>
+ <footer class="bg-gray-50 dark:bg-gray-800">
+ <div class="p-4 py-6 mx-auto max-w-screen-xl md:p-8 lg:-10">
+ <div class="grid grid-cols-2 gap-8 lg:grid-cols-6">
+ <div class="col-span-2">
+ <a href="/" class="">
+ <img src="/images/hs-brand.svg" class="h-16 mx-6" alt="Huggins & Scott" />
+ </a>
+ <p class="my-4 font-light text-gray-500 dark:text-gray-400">With more than 30 years of experience serving consignors at all levels, Huggins & Scott has the knowledge and expertise to handle your entire collection.</p>
+ <ul class="flex mt-5 space-x-6">
+ <li>
+ <a href="https://www.facebook.com/hugginsandscott" class="text-gray-500 hover:text-gray-900 dark:hover:text-white dark:text-gray-400">
+ </a>
+ </li>
+ <li>
+ <a href="https://www.instagram.com/hugginsandscott/" class="text-gray-500 hover:text-gray-900 dark:hover:text-white dark:text-gray-400">
+ </a>
+ </li>
+ <li>
+ <a href="https://twitter.com/HugginsAndScott" class="text-gray-500 hover:text-gray-900 dark:hover:text-white dark:text-gray-400">
+ </a>
+ </li>
+ </ul>
+ </div>
+ <div class="lg:mx-auto">
+ <h2 class="mb-6 text-sm font-semibold text-gray-900 uppercase dark:text-white">Auction</h2>
+ <ul class="text-gray-500 dark:text-gray-400">
+ <li class="mb-4">
+ <a href="https://bid.hugginsandscott.com/register" class="hover:underline">Register To Bid</a>
+ </li>
+ <li class="mb-4">
+ <a href="/consign" class="hover:underline">Consign Now</a>
+ </li>
+ <li class="mb-4">
+ <a href="/schedule" class=" hover:underline">Upcoming Auctions</a>
+ </li>
+ <li class="mb-4">
+ <a href="/search" class="hover:underline">Auction Archive</a>
+ </li>
+ </ul>
+ </div>
+ <div class="lg:mx-auto">
+ <h2 class="mb-6 text-sm font-semibold text-gray-900 uppercase dark:text-white">Company</h2>
+ <ul class="text-gray-500 dark:text-gray-400">
+ <li class="mb-4">
+ <a href="/team" class="hover:underline">Our Team</a>
+ </li>
+ <li class="mb-4">
+ <a href="/faq" class="hover:underline">FAQs</a>
+ </li>
+ <li class="mb-4">
+ <a href="/terms" class="hover:underline">Terms of Service</a>
+ </li>
+ <li class="mb-4">
+ <a href="/contact" class="hover:underline">Contact Us</a>
+ </li>
+ </ul>
+ </div>
+ <div class="col-span-2">
+ <h2 class="mb-6 text-sm font-semibold text-gray-900 uppercase dark:text-white">Our Address</h2>
+ <ul class="text-gray-500 dark:text-gray-400">
+ <p><strong>Huggins & Scott Auctions</strong><br>
+ 2301 Broadbirch Dr., Suite 150<br/>
+ Silver Spring, MD 20904<br/>
+ <a href="tel:3016080355" class="mr-6 dark:text-white hover:underline">301-608-0355</a></p>
+ </ul>
+ </div>
+ </div>
+ <hr class="my-6 border-gray-200 sm:mx-auto dark:border-gray-700 lg:my-8">
+ <span class="block text-sm text-center text-gray-500 dark:text-gray-400">© 2002-2026 <a href="/" class="hover:underline">Huggins & Scott Auctions</a>. All Rights Reserved.</span>
+ </div>
+</footer>
+ </body>
+</html>

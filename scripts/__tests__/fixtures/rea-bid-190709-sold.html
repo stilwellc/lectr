@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en"
+ x-data="{ darkMode: localStorage.getItem('dark') === 'true'}"
+ x-init="$watch('darkMode', val => localStorage.setItem('dark', val))"
+ x-bind:class="{ 'dark': darkMode }">
+ <head>
+ <title>1985 Star Company Basketball &quot;Gatorade Slam Dunk&quot; #7 Michael Jordan PSA NM-MT 8</title>
+ </head>
+ <body class="montserrat antialiased bg-slate-50 dark:bg-brandSecondary-900 text-brandSecondary-800 dark:text-brandSecondary-500">
+ <header class="sticky top-0 z-50">
+ <nav class="border-b-4 border-b-brandPrimary-500 bg-gradient-to-t from-brandSecondary-900 to-brandSecondary-700 w-full z-50">
+ <a href="#top"></a>
+ <div class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto pt-2 pb-4 px-4">
+ <a href="https://collectrea.com" alt="REA">
+ </a>
+ <div class="flex items-center md:order-3">
+ <a href="https://bid.collectrea.com/login" class="btn btn-primary">Sign In</a>
+ </div>
+ <div class="items-center justify-between hidden md:flex md:w-auto md:order-1" id="navbar-user">
+ <ul class="mt-3 md:mt-0 flex flex-col font-medium p-2 md:p-0 border border-brandSecondary-100 rounded-lg md:flex-row md:space-x-4 md:mt-0 md:border-0 bg-brandSecondary-800 md:bg-transparent border-brandSecondary-700">
+ <li><a class="navlink active" href="https://bid.collectrea.com/lots" aria-current="page">Auction</a></li>
+ <li><a class="navlink " href="https://bid.collectrea.com/marketplace" aria-current="page">Marketplace</a></li>
+ <li><a class="navlink" href="https://collectrea.com/contact#consign">Consign Now</a></li>
+ <li>
+ <a href="#" onclick="event.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' });" class="navlink">
+ <span>Top</span>
+ </a>
+ </li>
+ <li><a class="navlink " href="https://bid.collectrea.com/account/message">Help</a></li>
+ </ul>
+ </div>
+ </div>
+ </nav>
+</header> 
+ <div class="content container mx-auto min-h-[600px]">
+ <div
+ class="mx-auto max-w-screen-xl p-4 md:p-12"
+ >
+ <div>
+ </div> 
+ <div x-data="{ 
+ lotId: 190709, 
+ }"
+ x-init="() => {
+ // AuctionPeriodChanged is now handled in-place: mini-countdown.js's
+ // global Echo listener dispatches the `auction-period-changed` window
+ // event, which the large countdown reacts to (animation + restart) and
+ // LotBidding listens to (Livewire $refresh of the bid form / badges).
+ // LotReload still forces a full reload because it signals out-of-band
+ // changes (lot withdrawn, consignor swap, etc.) that need a fresh page.
+ Echo.channel('lots.' + lotId)
+ .listen('LotReload', (e) => {
+ window.location.reload();
+ });
+ }">
+ <div class="flex gap-0 justify-end mb-4">
+ <a href="https://bid.collectrea.com/lots/203305" class="
+ flex items-center justify-center px-4 h-10 font-medium rounded-s-lg
+ text-brandSecondary-400 dark:text-brandSecondary-400 dark:hover:text-white
+ bg-brandSecondary-200 hover:bg-brandSecondary-300 dark:bg-brandSecondary-700 dark:hover:bg-brandSecondary-800
+ border-l border-brandSecondary-50 dark:border-brandSecondary-600">
+ <span class="collapse md:visible ml-1">Prev</span>
+ </a>
+ <a href="https://bid.collectrea.com/lots/199257" class="
+ flex items-center justify-center px-4 h-10 font-medium rounded-e-lg
+ text-brandSecondary-400 dark:text-brandSecondary-400 dark:hover:text-white
+ bg-brandSecondary-200 hover:bg-brandSecondary-300 dark:bg-brandSecondary-700 dark:hover:bg-brandSecondary-800
+ border-l border-brandSecondary-50 dark:border-brandSecondary-600">
+ <span class="collapse md:visible mr-1">Next</span>
+ </a>
+ </div>
+ <div class="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:items-start">
+ <div class="gallery flex flex-col-reverse" x-data="{ selectedKey: 0 }">
+ <div class="mt-6 w-full sm:block max-w-2xl mx-auto lg:max-w-none p-2 max-h-36 sm:max-h-fit overflow-auto">
+ <div class="grid grid-cols-4 gap-5" aria-orientation="horizontal" role="tablist">
+ <button @click="selectedKey = 0" class="relative flex items-center justify-center h-24 text-sm font-medium text-brandSecondary-900 uppercase bg-white rounded-md cursor-pointer hover:bg-brandSecondary-50 focus:outline-none focus:ring focus:ring-offset-4 focus:ring-opacity-50" aria-controls="tabs-2-panel-0" role="tab" type="button">
+ <span class="absolute inset-0 rounded-md overflow-hidden">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fill,g_auto:subject,co_white,h_300,w_300/2026-September/190709-1.jpg" alt="" class="w-full h-full object-center object-cover">
+ </span>
+ <span class="absolute inset-0 rounded-md pointer-events-none ring-transparent ring-2 ring-offset-2" aria-hidden="true"></span>
+ </button>
+ <button @click="selectedKey = 1" class="relative flex items-center justify-center h-24 text-sm font-medium text-brandSecondary-900 uppercase bg-white rounded-md cursor-pointer hover:bg-brandSecondary-50 focus:outline-none focus:ring focus:ring-offset-4 focus:ring-opacity-50" aria-controls="tabs-2-panel-1" role="tab" type="button">
+ <span class="absolute inset-0 rounded-md overflow-hidden">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fill,g_auto:subject,co_white,h_300,w_300/2026-September/190709-2.jpg" alt="" class="w-full h-full object-center object-cover">
+ </span>
+ <span class="absolute inset-0 rounded-md pointer-events-none ring-transparent ring-2 ring-offset-2" aria-hidden="true"></span>
+ </button>
+ </div>
+ </div>
+ <div class="w-full" id="image-gallery" class="pswp-gallery">
+ <a :key="$key" href="https://res.cloudinary.com/robertedwardauctions/image/upload/v1783014031/2026-September/190709-1.jpg" id="tabs-2-panel-0" aria-labelledby="tabs-2-tab-0" role="tabpanel" tabindex="0" 
+ data-pswp-width="1222" 
+ data-pswp-height="2100" 
+ target="_blank">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen,h_1000,w_1000/2026-September/190709-1.jpg" alt="1985 Star Company Basketball &quot;Gatorade Slam Dunk&quot; #7 Michael Jordan PSA NM-MT 8" :class="selectedKey === 0 ? 'block' : 'hidden'" class="w-auto object-center rounded-lg md:rounded-xl mx-auto">
+ </a>
+ <a :key="$key" href="https://res.cloudinary.com/robertedwardauctions/image/upload/v1783014044/2026-September/190709-2.jpg" id="tabs-2-panel-1" aria-labelledby="tabs-2-tab-1" role="tabpanel" tabindex="1" 
+ data-pswp-width="1222" 
+ data-pswp-height="2100" 
+ target="_blank">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen,h_1000,w_1000/2026-September/190709-2.jpg" alt="1985 Star Company Basketball &quot;Gatorade Slam Dunk&quot; #7 Michael Jordan PSA NM-MT 8" :class="selectedKey === 1 ? 'block' : 'hidden'" class="w-auto object-center rounded-lg md:rounded-xl mx-auto">
+ </a>
+ </div>
+</div>
+ <div class="mt-10 sm:px-0 sm:mt-16 lg:mt-0">
+ <h1 class="text-3xl font-extrabold tracking-tight text-brandSecondary-900 dark:text-brandSecondary-100">Lot # 10: 1985 Star Company Basketball &quot;Gatorade Slam Dunk&quot; #7 Michael Jordan PSA NM-MT 8</h1>
+ <div class="bg-brandSecondary-100 dark:bg-brandSecondary-800 rounded-lg border border-brandSecondary-200 dark:border-brandSecondary-700 mb-6">
+ <div class="px-4 py-5 sm:p-6">
+ <div
+ id="lot-countdown-large-190709"
+ class="lot-countdown-large"
+ wire:ignore
+ x-data="miniCountdown({
+ lotId: 190709,
+ endTime: '2026-09-20T22:27:24-04:00',
+ auctionPeriod: 'final',
+ totalBids: 117,
+ status: 'sold' })"
+ x-init="init()"
+ @auction-period-changed.window="handlePeriodChanged($event.detail)"
+ @lot-status-changed.window="handleStatusChanged($event.detail)"
+>
+ <div
+ x-show="!isLive"
+ x-cloak
+ class="bg-brandSecondary-50 dark:bg-brandSecondary-900 border-l-4 border-brandSecondary-500 dark:border-brandSecondary-400 p-4 rounded-lg mb-12"
+ role="alert"
+ >
+ <div class="flex items-center text-brandSecondary-800 dark:text-brandSecondary-200">
+ <span class="sr-only">Info</span>
+ <h3 class="text-md font-medium text-brandSecondary-800 dark:text-brandSecondary-200">This lot is closed. Bidding is not allowed.</h3>
+ </div>
+ <div class="mt-2 mb-4 text-sm">
+ Item was in Auction <span class="font-bold">September 2026</span>, which ran from Thu, Sep 10, 2026 11:59 AM to Sun, Sep 20, 2026 9:59 PM
+ </div>
+ </div>
+</div>
+ <div class="grid grid-cols-2 gap-4 xs:grid-cols-1 mt-3">
+ <div>
+ <p class="text-sm text-brandSecondary-900 dark:text-white font-semibold">Starting Bid:</p>
+ <p class="text-sm text-brandSecondary-600 dark:text-brandSecondary-200">$10</p>
+ </div>
+ <div
+ x-data="{ lotId: 190709, totalBids: 117 }"
+ x-init="
+ Echo.channel('lots.' + lotId)
+ .listen('BidCreated', (e) => {
+ totalBids = e.totalBids
+ })
+ "
+>
+ <p class="text-sm text-brandSecondary-900 dark:text-white font-semibold">Bids:</p>
+ <p class="text-sm text-brandSecondary-600 dark:text-brandSecondary-200"><span x-text="totalBids"></span> (<span class="text-brandPrimary-600 dark:text-brandPrimary-300 cursor-pointer hover:underline" onclick="Livewire.dispatch('openModal', { component: 'lots.lot_bid_history', arguments: { lot: 190709 } })">Bid History</span>)</p>
+</div>
+ </div>
+ </div>
+ </div>
+ <div wire:snapshot="{&quot;data&quot;:{&quot;lot&quot;:[null,{&quot;class&quot;:&quot;App\\Models\\Lot&quot;,&quot;key&quot;:190709,&quot;s&quot;:&quot;mdl&quot;}],&quot;user&quot;:null,&quot;currentBid&quot;:57500,&quot;nextBid&quot;:60000,&quot;isWinning&quot;:false,&quot;haveAutobid&quot;:false,&quot;reserveMet&quot;:true,&quot;buyersPremium&quot;:13800,&quot;salesTax&quot;:0,&quot;shippingFee&quot;:75,&quot;totalCost&quot;:73875},&quot;memo&quot;:{&quot;id&quot;:&quot;8UHJ9yNiK9t9Ul6DiHML&quot;,&quot;name&quot;:&quot;lots.lot-bidding&quot;,&quot;path&quot;:&quot;lots\/190709&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;children&quot;:[],&quot;scripts&quot;:[],&quot;assets&quot;:[],&quot;errors&quot;:[],&quot;locale&quot;:&quot;en&quot;},&quot;checksum&quot;:&quot;f209df359b8071b68c974b300fe66a33af88f96673ffa4ab14ba4ac1082d4099&quot;}" wire:effects="{&quot;listeners&quot;:[&quot;echo:auctions.110,AuctionClosed&quot;,&quot;echo:auctions,AuctionPeriodChanged&quot;,&quot;newAutobid&quot;,&quot;created&quot;]}" wire:id="8UHJ9yNiK9t9Ul6DiHML"
+ class="bg-brandSecondary-100 dark:bg-brandSecondary-800 rounded-lg border border-brandSecondary-200 dark:border-brandSecondary-700 relative overflow-hidden h-full"
+ x-data="{
+ lotId: 190709,
+ userId: null,
+ currentBid: 57500,
+ nextBid: 60000,
+ status: 'sold',
+ buyersPremium: window.Livewire.find('8UHJ9yNiK9t9Ul6DiHML').entangle('buyersPremium'),
+ soldFor: '70725.00',
+ salesTax: window.Livewire.find('8UHJ9yNiK9t9Ul6DiHML').entangle('salesTax'),
+ shippingFee: window.Livewire.find('8UHJ9yNiK9t9Ul6DiHML').entangle('shippingFee'),
+ totalCost: window.Livewire.find('8UHJ9yNiK9t9Ul6DiHML').entangle('totalCost'),
+ showWinningBadge: false,
+ showOutbidBadge: false,
+ wonByMe: null,
+ hasBidByMe: null,
+ updateLotCard: function (e) {
+ this.currentBid = e.detail.currentBid
+ }
+ }"
+ @created="updateLotCard"
+ x-init="
+ if (userId) {
+ Echo.private('user.' + userId)
+ .listen('UserBidded', (e) => {
+ if (e.lotId !== lotId) {
+ return
+ }
+ if (e.badge === 'highbidder') {
+ showWinningBadge = true
+ showOutbidBadge = false
+ wonByMe = true
+ hasBidByMe = true
+ } else {
+ showWinningBadge = false
+ showOutbidBadge = true
+ wonByMe = false
+ hasBidByMe = true
+ }
+ });
+ }
+ "
+>
+ <div class="px-4 py-5 sm:p-6">
+ <div>
+ <div>
+ <div x-show="status === 'sold'">
+ <div class="p-4 text-green-800 border border-gray-200 rounded-lg bg-gray-50 dark:bg-primary-800 dark:text-green-400 dark:border-green-800" role="alert">
+ <div class="text-center">
+ <h5 x-show="soldFor != 0" class="text-sm font-medium">SOLD FOR <span x-text="Number(soldFor).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })"></span></h5>
+ <h5 x-show="soldFor == 0" class="text-sm font-medium">SOLD</h5>
+ </div>
+ </div>
+ <p x-show="soldFor !== 0" class="text-xs text-muted opacity-30 italic text-center mt-3">Includes Buyers Premium</p>
+ </div> 
+ <div x-show="status === 'closed'" class="p-4 text-yellow-800 border border-gray-200 rounded-lg bg-gray-50 dark:bg-primary-800 dark:text-yellow-400 dark:border-yellow-800" role="alert">
+ <div class="text-center">
+ <h5 class="text-sm font-medium">UNSOLD</h5>
+ </div>
+ </div>
+</div> </div>
+ </div>
+</div>
+ <div class="mt-6">
+ <h2 class="text-sm uppercase font-medium text-brandSecondary-900 dark:text-brandSecondary-100">Description</h2>
+ <div class="mt-4 text-brandSecondary-500 dark:text-brandSecondary-300 lot-description">
+ <p>Graded NM-MT 8 by PSA (submitted by REA). Only two examples have been graded higher by PSA to date. Stunning example of #7 Michael Jordan – “Gatorade Slam Dunk” from the nine-card set issued by The Star Co. as one of its limited offerings in 1985. The set was devoted exclusively to the superstars who participated in the popular “Slam Dunk” contest. It is a condition rarity that is often found with centering problems and chipping to the fragile green borders. Neither is the case with this copy, which is well-centered, exhibits virtually no chipping, and has strong corners. Clean reverse. This is a tremendous example of one of Michael Jordan's most desirable early cards.</p>
+ </div>
+ </div>
+ </div>
+ </div>
+ <div x-data="{ showSuggestions: false }" x-init="showSuggestions = true">
+ <div class="mb-16">
+ <template x-if="!showSuggestions">
+ <div class="flex justify-center items-center h-[400px]">
+ <div role="status">
+ <span class="sr-only">Loading...</span>
+ </div>
+ </div>
+ </template>
+ <template x-if="showSuggestions">
+ <div class="mb-16">
+ <h3 class="mt-16 text-4xl font-bold text-brandSecondary-900 dark:text-white text-center">You Might Also Like</h3>
+ <div class="mb-0 border-b border-brandSecondary-200 dark:border-brandSecondary-700">
+ <ul class="flex flex-wrap -mb-px text-sm font-medium text-center"
+ id="default-styled-tab"
+ data-tabs-toggle="#tab-content"
+ data-tabs-active-classes="text-brandPrimary-600 hover:text-brandPrimary-600 dark:text-brandPrimary-500 dark:hover:text-brandPrimary-500 border-brandPrimary-600 dark:border-brandPrimary-500"
+ data-tabs-inactive-classes="dark:border-transparent text-brandSecondary-500 hover:text-brandSecondary-600 dark:text-brandSecondary-400 border-brandSecondary-100 hover:border-brandSecondary-300 dark:border-brandSecondary-700 dark:hover:text-brandSecondary-300"
+ role="tablist">
+ <li class="me-2" role="presentation">
+ <button class="inline-block p-4 border-b-2 rounded-t-lg hover:text-brandSecondary-600 hover:border-brandSecondary-300 dark:hover:text-brandSecondary-300"
+ id="auction-styled-tab"
+ data-tabs-target="#styled-auction"
+ type="button" role="tab"
+ aria-controls="styled-auction"
+ aria-selected="false">
+ This Auction
+ </button>
+ </li>
+ <li class="me-2" role="presentation">
+ <button class="inline-block p-4 border-b-2 rounded-t-lg"
+ id="marketplace-styled-tab"
+ data-tabs-target="#styled-marketplace"
+ type="button" role="tab"
+ aria-controls="styled-marketplace"
+ aria-selected="false">
+ Marketplace
+ </button>
+ </li>
+ </ul>
+ </div>
+ <div id="tab-content">
+ <div
+ class="hidden p-8 rounded-b-lg bg-brandSecondary-50 dark:bg-brandSecondary-800"
+ id="styled-auction" role="tabpanel"
+ aria-labelledby="auction-styled-tab">
+ <h2 class="mb-8 text-2xl font-bold text-brandSecondary-900 dark:text-white">Suggestions of other lots in this auction</h2>
+ <div class="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/196932" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/196932-1.jpg" alt="1985-1986 Star Company Basketball &quot;Last 11 R.O.Y.&quot; #1 Michael Jordan PSA NM-MT 8" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 77</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/196932" class="text-sm link">1985-1986 Star Company Basketball &quot;Last 11 R.O.Y.&quot; #1 Michael Jordan PSA NM-MT 8</a>
+ </p>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/199257" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/199257-1.jpg" alt="1985-1986 Star Company Basketball &quot;Slam Dunk Supers 5x7&quot; #5 Michael Jordan PSA MINT 9 (MBA Bronze Diamond)" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 11</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/199257" class="text-sm link">1985-1986 Star Company Basketball &quot;Slam Dunk Supers 5x7&quot; #5 Michael Jordan PSA MINT 9 (MBA Bronze Diamond)</a>
+ </p>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/202670" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/202670-1.jpg" alt="1981-1982 Topps Basketball #4 Larry Bird PSA NM-MT 8" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 3970</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/202670" class="text-sm link">1981-1982 Topps Basketball #4 Larry Bird PSA NM-MT 8</a>
+ </p>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/196953" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/196953-1.jpg" alt="1997-1998 Upper Deck Michael Jordan Tribute #MJ40 Michael Jordan PSA MINT 9" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 4029</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/196953" class="text-sm link">1997-1998 Upper Deck Michael Jordan Tribute #MJ40 Michael Jordan PSA MINT 9</a>
+ </p>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/200626" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/200626-1.jpg" alt="1993-1994 Topps Stadium Club Members Only Basketball #1 Michael Jordan PSA NM-MT 8" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 4019</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/200626" class="text-sm link">1993-1994 Topps Stadium Club Members Only Basketball #1 Michael Jordan PSA NM-MT 8</a>
+ </p>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/203334" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/203334-1.jpg" alt="1986-1987 Star Company Basketball #4 Michael Jordan BGS NM-MT+ 8.5" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 81</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/203334" class="text-sm link">1986-1987 Star Company Basketball #4 Michael Jordan BGS NM-MT+ 8.5</a>
+ </p>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/203338" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/203338-1.jpg" alt="1986-1987 Star Company Basketball #5 Michael Jordan BGS NM-MT+ 8.5" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 3988</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/203338" class="text-sm link">1986-1987 Star Company Basketball #5 Michael Jordan BGS NM-MT+ 8.5</a>
+ </p>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/lots/196949" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/2026-September/196949-1.jpg" alt="2003-2004 Topps Matrix Basketball Milicic/Carmelo Anthony/Lebron James Rookie PSA MINT 9" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-3">
+ <h3 class="text-lg font-bold mb-0">Lot 4033</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/lots/196949" class="text-sm link">2003-2004 Topps Matrix Basketball Milicic/Carmelo Anthony/Lebron James Rookie PSA MINT 9</a>
+ </p>
+ </div>
+ </article>
+ </div>
+ </div>
+ <div
+ class="hidden p-8 rounded-b-lg bg-brandSecondary-50 dark:bg-brandSecondary-800"
+ id="styled-marketplace" role="tabpanel"
+ aria-labelledby="marketplace-styled-tab">
+ <h2 class="mb-8 text-2xl font-bold text-brandSecondary-900 dark:text-white">Suggestions of other items in the marketplace</h2>
+ <div class="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/6231" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-2026/6231-1.jpg" alt="1985 Nike Basketball Michael Jordan Rookie Promo PSA GEM MINT 10 (MBA Black Diamond) - The Only Gem Mint/Black Diamond Combination!" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 6231</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/6231" class="text-sm link">1985 Nike Basketball Michael Jordan Rookie Promo PSA GEM MINT 10 (MBA Black Diamond) - The Only Gem Mint/Black Diamond Combination!</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $100,000</h3>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/6203" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-2026/6203-1.jpg" alt="1985-1986 Star Company Basketball &quot;Supers 5x7&quot; #1 Michael Jordan PSA NM-MT 8 (MBA Gold Diamond)" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 6203</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/6203" class="text-sm link">1985-1986 Star Company Basketball &quot;Supers 5x7&quot; #1 Michael Jordan PSA NM-MT 8 (MBA Gold Diamond)</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $15,000</h3>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/6133" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-2026/6133-1.jpg" alt="1986-1987 Fleer Basketball #57 Michael Jordan Rookie PSA GEM MINT 10 (MBA Silver Diamond)" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 6133</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/6133" class="text-sm link">1986-1987 Fleer Basketball #57 Michael Jordan Rookie PSA GEM MINT 10 (MBA Silver Diamond)</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $550,000</h3>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/6124" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-2026/6124-1.jpg" alt="1997-1998 Metal Universe Platinum Portraits Basketball #1 Michael Jordan PSA GEM MINT 10 (MBA Silver Diamond)" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 6124</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/6124" class="text-sm link">1997-1998 Metal Universe Platinum Portraits Basketball #1 Michael Jordan PSA GEM MINT 10 (MBA Silver Diamond)</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $225,000</h3>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/1727" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-2025/1727-1.jpg" alt="Circa 1997 Michael Jordan Original Snapshot Photograph PSA/DNA Type I" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 1727</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/1727" class="text-sm link">Circa 1997 Michael Jordan Original Snapshot Photograph PSA/DNA Type I</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $375</h3>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/5324" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-2026/5324-1.jpg" alt="1991 Michael Jordan Original Pix International Photograph PSA/DNA Type I" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 5324</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/5324" class="text-sm link">1991 Michael Jordan Original Pix International Photograph PSA/DNA Type I</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $595</h3>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/459" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-mar-2025/459-1.jpg" alt="1990 Michael Jordan Original Chicago Tribune Photograph PSA/DNA Type I" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 459</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/459" class="text-sm link">1990 Michael Jordan Original Chicago Tribune Photograph PSA/DNA Type I</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $1,500</h3>
+ </div>
+ </article>
+ <article class="flex flex-col max-w-xs justify-between h-full">
+ <div class="flex items-center justify-center h-64 w-full">
+ <a href="https://bid.collectrea.com/marketplace/5996" class="h-full w-full flex items-center justify-center">
+ <img src="https://res.cloudinary.com/robertedwardauctions/image/upload/c_fit,e_sharpen:75,h_250,w_250/marketplace-2026/5996-1.jpg" alt="1991-1992 Hoops Slam Dunk Basketball #IV Michael Jordan PSA GEM MINT 10" class="rounded-lg">
+ </a>
+ </div>
+ <div class="text-center my-1">
+ <h3 class="text-lg font-bold text-brandSecondary-500 mb-0">MP# 5996</h3>
+ <p class="mb-2 line-clamp-3 leading-tight">
+ <a href="https://bid.collectrea.com/marketplace/5996" class="text-sm link">1991-1992 Hoops Slam Dunk Basketball #IV Michael Jordan PSA GEM MINT 10</a>
+ </p>
+ </div>
+ <div class="text-center mb-3">
+ <h3 class="text-lg font-bold text-brandSecondary-700 dark:text-brandSecondary-300">Buy Now &ndash; $1,050</h3>
+ </div>
+ </article>
+ </div>
+ </div>
+ </div>
+ </div>
+ </template>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ <footer class="p-4 sm:p-6 border-t-4 border-t-brandPrimary-500 
+border-t-brandPrimary-500 bg-gradient-to-t from-brandSecondary-900 to-brandSecondary-700 ">
+ <div class="mx-auto max-w-screen-xl">
+ <div class="md:flex md:justify-between">
+ <div class="mb-6 md:mb-0">
+ <a href="https://collectrea.com" alt="REA">
+ </a>
+ </div>
+ <div class="grid grid-cols-2 gap-32">
+ <div>
+ <h2 class="mb-6 text-sm font-semibold uppercase text-white">About Us</h2>
+ <ul class="text-brandSecondary-400">
+ <li class="mb-4"><a href="https://collectrea.com/about/schedule" class="hover:underline">Upcoming Auctions</a></li>
+ <li class="mb-4"><a href="https://collectrea.com/about/our-signature-approach" class="hover:underline">Why Consign To Us?</a></li>
+ <li class="mb-4"><a href="https://collectrea.com/about/promoting-items" class="hover:underline">How We Help</a></li>
+ </ul>
+ </div>
+ <div>
+ <h2 class="mb-6 text-sm font-semibold uppercase text-white">Support</h2>
+ <ul class="text-brandSecondary-400">
+ <li class="mb-4"><a href="https://bid.collectrea.com/terms-and-conditions" class="hover:underline">Terms & Conditions</a></li>
+ <li class="mb-4"><a href="https://bid.collectrea.com/account/message" class="hover:underline">Contact Us</a></li>
+ <li class="mb-4"><a href="https://bid.collectrea.com/faq" class="hover:underline">FAQ</a></li>
+ </ul>
+ </div>
+ </div>
+ </div>
+ <hr class="my-6 sm:mx-auto border-brandSecondary-700 lg:my-8" />
+ <div class="sm:flex sm:items-center sm:justify-between">
+ <span class="text-sm sm:text-center text-brandSecondary-400">© 2024 <a href="https://bid.collectrea.com" class="hover:underline">REA</a>. All Rights Reserved.
+ </span>
+ <div class="flex mt-4 space-x-6 sm:justify-center sm:mt-0">
+ <a href="https://www.tiktok.com/@collectrea" class="text-brandSecondary-600 hover:text-white">
+ </a>
+ <a href="https://www.facebook.com/RobertEdwardAuctions/" class="text-brandSecondary-600 hover:text-white">
+ </a>
+ <a href="https://www.instagram.com/collect_rea/" class="text-brandSecondary-600 hover:text-white">
+ </a>
+ <a href="https://x.com/collect_rea" class="text-brandSecondary-600 hover:text-white">
+ </a>
+ </div>
+ </div>
+ </div>
+ <div class="fixed bottom-0 left-0 right-0 sm:hidden border-t-4 border-t-brandSecondary-600 bg-gradient-to-t from-brandSecondary-900 to-brandSecondary-700 py-4">
+ <div class="flex justify-around">
+ <a href="https://bid.collectrea.com/lots" class="navlink active" href="https://bid.collectrea.com/lots">
+ <span class="text-sm">Auction</span>
+ </a>
+ <a href="https://bid.collectrea.com/marketplace" class="navlink " href="https://bid.collectrea.com/marketplace">
+ <span class="text-sm">Market</span>
+ </a>
+ <a href="https://bid.collectrea.com/account" class="navlink ">
+ <span class="text-sm">Account</span>
+ </a>
+ <a href="#top" class="navlink">
+ <span class="text-sm">Top</span>
+ </a>
+ </div>
+ </div>
+</footer>
+ <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-T962PQKD"
+ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+ <div wire:snapshot="{&quot;data&quot;:{&quot;activeComponent&quot;:null,&quot;components&quot;:[[],{&quot;s&quot;:&quot;arr&quot;}]},&quot;memo&quot;:{&quot;id&quot;:&quot;ulqnpc925FCnvB4uKv9J&quot;,&quot;name&quot;:&quot;livewire-ui-modal&quot;,&quot;path&quot;:&quot;lots\/190709&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;children&quot;:[],&quot;scripts&quot;:[],&quot;assets&quot;:[],&quot;errors&quot;:[],&quot;locale&quot;:&quot;en&quot;},&quot;checksum&quot;:&quot;8b8ec9230961d833c4a07add376161b8b2b2fafa5973c9a9ecef7c53a7af2c2e&quot;}" wire:effects="{&quot;listeners&quot;:[&quot;openModal&quot;,&quot;destroyComponent&quot;]}" wire:id="ulqnpc925FCnvB4uKv9J">
+ <div
+ x-data="LivewireUIModal()"
+ x-on:close.stop="setShowPropertyTo(false)"
+ x-on:keydown.escape.window="closeModalOnEscape()"
+ x-show="show"
+ class="fixed inset-0 z-50 overflow-y-auto"
+ style="display: none;"
+ >
+ <div class="flex items-start justify-center min-h-screen px-4 pt-4 pb-10 text-center sm:block sm:p-0">
+ <div
+ x-show="show"
+ x-on:click="closeModalOnClickAway()"
+ x-transition:enter="ease-out duration-300"
+ x-transition:enter-start="opacity-0"
+ x-transition:enter-end="opacity-100"
+ x-transition:leave="ease-in duration-200"
+ x-transition:leave-start="opacity-100"
+ x-transition:leave-end="opacity-0"
+ class="fixed inset-0 transition-all transform"
+ >
+ <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+ </div>
+ <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+ <div
+ x-show="show && showActiveComponent"
+ x-transition:enter="ease-out duration-300"
+ x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+ x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+ x-transition:leave="ease-in duration-200"
+ x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+ x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+ x-bind:class="modalWidth"
+ class="inline-block w-full align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:w-full"
+ id="modal-container"
+ x-trap.noscroll.inert="show && showActiveComponent"
+ aria-modal="true"
+ >
+ </div>
+ </div>
+ </div>
+</div>
+ <div wire:snapshot="{&quot;data&quot;:[],&quot;memo&quot;:{&quot;id&quot;:&quot;abT7oJrgmyw9UbROi111&quot;,&quot;name&quot;:&quot;toaster&quot;,&quot;path&quot;:&quot;lots\/190709&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;children&quot;:[],&quot;scripts&quot;:[],&quot;assets&quot;:[],&quot;errors&quot;:[],&quot;locale&quot;:&quot;en&quot;},&quot;checksum&quot;:&quot;fc097c0cb3ee35e20a66d835f76d18b88b256feeff9eb456ab6c04055df49678&quot;}" wire:effects="[]" wire:id="abT7oJrgmyw9UbROi111" class="relative w-auto h-auto">
+ <div
+ x-data="{
+ title: 'Default Toast Notification',
+ description: '',
+ type: 'default',
+ position: 'bottom-right',
+ expanded: false,
+ popToast (custom) {
+ let html = '';
+ if (typeof custom != 'undefined') {
+ html = custom;
+ }
+ toast(this.title, { description: this.description, type: this.type, position: this.position, html: html })
+ }
+ }"
+ x-init="
+ window.toast = function(message, options = {}) {
+ let description = '';
+ let type = 'info';
+ let position = 'bottom-right';
+ let html = '';
+ if(typeof options.description != 'undefined') description = options.description;
+ if(typeof options.type != 'undefined') type = options.type;
+ if(typeof options.position != 'undefined') position = options.position;
+ if(typeof options.html != 'undefined') html = options.html;
+ window.dispatchEvent(new CustomEvent('toast-show', { detail : { type: type, message: message, description: description, position : position, html: html }}));
+ }
+ window.customToastHTML = `
+ <div class='relative flex items-start justify-center p-4'>
+ <img src='https://cdn.devdojo.com/images/august2023/headshot-new.jpeg' class='w-10 h-10 mr-2 rounded-full'>
+ <div class='flex flex-col'>
+ <p class='text-sm font-medium text-brandSecondary-800'>New Friend Request</p>
+ <p class='mt-1 text-xs leading-none text-brandSecondary-800'>Friend request from John Doe.</p>
+ <div class='flex mt-3'>
+ <button type='button' @click='burnToast(toast.id)' class='inline-flex items-center px-2 py-1 text-xs font-semibold text-white bg-indigo-600 rounded shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'>Accept</button>
+ <button type='button' @click='burnToast(toast.id)' class='inline-flex items-center px-2 py-1 ml-3 text-xs font-semibold text-brandSecondary-900 bg-white rounded shadow-sm ring-1 ring-inset ring-brandSecondary-300 hover:bg-brandSecondary-50'>Decline</button>
+ </div>
+ </div>
+ </div>
+ `
+ "
+ class="relative space-y-5"
+ >
+ </div>
+ <template x-teleport="body">
+ <ul
+ x-data="{
+ toasts: [],
+ toastsHovered: false,
+ expanded: false,
+ layout: 'default',
+ position: 'bottom-right',
+ paddingBetweenToasts: 15,
+ deleteToastWithId (id) {
+ for (let i = 0; i < this.toasts.length; i++) {
+ if (this.toasts[i].id === id) {
+ this.toasts.splice(i, 1);
+ break;
+ }
+ }
+ },
+ burnToast(id) {
+ burnToast = this.getToastWithId(id);
+ burnToastElement = document.getElementById(burnToast.id);
+ if (burnToastElement) {
+ if (this.toasts.length == 1) {
+ if (this.layout=='default') {
+ this.expanded = false;
+ }
+ burnToastElement.classList.remove('translate-y-0');
+ if(this.position.includes('bottom')){
+ burnToastElement.classList.add('translate-y-full');
+ } else {
+ burnToastElement.classList.add('-translate-y-full');
+ }
+ burnToastElement.classList.add('-translate-y-full');
+ }
+ burnToastElement.classList.add('opacity-0');
+ let that = this;
+ setTimeout(function() {
+ that.deleteToastWithId(id);
+ setTimeout(function() {
+ that.stackToasts();
+ }, 1)
+ }, 300);
+ }
+ },
+ getToastWithId(id) {
+ for (let i = 0; i < this.toasts.length; i++) {
+ if (this.toasts[i].id === id) {
+ return this.toasts[i];
+ }
+ }
+ },
+ stackToasts(){
+ this.positionToasts();
+ this.calculateHeightOfToastsContainer();
+ let that = this;
+ setTimeout(function() {
+ that.calculateHeightOfToastsContainer();
+ }, 300);
+ },
+ positionToasts() {
+ if (this.toasts.length == 0) return;
+ let topToast = document.getElementById( this.toasts[0].id );
+ topToast.style.zIndex = 100;
+ if (this.expanded) {
+ if (this.position.includes('bottom')) {
+ topToast.style.top = 'auto';
+ topToast.style.bottom = '0px';
+ } else {
+ topToast.style.top = '0px';
+ }
+ }
+ let bottomPositionOfFirstToast = this.getBottomPositionOfElement(topToast);
+ if(this.toasts.length == 1) return;
+ let middleToast = document.getElementById( this.toasts[1].id );
+ middleToast.style.zIndex = 90;
+ if (this.expanded) {
+ middleToastPosition = topToast.getBoundingClientRect().height +
+ this.paddingBetweenToasts + 'px';
+ if (this.position.includes('bottom')) {
+ middleToast.style.top = 'auto';
+ middleToast.style.bottom = middleToastPosition;
+ } else {
+ middleToast.style.top = middleToastPosition;
+ }
+ middleToast.style.scale = '100%';
+ middleToast.style.transform = 'translateY(0px)';
+ } else {
+ middleToast.style.scale = '94%';
+ if (this.position.includes('bottom')) {
+ middleToast.style.transform = 'translateY(-16px)';
+ } else {
+ this.alignBottom(topToast, middleToast);
+ middleToast.style.transform = 'translateY(16px)';
+ }
+ }
+ if (this.toasts.length == 2) return;
+ let bottomToast = document.getElementById( this.toasts[2].id );
+ bottomToast.style.zIndex = 80;
+ if (this.expanded) {
+ bottomToastPosition = topToast.getBoundingClientRect().height +
+ this.paddingBetweenToasts +
+ middleToast.getBoundingClientRect().height +
+ this.paddingBetweenToasts + 'px';
+ if (this.position.includes('bottom')) {
+ bottomToast.style.top = 'auto';
+ bottomToast.style.bottom = bottomToastPosition;
+ } else {
+ bottomToast.style.top = bottomToastPosition;
+ }
+ bottomToast.style.scale = '100%';
+ bottomToast.style.transform = 'translateY(0px)';
+ } else {
+ bottomToast.style.scale = '88%';
+ if(this.position.includes('bottom')){
+ bottomToast.style.transform = 'translateY(-32px)';
+ } else {
+ this.alignBottom(topToast, bottomToast);
+ bottomToast.style.transform = 'translateY(32px)';
+ }
+ }
+ if(this.toasts.length == 3) return;
+ let burnToast = document.getElementById( this.toasts[3].id );
+ burnToast.style.zIndex = 70;
+ if (this.expanded) {
+ burnToastPosition = topToast.getBoundingClientRect().height +
+ this.paddingBetweenToasts +
+ middleToast.getBoundingClientRect().height +
+ this.paddingBetweenToasts +
+ bottomToast.getBoundingClientRect().height +
+ this.paddingBetweenToasts + 'px';
+ if (this.position.includes('bottom')) {
+ burnToast.style.top = 'auto';
+ burnToast.style.bottom = burnToastPosition;
+ } else {
+ burnToast.style.top = burnToastPosition;
+ }
+ burnToast.style.scale = '100%';
+ burnToast.style.transform = 'translateY(0px)';
+ } else {
+ burnToast.style.scale = '82%';
+ this.alignBottom(topToast, burnToast);
+ burnToast.style.transform = 'translateY(48px)';
+ }
+ burnToast.firstElementChild.classList.remove('opacity-100');
+ burnToast.firstElementChild.classList.add('opacity-0');
+ let that = this;
+ // Burn 🔥 (remove) last toast
+ setTimeout(function() {
+ that.toasts.pop();
+ }, 300);
+ if (this.position.includes('bottom')) {
+ middleToast.style.top = 'auto';
+ }
+ return;
+ },
+ alignBottom(element1, element2) {
+ // Get the top position and height of the first element
+ let top1 = element1.offsetTop;
+ let height1 = element1.offsetHeight;
+ // Get the height of the second element
+ let height2 = element2.offsetHeight;
+ // Calculate the top position for the second element
+ let top2 = top1 + (height1 - height2);
+ // Apply the calculated top position to the second element
+ element2.style.top = top2 + 'px';
+ },
+ alignTop(element1, element2) {
+ // Get the top position of the first element
+ let top1 = element1.offsetTop;
+ // Apply the same top position to the second element
+ element2.style.top = top1 + 'px';
+ },
+ resetBottom() {
+ for (let i = 0; i < this.toasts.length; i++) {
+ if (document.getElementById( this.toasts[i].id )) {
+ let toastElement = document.getElementById( this.toasts[i].id );
+ toastElement.style.bottom = '0px';
+ }
+ }
+ },
+ resetTop(){
+ for (let i = 0; i < this.toasts.length; i++) {
+ if(document.getElementById( this.toasts[i].id )) {
+ let toastElement = document.getElementById( this.toasts[i].id );
+ toastElement.style.top = '0px';
+ }
+ }
+ },
+ getBottomPositionOfElement(el) {
+ return (el.getBoundingClientRect().height + el.getBoundingClientRect().top);
+ },
+ calculateHeightOfToastsContainer() {
+ if (this.toasts.length == 0) {
+ $el.style.height = '0px';
+ return;
+ }
+ lastToast = this.toasts[this.toasts.length - 1];
+ lastToastRectangle = document.getElementById(lastToast.id).getBoundingClientRect();
+ firstToast = this.toasts[0];
+ firstToastRectangle = document.getElementById(firstToast.id).getBoundingClientRect();
+ if (this.toastsHovered) {
+ if (this.position.includes('bottom')) {
+ $el.style.height = ((firstToastRectangle.top + firstToastRectangle.height) - lastToastRectangle.top) + 'px';
+ } else {
+ $el.style.height = ((lastToastRectangle.top + lastToastRectangle.height) - firstToastRectangle.top) + 'px';
+ }
+ } else {
+ $el.style.height = firstToastRectangle.height + 'px';
+ }
+ }
+ }"
+ @set-toasts-layout.window="
+ layout=event.detail.layout;
+ if(layout == 'expanded'){
+ expanded=true;
+ } else {
+ expanded=false;
+ }
+ stackToasts();
+ "
+ @toast-show.window="
+ event.stopPropagation();
+ if(event.detail.position){
+ position = event.detail.position;
+ }
+ toasts.unshift({
+ id: 'toast-' + Math.random().toString(16).slice(2),
+ show: false,
+ message: event.detail.message,
+ description: event.detail.description,
+ type: event.detail.type,
+ html: event.detail.html
+ });
+ "
+ @mouseenter="toastsHovered=true;"
+ @mouseleave="toastsHovered=false"
+ x-init="
+ if(layout == 'expanded'){
+ expanded = true;
+ }
+ stackToasts();
+ $watch('toastsHovered', function(value){
+ if(layout == 'default'){
+ if(position.includes('bottom')){
+ resetBottom();
+ } else {
+ resetTop();
+ }
+ if(value){
+ // calculate the new positions
+ expanded = true;
+ if(layout == 'default'){
+ stackToasts();
+ }
+ } else {
+ if(layout == 'default'){
+ expanded = false;
+ //setTimeout(function(){
+ stackToasts();
+ //}, 10);
+ setTimeout(function(){
+ stackToasts();
+ }, 10)
+ }
+ }
+ }
+ });
+ "
+ class="fixed block w-full group z-[99] sm:max-w-xs"
+ :class="{ 'right-0 top-0 sm:mt-6 sm:mr-6': position=='top-right', 'left-0 top-0 sm:mt-6 sm:ml-6': position=='top-left', 'left-1/2 -translate-x-1/2 top-0 sm:mt-6': position=='top-center', 'right-0 bottom-0 sm:mr-6 sm:mb-6': position=='bottom-right', 'left-0 bottom-0 sm:ml-6 sm:mb-6': position=='bottom-left', 'left-1/2 -translate-x-1/2 bottom-0 sm:mb-6': position=='bottom-center' }"
+ x-cloak
+ >
+ <template x-for="(toast, index) in toasts" :key="toast.id">
+ <li
+ :id="toast.id"
+ x-data="{
+ toastHovered: false,
+ toastTimeout: null
+ }"
+ x-init="
+ if(position.includes('bottom')){
+ $el.firstElementChild.classList.add('toast-bottom');
+ $el.firstElementChild.classList.add('opacity-0', 'translate-y-full');
+ } else {
+ $el.firstElementChild.classList.add('opacity-0', '-translate-y-full');
+ }
+ setTimeout(function(){
+ setTimeout(function(){
+ if(position.includes('bottom')){
+ $el.firstElementChild.classList.remove('opacity-0', 'translate-y-full');
+ } else {
+ $el.firstElementChild.classList.remove('opacity-0', '-translate-y-full');
+ }
+ $el.firstElementChild.classList.add('opacity-100', 'translate-y-0');
+ setTimeout(function(){
+ stackToasts();
+ }, 10);
+ }, 5);
+ }, 50);
+ toastTimeout = setTimeout(function(){
+ setTimeout(function(){
+ $el.firstElementChild.classList.remove('opacity-100');
+ $el.firstElementChild.classList.add('opacity-0');
+ if(toasts.length == 1){
+ $el.firstElementChild.classList.remove('translate-y-0');
+ $el.firstElementChild.classList.add('-translate-y-full');
+ }
+ setTimeout(function(){
+ deleteToastWithId(toast.id)
+ }, 300);
+ }, 5);
+ }, 8000);
+ "
+ @mouseover="toastHovered=true; clearTimeout(toastTimeout); console.log(toastTimeout);"
+ @mouseout="toastHovered=false; toastTimeout = setTimeout(function(){
+ setTimeout(function(){
+ $el.firstElementChild.classList.remove('opacity-100');
+ $el.firstElementChild.classList.add('opacity-0');
+ if(toasts.length == 1){
+ $el.firstElementChild.classList.remove('translate-y-0');
+ $el.firstElementChild.classList.add('-translate-y-full');
+ }
+ setTimeout(function(){
+ deleteToastWithId(toast.id)
+ }, 300);
+ }, 5);
+ }, 8000)"
+ class="absolute w-full duration-300 ease-out select-none sm:max-w-xs"
+ :class="{ 'toast-no-description': !toast.description }"
+ >
+ <span
+ class="relative flex flex-col items-start shadow-[0_5px_15px_-3px_rgb(0_0_0_/_0.08)] w-full transition-all duration-300 ease-out bg-white border border-brandSecondary-100 dark:bg-brandSecondary-800 dark:border-brandSecondary-900 sm:rounded-md sm:max-w-xs group"
+ :class="{ 'p-4' : !toast.html, 'p-0' : toast.html }"
+ >
+ <template x-if="!toast.html">
+ <div class="relative">
+ <div
+ class="flex items-center"
+ :class="{ 'text-green-500' : toast.type=='success', 'text-blue-500' : toast.type=='info', 'text-orange-400' : toast.type=='warning', 'text-red-500' : toast.type=='danger', 'text-brandSecondary-800' : toast.type=='default' }"
+ >
+ <div class="flex-shrink-0">
+ </div>
+ <p class="text-[13px] font-medium leading-none text-brandSecondary-800 dark:text-white" x-text="toast.message"></p>
+ </div>
+ <p x-show="toast.description"
+ :class="{ 'pl-5' : toast.type!='default' }"
+ class="mt-1.5 text-xs leading-none opacity-70 dark:text-brandSecondary-100" x-text="toast.description"
+ ></p>
+ </div>
+ </template>
+ <template x-if="toast.html">
+ <div x-html="toast.html"></div>
+ </template>
+ <span
+ @click="burnToast(toast.id)"
+ class="absolute right-0 p-1.5 mr-2.5 text-brandSecondary-400 duration-100 ease-in-out rounded-full opacity-0 cursor-pointer hover:bg-brandSecondary-50 hover:text-brandSecondary-500"
+ :class="{ 'top-1/2 -translate-y-1/2' : !toast.description && !toast.html, 'top-0 mt-2.5' : (toast.description || toast.html), 'opacity-100' : toastHovered, 'opacity-0' : !toastHovered }"
+ >
+ </span>
+ </span>
+ </li>
+ </template>
+ </ul>
+ </template>
+</div>
+ <div>
+ </div> </body>
+</html>
