@@ -21,7 +21,8 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
-import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad } from '../../hooks/useRayData';
+import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFullLoad } from '../../hooks/useRayData';
+import { loadPageStats, type PageStats } from '../../lib/page-data';
 import { signalCallOf } from '../../lib/account';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, sizedImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
@@ -37,7 +38,7 @@ import { sportOfLot } from '../../lib/submarkets';
 import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedToolbar';
-import { Colophon, daysWord } from '../../components/Terminal';
+import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
 import { OPEN_CK_EVENT } from '../../components/CommandK';
@@ -225,7 +226,8 @@ function bidCellFace(lot: AuctionLot, houses: Set<string>): string {
 function bidCellTitle(lot: AuctionLot, houses: Set<string>): string {
   if (typeof lot.bidCount === 'number') {
     const v = bidVel(lot);
-    return v ? `${lot.bidCount} bids · ${v.delta} added in the last ${v.hours}h` : `${lot.bidCount} bids`;
+    const bw = lot.bidCount === 1 ? 'bid' : 'bids';
+    return v ? `${lot.bidCount} ${bw} · ${v.delta} added in the last ${v.hours}h` : `${lot.bidCount} ${bw}`;
   }
   if (bidVel(lot)) return `${lot.auctionHouse} posts bid activity but not a running count`;
   return housePublishesBids(lot, houses)
@@ -236,8 +238,8 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   const v = bidVel(lot);
   if (!v) return null;
   return (
-    <span className="ray-bidvel" title={`${v.delta} bids added in the last ${v.hours}h`}>
-      <span className="ray-bidvel-dot" aria-hidden />+{v.delta} bids · {v.hours}h
+    <span className="ray-bidvel" title={`${v.delta} ${v.delta === 1 ? 'bid' : 'bids'} added in the last ${v.hours}h`}>
+      <span className="ray-bidvel-dot" aria-hidden />+{v.delta} {v.delta === 1 ? 'bid' : 'bids'} · {v.hours}h
     </span>
   );
 }
@@ -443,6 +445,22 @@ export default function TerminalHomePage() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   const [showArchive, setShowArchive] = useState(false);
+  // THE SETTLEMENT, precomputed (Sep 27 2026): the slip's three numbers used
+  // to wait on the whole sold corpus (~35MB) — a black slab for most of a
+  // visit. The build prints them into pages/page-stats.json (same filter,
+  // same median pick, same served book), so the slip paints from ~40KB and
+  // the corpus is fetched only when the reader opens the archive table.
+  // undefined = loading · null = a data build without page-stats (the old
+  // corpus path below still stands).
+  const [pageStats, setPageStats] = useState<PageStats | null | undefined>(undefined);
+  useEffect(() => {
+    let dead = false;
+    loadPageStats().then(s => { if (!dead) setPageStats(s); });
+    return () => { dead = true; };
+  }, []);
+  const statsFallback = pageStats === null;
+  // opening the archive is what asks for the corpus (PastResults browses it)
+  useEffect(() => { if (showArchive && !statsFallback) triggerFullLoad(); }, [showArchive, statsFallback]);
 
   // The layout choice persists — read after mount (SSR renders the default).
   // A stored preference always wins; with none, desktop (≥900px) earns the
@@ -557,22 +575,51 @@ export default function TerminalHomePage() {
   // TONIGHT'S WALL — the call lot + the next best flagged-with-image, then
   // photographed lots in hammer order as backfill. MORE than 5 candidates ship
   // so a dead image drops out and the next one hangs in its place.
+  // TODAY'S CALL — ONE selector for the whole product: pickCall, the exact
+  // function /value's CallPlate runs over the same scoped book (confidence
+  // gate, actionable clock, lotFitsMarket, dealScore). Home used to crown the
+  // wall's own top dealScore flag instead — Goddard here, KAWS on /value.
+  const call = useMemo(() => pickCall(marketLots, marketLots, activeKey), [marketLots, activeKey]);
+  const todaysCall = useMemo(
+    () => (call && call.signal ? { lot: call.lot, pct: call.signal.pct } : null),
+    [call],
+  );
+
+  // TONIGHT'S WALL — lots that genuinely hammer within 48 hours (the audit
+  // caught a "tonight" wall hanging lots 25 days out). Flagged-with-image
+  // first by dealScore, then photographed lots in hammer order. MORE than 5
+  // candidates ship so a dead image drops out and the next one hangs. Under
+  // three photographed lots in the window → no wall (never padded with next
+  // month). The call tag marks the call only if it hammers in the window.
   const wallItems = useMemo<WallItem[]>(() => {
-    const withImg = upcoming.filter(l => l.imageUrl);
+    const now = Date.now();
+    const horizon = now + 48 * 3600_000;
+    const today = localToday();
+    const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
+    const within48h = (l: AuctionLot) => {
+      if (l.resultsPending) return false;
+      if (l.saleDateTime) { const t = Date.parse(l.saleDateTime); if (Number.isFinite(t)) return t > now && t <= horizon; }
+      const d = trueSaleDay(l);
+      return !!d && d >= today && d <= tomorrow;
+    };
+    const withImg = upcoming.filter(l => l.imageUrl && within48h(l));
     const pct = belowSignal.pct;
     const flagged = withImg
       .filter(l => belowIds.has(l.id))
       .sort((a, b) => dealScore(b, pct.get(b.id) || 0) - dealScore(a, pct.get(a.id) || 0));
-    const call = flagged[0] || null;
-    const rest = [...flagged.slice(1), ...withImg.filter(l => !belowIds.has(l.id))];
-    const ordered = call ? [call, ...rest] : withImg;
+    const ordered = [...flagged, ...withImg.filter(l => !belowIds.has(l.id))];
+    const callId = todaysCall?.lot.id;
+    if (callId) {
+      const i = ordered.findIndex(l => l.id === callId);
+      if (i > 0) ordered.unshift(...ordered.splice(i, 1));
+    }
     return ordered.slice(0, 14).map(l => ({
       lot: l,
       flagged: belowIds.has(l.id),
       pct: pct.get(l.id),
-      call: !!call && l.id === call.id,
+      call: l.id === callId,
     }));
-  }, [upcoming, belowIds, belowSignal]);
+  }, [upcoming, belowIds, belowSignal, todaysCall]);
   const wallEl = wallItems.length >= 3 ? (
     <TonightsWall
       items={wallItems}
@@ -582,14 +629,6 @@ export default function TerminalHomePage() {
     />
   ) : null;
 
-  // THE PLATFORM CELLS' call — the SAME lot Tonight's Wall leads with (one
-  // source, one direction): the wall marks call:true on the flagged lot that
-  // won the dealScore sort, and its pct is the same below-market gap the
-  // wall's ring and gap text already speak. No independent selection here.
-  const todaysCall = useMemo(() => {
-    const it = wallItems.find(w => w.call && w.pct != null);
-    return it ? { lot: it.lot, pct: it.pct! } : null;
-  }, [wallItems]);
 
   // The Value Engine's chapter-01 hero: ONE lot — the best flag on the book
   // by THE ONE FLAGGED RANKING (dealScore: calibrated odds first, then the
@@ -696,6 +735,7 @@ export default function TerminalHomePage() {
     [marketLots]
   );
 
+  const slipStat = pageStats ? pageStats.settlement[activeKey] || null : null;
   const soldMedianPct = useMemo(() => {
     // hammer-basis via overEstimatePct — raw priceUsd is premium-inclusive and
     // comparing it to hammer-basis estimates overstated this figure ~25pts
@@ -1139,7 +1179,7 @@ export default function TerminalHomePage() {
                               <td>
                                 {sig
                                   ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
-                                      {signalMagnitude(sig.label, sig.pct)}<span style={{ color: 'var(--color-text-faint)', marginLeft: 5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
+                                      {signalMagnitude(sig.label, sig.pct)}{/* the qualifier on its own line: inline it overflowed the last column and clipped ('2.4× unde') */}<span style={{ display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
                                       <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
                                         {confidenceMeter(sig.confidence).dots}
                                       </span>
@@ -1253,9 +1293,9 @@ export default function TerminalHomePage() {
               </section>
             )}
 
-            {/* phase-2 trigger — the settlement slip below reads the full sold
-                corpus; the sentinel starts that fetch as the reader approaches */}
-            <Phase2Sentinel />
+            {/* phase-2 trigger — ONLY for a data build without page-stats
+                (the old path: the slip below read the full sold corpus) */}
+            {statsFallback && <Phase2Sentinel />}
 
             {/* ══ ROOM · THE SETTLEMENT — the slip is the room. ══ */}
             <div className="ns-plate">
@@ -1273,7 +1313,7 @@ export default function TerminalHomePage() {
                 the moment real content exists. Only while phase 2 is pending —
                 a market that resolves to no sold rows keeps its natural
                 collapse rather than a permanent gap. */}
-            {!ray.fullLoaded && sold.length === 0 && recentRows.length === 0 && (
+            {((pageStats === undefined && !isSportsScience) || (statsFallback && !ray.fullLoaded && sold.length === 0 && recentRows.length === 0)) && (
               <div aria-hidden className={styles.slipHold} />
             )}
             {isSportsScience ? (
@@ -1302,7 +1342,34 @@ export default function TerminalHomePage() {
                   )}
                 </div>
               )
-            ) : sold.length > 0 && (activeKey === 'all' ? (
+            ) : slipStat && slipStat.sold > 0 ? (
+              <div className={`${styles.recordBandWrap}${activeKey === 'all' ? ` ${styles.recordEmblem}` : ''}`}>
+                <SettlementSlip
+                  marketName={marketName}
+                  serial={editionSerial}
+                  archiveOpen={showArchive}
+                  onToggleArchive={() => setShowArchive(s => !s)}
+                  lines={[
+                    activeKey === 'all'
+                      ? { k: 'Sold lots on the book', v: (meta.totalSold ?? slipStat.sold).toLocaleString() }
+                      : { k: `Sold ${marketName} lots on the book`, v: (scopedSold ?? slipStat.sold).toLocaleString() },
+                    ...(slipStat.medianPct !== null ? [{ k: 'Median hammer vs estimate', v: fmtSignedPct(slipStat.medianPct), signed: slipStat.medianPct }] : []),
+                    ...(slipStat.latest ? [{ k: 'Latest hammer', v: formatDate(slipStat.latest) }] : []),
+                  ]}
+                />
+                {showArchive && (
+                  <section className="rail" style={{ paddingBlock: '8px 40px' }}>
+                    <div className="ray-recordband" style={{ marginTop: 0 }}>
+                      {ray.fullLoaded
+                        ? <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
+                        : ray.fullError
+                          ? <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', textAlign: 'center', padding: '32px 0' }}>The sold archive didn&rsquo;t load. <button className="link-action" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', textDecoration: 'underline' }} onClick={() => retryFullLoad()}>Try again</button></p>
+                          : <RayLoading />}
+                    </div>
+                  </section>
+                )}
+              </div>
+            ) : statsFallback && sold.length > 0 && (activeKey === 'all' ? (
               <div className={`${styles.recordBandWrap} ${styles.recordEmblem}`}>
                 <SettlementSlip
                   marketName={marketName}

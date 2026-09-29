@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice, fmtSignedPct } from '../../utils';
 import { medianOverEstimatePct } from './ArtistRankingsTable';
-import { MARKETS, marketOf } from '../../constants';
+import { MARKETS, marketOf, MAKER_MARKETS, ARTIST_MARKET, rosterNoun, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData } from '../../hooks/useRayData';
 import RecordBand from '../RecordBand';
@@ -48,7 +48,11 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
 
     // makers tracked in THIS market — derived from the filtered stats passed
     // in, never the global roster
-    const makerCount = Object.keys(statsByArtist).length;
+    // split the roster the way every page does (ROSTER): named makers vs
+    // category pseudo-artists — "54 makers" counted 22 categories as people
+    const slugs = Object.keys(statsByArtist);
+    const namedCount = slugs.filter(s => MAKER_MARKETS.has((ARTIST_MARKET[s] || 'all') as Market)).length;
+    const catCount = slugs.length - namedCount;
 
     // estimate coverage: on markets where almost no sold lot carries an
     // estimate (sports/science) the vs-estimate KPI would be fake — show the
@@ -119,7 +123,9 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
 
     return [
       totalLotsCard,
-      { label: 'Makers tracked', value: makerCount.toLocaleString(), sub: `across ${contextLabel}`, tone: '' },
+      market === 'all' || !market
+        ? { label: 'Makers tracked', value: namedCount.toLocaleString(), sub: catCount ? `plus ${catCount} categories · across ${contextLabel}` : `across ${contextLabel}`, tone: '' }
+        : { label: `${rosterNoun(market as Market).replace(/^./, c => c.toUpperCase())} tracked`, value: slugs.length.toLocaleString(), sub: `across ${contextLabel}`, tone: '' },
       sellThroughCard,
       estimateCard,
     ];

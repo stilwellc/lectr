@@ -10,10 +10,11 @@ import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import { Colophon, pickCall, CallPlate, daysUntil } from '../components/Terminal';
 import { useRayData, triggerFullLoad, retryFullLoad } from '../hooks/useRayData';
+import { loadLotPack, loadPageStats, markFallbackProjections, type LotPack, type PageStats, type SettledCallRow } from '../lib/page-data';
 import type { Backtest } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
-import { lotSignal, formatEstimate, confidenceMeter, LiveStamp } from '../components/LotCard';
+import { lotSignal, formatEstimate, estimateOnly, confidenceMeter, LiveStamp } from '../components/LotCard';
 import ComparableModal, { PriceBand } from '../components/ComparableModal';
 // The paper room's two recharts consumers stay OUT of the initial bundle
 // (dynamic, ssr:false, fixed-height fallbacks so the swap can never shift).
@@ -48,30 +49,16 @@ import {
 // globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, overEstimatePct, toneOf } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 
 const ROWS_PAGE = 12;
 
-/* ── PHASE-2 SENTINEL — /value no longer pulls the 28MB corpus eagerly.
-   Everything above the settled tape paints from phase 1 (signal stamps,
-   backtest, market.json) + the 540KB comp-evidence pool rows; the corpus
-   fires only as the reader approaches the tape (or opens the comps modal). */
-function Phase2Sentinel() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') { triggerFullLoad(); return; }
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(entries => {
-      if (entries.some(e => e.isIntersecting)) { triggerFullLoad(); io.disconnect(); }
-    }, { rootMargin: '600px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return <div ref={ref} aria-hidden />;
-}
+/* (The phase-2 sentinel that pulled the corpus as the reader approached the
+   settled tape is gone: the tape reads the forward ledger via page-stats.json
+   and the call band reads its build-time lot pack. The corpus now loads only
+   when the comps modal opens.) */
 
 /* comp-evidence.json — the engine pool's actual rows for lots whose comps
    live in the corpus-only tier (the modal's own fallback source). Module-
@@ -291,7 +278,9 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
   const wireAll = rows.filter(r => r.g.shelf === 'wire').sort((a, b) => b.g.depth - a.g.depth);
   const formingAll = rows.filter(r => r.g.shelf === 'forming').sort((a, b) => b.g.depth - a.g.depth);
   const wire = wireAll.slice(0, 8);
-  const forming = formingAll.slice(0, 6);
+  // forming is opt-in (the toggle) — it opens in full, so the toggle's count
+  // and the lane badge (wire + forming) always agree (was: badge 8, "show 6")
+  const forming = formingAll;
   const wireCut = wireAll.length - wire.length;
   if (!wire.length && !forming.length) return null;
   const gapRec = receipts?.record?.gap;
@@ -857,17 +846,30 @@ export default function ValuePage() {
   // So a lot with signal.label === 'Below Market' AND a realized priceUsd is an
   // HONEST settled call: the flag was measured before the outcome was known —
   // never a post-hoc recompute against a pool that now includes the sale itself.
-  const settled = useMemo(() => {
-    const today = localToday();
-    return marketLots
-      .filter(l =>
-        l.signal && l.signal.label === 'Below Market' &&
-        (l.priceUsd || 0) > 0 &&
-        trueSaleDay(l) && trueSaleDay(l) < today)          // genuinely concluded
-      .map(l => ({ lot: l, oe: overEstimatePct(l), med: (l.signal as { med?: number }).med ?? null }))
-      .sort((a, b) => trueSaleDay(b.lot).localeCompare(trueSaleDay(a.lot))) // most recent first
+  // SETTLED CALLS (Sep 27 2026). This used to scan the phase-2 corpus for
+  // lots carrying a Below-Market `signal` AND a realized price — but the
+  // corpus shards never carry signals (only the eager, upcoming-only tape
+  // does), so the list was structurally empty: ghost rows until ~35MB
+  // landed, then "no flags have hammered". The honest settled record of
+  // calls made BEFORE the hammer is the forward ledger (receipts); the build
+  // pre-slices its newest graded rows per market into page-stats.json. Fallback
+  // projections (an opening bid run through the curve) are marked and hidden.
+  const [pageStats, setPageStats] = useState<PageStats | null | undefined>(undefined);
+  useEffect(() => {
+    let on = true;
+    loadPageStats().then(s => { if (on) setPageStats(s); });
+    return () => { on = false; };
+  }, []);
+  const settled = useMemo<SettledCallRow[] | null>(() => {
+    const pre = pageStats?.settled?.[activeKey];
+    if (pre) return pre;
+    if (pageStats === undefined) return null;               // still answering
+    // an older data build: the same rule over the eager receipts tape
+    const rows = (receipts?.rows || []) as unknown as SettledCallRow[];
+    return markFallbackProjections(rows)
+      .filter(r => !r.fb && r.r > 0 && (activeKey === 'all' || r.m === activeKey || mktSet.has(r.a)))
       .slice(0, 6);
-  }, [marketLots]);
+  }, [pageStats, activeKey, receipts, mktSet]);
 
   // HONESTY-FLEX — name our WORST cohort year openly. Only years with an
   // adequate flagged sample (≥30) are eligible; among those, the lowest
@@ -911,8 +913,10 @@ export default function ValuePage() {
   // calls. Measured: 80/83 live call candidates recompute to NULL client-side
   // because their pools live in the corpus-only tier — the stamp is the band.
   const callStamp = useMemo(() => {
-    const ev = call?.lot.value as { compValueUsd?: number; poolIds?: string[] } | undefined | null;
-    return ev?.compValueUsd && (ev.poolIds?.length ?? 0) >= 3 ? ev : null;
+    const ev = call?.lot.value as { compValueUsd?: number; compMedianUsd?: number | null; poolIds?: string[] } | undefined | null;
+    const med = ev?.compMedianUsd ?? ev?.compValueUsd;
+    // the band's median is the COMPS median (compMedianUsd), never the blended prediction
+    return med && (ev!.poolIds?.length ?? 0) >= 3 ? { ...ev!, compValueUsd: med } : null;
   }, [call]);
   // evidence rows arrive from the 540KB sidecar well before the corpus
   const [evidence, setEvidence] = useState<EvidenceMap | null>(evidenceCache);
@@ -922,8 +926,23 @@ export default function ValuePage() {
     loadEvidence().then(ev => { if (on) setEvidence(ev); });
     return () => { on = false; };
   }, [call, evidence]);
+  // the call's build-time pack (pages/lot-pack-XX.json): the WHOLE pool's
+  // prices, read over the full corpus at build — the band's first source
+  const [callPack, setCallPack] = useState<LotPack | null | undefined>(undefined);
+  useEffect(() => {
+    if (!call) { setCallPack(null); return; }
+    let on = true;
+    setCallPack(undefined);
+    loadLotPack(call.lot.id, lastCrawl).then(p => { if (on) setCallPack(p); });
+    return () => { on = false; };
+  }, [call, lastCrawl]);
   const callBand = useMemo(() => {
     if (!call) return null;
+    const ps = callPack?.c?.ps;
+    if (ps && ps.length >= 3) {
+      const median = callStamp?.compValueUsd ?? callPack!.c!.med ?? (call.lot.signal as { med?: number } | null | undefined)?.med;
+      if (median) return { prices: ps, median };
+    }
     if (callStamp) {
       // 1) the shipped pool rows (phase-1-fast, the modal's own source)
       const rows = evidence?.[String(call.lot.id)];
@@ -954,7 +973,7 @@ export default function ValuePage() {
     const pool = signalWithPool(call.lot, marketLots);
     if (!pool || pool.signal.med == null) return null;
     return { prices: pool.pool.map(l => l.priceUsd!).sort((a: number, b: number) => a - b), median: pool.signal.med };
-  }, [call, callStamp, evidence, marketLots, fullLoaded]);
+  }, [call, callStamp, callPack, evidence, marketLots, fullLoaded]);
 
   const hasFlags = deals.length > 0;
   const coverage = ray.market?.markets?.[activeKey]?.n;
@@ -1241,6 +1260,13 @@ export default function ValuePage() {
           .ray-value-section { padding-block: calc(var(--sect-t) - 10px) calc(var(--sect-b) + var(--space-2)); }
           .ray-value-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; }
           .ray-value-row-thumb { width: 44px; height: 36px; }
+          /* phones lead with the WORK, not its category: collectibles'
+             "maker" is a bucket ("Entertainment & Icons"), so the title
+             rides first in ink and the bucket drops to the muted line */
+          .ray-value-row-maker, .ray-value-row-title { display: block; }
+          .ray-value-row > span:nth-child(2) { display: flex !important; flex-direction: column; }
+          .ray-value-row .ray-value-row-title { order: -1; font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+          .ray-value-row .ray-value-row-maker { font-size: 12px; font-weight: 400; color: var(--color-text-muted); }
         }
         /* desktop ledger (≥900px): thumb · maker/work · house · hammers ·
            estimate · comps median · odds · gap — mono cells, right numerics */
@@ -1946,7 +1972,7 @@ export default function ValuePage() {
                     estHigh={call.lot.estimateHigh}
                     below={true}
                   />
-                ) : (callStamp && !fullLoaded && !fullError ? <div style={{ height: 102 }} aria-hidden /> : null)}
+                ) : ((callStamp || callPack === undefined) && !fullLoaded && !fullError ? <div style={{ height: 102 }} aria-hidden /> : null)}
               />
               </div>
             </section>
@@ -2075,7 +2101,7 @@ export default function ValuePage() {
                           : formatDate(trueSaleDay(d.lot) || d.lot.saleDate);
                       })()}
                     </span>
-                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{formatEstimate(d.lot).replace(/ est\.$/, '').replace(/ · \d+ bids?$/, '')}</span>
+                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{estimateOnly(d.lot)}</span>
                     <span className="ray-value-cell ray-value-cell-num">
                       {rowMed ? formatPrice(rowMed) : '—'}
                     </span>
@@ -2101,14 +2127,15 @@ export default function ValuePage() {
                         </span>
                       )}
                       <span className="ray-value-row-est" style={{ display: 'block' }}>
-                        {formatEstimate(d.lot)}
+                        {/* a FLAG is read against the estimate — print that, not the bid */}
+                        {(d.lot.estimateLow || d.lot.estimateHigh) ? `${estimateOnly(d.lot)} est.` : formatEstimate(d.lot)}
                       </span>
                     </span>
                     {/* row-hover leader — the certificate sentence, the same
                         statistic the modal shows; mono only on the figure */}
                     <span className="ray-value-leader" aria-hidden="true">
                       {rowMed
-                        ? <>comps median <b>{formatPrice(rowMed)}</b> vs {formatEstimate(d.lot).replace(/ est\.$/, '')} ask · <span className="up">{signalMagnitude('Below Market', Math.round(d.signal!.pct))}</span> over{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>
+                        ? <>comps median <b>{formatPrice(rowMed)}</b> vs {estimateOnly(d.lot)} estimate · <span className="up">{signalMagnitude('Below Market', Math.round(d.signal!.pct))}</span> over{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>
                         : <>{signalMagnitude('Below Market', Math.round(d.signal!.pct))} over ask{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>}
                     </span>
                   </button>
@@ -2240,51 +2267,42 @@ export default function ValuePage() {
               on /analytics under "The engine's record", and house
               calibration + the calendar are /analytics rooms outright.) */}
 
-          {/* the corpus loads as the reader approaches the tape */}
-          <Phase2Sentinel />
-
-          {/* settled tape — flags stamped before the hammer, then graded */}
+          {/* settled tape — calls logged before the hammer, then graded (the
+              forward ledger; no corpus, no sentinel — page-stats.json) */}
           <section id="tape" className="rail ray-enter vd-room ns-plate" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
               <div className="vd-sect-head">
                 <span className="vd-sect-mark" aria-hidden><TapeMark size={16} /></span>
                 <span className="ns-kicker">Settled calls</span>
                 <span className="vd-pulse-rule" aria-hidden />
-                <span className="vd-sect-cap">flag stamped before the hammer — honest by construction</span>
+                <span className="vd-sect-cap">logged before the hammer, graded at it — <Link href="/receipts" style={{ color: 'inherit' }}>the full record</Link></span>
               </div>
-              {settled.length > 0 ? (
+              {settled === null ? (
+                <div aria-hidden>
+                  {Array.from({ length: 3 }, (_, i) => <div key={i} className="vd-tape-ghost" />)}
+                </div>
+              ) : settled.length > 0 ? (
                 settled.map(s => {
-                  // all-in vs all-in: realized priceUsd against the comps
-                  // median (itself a median of premium-inclusive sold prices).
-                  // Dividing a derived hammer by the all-in median biased
-                  // every honest hit ~20% toward "below" — same basis or none.
-                  const vsComps = s.med != null && s.med > 0 && (s.lot.priceUsd || 0) > 0
-                    ? Math.round((s.lot.priceUsd! / s.med - 1) * 100) : null;
+                  const delta = s.p > 0 ? Math.round((s.r / s.p - 1) * 100) : null;
+                  const kind = ({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as Record<string, string>)[s.k] || s.k;
                   return (
-                    <Link key={s.lot.id} href={`/lot/${s.lot.id}`} className="vd-tape-row">
+                    <Link key={`${s.id}|${s.k}`} href={`/lot/${encodeURIComponent(s.id)}`} className="vd-tape-row">
                       <span style={{ minWidth: 0 }}>
-                        <span className="vd-tape-maker">{ARTIST_LABEL[s.lot.artist] || s.lot.artist}</span>
-                        <span className="vd-tape-title" style={{ display: 'block' }}>{craftTitle(s.lot.title)}</span>
+                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s.t ? craftTitle(s.t) : s.id}</span>
+                        <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s.a ? (ARTIST_LABEL[s.a] || s.a) : ''}{s.h ? ` · ${s.h}` : ''}</span>
                       </span>
                       <span className="vd-tape-cells">
-                        <span className="vd-tape-real">realized {formatPrice(s.lot.priceUsd!)} all-in · {formatDate(trueSaleDay(s.lot))}</span>
+                        <span className="vd-tape-real">realized {formatPrice(s.r)} all-in{s.sd ? ` · ${formatDate(s.sd)}` : ''}</span>
                         <span className="vd-tape-vs">
-                          {s.oe != null && <span data-tone={toneOf(s.oe)}>{fmtSignedPct(s.oe)}</span>}
-                          {s.oe != null && <> vs estimate, all-in</>}
-                          {vsComps != null && <> · {vsComps > 5 ? 'above' : vsComps < -5 ? 'below' : 'at'} comps med</>}
+                          called {formatPrice(s.p)} <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em' }}>{kind}</span>
+                          {delta != null && <> · <span data-tone={toneOf(delta)}>{fmtSignedPct(delta)}</span> vs the call</>}
                         </span>
                       </span>
                     </Link>
                   );
                 })
-              ) : !fullLoaded && !fullError ? (
-                /* phase-2 pending: hold the tape's frame with ghost rows —
-                   an empty settled result collapses to the sentence once loaded */
-                <div aria-hidden>
-                  {Array.from({ length: 3 }, (_, i) => <div key={i} className="vd-tape-ghost" />)}
-                </div>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
-                  No {activeLabel} flags have hammered yet this cycle — the tape fills as the board settles.
+                  No {activeLabel} calls have hammered yet this cycle — the tape fills as the board settles.
                 </p>
               )}
             </section>

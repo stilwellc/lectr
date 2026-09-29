@@ -4,7 +4,7 @@ import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import Flick from '../components/Flick';
 import { Colophon } from '../components/Terminal';
-import { MARKETS } from '../constants';
+import { MARKETS, MAKER_MARKETS, ARTIST_MARKET, type Market } from '../constants';
 import { craftTitle } from '../utils';
 import meta from '../../public/data/ray/meta.json';
 import backtest from '../../public/data/ray/backtest.json';
@@ -120,8 +120,11 @@ const drillCount = allDrills.length;
 const drillAbstain = allDrills.filter((d) => d.readType === 'descriptive').length;
 
 const makerIdx = market.makerIndex as Record<string, { horizons?: Record<string, { publishable?: boolean }> }>;
-const makerTotal = Object.keys(makerIdx).length;
-const makerPublish = Object.values(makerIdx).filter((m) =>
+// NAMED makers only (ROSTER.makers — the one maker count every page prints);
+// category pseudo-artists carry indices too but are not makers
+const namedIdx = Object.entries(makerIdx).filter(([slug]) => MAKER_MARKETS.has((ARTIST_MARKET[slug] || 'all') as Market));
+const makerTotal = namedIdx.length;
+const makerPublish = namedIdx.filter(([, m]) =>
   Object.values(m.horizons || {}).some((h) => h?.publishable),
 ).length;
 
@@ -1650,7 +1653,7 @@ const DECK_CSS = `
   }
   .dist-foot-u { width: 33.333%; text-align: right; padding-right: 10px; white-space: nowrap; }
   .dist-foot-o { flex: 1; text-align: left; padding-left: 10px; }
-  @media (max-width: 620px) { .dist-foot { font-size: 9px; letter-spacing: 0.06em; } }
+  @media (max-width: 620px) { .dist-foot { font-size: 10px; letter-spacing: 0.06em; } }
   .dist-cap { font-size: var(--d-cap); line-height: 1.6; color: var(--color-text-faint); margin: 12px 0 0; max-width: var(--measure); }
   .dist-cap b { color: var(--color-text-secondary); font-weight: 600; }
   .yrs-band { fill: color-mix(in srgb, var(--color-butter) 20%, transparent); }

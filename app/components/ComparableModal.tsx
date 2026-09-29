@@ -51,7 +51,8 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
   const confidence = v?.confidence ?? sig?.confidence ?? null;
   const drow = drillRowFor(lot, market);
   const dslug = drillSlugFor(lot);
-  const calBand = confidence ? backtest?.calibration?.band?.[confidence] : null;
+  // the band served lots now wear is calibration.valueBand (Sep 2026); band on older data
+  const calBand = confidence ? ((backtest?.calibration as { valueBand?: Record<string, { lo: number; hi: number }> } | undefined)?.valueBand?.[confidence] ?? backtest?.calibration?.band?.[confidence]) : null;
   if (!v && !sig && !calBand && !(drow && dslug)) return null;
   return (
     <div className="ray-lv" style={{ margin: '10px 0 2px', padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel)' }}>
@@ -527,7 +528,7 @@ export default function ComparableModal({
   // the call; 'at comparable market' means the engine looked and called it
   // fair — no call, no client second-guessing.
   const called = useMemo(() => {
-    const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; compValueUsd?: number; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
+    const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; compValueUsd?: number; compMedianUsd?: number | null; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
     // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
     // outside [1/5, 5] is a data fault the build killed at the source — the
     // modal must never resurrect it. Treat it as no engine call and fall
@@ -547,7 +548,7 @@ export default function ComparableModal({
           label: (below ? 'Below Market' : 'Above Market') as 'Below Market' | 'Above Market',
           pct: Math.round((below ? ev.compRatio - 1 : 1 - ev.compRatio) * 100),
           basis: ev.n || pool.length,
-          med: ev.compValueUsd,
+          med: ev.compMedianUsd ?? ev.compValueUsd,
           kind: 'form' as const,
           form: ((lot as { formKey?: string }).formKey || 'unknown') as ReturnType<typeof signalWithPool> extends { signal: { form: infer F } } | null ? F : never,
           confidence: (ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low') as 'high' | 'medium' | 'low',

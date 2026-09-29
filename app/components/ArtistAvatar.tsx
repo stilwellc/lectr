@@ -25,7 +25,7 @@ export default function ArtistAvatar({ label, size = 28 }: { label: string; size
       style={{
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.38),
+        fontSize: Math.max(10, Math.round(size * 0.38)), // the 10px floor (de-slop law 2)
         ['--av-bg' as string]: `hsl(${hue}, 16%, 18%)`,
         color: `hsl(${hue}, 22%, 72%)`,
       }}

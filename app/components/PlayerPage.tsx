@@ -19,7 +19,7 @@ import { LOTPAGE_CSS } from './LotPage';
 import { Colophon } from './Terminal';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
-import { formatPrice, formatDate, getUpcomingCounts } from '../utils';
+import { closeCut, formatPrice, formatDate, getUpcomingCounts } from '../utils';
 import FollowButton from './FollowButton';
 import HeroChart, { type HeroLine } from '../preview/terminal/HeroChart';
 import type { AuctionLot } from '../types';
@@ -108,7 +108,7 @@ function TrendLine({ yearly, name }: { yearly: PlayerEntry['yearly']; name: stri
           <span className="ns-kicker">The line</span>
           <h2 className="nsp-h2">Yearly card median, {yearly[0].y}–{yearly[yearly.length - 1].y}</h2>
         </div>
-        <span className="nsp-shctx">median realized, by year</span>
+        <span className="nsp-shctx">card sales only · years with 5+ sales</span>
       </div>
       <div className="nsp-chart">
         <HeroChart anchor={anchor} height={170} play={false} compact hideTickLabels={false} />
@@ -147,7 +147,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
     [allLots, playerSlug],
   );
 
-  const nav = <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
+  const nav = <ArtistNav activeSlug="" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
 
   if (!entry) {
     const loading = players === null && !loadFailed;
@@ -197,7 +197,13 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
         </div>
         <p className="nsp-dek">
           The whole market for one athlete — cards, game-worn and the physical record read together across every
-          sale lectr has catalogued. Medians of what sold; the yearly line is the honest trend.
+          sale lectr has catalogued{(() => {
+            // one span from every row the page prints (card years + recent rows)
+            const ys = [...entry.yearly.map(y => y.y), ...entry.recent.map(r => +String(r.d || '').slice(0, 4)).filter(y => y > 1900)];
+            if (!ys.length) return '';
+            const lo = Math.min(...ys), hi = Math.max(...ys);
+            return lo === hi ? `, ${lo}` : `, ${lo}–${hi}`;
+          })()}. Medians of what sold; the yearly line is the honest trend.
         </p>
 
         {/* the byline ledger — medians of WHAT SOLD, deliberately uncolored: a
@@ -320,7 +326,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
               {entry.objects.map((o, i) => (
                 <span key={i} className="lectr-lot-comp" style={{ cursor: 'default' }}>
                   <span className="lectr-lot-comp-t">
-                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{o.t}</span>
+                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{(o.t || '').length >= 80 ? closeCut(o.t, 1) : o.t}</span>
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                       {CAT_LABEL[o.cat] || o.cat} · {formatDate(o.d, { month: 'short', year: 'numeric' })}
                     </span>
@@ -336,7 +342,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           <div className="nsp-shead">
             <div>
               <span className="ns-kicker">The record</span>
-              <h2 className="nsp-h2">Recent sales</h2>
+              <h2 className="nsp-h2">{entry.recent.length < entry.n ? `Latest ${entry.recent.length} of ${entry.n.toLocaleString()} sales` : 'Every sale'}</h2>
             </div>
             <span className="nsp-shctx">realized, buyer&rsquo;s premium included</span>
           </div>
@@ -344,7 +350,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
             {entry.recent.map((s, i) => (
               <span key={i} className="lectr-lot-comp" style={{ cursor: 'default' }}>
                 <span className="lectr-lot-comp-t">
-                  <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{s.t}</span>
+                  <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{(s.t || '').length >= 80 ? closeCut(s.t, 1) : s.t}</span>
                   <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                     {CAT_LABEL[s.cat] || s.cat} · {formatDate(s.d, { month: 'short', year: 'numeric' })}
                   </span>

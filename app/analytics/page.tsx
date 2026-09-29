@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { MARKETS, marketArtists } from '../constants';
+import { MARKETS, marketArtists, rosterNoun, ROSTER_PHRASE } from '../constants';
 import type { Market } from '../constants';
 import type { MarketStats } from '../types';
 import { useMarket } from '../lib/market';
@@ -273,9 +273,9 @@ export default function AnalyticsPage() {
             <div className="s">{backtest ? `${backtest.flagged.n.toLocaleString()} flagged calls, replayed · median vs estimate` : 'flagged calls, replayed · median vs estimate'}</div>
           </div>
           <div>
-            <div className="k">Makers ranked</div>
+            <div className="k">{activeKey === 'all' ? 'Names ranked' : `${rosterNoun(activeKey).replace(/^./, c => c.toUpperCase())} ranked`}</div>
             <div className="v">{Object.keys(marketStats).length || '—'}</div>
-            <div className="s">{activeKey === 'all' ? 'every roster name' : `${activeKey} roster`}</div>
+            <div className="s">{activeKey === 'all' ? ROSTER_PHRASE : `${activeKey} roster`}</div>
           </div>
         </div>
       </section>
@@ -378,7 +378,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="ns-ledger-row">
               <span className="k">Data</span>
-              <span className="val">public auction results across 16 houses.</span>
+              <span className="val">public auction results across {bookHouses} houses.</span>
             </div>
           </div>
         </div>
@@ -408,7 +408,7 @@ function DeepPools({ activeKey, mktSet, marketStats }: {
   }, [armed]);
 
   return (
-    <div ref={ref} style={{ minHeight: armed ? undefined : 400 }}>
+    <div ref={ref} data-pools style={{ minHeight: POOLS_HOLD }}>
       <div className="rail" style={{ paddingTop: 26 }}>
         {/* no mark here — BookMark belongs to "The full book" head below;
             one glyph, one room (the mark system's premise) */}
@@ -425,6 +425,12 @@ function DeepPools({ activeKey, mktSet, marketStats }: {
     </div>
   );
 }
+
+// CLS: the pools grid lands ~1,740-2,520px tall once the corpus streams in; the
+// placeholder used to hold 260-400px, so a reader scrolled to the methods /
+// footer watched them get shoved down (0.53 on /analytics). Hold the grid's
+// settled height while it loads.
+const POOLS_HOLD = 'clamp(1740px, 175vw, 2520px)'; // measured settled: 2,518px @1440 · ~1,740px @390
 
 function DeepPoolsBody(props: {
   activeKey: Market;
