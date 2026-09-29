@@ -35,7 +35,7 @@
  */
 import { readSegment, writeSegment } from './corpus-io';
 import { toUsdDated, fxRateFor } from '../app/lib/normalize';
-import type { AuctionLot, Currency, PriceBasis } from '../app/types';
+import { isCurrency, type AuctionLot, type Currency, type PriceBasis } from '../app/types';
 
 const WRITE = process.argv.includes('--write');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
@@ -44,10 +44,9 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // Bonhams sells in GBP/USD/EUR/HKD (and a few others) — the lot record hands us
 // an ISO code, so we just validate it against the currencies we can convert.
-const KNOWN: Currency[] = ['USD', 'GBP', 'EUR', 'HKD', 'CNY', 'AUD', 'CHF'];
 function normCurrency(iso: string | undefined, fallback: Currency): Currency {
-  const c = (iso || '').toUpperCase() as Currency;
-  return KNOWN.includes(c) ? c : fallback;
+  const c = (iso || '').toUpperCase();
+  return isCurrency(c) ? c : fallback;
 }
 
 // ── money stamping — byte-identical to resolve-christies' stampSold: realized

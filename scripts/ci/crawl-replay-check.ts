@@ -17,16 +17,23 @@
  *           under replay, then hashes every file it wrote (segment, leg-health,
  *           …) into the JSON.
  *
- * Usage:
- *   # 1. record (live network; writes the tape; run the CLI and/or parse mode)
- *   RAY_HTTP_RECORD=/tmp/tape/phillips RAY_HOUSE=phillips RAY_ONLY=eddie-martinez \
- *     npx tsx scripts/ray-crawl.ts                       # from a scratch cwd
- *   npx tsx scripts/ci/crawl-replay-check.ts --mode parse --house phillips \
- *     --only eddie-martinez --tape /tmp/tape/phillips --record --out /dev/null
- *   # 2. baseline on the old code, 3. compare on the new code:
- *   npx tsx scripts/ci/crawl-replay-check.ts --mode parse --house phillips \
- *     --only eddie-martinez --tape /tmp/tape/phillips --out before.json
- *   npx tsx scripts/ci/crawl-replay-check.ts … --out after.json --compare before.json
+ * Usage (the tape is the only state; record once, replay forever):
+ *   # 1. record — live network, real Chrome UA, the crawler's own politeness.
+ *   #    Record mode serves already-taped requests from the tape, so re-running
+ *   #    (or recording parse mode after the CLI leg) only fetches what's new.
+ *   crawl-replay-check.ts --mode cli   --house phillips --only eddie-martinez --tape T --out x.json --record
+ *   crawl-replay-check.ts --mode parse --house phillips --only eddie-martinez --makers eddie-martinez,rolex \
+ *     --tape T --out x.json --record
+ *   # 2. baseline on the old code, 3. the same command on the new code + --compare:
+ *   crawl-replay-check.ts --mode parse … --tape T --out before.json
+ *   crawl-replay-check.ts --mode parse … --tape T --out after.json --compare before.json
+ *
+ * Flags: --only (RAY_ONLY; also derives the auction scope), --makers (parse
+ * mode per-maker roster, default --only), --seed <segment.ndjson.gz> (cli mode:
+ * start from a prior segment so merge/promotion/eviction/incremental-skip run),
+ * --enrich N (parse mode: enrich the first N lots, default 40). RAY_REPLAY_TMP
+ * sets the cli mode's temp root. Replay freezes the clock at the recording's
+ * start, so a tape keeps replaying identically on later days.
  *
  * Exit 1 when --compare differs. Never writes to R2/Supabase: segmented legs
  * only write local files, and the cli mode runs in a temp cwd.
@@ -91,6 +98,7 @@ async function runParse(): Promise<Json> {
   const produced: unknown[] = [];
   for (const h of houses) {
     const reg = R[h];
+    const mark = produced.length;
     if (!reg) throw new Error(`no registry entry for ${h}`);
     if (reg.crawlArtist) {
       for (const a of roster) {
@@ -113,6 +121,14 @@ async function runParse(): Promise<Json> {
       calls[`${h}.crawl()`] = lots;
       calls[`${h}.state()`] = reg.state ? reg.state() : null;
       produced.push(...lots);
+    }
+    // house invariants (lib/houses registry) — reported on stderr, never in the
+    // compared JSON, so a baseline taken before the registry existed still matches
+    if (reg.invariants) {
+      const own = produced.slice(mark);
+      const bad: string[] = reg.invariants(own);
+      console.error(`[replay-check] ${h} invariants: ${own.length} lots, ${bad.length} violation(s)${bad.length ? ' — ' + bad.slice(0, 5).join(' | ') : ''}`);
+      if (bad.length) process.exitCode = 1;
     }
     if (reg.enrich) {
       const targets = (produced as { url?: string }[]).filter(l => l.url).slice(0, ENRICH_N);
@@ -141,6 +157,13 @@ function hashTree(dir: string): Json {
 
 function runCli(): Json {
   const cwd = fs.mkdtempSync(path.join(process.env.RAY_REPLAY_TMP || os.tmpdir(), `ray-replay-${HOUSE}-`));
+  // --seed <segment.ndjson.gz>: start from a prior segment instead of a bootstrap
+  // run, so the merge / promotion / eviction / incremental-skip paths execute
+  const seed = arg('seed');
+  if (seed) {
+    fs.mkdirSync(path.join(cwd, 'data', 'corpus', 'segments'), { recursive: true });
+    fs.copyFileSync(seed, path.join(cwd, 'data', 'corpus', 'segments', `${HOUSE}.ndjson.gz`));
+  }
   const env = {
     ...process.env,
     RAY_HOUSE: HOUSE,

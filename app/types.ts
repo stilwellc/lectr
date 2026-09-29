@@ -8,7 +8,13 @@ export type AuctionHouse = 'Phillips' | "Sotheby's" | "Christie's" | 'Wright' | 
 /** 'withdrawn'/'unknown-result' are actively used post-migration for vanished
     or unreconciled non-Goldin lots (see §1d + W11). */
 export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn' | 'unknown-result';
-export type Currency = 'USD' | 'GBP' | 'EUR' | 'HKD' | 'CNY' | 'AUD' | 'CHF';
+/** Every currency the money layer can carry and convert (normalize.ts FX
+    table) — the ONE runtime list; `Currency` is derived from it, and crawlers
+    validate a house-supplied code with `isCurrency` instead of re-typing it. */
+export const CURRENCIES = ['USD', 'GBP', 'EUR', 'HKD', 'CNY', 'AUD', 'CHF'] as const;
+export type Currency = typeof CURRENCIES[number];
+export const isCurrency = (c: unknown): c is Currency =>
+  typeof c === 'string' && (CURRENCIES as readonly string[]).includes(c);
 export type LotCategory = 'original' | 'print' | 'photograph' | 'sculpture' | 'design' | 'object' | 'unknown';
 /** How a sold price was established. v2 expands the union while KEEPING the old
     values ('hammer' | 'last-tracked-bid' | 'goldin-final-bid') so pre-migration

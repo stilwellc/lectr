@@ -17,8 +17,8 @@
  *
  * We match a stuck lot to its API record on the numeric id in its detail URL
  * (phillips.com/detail/<slug>/<id>), which the API echoes in `detailLink`. The
- * artist-slug → maker-id map is read (never executed) out of ray-crawl.ts's
- * ArtistConfig, the same table crawlPhillips uses.
+ * artist-slug → maker-id map is read (never executed) out of the ArtistConfig
+ * roster in scripts/lib/houses/artists.ts, the same table crawlPhillips uses.
  *
  * Doctrine (mirrors crawlPhillips): hammerPlusBP is premium-inclusive →
  * premiumNative, priceBasis 'realized', hammer null; currency sniffed from
@@ -76,13 +76,14 @@ function stripMoney(l: Record<string, unknown>) {
   for (const f of ['realizedUsd', 'realizedNative', 'hammerUsd', 'hammerNative', 'premiumUsd', 'premiumNative', 'hammerPrice', 'premiumPrice', 'priceUsd', 'priceBasis']) l[f] = null;
 }
 
-/** artist-slug → phillips maker id, READ (not run) out of ray-crawl's ArtistConfig.
+/** artist-slug → phillips maker id, READ (not run) out of the ArtistConfig roster
+ *  (scripts/lib/houses/artists.ts).
  *  Per-block parse: for each `slug: '…'`, take the nearest phillips id before the
  *  next slug. Falls back to an empty map if the source shape drifts. */
 function makerIdMap(): Record<string, string> {
   const map: Record<string, string> = {};
   try {
-    const src = fs.readFileSync(path.join(process.cwd(), 'scripts', 'ray-crawl.ts'), 'utf8');
+    const src = fs.readFileSync(path.join(process.cwd(), 'scripts', 'lib', 'houses', 'artists.ts'), 'utf8');
     const slugRe = /slug:\s*['"]([a-z0-9-]+)['"]/g;
     const idxs: { slug: string; pos: number }[] = [];
     let m: RegExpExecArray | null;
