@@ -15,6 +15,7 @@ import type { AuctionLot } from '../app/types';
 import { buildIdf, buildVectors, SIM_FLAGS } from '../app/lib/similarity';
 import { AUTOGRAPH_SLUGS } from '../app/lib/identity';
 import { resolveComps, estimateValue, COMP_GATE } from '../app/lib/value';
+import { medianOr } from '../app/lib/stats';
 
 const CORPUS = path.join(process.cwd(), 'data', 'corpus');
 // buffer-safe NDJSON read via the shared codec (the corpus is NDJSON now; a raw
@@ -23,12 +24,7 @@ const readGz = (f: string): AuctionLot[] =>
   (require('./corpus-io').readGzRows(path.join(CORPUS, f + '.gz'))) as AuctionLot[];
 
 type L = AuctionLot & { _v?: Record<string, number>; estLowUsd?: number; estHighUsd?: number; realizedUsd?: number };
-const median = (a: number[]) => {
-  if (!a.length) return 0;
-  const s = [...a].sort((x, y) => x - y);
-  const n = s.length;
-  return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;
-};
+const median = (a: number[]) => medianOr(a, 0);
 
 // NO prior cap — production build-market feeds the engine the FULL same-maker
 // roster; a 500 cap was measured to understate shipped coverage by ~7pp (64.9%

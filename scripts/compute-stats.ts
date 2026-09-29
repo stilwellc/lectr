@@ -5,6 +5,7 @@
  * from ray-crawl.ts — one implementation, one shape.
  */
 import type { AuctionLot, MarketStats, PricePoint, HouseCount, AuctionHouse } from '../app/types';
+import { medianSorted } from '../app/lib/stats';
 
 /** The trailing-year sales count on a TRUE calendar window. The UI used to
  *  print "12 mo sold" from priceHistory.slice(-4) — the last four NON-EMPTY
@@ -37,7 +38,9 @@ export function computeStats(lots: AuctionLot[], existingStats: MarketStats | nu
 
   const prices = recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
   const avg = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : existingStats?.avgPriceLast12Months || 0;
-  const median = prices.length ? (prices.length % 2 ? prices[prices.length >> 1] : Math.round((prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2)) : existingStats?.medianPriceLast12Months || 0;
+  // stats.medianSorted; an even-n mean is rounded to whole dollars (an odd-n
+  // median is an observed price already) — the historical stats.json contract
+  const median = prices.length ? (prices.length % 2 ? medianSorted(prices) : Math.round(medianSorted(prices))) : existingStats?.medianPriceLast12Months || 0;
 
   const record = sold.reduce((best, l) =>
     (l.priceUsd || 0) > (best?.priceUsd || 0) ? l : best, sold[0]);

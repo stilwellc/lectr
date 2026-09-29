@@ -1,3 +1,5 @@
+import { medianOr } from './lib/stats';
+
 // Neutral ivory ramp: houses are distinguished by LIGHTNESS, not hue — hue is
 // reserved for meaning (wine = emphasis, gold = site primary). Each step mixes
 // the warm foreground into the background, so the ramp tracks both themes and
@@ -202,10 +204,7 @@ export function localToday(): string {
 /** Median of a numeric list, null when empty — the app's ONE median.
  *  (Hand-rolled copies of this litter the rooms; new code imports this.) */
 export function median(a: number[]): number | null {
-  if (!a.length) return null;
-  const s = [...a].sort((x, y) => x - y);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  return medianOr(a, null);
 }
 
 /** Upgrade http:// image URLs to https:// so they don't trip mixed-content on

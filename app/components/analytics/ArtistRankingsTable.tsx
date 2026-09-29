@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice, fmtSignedPct, toneOf, overEstimatePct } from '../../utils';
 import { demandSeries, formatDemand } from '../../lib/demand';
+import { medianOr, medianSorted } from '../../lib/stats';
 import ArtistAvatar from '../ArtistAvatar';
 import Flick from '../Flick';
 import { ARTISTS, marketArtists, Market } from '../../constants';
@@ -62,20 +63,13 @@ export function medianOverEstimatePct(lots: AuctionLot[]): number {
     .filter((v): v is number => v != null)
     .sort((x, y) => x - y);
   if (pcts.length < 3) return -999;
-  return pcts.length % 2
-    ? pcts[(pcts.length - 1) / 2]
-    : (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2;
+  return medianSorted(pcts);
 }
 
 const COLLAPSED_ROWS = 10;
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
-function medianOf(xs: number[]): number {
-  if (!xs.length) return 0;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
+const medianOf = (xs: number[]): number => medianOr(xs, 0);
 
 export default function ArtistRankingsTable({ statsByArtist, allLots, market }: Props & { market?: Market }) {
   const [sortKey, setSortKey] = useState<SortKey>('totalRevenue');

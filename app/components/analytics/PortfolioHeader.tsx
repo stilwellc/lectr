@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { MarketStats, AuctionLot } from '../../types';
 import { formatPrice, fmtSignedPct } from '../../utils';
 import { medianOverEstimatePct } from './ArtistRankingsTable';
+import { medianSorted } from '../../lib/stats';
 import { MARKETS, marketOf, MAKER_MARKETS, ARTIST_MARKET, rosterNoun, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData } from '../../hooks/useRayData';
@@ -72,11 +73,7 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
           const prices = statMedians.length
             ? statMedians
             : recentSold.map(l => l.priceUsd!).sort((a, b) => a - b);
-          const median = prices.length
-            ? (prices.length % 2
-                ? prices[(prices.length - 1) / 2]
-                : (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2)
-            : 0;
+          const median = prices.length ? medianSorted(prices) : 0;
           return { label: 'Median sale, past year', value: formatPrice(median), sub: 'realized · no house estimates in this market', tone: '' };
         })();
 

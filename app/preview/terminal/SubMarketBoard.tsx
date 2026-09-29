@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { ARTIST_LABEL, type Market } from '../../constants';
+import { median as statsMedian } from '../../lib/stats';
 import type { AuctionLot } from '../../types';
 import { formatPrice, httpsImg } from '../../utils';
 import { countSubMarkets } from '../../lib/submarkets';
@@ -213,8 +214,8 @@ export function DemandLine({ series, mini = false, dir }: { series: { period: st
     const step = Math.max(1, Math.ceil(series.length / 48));
     const vals = series.filter((_, i) => i % step === 0 || i === series.length - 1).map((s) => s.value);
     if (vals.length < 2) return null;
-    const sorted = [...vals].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
+    // THE median (was sorted[n/2], the upper-middle, for even n)
+    const median = statsMedian(vals);
     const lo = Math.min(...vals);
     const hi = Math.max(...vals);
     const span = (hi - lo) || 1;

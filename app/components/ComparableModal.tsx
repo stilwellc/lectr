@@ -11,6 +11,7 @@ import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { signedPct, dirOf } from './SubMarketDirectory';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import { safeHref } from '../lib/safe-href';
+import { medianSorted } from '../lib/stats';
 import type { MarketData, Backtest } from '../hooks/useRayData';
 import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
@@ -674,9 +675,7 @@ export default function ComparableModal({
     // The comps-vs-ask read itself is the ENGINE's (called.signal.label/pct)
     // — this modal computes no ratio of its own, so it can never color a
     // pure-premium 1.0–1.3 band green against the engine's own threshold.
-    const median = called?.signal.med ?? (prices.length % 2 === 0
-      ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
-      : prices[Math.floor(prices.length / 2)]);
+    const median = called?.signal.med ?? medianSorted(prices);
     return { median, low, high, total: prices.length };
   }, [comparables, called, band]);
 
@@ -688,9 +687,7 @@ export default function ComparableModal({
     if (!compStats || comparables.length === 0) return 'Median';
     const prices = comparables.map(c => c.lot.priceUsd).filter((p): p is number => !!p).sort((a, b) => a - b);
     if (prices.length === 0) return 'Median';
-    const poolMed = prices.length % 2 === 0
-      ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
-      : prices[Math.floor(prices.length / 2)];
+    const poolMed = medianSorted(prices);
     return poolMed > 0 && Math.abs(compStats.median - poolMed) / poolMed > 0.1 ? 'lectr value' : 'Median';
   }, [compStats, comparables]);
 

@@ -45,19 +45,11 @@ function slug(s: string | null | undefined): string {
     .replace(/^-+|-+$/g, '');
 }
 
-// ── value.ts primitives (module-private there — copied) ──────────────────────
-function weightedMedian(pairs: [number, number][]): number {
-  const s = [...pairs].sort((a, b) => a[0] - b[0]);
-  const total = s.reduce((t, p) => t + p[1], 0);
-  let c = 0;
-  for (const [v, w] of s) {
-    c += w;
-    if (c >= total / 2) return v;
-  }
-  return s.length ? s[s.length - 1][0] : 0;
-}
+// ── order statistics — the ONE definitions (app/lib/stats.ts via value.ts) ──
 // THE quantile (P2): the engine's lerp convention, imported — no local copies
 import { quantile } from '../app/lib/value';
+// THE lower weighted median (stats.ts) — formerly a local copy here
+import { weightedMedian } from '../app/lib/stats';
 const lerpQuantile = quantile;
 
 // ── card + pokemon keys (module-private in sub-markets.ts — copied, minus the
