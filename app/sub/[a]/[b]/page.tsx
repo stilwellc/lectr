@@ -71,7 +71,8 @@ const READ_SENTENCE: Record<string, string> = {
   descriptive: 'typical price and sale volume',
 };
 
-export function generateMetadata({ params }: { params: { a: string; b: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ a: string; b: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const row = findRow(params.a, params.b);
   const label = row?.label || subCatLabel(params.b);
   const read = READ_SENTENCE[row?.readType || ''] || 'strongest honest read';
@@ -88,7 +89,8 @@ export function generateMetadata({ params }: { params: { a: string; b: string } 
   };
 }
 
-export default function StaticSubPage({ params }: { params: { a: string; b: string } }) {
+export default async function StaticSubPage(props: { params: Promise<{ a: string; b: string }> }) {
+  const params = await props.params;
   const slug = `${params.a}:${params.b}`;
   // key: navigating between sub dossiers must remount (fresh chart/series
   // state) — same doctrine as the query route it replaces.

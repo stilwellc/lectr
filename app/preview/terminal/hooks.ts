@@ -46,7 +46,7 @@ export function useInView<T extends HTMLElement>(
   // threshold 0 = fire when ANY pixel enters (a tall element taller than
   // ~6× the viewport can never reach a 0.15 ratio, which silently hid content)
   opts: IntersectionObserverInit = { threshold: 0, rootMargin: '0px 0px -6% 0px' },
-): [React.RefObject<T>, boolean] {
+): [React.RefObject<T | null>, boolean] {
   const ref = useRef<T>(null);
   const [seen, setSeen] = useState(false);
   useEffect(() => {

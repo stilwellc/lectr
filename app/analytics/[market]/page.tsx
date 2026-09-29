@@ -17,7 +17,8 @@ export function generateStaticParams() {
 
 // Title must mirror SEGMENT_PAGES' noun in app/lib/market.tsx — the pushState
 // market switch re-asserts `${label} analytics — lectr` by hand.
-export function generateMetadata({ params }: { params: { market: string } }) {
+export async function generateMetadata(props: { params: Promise<{ market: string }> }) {
+  const params = await props.params;
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
   return {
     title: `${label} analytics`,

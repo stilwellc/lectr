@@ -19,7 +19,7 @@ const nextConfig = {
   // Pure static export — the whole site prerenders to files (Cloudflare Pages
   // hosting; no server anywhere, which is what the Vercel fair-use block
   // taught us the hard way).
-  // RAY_DEV_NO_EXPORT=1 (dev only): `next dev` refuses /[artist] under
+  // RAY_DEV_NO_EXPORT=1 (dev only): `next dev` refuses a dynamic route under
   // output:'export' (it wants generateStaticParams on the page itself, though
   // the layout's satisfies the build) — unset output so hydration can be
   // debugged locally with unminified React errors. Builds are unaffected.
@@ -28,18 +28,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-      };
-    }
-    return config;
-  },
-  optimizeFonts: true,
-  swcMinify: true,
+  // Next 16 builds with Turbopack by default. The old webpack hook (browser
+  // fallbacks for fs/path) is gone: fs/path are only imported by server-side
+  // build-time modules (generateStaticParams / metadata / sitemap / OG), never
+  // by a client component, so no browser alias is needed.
   compress: true,
   generateEtags: true,
 };

@@ -41,7 +41,7 @@ export default function RollingNumber({
 }: Props) {
   const reduce = useReducedMotion();
   const [display, setDisplay] = useState(from);
-  const raf = useRef<number>();
+  const raf = useRef<number | undefined>(undefined);
   const started = useRef(false);
 
   useEffect(() => {

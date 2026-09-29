@@ -162,7 +162,9 @@ jobs:
           echo "verifying $url"
           for i in $(seq 1 8); do
             html=$(curl -s "$url/?cb=$i" || true)
-            chunk=$(echo "$html" | grep -oE '/_next/static/chunks/app/page-[a-z0-9]+\.js' | head -1)
+            # bundler-agnostic: Turbopack (Next 16 default) names chunks by
+            # content hash, not app/page-<hash>.js — take the first real chunk
+            chunk=$(echo "$html" | grep -oE 'src="/_next/static/chunks/[A-Za-z0-9_.-]+\.js"' | head -1 | sed -E 's/^src="|"$//g')
             if [ -n "$chunk" ]; then
               code=$(curl -s -o /dev/null -w '%{http_code}' "$url$chunk")
               ctype=$(curl -s -o /dev/null -w '%{content_type}' "$url$chunk")

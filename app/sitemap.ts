@@ -42,6 +42,9 @@ const BASE = 'https://lectr.bid';
  *  first HTML pass. The static flagged-lot permalinks (/lot/<id>, the same
  *  build-time set app/lot/[id] prerenders) are appended so each night's
  *  below-market calls are crawlable the day they're flagged. */
+// Next 15+ requires route handlers (sitemap/OG) to opt into static under output:'export'.
+export const dynamic = 'force-static';
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const liveMarkets = MARKETS.filter(m => m.live && m.key !== 'all').map(m => m.key);
   const staticRoutes = ['', '/art', '/design', '/watches', '/science', '/sports', '/culture', '/value', '/analytics', '/makers', '/about', '/blog',
