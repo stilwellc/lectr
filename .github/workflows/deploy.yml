@@ -103,8 +103,8 @@ jobs:
           echo "✓ local data $local_stamp ≥ prod $prod_stamp"
 
       # CODE GATE — typecheck needs the served JSON the app imports (pulled
-      # above), so it runs here, not before the pull. Lint is a notice-only
-      # no-op until an ESLint flat config lands (scripts/ci/lint.mjs).
+      # above), so it runs here, not before the pull. Lint gates on errors
+      # only (eslint.config.mjs; legacy-noise rules are warnings).
       - name: Typecheck
         run: npm run typecheck
       - name: Unit tests
