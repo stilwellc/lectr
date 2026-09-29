@@ -217,7 +217,7 @@ New `normalizeCorpus` order (existing passes keep their positions; new passes ma
 2c ★ normalizeArtCategory          // category re-derivation (classification report, precision 98.8→99.4%)
 3  enrichWatchReferences
 3b ★ recoverPlayerSlugs            // game-used identity, sold AND upcoming in ONE pass, one function
-3c ★ stampCultureAxes              // subjectKeys[] + itemClass for culture slugs (extractors from scripts/_qa/culture-lib.ts)
+3c ★ stampCultureAxes              // subjectKeys[] + itemClass for culture slugs (extractors from scripts/oneoff/qa/culture-lib.ts)
 4  reconcileSaleDates
 5  ★ restampIdentityKeys           // MUST RUN LAST — after every category flip and with the current classifyForm
 ```
@@ -277,9 +277,9 @@ Today corrects exactly 22 stale rows (6 watch — incl. the live Cartier Ellipse
 
 ## 4 · ORDERED IMPLEMENTATION CHECKLIST + VALIDATION PLAN
 
-Every step lists the gate metric (must improve) and the guard metrics (must not regress). All backtest harnesses already exist in `scripts/_qa/` — note the art/design numbers come from verified replicas (art: 150/150 exact match vs shipped; design: 0.2% read drift); **any edit to comps.ts invalidates the clones — re-verify the replica match before reusing a probe.**
+Every step lists the gate metric (must improve) and the guard metrics (must not regress). All backtest harnesses already exist in `scripts/oneoff/qa/` — note the art/design numbers come from verified replicas (art: 150/150 exact match vs shipped; design: 0.2% read drift); **any edit to comps.ts invalidates the clones — re-verify the replica match before reusing a probe.**
 
-**Step 0 — close the open measurement (blocking for step 1).** Rerun `scripts/_qa/classification-normalize-spec.ts` to completion (~20–40 min; its per-artist before/after reads/flags/medAbsErr table was still computing at deadline). Gate: flipped-artist hindsight error must not regress vs the audit2-art 0.46 baseline.
+**Step 0 — close the open measurement (blocking for step 1).** Rerun `scripts/oneoff/qa/classification-normalize-spec.ts` to completion (~20–40 min; its per-artist before/after reads/flags/medAbsErr table was still computing at deadline). Gate: flipped-artist hindsight error must not regress vs the audit2-art 0.46 baseline.
 
 **Step 1 — corpus healing (corpus-normalize.ts): passes 2c, 3b, 3c, 5 + shard regen.**
 Validate: 185 category flips ±5; formKey drift 22→0 (`classification-drift.ts`); game-used sold identity ≥ 93% (`game-used-coverage.ts`), canary wired at 85%; the 3 upcoming art flips still value=null-or-honest-print-read (they are value=null today, so zero live flags may be lost); bonhams-31913-7 no longer flags; shards carry formKey on 100% of rows.
@@ -301,7 +301,7 @@ Validate: science hindsight coverage 179→1,300±100 with per-slug within-±100
 
 **Step 7 — audit re-run.** Regenerate `audit-summary.json` / `audit2-*.json`. Must-improve: game-used bands (was 0), science bands (scientific-instruments was 0/120), watches formMatch 0.5→1.0, culture reads present as reference bands. Must-not-regress: audit2 medAbsErr per vertical (art ≤0.46, design ≤0.44, watches ≤0.42); total live flag count may DROP (that is the point — the drops are enumerated dishonest classes: sniffed-art, model-name-watch, culture).
 
-**Step 8 (deferred, in priority order):** (a) watches era/recency gate — **MEASURED AND DECLINED Aug 30 2026** (`scripts/_qa/era-gate-loo.ts`, build-side engine, 4,000-anchor LOO: ±15y touched-read err 35.8%→36.2%, ±10y −1.3pt touched for 73 lost reads — under the ≥2pt bar; the 1,500-anchor run showed a phantom −2.5pt win, so any re-litigation needs n≥4,000). Same pass adopted the build-side ART area gate at ≤4× (`scripts/_qa/dims-gate-loo.ts`: touched 95/2,185 reads 49.4%→39.9%, aggregate 45.4%→44.9%; ≤2.5× — this spec's client band — measured WORSE there; design/watches declined) — wired in `app/lib/similarity.ts`; (b) Goldin sold history → client shards or server-side band precompute vs the 507K R2 corpus (worth ~5× the game-used parser's live yield); (c) crawl-stamp dimensions + design modelKey (unlocks the currently-blind 2.2× length gate: fires on 29.8% of pairs when it can see, sees 0.28%); (d) meteorite weight parsing (the biggest unexploited within-identity lever for science bands).
+**Step 8 (deferred, in priority order):** (a) watches era/recency gate — **MEASURED AND DECLINED Aug 30 2026** (`scripts/oneoff/qa/era-gate-loo.ts`, build-side engine, 4,000-anchor LOO: ±15y touched-read err 35.8%→36.2%, ±10y −1.3pt touched for 73 lost reads — under the ≥2pt bar; the 1,500-anchor run showed a phantom −2.5pt win, so any re-litigation needs n≥4,000). Same pass adopted the build-side ART area gate at ≤4× (`scripts/oneoff/qa/dims-gate-loo.ts`: touched 95/2,185 reads 49.4%→39.9%, aggregate 45.4%→44.9%; ≤2.5× — this spec's client band — measured WORSE there; design/watches declined) — wired in `app/lib/similarity.ts`; (b) Goldin sold history → client shards or server-side band precompute vs the 507K R2 corpus (worth ~5× the game-used parser's live yield); (c) crawl-stamp dimensions + design modelKey (unlocks the currently-blind 2.2× length gate: fires on 29.8% of pairs when it can see, sees 0.28%); (d) meteorite weight parsing (the biggest unexploited within-identity lever for science bands).
 
 **Global regression tripwires (every step):** repeat-sales card index untouched (no card-path file is modified); `signalMagnitude`/`dealScore` semantics unchanged; edition path precedence unchanged; flag beat definition (realized ≥ estMid, premium-flattered ~1.25×) used ONLY for A/B deltas, never quoted as an absolute win rate.
 

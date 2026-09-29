@@ -92,7 +92,7 @@ for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) MARKE
 /** Options for the build (defaults = the production nightly). `evalOnly` +
  *  `lots` + `nowMs` are the point-in-time evaluation seam: value a supplied
  *  corpus as of a past day and return it WITHOUT writing any artifact
- *  (scripts/_qa harnesses re-score the live snapshots through this). */
+ *  (scripts/oneoff/qa harnesses re-score the live snapshots through this). */
 export interface MarketBuildOpts {
   lots?: AuctionLot[];
   nowMs?: number;
@@ -432,7 +432,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
 
   // ── 2 · repeat-sale groups: physical matches among SOLD lots ──
   // Extracted to scripts/lib/repeat-sale.ts (Sep 10 2026) so the grouping can be
-  // validated offline (scripts/_qa/repeat-sale-equiv.ts) and so the eligibility
+  // validated offline (scripts/oneoff/qa/repeat-sale-equiv.ts) and so the eligibility
   // hoist that took it from ~28min to seconds is provably result-identical.
   if (!opts.evalOnly) {
     const rs = groupRepeatSales(soldSorted, engineAll, tbl);
@@ -470,7 +470,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // Sep 10 2026: the 54 per-maker indices are independent pure computations
   // (~1,700s sequential on the Aug 25 nightly — 40% of assemble). They now run
   // across a worker pool (scripts/lib/maker-pool.ts); results and their shape
-  // are identical to the sequential loop (scripts/_qa/maker-pool-equiv.ts).
+  // are identical to the sequential loop (scripts/oneoff/qa/maker-pool-equiv.ts).
   if (!opts.evalOnly) {
     const pool = await buildMakerIndicesParallel(makerLotsBySlug);
     Object.assign(makerIndex, pool.makerIndex);

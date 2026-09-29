@@ -1,7 +1,7 @@
 /**
  * subject-domains.ts — curated subject -> domain map for the culture drill
  * stamp. GENERATED Jul 31 2026 from the top-1500 corpus subjects
- * (scripts/_qa/subjects-top.txt), LLM-classified + spot-audited. Domains:
+ * (scripts/oneoff/qa/subjects-top.txt), LLM-classified + spot-audited. Domains:
  * music | hollywood | political | historic | military | royalty | literary |
  * space-science | sports | other. Regenerate from a fresh subject dump when
  * the corpus head shifts.

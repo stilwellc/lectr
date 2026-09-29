@@ -19,7 +19,7 @@
 // one of ~1.1M sold lots into the token/ref/serial maps and built a candidate
 // Set + array per lot. Restricting BOTH the index and the outer loop to
 // eligible lots skips no pair that could ever union, so the groups are
-// identical (scripts/_qa/repeat-sale-equiv.ts diffs old-vs-new on a local
+// identical (scripts/oneoff/qa/repeat-sale-equiv.ts diffs old-vs-new on a local
 // corpus and asserts exactly that), and the eligible set is a small fraction
 // of the book — the 230 pairs speak to that.
 import type { AuctionLot } from '../../app/types';

@@ -12,7 +12,7 @@
 // so the only un-walled source of realized prices is the Wayback Machine, and
 // this parser is fed archived snapshots (`/web/<ts>id_/<original>` — the `id_`
 // suffix returns the original bytes with no Archive toolbar injected).
-// Full recon, CDX numbers and yield measurements: scripts/_qa/JULIENS_PROPSTORE_PLAN.md
+// Full recon, CDX numbers and yield measurements: scripts/oneoff/qa/JULIENS_PROPSTORE_PLAN.md
 //
 // ── SUBJECT ANCHORING ────────────────────────────────────────────────────────
 // A lot-details page renders exactly ONE `div.message-closed` and ONE

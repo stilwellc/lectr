@@ -389,7 +389,7 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
   // with the same Cholesky factor the fit already uses — O(p²·q), exact for
   // an SPD A (ridge guarantees PD). Rows for non-quarter columns are a shared
   // zero row. RAY_COV_EIGEN=1 forces the old full-inverse path (equivalence
-  // harness: scripts/_qa/maker-cov-equiv.ts); a non-PD A also falls back.
+  // harness: scripts/oneoff/qa/maker-cov-equiv.ts); a non-PD A also falls back.
   let cov: number[][] = [];
   const qcols = Array.from(design.quarterCols.values());
   let fast = process.env.RAY_COV_EIGEN !== '1' && qcols.length > 0;

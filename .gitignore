@@ -47,3 +47,6 @@ shots/
 
 # per-leg crawl health record (scripts/lib/leg-health.ts) — a CI artifact, never committed
 /leg-health.json
+
+# Claude Code local state (worktrees, settings)
+.claude/
