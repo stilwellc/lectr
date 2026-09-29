@@ -1,3 +1,6 @@
+// http-tape FIRST: with RAY_HTTP_RECORD/RAY_HTTP_REPLAY set it wraps fetch (and,
+// on replay, freezes the clock) before any other module evaluates. No-op otherwise.
+import './lib/http-tape';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as cheerio from 'cheerio';
@@ -4471,6 +4474,19 @@ async function main() {
 
   console.log(`\n[Ray] Done. ${allLots.length} total lots written (corpus gz + slim served + engine).`);
 }
+
+// Per-house entry points, for the record/replay equivalence harness
+// (scripts/ci/crawl-replay-check.ts). Not used by main().
+export const HOUSE_REGISTRY = {
+  phillips: { crawlArtist: crawlPhillips, enrich: enrichPhillips },
+  sothebys: { crawlArtist: crawlSothebys, crawlAuctions: crawlSothebysAuctions, closeTimes: enrichSothebysCloseTimes, enrich: enrichSothebys },
+  christies: { crawlArtist: crawlChristies, crawlAuctions: crawlChristiesAuctions, enrich: enrichChristies },
+  wright: { crawlArtist: crawlWright },
+  lama: { crawlArtist: crawlLama },
+  bonhams: { crawlArtist: crawlBonhams, enrich: enrichBonhams },
+  goldin: { crawl: crawlGoldin, state: () => ({ completedAuctions: Array.from(goldinCompletedAuctions).sort(), statusOk: goldinStatusOk, feedComplete: goldinFeedComplete }) },
+};
+export { HEALTH };
 
 // RAY_SKIP_MAIN lets a test import the crawler's exported functions without
 // triggering a full corpus crawl. Default (unset) = normal run, unchanged.
