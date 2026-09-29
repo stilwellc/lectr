@@ -51,6 +51,7 @@ import {
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
+import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 
 const ROWS_PAGE = 12;
@@ -83,11 +84,7 @@ function compactCount(n: number): string {
   if (n >= 1e4) return `${(n / 1e3).toFixed(1)}K`;
   return n.toLocaleString();
 }
-function median(nums: number[]): number {
-  if (!nums.length) return 0;
-  const s = [...nums].sort((a, b) => a - b);
-  return s.length % 2 === 0 ? (s[s.length / 2 - 1] + s[s.length / 2]) / 2 : s[Math.floor(s.length / 2)];
-}
+const median = (nums: number[]): number => medianOr(nums, 0);
 
 /* ── ROOM 1c · THE DIAL STRIP — one fused stat band, never boxed tiles.
    Numerals ride fixed min-width slots so CountUp can't shift a neighbor. ── */

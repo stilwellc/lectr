@@ -18,6 +18,7 @@
  * Called from scripts/build-market.ts with the full corpus + stats + makerIndex.
  */
 import type { AuctionLot } from '../app/types';
+import { medianOr } from '../app/lib/stats';
 import { ARTISTS } from '../app/constants';
 import type { MakerIndexResult } from './hedonic-index';
 import { buildRepeatSaleIndex } from './repeat-sales';
@@ -130,11 +131,9 @@ function yearlyHist(sold: AuctionLot[]): { period: string; value: number; n: num
   return rows.length >= 3 ? rows : undefined;
 }
 
+/** stats.median with this module's historical 0-on-empty contract */
 function median(a: number[]): number {
-  const s = a.slice().sort((x, y) => x - y);
-  const n = s.length;
-  if (!n) return 0;
-  return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  return medianOr(a, 0);
 }
 
 /**

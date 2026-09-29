@@ -32,6 +32,7 @@
  */
 import { Matrix, CholeskyDecomposition, EigenvalueDecomposition } from 'ml-matrix';
 import type { AuctionLot } from '../app/types';
+import { medianOr } from '../app/lib/stats';
 
 // ── public shapes ──────────────────────────────────────────────────────────
 export interface HedonicSeriesPoint {
@@ -123,11 +124,9 @@ function quarterOf(saleDate: string): string | null {
   if (mo < 1 || mo > 12) return null;
   return `${m[1]}-Q${Math.ceil(mo / 3)}`;
 }
+/** stats.median with this module's historical 0-on-empty contract */
 function median(a: number[]): number {
-  if (!a.length) return 0;
-  const s = a.slice().sort((x, y) => x - y);
-  const n = s.length;
-  return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  return medianOr(a, 0);
 }
 /** Index of the quarter that is fully in the PAST relative to `now`.
  *  We never end on the current (stub) quarter — see gate 6a. */

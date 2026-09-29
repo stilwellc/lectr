@@ -9,6 +9,7 @@ import type { Market } from '../../constants';
 import type { HeroPoint } from './HeroChart';
 import { MarketTape, SubTape, TapeMonument, pickLead } from './MarketTape';
 import { fmtInt, useReducedMotion } from './hooks';
+import { medianOr } from '../../lib/stats';
 
 
 /** Market keys read naturally lowercase in the kicker ("the design market") —
@@ -198,12 +199,7 @@ interface Props {
   closingNext?: ClosingHouse[];
 }
 
-const median = (a: number[]): number => {
-  if (!a.length) return 0;
-  const s = [...a].sort((x, y) => x - y);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
+const median = (a: number[]): number => medianOr(a, 0);
 
 // Resolve the hero series for the active market — DEMAND first (measured,
 // defensible), then the realized-cohort median for markets without estimates.
