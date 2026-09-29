@@ -322,6 +322,12 @@ jobs:
           RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
       - name: Rebuild eager upcoming payload
         run: npx tsx scripts/build-upcoming.ts
+      # small precomputed page files (settlement numbers, settled calls,
+      # lot→shard index, per-lot comps, per-maker rows) so pages never load
+      # the full corpus. If it fails, pages fall back to the corpus path.
+      - name: Emit page data
+        continue-on-error: true
+        run: NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-page-stats.ts
       # ENGINE GATE (Sep 2 2026): temporal holdout through the production
       # replay path. Runs BEFORE the R2 push so a failed gate keeps last-good live.
       - name: Validate engine (temporal holdout gate)
