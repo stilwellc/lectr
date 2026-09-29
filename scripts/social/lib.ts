@@ -521,9 +521,9 @@ export function whenLabel(iso: string): string {
  *  margin. Bails to the original on anything unexpected. */
 function trimMargins(buf: Buffer, isJpeg: boolean): string | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const jpeg = require('jpeg-js') as { decode: (b: Buffer, o: { useTArray: boolean }) => { data: Uint8Array; width: number; height: number }; encode: (i: { data: Uint8Array; width: number; height: number }, q: number) => { data: Buffer } };
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PNG } = require('pngjs') as { PNG: { sync: { read: (b: Buffer) => { data: Buffer; width: number; height: number } } } };
     const img = isJpeg ? jpeg.decode(buf, { useTArray: true }) : PNG.sync.read(buf);
     const { data, width: W, height: H } = img;
