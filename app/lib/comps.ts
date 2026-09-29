@@ -26,6 +26,7 @@ import { AuctionLot, ObjectType, SoldComp } from '../types';
 // the engine band/backtest. Imported from stats (not value) so value.ts can
 // import the shape gate below without a module cycle.
 import { quantileSorted as quantile, medianSorted } from './stats';
+import { readWatchKey } from './watch-ref';
 
 export type Form =
   | 'book' | 'ephemera' | 'poster' | 'photograph' | 'textile'
@@ -273,17 +274,15 @@ const FURNITURE = new Set<Form>([
  * the title carries one, else the model line name. Comps must share the key —
  * including both having none.
  */
+// model-line vocabulary for classifyForm's wristwatch test (the KEY reader
+// lives in watch-ref.ts, word-bounded + brand-scoped)
 const WATCH_MODELS = /(submariner|daytona|datejust|day[- ]date|gmt[- ]master(?:\s*ii)?|explorer(?:\s*ii)?|sea[- ]dweller|yacht[- ]master|milgauss|air[- ]king|oyster perpetual|cellini|nautilus|aquanaut|calatrava|ellipse|gondolo|twenty[~-]?4|world time|royal oak(?: offshore)?|millenary|jules audemars|speedmaster|seamaster|constellation|de ville|railmaster|tank|santos|panth[eè]re|ballon bleu|pasha|crash|baignoire|tortue|reverso|memovox|polaris|navitimer|superocean|chronomat|monaco|carrera|autavia|el primero|defy|portugieser|portofino|ingenieur|aquatimer|luminor|radiomir|overseas|patrimony|fifty ?fathoms|villeret)/;
 
-export function watchKey(lot: Pick<AuctionLot, 'title'>): string | null {
-  const t = (lot.title || '').toLowerCase();
-  // 1 · explicit reference: "Ref. 116500LN", "reference 5711/1A"
-  const ref = t.match(/\bref(?:erence)?\.?,?\s*([a-z]?\d{3,6}[a-z]{0,4}(?:\/\d+[a-z]?)?)\b/);
-  if (ref) return ref[1];
-  // 2 · the model line name
-  const model = t.match(WATCH_MODELS);
-  if (model) return model[1].replace(/[-~ ]/g, '');
-  return null;
+export function watchKey(lot: Pick<AuctionLot, 'title'> & { artist?: string }): string | null {
+  // (Sep 28 2026) one reader, app/lib/watch-ref.ts: a labelled ref in any
+  // printed form ("Ref.", "Ref:", "Réf.", "Reference No."), else the model
+  // line — word-bounded, accent-folded, brand-scoped for the tracked makers.
+  return readWatchKey(lot.title, lot.artist)?.key ?? null;
 }
 
 /** How the watch key was derived — an explicit REFERENCE number is a tight
@@ -291,11 +290,8 @@ export function watchKey(lot: Pick<AuctionLot, 'title'>): string | null {
     Measured: ref-keyed pools IQR/med 0.53 vs model-name 1.27 (2.4× looser),
     so model-name keys cap confidence at 'medium' (H1) and cannot flag without
     a material-pure pool (§1.3). */
-export function watchKeyKind(lot: Pick<AuctionLot, 'title'>): 'ref' | 'model-name' | null {
-  const t = (lot.title || '').toLowerCase();
-  if (/\bref(?:erence)?\.?,?\s*([a-z]?\d{3,6}[a-z]{0,4}(?:\/\d+[a-z]?)?)\b/.test(t)) return 'ref';
-  if (WATCH_MODELS.test(t)) return 'model-name';
-  return null;
+export function watchKeyKind(lot: Pick<AuctionLot, 'title'> & { artist?: string }): 'ref' | 'model-name' | null {
+  return readWatchKey(lot.title, lot.artist)?.kind ?? null;
 }
 
 /** Coarse watch material from title+medium. Gold shades deliberately collapse

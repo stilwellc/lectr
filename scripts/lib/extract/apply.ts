@@ -18,6 +18,7 @@ import { playerSlugOf, type CardId } from '../../../app/lib/cards';
 import { ExtractCache, hashText, pairKey, type QRec } from './cache';
 import { cachePath, extractApplyEnabled, logExtractionOff, EXTRACT_PROMPT_VERSION, SAME_PROMPT_VERSION } from './config';
 import type { Extraction } from './schema';
+import { vetReference } from '../../../app/lib/watch-ref';
 
 /** The compact extraction a lot carries in the corpus (stripped from served). */
 export type LotExtract = Partial<Extraction> & { h: string; v: string; src: 'llm' };
@@ -81,6 +82,8 @@ export function fillWatchReferencesFromExtract(lots: AuctionLot[]): number {
     if (!x?.reference || !WATCH_SLUGS_X.has(l.artist) || (l.reference && String(l.reference).length)) continue;
     if (x.vertical && x.vertical !== 'watch') continue;
     if (x.brand && slug(x.brand) !== l.artist) continue;
+    // a movement / case serial the model quoted is not a reference (Sep 28)
+    if (!vetReference(l.artist, String(x.reference), l.title)) continue;
     l.reference = x.reference; l.referenceSrc = 'llm'; n++;
   }
   if (n) console.log(`[extract] watch references filled from extraction: ${n}`);

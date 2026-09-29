@@ -2,7 +2,8 @@ import type { AuctionLot } from '../../app/types';
 import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
-import { classifyForm, objectClassOf, cleanGoldinTitle } from '../../app/lib/comps';
+import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
+import { vetReference } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
@@ -44,10 +45,10 @@ import { attachExtractions, fillWatchReferencesFromExtract } from './extract/app
       their EXACT-card comp value instead of a broad player-median. Conservative:
       fires only on the shared looksLikeCard detector (a card PRODUCT or a card
       NUMBER in card context) — never on grading alone. Idempotent.
-   3. enrichWatchReferences — fill `reference` for watch lots the live watchKey
-      missed, via identity-enrich.extractReference (recovers "Ref:" colon forms,
-      hyphen-suffixed refs, bare model codes). Only fills empties; never
-      overwrites an existing reference.
+   3. enrichWatchReferences — re-derive `reference` for the five watch makers
+      from the one reader (app/lib/watch-ref.ts: labelled refs in every printed
+      form, brand-shaped bare refs, the maker's own model line), healing
+      serials / model names an older reader stamped (Sep 28 2026).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 type Lot = AuctionLot & {
@@ -209,21 +210,39 @@ export function rerouteRelicCards(lots: Lot[]): { total: number; examples: strin
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3 · watch reference fallback.
+// 3 · watch reference fallback + heal.
 //
-// For a watch-maker lot missing `reference`, apply identity-enrich.extractReference
-// and stamp its result. extractReference itself only fires on the five tracked
-// watch makers and never fabricates — it returns null when there is no ref/model
-// to recover. Only empties are filled.
+// For the five tracked watch makers the reference is a PURE function of the
+// title (app/lib/watch-ref.ts), so it is re-derived every pass: comps.watchKey
+// (labelled ref, else the maker's model line) and, where that is empty,
+// identity-enrich.extractReference (brand-shaped bare refs). This heals rows an
+// older reader stamped — movement/case serials ("Case No. 68594"), model names
+// where a "Ref:" was printed, truncated Omega refs — instead of freezing them
+// (the old pass only filled empties). A model-extraction reference
+// (referenceSrc 'llm') is kept unless it fails the serial/shape vet or a regex
+// reference now reads the title. Other makers are never touched.
 // ─────────────────────────────────────────────────────────────────────────────
+const WATCH_MAKER_SLUGS = new Set(['rolex', 'patek-philippe', 'cartier', 'audemars-piguet', 'omega']);
 export function enrichWatchReferences(lots: Lot[]): number {
-  let filled = 0;
+  let filled = 0, healed = 0, cleared = 0;
   for (const l of lots) {
-    const ref = l.reference;
-    if (ref && String(ref).length > 0) continue;
-    const rec = extractReference(l);
-    if (rec) { l.reference = rec; filled++; }
+    if (!WATCH_MAKER_SLUGS.has(l.artist)) continue;
+    const x = l as Lot & { referenceSrc?: string };
+    const prev = l.reference ?? null;
+    const regex = watchKey(l) ?? extractReference(l);
+    if (x.referenceSrc === 'llm' && prev) {
+      const regexRef = regex && /\d/.test(regex) ? regex : null;
+      if (regexRef) { l.reference = regexRef; delete x.referenceSrc; healed++; }
+      else if (!vetReference(l.artist, String(prev), l.title)) { l.reference = regex; delete x.referenceSrc; cleared++; }
+      continue;
+    }
+    if ((prev || null) === (regex || null)) continue;
+    if (!prev) filled++;
+    else if (regex) healed++;
+    else cleared++;
+    l.reference = regex;
   }
+  if (healed || cleared) console.log(`[normalize] watch references re-derived: healed=${healed} cleared=${cleared}`);
   return filled;
 }
 

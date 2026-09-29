@@ -68,6 +68,8 @@ const VARIANT_TOKENS: [RegExp, string][] = [
   [/\b(?:shimmer|mojo|wave|cracked ice|atomic|camo|tie[- ]dye|neon|disco|hyper|pulsar|la[sz]er|snakeskin|zebra|tiger|scope|velocity|lucky envelopes?|fast break|choice|no huddle|sparkle|glitter)\b/i, 'pattern'],
   [/\b(?:silver|gold|red|blue|green|orange|purple|pink|black|bronze|platinum|yellow|teal|aqua|emerald|ruby|sapphire)\b/i, 'color'],
 ];
+/** a leading lot number immediately followed by a 4-digit year */
+const LOT_NO_BEFORE_YEAR = /^\d{1,5}\s+(?=(?:19|20)\d{2}(?:-\d{2})?\b)/;
 const SERIAL_RE = /\(#?\s*\d*\s*\/\s*(\d+)\)/;
 // the player: capitalized-word run right after #CARDNO (cards) — allows
 // lowercase particles (de, van), diacritics, O'/Mc names, Jr/Sr/II suffixes
@@ -152,9 +154,14 @@ export function parseCard(title: string): CardId {
   out.rookie = /\brookie\b|\bRC\b/i.test(t);
   out.auto = /\b(autograph|signed|auto)\b/i.test(t);
 
-  // year: leading 4-digit (with optional -yy) or bare 2-digit ('96, 21, 00)
-  const y4 = t.match(/^(19\d{2}|20\d{2})(?:-\d{2})?\b/);
-  const y2 = !y4 && t.match(/^'?(\d{2})\b/);
+  // year: leading 4-digit (with optional -yy) or bare 2-digit ('96, 21, 00).
+  // A LOT NUMBER may lead ("77 1962 Topps …" — Memory Lane / Lelands / LOTG):
+  // a short number directly before a 4-digit year is skipped, never read as a
+  // '77 two-digit year (Sep 28 2026: it minted 1977 for a 1962 card).
+  const lotPre = (t.match(LOT_NO_BEFORE_YEAR) || [''])[0];
+  const ty = t.slice(lotPre.length);
+  const y4 = ty.match(/^(19\d{2}|20\d{2})(?:-\d{2})?\b/);
+  const y2 = !y4 && ty.match(/^'?(\d{2})\b/);
   if (y4) out.year = y4[0].replace(/^'/, '');
   else if (y2) { const n = parseInt(y2[1], 10); out.year = n > 40 ? `19${y2[1]}` : `20${y2[1]}`; }
 
@@ -170,7 +177,7 @@ export function parseCard(title: string): CardId {
     // year's last two digits landed inside the year itself whenever they
     // repeat its start ("2020 Panini Prizm" → setName "20 Panini Prizm",
     // "2000 Bowman" → "0 Bowman"), corrupting every 2020-set identity.
-    const yrRaw = y4 ? y4[0] : y2 ? y2[0] : '';
+    const yrRaw = lotPre + (y4 ? y4[0] : y2 ? y2[0] : '');
     const afterYear = noParens.slice(yrRaw.length);
     const uptoNo = afterYear.slice(0, afterYear.indexOf('#'));
     const set = uptoNo.replace(/\s+/g, ' ').trim();
@@ -205,11 +212,17 @@ export function playerOf(title: string, slug: string): { player: string | null; 
   }
   // object titles lead with the athlete — often after a year ("1986 Michael
   // Jordan Game-Worn…") or a year-range; strip that prefix first
-  const stripped = (title || '').replace(/^['’]?\d{2,4}(?:-\d{2,4})?\s+/, '');
+  const YEAR_PREFIX = /^['’]?\d{2,4}(?:-\d{2,4})?\s+/;
+  const stripped = (title || '').replace(YEAR_PREFIX, '');
+  // a leading lot number ("13 1959 Topps …") hides the brand one token deeper;
+  // only the brand test looks past it — the object-title reads below keep
+  // their old input (past the lot number they would mint team/set names
+  // like "Chicago Bulls Eastern" as players)
+  const branded = (title || '').replace(LOT_NO_BEFORE_YEAR, '').replace(YEAR_PREFIX, '');
   // card-style object titles (game-used PATCH/relic cards: "2005 Upper Deck
   // Exquisite #… Jordan Patch") lead with a BRAND, not the athlete — the card
   // parser reads those correctly (player after the #number)
-  if (/^(Upper Deck|Panini|Topps|Fleer|Donruss|Bowman|Leaf|Skybox|Score|Pro Set|Pinnacle|Stadium Club|O-Pee-Chee|Hoops|Select|Mosaic|Prizm|Optic|National Treasures|Immaculate|Flawless|Exquisite)\b/i.test(stripped)) {
+  if (/^(Upper Deck|Panini|Topps|Fleer|Donruss|Bowman|Leaf|Skybox|Score|Pro Set|Pinnacle|Stadium Club|O-Pee-Chee|Hoops|Select|Mosaic|Prizm|Optic|National Treasures|Immaculate|Flawless|Exquisite)\b/i.test(branded)) {
     const c = parseCard(title);
     return { player: c.player, playerSlug: c.playerSlug };
   }
