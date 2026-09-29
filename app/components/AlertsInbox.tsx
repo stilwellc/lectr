@@ -56,7 +56,7 @@ const CSS = `
 }
 .lectr-inbox-del:hover { color: var(--color-fg); }
 .lectr-inbox-auto {
-  font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--color-text-faint); border: 1px solid var(--color-border);
   border-radius: 5px; padding: 1px 6px;
 }

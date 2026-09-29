@@ -57,7 +57,7 @@ const CSS = `
 .ray-lf-zero { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--chart-ref); }
 .ray-lf-comp { --lfgut: 100px; }
 .ray-lf-cend { position: absolute; font-size: 10.5px; white-space: nowrap; transform: translateY(-50%); max-width: calc(var(--lfgut) - 6px); overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 640px) { .ray-lf-comp { --lfgut: 78px; } .ray-lf-cend { font-size: 9.5px; } }
+@media (max-width: 640px) { .ray-lf-comp { --lfgut: 78px; } .ray-lf-cend { font-size: 10px; } }
 `;
 
 /* ── shared: the ink ladder for confidence tiers — labs rank by density,
@@ -124,7 +124,9 @@ export function CloseCurveFigure({ marketData }: { marketData: MarketData | null
 
 /* ═══ 2 · THE COVERAGE FUNNEL ═══ */
 export function CoverageFunnel({ backtest }: { backtest: Backtest | null }) {
-  const band = backtest?.calibration?.band as Record<string, { lo: number; hi: number }> | undefined;
+  // valueBand = the band served lots now wear (Sep 2026 engine); band on older data
+  const band = ((backtest?.calibration as { valueBand?: Record<string, { lo: number; hi: number }> } | undefined)?.valueBand
+    ?? backtest?.calibration?.band) as Record<string, { lo: number; hi: number }> | undefined;
   // COVERAGE BASIS: bandCoverage is in-sample by construction (the bands
   // are fit on the same replay). The engine emits bandCoverageOOS — held-out
   // coverage per tier — where it can; render that with its basis named, and

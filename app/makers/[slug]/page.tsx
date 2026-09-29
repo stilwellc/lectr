@@ -5,9 +5,10 @@ import SubMarketDrills from '../../components/analytics/SubMarketDrills';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ARTISTS, ARTIST_LABEL, marketOf } from '../../constants';
+import { ARTISTS, ARTIST_LABEL, ROSTER_PHRASE, marketOf } from '../../constants';
 import type { AuctionLot, LotCategory, MarketStats } from '../../types';
-import { useFullLots, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../../hooks/useRayData';
+import { useRayData, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../../hooks/useRayData';
+import { useMakerRows } from '../../hooks/useMakerRows';
 import type { MarketData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useMarket } from '../../lib/market';
@@ -472,7 +473,15 @@ export default function ArtistDetailPage() {
   const slug = params.slug as string;
   // useFullLots (not useRayData): the lot-level sections below gate on
   // fullLoaded, so this route must trigger the phase-2 corpus on mount.
-  const { statsByArtist, allLots, lastCrawl, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
+  // ONE MAKER'S BOOK (useMakerRows): the maker's own rows from the build's
+  // maker shards — not the whole corpus. A data build without them falls back
+  // to the corpus (the hook asks for it) and the old gates below.
+  const ray = useRayData();
+  const { statsByArtist, allLots, lastCrawl, fromCache, market: marketData } = ray;
+  const mk = useMakerRows(slug);
+  const viaMaker = mk.source !== 'corpus';
+  const fullLoaded = viaMaker ? mk.loaded : ray.fullLoaded;
+  const fullError = viaMaker ? mk.error : ray.fullError;
   const { toggle, savedIds, ownedIds, toggleOwned } = useSavedLots();
   const { setMarket } = useMarket();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -509,7 +518,7 @@ export default function ArtistDetailPage() {
   // `sold` lives here too: an inline filter in the JSX would hand PastResults
   // a fresh array identity every render, defeating exactly that.
   const { lots, upcoming, sold } = useMemo(() => {
-    const lots = allLots.filter(l => l.artist === slug);
+    const lots = mk.rows ?? allLots.filter(l => l.artist === slug);
     const today = localToday(); // the reader's local YYYY-MM-DD
     const upcoming = lots
       .filter(l => isLiveUpcoming(l, today))
@@ -520,7 +529,7 @@ export default function ArtistDetailPage() {
       });
     const sold = lots.filter(l => l.status === 'sold');
     return { lots, upcoming, sold };
-  }, [allLots, slug]);
+  }, [allLots, slug, mk.rows]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
@@ -543,7 +552,7 @@ export default function ArtistDetailPage() {
             Nothing tracked at this address
           </h2>
           <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 24 }}>
-            The desk follows {ARTISTS.length} artists and makers across art, design, watches, sports, science and pop culture.
+            The desk follows {ROSTER_PHRASE} across art, design, watches, sports, science and pop culture.
           </p>
           <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
             Back to the market
@@ -609,14 +618,20 @@ export default function ArtistDetailPage() {
               categoryFilter={categoryFilter}
               onCategoryChange={setCategoryFilter}
               fromCache={fromCache}
+              pre={viaMaker ? { rows: mk.rows, error: mk.error } : null}
             />
           ) : !fullLoaded ? (
             fullError ? (
               // phase 2 (the full archive) failed after retries — say so and
               // offer a retry, never an eternal skeleton
-              <ArchiveErrorPanel onRetry={() => retryFullLoad()} />
+              <ArchiveErrorPanel onRetry={() => (viaMaker ? window.location.reload() : retryFullLoad())} />
+            ) : ray.loading ? (
+              // phase 1 still landing: the hero above is about to grow —
+              // hold the body with an unpainted spacer (a visible loader here
+              // was the element the hero shoved down: CLS 0.11)
+              <div aria-hidden style={{ minHeight: '100vh' }} />
             ) : (
-              <RayLoading />
+              <div style={{ minHeight: '100vh' }}><RayLoading /></div>
             )
           ) : (
             <MakerSections
@@ -645,6 +660,30 @@ export default function ArtistDetailPage() {
   );
 }
 
+// The legacy phase-3 path, as a hook that only subscribes when asked:
+// useSoldArchive fetches on mount by contract, so it lives in a child that
+// mounts only for a data build without maker shards.
+function useLegacyArchive(on: boolean, slug: string, phaseLots: AuctionLot[]) {
+  const [st, setSt] = useState<{ archiveLoaded: boolean; archiveError: boolean; makerLots: AuctionLot[] }>(
+    { archiveLoaded: false, archiveError: false, makerLots: phaseLots },
+  );
+  useEffect(() => { if (!on) return; setSt(s => (s.archiveLoaded ? s : { ...s, makerLots: phaseLots })); }, [on, phaseLots]);
+  return { ...st, probe: on ? <LegacyArchiveProbe slug={slug} phaseLots={phaseLots} onState={setSt} /> : null };
+}
+function LegacyArchiveProbe({ slug, phaseLots, onState }: {
+  slug: string; phaseLots: AuctionLot[];
+  onState: (s: { archiveLoaded: boolean; archiveError: boolean; makerLots: AuctionLot[] }) => void;
+}) {
+  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
+  useEffect(() => {
+    onState({
+      archiveLoaded, archiveError,
+      makerLots: archiveLoaded ? allLotsWithArchive.filter(l => l.artist === slug) : phaseLots,
+    });
+  }, [allLotsWithArchive, archiveLoaded, archiveError, slug, phaseLots, onState]);
+  return null;
+}
+
 // Archive makers only: mounting this triggers useSoldArchive()'s phase-3
 // fetch. It merges the maker's archive sold rows into lots/sold and re-renders
 // the hero + the gated sections once the archive lands (RayLoading /
@@ -663,7 +702,9 @@ function ArchiveMakerBody({
   categoryFilter,
   onCategoryChange,
   fromCache,
+  pre,
 }: {
+  pre: { rows: AuctionLot[] | null; error: boolean } | null;
   slug: string;
   serial?: string;
   label: string;
@@ -678,17 +719,17 @@ function ArchiveMakerBody({
   onCategoryChange: (c: CategoryFilter) => void;
   fromCache: boolean;
 }) {
-  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
-
-  // the maker's full lot set with archive sold rows merged in
-  const makerLots = useMemo(
-    () => (archiveLoaded ? allLotsWithArchive.filter(l => l.artist === slug) : phaseLots),
-    [archiveLoaded, allLotsWithArchive, slug, phaseLots]
-  );
+  // the maker shard already carries the archive tier (main-wins merged at
+  // build) — only a data build without it mounts the phase-3 archive
+  const legacy = useLegacyArchive(!pre, slug, phaseLots);
+  const archiveLoaded = pre ? !!pre.rows : legacy.archiveLoaded;
+  const archiveError = pre ? pre.error : legacy.archiveError;
+  const makerLots = pre ? (pre.rows || phaseLots) : legacy.makerLots;
   const sold = useMemo(() => makerLots.filter(l => l.status === 'sold'), [makerLots]);
 
   return (
     <>
+      {legacy.probe}
       <RayEntrance animate={!fromCache}>
         <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}>
           <MarketSwitch compact />
@@ -717,7 +758,7 @@ function ArchiveMakerBody({
 
       {!archiveLoaded ? (
         archiveError ? (
-          <ArchiveErrorPanel onRetry={() => retryArchiveLoad()} />
+          <ArchiveErrorPanel onRetry={() => (pre ? window.location.reload() : retryArchiveLoad())} />
         ) : (
           <RayLoading />
         )

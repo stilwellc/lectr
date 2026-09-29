@@ -309,7 +309,11 @@ export interface AuctionLot {
   /** Part-2 engine output, stamped at build time on upcoming lots. See
       app/lib/value.ts ValueResult. Structural to avoid a types↔value cycle. */
   value?: {
+    /** compValueUsd is the engine's PREDICTION (blended, Sep 2026); the comps
+        MEDIAN a "comps median" display prints is compMedianUsd (absent on
+        older data → fall back to compValueUsd, which was the median then). */
     poolIds: string[]; n: number; compValueUsd: number; low: number; high: number;
+    compMedianUsd?: number | null; compAdjUsd?: number | null; blendW?: number | null;
     compRatio: number | null;
     signal: { label: string; strength: string; beatRatePct: number } | null;
     estimateUsd: number | null;

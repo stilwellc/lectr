@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PlayerPage from '../components/PlayerPage';
+import BookIndex from '../components/BookIndex';
 
 /**
  * The player-dossier permalink — /player?id=<slug> (e.g. /player?id=
@@ -11,6 +12,7 @@ import PlayerPage from '../components/PlayerPage';
 function PlayerFromQuery() {
   const params = useSearchParams();
   const id = (params.get('id') || '').trim().toLowerCase();
+  if (!id) return <BookIndex kind="player" />;
   return <PlayerPage key={id} playerSlug={id} />;
 }
 

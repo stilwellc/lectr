@@ -25,7 +25,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 // never fetch refs.json twice
 import { useRefs, type RefEntry } from '../hooks/useRefs';
 import { ARTIST_LABEL } from '../constants';
-import { formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
+import { closeCut, formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
 import PlateImg from './PlateImg';
 import '../northstar-pages.css';
 
@@ -49,7 +49,7 @@ function RefLine({ yearly }: { yearly: RefEntry['yearly'] }) {
           <span className="ns-kicker">The line</span>
           <h2 className="nsp-h2">Yearly median, {yearly[0].y}–{yearly[yearly.length - 1].y}</h2>
         </div>
-        <span className="nsp-shctx">every point a real yearly reading · realized, all-in</span>
+        <span className="nsp-shctx">years with 3+ sales · realized, all-in</span>
       </div>
       <div className="nsp-chart">
         <HeroChart anchor={anchor} play={false} height={200} />
@@ -72,7 +72,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
     return allLots.filter(l => l.status === 'upcoming' && l.artist === entry.maker && l.reference === entry.ref);
   }, [allLots, entry]);
 
-  const nav = <ArtistNav activeSlug={entry ? entry.maker : null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
+  const nav = <ArtistNav activeSlug={entry ? entry.maker : ''} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
 
   if (!entry) {
     const loading = refs === null && !failed;
@@ -97,7 +97,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
             </>
           )}
         </div>
-        <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
+        <Colophon lotCount={totalLots || allLots.length} record={null} />
       </div>
     );
   }
@@ -107,8 +107,16 @@ export default function RefPage({ refKey }: { refKey: string }) {
   // on this reference, so it may wear the lamp (up green / down red)
   const delta = entry.ttmMedianUsd != null && entry.medianUsd > 0
     ? Math.round(100 * (entry.ttmMedianUsd / entry.medianUsd - 1)) : null;
-  const yearSpan = entry.yearly.length
-    ? `${entry.yearly[0].y}–${entry.yearly[entry.yearly.length - 1].y}`
+  // ONE SPAN, from every row the page prints: the yearly line only keeps years
+  // with 3+ sales, so a reference whose recent hammers are thin read
+  // "2010–2023" above rows dated 2026. The span now covers the yearly years
+  // AND the recent rows; the chart names its own gated range separately.
+  const spanYears = [
+    ...entry.yearly.map(y => y.y),
+    ...entry.recent.map(r => +String(r.d || '').slice(0, 4)).filter(y => y > 1900),
+  ];
+  const yearSpan = spanYears.length
+    ? (Math.min(...spanYears) === Math.max(...spanYears) ? String(spanYears[0]) : `${Math.min(...spanYears)}–${Math.max(...spanYears)}`)
     : null;
 
   return (
@@ -202,7 +210,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
           <div className="nsp-shead">
             <div>
               <span className="ns-kicker">The record</span>
-              <h2 className="nsp-h2">Recent sales</h2>
+              <h2 className="nsp-h2">{entry.recent.length < entry.n ? `Latest ${entry.recent.length} of ${entry.n.toLocaleString()} sales` : 'Every sale'}</h2>
             </div>
             <span className="nsp-shctx">realized, buyer&rsquo;s premium included</span>
           </div>
@@ -221,7 +229,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
                   {s.img && <PlateImg src={sizedImg(httpsImg(s.img)!, 160)} alt="" loading="lazy" referrerPolicy="no-referrer" />}
                 </span>
                 <span className="lectr-lot-comp-t">
-                  <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(s.t)}</span>
+                  <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{(s.t || '').length >= 80 ? closeCut(craftTitle(s.t), 1) : craftTitle(s.t)}</span>
                   <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                     <span style={{ color: houseColors[s.h] || 'var(--color-text-faint)', fontWeight: 500 }}>{s.h}</span>
                     {' · '}{formatDate(s.d, { month: 'short', year: 'numeric' })}
@@ -246,7 +254,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
           </Link>
         </div>
       </div>
-      <Colophon lotCount={totalLots || allLots.length} houseCount={7} record={null} />
+      <Colophon lotCount={totalLots || allLots.length} record={null} />
     </div>
   );
 }

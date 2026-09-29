@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useFullLotsOnDemand, retryFullLoad } from '../hooks/useRayData';
+import { markFallbackProjections } from '../lib/page-data';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
@@ -77,7 +78,16 @@ export default function ReceiptsPage() {
     return fromMarket ?? fromTape;
   }, [market, tape]);
 
-  const rows: ReceiptRow[] = tape && tape !== 'missing' ? tape.rows : [];
+  // FALLBACK PROJECTIONS HIDDEN (Sep 27 2026): a bid projection run off an
+  // opening bid nobody has touched prints the SAME number for every such lot
+  // ($691 ×3 on one night) — that is the ladder, not a read of the lot. One
+  // rule (page-data markFallbackProjections), shared with /value's tape.
+  const { rows, hiddenFb } = useMemo(() => {
+    const all: ReceiptRow[] = tape && tape !== 'missing' ? tape.rows : [];
+    const marked = markFallbackProjections(all);
+    const kept = marked.filter(r => !(r as { fb?: 1 }).fb);
+    return { rows: kept, hiddenFb: marked.length - kept.length };
+  }, [tape]);
 
   /* ── settled flags — signals stamped while live, now hammered ── */
   const settledFlags = useMemo(() => {
@@ -197,6 +207,11 @@ export default function ReceiptsPage() {
                 </p>
               )}
 
+              {hiddenFb > 0 && (
+                <p className="rcp-note">
+                  {hiddenFb} opening-bid {hiddenFb === 1 ? 'projection is' : 'projections are'} left off the tape below — the same starting bid projects the same number for every unbid lot, so it says nothing about the lot. They still count in the record above.
+                </p>
+              )}
               {rows.length > 0 && (
                 <div className="rcp-tape">
                   <div className="rcp-cols kicker" aria-hidden>

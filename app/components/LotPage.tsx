@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
+import { loadLotPack, loadLotFromShard, loadPageStats, loadMakerLots, packRowsToLots, type LotPack } from '../lib/page-data';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
@@ -11,11 +12,11 @@ import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoa
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
-import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
+import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
 import { valueFloor } from '../lib/lanes';
-import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
+import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
 import Flick from './Flick';
@@ -410,16 +411,83 @@ export default function LotPage({ lotId, initialLot }: {
     // one shot per id on mount — live/initialLot arriving later is fine, they win below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotId]);
-  const preResolved = live || initialLot || dbLot || null;
+  // SINGLE-SHARD RESOLUTION (Sep 27 2026): a permalink the eager tape, the
+  // prerender and Supabase all missed used to pull the WHOLE corpus (~35MB)
+  // to find one row. The build's lot index (pages/lot-idx-XX.json, ~20KB)
+  // names the one served shard that carries the id — fetch only that.
+  // undefined = looking · null = the index answered "not on the book" ·
+  // 'noindex' = no index on this data build (fall back to the corpus).
+  const [shardLot, setShardLot] = useState<AuctionLot | null | undefined | 'noindex'>(undefined);
+  useEffect(() => {
+    if (!lotId || live || initialLot) { setShardLot(null); return; }
+    if (loading) return;                       // wait for the crawl stamp (?v=)
+    let dead = false;
+    loadLotFromShard(lotId, lastCrawl).then(r => {
+      if (dead) return;
+      setShardLot(r.indexed ? r.lot : 'noindex');
+    });
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotId, loading]);
+  const shardHit = shardLot && shardLot !== 'noindex' ? shardLot : null;
+  const preResolved = live || initialLot || dbLot || shardHit || null;
+
+  // THE LOT PACK: the build-time corpus reads for this upcoming lot (comps,
+  // band, appraisal, reference band, provenance) — ~15KB instead of the
+  // corpus. undefined = loading · null = no pack (not an upcoming lot, or a
+  // data build that predates the emitter → the corpus paths below stand).
+  const [pack, setPack] = useState<LotPack | null | undefined>(undefined);
+  useEffect(() => {
+    if (!lotId) { setPack(null); return; }
+    if (loading) return;
+    let dead = false;
+    loadLotPack(lotId, lastCrawl).then(p => { if (!dead) setPack(p); });
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotId, loading]);
+  const hasPack = !!pack && !fullLoaded;
+  // set when no maker shard could answer → the corpus (+ archive) path stands
+  const [poolFallback, setPoolFallback] = useState(false);
   const isGoldinId = lotId.startsWith('goldin');
   const wantsArchive =
-    (!!preResolved && isSportsScienceObject(preResolved)) ||
-    (!preResolved && isGoldinId && (fullLoaded || fullError));
+    (!!preResolved && isSportsScienceObject(preResolved) && pack === null && poolFallback) ||
+    (!preResolved && isGoldinId && shardLot === 'noindex' && (fullLoaded || fullError));
   const archiveLot = useMemo(
     () => (!preResolved && archive.archiveLoaded ? archive.soldArchive.find(l => l.id === lotId) || null : null),
     [preResolved, archive.archiveLoaded, archive.soldArchive, lotId],
   );
   const lot = preResolved || archiveLot;
+
+  // THE MAKER POOL (Sep 27 2026): every comp read here (signalWithPool,
+  // appraiseLot, soldCompBand, the science reference band) pools SAME-ARTIST
+  // rows only — so a lot with no build-time pack (a settled lot) reads its
+  // comps over its maker's own shard (pages/maker-<slug>-N.json, archive tier
+  // included for sports/science) instead of the ~35MB corpus. Same pool, same
+  // answer; a maker without a shard (or an old data build) still asks for
+  // the corpus.
+  const [makerPool, setMakerPool] = useState<AuctionLot[] | null>(null);
+
+  const poolAsked = useRef(false);
+  const requestPool = useCallback(() => {
+    if (poolAsked.current || fullLoaded) return;
+    poolAsked.current = true;
+    const artist = lot?.artist;
+    const fallback = () => { setPoolFallback(true); requestFullLots(); };
+    if (!artist) { fallback(); return; }
+    loadPageStats().then(st => {
+      const n = st?.makerShards?.[artist];
+      if (!n) { fallback(); return; }
+      loadMakerLots(artist, n, lastCrawl).then(rows => {
+        if (rows) setMakerPool(rows); else fallback();
+      });
+    });
+  }, [lot, fullLoaded, requestFullLots, lastCrawl]);
+  const poolLots = fullLoaded || !makerPool ? allLots : makerPool;
+  // a settled sports/science object prints its realized band near the top —
+  // ask for the maker pool at mount (it replaces the 25MB archive probe)
+  useEffect(() => {
+    if (lot && pack === null && isSportsScienceObject(lot)) requestPool();
+  }, [lot, pack, requestPool]);
 
   /* ── THE CORPUS GATE ───────────────────────────────────────────────────
      Read off the lot's OWN stamped fields — never off the pool, which is the
@@ -437,7 +505,13 @@ export default function LotPage({ lotId, initialLot }: {
   const engineCalled = !!(engineCall && engineCall.signal && engineCall.compRatio != null
     && (engineCall.compRatio <= 5 && engineCall.compRatio >= 1 / 5));
   const needsCorpusRead = useMemo(() => {
-    if (!lot) return dbSettled;                               // last-resort resolution
+    // last-resort resolution — only when the build ships no lot index
+    if (!lot) return dbSettled && shardLot === 'noindex';
+    if (pack === undefined) return false;                     // the pack is still answering
+    if (pack) return false;                                   // the build already read the corpus
+    // a settled/unpacked lot's comps are read on demand (the comps sentinel),
+    // never at first paint — the certificate itself needs nothing more
+    if (lot.status !== 'upcoming') return false;
     if (lot.repeatSaleGroupId) return true;                   // provenance ledger
     const mkt = ARTIST_MARKET[lot.artist];
     if (mkt === 'science' || mkt === 'culture') return true;  // reference band
@@ -446,13 +520,14 @@ export default function LotPage({ lotId, initialLot }: {
     // certificate falls through to appraiseLot, which is corpus-fed
     if (engineCalled) return !!engineCall?.signal?.label.startsWith('at');
     return true;                                              // client-computed read
-  }, [lot, dbSettled, engineCalled, engineCall]);
+  }, [lot, dbSettled, shardLot, pack, engineCalled, engineCall]);
   useEffect(() => { if (needsCorpusRead) requestFullLots(); }, [needsCorpusRead, requestFullLots]);
-  const corpusSettled = fullLoaded || fullError;
+  // a pack IS a settled corpus read (computed over the whole book at build)
+  const corpusSettled = fullLoaded || fullError || hasPack || !!makerPool;
 
   // set the tab title on the query route (the static set gets real metadata)
   useEffect(() => {
-    if (lot) document.title = `${craftTitle(lot.title)} — lectr`;
+    if (lot) document.title = `${splitTitle(lot.title).short} — lectr`;
   }, [lot]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -476,15 +551,20 @@ export default function LotPage({ lotId, initialLot }: {
   // (same doctrine as ComparableModal: one lot, one statistic), else the
   // client read; sports/science objects get the descriptive realized band.
   const bandPoolLots = useMemo(
-    () => (archive.archiveLoaded && archive.soldArchive.length ? [...allLots, ...archive.soldArchive] : allLots),
-    [allLots, archive.archiveLoaded, archive.soldArchive],
+    () => (!makerPool && archive.archiveLoaded && archive.soldArchive.length ? [...poolLots, ...archive.soldArchive] : poolLots),
+    [poolLots, makerPool, archive.archiveLoaded, archive.soldArchive],
   );
-  const band = useMemo(
-    () => (lot && isSportsScienceObject(lot) ? soldCompBand(lot, bandPoolLots) : null),
-    [lot, bandPoolLots],
-  );
+  const band = useMemo(() => {
+    if (!lot || !isSportsScienceObject(lot)) return null;
+    if (hasPack) return pack!.b ? { ...pack!.b, pool: packRowsToLots(pack!.b.rows) } : null;
+    return soldCompBand(lot, bandPoolLots);
+  }, [lot, bandPoolLots, hasPack, pack]);
   const called = useMemo(() => {
     if (!lot || band) return null;
+    if (hasPack) {
+      const c = pack!.c;
+      return c ? { pool: packRowsToLots(c.rows), n: c.n, med: c.med ?? undefined, form: c.form, kind: c.kind as 'form' | 'edition' } : null;
+    }
     const ev = lot.value;
     // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
     // outside [1/5, 5] is a data fault the build killed at the source — the
@@ -496,7 +576,7 @@ export default function LotPage({ lotId, initialLot }: {
       // call, no comp pool, no client second-guessing (ComparableModal's
       // exact doctrine).
       if (ev.signal.label.startsWith('at')) return null;
-      const byId = new Map(allLots.map(l => [l.id, l]));
+      const byId = new Map(poolLots.map(l => [l.id, l]));
       // sold-with-price only (ComparableModal's exact guard): a pool id
       // resolving to a relisted/faulted lot must never feed a price read
       const pool = (ev.poolIds || [])
@@ -506,11 +586,11 @@ export default function LotPage({ lotId, initialLot }: {
       // tier) — keep the engine call anyway; the evidence fetch below fills
       // the rows. Falling through to signalWithPool would print a DIFFERENT
       // read against the same header (the contradiction Collin caught).
-      return { pool, n: ev.n || pool.length, med: ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
+      return { pool, n: ev.n || pool.length, med: ev.compMedianUsd ?? ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
     }
-    const read = signalWithPool(lot, allLots);
+    const read = signalWithPool(lot, poolLots);
     return read ? { pool: read.pool, n: read.pool.length, med: read.signal.med, form: read.signal.form as string, kind: read.signal.kind } : null;
-  }, [lot, allLots, band]);
+  }, [lot, poolLots, band, hasPack, pack]);
 
   // build-shipped evidence rows for engine calls whose poolIds aren't on-wire
   // (undefined = loading · null = fetched, nothing there)
@@ -542,12 +622,13 @@ export default function LotPage({ lotId, initialLot }: {
   const provenance = useMemo(() => {
     const gid = lot?.repeatSaleGroupId;
     if (!lot || !gid) return [];
+    if (hasPack) return pack!.p ? packRowsToLots(pack!.p) : [];
     const rows = bandPoolLots.filter(l => l.repeatSaleGroupId === gid);
     if (!rows.some(r => r.id === lot.id)) rows.push(lot);
     return rows.length >= 2
       ? rows.slice().sort((a, b) => ((a.saleDate || '') < (b.saleDate || '') ? -1 : 1))
       : [];
-  }, [lot, bandPoolLots]);
+  }, [lot, bandPoolLots, hasPack, pack]);
 
   // ── house calibration: does this house's estimate historically hold? ──
   // hammer-led per the dual-basis doctrine; market cell first, 'all' fallback.
@@ -577,9 +658,10 @@ export default function LotPage({ lotId, initialLot }: {
     if (sigMed != null) return sigMed;
     if (calledIsHonest && called?.med != null) return called.med;
     if (band) return band.median;
-    if (fullLoaded) return appraiseLot(lot, allLots)?.value ?? null;
+    if (fullLoaded || makerPool) return appraiseLot(lot, poolLots)?.value ?? null;
+    if (hasPack) return pack!.a ?? null;
     return null;
-  }, [lot, sig, called, calledIsHonest, band, fullLoaded, allLots]);
+  }, [lot, sig, called, calledIsHonest, band, fullLoaded, makerPool, poolLots, hasPack, pack]);
   const compsN = sig?.basis ?? (band ? band.n : (calledIsHonest ? called?.n : null)) ?? null;
 
   // ── reference comps: a low-confidence measured RANGE, never a flag ──
@@ -587,12 +669,18 @@ export default function LotPage({ lotId, initialLot }: {
   // on fullLoaded. Purely descriptive $ context — the render carries no tone,
   // no %, no mono; it labels itself low-confidence reference.
   const refBand = useMemo(() => {
-    if (!lot || !fullLoaded) return null;
+    if (!lot) return null;
     const mkt = ARTIST_MARKET[lot.artist];
+    if (!fullLoaded) {
+      if (hasPack) return pack!.r ?? null;
+      // science pools same-artist → the maker shard answers it exactly
+      if (makerPool && mkt === 'science') return scienceReferenceBand(lot, makerPool);
+      return null;
+    }
     if (mkt === 'science') return scienceReferenceBand(lot, allLots);
     if (mkt === 'culture') return cultureReferenceBand(lot, allLots);
     return null;
-  }, [lot, fullLoaded, allLots]);
+  }, [lot, fullLoaded, allLots, hasPack, pack, makerPool]);
 
   /* ── THE COMPS SENTINEL ────────────────────────────────────────────────
      The comps block has a CHEAPER source than the corpus for its first paint:
@@ -615,16 +703,19 @@ export default function LotPage({ lotId, initialLot }: {
   const poolPartial = !!called && !corpusSettled
     && (!engineCalled || (called.pool.length > 0 && called.n > called.pool.length));
   const compsNeedCorpus = !corpusSettled && (poolPartial || needEvidence || (!band && !called));
-  const compsSentinel = useVisibilityTrigger(requestFullLots, { rootMargin: '0px 0px -180px 0px', enabled: compsNeedCorpus });
+  const compsSentinel = useVisibilityTrigger(requestPool, { rootMargin: '0px 0px -180px 0px', enabled: compsNeedCorpus && pack !== undefined });
 
   // ── resolution states ─────────────────────────────────────────────────
   if (!lot) {
     const mainSettled = fullLoaded || fullError;
     const archiveSettled = !isGoldinId || archive.archiveLoaded || archive.archiveError;
-    const settled = !lotId || (!loading && mainSettled && archiveSettled && dbSettled);
+    // the lot index settles "not on the book" without the corpus; only a
+    // data build with no index falls back to the corpus + archive scan
+    const indexSettled = shardLot === null;
+    const settled = !lotId || (!loading && dbSettled && (indexSettled || (shardLot === 'noindex' && mainSettled && archiveSettled)));
     return (
       <div className="terminal-shell">
-        <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+        <ArtistNav activeSlug="" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
         {wantsArchive && <ArchiveProbe onState={setArchive} />}
         {settled ? (
           <>
@@ -653,6 +744,7 @@ export default function LotPage({ lotId, initialLot }: {
 
   // ── the catalogue page ────────────────────────────────────────────────
   const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
+  const titleParts = splitTitle(lot.title);
   const marketKey = ARTIST_MARKET[lot.artist];
   const marketLabel = MARKETS.find(m => m.key === marketKey)?.label || null;
   const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title).charAt(0) || '?').toUpperCase();
@@ -690,7 +782,7 @@ export default function LotPage({ lotId, initialLot }: {
 
   return (
     <div className="terminal-shell">
-      <ArtistNav activeSlug={lot.artist in ARTIST_LABEL ? lot.artist : null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+      <ArtistNav activeSlug={lot.artist in ARTIST_LABEL ? lot.artist : ''} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
       {wantsArchive && <ArchiveProbe onState={setArchive} />}
       <div className="lectr-lot rail">
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
@@ -808,10 +900,13 @@ export default function LotPage({ lotId, initialLot }: {
               <span className="no">no. {lot.id}</span>
             </div>
 
-            <h1 className="lectr-lot-title">{craftTitle(lot.title)}</h1>
+            {/* the SHORT title carries the h1; a catalogue description the
+                house poured into the title field rides beneath as prose */}
+            <h1 className="lectr-lot-title">{titleParts.short}</h1>
+            {titleParts.rest && <p className="lectr-lot-medium">{titleParts.rest}</p>}
             {(lot.year || lot.medium) && (
               <p className="lectr-lot-medium">
-                {[lot.year, lot.medium ? cleanText(lot.medium) : null, lot.dimensions].filter(Boolean).join(' · ')}
+                {[lot.year, lot.medium ? deglue(cleanText(lot.medium)) : null, lot.dimensions].filter(Boolean).join(' · ')}
               </p>
             )}
 
@@ -848,6 +943,9 @@ export default function LotPage({ lotId, initialLot }: {
                     ? (lot.status === 'bought_in' ? 'bought in' : lot.priceUsd ? formatPrice(lot.priceUsd) : '—')
                     : (formatEstimate(lot) || '—')}
                 </div>
+                {!isSold && !(lot.estimateLow && lot.estimateHigh) && !!(lot.estimateLow || lot.estimateHigh) && (lot.currentBid || 0) > 0 && (
+                  <div className="s">{estimateOnly(lot)} est.</div>
+                )}
               </div>
               {marketLabel && (
                 <div>
@@ -862,7 +960,9 @@ export default function LotPage({ lotId, initialLot }: {
                 printed: 'up' only when the engine called Below Market (the
                 lamp); anything else falls to ink — never red, never
                 manufactured. Every figure is the gap row's own number. */}
-            {isUpcoming && sig && (
+            {/* no printed estimate → no "vs. estimate" plate: the label would
+                name a number the page never shows (the byline prints a bid) */}
+            {isUpcoming && sig && !!(lot.estimateLow || lot.estimateHigh) && (
               <div className="ns-cell ns-cell-color lectr-lot-read" data-dir={sig.label === 'Below Market' ? 'up' : 'ink'}>
                 {/* "vs. estimate", not "the gap" — THE GAP is the no-estimate
                     lane's name (lanes.ts); this cell is the FLAGS read */}
@@ -1128,7 +1228,7 @@ export default function LotPage({ lotId, initialLot }: {
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                       <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
                       {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
-                      {comp.medium ? ` · ${cleanText(comp.medium)}` : ''}
+                      {comp.medium ? ` · ${deglue(cleanText(comp.medium))}` : ''}
                     </span>
                   </span>
                   <span className="lectr-lot-comp-p">{comp.priceUsd ? formatPrice(comp.priceUsd) : '—'}</span>

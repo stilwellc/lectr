@@ -125,7 +125,7 @@ export default function TonightsWall({
         </div>
         <p>{evening
             ? 'The room tonight — closing soonest first, priced under where their comparables sell.'
-            : 'Today\u2019s call and the strongest flagged lots on the block — priced under where their comparables sell.'}</p>
+            : 'Hammering in the next 48 hours — flagged lots first, priced under where their comparables sell.'}</p>
       </div>
       <div className={styles.wallRow}>
         {shown.map((it, i) => (
@@ -162,7 +162,7 @@ export default function TonightsWall({
                 <span className={styles.wallSignal}>{gapGrammar('Below Market', it.pct)}</span>
               )}
               {closesToday(it) && (
-                <span className={styles.wallCloses}>closes today{it.lot.bidVelocity && it.lot.bidVelocity.delta > 0 ? ` · +${it.lot.bidVelocity.delta} bids` : ''}</span>
+                <span className={styles.wallCloses}>closes today{it.lot.bidVelocity && it.lot.bidVelocity.delta > 0 ? ` · +${it.lot.bidVelocity.delta} ${it.lot.bidVelocity.delta === 1 ? 'bid' : 'bids'}` : ''}</span>
               )}
             </span>
           </button>

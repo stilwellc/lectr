@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { flaggedLots } from '../flagged';
 import LotPage from '../../components/LotPage';
-import { craftTitle, formatDate, httpsImg, formatPrice } from '../../utils';
+import { splitTitle, formatDate, httpsImg, formatPrice } from '../../utils';
 import { signalMagnitude } from '../../lib/comps';
 import { ARTIST_LABEL } from '../../constants';
 
@@ -26,7 +26,7 @@ export function generateMetadata({ params }: { params: { id: string } }): Metada
   if (!lot) return { title: 'Lot' };
 
   const maker = ARTIST_LABEL[lot.artist] || lot.artist;
-  const title = craftTitle(lot.title);
+  const title = splitTitle(lot.title).short;
   const sig = lot.signal;
   const est = lot.estimateLow && lot.estimateHigh
     ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)} est.`

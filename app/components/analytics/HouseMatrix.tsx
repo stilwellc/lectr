@@ -35,7 +35,7 @@ const CSS = `
 .ray-hm-cell[data-dir="up"] .num{color:var(--color-up)}
 .ray-hm-cell[data-dir="down"] .num{color:var(--color-down-text,var(--color-down))}
 .ray-hm-cell[data-dir="flat"] .num{color:var(--color-text-muted)}
-.ray-hm-cell .n{display:block;font-size:9.5px;color:var(--color-text-muted);font-variant-numeric:tabular-nums;margin-top:1px}
+.ray-hm-cell .n{display:block;font-size:10px;color:var(--color-text-muted);font-variant-numeric:tabular-nums;margin-top:1px}
 .ray-hm-empty{font-size:12.5px;color:var(--color-text-muted);opacity:0.55}
 `;
 

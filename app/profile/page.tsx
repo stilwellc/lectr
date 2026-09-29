@@ -914,7 +914,7 @@ export default function SavedPage() {
       const printedBid = estText.includes('bid');
       rows.push({
         key: `soon-${claim(l).id}`, tag: 'Lands soon', lot: l, tone: 'hot',
-        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{estText ? <> · {estText}</> : null}{!printedBid && typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} bids</> : null}</>,
+        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{estText ? <> · {estText}</> : null}{!printedBid && typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} {l.bidCount === 1 ? 'bid' : 'bids'}</> : null}</>,
       });
     }
     if (fullLoaded) {
