@@ -163,3 +163,49 @@ Both computed by calling `gapRead`/`sleeperRead` from app/lib/lanes.ts inside th
 - **F1 / cut-list #12 (backtest + calibration frozen) is superseded** for the Sep 2 audit items: the replay now applies point-in-time calibration (P1-1), publishes out-of-sample band coverage per market (P1-2), per-market bands and MdAPE, and carries an engine version. The Flags' thresholds (1.3 / 0.75 / odds gate) are unchanged; the RECORD's meaning changed (it measures the calibrated engine), which is why `rowsOnVersionPct` is published.
 - **F22/F24 card tape.** Card calls carry a tier marker in `s` (`x` exact, `g` grade-adj, `p` player, `t` tcg, `m` raw median) and `callsRecord.card.byTier` publishes each tier at 20 graded — the P0-2 per-tier receipt.
 - **Labels.** `SIGNAL_LABEL` is exported from `app/lib/value.ts` and re-exported here; the four UI files that hardcode the strings are listed in ENGINE_SPEC_V2 §5.9.
+
+## 9 · OCT 3 2026 ENGINE PASS — house-normalized Flags, expected hammer + max bid, card gate, shadow/promote
+
+Product decision (Collin, Oct 3): lead with **expected hammer + max bid** (forecast the hammer better than the house) and gate card calls harder. Engine version **`2026.10.03-house-gate`** (`ENGINE_FLAGS_CURRENT` in app/lib/value.ts; the pre-pass engine replays as `ENGINE_FLAGS_LEGACY`).
+
+**9.1 The house-bias index** (app/lib/indices.ts `makeHouseBiasIndexer`). Point-in-time recency-weighted median of log(realized all-in / estimate mid) over sales KNOWN strictly before the valuation day (6y window, 2y half-life, `compExclude`/undated excluded), per estimate kind (band `b` / single-point `p`), in a shrinkage ladder global → market, house → market × house (K = 20). `houseFactorOf` returns the habit relative to the global band habit (≈1 for a typical band house). build-market builds it for today from the engine population; the backtest replay and validate-engine build it per quarter. Measured: RR's single-point low clears 1.38× (global band 1.24×) → factor 1.11 — RR's policy is milder than the audit assumed; its 85%-odds top-50 monopoly came from the odds (9.2), not the ratio.
+
+**9.2 House-normalized Flags.** `value.flagRatio` = comp median / (estimate mid × houseFactor); the signal (label, strength, `beatRatePct`) is called on it. `compRatio` stays the raw ratio (the ×5 data-fault sanity still reads it). "Beat" in the odds and in flag precision means realized above the **house-adjusted top** (`adjustedTop`: band high × factor; a single point × factor × 1.2, the median high/mid of band estimates) — the `:pt` odds rows used to mean "beat the low", which is near-certain, so every RR flag read 85%. Admission under the adjusted yardstick: odds ≥ 55 (`FLAG_GATE.minOdds`; sports' 1.3–2× bucket calibrates 51% and realized 49% out of sample with a 6.6pt edge — a coin flip is not a flag) and ≥ 10pt over the market's own at-market bucket. The record stores `fr` (flag ratio), `ba` (beat adjusted top) and `hl` (house habit) on every observation; legacy rows are rehydrated from the index at the row's quarter (market cell — legacy rows carry no house); the next full replay replaces the approximation.
+
+**9.3 The house anchor** (`blendPredict`, `houseAnchor`): log(value/mid) = (1 − w)·h + w·log(comps/mid), h = the house-bias cell, w = the calibrated per-tier comp weight (refit on the anchor model where rows carry `hl`). Replaces the fitted market intercept / bare-premium anchor.
+
+**9.4 THE BUYER'S FIELDS — what the UI reads** (every served value, hedonic and card):
+
+| field | meaning |
+|---|---|
+| `value.expectedHammerUsd` | the prediction, **hammer basis** (same basis as the house estimate the page prints) = compValueUsd ÷ premiumFactor |
+| `value.bandLowUsd` / `value.bandHighUsd` | the calibrated outcome band, hammer basis (13/87 residual quantiles; ~70% coverage measured) |
+| `value.maxBidUsd` | the **30% quantile** of the calibrated outcome distribution, hammer basis — "only ~30% of comparable outcomes cleared at or below this": bid to here and you buy in the cheap third. Clamped into [bandLowUsd, expectedHammerUsd]. Uncalibrated: the log-normal 30% point between the band low and the median. |
+| `value.premiumFactor` | all-in = hammer × this (the lot's stamped premium, else the house schedule) |
+| `value.engineVersion` | the engine version that produced the value |
+| `value.flagRatio`, `value.houseFactor` | the flag statistic and the house multiplier it divided by — the Flags' printed % must read `flagRatio` (fallback `compRatio`) |
+| `value.gate` | (card values) the cell's trailing-year out-of-sample record: n, within30Pct, bias |
+
+`compValueUsd`, `low`, `high` keep their all-in meaning for compatibility. backtest.json `calibration.maxBidCalibration[market]` publishes, per market, the share of actual hammers inside the band, at/below the max bid (nominal 30) and above it.
+
+**9.5 The publish gates** (app/lib/cards-gate.ts). A card/TCG value publishes only when its market × tier × confidence cell, over the trailing 365 days of point-in-time-priced sold cards (each corrected by the tier bias as it stood the week the card sold), clears **n ≥ 50, ±30% hit ≥ 45%, |bias| ≤ 1.15×**; else the lot abstains `card:uncalibrated` / `card:gate-accuracy` / `card:gate-bias`. The no-estimate hedonic value takes the same bar per market × confidence from the record's trailing-year no-estimate rows (`calibration.noEstGate`; `noest:*` codes). Both gates sit at PUBLISH in build-market — the record keeps scoring every value, so a cell can earn its way back. TCG is now priced point-in-time and wears the tier bias/band like sports cards.
+
+**9.6 Shadow / promote.** `ENGINE_FLAGS_CANDIDATE` (equal to CURRENT when nothing is pending). `RAY_ENGINE_CANDIDATE=1`: build-market values every lot under the candidate too and appends **shadow** rows (`sh: 1`, the candidate's version) to the value tape — never served; validate-engine prices each holdout lot's one comp pool under both engines with the point-in-time calibration each would have loaded and emits `candidate` (backtest-core `compareEngines`: value error on lots both valued, coverage, band, max bid, flag precision + edge on the house-adjusted yardstick) with `promote` = candidate median abs error ≤ current, ±30% ≥ current − 0.5pt, adjusted edge ≥ current − 2pt. Promotion = copy the candidate's flags into CURRENT and bump the version.
+
+**9.7 G5 (live forward check) never graded** because the value tape lived only inside the corpus tar and the nightly assemble rebuilds data/corpus from segments — reborn empty every night (the Aug 14–24 calls-ledger bug again); validate-engine, running the same night, only saw rows served that day. data-store.sh now persists `latest/value-tape.json.gz` (push + pull-backtest). G5 grades the current version; every version on the tape (served and shadow) is graded into the validation JSON `live.byVersion`.
+
+**9.8 Measured** (oneoff/qa/engine-ab.ts: test year Oct 1 2025 → Sep 2026, point-in-time calibration + indices per quarter, identical comp pools, 4,944 estimate + 1,017 no-estimate lots; oneoff/qa/live-ab.ts: the Sep 14 live book re-served, graded on lots sold by Oct 2):
+
+| | legacy | Oct 3 |
+|---|---|---|
+| holdout estimate lots: median abs error (house mid: 31.0%) | 30.7% | **28.8%** |
+| holdout estimate lots: ±30% (house: 49.4%) | 49.2% | **51.2%** |
+| holdout bias (realized/value) | 1.111 | 1.056 |
+| holdout band coverage | 68.5% | 69.2% |
+| holdout hammers ≤ max bid (nominal 30%) | — | 22.6% |
+| holdout flags / precision vs adjusted top / adjusted edge | 2,299 / 66.9% / 27.2pt | 2,137 / **68.1%** / **28.4pt** |
+| live estimate lots (n 680): median abs error (house 32.3%) | 32.1% | **31.2%** |
+| live hammers in band / ≤ max bid | — | 70.1% / 29.1% |
+| live card values kept / ±30% hit / median abs error | 477 / 45.9% / 35.7% | 267 / **60.7%** / **23.0%** |
+| live no-estimate values (±30% hit 26%) | 197 | 0 (abstain) |
+| today's book: top-50 Flags from RR | 50 / 50 | 43 / 50 |

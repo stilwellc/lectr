@@ -19,16 +19,16 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { resolveComps, estimateValueEx, setCalibration, setTimeIndex, vsBidRead, quantile, knownKey, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
 import { mergeCardExtract, pokemonKeyFromExtract, llmConditionFlag, sameObjectFilter, flushExtractQueue } from './lib/extract/apply';
-import { buildMarketSeries, buildTimeIndex, type MarketSeries } from '../app/lib/indices';
+import { buildMarketSeries, buildTimeIndex, buildHouseBias, type MarketSeries } from '../app/lib/indices';
 import { median as statsMedian, weightedMedian } from '../app/lib/stats';
 import { isCompExcluded } from '../app/lib/comps';
 import { fitCloseCurve } from './build-market-curve';
 import { appendValueTape } from './build-market-tape';
-import { ENGINE_VERSION } from './backtest-core';
 import { buildHedonicIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
 import { buildSubMarkets, buildDrillRows, buildVerticalRepeatSale } from './sub-markets';
 import { fitGradeLadder } from './lib/grade-ladder';
@@ -133,7 +133,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // Runs here so a standalone build-market applies them too; the nightly runs the
   // same pass in assemble.ts (which persists the fixes into the corpus gz).
   const { normalizeCorpus } = require('./lib/corpus-normalize');
-  normalizeCorpus(all);
+  normalizeCorpus(all, { now: new Date(NOW_MS) });
 
   // load the auto-calibration the previous backtest emitted (per-market
   // beatRate relevel + conformal band multipliers) — displayed figures only,
@@ -198,6 +198,16 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // from sales known before today only, so the live book and the backtest
   // replay adjust comps by the same construction.
   setTimeIndex(opts.noTimeAdjust ? null : buildTimeIndex(all, MARKET_BY_SLUG, TODAY));
+  // THE HOUSE-BIAS INDEX (Oct 3): each house × market's estimate habit, from
+  // the engine population's sales known before today — the Flags read comps
+  // against the house-adjusted estimate (value.houseFactorOf); built the same
+  // way the backtest replay builds it per quarter
+  setHouseBias(buildHouseBias(engineAll, MARKET_BY_SLUG, TODAY));
+  // SHADOW (RAY_ENGINE_CANDIDATE=1): the candidate engine valued alongside the
+  // served one — its values go ONLY to the value tape (shadow rows, the
+  // candidate's version), never onto a lot
+  const SHADOW = process.env.RAY_ENGINE_CANDIDATE === '1';
+  const shadowValues = new Map<string, { compValueUsd: number; low: number; high: number; confidence: string; basis?: string; signal?: { label: string } | null; expectedHammerUsd?: number; maxBidUsd?: number }>();
   buildVectors(engineAll, tbl);    // attach _v to every engine lot (upcoming need it too)
   const soldSorted = sold.slice().sort((a, b) => a.saleDate < b.saleDate ? -1 : 1);
   const soldPos = new Map(soldSorted.map((l, i) => [l.id, i]));
@@ -230,6 +240,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   for (const s of soldSorted) (soldByArtist.get(s.artist) || soldByArtist.set(s.artist, []).get(s.artist)!).push(s);
   const upcoming = engineAll.filter(l => l.status === 'upcoming' && (!opts.onlyIds || opts.onlyIds.has(String(l.id))));
   let valued = 0;
+  let noEstGated = 0;
   // artist-level sell-through (sold vs bought-in) — the bought-in shadow read
   const artistSellThrough = new Map<string, number>();
   {
@@ -370,7 +381,31 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     // priorTo=TODAY: only sales KNOWN before today (month/year-precision
     // dates count from the end of their period — value.knownKey)
     const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl, TODAY);
-    const { value: v, abstain } = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
+    const ex = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
+    let v = ex.value;
+    let abstain: AbstainReason | string | null = ex.abstain;
+    // THE NO-ESTIMATE PUBLISH GATE (Oct 3): an absolute (no-estimate) value
+    // publishes only where its market × confidence record over the trailing
+    // year clears the card bar (calibration.noEstGate — replayed out of
+    // sample by the backtest); else it abstains with the cell's reason. The
+    // record keeps scoring every value either way (the gate sits HERE, at
+    // publish, never inside the engine).
+    const gateNoEst = (val: ValueResult | null, flags: { noEstGate: boolean }): { pass: boolean; reason?: string } => {
+      if (!val || !flags.noEstGate || val.compRatio != null) return { pass: true };
+      const g = noEstGateOf(lot.artist, val.confidence);
+      return g.pass ? { pass: true } : { pass: false, reason: g.reason || 'noest:uncalibrated' };
+    };
+    {
+      const g = gateNoEst(v, getEngineFlags());
+      if (!g.pass) { v = null; abstain = g.reason!; noEstGated++; }
+    }
+    if (SHADOW) {
+      const served = getEngineFlags();
+      setEngineFlags(ENGINE_FLAGS_CANDIDATE);
+      const sv = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl).value;
+      setEngineFlags(served);
+      if (sv && gateNoEst(sv, ENGINE_FLAGS_CANDIDATE).pass) shadowValues.set(String(lot.id), sv);
+    }
     const lotW = lot as AuctionLot & { value?: ValueResult | null; abstain?: AbstainReason | string };
     if (v) {
       delete lotW.abstain;
@@ -394,7 +429,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       lotW.abstain = abstain || (pool.length ? 'pool<3' : 'no-candidates');
     }
   }
-  console.log(`[market] valued ${valued}/${upcoming.length} upcoming lots · ${((Date.now() - tVal) / 1000).toFixed(0)}s`);
+  console.log(`[market] valued ${valued}/${upcoming.length} upcoming lots (${noEstGated} no-estimate values withheld by the publish gate) · ${((Date.now() - tVal) / 1000).toFixed(0)}s`);
   {
     const reasons: Record<string, number> = {};
     for (const l of upcoming) { const a = (l as AuctionLot & { abstain?: string }).abstain; if (a) reasons[a] = (reasons[a] || 0) + 1; }
@@ -829,13 +864,13 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     const gradeMult = gradeLadderFit.mult;
     // (bid reads go through value.vsBidRead — the ONE all-in bid comparison)
     type CardTier = 'exact' | 'grade-adj' | 'player' | 'none';
-    const tierCounts: Record<CardTier, number> = { exact: 0, 'grade-adj': 0, player: 0, none: 0 };
+    const tierCounts: Record<CardTier | 'gated', number> = { exact: 0, 'grade-adj': 0, player: 0, none: 0, gated: 0 };
     // recency-decayed weighted median (half-life 1y — the Goldin absolute path's
     // measured optimum; memorabilia cycles faster than estimate lots)
     const saleMsOf = (s: AuctionLot) => (s as AuctionLot & { _saleMs?: number })._saleMs ?? new Date(s.saleDate as string).getTime();
     // (stats.weightedMedian — the one lower-weighted-median definition)
-    const decayedMedian = (pool: { p: number; ms: number }[]): number => {
-      const m = weightedMedian(pool.map(x => [x.p, isNaN(x.ms) ? 0.25 : Math.pow(0.5, Math.max(0, (NOW_MS - x.ms) / 31_557_600_000))] as [number, number]));
+    const decayedMedian = (pool: { p: number; ms: number }[], asOfMs: number = NOW_MS): number => {
+      const m = weightedMedian(pool.map(x => [x.p, isNaN(x.ms) ? 0.25 : Math.pow(0.5, Math.max(0, (asOfMs - x.ms) / 31_557_600_000))] as [number, number]));
       return Number.isNaN(m) ? 0 : m;
     };
     // the pool's own dispersion as the band: 15/85 lerp quantiles; [min,max] at n=2
@@ -860,7 +895,51 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       const lk = k.slice(0, k.lastIndexOf('|'));
       (tcgByLadder.get(lk) || tcgByLadder.set(lk, []).get(lk)!).push(sPk);
     }
-    const tcgCounts = { exact: 0, 'grade-adj': 0, none: 0, noKey: 0, bidOnly: 0 };
+    // THE TCG TIER PRICER (Oct 3 2026: one function for the live book AND
+    // its point-in-time calibration — pools cut to sales strictly before
+    // asOf, decay measured from asOf). Unchanged rules: exact identity ≥2 →
+    // 'tcg-exact' (high at ≥4); else the grade ladder borrowing the sports
+    // ladder ratios → 'tcg-grade-adj' (low).
+    type TcgPrice = { value: number; low: number; high: number; poolIds: string[]; poolN: number; confidence: 'high' | 'medium' | 'low'; tier: 'tcg-exact' | 'tcg-grade-adj' };
+    const priceTcg = (k: string, exactAll: AuctionLot[], asOfMs: number, selfId?: string): TcgPrice | null => {
+      const before = (x: AuctionLot) => String(x.id) !== selfId && saleMsOf(x) < asOfMs;
+      const exact = exactAll.filter(before);
+      const gradeNum = parseFloat(k.slice(k.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
+      if (exact.length >= 2) {
+        const pool = exact.map(x => ({ p: x.realizedUsd!, ms: saleMsOf(x) }));
+        const [low, high] = dispersionBand(pool.map(x => x.p));
+        return { value: Math.round(decayedMedian(pool, asOfMs)), low, high, poolIds: exact.slice(-60).map(x => x.id), poolN: exact.length, confidence: exact.length >= 4 ? 'high' : 'medium', tier: 'tcg-exact' };
+      }
+      const ladder = (tcgByLadder.get(k.slice(0, k.lastIndexOf('|'))) || []).filter(before);
+      if (ladder.length >= 2 && isFinite(gradeNum)) {
+        const adj = ladder.map(x => {
+          const xk = pkKey(x)!; const g = parseFloat(xk.slice(xk.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
+          return { p: x.realizedUsd! * (gradeMult(gradeNum) / gradeMult(g)), ms: saleMsOf(x) };
+        }).filter(x => x.p > 0);
+        if (adj.length >= 2) {
+          const [low, high] = dispersionBand(adj.map(x => x.p));
+          return { value: Math.round(decayedMedian(adj, asOfMs)), low, high, poolIds: ladder.slice(-60).map(x => x.id), poolN: ladder.length, confidence: 'low', tier: 'tcg-grade-adj' };
+        }
+      }
+      return null;
+    };
+    // point-in-time TCG residuals for the card gate (fit below with the
+    // sports-card rows): recent sold Pokémon priced as of their own day
+    const tcgResiduals: CardResidual[] = [];
+    {
+      const cut = NOW_MS - CARD_GATE.windowDays * 864e5;
+      const rec = lotsForSlug('pokemon').filter(x => x.status === 'sold' && (x.realizedUsd || 0) > 0 && x.saleDate && saleMsOf(x) > cut && saleMsOf(x) < NOW_MS && !hasConditionFlag(x.title) && !llmConditionFlag(x));
+      const step = Math.max(1, Math.ceil(rec.length / 6000));
+      for (let i = 0; i < rec.length; i += step) {
+        const x = rec[i];
+        const k = pkKey(x); if (!k) continue;
+        const pr = priceTcg(k, tcgByKey.get(k) || [], saleMsOf(x), String(x.id));
+        if (pr && pr.value > 0) tcgResiduals.push({ tier: pr.tier, conf: pr.confidence, market: 'tcg', ms: saleMsOf(x), lr: Math.log(x.realizedUsd! / pr.value) });
+      }
+    }
+    const tcgCounts = { exact: 0, 'grade-adj': 0, none: 0, noKey: 0, bidOnly: 0, gated: 0 };
+    // the live TCG pass runs once the card gate is fit (below)
+    const valueTcgLive = (cal: CardCalibration) => {
     for (const l of lotsForSlug('pokemon')) {
       if (l.status !== 'upcoming') continue;
       const lv = l as AuctionLot & { currentBid?: number; estLowUsd?: number; estHighUsd?: number; value?: ValueResult | null; abstain?: string };
@@ -871,42 +950,15 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       const k = pkKey(l);
       if (!k) { lv.abstain = 'no-identity'; tcgCounts.noKey++; continue; }
       const exact = sameObjectFilter(l, tcgByKey.get(k) || [], { queue: !opts.evalOnly });
-      const gradeNum = parseFloat(k.slice(k.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
-      let value: number | null = null, low = 0, high = 0, poolIds: string[] = [], poolN = 0;
-      let confidence: 'high' | 'medium' | 'low' = 'low';
-      let tier: 'tcg-exact' | 'tcg-grade-adj' | null = null;
-      if (exact.length >= 2) {
-        const pool = exact.map(x => ({ p: x.realizedUsd!, ms: saleMsOf(x) }));
-        value = Math.round(decayedMedian(pool)); [low, high] = dispersionBand(pool.map(x => x.p));
-        poolIds = exact.slice(-60).map(x => x.id); poolN = exact.length;
-        confidence = exact.length >= 4 ? 'high' : 'medium'; tier = 'tcg-exact';
-      } else {
-        const ladder = (tcgByLadder.get(k.slice(0, k.lastIndexOf('|'))) || []).filter(x => x.id !== l.id);
-        if (ladder.length >= 2 && isFinite(gradeNum)) {
-          const adj = ladder.map(x => {
-            const xk = pkKey(x)!; const g = parseFloat(xk.slice(xk.lastIndexOf('|') + 1).replace(/^[A-Z]+/, ''));
-            return { p: x.realizedUsd! * (gradeMult(gradeNum) / gradeMult(g)), ms: saleMsOf(x) };
-          }).filter(x => x.p > 0);
-          if (adj.length >= 2) {
-            value = Math.round(decayedMedian(adj)); [low, high] = dispersionBand(adj.map(x => x.p));
-            poolIds = ladder.slice(-60).map(x => x.id); poolN = ladder.length;
-            confidence = 'low'; tier = 'tcg-grade-adj';
-          }
-        }
-      }
-      if (value != null && value > 0 && tier) {
-        lv.value = {
-          poolIds, n: poolN, compValueUsd: value, low, high, compRatio: null, signal: null,
-          estimateUsd: value,
-          vsBid: confidence === 'low' ? null : vsBidRead(l, bid, value),
-          confidence, exact: null, basis: 'card-comp', cardTier: tier,
-          ...(confidence === 'low' ? { abstain: 'tcg:grade-proxy-context-only' } : {}),
-        } as ValueResult;
-        delete lv.abstain;
-        tcgCounts[tier === 'tcg-exact' ? 'exact' : 'grade-adj']++;
-      } else { lv.abstain = 'tcg:pool<2'; tcgCounts.none++; }
+      const pr = priceTcg(k, exact, NOW_MS, String(l.id));
+      if (!pr || !(pr.value > 0)) { lv.abstain = 'tcg:pool<2'; tcgCounts.none++; continue; }
+      const res = publishCardValue(l, cal, 'tcg', pr.tier, pr.confidence, pr.value, pr.low, pr.high, pr.poolIds, pr.poolN, bid,
+        pr.confidence === 'low' ? 'tcg:grade-proxy-context-only' : null);
+      if (res) { tcgCounts[pr.tier === 'tcg-exact' ? 'exact' : 'grade-adj']++; }
+      else { tcgCounts.gated++; }
     }
-    console.log(`[market] tcg value estimator: ${tcgCounts.exact + tcgCounts['grade-adj']}/${tcgCounts.bidOnly} bid-only pokémon valued · exact=${tcgCounts.exact} · grade-adj=${tcgCounts['grade-adj']} · no-key=${tcgCounts.noKey} · thin=${tcgCounts.none} · keyed sold pools ${tcgByKey.size}`);
+    console.log(`[market] tcg value estimator: ${tcgCounts.exact + tcgCounts['grade-adj']}/${tcgCounts.bidOnly} bid-only pokémon valued · exact=${tcgCounts.exact} · grade-adj=${tcgCounts['grade-adj']} · gated=${tcgCounts.gated} · no-key=${tcgCounts.noKey} · thin=${tcgCounts.none} · keyed sold pools ${tcgByKey.size}`);
+    };
 
     // ── THE CARD TIER PRICER (Sep 27 2026) — one function for the live book
     // AND its own point-in-time calibration below, so the band/bias the live
@@ -979,41 +1031,77 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
       return out;
     };
 
-    // ── CARD CALIBRATION, point-in-time (Sep 27 2026) — the tier pricer run on
-    // the most recent sold cards AS OF each one's own sale day (pools strictly
-    // before it), so realized / value is an honest out-of-sample residual.
-    // Per tier: a bias multiplier (median residual, shrunk toward 1) and the
-    // 15/85 outcome band around the bias-corrected value — the band the live
-    // value wears (the pool's own 15/85 spread covered ~30% live).
-    const cardCal: Record<string, { bias: number; lo: number; hi: number; n: number }> = {};
+    // ── CARD CALIBRATION + THE PUBLISH GATE, point-in-time (Sep 27 / Oct 3
+    // 2026) — the tier pricer run on recently sold cards AS OF each one's own
+    // sale day (pools strictly before it), so realized / value is an honest
+    // out-of-sample residual. app/lib/cards-gate.ts fits, from these rows
+    // (+ the TCG rows above): the per-tier bias multiplier + 13/87 band +
+    // max-bid quantile the live value wears (last 120d), and the per market ×
+    // tier × confidence PUBLISH GATE over the last 365d (±30% hit ≥ 45%,
+    // |bias| ≤ 15% after the point-in-time correction). A value in a failing
+    // cell abstains with the cell's reason code (ENGINE_FLAGS.cardGate).
+    let cardCalib: CardCalibration;
     {
-      const CAL_DAYS = 120, CAL_MAX = 6000, K = 30;
-      const cut = NOW_MS - CAL_DAYS * 864e5;
+      const CAL_MAX = 12000;
+      const cut = NOW_MS - CARD_GATE.windowDays * 864e5;
       const recentSold = (sportsSold as PLot[]).filter(s => CARD_SLUGS.has(s.artist) && s._card && saleMsOf(s) > cut && saleMsOf(s) < NOW_MS && !hasConditionFlag(s.title));
       const step = Math.max(1, Math.ceil(recentSold.length / CAL_MAX));
-      const res: Record<string, number[]> = {};
+      const rows: CardResidual[] = [];
       for (let i = 0; i < recentSold.length; i += step) {
         const s = recentSold[i];
         const c = s._card!;
         const ck = cardKey(c); const lk = cardLadderKey(c);
         const pr = priceCard(c, (ck ? byCardKey.get(ck) : undefined) || [], (lk ? byLadderKey.get(lk) : undefined) || [], String(s.auctionHouse), saleMsOf(s), String(s.id));
-        if (pr.value && pr.value > 0 && s.realizedUsd! > 0) (res[pr.tier] ||= []).push(Math.log(s.realizedUsd! / pr.value));
+        if (pr.value && pr.value > 0 && s.realizedUsd! > 0) rows.push({ tier: pr.tier, conf: pr.confidence, market: 'sports', ms: saleMsOf(s), lr: Math.log(s.realizedUsd! / pr.value) });
       }
-      for (const [tierK, logs] of Object.entries(res)) {
-        if (logs.length < 50) continue;
-        const b = statsMedian(logs);
-        const shrunk = (logs.length * b) / (logs.length + K);
-        const z = logs.map(x => x - shrunk).sort((a, b2) => a - b2);
-        cardCal[tierK] = {
-          bias: Math.round(Math.exp(shrunk) * 1000) / 1000,
-          lo: Math.round(Math.min(1, Math.exp(quantile(z, 0.15))) * 1000) / 1000,
-          hi: Math.round(Math.max(1, Math.exp(quantile(z, 0.85))) * 1000) / 1000,
-          n: logs.length,
-        };
-      }
-      console.log(`[market] card tier calibration (pit, ${recentSold.length} sold cards in ${CAL_DAYS}d, sampled 1/${step}): ${JSON.stringify(cardCal)}`);
-      if (markets.all?.analytics) (markets.all.analytics as unknown as Record<string, unknown>).cardCalibration = cardCal;
+      cardCalib = fitCardCalibration(rows.concat(tcgResiduals), NOW_MS);
+      console.log(`[market] card tier calibration (pit, ${recentSold.length} sold cards in ${CARD_GATE.windowDays}d, sampled 1/${step}; ${rows.length} sports + ${tcgResiduals.length} tcg residuals): ${JSON.stringify(cardCalib.tiers)}`);
+      console.log(`[market] card publish gate (${CARD_GATE.windowDays}d OOS, ±30% ≥ ${CARD_GATE.within30Pct}% & |bias| ≤ ${CARD_GATE.maxBias}×, n ≥ ${CARD_GATE.minN}): ${Object.entries(cardCalib.cells).map(([k, c]) => `${k} n${c.n} w30=${c.within30Pct ?? '-'} b=${c.bias ?? '-'} ${c.pass ? 'PUBLISH' : c.reason}`).join(' · ')}`);
+      if (markets.all?.analytics) (markets.all.analytics as unknown as Record<string, unknown>).cardCalibration = { ...cardCalib.tiers, gate: cardCalib.cells };
     }
+    // THE CARD PUBLISH STEP (Oct 3): bias + band + buyer's fields + the gate,
+    // shared by the sports-card and TCG tiers. Returns the stamped value, or
+    // null when the gate withheld it (the lot then carries the reason).
+    const publishCardValue = (
+      l: AuctionLot, cal: CardCalibration, market: 'sports' | 'tcg', tier: string, confidence: 'high' | 'medium' | 'low',
+      raw: number, rawLow: number | null, rawHigh: number | null, poolIds: string[], poolN: number, bid: number,
+      partialAbstain: string | null,
+    ): ValueResult | null => {
+      const lv = l as AuctionLot & { value?: ValueResult | null; abstain?: string };
+      const tc = cal.tiers[tier];
+      let value = raw, low = rawLow ?? raw, high = rawHigh ?? raw;
+      let mbAllIn: number | null = null;
+      if (tc) {
+        value = Math.round(raw * tc.bias);
+        low = Math.round(value * tc.lo); high = Math.round(value * tc.hi); mbAllIn = value * tc.mb;
+      }
+      const g = cardGate(cal, market, tier, confidence);
+      const flagsNow = getEngineFlags();
+      // shadow: the candidate's verdict on the same priced value (never served)
+      if (SHADOW) {
+        const candPass = !ENGINE_FLAGS_CANDIDATE.cardGate || g.pass;
+        if (candPass) shadowValues.set(String(l.id), { compValueUsd: value, low, high, confidence, basis: 'card-comp', ...buyerFields(l, value, Math.min(low, value), Math.max(high, value), mbAllIn) });
+      }
+      if (flagsNow.cardGate && !g.pass) {
+        lv.value = null;
+        lv.abstain = g.reason || 'card:uncalibrated';
+        return null;
+      }
+      const v = {
+        poolIds, n: poolN, compValueUsd: value, low: Math.min(low, value), high: Math.max(high, value), compRatio: null, signal: null,
+        estimateUsd: value, // no house estimate — the comp value IS the estimate
+        // a below/above-BID call only on a value that reflects THIS card
+        vsBid: confidence === 'low' || !(bid > 0) ? null : vsBidRead(l, bid, value),
+        confidence, exact: null, basis: 'card-comp', cardTier: tier,
+        ...(confidence === 'low' && partialAbstain ? { abstain: partialAbstain } : {}),
+        ...buyerFields(l, value, Math.min(low, value), Math.max(high, value), mbAllIn),
+        ...(g.within30Pct != null ? { gate: { n: g.n, within30Pct: g.within30Pct, bias: g.bias } } : {}),
+      } as ValueResult;
+      lv.value = v;
+      delete lv.abstain;
+      return v;
+    };
+    valueTcgLive(cardCalib);
 
 
     // live-card comps: exact cardKey → last sales; ladderKey → grade ladder.
@@ -1129,11 +1217,8 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
           // the value is bias-corrected and wears the measured outcome band
           const pr = priceCard(c, exact, ladder, house, NOW_MS);
           if (pr.value != null && pr.value > 0) {
-            const cal = cardCal[pr.tier];
-            if (cal) {
-              value = Math.round(pr.value * cal.bias);
-              low = Math.round(value * cal.lo); high = Math.round(value * cal.hi);
-            } else { value = pr.value; low = pr.low; high = pr.high; }
+            // raw tier price — publishCardValue applies the tier bias/band
+            value = pr.value; low = pr.low; high = pr.high;
             poolIds = pr.poolIds; poolN = pr.poolN; confidence = pr.confidence; tier = pr.tier;
           }
           const staleSeen = pr.stale;
@@ -1149,30 +1234,12 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
           if (value == null) abstain = staleSeen ? 'card:stale' : (ck || lk) ? 'card:pool<2' : c.playerSlug ? 'card:player-tier' : 'no-identity';
 
           if (value != null && value > 0) {
-            lv.value = {
-              poolIds,
-              n: poolN,
-              compValueUsd: value,
-              low: low ?? value,
-              high: high ?? value,
-              compRatio: null,
-              signal: null, // never assert a hedonic buy-signal on cards
-              estimateUsd: value, // no house estimate — the comp value IS the estimate
-              // A below/above-BID call (and its glow) only fires when the value
-              // reflects THIS card — exact (tier 1) or grade-adjusted (tier 2). A
-              // bare PLAYER median (tier 3, 'low') can't call a specific card: a
-              // rare parallel/high grade collapses to the median and would print a
-              // wild ±% (a Jordan/Kobe refractor read '+782% over comps'). So tier 3
-              // carries the value as CONTEXT only — no vsBid, no glow, no call.
-              vsBid: confidence === 'low' || !(bid > 0) ? null : vsBidRead(l, bid, value),
-              confidence,
-              exact: null,
-              basis: 'card-comp', // marker: card-comp value, NOT the hedonic engine
-              cardTier: tier === 'none' ? undefined : tier,
-              ...(confidence === 'low' && bid > 0 ? { abstain: 'card:player-median-context-only' } : {}),
-            } as ValueResult;
-            delete (lv as AuctionLot & { abstain?: string }).abstain;
-            tierCounts[tier]++;
+            // signal is never asserted on cards; a vsBid call only on a value
+            // that reflects THIS card (non-'low' — a low-confidence value is
+            // context only). The publish gate may still withhold it (Oct 3).
+            const pub = publishCardValue(l, cardCalib, 'sports', tier, confidence, value, low, high, poolIds, poolN, bid,
+              'card:player-median-context-only');
+            if (pub) tierCounts[tier]++; else tierCounts.gated++;
           } else {
             tierCounts.none++;
             (lv as AuctionLot & { abstain?: string }).abstain = abstain || 'card:pool<2';
@@ -1185,8 +1252,8 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     }
     console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · ${soldStamped} sold sports-object lots player-stamped · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
     const cardValued = tierCounts.exact + tierCounts['grade-adj'] + tierCounts.player;
-    const cardBidOnly = cardValued + tierCounts.none;
-    console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · none=${tierCounts.none}`);
+    const cardBidOnly = cardValued + tierCounts.none + tierCounts.gated;
+    console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · gated=${tierCounts.gated} · none=${tierCounts.none}`);
     console.log(`[market] cross-house live collisions stamped: ${crossLiveStamped}`);
   }
   // the point-in-time evaluation seam stops here: every upcoming lot now
@@ -1194,6 +1261,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   if (opts.evalOnly) {
     for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; delete t._v; delete t._saleMs; }
     setTimeIndex(null);
+    setHouseBias(null);
     return all;
   }
 
@@ -1330,8 +1398,9 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   {
     const soldIds = new Set<string>();
     for (const l of all) if (l.status === 'sold') soldIds.add(String(l.id));
-    const t = appendValueTape(all, TODAY, MARKET_BY_SLUG, ENGINE_VERSION, soldIds);
-    console.log(`[market] value tape — ${t.added} first-served values appended (${t.total} rows, ${t.pruned} pruned)`);
+    const t = appendValueTape(all, TODAY, MARKET_BY_SLUG, ENGINE_VERSION, soldIds, undefined,
+      SHADOW ? { version: ENGINE_FLAGS_CANDIDATE.version, values: shadowValues } : undefined);
+    console.log(`[market] value tape — ${t.added} first-served values appended${SHADOW ? ` (+${t.shadowAdded} candidate shadow rows, ${ENGINE_FLAGS_CANDIDATE.version})` : ''} (${t.total} rows, ${t.pruned} pruned)`);
   }
   // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit; conditioned Sep 27) — how
   // much of final hammer arrives in the last days, fitted from Goldin's own
@@ -1438,6 +1507,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED, all as unknown as AuctionLot[]);
   setTimeIndex(null);
+  setHouseBias(null);
   console.log(`[market] done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   return all;
 }
