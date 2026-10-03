@@ -453,6 +453,20 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push
+      # THE LOT API (docs/data-pipeline.md §3): everything the /api/* Pages
+      # Functions serve, precomputed (Free plan: no compute at the edge).
+      # Uploaded write-once under api/v/<version>/, pointer flipped LAST.
+      # Best-effort: a failure keeps the API on the previous version.
+      - name: Emit + push the lot-API index → R2
+        if: ${{ steps.push.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts --served public/data/ray --corpus data/corpus --out data/r2-api
+          bash scripts/r2-api-push.sh data/r2-api
       # The ledger is CRAWL truth, independent of publish: persist it even on a
       # night assemble failed, so tomorrow's stale clock is right.
       - name: Persist the house ledger → R2
