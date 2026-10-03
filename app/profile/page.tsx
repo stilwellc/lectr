@@ -20,6 +20,8 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
+import PushOptIn from '../components/retention/PushOptIn';
+import ProCard from '../components/retention/ProCard';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark } from '../components/marks';
@@ -1532,6 +1534,9 @@ export default function SavedPage() {
             </section>
           )}
 
+          {/* close alerts (browser push) — renders nothing until VAPID + Supabase are configured */}
+          <PushOptIn />
+
           {/* the inbox rides directly under the room — new matches are watch-adjacent */}
           <div id="inbox"><AlertsInbox /></div>
 
@@ -1937,6 +1942,8 @@ export default function SavedPage() {
           )}
         </RayEntrance>
       )}
+      {/* the Pro fake door — measures interest; nothing is for sale */}
+      {authReady && (!user || savedReady) && <ProCard />}
       <Colophon record={null} />
     </div>
   );
