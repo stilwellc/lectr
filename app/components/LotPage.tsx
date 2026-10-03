@@ -24,6 +24,7 @@ import ArtistNav from './ArtistNav';
 import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
+import LotPlate from './LotPlate';
 import { VerdictPanel, CompStrip } from './LotVerdict';
 import { lotVerdict, estAllIn, VERDICT_CSS, fmtUsd } from '../lib/verdict';
 import HouseAsOf from './HouseAsOf';
@@ -106,13 +107,8 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
 .lectr-lot-v.up{color:var(--color-up)}
 .lectr-lot-v.down{color:var(--color-down)}
 .lectr-lot-sub{font-size:11px;font-weight: 500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
-.lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
-.lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,var(--color-border-mid) 4px,var(--color-border-mid) 5px)}
-.lectr-lot-monoglyph{font-size:64px;font-weight: 500;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
-.lectr-lot .ray-plate-mat{padding:18px;margin-bottom:0}
-.lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
-.lectr-lot .ray-plate-img img{object-fit:contain}
-.lectr-lot .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11px;color:var(--color-text-muted);text-align:left}
+.lectr-lot-skel-mat{aspect-ratio:4/5;background:#F5F3F1;border-radius:2px;box-shadow:inset 0 0 0 1px rgba(28,25,23,0.08)}
+.lectr-lot-skel-cap{padding-top:10px}
 .lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px dotted var(--color-border-mid)}
 .lectr-lot-comps{margin-top:44px}
 .lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight: 500;letter-spacing: 0;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
@@ -134,7 +130,6 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
   .lectr-lot-skel-block{animation:lectrLotPulse 1.4s ease-in-out infinite}
   @keyframes lectrLotPulse{0%,100%{opacity:1}50%{opacity:0.45}}
 }
-.lectr-lot-noimg .ray-plate-img{height:220px}
 /* ── NORTH STAR, lot-only additions — every rule below is scoped under
    .lectr-lot (or an -lk/-lval/-read/-shead class only this page renders),
    so the shared comp-ledger grammar Ref/Sub/Player reuse is untouched.
@@ -168,7 +163,7 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
   /* dissolved wrappers make the sections grid items — kill the auto
      min-content floor or a nowrap comp title widens the page */
   .lectr-lot-grid>*{min-width:0}
-  .lectr-lot-cola>.ray-plate-mat{order:1}
+  .lectr-lot-plate{order:1;width:78%;max-width:360px}
   .lectr-lot-cert{order:2}
   .lectr-lot-prov{order:3}
   .lectr-lot-ladder{order:4}
@@ -176,9 +171,6 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
   /* inside the grid the 26px row-gap already separates the sections — trim
      the section margin so the total stays the original 44px */
   .lectr-lot-grid .lectr-lot-comps{margin-top:18px}
-  .lectr-lot .ray-plate-img{height:240px}
-  .lectr-lot-noimg .ray-plate-img{height:160px}
-  .lectr-lot-monoglyph{font-size:44px}
   /* narrow screens: subs wrap, rows may stack, values ellipsize — the
      desktop nowrap pair otherwise forces a >390px page render */
   .lectr-lot-row{flex-wrap:wrap}
@@ -310,9 +302,9 @@ export function LotPageSkeleton() {
     <div className="lectr-lot rail" aria-busy="true" aria-label="Loading lot">
       <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
       <div className="lectr-lot-grid" style={{ paddingTop: 12 }}>
-        <div className="ray-plate-mat">
-          <div className="ray-plate-img lectr-lot-skel-block" />
-          <div className="ray-plate-cap"><span className="lectr-lot-skel-block" style={{ display: 'inline-block', width: 180, height: 10 }} /></div>
+        <div className="lectr-lot-plate">
+          <div className="lectr-lot-skel-mat" />
+          <div className="lectr-lot-skel-cap"><span className="lectr-lot-skel-block" style={{ display: 'inline-block', width: 180, height: 10 }} /></div>
         </div>
         <div>
           <div className="lectr-lot-head"><span className="lectr-lot-skel-block" style={{ width: 190, height: 10 }} /></div>
@@ -384,7 +376,6 @@ export default function LotPage({ lotId, initialLot }: {
   // the reader's clock (null until mount) — close labels are computed at
   // render time, never from the crawl stamp
   const now = useNow();
-  const [imgFailed, setImgFailed] = useState(false);
   const [showAllComps, setShowAllComps] = useState(false);
 
   const live = useMemo(() => allLots.find(l => l.id === lotId) || null, [allLots, lotId]);
@@ -716,7 +707,6 @@ export default function LotPage({ lotId, initialLot }: {
   const marketKey = ARTIST_MARKET[lot.artist];
   const marketLabel = MARKETS.find(m => m.key === marketKey)?.label || null;
   const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title).charAt(0) || '?').toUpperCase();
-  const imgOk = !!lot.imageUrl && !imgFailed;
   const saved = isSaved(lot.id);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
@@ -757,29 +747,18 @@ export default function LotPage({ lotId, initialLot }: {
           {/* the plate column — the photograph, then the object's paper trail
               (provenance, the grade ladder) riding beneath it on desktop */}
           <div className="lectr-lot-cola">
-          {/* the plate: photograph on the elevated mat — or the monogram when
-              the house blocks the hotlink (CallPlate's exact fallback) */}
-          <figure className={`ray-plate-mat${imgOk ? '' : ' lectr-lot-noimg'}`} style={{ margin: 0 }}>
-            {imgOk ? (
-              <div className="ray-plate-img">
-                <img
-                  src={httpsImg(lot.imageUrl)}
-                  alt={craftTitle(lot.title)}
-                  referrerPolicy="no-referrer"
-                  onError={() => setImgFailed(true)}
-                  // cache hits never fire onError — complete with zero
-                  // naturalWidth at attach is a cached failure
-                  ref={el => { if (el && el.complete && el.naturalWidth === 0) setImgFailed(true); }}
-                />
-              </div>
-            ) : (
-              <div className="ray-plate-img lectr-lot-mono" style={{ position: 'relative' }}>
-                <span className="lectr-lot-monorules" aria-hidden />
-                <span className="lectr-lot-monoglyph">{monogram}</span>
-              </div>
-            )}
-            <figcaption className="ray-plate-cap">{caption}</figcaption>
-          </figure>
+          {/* the plate (NORTHSTAR §0.4): the shared LotPlate — cream 4:5 mat,
+              object at 80% multiplied into it, FIG. caption; a hotlink-blocked
+              house falls back to the maker's initial on the same mat */}
+          <LotPlate
+            className="lectr-lot-plate"
+            src={lot.imageUrl}
+            alt={craftTitle(lot.title)}
+            monogram={monogram}
+            fig={1}
+            caption={caption}
+            eager
+          />
 
           {/* provenance — the same physical object's trips across the block.
               Strict physical-match groups only; absence of the section means

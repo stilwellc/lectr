@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Market, MARKETS } from '../constants';
+import { landerDocTitle, segmentTitle, titled, SEGMENT_BARE_TITLE } from './route-titles';
 
 /**
  * The active market — now URL-backed. Each market has a shareable route
@@ -43,8 +44,8 @@ const PATH_MARKET: Record<string, Market> = {
 // the bare route is the stored-choice view ('all' by default), the pathed
 // sibling pins the market. /makers takes an extra /m/ level so the six market
 // keys never collide with the maker-slug namespace (/makers/<slug>). `noun`
-// keeps document.title honest across pushState switches — it must mirror the
-// `generateMetadata` title in each [market] page (template '%s — lectr').
+// keeps document.title honest across pushState switches — the [market] pages
+// build their titles with the same segmentTitle() (app/lib/route-titles.ts).
 const SEGMENT_PAGES = [
   { bare: '/makers', base: '/makers/m', noun: 'makers' },
   { bare: '/analytics', base: '/analytics', noun: 'analytics' },
@@ -76,20 +77,6 @@ const MarketContext = createContext<{ market: Market; setMarket: (m: Market) => 
 export function useMarket() {
   return useContext(MarketContext);
 }
-
-// The lander titles, mirrored from each route's metadata — pushState market
-// switches move the URL under the mounted board, so the document title has to
-// be kept honest by hand (a real navigation would have Next do it).
-const MARKET_TITLE: Record<Market, string> = {
-  all: 'lectr — auction intelligence',
-  art: 'Art — lectr',
-  design: 'Design — lectr',
-  watches: 'Watches — lectr',
-  science: 'Science — lectr',
-  sports: 'Sports — lectr',
-  tcg: 'TCG — lectr',
-  culture: 'Pop Culture — lectr',
-};
 
 export function MarketProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -137,14 +124,20 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   // metadata title on a real navigation). The segment pages mirror their
   // [market] pages' generateMetadata titles.
   useEffect(() => {
-    // /collectibles is the all-market lander under its own name — keep its
-    // metadata title rather than the generic home title
-    if (onLander) document.title = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/collectibles' ? 'Collectibles — lectr' : MARKET_TITLE[urlMarket!];
-    else if (segPage && urlMarket) {
-      const label = MARKETS.find(mk => mk.key === urlMarket)!.label;
-      document.title = `${label} ${segPage.noun} — lectr`;
+    // each route keeps its OWN title: every string comes from
+    // app/lib/route-titles.ts, the same table the routes' metadata reads —
+    // the lander by its path (/collectibles stays "Collectibles", / stays
+    // the site title), a pathed surface by its noun, and a switch back to
+    // the bare route restores the bare route's title instead of leaving the
+    // last market's behind.
+    if (onLander) document.title = landerDocTitle(normPath);
+    else if (segPage) {
+      const label = urlMarket ? MARKETS.find(mk => mk.key === urlMarket)?.label : undefined;
+      document.title = label
+        ? segmentTitle(label, segPage.noun)
+        : titled(SEGMENT_BARE_TITLE[segPage.bare]);
     }
-  }, [onLander, urlMarket, segPage]);
+  }, [onLander, normPath, urlMarket, segPage]);
 
   // SCROLL LEDGER (audit-navbugs defect 2): the lander's market switch moves
   // the URL under the mounted board via raw pushState, and the browser's own

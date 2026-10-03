@@ -18,7 +18,7 @@ export default function GlobalError({ error, reset }: { error: Error; reset: () 
             The desk hit an unexpected error. Reloading usually clears it.
           </p>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => reset()} style={{ background: '#1C1917', color: '#FDFCFC', border: 'none', padding: '9px 18px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => reset()} style={{ background: '#1C1917', color: '#FDFCFC', border: 'none', padding: '9px 18px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
               Try again
             </button>
             <a href="/" style={{ display: 'inline-flex', alignItems: 'center', padding: '9px 18px', borderRadius: 8, fontSize: 14, border: '1px solid rgba(28,25,23,0.18)', color: '#1C1917', textDecoration: 'none' }}>

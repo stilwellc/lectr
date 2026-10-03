@@ -48,7 +48,6 @@ import {
 // THE CELL SYSTEM — the shared ElevenLabs cell grammar (cells.tsx +
 // globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
 // forced-color cell classes re-plate the call. Never redefined here.
-import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
 import { dealScore } from '../lib/comps';
 import { medianOr } from '../lib/stats';
@@ -1241,7 +1240,7 @@ export default function ValuePage() {
           border-left: 1px solid var(--color-hair, rgba(255,255,255,0.06));
         }
         .vd-dial:first-child { border-left: none; padding-left: 2px; }
-        .vd-dial-k { font-size: 10px; letter-spacing: 0.18em; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vd-dial-k { font-size: 10px; letter-spacing: 0; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vd-dial-v {
           font-family: var(--font-mono), monospace;
           font-size: 27px; font-weight: 500; letter-spacing: -0.01em;
@@ -1819,11 +1818,29 @@ export default function ValuePage() {
           max-width: 640px;
         }
 
-        /* ── ROOM 1e · how the desk reads — split head over the figure
-           cells. All cell chrome lives in globals ("THE CELL SYSTEM");
-           this is layout breathing room only. ── */
+        /* ── ROOM 1e · how the desk reads — split head over ONE dotted
+           ledger (NORTHSTAR §0.7): lane · dotted leader · its gate in Plex,
+           the lane's question beneath in muted body. No cells, no bento. ── */
         .vd-reads .ns-split { margin-bottom: 26px; }
-        @media (max-width: 768px) { .vd-reads .ns-split { margin-bottom: 18px; } }
+        .vd-ledger { margin: 0; border-top: 1px solid var(--hairline); }
+        .vd-ledger-row {
+          display: grid; grid-template-columns: max-content minmax(24px, 1fr) max-content;
+          column-gap: 12px; align-items: baseline;
+          padding: 16px 0 18px; border-bottom: 1px dotted var(--color-border-mid);
+        }
+        /* the dotted leader — a grid item of its own between lane and gate */
+        .vd-ledger-row::before { content: ''; grid-column: 2; grid-row: 1; align-self: end; margin-bottom: 0.4em; border-bottom: 1px dotted var(--color-border-mid); }
+        .vd-ledger dt { grid-column: 1; grid-row: 1; font-size: 16px; font-weight: 500; letter-spacing: -0.01em; color: var(--color-fg); }
+        .vd-ledger dd { margin: 0; }
+        .vd-ledger-fig { grid-column: 3; grid-row: 1; font-family: var(--font-mono), ui-monospace, monospace; font-size: 13px; font-weight: 500; color: var(--color-fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .vd-ledger-body { grid-column: 1 / -1; grid-row: 2; margin-top: 6px !important; max-width: 68ch; font-size: 14.5px; line-height: 1.55; color: var(--color-text-muted); }
+        @media (max-width: 768px) {
+          .vd-reads .ns-split { margin-bottom: 18px; }
+          .vd-ledger-row { grid-template-columns: minmax(0, 1fr); }
+          .vd-ledger-row::before { display: none; }
+          .vd-ledger-fig { grid-column: 1; grid-row: 2; margin-top: 2px !important; white-space: normal; }
+          .vd-ledger-body { grid-row: 3; font-size: 14px; }
+        }
 
         /* ── THE CALL AS COLOR — the ns-cell-color grammar wraps the plate.
            The wrapper supplies ground (gradient + grain, globals-owned);
@@ -1956,9 +1973,8 @@ export default function ValuePage() {
             </div>
           </section>
 
-          {/* ════ ROOM 1e · HOW THE DESK READS — the cell grammar: split
-              head (quiet kicker, light headline) over three patent-figure
-              cells, one per lane. Copy states each lane's real gates
+          {/* ════ ROOM 1e · HOW THE DESK READS — split head (quiet kicker,
+              light headline) over one dotted ledger, a row per lane. Copy states each lane's real gates
               (pickCall/comps ladder, lanes.ts) in the lanes' own words; the
               bid-history count reads live from the served closeCurve. No
               thresholds invented, no new signal labels. ════ */}
@@ -1975,29 +1991,31 @@ export default function ValuePage() {
                 the data runs thin, a lane abstains out loud.
               </p>
             </div>
-            <CellGrid min={250} className="vd-reads-grid">
-              <FigureCell
-                figure={<FigGate />}
-                label="The Flags"
-                body={<>Live lots whose comps median clears the estimate by at least 1.3&times; —
+            {/* one dotted ledger (NORTHSTAR §0.7 — ledgers, not bento): lane ·
+                leader · its gate in Plex, the lane's question beneath */}
+            <dl className="vd-ledger">
+              <div className="vd-ledger-row">
+                <dt>The Flags</dt>
+                <dd className="vd-ledger-fig">comps &ge; 1.3&times; the estimate</dd>
+                <dd className="vd-ledger-body">Live lots whose comps median clears the estimate by at least 1.3&times; —
                   ranked by calibrated odds, confidence-gated, and the engine abstains rather
-                  than print a thin call.</>}
-              />
-              <FigureCell
-                figure={<FigReplay />}
-                label="The Gap"
-                body={<>No-estimate lots where the projected close sits at least 25% under the
+                  than print a thin call.</dd>
+              </div>
+              <div className="vd-ledger-row">
+                <dt>The Gap</dt>
+                <dd className="vd-ledger-fig">close &ge; 25% under the floor</dd>
+                <dd className="vd-ledger-body">No-estimate lots where the projected close sits at least 25% under the
                   value floor — the close-day growth curve fitted
-                  from {curveSnaps != null ? `${compactCount(curveSnaps)} ` : ''}Goldin bid histories.</>}
-              />
-              <FigureCell
-                figure={<FigPools />}
-                label="The Sleepers"
-                body={<>Verified-fair lots with no printed bid yet, closing inside seven days —
+                  from {curveSnaps != null ? `${compactCount(curveSnaps)} ` : ''}Goldin bid histories.</dd>
+              </div>
+              <div className="vd-ledger-row">
+                <dt>The Sleepers</dt>
+                <dd className="vd-ledger-fig">no bid &middot; closes &le; 7 days</dd>
+                <dd className="vd-ledger-body">Verified-fair lots with no printed bid yet, closing inside seven days —
                   fairness measured against the engine&rsquo;s own appraisal, never inferred
-                  from a missing signal.</>}
-              />
-            </CellGrid>
+                  from a missing signal.</dd>
+              </div>
+            </dl>
           </section>
 
           {/* ════ ROOM 2 · THE BOARD ════ */}

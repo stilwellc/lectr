@@ -1227,7 +1227,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mk-display{position:relative}
 .mk-display-veil{position:fixed;inset:0;z-index:39;background:none;border:none;cursor:default}
 .mk-display-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;min-width:180px;background:var(--surface-tip, #101214);border:1px solid var(--color-border-mid);border-radius:12px;padding:8px;display:grid;gap:1px}
-.mk-display-head{font-size:10px;letter-spacing:0.14em;padding:4px 8px 7px}
+.mk-display-head{font-size:10px;letter-spacing:0;padding:4px 8px 7px}
 .mk-display-item{display:flex;align-items:center;gap:8px;padding:6px 8px;background:none;border:none;border-radius:7px;font-family:var(--font-sans),sans-serif;font-size:12px;color:var(--color-text-muted);cursor:pointer;text-align:left;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
 .mk-display-item:hover{background:var(--color-hover-item);color:var(--color-fg)}
 .mk-display-item[data-on]{color:var(--color-fg)}
@@ -1239,7 +1239,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mk-cols{display:none}
 @media(min-width:940px){
   .mk-cols{display:grid;gap:14px;align-items:baseline;padding:12px 14px 8px}
-  .mk-cols .kicker{font-size:10px;letter-spacing:0.14em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mk-cols .kicker{font-size:10px;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
 /* ── group heads — rooms as framed plates, authority through lightness ── */
@@ -1324,7 +1324,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mkx-hero-cap{position:absolute;left:14px;bottom:11px;z-index:1;font-size:12px;font-weight: 500;letter-spacing:0.01em;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,0.6)}
 @media(min-width:940px){.mkx-hero{height:190px}}
 .mkx-chartwrap{padding:14px 16px 0}
-.mkx-chart-cap{font-size:10px;letter-spacing:0.14em;margin-bottom:8px}
+.mkx-chart-cap{font-size:10px;letter-spacing:0;margin-bottom:8px}
 .mkx-chart{width:100%;height:150px;padding:4px 10px 18px 46px;box-sizing:border-box}
 .mkx-plot{position:relative;width:100%;height:100%}
 .mkx-plot svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
@@ -1336,7 +1336,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mkx-none{margin:14px 16px 0}
 .mkx-none .ns-well-body{font-size:12.5px;color:var(--color-text-muted)}
 .mkx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px 26px;padding:14px 16px 0}
-.mkx-grid .kicker{font-size:10px;letter-spacing:0.14em}
+.mkx-grid .kicker{font-size:10px;letter-spacing:0}
 .mkx-grid p{margin:4px 0 0;font-size:12px;color:var(--color-text-muted);line-height:1.55}
 .mkx-grid p b{color:var(--color-fg);font-weight: 500;font-variant-numeric:tabular-nums}
 .mkx-houses{margin-top:6px;display:grid;gap:4px}
@@ -1355,7 +1355,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 
 /* ── the live book inside the dossier ── */
 .mkx-live{margin:14px 16px 0;border:1px solid var(--color-hair,rgba(255,255,255,0.07));border-radius:12px;overflow:clip}
-.mkx-live-head{font-size:10px;letter-spacing:0.14em;padding:9px 12px 8px;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}
+.mkx-live-head{font-size:10px;letter-spacing:0;padding:9px 12px 8px;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}
 .mkx-live-flagn{color:var(--color-fg);font-weight: 500;letter-spacing:0.06em}
 .mkx-lot{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;color:inherit;text-decoration:none;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.05));transition:background var(--duration-fast) var(--ease-signature)}
 .mkx-lot:last-of-type{border-bottom:none}
@@ -1390,7 +1390,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mkc-plotwrap{min-width:0}
 .mkc-plot{position:relative;height:150px;margin-left:44px;margin-right:8px}
 .mkc-plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.mkc-cap{font-size:10px;letter-spacing:0.1em;margin-top:8px}
+.mkc-cap{font-size:10px;letter-spacing:0;margin-top:8px}
 .mkc-legend{display:grid;gap:6px;align-content:start;padding-top:2px}
 .mkc-leg{display:flex;align-items:baseline;gap:8px;min-width:0}
 .mkc-leg svg{flex:none;align-self:center}

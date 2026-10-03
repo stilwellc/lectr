@@ -259,7 +259,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           align-items: center;
           gap: 9px;
           font-family: var(--font-sans), sans-serif;
-          font-weight: 750;
+          font-weight: 500;
           font-size: 18px;
           line-height: 1;
           letter-spacing: -0.02em;
@@ -341,11 +341,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-artist-dropdown-item[data-active=true] {
           color: var(--color-fg);
           background: var(--color-hover-item);
-          font-weight: 600;
+          font-weight: 500;
         }
         .ray-artist-count {
           font-size: 12.5px;
-          font-weight: 600;
+          font-weight: 500;
           color: var(--color-bg);
           background: var(--color-fg);
           border-radius: 100px;
@@ -358,7 +358,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           padding: 8px 16px 4px;
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
-          font-weight: 600;
+          font-weight: 500;
           /* north star: sentence case, untracked (matches the de-slop layer) */
           letter-spacing: 0.02em;
           text-transform: none;
@@ -426,7 +426,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             color: var(--color-fg);
             font-family: var(--font-sans), sans-serif;
             font-size: 13.5px;
-            font-weight: 600;
+            font-weight: 500;
             letter-spacing: 0.02em;
             cursor: pointer;
           }
@@ -468,7 +468,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-maker-sheet-title {
           font-family: var(--font-sans), sans-serif;
           font-size: 17px;
-          font-weight: 700;
+          font-weight: 500;
           letter-spacing: -0.01em;
           color: var(--color-fg);
         }
@@ -478,7 +478,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           color: var(--color-fg);
           font-family: var(--font-sans), sans-serif;
           font-size: 16px;
-          font-weight: 600;
+          font-weight: 500;
           padding: 8px 4px;
           margin: -8px -4px;
           min-height: 44px;
@@ -552,7 +552,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           padding: 18px 20px 4px;
           font-family: var(--font-sans), sans-serif;
           font-size: 12px;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: 0.02em;
           color: var(--color-text-faint);
         }
@@ -731,7 +731,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     className="ray-artist-dropdown-item"
                     aria-expanded={showAll}
                     onClick={() => setShowAll(s => !s)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, color: 'var(--color-fg)' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 500, color: 'var(--color-fg)' }}
                   >
                     All makers{' '}
                     <Flick
@@ -748,7 +748,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                     role="menuitem"
                     className="ray-artist-dropdown-item"
                     onClick={() => navigate('/makers')}
-                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, color: 'var(--color-fg)' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 500, color: 'var(--color-fg)' }}
                   >
                     Browse all makers <Flick size={11} style={{ marginLeft: 0 }} />
                   </button>

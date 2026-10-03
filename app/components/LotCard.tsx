@@ -6,9 +6,10 @@ import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import AddToCalendar from './retention/AddToCalendar';
-import { houseColors, categoryLabels, formatDate, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
+import { categoryLabels, formatDate, craftTitle, formatPrice, localToday } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
+import LotPlate from './LotPlate';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
 import { confidenceA11y } from '../lib/verdict';
@@ -112,22 +113,15 @@ export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]) {
 // first card still lays out at the right height with no flash.
 const LOT_CARD_STYLE_ID = 'ray-lot-card-style';
 const LOT_CARD_CSS = `
-  .ray-lot-img { height: 200px; }
-  .ray-lot-img img {
-    opacity: 0;
-    transition: opacity 400ms var(--ease-signature);
-  }
-  .ray-lot-img img[data-loaded=true] { opacity: 1; }
-  /* hotlink-blocked or dead images stay invisible — the serif
-     initial sits in flow behind and reads instead */
-  .ray-lot-img img[data-error=true] { opacity: 0; }
   .ray-save-btn:hover { opacity: 0.85; }
   .ray-lot-card .ray-save-btn { width: 32px; height: 32px; }
   .ray-lot-maker { position: relative; z-index: 2; }
   .ray-lot-maker:hover { text-decoration: underline; }
   @media (max-width: 900px) {
-    /* compact mobile card: shorter image, 44px touch target on save */
-    .ray-lot-img { height: 140px; }
+    /* compact mobile card: the single-column phone feed hangs a landscape
+       mat (NORTHSTAR §0.4 "4:5 unless a surface overrides") so one card
+       never takes a full screen; 44px touch target on save */
+    .ray-lot-platewell > figure > div { aspect-ratio: 5 / 4 !important; }
     .ray-lot-card .ray-save-btn { width: 44px; height: 44px; }
   }
 `;
@@ -162,7 +156,6 @@ function LotCard({
   // hotlink-blocked/dead images flip the card into the compact row layout —
   // a 140-200px well showing a monogram letter is burned space, not a photo
   const [imgFailed, setImgFailed] = useState(false);
-  const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
 
   // firstSeen ships from the crawler diff — read defensively: older data
   // files (and lots crawled before the stamp existed) don't carry it.
@@ -201,20 +194,6 @@ function LotCard({
     return lotSignal(lot, allLots);
   }, [lot, allLots, isUpcoming]);
 
-  // The desktop verdict ring around the photo — same tiers as the mobile
-  // feed rows: comp signal, then the engine's value read, then the bid read.
-  const cardTone = useMemo<'up' | 'down' | undefined>(() => {
-    if (!isUpcoming) return undefined;
-    if (buySignal) return buySignal.label === 'Below Market' ? 'up' : 'down';
-    const vs = lot.value?.signal?.label;
-    if (vs === 'below comparable market') return 'up';
-    if (vs === 'above comparable market') return 'down';
-    const vb = lot.value?.vsBid?.label;
-    if (vb === 'below recent comps') return 'up';
-    if (vb === 'above recent comps') return 'down';
-    return undefined;
-  }, [buySignal, lot, isUpcoming]);
-
   // The realized band precomputed at build time (soldCompBand over the full
   // corpus). It rides on the lot like `signal` does, so the card grid never
   // has to touch the 10MB sold-archive. It carries NO label and NO pct — it is
@@ -226,7 +205,7 @@ function LotCard({
   // cards) and stamps it as value.basis === 'card-comp' — a comp value, never
   // the hedonic engine's signal (value.signal is always null on these). Show it
   // as a secondary "comps ~$Y" read under the bid, tinted by the vs-bid call
-  // (the photo glow ring already fires from value.vsBid via cardTone). Non-card
+  // (the vs-bid read prints in the row itself — no ring on the plate). Non-card
   // engine values (basis 'hedonic'/absent) are untouched — they render through
   // buySignal / LotValueBlock as before.
   const cardComp =
@@ -300,7 +279,7 @@ function LotCard({
               href={`/makers/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
-              style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+              style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
             >
               {makerLabel}
             </Link>
@@ -309,7 +288,7 @@ function LotCard({
             <span className="ray-lot-title" style={{
               fontFamily: 'var(--font-sans), sans-serif',
               fontSize: showArtist ? 13 : 14,
-              fontWeight: showArtist ? 400 : 600,
+              fontWeight: showArtist ? 400 : 500,
               color: showArtist ? 'var(--color-text-muted)' : 'var(--color-fg)',
               letterSpacing: '-0.01em',
               lineHeight: 1.4,
@@ -352,7 +331,7 @@ function LotCard({
                   : cardComp.tone === 'down'
                   ? 'var(--color-down-text)'
                   : 'var(--color-text-muted)',
-              fontWeight: 600,
+              fontWeight: 500,
             }}
           >
             {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{formatPrice(cardComp.value)}
@@ -406,54 +385,20 @@ function LotCard({
       {/* zIndex auto keeps the stretched link (z1) clickable above this
           content while save/remind buttons (z2) stay above the link —
           overrides the .glass > * z-index:2 rule. */}
-      <div className="ray-lot-img" data-tone={cardTone} style={{
-        position: 'relative',
-        zIndex: 'auto',
-        width: '100%',
-        background: `linear-gradient(135deg, var(--color-bg-elevated) 0%, var(--color-bg) 100%)`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        {/* the matted plate — the honest fallback while the image loads,
-            and the permanent face when it never arrives (many houses
-            hotlink-block via CORP/ORB). The img paints over it. */}
-        <div
-          className="ray-lot-plate"
-          aria-hidden={lot.imageUrl ? 'true' : undefined}
-          style={{ '--plate-ink': color } as React.CSSProperties}
-        >
-          <span className="ray-lot-plate-letter">{lot.title.charAt(0)}</span>
-          <span className="ray-lot-plate-rule" />
-        </div>
-        {lot.imageUrl && (
-          <img
-            // .ray-lot-img is a full-bleed 200 px-tall well in a ~290–420 px
-            // grid column (140 px tall on mobile). object-fit: cover on a
-            // square master needs the COLUMN width, so 640 ≈ 2× the widest
-            // real column — not a thumbnail size.
-            src={sizedImg(httpsImg(lot.imageUrl), 640)}
-            alt={lot.title}
-            // the grid mounts 48 cards a page — lazy-load so below-fold house
-            // photography doesn't race the phase-2 data stream at first paint
-            loading="lazy"
-            decoding="async"
-            // cache hits never fire onLoad/onError — check complete at
-            // attach; complete with zero naturalWidth is a cached failure.
-            // A failure flips the whole card into the compact row layout.
-            ref={(el) => {
-              if (!el || !el.complete) return;
-              if (el.naturalWidth > 0) {
-                el.setAttribute('data-loaded', 'true');
-              } else {
-                setImgFailed(true);
-              }
-            }}
-            onLoad={(e) => e.currentTarget.setAttribute('data-loaded', 'true')}
-            onError={() => setImgFailed(true)}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        )}
+      {/* the plate (NORTHSTAR §0.4) — the shared LotPlate: cream 4:5 mat,
+          the object at 80% multiplied into it, no scrim, no ring. A dead
+          hotlink flips the whole card into the compact row layout below.
+          zIndex auto keeps the stretched link (z1) clickable above this
+          content while save/remind buttons (z2) stay above the link —
+          overrides the .glass > * z-index:2 rule. */}
+      <div className="ray-lot-platewell" style={{ position: 'relative', zIndex: 'auto' }}>
+        <LotPlate
+          src={lot.imageUrl}
+          alt={lot.title}
+          monogram={makerLabel || lot.title}
+          size={640}
+          onFail={() => setImgFailed(true)}
+        />
         {/* freshness, on the lot itself: stamped by the crawler diff, shown
             only on the day it first appeared */}
         {isNewToday && (
@@ -474,8 +419,8 @@ function LotCard({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: saved ? 'var(--color-fg)' : 'rgba(0,0,0,0.5)',
-              border: 'none',
+              background: saved ? 'var(--color-fg)' : 'var(--color-bg-raised, #FFFFFF)',
+              border: saved ? 'none' : '1px solid var(--hairline, rgba(28, 25, 23, 0.1))',
               borderRadius: 100,
               cursor: 'pointer',
               padding: 0,
@@ -486,7 +431,7 @@ function LotCard({
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
               <path
                 d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
-                fill={saved ? 'var(--color-bg)' : 'var(--color-fg)'}
+                fill={saved ? 'var(--color-bg)' : 'none'}
                 stroke={saved ? 'var(--color-bg)' : 'var(--color-fg)'}
                 strokeWidth="0.8"
               />
@@ -510,7 +455,7 @@ function LotCard({
                 fontSize: 15,
                 letterSpacing: '-0.01em',
                 color: 'var(--color-fg)',
-                fontWeight: 600,
+                fontWeight: 500,
                 textDecoration: 'none',
               }}
             >
@@ -522,7 +467,7 @@ function LotCard({
           <h3 className="ray-lot-title" style={{
             fontFamily: 'var(--font-sans), sans-serif',
             fontSize: showArtist ? 14 : 15,
-            fontWeight: showArtist ? 400 : 600,
+            fontWeight: showArtist ? 400 : 500,
             color: showArtist ? 'var(--color-text-muted)' : 'var(--color-fg)',
             letterSpacing: '-0.01em',
             margin: '0 0 3px',
@@ -609,7 +554,7 @@ function LotCard({
                     : cardComp.tone === 'down'
                     ? 'var(--color-down-text)'
                     : 'var(--color-text-muted)',
-                fontWeight: 600,
+                fontWeight: 500,
               }}
             >
               {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{formatPrice(cardComp.value)}

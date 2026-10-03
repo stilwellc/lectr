@@ -75,7 +75,7 @@ function missRead(call: number, hammer: number): { band: MissBand; text: string;
 const MISS_LABEL: Record<MissBand, string> = { close: 'close', off: 'off', miss: 'miss' };
 // neutral ink only: weight carries the band, never hue
 const MISS_STYLE: Record<MissBand, React.CSSProperties> = {
-  close: { color: 'var(--color-fg)', fontWeight: 600 },
+  close: { color: 'var(--color-fg)', fontWeight: 500 },
   off: { color: 'var(--color-text-secondary)', fontWeight: 500 },
   miss: { color: 'var(--color-text-muted)', fontWeight: 500 },
 };

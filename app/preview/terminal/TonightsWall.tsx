@@ -3,16 +3,17 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { AuctionLot } from '../../types';
 import { ARTIST_LABEL } from '../../constants';
-import { formatPrice, httpsImg, craftTitle } from '../../utils';
+import { formatPrice, craftTitle } from '../../utils';
 import { closeMs, closeWord } from '../../lib/closing';
 import { lotVerdict, fmtUsd } from '../../lib/verdict';
 import { useInView } from './hooks';
 import styles from './style.module.css';
+import LotPlate from '../../components/LotPlate';
 
 /* ============================================================
    TONIGHT'S WALL (M6) — the gallery's front row. Five
    photographed upcoming lots (Today's-Call lot first, then the
-   next best by signal-with-image), each hung on a warm mat plate
+   next best by signal-with-image), each hung on the shared LotPlate
    (#1C1A14, object-fit: contain — never crop artwork). Flagged
    lots wear the verdict ring the feed already speaks. Clicking a
    plate opens the same comps modal as the feed (setTableLot).
@@ -144,20 +145,18 @@ export default function TonightsWall({
             onClick={() => onOpen(it.lot)}
             aria-label={`Comps for ${craftTitle(it.lot.title)}`}
           >
-            <span className={styles.wallMat}>
-              <img
-                src={httpsImg(it.lot.imageUrl!)}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                referrerPolicy="no-referrer"
-                onError={() => drop(it.lot.id)}
-                onLoad={(e) => {
-                  // some hosts return a 1px placeholder instead of erroring
-                  if (e.currentTarget.naturalWidth < 4) drop(it.lot.id);
-                }}
-              />
-            </span>
+            {/* the shared plate (NORTHSTAR §0.4), in its span form — valid
+                inside the button; a dead photograph drops the lot and the
+                next candidate backfills (a monogram wall is never shown) */}
+            <LotPlate
+              inline
+              src={it.lot.imageUrl}
+              monogram={ARTIST_LABEL[it.lot.artist] || it.lot.artist}
+              fig={i + 1}
+              caption={it.lot.auctionHouse}
+              size={480}
+              onFail={() => drop(it.lot.id)}
+            />
             <span className={styles.wallMeta}>
               <span className={styles.wallMaker}>{ARTIST_LABEL[it.lot.artist] || it.lot.artist}</span>
               <span className={styles.wallEst}>

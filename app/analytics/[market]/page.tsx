@@ -24,7 +24,7 @@ export async function generateMetadata(props: { params: Promise<{ market: string
   const f = marketFacts(params.market as Market);
   const noun = params.market === 'tcg' ? 'TCG' : label.toLowerCase();
   return shareMeta({
-    title: `${label} analytics — lectr`,
+    title: segmentTitle(label, 'analytics'),
     absolute: true,
     description: `The ${noun} market in numbers${f.settled ? ` — ${n(f.settled)} settled results` : ''}: price indices with their 95% intervals, sell-through, house share and maker rankings.`,
     canonical: `/analytics/${params.market}`,
@@ -32,6 +32,7 @@ export async function generateMetadata(props: { params: Promise<{ market: string
 }
 
 import Base from '../page';
+import { segmentTitle } from '../../lib/route-titles';
 
 // A prop-less WRAPPER, not a re-export: forwarding the server-injected
 // params/searchParams into the client page component makes Next serialize

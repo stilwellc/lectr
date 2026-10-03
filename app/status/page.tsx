@@ -27,10 +27,10 @@ import { formatDate, getUpcomingCounts } from '../utils';
 
 const CSS = `
 .st-page{padding-block:28px 64px}
-.st-h1{font-size:clamp(30px,4.4vw,46px);font-weight:330;letter-spacing:-0.025em;line-height:1.06;color:var(--color-fg);margin:0 0 12px}
+.st-h1{font-size:clamp(30px,4.4vw,46px);font-weight:300;letter-spacing:-0.025em;line-height:1.06;color:var(--color-fg);margin:0 0 12px}
 .st-dek{font-size:15px;line-height:1.6;color:var(--color-text-secondary);max-width:62ch;margin:0}
 .st-sec{margin-top:36px;padding-top:16px}
-.st-h2{font-size:clamp(19px,2.2vw,23px);font-weight:350;letter-spacing:-0.02em;color:var(--color-fg);margin:0 0 6px}
+.st-h2{font-size:clamp(19px,2.2vw,23px);font-weight:300;letter-spacing:-0.02em;color:var(--color-fg);margin:0 0 6px}
 .st-note{font-size:13px;line-height:1.55;color:var(--color-text-muted);max-width:66ch;margin:8px 0 0}
 .st-pub{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0;margin-top:14px;border-top:1px solid var(--hairline)}
 .st-pub>div{padding:14px 16px 12px 0;border-bottom:1px dotted var(--color-border-mid)}
@@ -44,7 +44,7 @@ const CSS = `
 .st-num{font-variant-numeric:tabular-nums;color:var(--color-fg)}
 .st-dim{color:var(--color-text-faint)}
 .st-state{color:var(--color-text-secondary)}
-.st-state b{font-weight:600;color:var(--color-fg)}
+.st-state b{font-weight:500;color:var(--color-fg)}
 .st-state.stale b{color:var(--color-text-muted);text-decoration:underline dotted;text-underline-offset:3px}
 @media (max-width:760px){
   .st-row{grid-template-columns:minmax(0,1fr) auto;gap:3px 12px}

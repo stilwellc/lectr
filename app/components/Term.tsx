@@ -29,7 +29,7 @@ const TERM_CSS = `
   letter-spacing:0;text-align:left;text-transform:none;font-variant-numeric:normal;white-space:normal;
   pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease}
 .lx-term-tip[data-open=true]{opacity:1;visibility:visible}
-.lx-term-tip b{font-weight:600}
+.lx-term-tip b{font-weight:500}
 @media (prefers-reduced-motion:reduce){.lx-term-tip{transition:none}}
 `;
 

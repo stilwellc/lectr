@@ -8,6 +8,7 @@ import { AccountProvider } from './lib/account';
 import { ROSTER_PHRASE } from './constants';
 import Analytics from './components/retention/Analytics';
 import { bookFacts } from './lib/og-meta';
+import { SITE_TITLE } from './lib/route-titles';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -49,7 +50,7 @@ export const metadata: Metadata = {
   // NO global canonical: './' collapsed every query/dossier URL onto its bare
   // shell for crawlers (audit-urls); pages declare their own canonicals.
   title: {
-    default: 'lectr — auction intelligence',
+    default: SITE_TITLE,
     template: '%s — lectr',
   },
   description: SITE_DESCRIPTION,

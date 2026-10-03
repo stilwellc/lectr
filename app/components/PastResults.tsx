@@ -211,7 +211,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
         .ray-sort-pill {
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           padding: 6px 16px;
           border-radius: 100px;
@@ -283,7 +283,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
             <h2 style={{
               fontFamily: 'var(--font-sans), sans-serif',
               fontSize: 30,
-              fontWeight: 350,
+              fontWeight: 300,
               letterSpacing: '-0.02em',
             }}>
               Recent <span style={{ fontStyle: 'normal' }}>results</span>
@@ -435,7 +435,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
                         letterSpacing: '-0.01em',
                         textTransform: 'none',
                         color: 'var(--color-text-muted)',
-                        fontWeight: 600,
+                        fontWeight: 500,
                         textDecoration: 'none',
                       }}
                     >
@@ -447,7 +447,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
                   <div style={{
                     fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 16.5,
-                    fontWeight: 450,
+                    fontWeight: 400,
                     lineHeight: 1.3,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
@@ -494,7 +494,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
                   {lot.status === 'sold' && lot.priceUsd
                     ? formatPrice(lot.priceUsd)
                     : (lot as { resultsPending?: boolean }).resultsPending
-                      ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.92em' }}>Pending</span>
+                      ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, fontSize: '0.92em' }}>Pending</span>
                       : '—'}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', marginTop: 1 }}>
@@ -509,7 +509,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
                     const pct = Math.round(raw);
                     if (Math.abs(pct) > 2000) return null; // bad estimate data — say nothing
                     return (
-                      <span style={{ color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 600 }}>
+                      <span style={{ color: pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 500 }}>
                         {pct >= 0 ? '+' : ''}{pct}% vs est ·{' '}
                       </span>
                     );
@@ -535,7 +535,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: catColor,
-                    fontWeight: 600,
+                    fontWeight: 500,
                     whiteSpace: 'nowrap',
                   }}>
                     {catBadge}
@@ -550,7 +550,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
                   letterSpacing: '-0.01em',
                   textTransform: 'none',
                   color: color,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   whiteSpace: 'nowrap',
                 }}>
                   {lot.auctionHouse}
@@ -565,7 +565,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
                   aria-label={ownedIds.includes(lot.id) ? 'Remove from your collection' : 'Mark as owned'}
                   style={{
                     flexShrink: 0, position: 'relative', zIndex: 2, cursor: 'pointer',
-                    fontFamily: 'var(--font-sans), sans-serif', fontSize: 11.5, fontWeight: 600,
+                    fontFamily: 'var(--font-sans), sans-serif', fontSize: 11.5, fontWeight: 500,
                     padding: '5px 12px', borderRadius: 100, whiteSpace: 'nowrap',
                     background: ownedIds.includes(lot.id) ? 'var(--color-butter)' : 'transparent',
                     color: ownedIds.includes(lot.id) ? 'var(--color-butter-ink)' : 'var(--color-text-muted)',
