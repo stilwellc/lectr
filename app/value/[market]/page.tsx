@@ -21,7 +21,7 @@ export async function generateMetadata(props: { params: Promise<{ market: string
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
   return {
     title: `${label} buy signals`,
-    description: `${label} lots trading below where their comparable sales clear — each call replayed against what the lot actually hammered for.`,
+    description: `${label} lots lectr expects to hammer over the house estimate — every call replayed against what the lot actually hammered for.`,
     alternates: { canonical: `/value/${params.market}` },
   };
 }

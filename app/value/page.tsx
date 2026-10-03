@@ -50,9 +50,24 @@ import {
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
-import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
+import { signalWithPool, dealScore } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
+import { isOpen, closeWord, useNow } from '../lib/closing';
+import HouseAsOf from '../components/HouseAsOf';
+import { gapMultiple } from '../preview/terminal/TonightsWall';
+
+/** ONE gap format on /value — the multiple (×), the lander wall's exact
+    grammar. signalMagnitude flips between +% and × at 100%, which printed
+    two formats down the same column. */
+function flagGap(pct: number): string {
+  return gapMultiple(Math.max(0, pct));
+}
+/** "Confidence: medium, 2 of 4" — the dots' accessible name */
+function confLabel(c?: string | null): string {
+  const m = confidenceMeter(c || undefined);
+  return `Confidence: ${m.word}, ${(m.dots.match(/●/g) || []).length} of 4`;
+}
 
 const ROWS_PAGE = 12;
 
@@ -260,8 +275,9 @@ function WitnessTrack({ at }: { at: number }) {
    WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, ≥40%). A PROJECTION product:
    neutral ink, every entry logs to the forward tape, publishes at 20 graded.
    Same ledger grammar as the Flags board — sibling boards, one language. ── */
-function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
+function GapAnnex({ rows, receipts, activeKey, activeLabel, play, isSaved, onToggleSave }: {
   rows: { lot: AuctionLot; g: GapRead }[];
+  activeLabel: string;
   receipts: { record: { gap?: { n: number; graded: number } } } | null;
   activeKey: string;
   play: boolean;
@@ -279,8 +295,22 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
   // and the lane badge (wire + forming) always agree (was: badge 8, "show 6")
   const forming = formingAll;
   const wireCut = wireAll.length - wire.length;
-  if (!wire.length && !forming.length) return null;
   const gapRec = receipts?.record?.gap;
+  // ABSTAIN OUT LOUD — an empty lane prints its own line, never vanishes
+  // (a reader on /value/watches couldn't tell "no reads" from "no lane")
+  if (!wire.length && !forming.length) {
+    return (
+      <section id="gap" className="rail ray-enter vd-annex vd-room ns-plate" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+        <LaneHead mark={<GapMark />} name="The Gap" count={0} play={play} tag={<>projected close vs floor · no-estimate books</>} />
+        <div className="glass glass-quiet vd-lane-panel">
+          <p className="vd-lane-empty">
+            The Gap abstains on {activeLabel} tonight — no live no-estimate lot projects 25% under its floor
+            {activeKey === 'all' ? '' : ' (estimate-house books sit outside this lane)'}.
+          </p>
+        </div>
+      </section>
+    );
+  }
   const row = ({ lot, g }: { lot: AuctionLot; g: GapRead }) => {
     const isOpen = open === lot.id;
     return (
@@ -301,11 +331,11 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
             )}
           </span>
           <span style={{ minWidth: 0 }}>
-            <span className="ray-value-row-maker" style={{ display: 'block' }}>
-              {ARTIST_LABEL[lot.artist] || lot.artist}
+            <span className="ray-value-row-title" style={{ display: 'block' }}>
+              {craftTitle(lot.title)}
               {g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}
             </span>
-            <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+            <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
           </span>
           <span className="vd-cell vd-cell-strong">
             −{Math.round(g.depth * 100)}%
@@ -364,12 +394,13 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
               <span className="vd-curve-read">closes in {g.daysOut < 1 ? `${Math.round(g.daysOut * 24)}h` : `${g.daysOut.toFixed(1)}d`} · {g.shelf === 'wire' ? 'at the wire' : 'forming'}{lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</span>
             </div>
             <div className="vd-detail-actions">
-              <Link href={`/lot/${lot.id}`} className="link-action" style={{ color: 'var(--color-fg)' }} onClick={e => e.stopPropagation()}>
+              <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="link-action" style={{ color: 'var(--color-fg)' }} onClick={e => e.stopPropagation()}>
                 Open the lot <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
               </Link>
               <button
                 type="button" className="vd-detail-save" data-save-btn
                 aria-pressed={isSaved(lot.id)}
+                aria-label={isSaved(lot.id) ? `Saved to your desk: ${craftTitle(lot.title)}` : `Save ${craftTitle(lot.title)} to your desk`}
                 onClick={e => { e.stopPropagation(); onToggleSave(lot.id, lot); }}
               >
                 {isSaved(lot.id) ? 'Saved to your desk' : 'Save to your desk'}
@@ -397,6 +428,7 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
           the hammer. Click a row for its whole case.</>
         }
       />
+      <HouseAsOf lots={[...wire, ...forming].map(r => r.lot)} style={{ margin: '0 0 10px' }} />
       <div className="glass glass-quiet vd-lane-panel">
         <div className="vd-lane-cols vd-gap-grid" aria-hidden>
           <span />
@@ -444,8 +476,20 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
   onToggleSave: (id: string, lot?: AuctionLot) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  if (!rows.length && !queued) return null;
   const rec = receipts?.record?.quiet;
+  // ABSTAIN OUT LOUD — the lane keeps its head and says why it is empty
+  if (!rows.length && !queued) {
+    return (
+      <section id="sleepers" className="rail ray-enter vd-annex vd-room ns-plate" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
+        <LaneHead mark={<SleeperMark />} name="The Sleepers" count={0} play={play} tag={<>verified fair · zero bids · closing ≤7d</>} />
+        <div className="glass glass-quiet vd-lane-panel">
+          <p className="vd-lane-empty">
+            The Sleepers abstain on {activeLabel} tonight — no verified-fair live lot sits at zero bids, in the 7-day window or queued behind it.
+          </p>
+        </div>
+      </section>
+    );
+  }
   return (
     <section id="sleepers" className="rail ray-enter vd-annex vd-room ns-plate" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
       <LaneHead
@@ -462,6 +506,7 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
           is <Term k="graded">graded</Term> against the appraisal, both <Term k="all-in">all-in</Term>.</>
         }
       />
+      {rows.length > 0 && <HouseAsOf lots={rows.slice(0, 6).map(r => r.lot)} style={{ margin: '0 0 10px' }} />}
       {rows.length ? (
         <div className="glass glass-quiet vd-lane-panel">
           <div className="vd-lane-cols vd-slp-grid" aria-hidden>
@@ -493,8 +538,8 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
                     )}
                   </span>
                   <span style={{ minWidth: 0 }}>
-                    <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
                     <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+                    <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
                   </span>
                   <span className="vd-cell">{q.estMid ? formatPrice(q.estMid) : '—'}</span>
                   <span className="vd-cell vd-cell-strong">
@@ -537,12 +582,13 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
                       </div>
                     </div>
                     <div className="vd-detail-actions">
-                      <Link href={`/lot/${lot.id}`} className="link-action" style={{ color: 'var(--color-fg)' }} onClick={e => e.stopPropagation()}>
+                      <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="link-action" style={{ color: 'var(--color-fg)' }} onClick={e => e.stopPropagation()}>
                         Open the lot <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
                       </Link>
                       <button
                         type="button" className="vd-detail-save" data-save-btn
                         aria-pressed={isSaved(lot.id)}
+                        aria-label={isSaved(lot.id) ? `Saved to your desk: ${craftTitle(lot.title)}` : `Save ${craftTitle(lot.title)} to your desk`}
                         onClick={e => { e.stopPropagation(); onToggleSave(lot.id, lot); }}
                       >
                         {isSaved(lot.id) ? 'Saved to your desk' : 'Save to your desk'}
@@ -747,16 +793,40 @@ export default function ValuePage() {
     }));
   }, [loading]);
 
+  // the READER's clock (null on first paint) — a lot whose close has passed
+  // since the nightly build is hammered, never live, never counted
+  const now = useNow();
+  const stillOpen = useCallback((l: AuctionLot) => now == null || isOpen(l, now), [now]);
   const deals = useMemo(() => {
     const today = localToday();
     // THE ONE FLAGGED RANKING — dealScore (lib/comps): calibrated odds first,
     // then the gap capped at 400%. Same ordering as every other surface.
     return marketLots
-      .filter(l => isLiveUpcoming(l, today))
+      .filter(l => isLiveUpcoming(l, today) && stillOpen(l))
       .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
       .sort((a, b) => dealScore(b.lot, b.signal!.pct) - dealScore(a.lot, a.signal!.pct));
-  }, [marketLots]);
+  }, [marketLots, stillOpen]);
+
+  // THE PREVAILING ODDS — the calibrated beat rate is a per-ratio-bucket
+  // figure, so most rows on a night share one number ("85%" down the whole
+  // column said nothing). When one value covers at least half the rows that
+  // carry odds, it prints ONCE in the column head and only rows that differ
+  // print their own.
+  const prevailingOdds = useMemo<number | null>(() => {
+    const counts = new Map<number, number>();
+    let n = 0;
+    for (const d of deals) {
+      const b = d.lot.value?.signal?.beatRatePct;
+      if (b == null) continue;
+      n++;
+      const k = Math.round(b);
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    let best: number | null = null, bestN = 0;
+    counts.forEach((c, k) => { if (c > bestN) { best = k; bestN = c; } });
+    return n >= 2 && bestN * 2 >= n ? best : null;
+  }, [deals]);
 
   const summary = useMemo(() => {
     const withEst = deals.filter(d => (d.lot.estimateLow || 0) > 0 || (d.lot.estimateHigh || 0) > 0);
@@ -781,8 +851,8 @@ export default function ValuePage() {
   // corpus, so every "in the book" denominator must re-scope to live lots
   const liveLots = useMemo(() => {
     const today = localToday();
-    return marketLots.filter(l => isLiveUpcoming(l, today));
-  }, [marketLots]);
+    return marketLots.filter(l => isLiveUpcoming(l, today) && stillOpen(l));
+  }, [marketLots, stillOpen]);
 
   // ── THE GAP + THE SLEEPERS: the two uncertified lanes, computed from the
   // SAME readers the nightly ledger logs from (app/lib/lanes) — one lot,
@@ -834,8 +904,8 @@ export default function ValuePage() {
   );
   const allFlagCount = useMemo(() => {
     const today = localToday();
-    return allLots.filter(l => isLiveUpcoming(l, today) && l.signal?.label === 'Below Market').length;
-  }, [allLots]);
+    return allLots.filter(l => isLiveUpcoming(l, today) && stillOpen(l) && l.signal?.label === 'Below Market').length;
+  }, [allLots, stillOpen]);
 
   // SETTLED CALLS — the honesty-critical tape. A lot only carries a
   // below-market `signal` if it was in the eager upcoming set while LIVE (the
@@ -884,6 +954,20 @@ export default function ValuePage() {
     const last = rows[rows.length - 1];
     return last.flaggedMedianPct != null && last.unflaggedMedianPct != null ? last : null;
   }, [backtest]);
+  // THE RECORD, SCOPED — on a vertical page the replay's own per-market
+  // medians (byMarket, flagged + unflagged) lead; figures the replay only
+  // publishes book-wide say "all markets" out loud instead of borrowing the
+  // vertical's name.
+  const scopedRecord = useMemo(() => {
+    if (activeKey === 'all' || !backtest) return null;
+    const bm = (backtest as Backtest & { byMarket?: Record<string, { flagged: { n: number; medPct: number | null }; unflagged?: { n: number; medPct: number | null } }> }).byMarket?.[activeKey];
+    if (!bm || bm.flagged.medPct == null || bm.flagged.n < 50) return null;
+    return {
+      flagged: { n: bm.flagged.n, medPct: bm.flagged.medPct },
+      unflagged: bm.unflagged && bm.unflagged.medPct != null ? { n: bm.unflagged.n, medPct: bm.unflagged.medPct } : null,
+    };
+  }, [backtest, activeKey]);
+  const flagRecordPct = scopedRecord?.flagged.medPct ?? null;
   const tiers = (backtest as (Backtest & { flaggedTiers?: Record<string, { n: number; medianPerfPct: number }> }) | null)?.flaggedTiers;
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -1049,9 +1133,9 @@ export default function ValuePage() {
       },
       {
         k: 'Median gap',
-        v: hasFlags ? signalMagnitude('Below Market', Math.round(summary.medianGap)) : '—',
+        v: hasFlags ? flagGap(Math.round(summary.medianGap)) : '—',
         tone: hasFlags ? 'up' : undefined,
-        sub: hasFlags ? 'comps med over ask' : 'no flags in scope',
+        sub: hasFlags ? 'comps median vs estimate' : 'no flags in scope',
       },
     ];
     {
@@ -1246,8 +1330,9 @@ export default function ValuePage() {
         }
         .ray-value-row-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .vd-thumb-letter { font-family: var(--font-inter), sans-serif; font-weight: 600; font-size: 18px; line-height: 1; color: color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint)); }
-        .ray-value-row-maker { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .ray-value-row-title { font-size: 12.5px; font-weight: 400; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* the WORK leads in ink; its maker / category bucket rides muted */
+        .ray-value-row-maker.ray-value-row-maker { font-size: 12.5px; font-weight: 400; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ray-value-row-title { font-size: 13.5px; font-weight: 600; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         /* phones: the hammer date is its own line under the title (never inside
            the ellipsized title span, where it was the first thing cut) */
         .ray-value-mobdate { display: block; font-size: 11.5px; color: var(--color-text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
@@ -1272,7 +1357,7 @@ export default function ValuePage() {
         @media (min-width: 900px) {
           .ray-value-row,
           .ray-value-head {
-            grid-template-columns: 56px minmax(0, 1fr) 92px 100px 118px 84px 52px 64px;
+            grid-template-columns: 56px minmax(0, 1fr) 92px 100px 118px 84px 68px 64px;
             gap: 16px;
           }
           .ray-value-head {
@@ -1859,13 +1944,13 @@ export default function ValuePage() {
                 <Masthead
                   kicker=""
                   title={hasFlags
-                    ? <>Priced <Accent>under</Accent> where the {activeLabel === 'collectible' ? 'market' : `${activeLabel} market`} clears.</>
+                    ? <>Lots the {activeLabel === 'collectible' ? 'room' : `${activeLabel} room`} should bid <Accent>past</Accent> the estimate.</>
                     : <>The {activeLabel === 'collectible' ? 'whole' : activeLabel} book is read. <Accent>No lot</Accent> clears the bar tonight.</>}
                   sub={hasFlags
                     ? <>
                         <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{deals.length}</b> flags live ·{' '}
                         <span style={{ color: 'var(--color-up)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                          median gap {signalMagnitude('Below Market', Math.round(summary.medianGap))}
+                          comps median {flagGap(Math.round(summary.medianGap))} the estimate
                         </span>{' '}
                         · {formatPrice(summary.totalEst)} at estimate · {summary.artists} makers
                         {summary.soonest && <> · <span style={{ whiteSpace: 'nowrap' }}>first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
@@ -1982,12 +2067,15 @@ export default function ValuePage() {
                 name="The Flags"
                 count={deals.length}
                 play={!fromCache}
-                tag={sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}
+                tag={<>{sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}{prevailingOdds != null ? <> · odds {prevailingOdds}% unless a row prints its own</> : null}</>}
                 help={
                   <>Each row is a live lot whose <Term k="comps">comps median</Term> clears its
                   estimate by at least 1.3×. <Term k="odds">Odds</Term> rank the board — the share of
                   historical calls at that ratio which beat the high estimate — and the deepest gap
-                  breaks ties. Click a row for the full comps case; j/k walk the rows, s saves.</>
+                  breaks ties. A flag is a forecast that the hammer clears the house estimate: in the
+                  replay, flagged lots realized a median {backtest ? fmtSignedPct(flagRecordPct ?? backtest.flagged.medianPerfPct) : '—'} over
+                  estimate, all-in — expect the room to bid them up. Click a row for the full comps
+                  case; j/k walk the rows, s saves.</>
                 }
                 right={
                   <span className="vd-sort" role="tablist" aria-label="Board order">
@@ -1997,6 +2085,7 @@ export default function ValuePage() {
                 }
               />
             </div>
+            {hasFlags && <HouseAsOf lots={gridDeals.map(d => d.lot)} style={{ margin: '0 0 10px' }} />}
             <div ref={boardRef} className="glass glass-quiet ray-enter" style={{ overflow: 'clip' }}>
               <div className="ray-value-head" aria-hidden="true">
                 <span />
@@ -2005,7 +2094,7 @@ export default function ValuePage() {
                 <span className="kicker">Hammers</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Comps med</span>
-                <span className="kicker" style={{ textAlign: 'right' }}>Odds</span>
+                <span className="kicker" style={{ textAlign: 'right' }}>{prevailingOdds != null ? `Odds ${prevailingOdds}%` : 'Odds'}</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Gap</span>
               </div>
               {!hasFlags ? (
@@ -2048,7 +2137,7 @@ export default function ValuePage() {
                     className="ray-value-row"
                     data-nav-row
                     onClick={() => setModalLot(d.lot)}
-                    aria-label={`${ARTIST_LABEL[d.lot.artist] || d.lot.artist} — see the comps`}
+                    aria-label={`See the comps for ${craftTitle(d.lot.title)}`}
                   >
                     {/* Thumbnail — monogram plate always behind, photo overlays;
                         on a hotlink-block the plate shows through, never a gap */}
@@ -2063,18 +2152,19 @@ export default function ValuePage() {
                       )}
                     </span>
                     <span style={{ minWidth: 0 }}>
-                      <span className="ray-value-row-maker" style={{ display: 'block' }}>
-                        {ARTIST_LABEL[d.lot.artist] || d.lot.artist}
-                      </span>
+                      {/* the WORK leads, its maker/category rides the muted line */}
                       <span className="ray-value-row-title" style={{ display: 'block' }}>
                         {craftTitle(d.lot.title)}
+                      </span>
+                      <span className="ray-value-row-maker" style={{ display: 'block' }}>
+                        {ARTIST_LABEL[d.lot.artist] || d.lot.artist}
                       </span>
                       {/* its own line: inside the nowrap/ellipsis title the date was the first thing cut */}
                       <span className="ray-value-mobdate">
                         <span className="ray-value-mobdate-in">
                           {(() => {
                             const day = trueSaleDay(d.lot) || d.lot.saleDate;
-                            const past = trueSaleDay(d.lot) && trueSaleDay(d.lot) < localToday();
+                            const past = now != null ? !isOpen(d.lot, now) : !!(trueSaleDay(d.lot) && trueSaleDay(d.lot) < localToday());
                             const dU = daysUntil(day);
                             if (!past && dU != null && dU <= 0) {
                               const tonight = !!d.lot.saleDateTime && new Date(d.lot.saleDateTime).getHours() >= 17;
@@ -2083,7 +2173,7 @@ export default function ValuePage() {
                                 {d.lot.saleDateTime && <> · <CloseClock iso={d.lot.saleDateTime} windowHours={24} /></>}
                               </span></>;
                             }
-                            return <>{past ? 'hammered' : 'hammers'} {formatDate(day)}</>;
+                            return <>{past ? 'hammered' : 'hammers'} {formatDate(day)}{!past && now != null ? <> · {closeWord(d.lot, now)}</> : null}</>;
                           })()}
                         </span>
                       </span>
@@ -2104,21 +2194,23 @@ export default function ValuePage() {
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-odds">
                       {d.lot.value?.signal?.beatRatePct != null
-                        ? `${Math.round(d.lot.value.signal.beatRatePct)}%`
+                        ? (Math.round(d.lot.value.signal.beatRatePct) === prevailingOdds
+                            ? <span style={{ color: 'var(--color-text-faint)' }} title={`${prevailingOdds}% odds — the board's prevailing figure`}>·</span>
+                            : `${Math.round(d.lot.value.signal.beatRatePct)}%`)
                         : conf
-                          ? <span className="ray-value-conf" aria-label={`${confidenceMeter(conf).word} confidence`}>{confidenceMeter(conf).dots}</span>
+                          ? <span className="ray-value-conf" role="img" aria-label={confLabel(conf)} title={confLabel(conf)}>{confidenceMeter(conf).dots}</span>
                           : '—'}
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-gap">
-                      {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
+                      {flagGap(Math.round(d.signal!.pct))}
                       <CellTrack pct={d.signal!.pct / 4} tone="up" />
                     </span>
                     {/* MOBILE stack — the audited-good phone composition */}
                     <span className="ray-value-mob" style={{ textAlign: 'right' }}>
                       <span className="ray-value-row-sig" style={{ display: 'block' }}>
-                        {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
+                        {flagGap(Math.round(d.signal!.pct))}
                       </span>
-                      {d.lot.value?.signal?.beatRatePct != null && (
+                      {d.lot.value?.signal?.beatRatePct != null && Math.round(d.lot.value.signal.beatRatePct) !== prevailingOdds && (
                         <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                           {Math.round(d.lot.value.signal.beatRatePct)}% odds
                         </span>
@@ -2132,8 +2224,8 @@ export default function ValuePage() {
                         statistic the modal shows; mono only on the figure */}
                     <span className="ray-value-leader" aria-hidden="true">
                       {rowMed
-                        ? <>comps median <b>{formatPrice(rowMed)}</b> vs {estimateOnly(d.lot)} estimate · <span className="up">{signalMagnitude('Below Market', Math.round(d.signal!.pct))}</span> over{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>
-                        : <>{signalMagnitude('Below Market', Math.round(d.signal!.pct))} over ask{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>}
+                        ? <>comps median <b>{formatPrice(rowMed)}</b> vs {estimateOnly(d.lot)} estimate · <span className="up">{flagGap(Math.round(d.signal!.pct))}</span>{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}{d.lot.value?.signal?.beatRatePct != null ? <> · {Math.round(d.lot.value.signal.beatRatePct)}% odds</> : null}</>
+                        : <>{flagGap(Math.round(d.signal!.pct))} the ask{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>}
                     </span>
                   </button>
                   {/* save — sibling of the row button (both interactive) */}
@@ -2143,7 +2235,7 @@ export default function ValuePage() {
                     data-save-btn
                     data-saved={isSaved(d.lot.id)}
                     onClick={() => toggle(d.lot.id, d.lot)}
-                    aria-label={isSaved(d.lot.id) ? 'Remove from saved' : 'Save lot'}
+                    aria-label={isSaved(d.lot.id) ? `Remove ${craftTitle(d.lot.title)} from saved` : `Save ${craftTitle(d.lot.title)}`}
                     aria-pressed={isSaved(d.lot.id)}
                   >
                     <span className="ray-value-save-glyph">
@@ -2171,7 +2263,7 @@ export default function ValuePage() {
           </section>
 
           {/* ── ROOM 2c · THE GAP ── */}
-          <GapAnnex rows={gapRows} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+          <GapAnnex rows={gapRows} receipts={receipts} activeKey={activeKey} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
           {/* ── ROOM 2d · THE SLEEPERS ── */}
           <SleepersAnnex rows={sleeperRows} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
@@ -2185,45 +2277,71 @@ export default function ValuePage() {
                     estimates are hammer-basis so the hammer figure is the
                     only honest lead. Every cell names its basis. */}
                 <RecordBand
-                  title="The record"
-                  context="every call replayed against history"
+                  title={scopedRecord ? `The record · ${activeLabel}` : 'The record'}
+                  context={scopedRecord
+                    ? `${activeLabel} calls replayed against history · cells marked all markets are book-wide`
+                    : activeKey === 'all' ? 'every call replayed against history' : 'every call replayed against history · all markets'}
                   serial={(lastCrawl || '').slice(0, 10).replace(/-/g, '') || undefined}
                   footer="each figure names its basis · refit nightly from the full replay"
                   cells={[
-                    {
-                      k: 'Flagged calls',
-                      v: fmtSignedPct(backtest.flagged.medianPerfPct),
-                      signed: backtest.flagged.medianPerfPct,
-                      sub: `realized vs estimate, all-in${backtest.flagged.hammerMedianPct != null ? ` · hammer ${fmtSignedPct(backtest.flagged.hammerMedianPct)}` : ''} · n ${backtest.flagged.n.toLocaleString()}`,
-                    },
-                    {
-                      k: 'The edge',
-                      v: `${backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct >= 0 ? '+' : '−'}${Math.abs(backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct)} pts`,
-                      signed: backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct,
-                      sub: <>over {backtest.unflagged.n.toLocaleString()} unflagged ({fmtSignedPct(backtest.unflagged.medianPerfPct)} all-in)</>,
-                    },
+                    scopedRecord
+                      ? {
+                          k: 'Flagged calls',
+                          v: fmtSignedPct(scopedRecord.flagged.medPct),
+                          signed: scopedRecord.flagged.medPct,
+                          sub: `${activeLabel} · realized vs estimate, all-in · n ${scopedRecord.flagged.n.toLocaleString()}`,
+                        }
+                      : {
+                          k: 'Flagged calls',
+                          v: fmtSignedPct(backtest.flagged.medianPerfPct),
+                          signed: backtest.flagged.medianPerfPct,
+                          sub: `realized vs estimate, all-in${backtest.flagged.hammerMedianPct != null ? ` · hammer ${fmtSignedPct(backtest.flagged.hammerMedianPct)}` : ''} · n ${backtest.flagged.n.toLocaleString()}${activeKey !== 'all' ? ' · all markets' : ''}`,
+                        },
+                    scopedRecord?.unflagged
+                      ? (() => {
+                          const un = scopedRecord.unflagged!;
+                          const edge = Math.round((scopedRecord.flagged.medPct - un.medPct) * 10) / 10;
+                          return {
+                            k: 'The edge',
+                            v: `${edge >= 0 ? '+' : '−'}${Math.abs(edge)} pts`,
+                            signed: edge,
+                            sub: <>{activeLabel} · over {un.n.toLocaleString()} unflagged ({fmtSignedPct(un.medPct)} all-in)</>,
+                          };
+                        })()
+                      : {
+                          k: 'The edge',
+                          v: `${backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct >= 0 ? '+' : '−'}${Math.abs(backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct)} pts`,
+                          signed: backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct,
+                          sub: <>over {backtest.unflagged.n.toLocaleString()} unflagged ({fmtSignedPct(backtest.unflagged.medianPerfPct)} all-in){activeKey !== 'all' ? ' · all markets' : ''}</>,
+                        },
                     {
                       k: 'Beat the high',
                       v: `${Math.round(backtest.flagged.hammerBeatPct ?? backtest.flagged.beatHighPct)}%`,
                       // the label names whichever basis the figure actually is
-                      sub: backtest.flagged.hammerBeatPct != null
+                      sub: `${backtest.flagged.hammerBeatPct != null
                         ? `at the hammer · vs ${backtest.unflagged.hammerBeatPct ?? backtest.unflagged.beatHighPct}% unflagged`
-                        : `all-in · vs ${backtest.unflagged.beatHighPct}% unflagged`,
+                        : `all-in · vs ${backtest.unflagged.beatHighPct}% unflagged`}${activeKey !== 'all' ? ' · all markets' : ''}`,
                     },
                     backtest.flagged.failToSellPct != null && backtest.above.failToSellPct != null
                       ? {
                           k: 'Failed to sell',
                           v: `${backtest.flagged.failToSellPct.toFixed(1)}%`,
-                          sub: <>of flagged lots · vs {backtest.above.failToSellPct}% of &ldquo;above market&rdquo;</>,
+                          sub: <>of flagged lots · vs {backtest.above.failToSellPct}% of &ldquo;above market&rdquo;{activeKey !== 'all' ? ' · all markets' : ''}</>,
                         }
                       : {
                           k: '“Above market” calls',
                           v: fmtSignedPct(backtest.above.medianPerfPct),
                           signed: backtest.above.medianPerfPct,
-                          sub: 'underperformed both — the ordering holds',
+                          sub: `underperformed both — the ordering holds${activeKey !== 'all' ? ' · all markets' : ''}`,
                         },
                   ]}
                 />
+                {activeKey !== 'all' && (
+                  <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                    The year-by-year record and outcome distribution below cover all markets — the replay publishes
+                    only its flagged and unflagged medians per market{scopedRecord ? '' : `, and ${activeLabel} hasn’t cleared the 50-call bar for its own`}.
+                  </p>
+                )}
               </section>
 
               <RecordByYear backtest={backtest} />
@@ -2282,7 +2400,7 @@ export default function ValuePage() {
                   const delta = s.p > 0 ? Math.round((s.r / s.p - 1) * 100) : null;
                   const kind = ({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as Record<string, string>)[s.k] || s.k;
                   return (
-                    <Link key={`${s.id}|${s.k}`} href={`/lot/${encodeURIComponent(s.id)}`} className="vd-tape-row">
+                    <Link key={`${s.id}|${s.k}`} href={`/lot?id=${encodeURIComponent(s.id)}`} className="vd-tape-row">
                       <span style={{ minWidth: 0 }}>
                         <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s.t ? craftTitle(s.t) : s.id}</span>
                         <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s.a ? (ARTIST_LABEL[s.a] || s.a) : ''}{s.h ? ` · ${s.h}` : ''}</span>

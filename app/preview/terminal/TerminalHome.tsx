@@ -28,7 +28,7 @@ import { useSavedLots } from '../../hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, sizedImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
-import { dealScore, signalMagnitude } from '../../lib/comps';
+import { dealScore } from '../../lib/comps';
 import ComparableModal from '../../components/ComparableModal';
 import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
@@ -47,6 +47,9 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 import IndexHero from './IndexHero';
 import SubMarketBoard from './SubMarketBoard';
 import TonightsWall, { type WallItem, gapMultiple } from './TonightsWall';
+import { closeIsTimed, closeMs, closeShort, closeWord, closesWithin, isOpen, useNow } from '../../lib/closing';
+import { confidenceA11y } from '../../lib/verdict';
+import HouseAsOf from '../../components/HouseAsOf';
 import { CellGrid, Cell, ColorCell, FigGate, FigCorpus, FigPools, FigTape } from '../../components/cells';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
@@ -165,12 +168,6 @@ const CAT_LABEL: Record<string, string> = {
   design: 'Design',
   object: 'Object',
 };
-function daysToHammer(l: AuctionLot, todayDay: string): number | null {
-  const day = trueSaleDay(l);
-  if (!day) return null;
-  const d = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${todayDay}T00:00:00Z`)) / 86_400_000);
-  return Number.isFinite(d) ? d : null;
-}
 
 // The mobile feed's compact row — signal-less lots fold to one ruled line
 // (thumb · maker · title · est/bid · date) instead of a full-bleed card.
@@ -244,7 +241,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down' }) {
+function FeedRow({ lot, onOpen, tone, now }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; now: number | null }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -254,7 +251,7 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
         ? `bid ${formatPrice(lot.currentBid)}`
         : '—';
   return (
-    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title)}`}>
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`See the comps for ${craftTitle(lot.title)}`}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -278,7 +275,7 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
-        <span>{formatDate(lot.saleDate)}</span>
+        <span title={saleWhenTitle(lot)}>{now != null ? closeWord(lot, now) : formatDate(lot.saleDate)}</span>
         <BidVelChip lot={lot} />
       </span>
     </button>
@@ -323,6 +320,11 @@ export default function TerminalHomePage() {
   const marketMeta = MARKETS.find(m => m.key === market)!;
   const mounted = useMounted();
   const isMobile = useMediaQuery('(max-width: 820px)', false);
+  // THE READER'S CLOCK (Oct 3 2026): "live", "today", "in 2d", Soonest and
+  // Tonight's wall are all judged against it at render time — never the crawl
+  // stamp, which goes stale the moment the page is opened later. null until
+  // mount (SSG-safe); re-read every minute.
+  const now = useNow();
 
   // ONE TODAY, ONE SERIAL — the crawl day is the data's "today".
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
@@ -509,10 +511,14 @@ export default function TerminalHomePage() {
     // 1-day results-pending grace build-upcoming serves, so a just-closed lot
     // stays visible (sorted to the end, dressed as "results pending" by the
     // card) while the house posts results, exactly as on /value and /[artist].
-    return marketLots
-      .filter(l => isLiveUpcoming(l, today))
-      .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
-  }, [marketLots]);
+    // Once the reader's clock is known, a lot whose close has PASSED leaves
+    // the live book outright (timed lots by the minute, day-only lots when
+    // their day ends) — a hammered lot is not "on the block", even while the
+    // house posts results. Soonest = the real close instant.
+    const live = marketLots.filter(l => (now != null ? isOpen(l, now) : isLiveUpcoming(l, today)));
+    const key = (l: AuctionLot) => closeMs(l) ?? Infinity;
+    return live.sort((a, b) => key(a) - key(b));
+  }, [marketLots, now]);
 
   // Which houses publish a live bid book at all — measured, not hardcoded.
   const housesWithBids = useMemo(() => {
@@ -521,7 +527,13 @@ export default function TerminalHomePage() {
     return s;
   }, [upcoming]);
 
-  const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  // live counts on the reader's clock — closed lots never count as live
+  const upcomingCounts = useMemo(() => {
+    if (now == null) return getUpcomingCounts(allLots);
+    const counts: Record<string, number> = {};
+    for (const l of allLots) if (isOpen(l, now)) counts[l.artist] = (counts[l.artist] || 0) + 1;
+    return counts;
+  }, [allLots, now]);
 
   // THE RAIL'S MICRO-READS — one standardized read per cell: live lots on
   // the block (Collin, Aug 22 2026: no % in the rail — one grammar, eight
@@ -592,17 +604,11 @@ export default function TerminalHomePage() {
   // three photographed lots in the window → no wall (never padded with next
   // month). The call tag marks the call only if it hammers in the window.
   const wallItems = useMemo<WallItem[]>(() => {
-    const now = Date.now();
-    const horizon = now + 48 * 3600_000;
-    const today = localToday();
-    const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
-    const within48h = (l: AuctionLot) => {
-      if (l.resultsPending) return false;
-      if (l.saleDateTime) { const t = Date.parse(l.saleDateTime); if (Number.isFinite(t)) return t > now && t <= horizon; }
-      const d = trueSaleDay(l);
-      return !!d && d >= today && d <= tomorrow;
-    };
-    const withImg = upcoming.filter(l => l.imageUrl && within48h(l));
+    // closing within 48h on the READER's clock (closing.closesWithin): a
+    // timed lot by its real close, a day-only lot by the end of its day —
+    // anything past its close is already gone from `upcoming`
+    if (now == null) return [];
+    const withImg = upcoming.filter(l => l.imageUrl && !l.resultsPending && closesWithin(l, now));
     const pct = belowSignal.pct;
     const flagged = withImg
       .filter(l => belowIds.has(l.id))
@@ -619,9 +625,10 @@ export default function TerminalHomePage() {
       pct: pct.get(l.id),
       call: l.id === callId,
     }));
-  }, [upcoming, belowIds, belowSignal, todaysCall]);
+  }, [upcoming, belowIds, belowSignal, todaysCall, now]);
   const wallEl = wallItems.length >= 3 ? (
     <TonightsWall
+      now={now}
       items={wallItems}
       onOpen={setTableLot}
       variant={mounted && isMobile ? 'mobile' : 'desktop'}
@@ -669,6 +676,7 @@ export default function TerminalHomePage() {
     if (f.category) arr = arr.filter(l => l.category === f.category);
     if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
+    if (f.closingSoon && now != null) arr = arr.filter(l => closesWithin(l, now));
     if (q) {
       arr = arr.filter(l =>
         `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
@@ -704,17 +712,22 @@ export default function TerminalHomePage() {
     } else {
       const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
       arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];
-      if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
+      if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay && !f.closingSoon) {
         arr = diversifyFeed(arr, pageSize);
       }
     }
     return arr;
-  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay]);
+  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay, now]);
+  // lots closing within 48h — the toolbar's "Closing ≤48h" lens count
+  const closingSoonCount = useMemo(
+    () => (now == null ? 0 : upcoming.filter(l => closesWithin(l, now)).length),
+    [upcoming, now],
+  );
 
 
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}`;
+    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.closingSoon ? 1 : 0}|${f.sort}|${f.saleDay ?? ''}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     setFeedFilters(next);
@@ -767,13 +780,13 @@ export default function TerminalHomePage() {
     // "today / tomorrow / in Nd" reads to the USER — count from the reader's
     // local day, the same clock the feed filter runs on (never the crawl day,
     // which can lag and print "in 2d" for tomorrow's hammer).
-    const today = localToday();
-    const lot = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= today) || null;
+    // `upcoming` is open-only and close-sorted on the reader's clock, so
+    // its head IS the next close
+    if (now == null) return null;
+    const lot = upcoming[0] || null;
     if (!lot) return null;
-    const d = Math.round((Date.parse(`${lot.saleDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
-    const word = d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d}d`;
-    return { lot, word };
-  }, [upcoming]);
+    return { lot, word: closeWord(lot, now) };
+  }, [upcoming, now]);
 
 
   // The watchlist strip — what changed since you saved.
@@ -1061,9 +1074,19 @@ export default function TerminalHomePage() {
                     <span className="ns-kicker">The live book</span>
                     <h2 className={styles.feedTitle}>On the block</h2>
                   </div>
-                  {nextHammer && (
+                  {(nextHammer || (mounted && isMobile)) && (
                     <p>
-                      Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}
+                      {nextHammer && <>Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}</>}
+                      {/* phones: the flagged board is a long scroll away
+                          on another page — one tap to it */}
+                      {mounted && isMobile && (
+                        <>
+                          {nextHammer ? ' · ' : ''}
+                          <Link href={activeKey === 'all' ? '/value#flags' : `/value/${activeKey}#flags`} style={{ color: 'var(--color-fg)', textDecoration: 'underline', textUnderlineOffset: 3, display: 'inline-block', padding: '6px 0' }}>
+                            Jump to the flags
+                          </Link>
+                        </>
+                      )}
                     </p>
                   )}
                 </div>
@@ -1081,7 +1104,10 @@ export default function TerminalHomePage() {
                   onViewChange={handleView}
                   pageSize={pageSize}
                   showToggle={!narrowView}
+                  closingCount={closingSoonCount}
                 />
+                {/* per-house freshness: a house last read >36h ago says so */}
+                <HouseAsOf lots={upcoming} style={{ margin: '-8px 0 14px' }} />
 
                 {effectiveView === 'table' && feed.length > 0 ? (
                   <div key={feedKey} className="ray-feed-rekey ray-feedtable-scroll" style={{ overflowX: 'auto' }}>
@@ -1103,7 +1129,6 @@ export default function TerminalHomePage() {
                       <tbody>
                         {feed.slice(0, visibleUpcoming).map(lot => {
                           const sig = lotSignal(lot, marketLots);
-                          const dth = daysToHammer(lot, localToday());
                           return (
                             // the whole row stays clickable as a POINTER
                             // convenience; the accessible open-modal control is
@@ -1153,7 +1178,7 @@ export default function TerminalHomePage() {
                                   type="button"
                                   className="t-title"
                                   onClick={e => { e.stopPropagation(); setTableLot(lot); }}
-                                  aria-label={`Comps for ${craftTitle(lot.title)}`}
+                                  aria-label={`See the comps for ${craftTitle(lot.title)}`}
                                   style={{ display: 'block', width: '100%', background: 'none', border: 0, padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
                                 >
                                   {craftTitle(lot.title)}
@@ -1161,9 +1186,9 @@ export default function TerminalHomePage() {
                               </td>
                               <td>{lot.auctionHouse}</td>
                               <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
-                              <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
+                              <td className="t-date" title={saleWhenTitle(lot)}>{now != null && closeIsTimed(lot) ? new Date(closeMs(lot)!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : formatDate(lot.saleDate)}</td>
                               <td className="num t-days">
-                                {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
+                                {now == null ? '—' : closeShort(lot, now)}
                               </td>
                               <td className="num t-bids" title={bidCellTitle(lot, housesWithBids)}>
                                 {bidCellFace(lot, housesWithBids)}
@@ -1179,8 +1204,11 @@ export default function TerminalHomePage() {
                               <td>
                                 {sig
                                   ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
-                                      {signalMagnitude(sig.label, sig.pct)}{/* the qualifier on its own line: inline it overflowed the last column and clipped ('2.4× unde') */}<span style={{ display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
-                                      <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
+                                      {/* ONE gap format (the × multiple /value and the wall
+                                          print): comps median ÷ the estimate */}
+                                      {sig.label === 'Below Market' ? gapMultiple(sig.pct) : `${Math.max(0.1, 1 - Math.min(sig.pct, 99) / 100).toFixed(1)}×`}
+                                      <span style={{ display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 }}>comps vs est.</span>
+                                      <span role="img" title={confidenceA11y(sig.confidence)} aria-label={confidenceA11y(sig.confidence)} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
                                         {confidenceMeter(sig.confidence).dots}
                                       </span>
                                     </span>
@@ -1190,7 +1218,7 @@ export default function TerminalHomePage() {
                                 <button
                                   className="ray-save-btn ray-tbl-save"
                                   onClick={e => { e.stopPropagation(); toggle(lot.id, lot); }}
-                                  aria-label={isSaved(lot.id) ? 'Remove from saved' : 'Save lot'}
+                                  aria-label={isSaved(lot.id) ? `Remove ${craftTitle(lot.title)} from saved` : `Save ${craftTitle(lot.title)}`}
                                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-fg)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
                                 >
                                   <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
@@ -1232,6 +1260,7 @@ export default function TerminalHomePage() {
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
                             tone={feedTone(lot, belowIds, belowSignal.hasSig)}
+                            now={now}
                           />
                         </div>
                       ) : (
