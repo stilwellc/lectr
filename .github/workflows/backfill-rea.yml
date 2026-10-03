@@ -55,7 +55,7 @@ jobs:
       # window-only segment over it — fail the job instead.
       - name: Pull last-good segment
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-segment rea
       - name: Back-crawl the itemid window
@@ -63,6 +63,6 @@ jobs:
         run: RAY_SKIP_MAIN=1 npx tsx scripts/backfill-rea.ts --start "$START" --end "$END" --conc "$CONC" --delay "$DELAY" --write
       - name: Push segment
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-segment rea

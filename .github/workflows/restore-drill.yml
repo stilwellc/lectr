@@ -1,0 +1,78 @@
+# RESTORE DRILL — proves, every quarter, that a house's segment can actually be
+# restored from the write-once rollback ladder (segment-versions/<house>/).
+#
+# Restores the newest (or a chosen) version into a SCRATCH prefix
+# drill/<run_id>/ — latest/ is never touched — then verifies the restored bytes
+# match the version's etag, the gzip is intact, the NDJSON parses, and prints a
+# stats diff (rows / sold / price shape) against the live latest/ segment.
+# Cleans the scratch prefix up after itself. Red = the ladder is broken: fix
+# it before you need it (docs/RUNBOOK.md "Restore drill").
+#
+# Default house rotates by quarter so every house is drilled over time.
+name: Restore drill (quarterly)
+on:
+  schedule:
+    - cron: '23 7 2 1,4,7,10 *'   # 07:23 UTC on Jan/Apr/Jul/Oct 2
+  workflow_dispatch:
+    inputs:
+      house:
+        description: 'house to drill (blank = rotate by quarter)'
+        type: string
+        default: ''
+      date:
+        description: 'version date YYYY-MM-DD or stamp (blank = newest)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Pick the house
+        id: pick
+        env:
+          HOUSE: ${{ inputs.house }}
+        run: |
+          if [ -z "$HOUSE" ]; then
+            houses=(goldin sothebys christies bonhams phillips wright rrauction rea hugginsscott scp hakes lelands memorylane lotg nflauction mlbauction)
+            q=$(( ($(date -u +%Y) * 4 + ($(date -u +%-m) - 1) / 3) % ${#houses[@]} ))
+            HOUSE="${houses[$q]}"
+          fi
+          echo "house=$HOUSE" >> "$GITHUB_OUTPUT"
+          echo "drilling $HOUSE"
+      - name: Versions on the ladder
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HOUSE: ${{ steps.pick.outputs.house }}
+        run: bash scripts/data-store.sh list-segment-versions "$HOUSE"
+      - name: Restore into a scratch prefix + verify + diff
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HOUSE: ${{ steps.pick.outputs.house }}
+          WHEN: ${{ inputs.date }}
+        run: |
+          rc=0
+          bash scripts/data-store.sh restore-drill "$HOUSE" "$WHEN" > drill.log 2>&1 || rc=$?
+          cat drill.log
+          echo "### Restore drill: ${HOUSE} — $([ "$rc" -eq 0 ] && echo PASS || echo FAIL)" >> "$GITHUB_STEP_SUMMARY"
+          { echo '```'; cat drill.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"

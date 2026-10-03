@@ -37,7 +37,7 @@ jobs:
       # the bucket listing confirms "not in R2 yet").
       - name: Pull last-good segment
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-segment nflauction
       # (the idwalk mode was RETIRED Aug 30 2026 — its price scrape read the
@@ -47,6 +47,6 @@ jobs:
         run: RAY_SKIP_MAIN=1 npx tsx scripts/crawl-nflauction.ts --backfill --closed-pages "$PAGES" --delay 150 --write
       - name: Push segment
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-segment nflauction

@@ -15,7 +15,8 @@ import { PRICE_BASIS } from './price-basis';
 import { soldByYear, houseCoverage } from './coverage';
 import * as fs from 'fs';
 import * as path from 'path';
-import { readAllSegments, writeCorpusAndServed, CORPUS_DIR, SERVED_DIR } from './corpus-io';
+import { readAllSegments, writeCorpusAndServed, segmentOf, isServedUpcoming, CORPUS_DIR, SERVED_DIR } from './corpus-io';
+import { staleHouseKeys, STALE_AFTER_H, type Ledger, type HouseStats } from './lib/house-status';
 import { normalizeCorpus } from './lib/corpus-normalize';
 import { computeStats } from './compute-stats';
 import { ARTISTS } from '../app/constants';
@@ -111,6 +112,45 @@ export function computeSentinel(
   }));
   sentinel.sort((a, b) => b.n - a.n);
   return sentinel;
+}
+
+/**
+ * Per-house numbers for status.json (scripts/emit-status.ts): rows, sold, the
+ * served live count AFTER the stale-house hide, the hidden count, and the
+ * newest sold saleDate (≤ today). Keyed by segment (the nightly matrix house).
+ */
+export function computeHouseStats(
+  lots: Array<{ auctionHouse?: string | null; status?: string; saleDate?: string | null; resultsPending?: boolean; staleHidden?: boolean }>,
+  now: Date = new Date(),
+): Record<string, HouseStats> {
+  const today = now.toISOString().slice(0, 10);
+  const out: Record<string, HouseStats> = {};
+  for (const l of lots) {
+    const h = segmentOf(String(l.auctionHouse || ''));
+    const s = out[h] || (out[h] = { rows: 0, sold: 0, live: 0, hiddenLive: 0, lastSaleDate: null });
+    s.rows++;
+    if (l.staleHidden) s.hiddenLive++;
+    if (isServedUpcoming(l, now)) s.live++;
+    if (l.status === 'sold') {
+      s.sold++;
+      const d = typeof l.saleDate === 'string' ? l.saleDate.slice(0, 10) : '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today && (!s.lastSaleDate || d > s.lastSaleDate)) s.lastSaleDate = d;
+    }
+  }
+  return out;
+}
+
+/** The houses whose live lots the stale rule hides tonight, from the ledger
+ *  emit-status.ts wrote (data/qa/house-ledger.json). No ledger → none (a
+ *  bootstrap night never hides anything it cannot date). */
+export function readStaleHouses(file: string, now: Date = new Date()): Set<string> {
+  if (!fs.existsSync(file)) { console.log(`[assemble] no house ledger at ${file} — stale-house rule inactive tonight`); return new Set(); }
+  try {
+    return staleHouseKeys(JSON.parse(fs.readFileSync(file, 'utf8')) as Ledger, now);
+  } catch (e) {
+    console.log(`::warning title=house ledger unreadable::${file}: ${(e as Error).message} — stale-house rule inactive tonight`);
+    return new Set();
+  }
 }
 
 async function main() {
@@ -267,7 +307,11 @@ async function main() {
   // and flow through stats/market/hedonic. build-market re-runs the same pass
   // idempotently on the corpus it reads.
   const preNormalize = allLots.length;
-  const hygiene = normalizeCorpus(allLots);
+  // STALE-HOUSE RULE (Oct 3 2026): a house with no successful crawl in >48h
+  // has its live lots hidden (demoted, never deleted) — see hideStaleHouseLive.
+  const staleHouses = readStaleHouses(process.env.RAY_HOUSE_LEDGER || path.join('data', 'qa', 'house-ledger.json'));
+  if (staleHouses.size) console.log(`::warning title=stale houses — live lots hidden::${Array.from(staleHouses).join(', ')} — no successful crawl in >${STALE_AFTER_H}h; their live/upcoming lots are hidden from the served live set until a crawl lands`);
+  const hygiene = normalizeCorpus(allLots, { staleHouses });
   // STALE-UPCOMING annotation (Sep 27 2026): lots a crawler left 'upcoming' >3
   // days past their close were demoted to 'unknown-result' by normalize (kept
   // out of the live book + comps). A non-zero count means a house's results
@@ -325,6 +369,13 @@ async function main() {
     sentinel: { checkedAt: new Date().toISOString(), signatures: sentinel },
     version: 2,
   }, null, 2));
+
+  // per-house numbers for status.json (emit-status.ts) — advisory, never fatal
+  try {
+    const qa = path.join('data', 'qa');
+    fs.mkdirSync(qa, { recursive: true });
+    fs.writeFileSync(path.join(qa, 'house-stats.json'), JSON.stringify({ generatedAt: new Date().toISOString(), houses: computeHouseStats(allLots as never) }, null, 2));
+  } catch (e) { console.log(`::warning title=house stats::${(e as Error).message}`); }
 
   const { runMarketBuild } = await import('./build-market');
   await runMarketBuild();
