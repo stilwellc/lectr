@@ -11,13 +11,16 @@
  * past year / beat rate / houses) → the yearly line in a framed chart →
  * sections as registration plates with dotted comp rows.
  */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import ArtistNav from './ArtistNav';
 import { LOTPAGE_CSS } from './LotPage';
 import { Colophon } from './Terminal';
-import HeroChart, { type HeroLine } from '../preview/terminal/HeroChart';
-import { LAYER_PALETTE } from '../lib/heroLayers';
+import SalesScatter from '../ref/SalesScatter';
+import { variantsOf } from '../ref/ref-book';
+import { encodeRefPath } from '../ref/ref-path';
+import { loadRefSales } from '../lib/search-index';
+import type { RefSale } from '../lib/search-tokens';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 // the shared refs fetch (module-cached, one pull per session) — the same hook
@@ -27,36 +30,43 @@ import { useRefs, type RefEntry } from '../hooks/useRefs';
 import { ARTIST_LABEL } from '../constants';
 import { closeCut, formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
 import PlateImg from './PlateImg';
+import Term from './Term';
 import '../northstar-pages.css';
 
 export type { RefEntry };
 
-/** The yearly median on the shared hero instrument — every point a real
-    yearly reading, drawn as a cool money line (matches SubPage's adapter). */
-function RefLine({ yearly }: { yearly: RefEntry['yearly'] }) {
-  if (yearly.length < 3) return null;
-  const anchor: HeroLine = {
-    key: 'ref-median',
-    label: 'Yearly median',
-    color: LAYER_PALETTE[0],
-    unit: 'money',
-    points: yearly.map(p => ({ period: String(p.y), value: p.med, n: p.n })),
-  };
+/** Every sale on a true time axis — the dots ARE the data (SalesScatter).
+    Falls back to the eight latest sales when the full ledger is unavailable,
+    and says so. */
+function RefChart({ entry, sales, label }: { entry: RefEntry; sales: RefSale[] | null; label: string }) {
+  const pts: RefSale[] = sales ?? entry.recent.map(r => [r.d, r.p, r.id, r.h, r.t, r.img] as RefSale);
+  if (pts.length < 2) return null;
+  const years = pts.map(s => +s[0].slice(0, 4)).filter(y => y > 1900);
   return (
-    <section className="nsp-section ns-plate" aria-label="Yearly median">
+    <section className="nsp-section ns-plate" aria-label="Every sale, by date">
       <div className="nsp-shead">
         <div>
-          <span className="ns-kicker">The line</span>
-          <h2 className="nsp-h2">Yearly median, {yearly[0].y}–{yearly[yearly.length - 1].y}</h2>
+          <h2 className="nsp-h2">
+            {sales ? `Every sale, ${Math.min(...years)}–${Math.max(...years)}` : `The latest ${pts.length} sales`}
+          </h2>
         </div>
-        <span className="nsp-shctx">years with 3+ sales · realized, all-in</span>
+        <span className="nsp-shctx">{pts.length.toLocaleString()} hammers · realized, all-in</span>
       </div>
-      <div className="nsp-chart">
-        <HeroChart anchor={anchor} play={false} height={200} />
+      <div style={{ marginTop: 12 }}>
+        <SalesScatter sales={pts} yearly={entry.yearly} label={label} />
       </div>
+      {sales && sales.length !== entry.n && (
+        <p className="nsp-note">
+          The chart plots the {sales.length.toLocaleString()} sales in tonight&rsquo;s book; the medians above use the{' '}
+          {entry.n.toLocaleString()} that pass the comp gates (duplicates and flagged lots set aside).
+        </p>
+      )}
+      {!sales && <p className="nsp-note">The full sale ledger didn&rsquo;t load — plotting the latest sales only.</p>}
     </section>
   );
 }
+
+const SALES_PAGE = 12;
 
 export default function RefPage({ refKey }: { refKey: string }) {
   const { allLots, lastCrawl, totalLots } = useRayData();
@@ -64,6 +74,21 @@ export default function RefPage({ refKey }: { refKey: string }) {
   const { refs, failed } = useRefs();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
   const entry = useMemo(() => refs?.find(r => r.key === refKey) || null, [refs, refKey]);
+  // the full sale ledger (search/r-<maker>--<key>.json) — the chart's dots and
+  // the "every sale" list; null until loaded / when unavailable
+  const [sales, setSales] = useState<RefSale[] | null>(null);
+  const [salesState, setSalesState] = useState<'loading' | 'ok' | 'none'>('loading');
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => {
+    if (!entry) return;
+    let dead = false;
+    loadRefSales(entry.maker, entry.ref).then(s => {
+      if (dead) return;
+      if (s && s.length) { setSales(s); setSalesState('ok'); } else setSalesState('none');
+    });
+    return () => { dead = true; };
+  }, [entry]);
+  const variants = useMemo(() => (entry && refs ? variantsOf(refs, entry.maker, entry.ref) : []), [refs, entry]);
 
   // live lots of this reference currently on the block (client-derived — the
   // slim payload carries `reference` on watch lots)
@@ -118,6 +143,14 @@ export default function RefPage({ refKey }: { refKey: string }) {
   const yearSpan = spanYears.length
     ? (Math.min(...spanYears) === Math.max(...spanYears) ? String(spanYears[0]) : `${Math.min(...spanYears)}–${Math.max(...spanYears)}`)
     : null;
+
+  // the list under the chart: the full ledger when loaded (newest first),
+  // else refs.json's latest 8
+  const listRows = sales
+    ? sales.map(r => ({ id: r[2], d: r[0], h: r[3], p: r[1], t: r[4], img: r[5] }))
+    : entry.recent;
+  const listTotal = sales ? sales.length : entry.n;
+  const listAll = showAll ? listRows : listRows.slice(0, SALES_PAGE);
 
   return (
     <div className="terminal-shell">
@@ -176,7 +209,21 @@ export default function RefPage({ refKey }: { refKey: string }) {
           </div>
         </div>
 
-        <RefLine yearly={entry.yearly} />
+        {variants.length > 0 && (
+          <p className="nsp-note" style={{ fontSize: 13 }}>
+            Also catalogued as{' '}
+            {variants.map((v, i) => (
+              <React.Fragment key={v.key}>
+                {i > 0 && ', '}
+                <Link href={`/ref/${v.maker}/${encodeRefPath(v.ref)}`} style={{ color: 'var(--color-fg)' }}>
+                  &ldquo;{v.ref}&rdquo;, {v.n.toLocaleString()} sales
+                </Link>
+              </React.Fragment>
+            ))}{' '}— a separate dossier under the other spelling.
+          </p>
+        )}
+
+        {salesState !== 'loading' && <RefChart entry={entry} sales={sales} label={`${makerName} ${refLabel(entry.ref)}`} />}
 
         {onBlock.length > 0 && (
           <section className="nsp-section ns-plate" aria-label="On the block now">
@@ -203,19 +250,22 @@ export default function RefPage({ refKey }: { refKey: string }) {
                 </Link>
               ))}
             </div>
+            <p className="nsp-note">
+              Estimates are the house&rsquo;s, on the hammer. Where the engine <Term id="flags">flags</Term> a lot, or <Term id="abstain">abstains</Term> from
+              valuing it, the lot&rsquo;s own certificate says so.
+            </p>
           </section>
         )}
 
         <section className="nsp-section ns-plate" aria-label="Recent sales">
           <div className="nsp-shead">
             <div>
-              <span className="ns-kicker">The record</span>
-              <h2 className="nsp-h2">{entry.recent.length < entry.n ? `Latest ${entry.recent.length} of ${entry.n.toLocaleString()} sales` : 'Every sale'}</h2>
+              <h2 className="nsp-h2">{listAll.length < listTotal ? `Latest ${listAll.length} of ${listTotal.toLocaleString()} sales` : `Every sale, ${listTotal.toLocaleString()}`}</h2>
             </div>
             <span className="nsp-shctx">realized, buyer&rsquo;s premium included</span>
           </div>
           <div className="nsp-rows">
-            {entry.recent.map(s => (
+            {listAll.map(s => (
               <Link key={s.id} href={`/lot?id=${encodeURIComponent(s.id)}`} className="lectr-lot-comp">
                 <span className="lectr-lot-comp-thumb" aria-hidden>
                   <span>{(s.t || '?').charAt(0)}</span>
@@ -239,8 +289,15 @@ export default function RefPage({ refKey }: { refKey: string }) {
               </Link>
             ))}
           </div>
+          {listRows.length > listAll.length && (
+            <div style={{ marginTop: 14 }}>
+              <button type="button" className="ray-call-btn ray-call-btn-quiet" onClick={() => setShowAll(true)}>
+                Show all {listRows.length.toLocaleString()} sales
+              </button>
+            </div>
+          )}
           <p className="nsp-note">
-            Medians over every {makerName} sale lectr has catalogued for this reference — the yearly line is a
+            Medians over every {makerName} sale lectr has catalogued for this reference — the yearly medians are a
             mix-affected level, not an appreciation rate.
           </p>
         </section>
@@ -249,8 +306,11 @@ export default function RefPage({ refKey }: { refKey: string }) {
           <Link href={`/makers/${entry.maker}`} className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>
             {makerName}, the maker&rsquo;s book
           </Link>
-          <Link href="/makers" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>
-            Every maker
+          <Link href="/ref" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>
+            Every reference
+          </Link>
+          <Link href="/glossary" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>
+            Glossary
           </Link>
         </div>
       </div>

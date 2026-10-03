@@ -36,6 +36,11 @@ const CSS = `
 .ray-ss-cell[data-dir="flat"] .ray-ss-pct{color:var(--color-text-muted)}
 .ray-ss-n{font-size:10px;color:var(--color-text-muted);font-variant-numeric:tabular-nums}
 .ray-ss-blank .ray-ss-pct{color:var(--color-text-muted);opacity:0.5}
+/* contrast (axe, Oct 3): on the heat-tinted porcelain cells the lamp inks and
+   the muted count fell to ~4.3:1 — deepen them inside tinted cells only */
+html[data-lectr-light] .ray-ss-cell[data-dir="up"] .ray-ss-pct{color:color-mix(in srgb,var(--color-up) 78%,#000)}
+html[data-lectr-light] .ray-ss-cell[data-dir="down"] .ray-ss-pct{color:color-mix(in srgb,var(--color-down-text,var(--color-down)) 82%,#000)}
+html[data-lectr-light] .ray-ss-cell .ray-ss-n{color:var(--color-text-secondary)}
 .ray-ss-take{font-size:12.5px;color:var(--color-text-secondary);line-height:1.5;margin:12px 0 0}
 .ray-ss-take b{font-weight:650;color:var(--color-fg)}
 `;

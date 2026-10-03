@@ -36,6 +36,10 @@ const CSS = `
 .ray-hm-cell[data-dir="down"] .num{color:var(--color-down-text,var(--color-down))}
 .ray-hm-cell[data-dir="flat"] .num{color:var(--color-text-muted)}
 .ray-hm-cell .n{display:block;font-size:10px;color:var(--color-text-muted);font-variant-numeric:tabular-nums;margin-top:1px}
+/* contrast (axe, Oct 3): deepen the lamp inks + counts on tinted porcelain cells */
+html[data-lectr-light] .ray-hm-cell[data-dir="up"] .num{color:color-mix(in srgb,var(--color-up) 78%,#000)}
+html[data-lectr-light] .ray-hm-cell[data-dir="down"] .num{color:color-mix(in srgb,var(--color-down-text,var(--color-down)) 82%,#000)}
+html[data-lectr-light] .ray-hm-cell .n{color:var(--color-text-secondary)}
 .ray-hm-empty{font-size:12.5px;color:var(--color-text-muted);opacity:0.55}
 `;
 

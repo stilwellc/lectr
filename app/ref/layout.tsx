@@ -2,7 +2,7 @@ import React from 'react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Reference',
+  title: 'Watch references',
   description: 'One watch reference, every sale on the book — medians, trend and recent hammers. lectr auction intelligence.',
 };
 

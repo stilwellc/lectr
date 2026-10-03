@@ -473,7 +473,10 @@ const NS_CLOSE_CSS = `
   padding: 0 0 8px;
 }
 .ray-close-line-links { display: flex; flex-direction: column; align-items: flex-start; column-gap: 0; }
-.ray-close-line-links a { padding: 8px 0; font-size: 14.5px; font-weight: 450; color: var(--color-fg); }
+.ray-close-line-links a { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 0; font-size: 14.5px; font-weight: 450; color: var(--color-fg); }
+/* the starling link prints in TEXT-safe butter on porcelain (display butter
+   measured 4.42:1 on the about deck's ground) */
+html[data-lectr-light] .ray-close-starling { color: var(--color-butter-text) !important; }
 .ray-close-line-links a:hover { color: var(--color-text-secondary); text-decoration-color: var(--color-border-mid); }
 .ray-close-line-links a:focus-visible { outline: 1.5px solid var(--color-border-mid); outline-offset: 2px; }
 .ray-close-base { margin-top: 64px; padding-top: 0; color: var(--color-text-faint); }
@@ -484,7 +487,7 @@ const NS_CLOSE_CSS = `
   .ray-close-thesis { font-size: 26px; }
   .ray-close-lines { margin-top: 28px; grid-template-columns: 1fr 1fr; gap: 20px 24px; }
   .ray-close-line-k { padding-bottom: 4px; font-size: 13px; }
-  .ray-close-line-links a { padding: 5px 0; font-size: 13.5px; }
+  .ray-close-line-links a { min-height: 32px; padding: 3px 0; font-size: 13.5px; }
   .ray-close-base { margin-top: 28px; }
 }
 html[data-lectr-light] .ray-close {
@@ -599,9 +602,11 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
               <Link href="/value">Value</Link>
               <Link href="/receipts">The record</Link>
               <Link href="/makers">Makers</Link>
+              <Link href="/ref">Watch references</Link>
               <Link href="/analytics">Analytics</Link>
               <Link href="/profile">My profile</Link>
               <Link href="/about">How it works</Link>
+              <Link href="/glossary">Glossary</Link>
               <Link href="/blog">Notes from the desk</Link>
             </span>
           </div>
