@@ -23,6 +23,13 @@
 // status:'upcoming'), and the standing resolve pattern retires each upcoming
 // row into a sold row at the same `hakes-<itemId>` id once the sale settles.
 //
+// UPDATE Oct 2 2026 — the first sold sweep (event 24709, 631 lots) parsed 0:
+// Hake's GATES settled prices ("Login for Price", no lbl_/tcb_ pair). The
+// subject's JSON-LD still carries the HAMMER (availability SoldOut; proven ×1.20
+// == "Sold for … includes BP" on SCP), so bidsquare.ts gatedSoldHammer reads it,
+// anchored to item + event, and stores it like SCP: realized = hammer × 1.20,
+// buyerPremiumPct 20, with the page's hammer kept in hammerNative/hammerUsd.
+//
 // MONEY: Hake's publishes "HAKE'S BUYER'S PREMIUM IS 20%" on
 // https://www.hakes.com/terms-conditions (read Sep 3 2026). The platform's
 // settled figure is labelled "Sold for" and marked "Sold Price includes BP"

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<!-- TRIMMED real page: bid.collectrea.com/lots?page=1, fetched 2026-10-03 (REA Sep 2026 closed; October 2026 opens 2026-10-08). -->
+<html><body>
+<div
+		x-data="{ status: 'pending', showTimer: true }"
+		x-init="() => {
+			// Exponential distribution: most users refresh quickly, with a tail to spread load
+			// λ = 0.000462 → ~50% within 1.5s, capped at 3s max
+			const getRandomDelay = () => Math.min(-Math.log(1 - Math.random()) / 0.000462, 3000);
+
+			Echo.channel('auctions')
+			.listen('AuctionUpdated', (e) => {
+				setTimeout(() => {
+					window.location.reload();
+				}, getRandomDelay());
+			})
+
+			Echo.channel('auctions.111')
+			.listen('AuctionClosed', (e) => {
+				status = e.status;
+				if (status === 'closed') {
+					showTimer = false;
+				}
+			})
+		}"
+	>
+					<div class="mb-8 py-36 text-center">
+				<h1 class="mb-4">Our October 2026 Auction Is Opening Soon.</h1>
+				<p class="mb-8">Be sure to check the <a href="https://bid.collectrea.com/account" class="link">status</a> of your bidding account and good luck! The auction opens in...</p>
+				
+				<div
+    x-data="{
+        timer: {
+            days: '05',
+            hours: '11',
+            minutes: '56',
+            seconds: '42',
+        },
+        formatCounter(number) {
+            return number.toString().padStart(2, '0');
+        }
+    }"
+    x-init="
+        let runningCounter = setInterval(() => {
+            let countDownDate = new Date(1791475200 * 1000).getTime();
+            let timeDistance = countDownDate - new Date().getTime();
+
+            if (timeDistance < 0) {
+</div></div></div>
+</body></html>
