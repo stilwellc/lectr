@@ -2807,7 +2807,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   --tt-butter: #7A5A14;          /* the lamp, module register — gold ink */
   --tt-secondary: #44403B;
   --tt-muted: #6B655D;
-  --tt-faint: #8E877D;
+  --tt-faint: #726C63;  /* text-safe on eggshell (5.07:1; #8E877D read 3.46 — axe Oct 3) */
   --tt-hair: rgba(28, 25, 23, 0.10);
   --tt-hair-2: rgba(28, 25, 23, 0.16);
   --color-up: #0F7C43;

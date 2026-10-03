@@ -2094,9 +2094,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   color: color-mix(in srgb, var(--color-accent-gold) 58%, var(--color-text-faint));
   font-family: var(--font-inter), sans-serif; font-weight: 500; font-size: 17px; line-height: 1;
 }
-.ray-feedtable .t-artist { display: block; color: var(--color-fg); font-weight: 500; text-decoration: none; }
+.ray-feedtable .t-artist { display: flex; align-items: center; min-height: 24px; color: var(--color-fg); font-weight: 500; text-decoration: none; }  /* ≥24px target (WCAG 2.2 AA, axe Oct 3) */
 .ray-feedtable a.t-artist:hover { text-decoration: underline; text-underline-offset: 2px; }
-.ray-feedtable .t-title { color: var(--color-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+.ray-feedtable .t-title { display: block; min-height: 24px; line-height: 24px; color: var(--color-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
 /* the data cells speak mono — dates, days, bids, estimates, signals */
 .ray-feedtable .t-date, .ray-feedtable .t-days, .ray-feedtable .t-bids,
 .ray-feedtable .t-est, .ray-feedtable .t-sig-up, .ray-feedtable .t-sig-down {
@@ -3004,7 +3004,7 @@ html .lectr-recplate-k {
   font-variant-numeric: tabular-nums;
 }
 .ray-engine-stats b { color: var(--paper-ink, #1C1712); font-weight: 500; }
-.ray-engine-stats b.up { color: #1e7a4d; }
+.ray-engine-stats b.up { color: #0A5F33; }  /* 5.54:1 on the paper banner (#1e7a4d read 3.78 — axe Oct 3) */
 .ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--pa-3, rgba(28, 23, 18, 0.3)); align-self: center; }
 .ray-engine-cta {
   display: inline-block;
