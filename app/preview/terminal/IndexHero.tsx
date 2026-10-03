@@ -290,37 +290,20 @@ export default function IndexHero({
   // display headline left, the thesis copy right, pill CTAs beneath left.
   // Impact through lightness (weight 300) — no display bold anywhere.
   // Same element on both shells; ns-split collapses under 900px.
+  // the board's head — the site's statement moved up to the call hero
+  // (CallHero); this plate names what it is, in the split grammar.
   const masthead = (
-    <m.div className={`ns-split ${styles.nsMast}`} {...rise(0.02)}>
+    <div className={`ns-split ${styles.nsMast}`}>
       <div>
-        {/* no kicker here — the headline opens the lander (Collin: the
-            eyebrow line spent a full row of prime space). It enters on the
-            north-star word reveal, same play gate as every rise. */}
-        <RevealHeadline
-          className={styles.nsMastHead}
-          text="Every lot on the block, priced against the record."
-          play={play && !reduce}
-        />
+        <h2 className={styles.nsMastHead}>
+          {activeKey === 'all' ? 'The book tonight, market by market.' : `The ${marketLabel === 'TCG' ? 'TCG' : marketLabel.toLowerCase()} market tonight.`}
+        </h2>
       </div>
-      {/* right column: the doors first, the thesis under them (Collin) */}
-      <div>
-        <div className={styles.nsMastCtas}>
-          <a href="#on-the-block" className="ray-call-btn ray-call-btn-primary">
-            See what&rsquo;s on the block
-          </a>
-          <Link href="/value" className="ray-call-btn ray-call-btn-quiet">
-            Open the value desk
-          </Link>
-        </div>
-        <p className={styles.nsMastThesis}>
-          {/* the script mark IS the word — the light-mode ink swap in globals
-              retargets this src automatically */}
-          <img src="/brand/lectr-nav.png" alt="lectr" className={styles.nsMastMark} />
-          {' '}reads the live auction book each night and checks every ask against
-          where its comparables actually sold — {fmtInt(totalLots)} lots on file.
-        </p>
-      </div>
-    </m.div>
+      <p className={styles.nsMastThesis}>
+        How far lots sell against their estimates, the indices that clear a 95% interval,
+        and what is on the block right now.
+      </p>
+    </div>
   );
 
   // ── THE PULSE BOARD — the shared "Right now" composition (desktop rail +

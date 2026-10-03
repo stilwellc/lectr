@@ -2777,11 +2777,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-        var(--color-bg-deep);
-  transition: opacity 240ms var(--ease-ui);
-  /* decorative splash only — never intercept the first 0.9s of taps/clicks on
-     the live page underneath (it's aria-hidden and purely visual). */
+  /* the blank plate: opaque eggshell — nothing loading shows through */
+  background: var(--color-bg);
+  transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* decorative only — never intercept taps on the live page underneath */
   pointer-events: none;
 }
 .ray-greeting-out { opacity: 0; pointer-events: none; }
@@ -2789,7 +2788,7 @@ body {
   height: 132px;
   width: auto;
   clip-path: inset(0 100% 0 0);
-  animation: lectrCloseWrite 480ms var(--ease-draw) 60ms forwards;
+  animation: lectrCloseWrite 900ms var(--ease-draw) 80ms forwards;
 }
 @media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }
 
