@@ -111,7 +111,7 @@ function readGz(f: string): AuctionLot[] {
   return readGzRows(path.join(CORPUS, f + '.gz')) as AuctionLot[];
 }
 
-export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<AuctionLot[]> {
+async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   const t0 = Date.now();
   // the valuation clock — Date.now() for the nightly; a past day for the
   // point-in-time evaluation seam (every window/decay below reads NOW_MS)
@@ -1419,10 +1419,41 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // persist same-object pairs queued for the next extraction run (no-op when off)
   flushExtractQueue();
   console.log(`[market] wrote market.json (${(fs.statSync(path.join(SERVED, 'market.json')).size / 1024).toFixed(0)}KB)`);
+  // the engine's module state is not read by the persist phase (build-upcoming
+  // never imports value.ts) — release it with the engine's working set
+  setTimeIndex(null);
+  setHouseBias(null);
+  logPhase('engine', t0);
+  return all;
+}
 
+/** Wall-clock + heap for one phase (hrtime: unaffected by a frozen Date). */
+function logPhase(name: string, t0: number): void {
+  // live heap, not garbage, when the run exposes gc (the measurement harness)
+  (globalThis as { gc?: () => void }).gc?.();
+  const mu = process.memoryUsage();
+  console.log(`[phase] ${name} done · ${((Date.now() - t0) / 1000).toFixed(0)}s · heap ${(mu.heapUsed / 1048576).toFixed(0)}MB · rss ${(mu.rss / 1048576).toFixed(0)}MB · t+${(performance.now() / 1000).toFixed(0)}s`);
+}
+
+export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<AuctionLot[]> {
+  const t0 = Date.now();
+  // The engine runs in its OWN function so its working set (IDF vectors,
+  // pools, per-slug buckets, card maps — ~as large as the corpus) is garbage
+  // the moment it returns: the persist phase below then holds the corpus once.
+  const all = await runMarketEngine(opts);
+  if (opts.evalOnly) return all;
+  return persistMarket(all, t0);
+}
+
+async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[]> {
+  const lotsForSlug = (slug: string): AuctionLot[] => all.filter(l => l.artist === slug);
   // ── 4 · persist: full corpus (gz) + slim served (value flows to the client) ──
-  for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; delete t._v; delete t._saleMs; }
-  const { writeCorpusAndServed } = require('./corpus-io');
+  // (deleted LAST-ADDED first: `_saleMs` was stamped after buildVectors'
+  // `_v`, so each delete removes the object's final key — V8's fast
+  // map-rollback; deleting a middle key would drop ~600k lots into
+  // dictionary mode, +1/3 heap. Same keys removed as before.)
+  for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; delete t._saleMs; delete t._v; }
+  const { persistCorpusAndServed } = require('./corpus-io');
   // Served sold-card SAMPLE: the artist page / archive surfaces need real card
   // rows (record sale, past results, realized cohort) but 288k would blow the
   // payload — ship the most-recent 1,500 + top 500 by price (the record lives
@@ -1449,15 +1480,16 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // re-split runs after assemble and overwrites its output. Dropping the
   // `archived === true` clause once leaked the 252K-row RR sold archive into
   // the phase-2 shards (~290MB on the wire for every useFullLots surface).
-  writeCorpusAndServed(all as unknown as Record<string, unknown>[],
-    // NOTE: 'pokemon' is deliberately NOT in CULTURE_KEEP — its bulk sold
-    // history goes to the archive tier like sports cards, not phase-2 shards.
-    (l: Record<string, unknown>) => (l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string)) || l.archived === true,
-    // corpus-only: SOLD sport cards + Pokémon stay off the wire — except the
-    // samples above. Live lots always ship (they're on the block).
-    (l: Record<string, unknown>) =>
-      ((l.artist === 'sports-cards' || l.artist === 'graded-cards') && l.status === 'sold' && !cardSample.has(String(l.id))) ||
-      (l.artist === 'pokemon' && l.status === 'sold' && !pokemonSample.has(String(l.id))));
+  // NOTE: 'pokemon' is deliberately NOT in CULTURE_KEEP — its bulk sold
+  // history goes to the archive tier like sports cards, not phase-2 shards.
+  const isArchived = (l: Record<string, unknown>) => (l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string)) || l.archived === true;
+  // corpus-only: SOLD sport cards + Pokémon stay off the wire — except the
+  // samples above. Live lots always ship (they're on the block).
+  const isCorpusOnly = (l: Record<string, unknown>) =>
+    ((l.artist === 'sports-cards' || l.artist === 'graded-cards') && l.status === 'sold' && !cardSample.has(String(l.id))) ||
+    (l.artist === 'pokemon' && l.status === 'sold' && !pokemonSample.has(String(l.id)));
+  // (the corpus + served write runs LAST, below: it consumes `all` — every
+  // lot is replaced by its written-and-reparsed row as it streams out)
 
   // ── SOLD-OUTCOMES LEDGER — a slim id→[priceUsd, saleDate] map so the profile
   // can resolve SAVED lots that sold into the archive / corpus-only tiers (whose
@@ -1504,16 +1536,35 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // Hand it the IN-MEMORY corpus: letting it re-read the gz from disk doubled
   // the full lot set in RAM while `all` was still live — the +40k Pokémon rows
   // tipped that over the runner's ceiling (OOM, Aug 13 dispatch run).
+  // (Runs BEFORE the corpus write since the scale pass — it reads no file the
+  // write produces, and the write then consumes `all`. Its only mutation of a
+  // lot is the transient `_saleMs` stamp, removed again before the write —
+  // the last-added key, so `delete` is V8's fast map-rollback path.)
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED, all as unknown as AuctionLot[]);
-  setTimeIndex(null);
-  setHouseBias(null);
+  for (const l of all) delete (l as AuctionLot & { _saleMs?: unknown })._saleMs;
+  logPhase('upcoming (in-memory)', t0);
+
+  // ── the corpus gz + slim served shards (+ the columnar corpus.parquet) ──
+  // Returns the corpus exactly as readCorpus() would parse it back from the
+  // files just written (main tier, then archive; each row JSON-roundtripped) —
+  // the standalone readers' view, with no second parse of the files.
+  // the columnar corpus rides the same stream (advisory: a DuckDB failure
+  // costs tonight's corpus.parquet, never the publish)
+  let sink: import('./corpus-io').CorpusRowSink | null = null;
+  try {
+    const { openParquetSink, PARQUET_FILE } = require('./lib/corpus-parquet');
+    sink = await openParquetSink(path.join(CORPUS, PARQUET_FILE));
+  } catch (e) { console.log(`::warning title=corpus.parquet skipped::${(e as Error).message}`); }
+  const io = await persistCorpusAndServed(all as unknown as Record<string, unknown>[], isArchived, isCorpusOnly, { sink });
+  console.log(`[market] wrote corpus ${io.corpusMb}+${io.archiveMb}MB gz | served ${io.servedMb}MB`);
+  logPhase('persist', t0);
   console.log(`[market] done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
-  return all;
+  return io.view as unknown as AuctionLot[];
 }
 
 // standalone entry — fail loud with a clear message + non-zero exit rather than
 // a raw stack, so a failed rebuild is never mistaken for a successful one.
 if (require.main === module) {
-  try { runMarketBuild(); } catch (err) { console.error('[market] build failed:', err); process.exit(1); }
+  runMarketBuild().catch(err => { console.error('[market] build failed:', err); process.exit(1); });
 }

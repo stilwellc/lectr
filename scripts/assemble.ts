@@ -9,13 +9,24 @@
  * smaller than the last published one (a crawl bug or an empty segment must
  * never wipe the book) — the last-good served payload stays live instead.
  *
- * Run: NODE_OPTIONS=--max-old-space-size=10240 npx tsx scripts/assemble.ts
+ * SINGLE LOAD (Oct 2026 scale pass): the corpus is parsed ONCE per nightly.
+ * The reunioned lots are handed to the market build in memory (they used to
+ * be written to the corpus gz + served shards here, then read straight back
+ * by build-market — a second full copy, and a served write it overwrote), and
+ * with --single-load the steps that each re-read the corpus run here as
+ * phases on the same in-memory rows:
+ *   assemble → market (engine + persist) → eager upcoming → engine gate
+ *   (validate-engine) → page data (emit-page-stats) → search index
+ * Each phase sees exactly the rows its standalone script would have read
+ * (scripts/ci/equivalence.ts proves the outputs byte-identical).
+ *
+ * Run: NODE_OPTIONS=--max-old-space-size=4096 npx tsx scripts/assemble.ts [--single-load]
  */
 import { PRICE_BASIS } from './price-basis';
 import { soldByYear, houseCoverage } from './coverage';
 import * as fs from 'fs';
 import * as path from 'path';
-import { readAllSegments, writeCorpusAndServed, segmentOf, isServedUpcoming, CORPUS_DIR, SERVED_DIR } from './corpus-io';
+import { readAllSegmentsLean, roundtripCorpusView, segmentOf, isServedUpcoming, CORPUS_DIR, SERVED_DIR } from './corpus-io';
 import { staleHouseKeys, STALE_AFTER_H, type Ledger, type HouseStats } from './lib/house-status';
 import { normalizeCorpus } from './lib/corpus-normalize';
 import { computeStats } from './compute-stats';
@@ -155,14 +166,20 @@ export function readStaleHouses(file: string, now: Date = new Date()): Set<strin
 
 async function main() {
   const DATA_DIR = SERVED_DIR;
-  const allLotsRaw = readAllSegments() as unknown as AuctionLot[];
+  const SINGLE_LOAD = process.argv.includes('--single-load');
+  const tStart = Date.now();
+  // streamed + lean: same rows in the same order as readAllSegments, minus the
+  // dead engine scratch fields older builds left in the segments
+  const allLotsRaw = (await readAllSegmentsLean()) as unknown as AuctionLot[];
   if (!allLotsRaw.length) throw new Error('[assemble] no segments found — refusing to publish an empty corpus');
+  phase('read segments', tStart);
   // JUNK GATE (Aug 13 audit): broken scrapes that carry CSS instead of a title
   // (435 rows, Lelands/LOTG windows-era) and the one "Lot Withdrawn … Status:
   // Sold" row — dead weight in token space, never a real lot.
   const JUNK_TITLE = /\.pagination\s*\{|\{\s*clear:\s*both|^\d*\s*Lot Withdrawn\b/i;
   const allLots = allLotsRaw.filter(l => !JUNK_TITLE.test(String(l.title || '')));
   if (allLotsRaw.length !== allLots.length) console.log(`[assemble] junk gate dropped ${allLotsRaw.length - allLots.length} rows`);
+  allLotsRaw.length = 0; // the filtered array is the only holder from here
   // CONTENT DEDUPE (Aug 13 audit): ~9k sold rows duplicated under distinct ids
   // (double-crawls: same house + saleDate + price + title). Conservative key,
   // sold rows only, keep the lexically-first id (deterministic).
@@ -346,10 +363,11 @@ async function main() {
     if (lots && lots.length) statsByArtist[a.slug] = computeStats(lots, existing[a.slug] || null);
     else if (existing[a.slug]) statsByArtist[a.slug] = existing[a.slug]; // carry a slug with no lots this run
   }
+  bySlug.clear(); // it holds every row: the handoff below must be their only holder
 
-  // corpus gz + served (build-market re-writes served with the card sample)
-  const io = writeCorpusAndServed(allLots as unknown as Record<string, unknown>[], isArchiveTier);
-  console.log(`[assemble] wrote corpus ${io.corpusMb}+${io.archiveMb}MB gz | served ${io.servedMb}MB`);
+  // (the corpus gz + served shards are written ONCE, by build-market's persist
+  // phase — this step used to write both here too, only for build-market to
+  // read the gz straight back and overwrite every file)
   fs.mkdirSync(SERVED_DIR, { recursive: true });
   fs.writeFileSync(statsPath, JSON.stringify(statsByArtist, null, 2));
   fs.writeFileSync(metaPath, JSON.stringify({
@@ -377,10 +395,85 @@ async function main() {
     fs.writeFileSync(path.join(qa, 'house-stats.json'), JSON.stringify({ generatedAt: new Date().toISOString(), houses: computeHouseStats(allLots as never) }, null, 2));
   } catch (e) { console.log(`::warning title=house stats::${(e as Error).message}`); }
 
+  phase('assemble', tStart);
+  // ── HANDOFF: the market build's input is exactly what it used to read back
+  // from the corpus gz this step wrote — main tier then archive tier (THIS
+  // step's split), each row the JSON roundtrip of the in-memory one — built
+  // in place, so the corpus stays resident once.
+  const handoff = roundtripCorpusView(allLots as unknown as Record<string, unknown>[], isArchiveTier) as unknown as AuctionLot[];
+  phase('handoff', tStart);
   const { runMarketBuild } = await import('./build-market');
-  await runMarketBuild();
+  const corpus = await runMarketBuild({ lots: handoff });
+  phase('market', tStart);
   console.log(`[assemble] done — corpus in ${CORPUS_DIR}, served in ${SERVED_DIR}`);
+  if (!SINGLE_LOAD) return;
+  await runDownstream(corpus as unknown as Record<string, unknown>[], tStart);
 }
+
+/** The steps that each used to re-read the corpus, as phases over the ONE
+ *  in-memory copy. `corpus` is readCorpus()'s view of the files just written
+ *  (build-market's persist returns it). Ordering: the eager rebuild first
+ *  (it must see unstamped rows), then the off-book rows page data needs, then
+ *  the engine gate (it stamps _v/_vn on rows), then — corpus released — the
+ *  two served-book emitters. Failure semantics match the nightly's steps:
+ *  page data and search are advisory (warn + continue), the gate fails the
+ *  run (exit 1) AFTER everything else has been written. */
+async function runDownstream(corpus: Record<string, unknown>[], tStart: number): Promise<void> {
+  // 1 · eager upcoming payload (was: the "Rebuild eager upcoming payload" step)
+  const { buildUpcoming } = await import('./build-upcoming');
+  const eager = buildUpcoming(SERVED_DIR, corpus as unknown as AuctionLot[]);
+  for (const l of corpus) delete l._saleMs; // its transient sort stamp (last key: fast delete)
+  phase('eager upcoming', tStart);
+  // 2 · the off-book corpus rows page data resolves engine pools from
+  const ps = await import('./emit-page-stats');
+  const corpusRows = ps.pageStatsCorpusRows(corpus, ps.pageStatsCandidateIds(eager));
+  // 3 · THE ENGINE GATE (was: the "Validate engine" step)
+  const { runValidateEngine } = await import('./validate-engine');
+  fs.mkdirSync(path.join('data', 'qa'), { recursive: true });
+  let gate: { failures: number } = { failures: 1 };
+  try {
+    gate = runValidateEngine({ corpus: corpus as unknown as AuctionLot[], sample: Number(process.env.RAY_VALIDATE_SAMPLE || 30000), json: process.env.RAY_VALIDATE_JSON || path.join('data', 'qa', 'validate-engine.json') });
+  } catch (e) { console.error('[validate] FAILED:', (e as Error).message); }
+  phase('engine gate', tStart);
+  corpus.length = 0; // the corpus is released: the emitters below read the served book
+  // 4 · page data + search index — advisory, as their nightly steps were
+  try { await ps.emitPageStats({ corpusRows }); }
+  catch (e) { console.log(`::warning title=emit page data failed::${(e as Error).message} — pages fall back to the corpus path`); }
+  phase('page data', tStart);
+  try { (await import('./emit-search-index')).emitSearchIndex(); }
+  catch (e) { console.log(`::warning title=emit search index failed::${(e as Error).message} — search covers makers/refs/live lots only`); }
+  phase('search index', tStart);
+  if (gate.failures) {
+    console.error(`[assemble] engine gate FAILED (${gate.failures}) — exit 1 (outputs written; the push step will not run)`);
+    process.exitCode = 1;
+  }
+}
+
+/** One phase line: wall clock since start, heap + rss (hrtime-based clock is
+ *  unaffected by a frozen Date in the equivalence harness). */
+function phase(name: string, _t0: number): void {
+  // live heap, not garbage, when the run exposes gc (the measurement harness)
+  (globalThis as { gc?: () => void }).gc?.();
+  const mu = process.memoryUsage();
+  console.log(`[phase] ${name} · t+${(performance.now() / 1000).toFixed(0)}s · heap ${(mu.heapUsed / 1048576).toFixed(0)}MB · rss ${(mu.rss / 1048576).toFixed(0)}MB · peak live heap so far ${(peakLive / 1048576).toFixed(0)}MB`);
+}
+
+// PEAK LIVE HEAP: the heap left right after each major (mark-compact) GC —
+// the honest high-water mark of what the run actually holds, as opposed to
+// heapUsed at an arbitrary instant (which includes uncollected garbage).
+let peakLive = 0;
+try {
+  const { PerformanceObserver, constants } = require('perf_hooks') as typeof import('perf_hooks');
+  const obs = new PerformanceObserver(list => {
+    for (const e of list.getEntries()) {
+      if ((e as unknown as { detail?: { kind?: number } }).detail?.kind === constants.NODE_PERFORMANCE_GC_MAJOR) {
+        const h = process.memoryUsage().heapUsed;
+        if (h > peakLive) peakLive = h;
+      }
+    }
+  });
+  obs.observe({ entryTypes: ['gc'] });
+} catch { /* observer unavailable — phase lines still print */ }
 
 // RAY_SKIP_MAIN=1 lets the module be IMPORTED without running the pipeline —
 // the repo-wide convention (close-board, the crawlers, the backfills all use
