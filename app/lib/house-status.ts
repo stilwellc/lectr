@@ -42,6 +42,8 @@ export interface PipelineStatus {
 
 /** a house is shown as stale past this age */
 export const HOUSE_STALE_MS = 36 * 3_600_000;
+/** a missed night can't write status.json, so an old publish stamp IS the missed signal */
+export const PUBLISH_MISSED_MS = 30 * 3_600_000;
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -70,7 +72,8 @@ export function parseStatus(raw: unknown): PipelineStatus | null {
         live: num(h.live),
         ok: bool(h.ok),
         reason: str(h.reason),
-        staleHidden: num(h.staleHidden),
+        // the pipeline writes staleHidden as a flag and the count as hiddenLive
+        staleHidden: h.staleHidden === true ? (num(h.hiddenLive) ?? 0) : num(h.staleHidden),
       })),
   };
 }

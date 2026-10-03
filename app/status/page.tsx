@@ -6,7 +6,7 @@ import { useRayData } from '../hooks/useRayData';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import { useNow, isOpen, closeMs } from '../lib/closing';
-import { usePipelineStatus, houseAsOfMap, ageLabel, asOfLabel, HOUSE_STALE_MS, type HouseStatus } from '../lib/house-status';
+import { usePipelineStatus, houseAsOfMap, ageLabel, asOfLabel, HOUSE_STALE_MS, PUBLISH_MISSED_MS, type HouseStatus } from '../lib/house-status';
 import { formatDate, getUpcomingCounts } from '../utils';
 
 /* ============================================================
@@ -124,6 +124,8 @@ export default function StatusPage() {
   const pub = status?.publish || null;
   const publishedAt = pub?.lastPublishedAt || status?.generatedAt || null;
   const staleCount = rows.filter(r => isStale(r.asOf, now)).length;
+  const pubT = publishedAt ? Date.parse(publishedAt) : NaN;
+  const publishMissed = now != null && !isNaN(pubT) && now - pubT > PUBLISH_MISSED_MS;
 
   return (
     <div className="terminal-shell" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
@@ -172,7 +174,7 @@ export default function StatusPage() {
                 {!derived && (
                   <div>
                     <div className="st-k">Health</div>
-                    <div className="st-v" style={{ fontSize: 15, lineHeight: 1.4 }}>{signalWords(pub?.signal) || 'Not reported'}</div>
+                    <div className="st-v" style={{ fontSize: 15, lineHeight: 1.4 }}>{publishMissed ? 'Missed — no publish in over 30 hours; the last good book is still live' : (signalWords(pub?.signal) || 'Not reported')}</div>
                   </div>
                 )}
                 <div>
