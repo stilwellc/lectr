@@ -71,7 +71,11 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ display: 'flex', gap: 18, padding: '8px 0 10px 18px', fontSize: 12.5, color: 'var(--color-text-faint)' }}>
+        {/* the legend sits on the WHITE chart card inside the dark record band,
+            where the band's faint token measured 3.47:1 (axe, Oct 3) — the
+            same porcelain ink the card's figcaption already wears */}
+        <style>{`.rby-legend{color:var(--color-text-faint)}html[data-lectr-light] .ray-band .glass .rby-legend{color:#6B655D}`}</style>
+        <div className="rby-legend" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', padding: '8px 0 10px 18px', fontSize: 12.5 }}>
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--color-up)', verticalAlign: 'middle', marginRight: 6 }} />flagged below market</span>
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--chart-line-2)', verticalAlign: 'middle', marginRight: 6 }} />unflagged</span>
           <span>· premium-inclusive, as bought</span>

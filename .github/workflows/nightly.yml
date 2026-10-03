@@ -16,7 +16,8 @@ name: Nightly (segmented)
 #   deploy (needs: assemble)  →  pinned served payload → build → ship
 #   sync   (needs: assemble, non-blocking)  →  supabase + alerts
 #   backtest-leg / backtest  →  the point-in-time record (not on the deploy path)
-#   health (needs: crawl, non-blocking)  →  leg-health table, red on ok=false
+#   health (needs: crawl, non-blocking)  →  leg-health table, ⚠ on ok=false
+#   verdict (needs: assemble+deploy)     →  names the night; publish-missed + per-house issues
 #   handoff-cleanup (last, always)  →  deletes this run's R2 handoff objects
 #
 # HANDOFFS NEVER RIDE GITHUB ARTIFACTS (Sep 27 2026). The repo is PUBLIC:
@@ -43,19 +44,42 @@ name: Nightly (segmented)
 #
 # Net: no single job scales with the TOTAL corpus, a partial failure can never
 # regress prod, and any stage is retryable in isolation.
+#
+# ── WHAT RED MEANS (Oct 3 2026) — docs/RUNBOOK.md ─────────────────────────────
+#   RUN RED            = the night did NOT publish (assemble or deploy failed),
+#                        or the record/sync failed. A scheduled night that did
+#                        not publish opens/updates the issue "lectr: publish
+#                        missed"; the next successful publish closes it.
+#   RUN GREEN + ⚠      = PUBLISHED, DEGRADED: ≥1 house down or stale. Crawl legs
+#                        are continue-on-error (a sick house cannot redden the
+#                        run); each sick house gets its own rolling issue
+#                        "lectr: house <h> unhealthy", closed when it recovers.
+#                        The `verdict` job's NAME says which state the night is in.
+#   status.json        = the same truth for the site's /status page
+#                        (scripts/emit-status.ts, written before the push).
+# CLOCK: the Cloudflare Worker workers/cron-trigger dispatches this at 04:17
+# UTC on the minute (trigger=cron-worker); the GitHub cron below is the
+# FALLBACK and skips itself when a Worker run already started (run-guard.mjs).
+# TOKENS: CF_R2_READ_TOKEN / CF_R2_WRITE_TOKEN / CF_PAGES_TOKEN, each falling
+# back to CLOUDFLARE_API_TOKEN until created (docs/RUNBOOK.md "Tokens").
+
+run-name: ${{ format('Nightly · {0}', inputs.trigger || github.event_name) }}
 
 on:
   schedule:
-    # 04:17 UTC. Off the top of the hour on purpose: GitHub queues :00
-    # schedules behind the global rush — the old '0 6' started 11:20–11:50 UTC
-    # every night (Sep 2026), publishing at 8–9:30am ET. The run is ~60–90 min
-    # (crawl ~40–80, assemble ~45–90), so a 04:17 start publishes ~1–2am ET in
-    # summer (EDT) and ~12–1am in winter (EST). If GitHub's schedule lag keeps
-    # eating hours, the fix is an external trigger (a Cloudflare cron calling
-    # workflow_dispatch), not an earlier cron.
-    - cron: '17 4 * * *'
+    # FALLBACK clock (Oct 3 2026). The on-time trigger is the Cloudflare
+    # cron-trigger Worker at 04:17 UTC (workers/cron-trigger). GitHub's own
+    # schedule runs late (the old '0 6' started 11:20–11:50 UTC through Sep
+    # 2026), so this fires 20 min after the Worker's minute and the plan job's
+    # run-guard skips the whole run when a cron-worker run started in the last
+    # 20h. Until the Worker is deployed this cron IS the nightly.
+    - cron: '37 4 * * *'
   workflow_dispatch:
     inputs:
+      trigger:
+        description: "Who started the run. 'cron-worker' = the scheduled Worker (counts as a scheduled night: a miss opens the publish-missed issue). Leave 'manual' by hand."
+        type: string
+        default: manual
       skip_crawl:
         description: 'Skip the crawl stage and rebuild from the last-good segments (recovery / assemble-only)'
         type: boolean
@@ -98,12 +122,29 @@ jobs:
   # and backtest markets every job below reads.
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read     # run-guard reads this workflow's recent runs
     outputs:
+      go: ${{ steps.guard.outputs.go }}
       full: ${{ steps.plan.outputs.full }}
       houses: ${{ steps.plan.outputs.houses }}
       markets: ${{ steps.plan.outputs.markets }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+      # DOUBLE-RUN GUARD: the GitHub cron is the fallback for the Worker's
+      # on-time dispatch — skip the whole night when a cron-worker run of this
+      # workflow already started in the last 20h. Manual runs never skip.
+      - name: Double-run guard
+        id: guard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRIGGER: ${{ inputs.trigger }}
+        run: node scripts/ci/run-guard.mjs --workflow nightly.yml --hours 20 --event "$GITHUB_EVENT_NAME" --trigger "$TRIGGER"
       - id: plan
         env:
           BACKTEST_MODE: ${{ github.event.inputs.backtest_mode }}
@@ -126,7 +167,13 @@ jobs:
 
   crawl:
     needs: plan
-    if: ${{ github.event.inputs.skip_crawl != 'true' }}   # assemble-only recovery reuses last-good segments
+    # assemble-only recovery (skip_crawl) reuses last-good segments
+    if: ${{ needs.plan.outputs.go == 'true' && github.event.inputs.skip_crawl != 'true' }}
+    # HOUSE HEALTH ≠ PUBLISH (Oct 3 2026): a failed leg (crawler crash, the
+    # per-house shrink gate refusing its segment) must not redden the RUN —
+    # that colour now means "did not publish". The house rides its R2
+    # last-good, the ledger + its rolling issue + status.json carry the failure.
+    continue-on-error: true
     strategy:
       fail-fast: false          # one house failing must NOT cancel the others
       matrix:
@@ -164,7 +211,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Pull this house's segment (last-good)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-segment "$RAY_HOUSE"
       # Headless legs only: Chrome for the resolver. Aug 18+19 2026 this step
@@ -236,9 +283,12 @@ jobs:
           msg="resolve-${RAY_HOUSE}.ts failed — tonight's crawl still ships; gated results stay pending until the next run"
           echo "::warning title=resolver ${RAY_HOUSE} failed::${msg}"
           echo "- ⚠️ ${msg}" >> "$GITHUB_STEP_SUMMARY"
-      - name: Push this house's segment
+      # push-segment = CAS guard + the PER-HOUSE SHRINK/PRICE GATE (exit 3 →
+      # this house keeps its last-good, writes data/qa/leg-health-gate.json)
+      # + a write-once segment-versions/<house>/<UTC> rollback copy.
+      - name: Push this house's segment (per-house gated)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-segment "$RAY_HOUSE"
       # Same-run handoff to assemble: a write-once, run-scoped key in the
@@ -246,7 +296,7 @@ jobs:
       # latest/segments/ key the push above just wrote).
       - name: Hand the segment to assemble (private R2, run-scoped)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh handoff-put "segment-${RAY_HOUSE}" "data/corpus/segments/${RAY_HOUSE}.ndjson.gz"
       # {house, ok, fetched, parsed, settled, reason} from the crawler — tiny,
@@ -265,8 +315,8 @@ jobs:
   assemble:
     needs: [plan, crawl]
     # build from fresh-or-last-good segments even if some crawls failed (or
-    # were skipped) — but not on a cancelled run
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    # were skipped) — but not on a cancelled run, nor one the guard skipped
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.go == 'true' }}
     runs-on: ubuntu-latest
     # 60→120 (Aug 4) → 180 (Sep 9): measured 76–89m on a growing corpus. A kill
     # here costs a whole night and publishes nothing (the R2 push is last).
@@ -275,10 +325,14 @@ jobs:
       # LLM field extraction is advisory and OFF until the ANTHROPIC_API_KEY
       # secret exists; this is only '1' or empty, never the key itself
       RAY_EXTRACT_APPLY: ${{ secrets.ANTHROPIC_API_KEY != '' && '1' || '' }}
+      HOUSES_CSV: ${{ join(fromJSON(needs.plan.outputs.houses), ',') }}
     outputs:
       # the write-once versions/<UTC>-<sha> prefix this run published —
       # deploy / sync / backtest read exactly this (data-store.sh pull-version)
       version: ${{ steps.push.outputs.version }}
+      # house health for the verdict job's name + issues
+      houses_down: ${{ steps.ledger.outputs.houses_down }}
+      houses_down_list: ${{ steps.ledger.outputs.houses_down_list }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -295,17 +349,38 @@ jobs:
         run: npm test
       - name: Segments — this run's crawl handoff, else R2 last-good
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           HOUSES: ${{ join(fromJSON(needs.plan.outputs.houses), ' ') }}
         run: |
           read -r -a houses <<< "$HOUSES"
           bash scripts/data-store.sh assemble-segments "${houses[@]}" rrauction-archive other
-      - name: Pull previous totals + backtest (gate baseline + carry the record + incremental state)
+      - name: Pull previous totals + backtest + house ledger (gate baselines + carried state)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bash scripts/data-store.sh pull-meta && bash scripts/data-store.sh pull-backtest
+        run: |
+          bash scripts/data-store.sh pull-meta
+          bash scripts/data-store.sh pull-backtest
+          # advisory: an unreadable ledger only costs tonight's stale clock
+          bash scripts/data-store.sh pull-ledger || { rm -f data/qa/house-ledger.prev.json; echo "::warning title=house ledger unreadable::starting a fresh ledger tonight (stale-house clock resets)"; }
+      # ── HOUSE LEDGER (Oct 3 2026): tonight's leg-health records + where each
+      # segment came from (.<house>.source) folded into the per-house ledger.
+      # assemble.ts reads it for the STALE-HOUSE rule (>48h without a good
+      # crawl → live lots hidden); emit-status renders it into status.json.
+      - name: Download crawl leg health
+        if: needs.crawl.result != 'skipped'
+        uses: actions/download-artifact@v8
+        continue-on-error: true   # no leg wrote one → every house reads "no record"
+        with:
+          pattern: health-*
+          path: health
+      - name: House ledger (crawl health → per-house state)
+        id: ledger
+        continue-on-error: true   # advisory: no ledger → no stale hide tonight, never a missed publish
+        env:
+          CRAWLED: ${{ needs.crawl.result != 'skipped' }}
+        run: npx tsx scripts/emit-status.ts ledger --legs health --houses "$HOUSES_CSV" --crawled "$CRAWLED"
       - name: LLM extraction (advisory)
         if: ${{ env.RAY_EXTRACT_APPLY == '1' }}
         continue-on-error: true
@@ -328,8 +403,15 @@ jobs:
       - name: Emit page data
         continue-on-error: true
         run: NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-page-stats.ts
+      # sharded search index (makers, refs, live + sold lot titles); search
+      # still covers makers/refs/live lots if this step fails
+      - name: Emit search index
+        continue-on-error: true
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/emit-search-index.ts
       # ENGINE GATE (Sep 2 2026): temporal holdout through the production
       # replay path. Runs BEFORE the R2 push so a failed gate keeps last-good live.
+      # Threshold changes follow the replay policy (scripts/ci/gate-replay.ts,
+      # docs/RUNBOOK.md "Engine-gate policy").
       - name: Validate engine (temporal holdout gate)
         run: |
           mkdir -p data/qa
@@ -342,30 +424,65 @@ jobs:
           path: data/qa/validate-engine.json
           retention-days: 14
           if-no-files-found: ignore
+      # every night's report also lands in R2 (qa/validate-engine/<UTC>-<run>.json,
+      # kept) — the 30-night evidence gate-replay.ts reads; artifacts expire in 14d
+      - name: Archive the gate report → R2
+        if: ${{ always() && hashFiles('data/qa/validate-engine.json') != '' }}
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh put-gate-report data/qa/validate-engine.json
       # Emit the value book for Starling (the buy-side sibling) → PRIVATE R2.
       # Best-effort: a failure here must never break lectr's own nightly.
       - name: Emit value book → private R2 (Starling)
         continue-on-error: true
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx tsx scripts/emit-value-book.ts
+      # status.json — the /status page's contract (scripts/lib/house-status.ts):
+      # publish block + per-house asOf / lastSaleDate / live / ok / staleHidden.
+      # Rides inside the served payload pushed next. Advisory: never blocks.
+      - name: Emit status.json
+        continue-on-error: true
+        run: npx tsx scripts/emit-status.ts status --houses "$HOUSES_CSV"
       - name: Push corpus + served to R2
         id: push
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push
-      # versions/ retention: keep the newest 14 (two-week rollback ladder).
-      # Non-fatal — a failed prune only defers cleanup — but never silent.
-      - name: Prune old R2 versions (keep 14)
+      # The ledger is CRAWL truth, independent of publish: persist it even on a
+      # night assemble failed, so tomorrow's stale clock is right.
+      - name: Persist the house ledger → R2
+        if: ${{ always() && hashFiles('data/qa/house-ledger.json') != '' }}
+        continue-on-error: true
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh push-ledger
+      - name: Hand the ledger to the verdict job
+        if: ${{ always() && hashFiles('data/qa/house-ledger.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: house-ledger
+          path: data/qa/house-ledger.json
+          retention-days: 14
+      # versions/ retention: keep the newest 14 (two-week rollback ladder);
+      # segment-versions/: 30 days (newest 3 per house always kept).
+      # Non-fatal — a failed prune only defers cleanup — but never silent.
+      - name: Prune old R2 versions (corpus keep 14 · segments 30d)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if bash scripts/data-store.sh prune 14; then exit 0; fi
-          echo "::warning title=R2 prune failed::versions/ prune failed — retries tomorrow; storage grows ~176MB/night until it succeeds"
-          echo "- ⚠️ R2 versions/ prune failed (retries tomorrow)" >> "$GITHUB_STEP_SUMMARY"
+          ok=1
+          bash scripts/data-store.sh prune 14 || ok=0
+          bash scripts/data-store.sh prune-segment-versions 30 3 || ok=0
+          if [ "$ok" = 1 ]; then exit 0; fi
+          echo "::warning title=R2 prune failed::versions/ or segment-versions/ prune failed — retries tomorrow"
+          echo "- ⚠️ R2 prune failed (retries tomorrow)" >> "$GITHUB_STEP_SUMMARY"
 
   # The point-in-time backtest: weekdays run the incremental append
   # (build-backtest-incremental.ts); Sunday runs the FULL replay as per-market
@@ -400,7 +517,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Pull tonight's published version (corpus + served)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VERSION: ${{ needs.assemble.outputs.version }}
         run: bash scripts/data-store.sh pull-version "$VERSION"
@@ -410,7 +527,7 @@ jobs:
         run: bash scripts/ci/backtest-leg.sh "$MARKET" data/backtest-legs
       - name: Hand the leg state to the merge (private R2, run-scoped)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MARKET: ${{ matrix.market }}
         run: bash scripts/data-store.sh handoff-put "backtest-leg-${MARKET}" data/backtest-legs
@@ -439,14 +556,14 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Pull tonight's published version (corpus + served)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VERSION: ${{ needs.assemble.outputs.version }}
         run: bash scripts/data-store.sh pull-version "$VERSION"
       - name: Fetch leg states (Sunday)
         if: needs.plan.outputs.full == 'true'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MARKETS: ${{ join(fromJSON(needs.plan.outputs.markets), ' ') }}
         run: |
@@ -485,7 +602,7 @@ jobs:
           '
       - name: Push refreshed backtest.json (+ accumulator state)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-backtest
       # FRESHNESS (Sunday full replay only): after a full rebuild nearly every
@@ -514,6 +631,9 @@ jobs:
     concurrency:
       group: deploy-collectr
       cancel-in-progress: false
+    # deploy secrets (CF_PAGES_TOKEN) live in the 'production' environment —
+    # only jobs that name it can read them (docs/RUNBOOK.md "Tokens")
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -531,7 +651,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Pull tonight's published served payload
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VERSION: ${{ needs.assemble.outputs.version }}
         run: bash scripts/data-store.sh pull-version "$VERSION" served-only
@@ -544,7 +664,7 @@ jobs:
       - name: Render tonight's social cards
         continue-on-error: true
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx tsx scripts/social/render.tsx
       - name: Hand the cards to the social job
@@ -559,6 +679,9 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # both public and optional: absent → no beacon / no push opt-in
+          NEXT_PUBLIC_CF_BEACON_TOKEN: ${{ vars.NEXT_PUBLIC_CF_BEACON_TOKEN }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
         run: npm run build
       - name: Verify build self-consistency
         run: |
@@ -573,7 +696,7 @@ jobs:
           [ "$missing" -eq 0 ] || { echo "::error::$missing missing chunk ref(s)"; exit 1; }
       - name: Deploy to Cloudflare Pages
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           # RED, never a green "skipped": assemble already pushed tonight's
@@ -599,7 +722,7 @@ jobs:
       # refuses the stripped served files.
       - name: Pull tonight's published version (corpus + served)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VERSION: ${{ needs.assemble.outputs.version }}
         run: bash scripts/data-store.sh pull-version "$VERSION"
@@ -621,6 +744,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: npx tsx scripts/match-signal-alerts.ts
+      - name: Push watched-lot results + closing ≤24h
+        # inert without VAPID keys; failures are ::warning:: and exit 0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+        run: npx tsx scripts/push-send.ts --kinds hammer,close24
 
   # ── the social desk ───────────────────────────────────────────────────────
   # Posts tonight's card to X and Instagram AFTER the deploy is live.
@@ -650,7 +781,7 @@ jobs:
           path: public/social
       - name: Post
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
@@ -663,7 +794,7 @@ jobs:
           npx tsx scripts/social/post.ts
 
   # ── crawl leg health (NON-BLOCKING) ───────────────────────────────────────
-  # Aggregates every leg's leg-health.json into the run summary and goes RED
+  # Aggregates every leg's leg-health.json into the run summary and WARNS
   # when any leg reported ok=false (e.g. "200 grid, 0 parsed" — the silent
   # REA/H&S zero-ingest of Sep 2026). Nothing depends on this job.
   health:
@@ -685,10 +816,77 @@ jobs:
         with:
           pattern: health-*
           path: health
-      - name: Summarize (red on any ok=false)
+      # Oct 3 2026: NON-BLOCKING — a sick house is a ⚠ annotation + its own
+      # rolling issue (verdict job), never the run's red (that means "missed").
+      - name: Summarize (warn on any ok=false)
         env:
           HOUSES: ${{ join(fromJSON(needs.plan.outputs.houses), ',') }}
         run: node scripts/ci/leg-health-summary.mjs health "$HOUSES"
+
+  # ── THE NIGHT'S VERDICT (Oct 3 2026) ──────────────────────────────────────
+  # ONE place that says what kind of night it was — in its own job NAME on the
+  # run page — and keeps the two issue kinds in step:
+  #   published + every house ok   → "published"            (publish issue closed)
+  #   published + houses down      → "published, DEGRADED"  (⚠, per-house issues)
+  #   assemble/deploy did not run  → "PUBLISH MISSED"        (red; on a scheduled
+  #                                   night opens/updates "lectr: publish missed")
+  # issues: write is granted to THIS job only.
+  verdict:
+    name: ${{ (needs.assemble.result == 'success' && needs.deploy.result == 'success') && ((needs.assemble.outputs.houses_down == '0' || needs.assemble.outputs.houses_down == '') && 'night - published' || format('night - published, DEGRADED ({0} house(s) down)', needs.assemble.outputs.houses_down)) || 'night - PUBLISH MISSED' }}
+    needs: [plan, crawl, assemble, deploy]
+    if: ${{ always() && needs.plan.outputs.go == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Fetch the house ledger
+        uses: actions/download-artifact@v8
+        continue-on-error: true   # assemble died before writing it → house issues untouched
+        with:
+          name: house-ledger
+          path: data/qa
+      - name: Publish-missed issue (open on a missed SCHEDULED night · close on publish)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLISHED: ${{ needs.assemble.result == 'success' && needs.deploy.result == 'success' }}
+          SCHEDULED: ${{ github.event_name == 'schedule' || inputs.trigger == 'cron-worker' }}
+        run: node scripts/ci/ops-issues.mjs publish --published "$PUBLISHED" --scheduled "$SCHEDULED"
+      - name: Per-house rolling issues
+        if: needs.crawl.result != 'skipped'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HOUSES: ${{ join(fromJSON(needs.plan.outputs.houses), ',') }}
+        run: node scripts/ci/ops-issues.mjs houses --ledger data/qa/house-ledger.json --houses "$HOUSES"
+      - name: Verdict
+        env:
+          ASSEMBLE: ${{ needs.assemble.result }}
+          DEPLOY: ${{ needs.deploy.result }}
+          DOWN: ${{ needs.assemble.outputs.houses_down_list }}
+        run: |
+          if [ "$ASSEMBLE" = success ] && [ "$DEPLOY" = success ]; then
+            if [ -z "$DOWN" ]; then
+              msg="PUBLISHED — every house crawled fresh"
+              echo "$msg"
+            else
+              msg="PUBLISHED, DEGRADED — house(s) down or stale: ${DOWN//,/, } (serving their last-good segments; see the per-house issues)"
+              echo "::warning title=published, degraded::$msg"
+            fi
+            echo "### ✅ $msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          msg="PUBLISH MISSED — assemble: $ASSEMBLE, deploy: $DEPLOY. Production still serves the last good publish. Recovery: docs/RUNBOOK.md → Publish missed"
+          echo "::error title=publish missed::$msg"
+          echo "### ❌ $msg" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
   # ── HANDOFF CLEANUP (always, last) ────────────────────────────────────────
   # Deletes this run's ci-handoff/<run_id>/ prefix once every consumer is
@@ -709,11 +907,11 @@ jobs:
       - name: Delete this run's handoff (when nothing failed)
         if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh handoff-clean
       - name: Prune handoffs older than 2 days (any run)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh handoff-prune 2

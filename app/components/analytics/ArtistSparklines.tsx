@@ -487,7 +487,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
             margin: 0,
             fontFamily: 'var(--font-sans), sans-serif',
             fontSize: 30,
-            fontWeight: 340,
+            fontWeight: 300,
             letterSpacing: '-0.02em',
             lineHeight: 1.12,
           }}>

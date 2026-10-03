@@ -22,7 +22,7 @@ import FigCap from '../FigCap';
 const CSS = `
 .ray-il-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .ray-il-tf{display:inline-flex;gap:5px}
-.ray-il-tfbtn{font-family:var(--font-sans),sans-serif;font-size:11px;font-weight:600;padding:4px 12px;border-radius:100px;border:1px solid var(--color-border);background:transparent;color:var(--color-text-muted);cursor:pointer;transition:border-color var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
+.ray-il-tfbtn{font-family:var(--font-sans),sans-serif;font-size:11px;font-weight: 500;padding:4px 12px;border-radius:100px;border:1px solid var(--color-border);background:transparent;color:var(--color-text-muted);cursor:pointer;transition:border-color var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
 .ray-il-tfbtn:hover{border-color:var(--color-border-mid);color:var(--color-fg)}
 @media (max-width:768px){.ray-il-tfbtn{position:relative}.ray-il-tfbtn::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100%;height:100%;min-width:44px;min-height:44px}}
 .ray-il-tfbtn[data-on=true]{background:var(--color-fg);border-color:var(--color-fg);color:var(--color-bg)}
@@ -142,7 +142,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
       <div className="ray-vm-head ray-il-head" style={{ alignItems: 'flex-end' }}>
         <span style={{ minWidth: 0 }}>
           <span className="ns-kicker" style={{ marginBottom: 4 }}>The research desk&rsquo;s primary instrument</span>
-          <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+          <span style={{ display: 'block', fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
             <span className="ray-sect-mark" aria-hidden><IndexLabMark size={18} /></span>The index laboratory
           </span>
         </span>

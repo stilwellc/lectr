@@ -22,6 +22,7 @@ import { CopyLinkButton } from './LotPage';
 import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
+import { lotVerdict, fmtUsd } from '../lib/verdict';
 import '../northstar-pages.css';
 
 // ── LotValueBlock — the engine's under/over-valued read + the exact-item moment.
@@ -42,7 +43,6 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
   const evSane = !v || v.compRatio == null || (v.compRatio <= 5 && v.compRatio >= 1 / 5);
   const dir = v && evSane ? v.signal : null;
   const under = dir && dir.label === 'below comparable market';
-  const over = dir && dir.label === 'above comparable market';
   const exactLot = v?.exact ? allLots.find(l => l.id === v.exact!.id) : null;
   // A2-5: a Today's-Call lot can carry the crawl-stamped `signal` without the
   // build's `value` stamp — the SAME engine statistic, measured pre-outcome.
@@ -64,25 +64,40 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
           <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>· {formatDate(v.exact.saleDate, { month: 'short', year: 'numeric' })}</span>
         </div>
       )}
-      {v && dir && (
-        <div style={{ fontSize: 13.5 }}>
-          {/* the lamp: green only for a real below-market call; 'above' is
-              a buyer's caution, not a down market — ink, never red */}
-          <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: 500 }}>
-            {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
-          </span>
-          <span style={{ color: 'var(--color-text-muted)' }}> · comparable sales carry a {dir.beatRatePct}% rate of beating estimates like this · {v.n} sales</span>
-        </div>
-      )}
+      {v && dir && (() => {
+        // THE WHY, compact (LotVerdict — the lot page's frame): the engine's
+        // expected hammer against the house estimate, never a "below
+        // market" multiple. Green only on a flagged lot (the hammer runs
+        // over the estimate); ink otherwise — never red.
+        const vd = lotVerdict(lot);
+        if (!vd) return null;
+        const p = vd.vsEstPct;
+        return (
+          <div style={{ fontSize: 13.5 }}>
+            <span style={{ color: under ? 'var(--color-up)' : 'var(--color-fg)', fontWeight: 500 }}>
+              Expected hammer {fmtUsd(vd.expected)}
+              {vd.estMid != null && p != null ? ` · ${p === 0 ? 'level with' : `${p > 0 ? '+' : '−'}${Math.abs(p)}% ${p > 0 ? 'over' : 'under'}`} the estimate` : ''}
+            </span>
+            <span style={{ color: 'var(--color-text-muted)' }}>
+              {' '}· likely {fmtUsd(vd.bandLo)}–{fmtUsd(vd.bandHi)} · {vd.confidence} confidence
+              {vd.maxBid != null ? ` · max bid ≤ ${fmtUsd(vd.maxBid)} hammer` : ''}
+              {under && dir.beatRatePct != null ? ` · ${dir.beatRatePct}% of lots called like this beat their estimate` : ''}
+              {' '}· {v.n} sales
+            </span>
+          </div>
+        );
+      })()}
       {/* no value stamp, but the crawl-stamped card signal exists — the same
           comps-median-vs-ask read the card and the /value ledger print */}
       {!dir && sig && (
         <div style={{ fontSize: 13.5 }}>
-          <span style={{ color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-fg)', fontWeight: 500 }}>
-            Trading {sig.label === 'Below Market' ? 'below' : 'above'} comparable market
+          {/* no engine value → no hammer forecast: the comps against the
+              estimate as two plain numbers, ink, no multiple */}
+          <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>
+            Comps realized {(sig as { med?: number }).med != null ? fmtUsd((sig as { med?: number }).med!) : 'a median'} all-in
           </span>
           <span style={{ color: 'var(--color-text-muted)' }}>
-            {' '}· comps median vs ask {signalMagnitude(sig.label, sig.pct)}{sig.basis ? ` · ${sig.basis} sales` : ''}
+            {' '}vs {(formatEstimate(lot) || 'the').replace(/ est\.$/, '')} estimate{sig.basis ? ` · ${sig.basis} sales` : ''} · no hammer forecast on this lot
           </span>
         </div>
       )}
@@ -864,7 +879,8 @@ export default function ComparableModal({
           <button
             className="ray-save-btn"
             onClick={() => onToggleSave(lot.id, lot)}
-            aria-label={saved ? 'Remove from saved' : 'Save lot'}
+            aria-label={saved ? `Remove ${craftTitle(lot.title)} from saved` : `Save ${craftTitle(lot.title)}`}
+            aria-pressed={saved}
             style={{
               position: 'sticky',
               top: 12,
@@ -1096,20 +1112,24 @@ export default function ComparableModal({
                 a deal); Above Market is a buyer's caution — ink, not red.
                 No call → no cell: the engine looked and called it fair, or
                 had no pool. */}
-            {!band && called && (
-              <>
-                <div style={{ width: 1, background: 'var(--color-border)', margin: '0 4px' }} />
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div className={`nsp-modal-stat mono${called.signal.label === 'Below Market' ? ' up' : ''}`}>
-                    {/* signalMagnitude caps broken percents — never "+5976%" */}
-                    {signalMagnitude(called.signal.label, called.signal.pct)}
+            {/* THE FORECAST (Oct 3 2026): the engine's expected hammer, the
+                lot page's headline — no "comps vs ask" multiple. Green only
+                on a flagged lot; no engine value → no cell. */}
+            {!band && called && (() => {
+              const vd = lotVerdict(lot);
+              if (!vd) return null;
+              return (
+                <>
+                  <div style={{ width: 1, background: 'var(--color-border)', margin: '0 4px' }} />
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div className={`nsp-modal-stat mono${vd.flagged ? ' up' : ''}`}>{fmtUsd(vd.expected)}</div>
+                    <div className="nsp-modal-stat-k">
+                      expected hammer{vd.estMid != null && vd.vsEstPct != null ? ` · ${vd.vsEstPct > 0 ? '+' : vd.vsEstPct < 0 ? '−' : ''}${Math.abs(vd.vsEstPct)}% vs est.` : ''}
+                    </div>
                   </div>
-                  <div className="nsp-modal-stat-k">
-                    comps vs. ask · {called.signal.label.toLowerCase()}
-                  </div>
-                </div>
-              </>
-            )}
+                </>
+              );
+            })()}
           </div>
         )}
 

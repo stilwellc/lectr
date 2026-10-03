@@ -32,7 +32,7 @@ export default function VerifiedMovers({
     <div className="ray-vm-head" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
       <span style={{ minWidth: 0 }}>
         <span className="ns-kicker" style={{ marginBottom: 4 }}>The reads the engine stands behind</span>
-        <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>Verified movers</span>
+        <span style={{ display: 'block', fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>Verified movers</span>
       </span>
       <span className="ray-vm-method">price movement · 95% confidence</span>
     </div>
@@ -86,7 +86,7 @@ function VerifiedStyles() {
       .ray-vm-panel { background: var(--panel); padding: 18px 20px; }
       .ray-vm-card { padding: var(--card-pad); }
       .ray-vm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-      .ray-vm-title { font-size: 13.5px; font-weight: 550; color: var(--color-fg); }
+      .ray-vm-title { font-size: 13.5px; font-weight: 500; color: var(--color-fg); }
       .ray-vm-method { font-size: 10.5px; color: var(--color-text-muted); text-align: right; }
       .ray-vm-rows { display: flex; flex-direction: column; }
       .ray-vm-row {
@@ -106,11 +106,11 @@ function VerifiedStyles() {
       .ray-vm-dot[data-dir="up"] { background: var(--color-up); }
       .ray-vm-dot[data-dir="down"] { background: var(--color-down); }
       .ray-vm-row:first-child { border-top: none; }
-      .ray-vm-name { font-size: 13.5px; font-weight: 600; color: var(--color-fg); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .ray-vm-chg { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .ray-vm-name { font-size: 13.5px; font-weight: 500; color: var(--color-fg); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ray-vm-chg { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .ray-vm-chg[data-dir="up"] { color: var(--color-up); }
       .ray-vm-chg[data-dir="down"] { color: var(--color-down-text, var(--color-down)); }
-      .ray-vm-chg em { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); margin-left: 2px; }
+      .ray-vm-chg em { font-style: normal; font-size: 11.5px; font-weight: 500; color: var(--color-text-muted); margin-left: 2px; }
       .ray-vm-ci { font-family: var(--font-mono), monospace; font-size: 11.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; min-width: 72px; }
       .ray-vm-empty { font-size: 13.5px; color: var(--color-text-secondary); line-height: 1.5; margin: 4px 0 0; }
     `}} />

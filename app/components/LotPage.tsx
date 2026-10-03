@@ -1,5 +1,6 @@
 'use client';
 
+import TrackOnMount from './retention/TrackOnMount';
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
@@ -13,15 +14,19 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
 import { valueFloor } from '../lib/lanes';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
-import { daysWord, Colophon } from './Terminal';
+import { Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
 import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
+import { VerdictPanel, CompStrip } from './LotVerdict';
+import { lotVerdict, estAllIn, VERDICT_CSS, fmtUsd } from '../lib/verdict';
+import HouseAsOf from './HouseAsOf';
+import { closeWord, isOpen, useNow } from '../lib/closing';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
@@ -55,7 +60,7 @@ function gatedFloor(lot: AuctionLot): number | null {
    pages carry it in their first HTML. */
 const COPY_BTN_STYLE_ID = 'lectr-lot-copy-style';
 const COPY_BTN_CSS = `
-.lectr-lot-copy{display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid var(--color-butter-deep);color:var(--color-butter-text);border-radius:12px;padding:10px 18px;font-family:var(--font-sans);font-size:13.5px;font-weight:600;letter-spacing:-0.01em;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
+.lectr-lot-copy{display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid var(--color-butter-deep);color:var(--color-butter-text);border-radius:12px;padding:10px 18px;font-family:var(--font-sans);font-size:13.5px;font-weight: 500;letter-spacing:-0.01em;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
 .lectr-lot-copy:hover{background:var(--color-butter-subtle)}
 .lectr-lot-copy[data-copied=true]{background:var(--color-butter-subtle);color:var(--color-butter)}
 `;
@@ -64,7 +69,7 @@ const COPY_BTN_CSS = `
    <style> children with quotes break hydration on prerendered pages
    (see RecordBand/ComparableModal); __html serializes raw, deterministic. */
 // exported for RefPage, which reuses the comp-row ledger grammar
-export const LOTPAGE_CSS = COPY_BTN_CSS + `
+export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
 .lectr-lot{padding-block:26px 64px}
 .lectr-lot-grid{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr);column-gap:44px;row-gap:26px;align-items:start}
 /* ≥900px the two columns are independent flows: the certificate column
@@ -84,44 +89,44 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 /* the plate head — north star: quiet gray sentence case over a single
    hairline with crop-mark dots at the rule ends (registration grammar);
    the old tracked-uppercase form is retired on this surface */
-.lectr-lot-head{position:relative;padding-top:14px;border-top:1px solid var(--hairline);font-size:13.5px;font-weight:400;letter-spacing:0.01em;color:var(--color-text-muted);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:14px}
+.lectr-lot-head{position:relative;padding-top:14px;border-top:1px solid var(--hairline);font-size:13.5px;font-weight: 400;letter-spacing:0.01em;color:var(--color-text-muted);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:14px}
 .lectr-lot-head::before,.lectr-lot-head::after{content:"";position:absolute;top:-2px;width:3px;height:3px;border-radius:50%;background:var(--color-border-mid)}
 .lectr-lot-head::before{left:-1.5px}
 .lectr-lot-head::after{right:-1.5px}
-.lectr-lot-head .no{color:var(--color-text-faint);font-weight:400;font-variant-numeric:tabular-nums}
+.lectr-lot-head .no{color:var(--color-text-faint);font-weight: 400;font-variant-numeric:tabular-nums}
 /* the lot's name goes light-display — authority through lightness */
-.lectr-lot-title{font-size:clamp(28px,4vw,42px);font-weight:330;letter-spacing:-0.02em;line-height:1.08;color:var(--color-fg);margin:0 0 6px}
+.lectr-lot-title{font-size:clamp(28px,4vw,42px);font-weight: 300;letter-spacing:-0.02em;line-height:1.08;color:var(--color-fg);margin:0 0 6px}
 .lectr-lot-medium{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:2px 0 0}
 .lectr-lot-leaders{margin-top:16px;border-top:1px solid var(--hairline);padding-top:4px}
 .lectr-lot-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
 .lectr-lot-k{color:var(--color-text-muted)}
 .lectr-lot-fill{flex:1;border-bottom:1px dotted var(--color-border-mid);transform:translateY(-3px)}
-.lectr-lot-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-lot-v{font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-lot-v.up{color:var(--color-up)}
 .lectr-lot-v.down{color:var(--color-down)}
-.lectr-lot-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
+.lectr-lot-sub{font-size:11px;font-weight: 500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
 .lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
 .lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,var(--color-border-mid) 4px,var(--color-border-mid) 5px)}
-.lectr-lot-monoglyph{font-size:64px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
+.lectr-lot-monoglyph{font-size:64px;font-weight: 500;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
 .lectr-lot .ray-plate-mat{padding:18px;margin-bottom:0}
 .lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
 .lectr-lot .ray-plate-img img{object-fit:contain}
 .lectr-lot .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11px;color:var(--color-text-muted);text-align:left}
 .lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px dotted var(--color-border-mid)}
 .lectr-lot-comps{margin-top:44px}
-.lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
+.lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight: 500;letter-spacing: 0;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
 .lectr-lot-comps-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
-.lectr-lot-comps-head .ctx{color:var(--color-text-muted);font-weight:600}
+.lectr-lot-comps-head .ctx{color:var(--color-text-muted);font-weight: 500}
 .lectr-lot-comp{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--hairline-soft);text-decoration:none;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
 .lectr-lot-comp:hover{background:var(--color-hover-item)}
 .lectr-lot-comp-i{font-size:12px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;width:18px;text-align:right;flex-shrink:0}
 .lectr-lot-comp-thumb{width:40px;height:40px;flex-shrink:0;position:relative;overflow:hidden;border-radius:8px;background:var(--color-bg-elevated);border:1px solid color-mix(in srgb, var(--color-butter) 13%, transparent);display:flex;align-items:center;justify-content:center}
-.lectr-lot-comp-thumb span{font-family:var(--font-serif), serif;font-style:normal;font-weight:500;font-size:17px;line-height:1;color:color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))}
+.lectr-lot-comp-thumb span{font-family:var(--font-serif), serif;font-style:normal;font-weight: 500;font-size:17px;line-height:1;color:color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))}
 .lectr-lot-comp-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .lectr-lot-comp-t{flex:1;min-width:0}
-.lectr-lot-comp-title{font-size:13.5px;font-weight:600;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lectr-lot-comp-title{font-size:13.5px;font-weight: 500;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lectr-lot-comp-meta{font-size:11.5px;color:var(--color-text-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lectr-lot-comp-p{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);flex-shrink:0}
+.lectr-lot-comp-p{font-size:13.5px;font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);flex-shrink:0}
 .lectr-lot-quiet{padding:34px 0;text-align:center;color:var(--color-text-faint);font-size:13px}
 .lectr-lot-skel-block{background:var(--color-bg-elevated);border-radius:4px}
 @media (prefers-reduced-motion: no-preference){
@@ -139,19 +144,19 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot .lectr-lot-leaders{border-top:none;padding-top:0;margin-top:8px}
 .lectr-lot-lk{font-size:13px;color:var(--color-text-muted);flex:none}
 .lectr-lot-lval{display:flex;align-items:baseline;justify-content:flex-end;gap:10px;min-width:0;text-align:right}
-.lectr-lot-lsub{font-size:11px;font-weight:500;color:var(--color-text-muted);white-space:nowrap}
-.lectr-lot-lv{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-lot-lsub{font-size:11px;font-weight: 500;color:var(--color-text-muted);white-space:nowrap}
+.lectr-lot-lv{font-size:13.5px;font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-lot-lv.up{color:var(--color-up)}
 .lectr-lot-lv.down{color:var(--color-down)}
 /* the read as color — compact ns-cell-color face; ground = the signal */
 .lectr-lot-read{min-height:0;padding:20px 22px;border-radius:16px;margin:18px 0 4px}
-.lectr-lot-read-stat{font-family:var(--font-mono),monospace;font-size:clamp(30px,3.2vw,40px);font-weight:500;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;margin:10px 0 8px}
+.lectr-lot-read-stat{font-family:var(--font-mono),monospace;font-size:clamp(30px,3.2vw,40px);font-weight: 500;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;margin:10px 0 8px}
 .lectr-lot-read .ns-cell-label{font-size:13px}
-.lectr-lot-read .ns-cell-body{font-size:13px;font-weight:450;line-height:1.5;max-width:40ch}
+.lectr-lot-read .ns-cell-body{font-size:13px;font-weight: 500;line-height:1.5;max-width:40ch}
 /* section heads — quiet kicker + light headline on a registration plate */
 .lectr-lot-shead{display:flex;justify-content:space-between;align-items:flex-end;gap:8px 18px;flex-wrap:wrap;padding-top:14px}
 .lectr-lot-shead .ns-kicker{margin-bottom:4px}
-.lectr-lot-h2{font-size:clamp(19px,2.2vw,23px);font-weight:350;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0}
+.lectr-lot-h2{font-size:clamp(19px,2.2vw,23px);font-weight: 400;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0}
 .lectr-lot-shctx{font-size:11.5px;color:var(--color-text-faint);padding-bottom:2px}
 .lectr-lot .lectr-lot-comp{border-bottom:1px dotted var(--color-border-mid)}
 .lectr-lot .lectr-lot-note{padding:14px 16px;margin-top:14px}
@@ -341,7 +346,7 @@ function NotOnTheBook({ id }: { id: string }) {
       <span className="ns-kicker" style={{ marginBottom: 14, fontVariantNumeric: 'tabular-nums' }}>
         {id ? `no. ${id}` : 'no lot number'}
       </span>
-      <h1 style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 340, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
+      <h1 style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 300, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
         This lot isn&rsquo;t on the book
       </h1>
       <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', maxWidth: 420, margin: '0 auto 26px', lineHeight: 1.55 }}>
@@ -375,7 +380,11 @@ export default function LotPage({ lotId, initialLot }: {
   // hydrates against a different "in Nd" string.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  // the reader's clock (null until mount) — close labels are computed at
+  // render time, never from the crawl stamp
+  const now = useNow();
   const [imgFailed, setImgFailed] = useState(false);
+  const [showAllComps, setShowAllComps] = useState(false);
 
   const live = useMemo(() => allLots.find(l => l.id === lotId) || null, [allLots, lotId]);
 
@@ -542,7 +551,11 @@ export default function LotPage({ lotId, initialLot }: {
   // ── the certificate's numbers ─────────────────────────────────────────
   const isUpcoming = lot?.status === 'upcoming';
   const todayIso = (lastCrawl || (mounted ? new Date().toISOString() : '')).slice(0, 10);
-  const isPastPending = !!lot && isUpcoming && !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso;
+  // past its close on the READER's clock (timed lots by the minute, day-only
+  // lots once their day is over) — it hammered; results are pending
+  const isPastPending = !!lot && isUpcoming && (now != null
+    ? !isOpen(lot, now)
+    : !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso);
 
   // the number every card shows: crawl-time signal first, client compute after
   const sig = useMemo(() => (lot && isUpcoming ? lotSignal(lot, allLots) : null), [lot, allLots, isUpcoming]);
@@ -609,12 +622,14 @@ export default function LotPage({ lotId, initialLot }: {
     return () => { live = false; };
   }, [needEvidence, lot]);
 
-  const compRows = useMemo(() => {
+  // every comp row the page can show, newest first — the list prints 12 and
+  // a "show all" opens the rest (never a silent subset)
+  const compRowsAll = useMemo(() => {
     const pool = band ? band.pool : called ? (called.pool.length ? called.pool : (evRows || [])) : (evRows || []);
     return [...pool]
-      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
-      .slice(0, 12);
+      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
   }, [band, called, evRows]);
+  const compRows = useMemo(() => (showAllComps ? compRowsAll : compRowsAll.slice(0, 12)), [compRowsAll, showAllComps]);
 
   // ── provenance: the same physical object across the book ──
   // repeatSaleGroupId is the engine's strict physical-match verdict (photo/
@@ -641,6 +656,12 @@ export default function LotPage({ lotId, initialLot }: {
     const word = cell.hammerMedPct >= 3 ? 'run conservative' : cell.hammerMedPct <= -3 ? 'run rich' : 'hold';
     return `estimates here ${word} · hammers ${sign}${cell.hammerMedPct}% vs mid · ${cell.n.toLocaleString()} sales`;
   }, [lot, market]);
+
+  // THE WHY — the engine's forecast frame (null = no sane engine value)
+  const verdict = useMemo(() => (lot && lot.status === 'upcoming' ? lotVerdict(lot) : null), [lot]);
+  // the engine's weighted median runs over its top comps — poolIds IS that
+  // set (lib/value.ts: poolIds = top.map(id)), so its length is the honest K
+  const engineWeightedOn = lot?.value?.poolIds?.length ?? null;
 
   // Comps median: the signal's own median first (crawl-time signals carry it),
   // else the appraisal through the same pools, else the realized band.
@@ -752,7 +773,6 @@ export default function LotPage({ lotId, initialLot }: {
   const saved = isSaved(lot.id);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
-  const beatRate = lot.value?.signal?.beatRatePct ?? null;
   const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
   // poolPartial (above): an engine pool that resolved only PART of its stamped
   // ids is the same fault as a client read — the rows under an honest
@@ -843,7 +863,7 @@ export default function LotPage({ lotId, initialLot }: {
                           {here ? ' — this listing' : ''}
                         </span>
                         <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                          <span style={{ color: houseColors[p.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{p.auctionHouse}</span>
+                          <span style={{ color: houseColors[p.auctionHouse] || 'var(--color-text-faint)', fontWeight: 500 }}>{p.auctionHouse}</span>
                           {p.saleName ? ` · ${cleanText(p.saleName)}` : ''}
                         </span>
                       </span>
@@ -927,9 +947,9 @@ export default function LotPage({ lotId, initialLot }: {
                 <div className="k">{isSold || isPastPending ? 'Hammered' : 'Hammers'}</div>
                 <div className="v">{formatDate(lot.saleDate)}</div>
                 {isPastPending
-                  ? <div className="s">results pending</div>
-                  : !isSold && mounted && !isNaN(new Date(lot.saleDate).getTime())
-                    ? <div className="s">{daysWord(lot.saleDate)}</div>
+                  ? <div className="s">closed · results pending</div>
+                  : !isSold && now != null && !isNaN(new Date(lot.saleDate).getTime())
+                    ? <div className="s">{closeWord(lot, now)}</div>
                     : null}
               </div>
               <div>
@@ -955,25 +975,32 @@ export default function LotPage({ lotId, initialLot }: {
               )}
             </div>
 
-            {/* THE READ AS COLOR — the engine's face in ns-cell-color
-                grammar. dir comes STRICTLY from the signal the row already
-                printed: 'up' only when the engine called Below Market (the
-                lamp); anything else falls to ink — never red, never
-                manufactured. Every figure is the gap row's own number. */}
-            {/* no printed estimate → no "vs. estimate" plate: the label would
-                name a number the page never shows (the byline prints a bid) */}
-            {isUpcoming && sig && !!(lot.estimateLow || lot.estimateHigh) && (
-              <div className="ns-cell ns-cell-color lectr-lot-read" data-dir={sig.label === 'Below Market' ? 'up' : 'ink'}>
-                {/* "vs. estimate", not "the gap" — THE GAP is the no-estimate
-                    lane's name (lanes.ts); this cell is the FLAGS read */}
-                <span className="ns-cell-label">vs. estimate · {sig.label.toLowerCase()}</span>
-                <span className="lectr-lot-read-stat">{signalMagnitude(sig.label, sig.pct)}</span>
-                <span className="ns-cell-body">
-                  {beatRate != null
-                    ? `${beatRate}% of flags like this beat their estimate`
-                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
-                  {' · '}{confidenceMeter(sig.confidence).word} confidence
-                </span>
+            {/* THE WHY (Oct 3 2026) — the engine's expected hammer against
+                the house estimate, its likely range, the comps median, the
+                value floor and the max bid, each on a stated basis
+                (LotVerdict). Green only when the engine flagged the lot
+                (its call: the hammer runs over the estimate); ink
+                otherwise. A lot with only a comps read (no engine value)
+                prints the comps against the estimate — two numbers, no
+                multiple, no forecast it doesn't have. */}
+            {/* the house's own freshness — silent unless it was last read
+                more than 36h ago */}
+            {isUpcoming && !isPastPending && <HouseAsOf lots={[lot]} style={{ marginTop: 12 }} />}
+            {isUpcoming && verdict && (
+              <VerdictPanel lot={lot} verdict={verdict} house={lot.auctionHouse} weightedOn={engineWeightedOn} />
+            )}
+            {isUpcoming && !verdict && sig && compsMed != null && !!(lot.estimateLow || lot.estimateHigh) && (
+              <div className="lectr-vd">
+                <div className="ns-cell ns-cell-color lectr-vd-cell" data-dir="ink">
+                  <span className="ns-cell-label">What the comps realized</span>
+                  <span className="lectr-vd-stat">
+                    {fmtUsd(compsMed)}
+                    <span className="lectr-vd-vs">vs {(formatEstimate(lot) || '').replace(/ est\.$/, '')} estimate</span>
+                  </span>
+                  <span className="ns-cell-body">
+                    All-in median of {compsN != null ? `${compsN} comparable sales` : 'the comparable sales'} · {confidenceMeter(sig.confidence).word} confidence · no hammer forecast on this lot
+                  </span>
+                </div>
               </div>
             )}
 
@@ -982,8 +1009,8 @@ export default function LotPage({ lotId, initialLot }: {
                 <LeaderRow k="Estimate" v={formatEstimate(lot)} />
               ) : null}
 
-              {compsMed != null && (
-                <LeaderRow k="Comps median" v={formatPrice(compsMed)} sub={compsN != null ? `${compsN} sales` : undefined} />
+              {compsMed != null && !(isUpcoming && verdict) && !(isUpcoming && sig && !!(lot.estimateLow || lot.estimateHigh)) && (
+                <LeaderRow k="Comps median" v={formatPrice(compsMed)} sub={compsN != null ? `${compsN} sales · all-in` : undefined} />
               )}
 
               {isUpcoming && !sig && band && (
@@ -998,15 +1025,18 @@ export default function LotPage({ lotId, initialLot }: {
                   sub={`${formatPrice(lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
                 />
               )}
-              {isUpcoming && (() => {
+              {isUpcoming && !verdict && (() => {
                 const floor = gatedFloor(lot);
                 if (!floor) return null;
                 return (
-                  <LeaderRow
-                    k="Max bid"
-                    v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
-                    sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
-                  />
+                  <>
+                    <LeaderRow
+                      k="Max bid"
+                      v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
+                      sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
+                    />
+                    <TrackOnMount event="maxbid_view" onceKey={lot.id} />
+                  </>
                 );
               })()}
               {isUpcoming && lot.bidProj?.allIn != null && (() => {
@@ -1144,6 +1174,7 @@ export default function LotPage({ lotId, initialLot }: {
                 style={{ cursor: 'pointer', background: saved ? 'var(--color-bg-elevated)' : 'var(--color-bg)' }}
                 onClick={() => toggle(lot.id, lot)}
                 aria-pressed={saved}
+                aria-label={`${saved ? 'Saved' : 'Save'}: ${titleParts.short}`}
               >
                 <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
                   <path
@@ -1178,8 +1209,37 @@ export default function LotPage({ lotId, initialLot }: {
                     : 'Comparable sales'}
               </h2>
             </div>
-            <span className="lectr-lot-shctx">medians, never means</span>
+            <span className="lectr-lot-shctx">realized prices, all-in</span>
           </div>
+          {/* the distribution behind the median — every comp price the page
+              can show, with the median, the expected all-in and the estimate
+              grossed up by the premium on one axis. When the engine's pool
+              is deeper than the rows it weighted on, say exactly that. */}
+          {!compsPending && compRowsAll.length > 0 && (() => {
+            const prices = hasPack && pack!.c?.ps?.length && !band
+              ? pack!.c.ps
+              : compRowsAll.map(c => c.priceUsd || 0).filter(p => p > 0);
+            const ea = estAllIn(lot);
+            const med = verdict?.compMedianAllIn ?? (band ? band.median : compsMed);
+            const deep = !!headCalled && engineCalled && engineWeightedOn != null && headCalled.n > engineWeightedOn;
+            return (
+              <>
+                <CompStrip
+                  prices={prices}
+                  median={med ?? null}
+                  expectedAllIn={verdict ? verdict.expectedAllIn : null}
+                  estAllInLo={band ? null : ea?.lo ?? null}
+                  estAllInHi={band ? null : ea?.hi ?? null}
+                  flagged={!!verdict?.flagged}
+                />
+                {deep && (
+                  <p className="lectr-vd-note">
+                    {headCalled!.n} sales cleared the comparability gates; the median is weighted on the {engineWeightedOn} closest by similarity and recency, so those are the rows plotted and listed here. The rest carry no weight in the number.
+                  </p>
+                )}
+              </>
+            );
+          })()}
           {/* explanation copy rides a cream well — the printed-bid gate
               language below is preserved verbatim */}
           {band && (
@@ -1226,7 +1286,7 @@ export default function LotPage({ lotId, initialLot }: {
                   <span className="lectr-lot-comp-t">
                     <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(comp.title)}</span>
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                      <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
+                      <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 500 }}>{comp.auctionHouse}</span>
                       {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
                       {comp.medium ? ` · ${deglue(cleanText(comp.medium))}` : ''}
                     </span>
@@ -1234,6 +1294,17 @@ export default function LotPage({ lotId, initialLot }: {
                   <span className="lectr-lot-comp-p">{comp.priceUsd ? formatPrice(comp.priceUsd) : '—'}</span>
                 </a>
               ))}
+              {compRowsAll.length > 12 && (
+                <button
+                  type="button"
+                  className="ray-call-btn ray-call-btn-quiet"
+                  style={{ cursor: 'pointer', marginTop: 14 }}
+                  aria-expanded={showAllComps}
+                  onClick={() => setShowAllComps(v => !v)}
+                >
+                  {showAllComps ? 'Show the newest 12' : `Show all ${compRowsAll.length} comps`}
+                </button>
+              )}
             </div>
           )}
         </section>

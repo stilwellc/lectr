@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
+import { withShare } from '../../lib/og-meta';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withShare({
   title: 'Q2 2026 art market in review — the trophies cleared, the middle got picky',
   description: 'A half-billion-dollar quarter split between two houses, led by a $48M Matisse and a $48M Picasso — with Picasso alone half the tracked value. Masterpieces cleared, a third of everything offered bought in, and KAWS kept repricing. Why the engine abstains on art appreciation. The Q2 2026 art numbers.',
-};
+});
 
 export default function Q2Art() {
   return (

@@ -5,11 +5,13 @@ import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
+import AddToCalendar from './retention/AddToCalendar';
+import { houseColors, categoryLabels, formatDate, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
+import { confidenceA11y } from '../lib/verdict';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -157,7 +159,6 @@ function LotCard({
 }) {
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
-  const [reminded, setReminded] = useState(false);
   // hotlink-blocked/dead images flip the card into the compact row layout —
   // a 140-200px well showing a monogram letter is burned space, not a photo
   const [imgFailed, setImgFailed] = useState(false);
@@ -174,31 +175,6 @@ function LotCard({
     firstSeen && lastCrawl && crawlIsFresh(lastCrawl) && firstSeen.slice(0, 10) === lastCrawl.slice(0, 10)
   );
 
-  function handleAddToCalendar(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    const ics = makeAuctionIcs(lot);
-    if (!ics) return; // malformed saleDate — no calendar file to mint, no throw
-    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    // window.open preserves the user-gesture context on iOS Safari so the
-    // system intercepts the .ics MIME type and offers to add it to Calendar.
-    const opened = window.open(url, '_blank');
-    if (!opened) {
-      // Popup blocked (desktop) — fall back to hidden anchor
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `auction-${lot.id}.ics`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    // brief confirmation so the user knows the .ics fired (esp. desktop download)
-    setReminded(true);
-    setTimeout(() => setReminded(false), 2500);
-  }
   const catLabel = categoryLabels[lot.category] || null;
   const isUpcoming = lot.status === 'upcoming';
   // A concluded lot that never sold — bought_in (failed to meet reserve) or an
@@ -403,7 +379,7 @@ function LotCard({
             padding: 0,
             zIndex: 2,
           }}
-          aria-label={saved ? 'Remove from saved' : 'Save lot'}
+          aria-label={saved ? `Remove ${craftTitle(lot.title)} from saved` : `Save ${craftTitle(lot.title)}`}
         >
           <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
             <path
@@ -505,7 +481,7 @@ function LotCard({
               padding: 0,
               zIndex: 2,
             }}
-            aria-label={saved ? 'Remove from saved' : 'Save lot'}
+            aria-label={saved ? `Remove ${craftTitle(lot.title)} from saved` : `Save ${craftTitle(lot.title)}`}
           >
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
               <path
@@ -578,8 +554,9 @@ function LotCard({
                   : <>comps median vs ask · {buySignal.basis} {(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}</>}
                 <span
                   className="ray-sigrow-dots"
-                  title={`${confidenceMeter(buySignal.confidence).word} confidence`}
-                  aria-label={`${confidenceMeter(buySignal.confidence).word} confidence`}
+                  role="img"
+                  title={confidenceA11y(buySignal.confidence)}
+                  aria-label={confidenceA11y(buySignal.confidence)}
                 >
                   {confidenceMeter(buySignal.confidence).dots}
                 </span>
@@ -609,8 +586,9 @@ function LotCard({
               </span>
               <span
                 style={{ color: 'var(--color-text-faint)', letterSpacing: '0.06em' }}
-                title={`${confidenceMeter(soldComp.confidence).word} confidence`}
-                aria-label={`${confidenceMeter(soldComp.confidence).word} confidence`}
+                role="img"
+                title={confidenceA11y(soldComp.confidence)}
+                aria-label={confidenceA11y(soldComp.confidence)}
               >
                 {confidenceMeter(soldComp.confidence).dots}
               </span>
@@ -650,25 +628,7 @@ function LotCard({
           <div className="ray-lot-footer">
             {/* no reminder for a hammer that already fell */}
             {!isPastPending && (
-            <button
-              onClick={handleAddToCalendar}
-              className="ray-lot-remind"
-              aria-label={`Add ${lot.title} auction to calendar`}
-            >
-              {reminded ? (
-                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </svg>
-              ) : (
-                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.25" fill="none"/>
-                  <line x1="4" y1="1" x2="4" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-                  <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
-                  <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" strokeWidth="1.25"/>
-                </svg>
-              )}
-              {reminded ? 'Added to calendar' : 'Remind me'}
-            </button>
+            <AddToCalendar lot={lot} />
             )}
             <span className="ray-lot-comps" aria-hidden="true" style={isPastPending ? { marginLeft: 'auto' } : undefined}>
               Comps <Flick size={10} />

@@ -12,13 +12,24 @@
 # Nothing is committed: deploy.yml bakes the newest of {this overlay,
 # production's live copy, the nightly's served copy} via
 # scripts/ci/seed-close-board.mjs, so later code-push deploys keep it too.
+#
+# CLOCK (Oct 3 2026): the Cloudflare cron-trigger Worker (workers/cron-trigger)
+# dispatches this on the minute at :43 every 4h with trigger=cron-worker. The
+# GitHub cron below is the FALLBACK, 20 min later; the guard job skips it when
+# a cron-worker run started in the last 3h (no double production deploy).
 name: Close board (intraday)
+run-name: ${{ format('Close board · {0}', inputs.trigger || github.event_name) }}
 on:
   schedule:
-    # every 4h, off the top of the hour (GitHub delays :00/:30 schedules)
-    # and clear of the 04:17 nightly
-    - cron: '43 2,6,10,14,18,22 * * *'
+    # FALLBACK: 20 min after the Worker's '43 2,6,10,14,18,22' (clear of the
+    # 04:17 nightly). Until the Worker is deployed this cron IS the board.
+    - cron: '3 3,7,11,15,19,23 * * *'
   workflow_dispatch:
+    inputs:
+      trigger:
+        description: "'cron-worker' when dispatched by the scheduled Worker; leave 'manual' by hand"
+        type: string
+        default: manual
 concurrency:
   group: close-board
   # never cancel: a newer board must not kill an in-flight production deploy
@@ -26,7 +37,28 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      go: ${{ steps.guard.outputs.go }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+      - name: Double-run guard
+        id: guard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRIGGER: ${{ inputs.trigger }}
+        run: node scripts/ci/run-guard.mjs --workflow close-board.yml --hours 3 --event "$GITHUB_EVENT_NAME" --trigger "$TRIGGER"
   board:
+    needs: guard
+    if: needs.guard.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
@@ -55,12 +87,20 @@ jobs:
           path: public/data/ray/close-board.json
           retention-days: 1
           if-no-files-found: error
+      - name: Push close alerts (watched lots closing ≤24h / ≤90m)
+        # inert without VAPID keys; failures are ::warning:: and exit 0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+        run: npx tsx scripts/push-send.ts --kinds close24,close1
   deploy:
     needs: board
     if: needs.board.outputs.built == 'true'
     uses: ./.github/workflows/deploy.yml
     with:
       close_board_artifact: close-board-overlay
-    secrets:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    # inherit: deploy.yml picks CF_R2_READ_TOKEN / CF_PAGES_TOKEN (falling
+    # back to CLOUDFLARE_API_TOKEN); its job reads the 'production' environment
+    secrets: inherit

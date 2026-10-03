@@ -1,0 +1,161 @@
+/* THE CALL HERO — the social desk's call card, on the page.
+   Inter 300/400/500 · Plex 400/500 · ink on eggshell · no colour. */
+.hero {
+  position: relative;
+  padding: clamp(24px, 3vw, 40px) 0 clamp(16px, 2vw, 24px);
+  color: var(--color-fg);
+}
+
+/* ── the statement ── */
+.head {
+  display: grid;
+  grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+  gap: 18px 64px;
+  align-items: end;
+  padding-bottom: clamp(22px, 2.6vw, 34px);
+}
+.h1 {
+  margin: 0;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(32px, 3.3vw, 46px);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  color: var(--color-fg);
+  text-wrap: balance;
+}
+.dek {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  max-width: 40ch;
+}
+
+/* ── the card: plate left, the read right, on the registration rule ── */
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  gap: clamp(28px, 4vw, 64px);
+  padding-top: clamp(22px, 2.6vw, 34px);
+  border-top: 1px solid var(--hairline, rgba(28, 25, 23, 0.1));
+}
+.card::before, .card::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  width: 5px;
+  height: 5px;
+  background: var(--color-fg);
+  opacity: 0.5;
+}
+.card::before { left: -2px; }
+.card::after { right: -2px; }
+.plateLink { display: block; color: inherit; text-decoration: none; min-width: 0; }
+.plateLink:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: 4px; }
+
+.read { display: flex; flex-direction: column; min-width: 0; padding-top: 4px; }
+.kicker { margin: 0 0 14px; font-size: 14px; font-weight: 400; color: var(--color-text-muted); }
+.object { margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.maker { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; color: var(--color-fg); }
+.title {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.claim { margin: clamp(16px, 2vw, 26px) 0 0; display: flex; flex-direction: column; }
+.house, .recordSays {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(24px, 2.3vw, 32px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.house { color: var(--color-text-muted); }
+.recordSays { color: var(--color-fg); margin-top: 2px; }
+.numeral {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(72px, 7.6vw, 116px);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--color-fg);
+  margin: 6px 0 0 -0.04em;
+}
+
+/* the dotted ledger */
+.ledger { margin-top: clamp(20px, 2.2vw, 28px); border-top: 1px dotted var(--color-border-mid, rgba(28, 25, 23, 0.22)); }
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  font-size: 13.5px;
+  border-bottom: 1px dotted var(--color-border-mid, rgba(28, 25, 23, 0.22));
+}
+.row > span { color: var(--color-text-muted); white-space: nowrap; }
+.row > i { flex: 1; }
+.row > b {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--color-fg);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dots { font-size: 10px; letter-spacing: 1px; color: var(--color-text-muted); margin-right: 4px; }
+
+.ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+
+/* the receipt stub — a torn slip under the read */
+.stub {
+  position: relative;
+  margin: 24px 0 0;
+  padding: 14px 0 0;
+  border-top: 1px dashed var(--color-border-mid, rgba(28, 25, 23, 0.22));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 16px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+.stubK { color: var(--gold-ink-text, #7A5A14); font-weight: 500; white-space: nowrap; }
+.stubV b { font-weight: 500; color: var(--color-fg); }
+.stubLink { grid-column: 2; color: var(--color-fg); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; justify-self: start; }
+
+/* no call tonight */
+.quiet { border-top: 1px solid var(--hairline, rgba(28, 25, 23, 0.1)); padding-top: 24px; max-width: 720px; }
+.quietLine { margin: 0; font-size: clamp(20px, 2vw, 26px); font-weight: 300; line-height: 1.3; letter-spacing: -0.015em; color: var(--color-fg); }
+
+@media (max-width: 900px) {
+  .head { grid-template-columns: 1fr; gap: 12px; }
+  .card { grid-template-columns: 1fr; gap: 0; }
+  /* phone order: the read's claim first, then the plate, then the ledger */
+  .read { display: contents; }
+  .kicker { order: 1; margin-bottom: 8px; }
+  .object { order: 2; }
+  .claim { order: 3; margin-top: 16px; }
+  .plateLink { order: 4; margin-top: 20px; }
+  .ledger { order: 5; }
+  .ctas { order: 6; }
+  .stub { order: 7; grid-template-columns: 1fr; }
+  .stubLink { grid-column: 1; }
+  .numeral { font-size: clamp(64px, 19vw, 88px); }
+  .house, .recordSays { font-size: 22px; }
+  .card::before, .card::after { display: none; }
+}
+@media (max-width: 900px) {
+  .h1 { font-size: clamp(28px, 7.6vw, 34px); }
+  .dek { font-size: 15px; }
+  .plateLink :global(figure) { width: 78%; max-width: 360px; }
+}

@@ -70,7 +70,7 @@ export default function Distributions({ allLots, statsByArtist, market, series }
         .ray-dist-tab {
           font-family: var(--font-sans), sans-serif;
           font-size: 12px;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           padding: 6px 16px;
           border-radius: 100px;
@@ -115,7 +115,7 @@ export default function Distributions({ allLots, statsByArtist, market, series }
           cursor: pointer;
           text-align: left;
         }
-        .ray-dist-disc-t { font-size: 15px; font-weight: 550; letter-spacing: -0.01em; }
+        .ray-dist-disc-t { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
         .ray-dist-disc-stat {
           font-family: var(--font-mono), monospace;
           font-size: 11.5px; color: var(--color-text-muted);
@@ -155,7 +155,7 @@ export default function Distributions({ allLots, statsByArtist, market, series }
             margin: 0,
             fontFamily: 'var(--font-sans), sans-serif',
             fontSize: 30,
-            fontWeight: 340,
+            fontWeight: 300,
             letterSpacing: '-0.02em',
             lineHeight: 1.12,
           }}>

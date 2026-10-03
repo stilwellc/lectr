@@ -50,3 +50,8 @@ shots/
 
 # Claude Code local state (worktrees, settings)
 .claude/
+
+# share-card build outputs (scripts/build-og.tsx) + its photo cache — regenerated every build
+/public/og/live/
+/public/og/lot/
+/.og-cache/

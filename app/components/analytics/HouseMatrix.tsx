@@ -23,19 +23,23 @@ const fmtN = (n: number) =>
 const CSS = `
 .ray-hm.ray-vm-card{padding:var(--card-pad)}
 .ray-hm .ray-vm-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.ray-hm .ray-vm-title{font-size:13.5px;font-weight:550;color:var(--color-fg)}
+.ray-hm .ray-vm-title{font-size:13.5px;font-weight: 500;color:var(--color-fg)}
 .ray-hm .ray-vm-method{font-size:10.5px;color:var(--color-text-muted);text-align:right}
 .ray-hm-scroll{overflow-x:auto;margin:0 -6px;padding:0 6px}
 .ray-hm-grid{display:grid;align-items:stretch;column-gap:12px;min-width:min-content}
 .ray-hm-corner{font-size:10.5px;color:var(--color-text-muted)}
 .ray-hm-col{font-size:10.5px;color:var(--color-text-muted);text-align:center;padding:2px 0 6px;white-space:nowrap}
-.ray-hm-house{font-size:13px;font-weight:600;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px 0;border-top:1px solid var(--color-border);display:flex;align-items:center}
+.ray-hm-house{font-size:13px;font-weight: 500;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px 0;border-top:1px solid var(--color-border);display:flex;align-items:center}
 .ray-hm-cell{text-align:center;padding:8px 0;border-top:1px solid var(--color-border);white-space:nowrap;display:flex;flex-direction:column;justify-content:center}
 .ray-hm-cell .num{font-family:var(--font-mono),monospace;font-size:12.5px;font-variant-numeric:tabular-nums}
 .ray-hm-cell[data-dir="up"] .num{color:var(--color-up)}
 .ray-hm-cell[data-dir="down"] .num{color:var(--color-down-text,var(--color-down))}
 .ray-hm-cell[data-dir="flat"] .num{color:var(--color-text-muted)}
 .ray-hm-cell .n{display:block;font-size:10px;color:var(--color-text-muted);font-variant-numeric:tabular-nums;margin-top:1px}
+/* contrast (axe, Oct 3): deepen the lamp inks + counts on tinted porcelain cells */
+html[data-lectr-light] .ray-hm-cell[data-dir="up"] .num{color:color-mix(in srgb,var(--color-up) 78%,#000)}
+html[data-lectr-light] .ray-hm-cell[data-dir="down"] .num{color:color-mix(in srgb,var(--color-down-text,var(--color-down)) 82%,#000)}
+html[data-lectr-light] .ray-hm-cell .n{color:var(--color-text-secondary)}
 .ray-hm-empty{font-size:12.5px;color:var(--color-text-muted);opacity:0.55}
 `;
 

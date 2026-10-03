@@ -17,13 +17,21 @@
 #               more; an allow-list would silently blank a house's photos on
 #               the night it lands. Images cannot run script.
 #   connect-src same-origin data shards + the Supabase project (auth + saved
-#               lots + /rest/v1/lots). No analytics hosts are called.
+#               lots + /rest/v1/lots + the anonymous track_event counter).
+#   ANALYTICS (Oct 2026): script-src https://static.cloudflareinsights.com and
+#               connect-src https://cloudflareinsights.com are the Cloudflare
+#               Web Analytics beacon (cookieless). They are INERT unless the
+#               build had NEXT_PUBLIC_CF_BEACON_TOKEN (app/components/retention/
+#               Analytics.tsx renders no script without it) — or Cloudflare's
+#               dashboard auto-injects the beacon, which needs the same pair.
+#               The service worker (/sw.js) is covered by worker-src 'self';
+#               the web-app manifest by manifest-src 'self'.
 # frame-ancestors 'none' + X-Frame-Options block clickjacking of the login
 # modal. HSTS pins https; adding `preload` (and submitting to hstspreload.org)
 # is Collin's call — it is hard to undo.
 /*
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HE/v6bj/M7TOjC32nQkQiq+zDWeWUOfe3gzeMhLIQqA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://tiwrdomqydtnmgljsqsi.supabase.co; media-src 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HE/v6bj/M7TOjC32nQkQiq+zDWeWUOfe3gzeMhLIQqA=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://tiwrdomqydtnmgljsqsi.supabase.co https://cloudflareinsights.com; media-src 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
@@ -68,4 +76,9 @@
 /data/ray/sold-archive-*
   Cache-Control: public, max-age=31536000, immutable
 /data/ray/sold-ledger-*
+  Cache-Control: public, max-age=31536000, immutable
+# The ⌘K search index + per-reference sale ledgers (scripts/emit-search-index.ts):
+# every shard is fetched with ?v=<search-meta.v>, so a new nightly is a new URL.
+# search-meta.json itself sits OUTSIDE this directory and keeps revalidating.
+/data/ray/search/*
   Cache-Control: public, max-age=31536000, immutable

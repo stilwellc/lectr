@@ -1,0 +1,65 @@
+# Deploys workers/cron-trigger — the Cloudflare Worker whose Cron Triggers
+# dispatch nightly.yml (04:17 UTC) and close-board.yml (:43 every 4h) ON TIME.
+# GitHub's own `schedule:` stays in those workflows as the fallback.
+#
+# Needs (docs/RUNBOOK.md "On-time nightly"):
+#   CF_WORKERS_TOKEN  (production env) Account → Workers Scripts → Edit.
+#                     Falls back to CF_PAGES_TOKEN, then CLOUDFLARE_API_TOKEN.
+#   LECTR_DISPATCH_PAT (production env, optional) the fine-grained GitHub PAT
+#                     (repo stilwellc/lectr, Actions: read & write). When set,
+#                     this job (re)writes it into the Worker as the secret
+#                     GITHUB_DISPATCH_TOKEN; otherwise set it once by hand:
+#                     cd workers/cron-trigger && npx wrangler secret put GITHUB_DISPATCH_TOKEN
+name: Deploy cron-trigger Worker
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/cron-trigger/**'
+      - '.github/workflows/cron-trigger-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cron-trigger-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    defaults:
+      run:
+        working-directory: workers/cron-trigger
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKERS_TOKEN || secrets.CF_PAGES_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Deploy
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "::error::no Cloudflare token with Workers Scripts:Edit (CF_WORKERS_TOKEN)"; exit 1; fi
+          npx wrangler@4.120.1 deploy
+      - name: Set the dispatch PAT as a Worker secret
+        env:
+          PAT: ${{ secrets.LECTR_DISPATCH_PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "::notice title=dispatch PAT not in GitHub::LECTR_DISPATCH_PAT is not set — the Worker uses whatever GITHUB_DISPATCH_TOKEN was set by hand (npx wrangler secret put GITHUB_DISPATCH_TOKEN). Without one, every cron dispatch fails and the GitHub cron fallback runs the night."
+            exit 0
+          fi
+          printf '%s' "$PAT" | npx wrangler@4.120.1 secret put GITHUB_DISPATCH_TOKEN
+      - name: Smoke (the Worker answers with its schedule)
+        run: |
+          url=$(npx wrangler@4.120.1 deployments list 2>/dev/null | grep -oE 'https://[a-z0-9.-]+\.workers\.dev' | head -1 || true)
+          echo "schedule: $(sed -n '/^\[triggers\]/,/^$/p' wrangler.toml | tr '\n' ' ')"
+          if [ -n "$url" ]; then curl -sf "$url" | head -c 600 || echo "::warning::worker URL did not answer"; fi

@@ -479,6 +479,11 @@ const REF_LINE_LABELS: Record<string, string> = {
   explorer: 'Explorer', gmtmaster: 'GMT-Master', milgauss: 'Milgauss', yachtmaster: 'Yacht-Master',
   seadweller: 'Sea-Dweller', airking: 'Air-King', tortue: 'Tortue', baignoire: 'Baignoire',
   ronde: 'Ronde', roadster: 'Roadster', cloche: 'Cloche', must: 'Must de Cartier',
+  // the run-together model keys refs.json carries (audit Oct 3: 'Royaloakoffshore')
+  royaloakoffshore: 'Royal Oak Offshore', julesaudemars: 'Jules Audemars', millenary: 'Millenary',
+  mustdecartier: 'Must de Cartier', ballonbleu: 'Ballon Bleu', worldtime: 'World Time',
+  daydate: 'Day-Date', oyster: 'Oyster', oysterdate: 'Oysterdate', crash: 'Crash', ellipse: 'Ellipse',
+  railmaster: 'Railmaster', twenty4: 'Twenty~4', e1200: 'Ref. E1200', radiomir: 'Radiomir', ck987: 'Ref. CK987',
 };
 export function refLabel(ref: string): string {
   if (REF_LINE_LABELS[ref]) return REF_LINE_LABELS[ref];

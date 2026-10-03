@@ -28,7 +28,7 @@ import { useSavedLots } from '../../hooks/useSavedLots';
 import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, sizedImg, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import LotCard, { lotSignal, confidenceMeter } from '../../components/LotCard';
-import { dealScore, signalMagnitude } from '../../lib/comps';
+import { dealScore } from '../../lib/comps';
 import ComparableModal from '../../components/ComparableModal';
 import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
@@ -41,12 +41,16 @@ import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedTo
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
+import CallHero, { type HeroRecord } from '../../components/CallHero';
 import { OPEN_CK_EVENT } from '../../components/CommandK';
 
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
 import SubMarketBoard from './SubMarketBoard';
 import TonightsWall, { type WallItem, gapMultiple } from './TonightsWall';
+import { closeIsTimed, closeMs, closeShort, closeWord, closesWithin, isOpen, useNow } from '../../lib/closing';
+import { confidenceA11y } from '../../lib/verdict';
+import HouseAsOf from '../../components/HouseAsOf';
 import { CellGrid, Cell, ColorCell, FigGate, FigCorpus, FigPools, FigTape } from '../../components/cells';
 import { useMediaQuery, useMounted } from './hooks';
 import styles from './style.module.css';
@@ -165,12 +169,6 @@ const CAT_LABEL: Record<string, string> = {
   design: 'Design',
   object: 'Object',
 };
-function daysToHammer(l: AuctionLot, todayDay: string): number | null {
-  const day = trueSaleDay(l);
-  if (!day) return null;
-  const d = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${todayDay}T00:00:00Z`)) / 86_400_000);
-  return Number.isFinite(d) ? d : null;
-}
 
 // The mobile feed's compact row — signal-less lots fold to one ruled line
 // (thumb · maker · title · est/bid · date) instead of a full-bleed card.
@@ -244,7 +242,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down' }) {
+function FeedRow({ lot, onOpen, tone, now }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; now: number | null }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -254,7 +252,7 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
         ? `bid ${formatPrice(lot.currentBid)}`
         : '—';
   return (
-    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title)}`}>
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`See the comps for ${craftTitle(lot.title)}`}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -278,43 +276,34 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
-        <span>{formatDate(lot.saleDate)}</span>
+        <span title={saleWhenTitle(lot)}>{now != null ? closeWord(lot, now) : formatDate(lot.saleDate)}</span>
         <BidVelChip lot={lot} />
       </span>
     </button>
   );
 }
 
-/* THE INSTRUMENT SET's chip icons — 20px cuts of the cell system's patent
-   grammar (solid ink + dotted construction lines, currentColor). Drawn here,
-   not in cells.tsx: the figures there are 132px plates; these are chips. */
-const ICO = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.3 } as const;
-const ICO_DOT = { ...ICO, strokeDasharray: '1 2.4' } as const;
-function IcoRecord() { // the settled tape — ticks print, one result steps up
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden>
-      <line x1="2.5" y1="13.5" x2="17.5" y2="13.5" {...ICO} />
-      <line x1="5.5" y1="13.5" x2="5.5" y2="11.5" {...ICO} />
-      <line x1="14.5" y1="13.5" x2="14.5" y2="11.5" {...ICO} />
-      <path d="M8.5 13.5 L8.5 8 L11.5 8 L11.5 13.5" {...ICO} />
-      <line x1="2.5" y1="8" x2="17.5" y2="8" {...ICO_DOT} />
-    </svg>
-  );
-}
-function IcoDesk() { // the save mark — the same bookmark the feed prints
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden>
-      <path d="M5.5 3.5 H14.5 V16.5 L10 13.2 L5.5 16.5 Z" {...ICO} />
-      <line x1="5.5" y1="6.8" x2="14.5" y2="6.8" {...ICO_DOT} />
-    </svg>
-  );
-}
-
-// The instrument set's honest platform counts — static, from the same
+// The desk ledger's honest platform counts — static, from the same
 // constants every page already trusts ('all' is the anchor, not a vertical).
 // ROSTER splits named makers from category pseudo-artists: "54 makers" was
 // counting 22 categories as people.
 const VERTICAL_COUNT = MARKETS.length - 1;
+
+/** how a vertical names its own lots in a headline */
+const LOT_NOUN: Partial<Record<Market, [string, string]>> = {
+  all: ['lot', 'lots'],
+  art: ['art lot', 'art lots'],
+  design: ['design lot', 'design lots'],
+  watches: ['watch', 'watches'],
+  sports: ['sports lot', 'sports lots'],
+  tcg: ['TCG card', 'TCG cards'],
+  science: ['science lot', 'science lots'],
+  culture: ['pop-culture lot', 'pop-culture lots'],
+};
+const RESULT_NOUN: Partial<Record<Market, string>> = {
+  art: 'art results', design: 'design results', watches: 'watch results', sports: 'sports results',
+  tcg: 'TCG results', science: 'science results', culture: 'pop-culture results',
+};
 
 export default function TerminalHomePage() {
   const ray = useRayData();
@@ -323,6 +312,11 @@ export default function TerminalHomePage() {
   const marketMeta = MARKETS.find(m => m.key === market)!;
   const mounted = useMounted();
   const isMobile = useMediaQuery('(max-width: 820px)', false);
+  // THE READER'S CLOCK (Oct 3 2026): "live", "today", "in 2d", Soonest and
+  // Tonight's wall are all judged against it at render time — never the crawl
+  // stamp, which goes stale the moment the page is opened later. null until
+  // mount (SSG-safe); re-read every minute.
+  const now = useNow();
 
   // ONE TODAY, ONE SERIAL — the crawl day is the data's "today".
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
@@ -509,10 +503,14 @@ export default function TerminalHomePage() {
     // 1-day results-pending grace build-upcoming serves, so a just-closed lot
     // stays visible (sorted to the end, dressed as "results pending" by the
     // card) while the house posts results, exactly as on /value and /[artist].
-    return marketLots
-      .filter(l => isLiveUpcoming(l, today))
-      .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
-  }, [marketLots]);
+    // Once the reader's clock is known, a lot whose close has PASSED leaves
+    // the live book outright (timed lots by the minute, day-only lots when
+    // their day ends) — a hammered lot is not "on the block", even while the
+    // house posts results. Soonest = the real close instant.
+    const live = marketLots.filter(l => (now != null ? isOpen(l, now) : isLiveUpcoming(l, today)));
+    const key = (l: AuctionLot) => closeMs(l) ?? Infinity;
+    return live.sort((a, b) => key(a) - key(b));
+  }, [marketLots, now]);
 
   // Which houses publish a live bid book at all — measured, not hardcoded.
   const housesWithBids = useMemo(() => {
@@ -521,7 +519,13 @@ export default function TerminalHomePage() {
     return s;
   }, [upcoming]);
 
-  const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  // live counts on the reader's clock — closed lots never count as live
+  const upcomingCounts = useMemo(() => {
+    if (now == null) return getUpcomingCounts(allLots);
+    const counts: Record<string, number> = {};
+    for (const l of allLots) if (isOpen(l, now)) counts[l.artist] = (counts[l.artist] || 0) + 1;
+    return counts;
+  }, [allLots, now]);
 
   // THE RAIL'S MICRO-READS — one standardized read per cell: live lots on
   // the block (Collin, Aug 22 2026: no % in the rail — one grammar, eight
@@ -592,17 +596,11 @@ export default function TerminalHomePage() {
   // three photographed lots in the window → no wall (never padded with next
   // month). The call tag marks the call only if it hammers in the window.
   const wallItems = useMemo<WallItem[]>(() => {
-    const now = Date.now();
-    const horizon = now + 48 * 3600_000;
-    const today = localToday();
-    const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
-    const within48h = (l: AuctionLot) => {
-      if (l.resultsPending) return false;
-      if (l.saleDateTime) { const t = Date.parse(l.saleDateTime); if (Number.isFinite(t)) return t > now && t <= horizon; }
-      const d = trueSaleDay(l);
-      return !!d && d >= today && d <= tomorrow;
-    };
-    const withImg = upcoming.filter(l => l.imageUrl && within48h(l));
+    // closing within 48h on the READER's clock (closing.closesWithin): a
+    // timed lot by its real close, a day-only lot by the end of its day —
+    // anything past its close is already gone from `upcoming`
+    if (now == null) return [];
+    const withImg = upcoming.filter(l => l.imageUrl && !l.resultsPending && closesWithin(l, now));
     const pct = belowSignal.pct;
     const flagged = withImg
       .filter(l => belowIds.has(l.id))
@@ -619,40 +617,16 @@ export default function TerminalHomePage() {
       pct: pct.get(l.id),
       call: l.id === callId,
     }));
-  }, [upcoming, belowIds, belowSignal, todaysCall]);
+  }, [upcoming, belowIds, belowSignal, todaysCall, now]);
   const wallEl = wallItems.length >= 3 ? (
     <TonightsWall
+      now={now}
       items={wallItems}
       onOpen={setTableLot}
       variant={mounted && isMobile ? 'mobile' : 'desktop'}
       play={!fromCache}
     />
   ) : null;
-
-
-  // The Value Engine's chapter-01 hero: ONE lot — the best flag on the book
-  // by THE ONE FLAGGED RANKING (dealScore: calibrated odds first, then the
-  // capped gap — never confidence+pct, which is a second ranking).
-  // Prefers a high-confidence lot not already hanging on Tonight's Wall
-  // (confidence is a GATE here, not the sort); falls back to the absolute
-  // best when no high-confidence flag exists off the wall.
-  const engineHero = useMemo(() => {
-    const CONF: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, low: 0 };
-    const wallSet = new Set(wallItems.map(w => w.lot.id));
-    const cands = upcoming
-      .filter(l => l.imageUrl && belowIds.has(l.id)
-        // the engine's showcase must be ACTIONABLE: live by the true sale day
-        // AND, when the close time is known, the clock not yet run out (a
-        // timed lot that closed earlier today slips day-level guards)
-        && isLiveUpcoming(l) && !l.resultsPending
-        && (!l.saleDateTime || Date.parse(l.saleDateTime) > Date.now()))
-      .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
-      .filter((x): x is { lot: AuctionLot; signal: NonNullable<ReturnType<typeof lotSignal>> } =>
-        !!x.signal && x.signal.label === 'Below Market')
-      .sort((a, b) => dealScore(b.lot, b.signal.pct) - dealScore(a.lot, a.signal.pct));
-    const offWall = cands.find(x => !wallSet.has(x.lot.id) && CONF[x.signal.confidence || 'low'] >= 2);
-    return offWall ?? cands[0] ?? null;
-  }, [upcoming, belowIds, allLots, wallItems]);
 
 
   // The feed the reader actually sees — search + lenses + sort applied.
@@ -669,6 +643,7 @@ export default function TerminalHomePage() {
     if (f.category) arr = arr.filter(l => l.category === f.category);
     if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
+    if (f.closingSoon && now != null) arr = arr.filter(l => closesWithin(l, now));
     if (q) {
       arr = arr.filter(l =>
         `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
@@ -704,17 +679,22 @@ export default function TerminalHomePage() {
     } else {
       const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
       arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];
-      if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
+      if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay && !f.closingSoon) {
         arr = diversifyFeed(arr, pageSize);
       }
     }
     return arr;
-  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay]);
+  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay, now]);
+  // lots closing within 48h — the toolbar's "Closing ≤48h" lens count
+  const closingSoonCount = useMemo(
+    () => (now == null ? 0 : upcoming.filter(l => closesWithin(l, now)).length),
+    [upcoming, now],
+  );
 
 
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}`;
+    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.closingSoon ? 1 : 0}|${f.sort}|${f.saleDay ?? ''}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     setFeedFilters(next);
@@ -767,13 +747,13 @@ export default function TerminalHomePage() {
     // "today / tomorrow / in Nd" reads to the USER — count from the reader's
     // local day, the same clock the feed filter runs on (never the crawl day,
     // which can lag and print "in 2d" for tomorrow's hammer).
-    const today = localToday();
-    const lot = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= today) || null;
+    // `upcoming` is open-only and close-sorted on the reader's clock, so
+    // its head IS the next close
+    if (now == null) return null;
+    const lot = upcoming[0] || null;
     if (!lot) return null;
-    const d = Math.round((Date.parse(`${lot.saleDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
-    const word = d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d}d`;
-    return { lot, word };
-  }, [upcoming]);
+    return { lot, word: closeWord(lot, now) };
+  }, [upcoming, now]);
 
 
   // The watchlist strip — what changed since you saved.
@@ -832,14 +812,48 @@ export default function TerminalHomePage() {
   // below-market count for the hero stat (scoped to the live book)
   const belowMktCount = belowIds.size;
 
+  // ── THE CALL HERO's words — a specific, checkable claim with a live number
+  // (docs/NORTHSTAR_UI.md §0.5). Home keeps the site's one "Every…" line; a
+  // vertical states its own book against its own record.
+  const resultsN = activeKey === 'all' ? (meta.totalSold ?? null) : scopedSold;
+  const heroHeadline = useMemo(() => {
+    if (activeKey === 'all') {
+      return resultsN
+        ? `Every lot arrives with a guess. We score it against ${resultsN.toLocaleString()} results.`
+        : 'Every lot arrives with a guess. We score it against the record.';
+    }
+    const [one, many] = LOT_NOUN[activeKey] || ['lot', 'lots'];
+    const n = upcoming.length;
+    const book = n === 0
+      ? `No ${many} are on the block tonight.`
+      : `${n.toLocaleString()} ${n === 1 ? `${one} is` : `${many} are`} on the block.`;
+    if (!resultsN) return book;
+    return n === 0
+      ? `${book} The record holds ${resultsN.toLocaleString()} ${RESULT_NOUN[activeKey] || 'results'}.`
+      : `${book} We score each against ${resultsN.toLocaleString()} ${RESULT_NOUN[activeKey] || 'results'}.`;
+  }, [activeKey, resultsN, upcoming.length]);
+  // the replayed track record — hammer basis at full scope; a vertical prints
+  // its own replay (all-in basis, labelled) and falls back to the whole book
+  const heroRecord = useMemo<HeroRecord | null>(() => {
+    if (!backtest?.flagged) return null;
+    const bm = (backtest as unknown as { byMarket?: Record<string, { flagged: { n: number; medPct: number }; unflagged: { n: number; medPct: number } }> }).byMarket;
+    const mk = activeKey !== 'all' ? bm?.[activeKey] : undefined;
+    if (mk && mk.flagged.n >= 500) return { n: mk.flagged.n, flaggedPct: mk.flagged.medPct, restPct: mk.unflagged.medPct, basis: 'all-in' };
+    const fh = backtest.flagged.hammerMedianPct, uh = backtest.unflagged?.hammerMedianPct;
+    if (fh != null && uh != null) return { n: backtest.flagged.n, flaggedPct: fh, restPct: uh, basis: 'hammer' };
+    return { n: backtest.flagged.n, flaggedPct: backtest.flagged.medianPerfPct, restPct: backtest.unflagged.medianPerfPct, basis: 'all-in' };
+  }, [backtest, activeKey]);
+
   return (
     <>
     {/* the page's primary heading — visually hidden (the hero leads with the
         market number, not a title) but present for crawlers/AT. */}
-    <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
-      lectr — auction intelligence for the collectibles market
-    </h1>
-    <Greeting />
+    {(loading || !!error) && (
+      <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+        Every lot arrives with a guess. lectr scores it against the record.
+      </h1>
+    )}
+    <Greeting ready={!loading} />
     <div className={`${styles.root} terminal-shell`} data-mounted={mounted}>
       {/* the feed grid — global ray-* classes the reused LotCard renders into,
           re-authored here (page.tsx carried these in an inline style block). */}
@@ -868,7 +882,7 @@ export default function TerminalHomePage() {
       <div className={styles.grain} aria-hidden />
 
       {/* REAL CHROME — ArtistNav mounts CommandK (⌘K search, alerts, mobile sheet) */}
-      <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+      <ArtistNav activeSlug={activeKey === 'all' ? null : `vertical:${activeKey}`} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {/* THE EXCHANGE RAIL — the door; re-scopes the WHOLE page in place */}
       <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
@@ -884,12 +898,35 @@ export default function TerminalHomePage() {
           </button>
         </div>
       ) : loading ? (
-        <RayLoading />
+        // the blank plate — the signature writing on eggshell, no skeleton
+        // blocks (the greeting, when it plays, sits over exactly this)
+        <div className={styles.signPlate} role="status" aria-label="Loading tonight's book">
+          <img src="/brand/lectr-nav.png" alt="" className={styles.signMark} />
+        </div>
       ) : (
         <RayEntrance animate={!fromCache}>
           <div className={styles.deskShell}>
 
-            {/* ══ HERO — the market-scoped index glyph + chart draw-in ══ */}
+            {/* ══ HERO — tonight's call in the desk-card layout: the house's
+                guess against the record's expected hammer (pickCall, the one
+                selector). The index rows moved below the fold. ══ */}
+            <CallHero
+              call={call ? { lot: call.lot, signal: call.signal as never } : null}
+              headline={heroHeadline}
+              dek="lectr is the second opinion in the saleroom. The house prints a guess; we print the record."
+              record={heroRecord}
+              marketWord={activeKey === 'all' ? 'the book' : `the ${marketMeta.label === 'TCG' ? 'TCG' : marketMeta.label.toLowerCase()} book`}
+              onOpen={setTableLot}
+              quiet={{ onBlock: upcoming.length, next: nextHammer ? { house: nextHammer.lot.auctionHouse, word: nextHammer.word } : null }}
+            />
+
+            {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
+                section opens on a registration plate (north-star frame). ══ */}
+            {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
+
+            {/* ══ THE MARKETS TONIGHT — the index rows + the right-now board,
+                below the fold (the call leads) ══ */}
+            <div className={`${styles.indexPlate} ns-plate`}>
             <IndexHero
               activeKey={activeKey}
               marketLabel={activeKey === 'all' ? 'Total market' : marketMeta.label}
@@ -910,26 +947,25 @@ export default function TerminalHomePage() {
               closingNext={closingNext}
             />
 
-            {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
-                section opens on a registration plate (north-star frame). ══ */}
-            {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
+            </div>
+
 
             {/* ══ ROOM · THE VERIFIED BOARD — every certified read, on paper.
                 The movers ARE the board's top rows (one table, no duplicate
                 strip); the record sentence prints ONCE as the room's footer.
-                NORTH STAR: the engine's intro head lives OUT HERE on the page
-                ground in the split grammar; the vault below stays the one
-                dark room. ══ */}
+                CATALOGUE (Oct 3): the vault is retired — the board prints on
+                the eggshell like every other plate. The call hero above IS the
+                engine's demonstration, so the board no longer hangs a second
+                lot. ══ */}
             {marketData?.subMarkets && (
               <div className="ns-plate">
                 <div className={`ns-split ${styles.engineIntro}`}>
                   <div>
-                    <span className="ns-kicker">The value engine</span>
-                    <h2 className={styles.engineIntroHead}>We find what the room misprices.</h2>
+                    <h2 className={styles.engineIntroHead}>Each market, read at the strength its data supports.</h2>
                   </div>
                   <p>
-                    Live lots flagged under their comparables, the market indices behind
-                    them, and the replayed record that keeps us honest.
+                    A certified index where the 95% interval clears zero, demand against
+                    estimate where it doesn&rsquo;t, the typical price where neither holds.
                   </p>
                 </div>
               <section className={styles.roomPaper}>
@@ -947,7 +983,7 @@ export default function TerminalHomePage() {
                       n: backtest.flagged.n,
                       asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
                     } : null}
-                    hero={engineHero}
+                    hero={null}
                     onOpenLot={setTableLot}
                   />
                 </div>
@@ -955,99 +991,59 @@ export default function TerminalHomePage() {
               </div>
             )}
 
-            {/* ══ ROOM · THE INSTRUMENT SET — the platform cells, taken
-                directly from the elevenlabs.io feature-cell grammar: four
-                quiet cream wells for the desk's four surfaces, and ONE
-                forced-color cell carrying today's call. LAMP LAW: the color
-                cell's dir is the call's real signal direction — 'up' because
-                a Below Market flag means comps sell ABOVE this ask (the same
-                tone the wall's ring wears) — or 'ink' when no call exists.
-                Its multiple prints through gapMultiple, the wall's own
-                formatter. Never invented, never decorative. ══ */}
-            <section className={`${styles.cellsSection} ns-plate`}>
+            {/* ══ THE DESK — the four rooms as a dotted ledger (the bento of
+                cells retired, docs/NORTHSTAR_UI.md §0.7). Every figure is a
+                live value the page already holds; nothing invented. ══ */}
+            <section className={`${styles.deskLedgerSection} ns-plate`} aria-labelledby="desk-ledger-h">
               <div className={`ns-split ${styles.cellsHead}`}>
                 <div>
-                  <span className="ns-kicker">The instrument set</span>
-                  <h2 className={styles.engineIntroHead}>One desk, four instruments.</h2>
+                  <h2 id="desk-ledger-h" className={styles.engineIntroHead}>Where every number on this page is made.</h2>
                 </div>
                 <p>
-                  Every number on this page is made in one of these rooms — the
-                  engine that prices the book, the record that keeps it honest,
-                  the makers it tracks, and the desk you keep.
+                  The engine that reads the book, the record that grades it, the makers
+                  it tracks, and the desk you keep.
                 </p>
               </div>
-              <CellGrid min={300} className={styles.cellsGrid}>
-                {todaysCall ? (
-                  <ColorCell
-                    dir="up"
-                    span={2}
-                    stat={gapMultiple(todaysCall.pct)}
-                    label="Today's call"
-                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
-                    href={`/lot/${todaysCall.lot.id}`}
-                  />
-                ) : (
-                  <ColorCell
-                    dir="ink"
-                    span={2}
-                    stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : upcoming.length > 0 ? upcoming.length.toLocaleString() : undefined}
-                    label="Today's call"
-                    body={
-                      belowMktCount > 0
-                        ? `No single call tonight — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged under their comparables on the live book.`
-                        : upcoming.length > 0
-                          ? `No flags on this book tonight — ${upcoming.length.toLocaleString()} ${upcoming.length === 1 ? 'lot' : 'lots'} on the block, priced in line with their comps.`
-                          : 'The book is quiet — the crawl refreshes daily.'
-                    }
-                    href="#on-the-block"
-                  />
-                )}
-                {/* THE POP (Collin: "nothing POPs, dead space"): every cell
-                    leads with its big mono numeral — numbers are the desk's
-                    product art — and carries its patent figure as a top-right
-                    watermark. Stats are the same live values the bodies
-                    already printed; nothing invented. */}
-                <Cell
-                  stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : '1.3×'}
-                  statNote={belowMktCount > 0 ? 'flagged on the book tonight' : 'where a flag becomes legal'}
-                  mark={<FigGate size={96} />}
-                  label="The value engine"
-                  body={belowMktCount > 0
-                    ? 'Live asks priced against where their comparables actually sold.'
-                    : 'Live asks priced against where their comparables actually sold — every flag on this page starts here.'}
-                  href="/value"
-                />
-                <Cell
-                  stat={backtest?.flagged?.n ? backtest.flagged.n.toLocaleString() : undefined}
-                  statNote={backtest?.flagged?.n ? 'settled calls replayed' : undefined}
-                  icon={<IcoRecord />}
-                  mark={<FigCorpus size={96} />}
-                  label="The record"
-                  body={backtest?.flagged?.n
-                    ? 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'
-                    : 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'}
-                  href="/analytics"
-                />
-                <Cell
-                  stat={ROSTER.makers.toLocaleString()}
-                  statNote={`makers · ${ROSTER.categories} categories across ${VERTICAL_COUNT} verticals`}
-                  mark={<FigPools size={96} />}
-                  label="The makers ledger"
-                  body="Sale history, live coverage and market reads, one dossier per name."
-                  href="/makers"
-                />
-                <Cell
-                  stat={savedIds.length > 0 ? savedIds.length.toLocaleString() : undefined}
-                  statNote={savedIds.length > 0 ? (savedIds.length === 1 ? 'lot on your desk' : 'lots on your desk') : undefined}
-                  icon={<IcoDesk />}
-                  mark={<FigTape size={96} />}
-                  label="Your desk"
-                  body={savedIds.length > 0
-                    ? 'What moved since you saved it, the next hammers, and your own record.'
-                    : 'Save any lot on the block and it reports here — what moved since you saved it, and when it hammers.'}
-                  href="/profile"
-                />
-              </CellGrid>
+              <ol className={styles.deskLedger}>
+                {[
+                  {
+                    href: '/value',
+                    k: 'The value desk',
+                    d: 'Tonight\u2019s calls — every lot the record reads above its estimate.',
+                    v: belowMktCount > 0 ? `${belowMktCount.toLocaleString()} flagged` : `${upcoming.length.toLocaleString()} on the block`,
+                  },
+                  {
+                    href: '/receipts',
+                    k: 'The record',
+                    d: 'Each call graded against the hammer that followed, misses included.',
+                    v: backtest?.flagged?.n ? `${backtest.flagged.n.toLocaleString()} replayed` : '—',
+                  },
+                  {
+                    href: '/makers',
+                    k: 'The makers ledger',
+                    d: 'Sale history, live coverage and the market read, one dossier per name.',
+                    v: `${ROSTER.makers.toLocaleString()} makers · ${ROSTER.categories} categories · ${VERTICAL_COUNT} markets`,
+                  },
+                  {
+                    href: '/profile',
+                    k: 'Your desk',
+                    d: savedIds.length > 0
+                      ? 'What moved since you saved it, the next hammers, and your own record.'
+                      : 'Save any lot and it reports here — what moved, and when it hammers.',
+                    v: savedIds.length > 0 ? `${savedIds.length.toLocaleString()} saved` : 'empty',
+                  },
+                ].map((r, i) => (
+                  <li key={r.href}>
+                    <Link href={r.href} className={styles.deskRow}>
+                      <span className={styles.deskFolio} aria-hidden>{i + 1}</span>
+                      <span className={styles.deskK}>{r.k}</span>
+                      <span className={styles.deskD}>{r.d}</span>
+                      <span className={styles.deskLead} aria-hidden />
+                      <span className={styles.deskV}>{r.v}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
             </section>
 
             {/* the watchlist strip — the reader's saved lots (small, personal) */}
@@ -1061,9 +1057,19 @@ export default function TerminalHomePage() {
                     <span className="ns-kicker">The live book</span>
                     <h2 className={styles.feedTitle}>On the block</h2>
                   </div>
-                  {nextHammer && (
+                  {(nextHammer || (mounted && isMobile)) && (
                     <p>
-                      Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}
+                      {nextHammer && <>Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}</>}
+                      {/* phones: the flagged board is a long scroll away
+                          on another page — one tap to it */}
+                      {mounted && isMobile && (
+                        <>
+                          {nextHammer ? ' · ' : ''}
+                          <Link href={activeKey === 'all' ? '/value#flags' : `/value/${activeKey}#flags`} style={{ color: 'var(--color-fg)', textDecoration: 'underline', textUnderlineOffset: 3, display: 'inline-block', padding: '6px 0' }}>
+                            Jump to the flags
+                          </Link>
+                        </>
+                      )}
                     </p>
                   )}
                 </div>
@@ -1081,7 +1087,10 @@ export default function TerminalHomePage() {
                   onViewChange={handleView}
                   pageSize={pageSize}
                   showToggle={!narrowView}
+                  closingCount={closingSoonCount}
                 />
+                {/* per-house freshness: a house last read >36h ago says so */}
+                <HouseAsOf lots={upcoming} style={{ margin: '-8px 0 14px' }} />
 
                 {effectiveView === 'table' && feed.length > 0 ? (
                   <div key={feedKey} className="ray-feed-rekey ray-feedtable-scroll" style={{ overflowX: 'auto' }}>
@@ -1103,7 +1112,6 @@ export default function TerminalHomePage() {
                       <tbody>
                         {feed.slice(0, visibleUpcoming).map(lot => {
                           const sig = lotSignal(lot, marketLots);
-                          const dth = daysToHammer(lot, localToday());
                           return (
                             // the whole row stays clickable as a POINTER
                             // convenience; the accessible open-modal control is
@@ -1153,7 +1161,7 @@ export default function TerminalHomePage() {
                                   type="button"
                                   className="t-title"
                                   onClick={e => { e.stopPropagation(); setTableLot(lot); }}
-                                  aria-label={`Comps for ${craftTitle(lot.title)}`}
+                                  aria-label={`See the comps for ${craftTitle(lot.title)}`}
                                   style={{ display: 'block', width: '100%', background: 'none', border: 0, padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
                                 >
                                   {craftTitle(lot.title)}
@@ -1161,9 +1169,9 @@ export default function TerminalHomePage() {
                               </td>
                               <td>{lot.auctionHouse}</td>
                               <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
-                              <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
+                              <td className="t-date" title={saleWhenTitle(lot)}>{now != null && closeIsTimed(lot) ? new Date(closeMs(lot)!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : formatDate(lot.saleDate)}</td>
                               <td className="num t-days">
-                                {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
+                                {now == null ? '—' : closeShort(lot, now)}
                               </td>
                               <td className="num t-bids" title={bidCellTitle(lot, housesWithBids)}>
                                 {bidCellFace(lot, housesWithBids)}
@@ -1179,8 +1187,11 @@ export default function TerminalHomePage() {
                               <td>
                                 {sig
                                   ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
-                                      {signalMagnitude(sig.label, sig.pct)}{/* the qualifier on its own line: inline it overflowed the last column and clipped ('2.4× unde') */}<span style={{ display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
-                                      <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
+                                      {/* ONE gap format (the × multiple /value and the wall
+                                          print): comps median ÷ the estimate */}
+                                      {sig.label === 'Below Market' ? gapMultiple(sig.pct) : `${Math.max(0.1, 1 - Math.min(sig.pct, 99) / 100).toFixed(1)}×`}
+                                      <span style={{ display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 }}>comps vs est.</span>
+                                      <span role="img" title={confidenceA11y(sig.confidence)} aria-label={confidenceA11y(sig.confidence)} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
                                         {confidenceMeter(sig.confidence).dots}
                                       </span>
                                     </span>
@@ -1190,7 +1201,7 @@ export default function TerminalHomePage() {
                                 <button
                                   className="ray-save-btn ray-tbl-save"
                                   onClick={e => { e.stopPropagation(); toggle(lot.id, lot); }}
-                                  aria-label={isSaved(lot.id) ? 'Remove from saved' : 'Save lot'}
+                                  aria-label={isSaved(lot.id) ? `Remove ${craftTitle(lot.title)} from saved` : `Save ${craftTitle(lot.title)}`}
                                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSaved(lot.id) ? 'var(--color-fg)' : 'var(--color-bg-elevated)', border: 'none', borderRadius: 100, cursor: 'pointer', padding: 0 }}
                                 >
                                   <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
@@ -1232,6 +1243,7 @@ export default function TerminalHomePage() {
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
                             tone={feedTone(lot, belowIds, belowSignal.hasSig)}
+                            now={now}
                           />
                         </div>
                       ) : (

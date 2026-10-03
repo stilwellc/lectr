@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ARTISTS, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
-import CommandK, { OPEN_CK_EVENT } from './CommandK';
+import Link from 'next/link';
+import CommandK, { OPEN_CK_EVENT, SEARCH_SCOPE } from './CommandK';
 import Flick from './Flick';
 import { useDialogFocus } from './useDialogFocus';
 import { useAuth } from '../lib/account';
@@ -540,6 +541,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           color: var(--color-fg);
         }
         .ray-maker-navitem[data-active=true] { color: var(--color-fg); }
+        a.ray-maker-navitem, a.ray-nav-link { text-decoration: none; box-sizing: border-box; }
+        .ray-maker-navitem-minor { font-size: 15px; min-height: 48px; padding-block: 12px; color: var(--color-text-secondary); }
+        .ray-nav-search { border-radius: 999px; }
+        .ray-nav-search:focus { outline: none; }
+        .ray-nav-search:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -4px; }
         .ray-navitem-mark { display: inline-flex; flex: none; opacity: 0.85; }
         .ray-navitem-mark svg { width: 19px; height: 19px; }
         .ray-maker-sheet-sub {
@@ -561,15 +567,20 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         {/* Desktop quick links — one click to each room; the dropdown stays
             the artist index. Hidden on mobile where the dropdown covers all. */}
         <nav className="ray-nav-links" aria-label="Sections">
-          <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>{NAV_ICONS.overview}Overview</button>
-          <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>{NAV_ICONS.value}Value</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/makers')}>{NAV_ICONS.makers}Makers</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>{NAV_ICONS.analytics}Analytics</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>{NAV_ICONS.blog}Blog</button>
-          {(!authEnabled || user) ? (
-            <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
-              {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
-              {unseenAlerts > 0 && (
+          {/* real links (audit Oct 3, axe): a section is a place, so it is an
+              <a href> — middle-click, copy-link and the screen reader's link
+              list all work — with aria-current on the room you are in */}
+          {sections.map(sec => (
+            <Link
+              key={sec.path}
+              href={sec.path}
+              className={sec.path === '/value' ? 'ray-nav-link ray-nav-link-value' : 'ray-nav-link'}
+              data-active={sec.active}
+              aria-current={sec.active ? 'page' : undefined}
+              title={sec.path === '/profile' ? user?.email || undefined : undefined}
+            >
+              {sec.icon}{sec.label}
+              {sec.path === '/profile' && unseenAlerts > 0 && (
                 // ink marker: "something new happened" is a verb — the lamp
                 // law keeps green for the market's up-read only
                 <span aria-label={`${unseenAlerts} new matches`} style={{
@@ -577,9 +588,10 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                   background: 'var(--color-fg)', marginLeft: 6, verticalAlign: '2px',
                 }} />
               )}
-            </button>
-          ) : (
-            <button className="ray-nav-link" onClick={openLogin}>{NAV_ICONS.signin}Sign in</button>
+            </Link>
+          ))}
+          {authEnabled && !user && (
+            <button type="button" className="ray-nav-link" onClick={openLogin}>{NAV_ICONS.signin}Sign in</button>
           )}
         </nav>
 
@@ -594,9 +606,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           className="ray-artist-select-btn glass glass-pill glass-quiet"
           onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
           aria-haspopup="dialog"
-          aria-label="Search — find a maker or a past lot"
+          aria-label={`Search ${SEARCH_SCOPE}`}
         >
-          <span>Find a maker</span>
+          <span>Search makers, refs, lots</span>
           <kbd className="ray-nav-kbd" aria-hidden="true">&#8984;K</kbd>
         </button>
         </div>
@@ -606,7 +618,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             cluster on the right (this one carries the margin-left:auto). */}
         <button
           className="ray-nav-search"
-          aria-label="Search"
+          aria-haspopup="dialog"
+          aria-label={`Search ${SEARCH_SCOPE}`}
           onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -653,11 +666,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             <div className="ray-maker-sheet-list" ref={dropdownRef}>
               <nav className="ray-maker-sheet-nav" aria-label="Sections">
                 {sections.map(s => (
-                  <button
+                  <Link
                     key={s.path}
+                    href={s.path}
                     className="ray-maker-navitem"
                     data-active={s.active ? 'true' : 'false'}
-                    onClick={() => navigate(s.path)}
+                    aria-current={s.active ? 'page' : undefined}
+                    onClick={() => setOpen(false)}
                   >
                     <span className="ray-navitem-mark" aria-hidden>{s.icon}</span>
                     {s.label}
@@ -667,7 +682,15 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                         background: 'var(--color-fg)', marginLeft: 7, verticalAlign: '2px',
                       }} />
                     )}
-                  </button>
+                  </Link>
+                ))}
+                {/* the reference book + the glossary — reachable from the menu,
+                    not only from search */}
+                {[{ label: 'References', path: '/ref', icon: NAV_ICONS.makers }, { label: 'Glossary', path: '/glossary', icon: NAV_ICONS.blog }].map(x => (
+                  <Link key={x.path} href={x.path} className="ray-maker-navitem ray-maker-navitem-minor" onClick={() => setOpen(false)}>
+                    <span className="ray-navitem-mark" aria-hidden>{x.icon}</span>
+                    {x.label}
+                  </Link>
                 ))}
                 {authEnabled && !user && (
                   /* signed-out only — for signed-in users the account (and

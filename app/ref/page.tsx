@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import RefPage from '../components/RefPage';
-import BookIndex from '../components/BookIndex';
+import RefIndex from './RefIndex';
 import { encodeRefPath } from './ref-path';
 
 /**
@@ -38,7 +38,7 @@ function RefFromQuery() {
     return <div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} />;
   }
   // bare /ref is the reference directory; a malformed id keeps the dossier's own empty state
-  if (!id) return <BookIndex kind="ref" />;
+  if (!id) return <RefIndex />;
   return <RefPage key={id} refKey={id} />;
 }
 

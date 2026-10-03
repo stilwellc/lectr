@@ -21,6 +21,10 @@ sidesteps R2's GET-lag on overwritten keys — see the header of
 | `snapshots/YYYYMMDD/corpus.tar` | nightly corpus snapshot, auto-expired after 30 days (lifecycle rule `expire-snapshots`) — the rollback ladder |
 | `ci-handoff/<run_id>/<name>/a<attempt>-<UTC>.{bin,tar}` | same-run job→job handoffs of the nightly (crawl segments, backtest leg states) — write-once, deleted at the end of the run (see *CI handoff* below) |
 | `fixtures/ui-shots/<stamp>/served.tar.gz` | the frozen served payload the ui-shots rig builds against (key committed in `tests/ui-baseline/FIXTURE`); never pruned |
+| `segment-versions/<house>/<YYYYMMDDTHHMMSSZ>.ndjson.gz` | **write-once copy of every segment push** (Oct 3 2026) — the per-house rollback ladder (`list-segment-versions`, `restore-segment`, the quarterly restore drill). Pruned to 30 days, newest 3 per house always kept. Not under `versions/` on purpose: `prune` counts every `versions/<x>/` prefix as a corpus version |
+| `latest/house-ledger.json` | the per-house crawl ledger (`scripts/lib/house-status.ts`): last OK crawl, fail streak, reason — written every night, publish or not; drives the stale-house rule and `status.json` |
+| `qa/validate-engine/<UTC>-<run>.json` | every night's engine-gate report, kept (KBs) — `scripts/ci/gate-replay.ts` replays them |
+| `drill/<run_id>/…` | the restore drill's scratch prefix — deleted by the drill itself |
 
 The bucket is **private**: its `r2.dev` URL is disabled and it has no custom
 domain (verified Sep 27 2026) — only the API token can read it.
@@ -58,19 +62,32 @@ Moved by `scripts/data-store.sh` (`npm run data:pull` / `npm run data:push`):
   **assemble-segments `<house…>`** — the nightly's CI handoff (below).
 - **pin-fixture / pull-fixture** — the ui-shots data fixture (below).
 - **prune** — keeps the newest 14 `versions/` prefixes.
+- **list-segment-versions `<house>`** / **restore-segment `<house>` `<date>`** /
+  **prune-segment-versions [days=30] [keep=3]** / **restore-drill `<house>` [date]**
+  — the per-house rollback ladder (docs/RUNBOOK.md "Roll a house back").
+- **pull-ledger / push-ledger** — the per-house crawl ledger.
+- **put-gate-report / pull-gate-reports** — the archived engine-gate reports.
 
-Auth: locally wrangler's OAuth session; in CI `CLOUDFLARE_API_TOKEN` +
-`CLOUDFLARE_ACCOUNT_ID` (the token needs **Account → Workers R2 Storage →
-Edit** in addition to Pages).
+Auth: locally wrangler's OAuth session; in CI the variable is always
+`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, but each workflow step now
+fills it from the narrowest secret for its job — `CF_R2_READ_TOKEN` (pulls),
+`CF_R2_WRITE_TOKEN` (pushes), `CF_PAGES_TOKEN` (Pages deploys, in the
+`production` environment) — each falling back to the legacy all-powerful
+`CLOUDFLARE_API_TOKEN` until it exists. docs/RUNBOOK.md "Tokens".
 
 Flow:
-- `nightly.yml` (cron `17 4 * * *` UTC — off the top of the hour, which
-  GitHub delays by hours; publishes ~1–2am ET) — plan → crawl (one job per
-  house: pull-segment → crawl → push-segment → handoff-put) → assemble
-  (unit tests, `assemble-segments`, sanity gate, engine, `push`) → deploy /
-  sync / backtest (all read assemble's exact version via `pull-version`) →
-  health (non-blocking) → handoff-cleanup. R2 `latest/` is the recovery
-  source and tomorrow's baseline.
+- `nightly.yml` — dispatched ON TIME at 04:17 UTC by the Cloudflare Worker
+  `workers/cron-trigger` (`trigger=cron-worker`); the GitHub cron `37 4 * * *`
+  is the fallback and skips itself when a Worker run already started
+  (`scripts/ci/run-guard.mjs`). plan (guard) → crawl (one job per house,
+  `continue-on-error`: pull-segment → crawl → push-segment [per-house gate +
+  segment version] → handoff-put) → assemble (unit tests, `assemble-segments`,
+  house ledger, sanity gate + stale-house rule, engine, gate report → R2,
+  `status.json`, `push`, ledger → R2) → deploy / sync / backtest (all read
+  assemble's exact version via `pull-version`) → health (warn-only) →
+  verdict (names the night; publish-missed + per-house issues) →
+  handoff-cleanup. R2 `latest/` is the recovery source and tomorrow's
+  baseline. What each colour means: docs/RUNBOOK.md.
 - `ray-crawl.yml` (manual fallback monolith) pulls before the crawl, pushes
   after the payload builds, then builds and deploys the site itself.
 - `deploy.yml` (push to main, dispatch, and `workflow_call`) pulls the served
@@ -82,7 +99,8 @@ Flow:
   variable for a deliberate rollback). Every production deploy (this,
   nightly's `deploy` job, ray-crawl) shares the job-level concurrency group
   `deploy-collectr` (queue, never cancel).
-- `close-board.yml` (every 4h at :43) builds the intraday bid overlay and
+- `close-board.yml` (every 4h at :43 via the Worker; GitHub cron at :03 as
+  the guarded fallback) builds the intraday bid overlay and
   **deploys it directly** by calling `deploy.yml` as a reusable workflow
   (the overlay rides as a tiny same-run artifact). It no longer commits to
   git: a `GITHUB_TOKEN` push can never trigger `on: push`, so from Sep 19 the
@@ -129,13 +147,29 @@ Artifacts that remain are small and non-sensitive: `validate-engine`
 `social-cards` (the public JPEGs), `close-board-overlay` (the public
 overlay), `ui-drift` / `ui-baseline` (screenshots of the public site).
 
-### Nightly checks that go red without blocking the publish
+### Nightly checks that never block the publish
 
+Since Oct 3 2026 the RUN's red means **the night did not publish** (or the
+record/sync failed); house health is a separate signal. docs/RUNBOOK.md.
+
+- **crawl legs** — `continue-on-error`: a crashed leg, or one whose segment
+  the per-house gate refused, rides its R2 last-good and shows as a failed
+  job inside a green run.
 - **health** — aggregates each crawl leg's `leg-health.json`
   (`{house, ok, fetched, parsed, settled, reason}`, uploaded as artifact
-  `health-<house>` from `leg-health.json` or `data/qa/leg-health*.json`) into
-  the run summary and fails when any leg reported `ok=false`. Nothing
-  depends on it.
+  `health-<house>` from `leg-health.json` or `data/qa/leg-health*.json` — the
+  shrink gate's `leg-health-gate.json` merges in) into the run summary and
+  annotates every `ok=false` leg as a warning (`--strict` restores the old
+  exit 1). Nothing depends on it.
+- **verdict** — its job name is the night's state (`night - published` /
+  `night - published, DEGRADED (N house(s) down)` / `night - PUBLISH MISSED`);
+  opens/updates/closes the `lectr: publish missed` issue (scheduled nights
+  only) and the rolling `lectr: house <h> unhealthy` issues. `issues: write`
+  is scoped to this job.
+- **stale-house rule** — a house with no successful crawl in >48h (ledger)
+  has its live lots demoted to `unknown-result` + `staleHidden: true`
+  (`hideStaleHouseLive`, corpus-normalize) — never deleted; lifts itself the
+  first night the house crawls OK.
 - **backtest** — Sunday full replay: a market with no targets is
   legitimately empty for ANY market (tcg: Pokémon lots carry no estimate).
   `scripts/ci/backtest-leg.sh` exits 0 with an `EMPTY.<market>` marker for
@@ -167,13 +201,12 @@ the R2 pull (deploy.yml). `npm run lint` runs ESLint only once a flat config
 with `wrangler pages dev`, freezes the page clock at the fixture's
 `lastCrawl` + 1h, stubs external images, masks `[data-volatile]` /
 `[data-shot-mask]`, and diffs against `tests/ui-baseline/`. A missing
-baseline FAILS. Re-baseline (Linux fonts — approve in CI, not on a Mac):
+baseline FAILS. Re-baseline entirely in CI (Linux fonts; no local R2 token):
 
 ```
-bash scripts/data-store.sh pin-fixture          # only to move the pinned data (R2 write)
-gh workflow run ui-shots.yml -f approve=true
-gh run download <run-id> -n ui-baseline -D tests/ui-baseline
-git add tests/ui-baseline && git commit -m "ui-shots: re-baseline"
+gh workflow run ui-shots.yml -f pin_fixture=true -f approve=true   # move data + re-approve
+gh workflow run ui-shots.yml -f approve=true                       # code-only re-approve
+# → the `propose` job opens a PR from ui-shots/rebaseline-<run_id>; review the frames, merge
 ```
 
 ### Segment locks (the lost-update race)
@@ -224,6 +257,17 @@ first writer's rows. Two defences, both required:
    segment that has MORE rows or a NEWER max `validatedAt`/`firstSeen`.
    `SEGMENT_PUSH_FORCE=1` overrides both with a logged warning. A listing
    outage at push time refuses too (can't rule out a concurrent write).
+
+3. **Per-house shrink + price gate (Oct 3 2026, `scripts/ci/segment-gate.ts`).**
+   `pull-segment` records the pulled segment's stats
+   (`.<house>.pulled-stats.json`); `push-segment` refuses (exit 3) a segment
+   whose settled (non-upcoming) rows dropped >5%, that lost >200 sold rows,
+   that emptied, or whose sold price shape moved (median outside ×0.67–×1.5,
+   p90 outside ×0.5–×2, one price gaining >5pt of all sold rows). The house
+   keeps its last-good, `data/qa/leg-health-gate.json` records why, and the
+   rest of the night publishes. `SEGMENT_SHRINK_OK=1` = a deliberate shrink
+   (a dedupe heal). Every accepted push also writes a write-once
+   `segment-versions/<house>/<UTC>.ndjson.gz` first (the rollback ladder).
 
 ## 2. Supabase — the query layer (not the source of truth)
 

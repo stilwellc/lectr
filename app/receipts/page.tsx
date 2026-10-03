@@ -7,7 +7,7 @@ import { markFallbackProjections } from '../lib/page-data';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import Masthead, { Accent } from '../components/Masthead';
+import Masthead from '../components/Masthead';
 import Flick from '../components/Flick';
 import { lotSignal } from '../components/LotCard';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
@@ -30,8 +30,9 @@ import type { AuctionLot } from '../types';
    the flag was stamped in the nightly data before the sale.
 
    Honesty rules: a metric prints only past its n-gate (the
-   gate is stated, not hidden); green/red only on measured
-   outcomes; the two records never sum together.
+   gate is stated, not hidden); green/red ONLY for the market's
+   direction (hammer vs estimate) — an engine miss is neutral ink
+   with its size; the two records never sum together.
    ============================================================ */
 
 interface ReceiptRow {
@@ -49,6 +50,35 @@ interface CallsRecord {
   asOf: string;
 }
 interface ReceiptsFile { record: CallsRecord; rows: ReceiptRow[]; generatedAt: string }
+
+/** THE MISS READ (Oct 3 2026). A call's error is the ENGINE being wrong, not
+    the market moving — so it prints in neutral ink, as a size (|error|) in a
+    band, never in the up/down green/red that this site reserves for the
+    market's own direction (hammer vs estimate). A +7,315% row used to print
+    GREEN, which read as a win; it is a 74× miss. */
+type MissBand = 'close' | 'off' | 'miss';
+function missRead(call: number, hammer: number): { band: MissBand; text: string; title: string } {
+  const ratio = hammer / call;
+  const err = Math.abs(ratio - 1);
+  const band: MissBand = err <= 0.15 ? 'close' : err <= 0.4 ? 'off' : 'miss';
+  const dir = ratio >= 1 ? 'over' : 'under';
+  const times = ratio >= 1 ? ratio : 1 / ratio;
+  const text = Math.round(err * 100) === 0
+    ? 'on the call'
+    : times >= 2
+      ? `${times >= 10 ? Math.round(times).toLocaleString() : times.toFixed(1)}× ${dir}`
+      : `${Math.round(err * 100)}% ${dir}`;
+  const bandWord = band === 'close' ? 'within 15% of the call' : band === 'off' ? 'off by 15–40%' : 'missed by more than 40%';
+  return { band, text, title: `Hammered ${dir} the call — ${bandWord}` };
+}
+const MISS_LABEL: Record<MissBand, string> = { close: 'close', off: 'off', miss: 'miss' };
+// neutral ink only: weight carries the band, never hue
+const MISS_STYLE: Record<MissBand, React.CSSProperties> = {
+  close: { color: 'var(--color-fg)', fontWeight: 600 },
+  off: { color: 'var(--color-text-secondary)', fontWeight: 500 },
+  miss: { color: 'var(--color-text-muted)', fontWeight: 500 },
+};
+const KIND_PLAIN: React.CSSProperties = { textTransform: 'none', letterSpacing: 0, fontFamily: 'var(--font-sans), sans-serif', fontSize: 10.5 };
 
 export default function ReceiptsPage() {
   // LAZY CORPUS (Sep 2026 perf pass). Everything on this page except the
@@ -120,11 +150,14 @@ export default function ReceiptsPage() {
             <Masthead
               kicker="The record"
               serial={lastCrawl || undefined}
-              title={<>Every call, <Accent>graded</Accent> against the hammer.</>}
+              title={record
+                ? <>{(record.card.graded + record.vsbid.graded + (record.gap?.graded ?? 0) + (record.quiet?.graded ?? 0)).toLocaleString()} calls logged before the sale, graded at the hammer.</>
+                : <>Calls logged before the sale, graded at the hammer.</>}
               sub={
                 <>
-                  A call is logged the night the engine makes it — append-only, first call wins —
-                  then judged when the lot actually sells. What we said before, against what happened.
+                  The house prints an estimate; lectr prints where the hammer will land. Every call is logged the
+                  night the engine makes it — append-only, first call wins — then judged when the lot actually sells.
+                  Misses print as misses: how far off, never in the market&rsquo;s green or red.
                 </>
               }
             />
@@ -219,10 +252,10 @@ export default function ReceiptsPage() {
                     <span>Work</span>
                     <span style={{ textAlign: 'right' }}>The call</span>
                     <span style={{ textAlign: 'right' }}>The hammer</span>
-                    <span style={{ textAlign: 'right' }}>vs call</span>
+                    <span style={{ textAlign: 'right' }}>How far off</span>
                   </div>
                   {rows.slice(0, 60).map(r => {
-                    const delta = Math.round((r.r / r.p - 1) * 100);
+                    const miss = missRead(r.p, r.r);
                     return (
                       <Link key={`${r.id}|${r.k}`} href={`/lot?id=${encodeURIComponent(r.id)}`} className="rcp-cols rcp-row">
                         <span className="rcp-date">{r.sd ? formatDate(r.sd) : '—'}</span>
@@ -236,9 +269,10 @@ export default function ReceiptsPage() {
                           : `Bid projection, logged ${r.d}${r.f ? ` · floor ${formatPrice(r.f)}` : ''}`}>
                           {formatPrice(r.p)}<span className="rcp-kind">{({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as const)[r.k] || r.k}</span>
                         </span>
-                        <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(r.r)}</span>
-                        <span className="rcp-num" style={{ color: delta > 0 ? 'var(--color-up)' : delta < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 }}>
-                          {fmtSignedPct(delta)}
+                        <span className="rcp-num" style={{ fontWeight: 500 }}>{formatPrice(r.r)}</span>
+                        <span className="rcp-num" style={MISS_STYLE[miss.band]} title={miss.title}>
+                          {miss.text}
+                          <span className="rcp-kind" style={KIND_PLAIN}>{MISS_LABEL[miss.band]}</span>
                         </span>
                       </Link>
                     );
@@ -256,9 +290,11 @@ export default function ReceiptsPage() {
                 </div>
                 <div className="rcp-tiles">
                   <div className="rcp-tile">
-                    <span className="kicker">Flagged below market</span>
-                    <span className="rcp-fig" style={{ color: 'var(--color-up)' }}>{fmtSignedPct(F.medianPerfPct)}</span>
-                    <span className="rcp-sub">realized vs estimate, median · {F.n.toLocaleString()} settled flags · hammer-only {fmtSignedPct(F.hammerMedianPct ?? 0)}</span>
+                    <span className="kicker">Lots the engine flagged</span>
+                    {/* hammer vs the house estimate IS the market's own
+                        direction — the one place up/down color belongs */}
+                    <span className="rcp-fig" style={{ color: F.medianPerfPct > 0 ? 'var(--color-up)' : F.medianPerfPct < 0 ? 'var(--color-down-text)' : undefined }}>{fmtSignedPct(F.medianPerfPct)}</span>
+                    <span className="rcp-sub">realized vs the house estimate, median — flagged lots get bid up past the estimate · {F.n.toLocaleString()} settled flags · hammer-only {fmtSignedPct(F.hammerMedianPct ?? 0)}</span>
                   </div>
                   <div className="rcp-tile">
                     <span className="kicker">Everything unflagged</span>
@@ -356,9 +392,9 @@ export default function ReceiptsPage() {
                       <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="rcp-cols rcp-row">
                         <span className="rcp-date">{formatDate(l.saleDate)}</span>
                         <span className="rcp-work"><b>{ARTIST_LABEL[l.artist] || l.artist}</b> {craftTitle(l.title)}</span>
-                        <span className="rcp-num" style={{ color: 'var(--color-up)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind">vs comps</span></span>
-                        <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(l.priceUsd!)}</span>
-                        <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 } : { color: 'var(--color-text-faint)' }}>
+                        <span className="rcp-num" style={{ color: 'var(--color-text-secondary)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind" style={KIND_PLAIN}>comps vs est.</span></span>
+                        <span className="rcp-num" style={{ fontWeight: 500 }}>{formatPrice(l.priceUsd!)}</span>
+                        <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 500 } : { color: 'var(--color-text-faint)' }}>
                           {vsEst != null ? fmtSignedPct(Math.round(vsEst)) : '—'}
                         </span>
                       </Link>

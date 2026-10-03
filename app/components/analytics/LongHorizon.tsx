@@ -53,7 +53,7 @@ const CSS = `
 .ray-lh-legend{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)}
 .ray-lh-key{display:flex;align-items:baseline;gap:7px}
 .ray-lh-key i{width:9px;height:9px;border-radius:2px;flex:none;transform:translateY(1px)}
-.ray-lh-name{font-size:12.5px;font-weight:600;color:var(--color-fg,#E8EAED)}
+.ray-lh-name{font-size:12.5px;font-weight: 500;color:var(--color-fg,#E8EAED)}
 .ray-lh-val{font-size:12px;font-variant-numeric:tabular-nums;color:var(--color-fg,#E8EAED)}
 .ray-lh-val.pct{font-family:var(--font-mono,ui-monospace),monospace}
 .ray-lh-val[data-dir="up"]{color:var(--color-up,#2FBF71)}
@@ -237,7 +237,7 @@ export default function LongHorizon({ marketData, scope }: {
       <div className="ray-vm-head" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <span style={{ minWidth: 0 }}>
           <span className="ns-kicker" style={{ marginBottom: 4 }}>The long-horizon reads</span>
-          <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+          <span style={{ display: 'block', fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
             <span className="ray-sect-mark" aria-hidden><HorizonMark size={18} /></span>Long horizon
           </span>
         </span>

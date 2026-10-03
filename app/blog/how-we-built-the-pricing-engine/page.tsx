@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { withShare } from '../../lib/og-meta';
 import BookTotal from '../../components/BookTotal';
 import Link from 'next/link';
 import ArtistNav from '../../components/ArtistNav';
@@ -19,20 +20,20 @@ const movers = verifiedMovers(marketJson as unknown as MarketData);
 const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const countWord = (n: number) => COUNT_WORDS[n] ?? String(n);
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withShare({
   title: 'How we built the price-movement engine — a hedonic index that abstains',
   description:
     'The math behind lectr\'s appreciation numbers: a per-maker Huber-robust hedonic log-price regression that controls for the within-maker mix, and a confidence gate that publishes a return only when its 95% CI resolves the sign. The result is that almost everything abstains — and the few makers that clear the bar are the whole point.',
-};
+});
 
 /* NORTH STAR editorial grammar (docs/NORTHSTAR_UI.md): 17px prose on a
    ~680px measure; heads bigger and lighter, never serif, never bold. */
 const wrap: React.CSSProperties = { maxWidth: 728, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 450, letterSpacing: '-0.02em', lineHeight: 1.2, margin: '46px 0 12px' };
+const h2: React.CSSProperties = { fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.2, margin: '46px 0 12px' };
 const p: React.CSSProperties = { fontSize: 17, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
-const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
+const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 500 };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '6px 0 20px', fontSize: 14 };
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
+const th: React.CSSProperties = { textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontWeight: 500, fontSize: 12.5 };
 const td: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-secondary)' };
 const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)' };
 
@@ -75,7 +76,7 @@ export default function PricingEnginePost() {
           <p className="ns-kicker" style={{ margin: '0 0 14px' }}>
             <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link>
           </p>
-          <h1 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 'clamp(30px, 4.4vw, 40px)', fontWeight: 330, letterSpacing: '-0.02em', lineHeight: 1.1, margin: '0 0 14px' }}>
+          <h1 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 'clamp(30px, 4.4vw, 40px)', fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.1, margin: '0 0 14px' }}>
             How we built the price-movement engine
           </h1>
           {/* the provenance ledger — gray label over ink value, dotted close */}
