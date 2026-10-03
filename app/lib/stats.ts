@@ -43,6 +43,22 @@ export function median(vals: readonly number[]): number {
   return medianSorted(sortedFinite(vals));
 }
 
+/** Median of an unsorted array, `empty` when there is no finite value. The
+ *  call-site fallback in one place: `medianOr(xs, 0)` for the legacy
+ *  0-on-empty readers, `medianOr(xs, null)` for "no median" UIs. */
+export function medianOr<T>(vals: readonly number[], empty: T): number | T {
+  const m = median(vals);
+  return Number.isNaN(m) ? empty : m;
+}
+
+/** The UPPER-middle order statistic of an ASCENDING-sorted array — for even n
+ *  this is sorted[n/2], not the mean of the two middles. Use ONLY where the
+ *  figure must be an observed value (e.g. "the median lot holds 3 bids" over
+ *  integer counts). `empty` when the array is empty. */
+export function medianUpperSorted<T>(sorted: readonly number[], empty: T): number | T {
+  return sorted.length ? sorted[sorted.length >> 1] : empty;
+}
+
 /** Linear-interpolation quantile on an ASCENDING-sorted array. NaN if empty. */
 export function quantileSorted(sorted: readonly number[], q: number): number {
   const n = sorted.length;

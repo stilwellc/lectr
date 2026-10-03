@@ -11,6 +11,7 @@
  */
 import { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../types';
 import { isSportsScienceObject, sportsForm, classifyForm } from './comps';
+import { medianSorted } from './stats';
 
 export interface DemandPoint {
   date: string;
@@ -83,8 +84,7 @@ export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
       .map(s => s.perf)
       .sort((a, b) => a - b);
     if (window.length < MIN_WINDOW_SALES) continue;
-    const m = Math.floor(window.length / 2);
-    const median = window.length % 2 === 0 ? (window[m - 1] + window[m]) / 2 : window[m];
+    const median = medianSorted(window);
     points.push({ date: qk, value: median * 100, n: window.length });
   }
   return points;

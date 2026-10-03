@@ -12,7 +12,7 @@ import { useMakerRows } from '../../hooks/useMakerRows';
 import type { MarketData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useMarket } from '../../lib/market';
-import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming, refLabel } from '../../utils';
+import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming, refLabel, median } from '../../utils';
 import { useRefs, refsForMaker } from '../../hooks/useRefs';
 import { encodeRefPath } from '../../ref/ref-path';
 
@@ -124,13 +124,6 @@ function useDossierFeatureStyles() {
 const fmtUsdCompact = (n: number) =>
   n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `$${Math.round(n / 1000)}K` : `$${Math.round(n).toLocaleString()}`;
 
-// median of a numeric array (undefined-safe caller)
-function median(xs: number[]): number | null {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 
 // #26 — SPORTS DOSSIERS → PLAYER STRIP. Aggregate the maker's loaded lots by
 // playerSlug, top ~6 by lot count, each a row into /player?id=<slug>. A median

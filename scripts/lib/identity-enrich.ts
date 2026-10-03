@@ -1,4 +1,5 @@
 import type { AuctionLot } from '../../app/types';
+import { readWatchReference } from '../../app/lib/watch-ref';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    identity-enrich.ts — two greenfield identity keyers for lectr.
@@ -242,72 +243,23 @@ export function objectFingerprint(lot: AuctionLot): string | null {
 /* ═══════════════════════════════════════════════════════════════════════════
    2 · extractReference — recover a watch ref/model the pipeline missed.
 
-   Only fires on the five watch makers. Returns a normalized reference (or
-   model-line) key, or null. The order of attempts:
+   Only fires on the five watch makers. Delegates to app/lib/watch-ref.ts (the
+   ONE reader, shared with comps.watchKey), in order:
 
-     1. explicit reference token — accepts "Ref.", "Ref:", "Ref ", "Reference",
-        "réf" and hyphen/slash suffixed forms  ("4936G-001", "5711/1A",
-        "BA 191.8523 Z", "79302OR.ZZ.1032OR.01")   ← the colon form is the
-        single biggest miss in the live pipeline
-     2. a bare model-code number the house dropped a label from ("116500LN")
-     3. a named model line (Daytona, Nautilus, Tank, Speedmaster …)
+     1. a LABELLED reference — "Ref.", "Ref:", "Réf.", "Reference No." with
+        slash/dot suffixes ("5711/1A", "145.022", "311.30.42.30"), Omega case
+        prefixes (ST/BA…) and Cartier W-refs
+     2. a BARE ref only in the maker's distinctive shape (116500LN, 26240ST,
+        5711/1A, 145.022, W51002Q3) and never after a movement / case /
+        serial / "No." label — a bare 5–6-digit number is a serial (Sep 28:
+        ~2.5K rows had stored "Case No. 68594" / "Movement No. 341662")
+     3. the maker's OWN model line (word-bounded; no bare "oyster"/"must")
 
    Grade / condition / price are never read. A pure metal/quartz description
    with no ref and no model → null (correctly uncontrolled).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Clean a raw ref capture into a compact comparable key: lowercase, strip
-    spaces around separators, keep letters/digits/slash/dot/dash. */
-function cleanRef(raw: string): string {
-  return raw
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '')
-    .replace(/[.,;:]+$/, '');
-}
-
 export function extractReference(lot: AuctionLot): string | null {
   const maker = norm(lot.makerSlug ?? lot.artist ?? '');
-  if (!WATCH_MAKERS.has(maker)) return null;
-
-  const title = lot.title || '';
-  const t = title.toLowerCase();
-
-  // 1 · explicit "Ref" / "Reference" / "réf" label, ANY separator (. : , space)
-  //     then a ref token: optional leading letters, 2–6 digits, optional
-  //     alnum/slash/dot/dash suffix chain (116500LN, 4936G-001, 5711/1A,
-  //     79302OR.ZZ.1032OR.01, BA 191.8523 Z, 2814-5SC).
-  const labelled = t.match(
-    /\br[eé]f(?:erence)?\.?\s*[:.,-]?\s*([a-z]{0,3}\s?\d{2,6}(?:[\/.\-][a-z0-9]{1,10})*(?:\s?[a-z]{1,3})?)/i
-  );
-  if (labelled) {
-    const cleaned = cleanRef(labelled[1]);
-    if (/\d{2,}/.test(cleaned)) return cleaned;
-  }
-
-  // 2 · a bare model-code the house wrote with no "Ref" label. Watch refs are
-  //     5–6 digits, often with a metal/bezel alpha suffix (116500LN, 5711/1A,
-  //     26240ST). Require ≥5 digits so we don't grab a diameter ("36 mm") or a
-  //     year. Anchor on a word boundary; forbid a preceding letter-run so we
-  //     don't slice into a model name.
-  const bare = t.match(/(?:^|[\s,(])((?:\d{4,6})(?:[a-z]{1,4})?(?:\/\d+[a-z]?)?)\b/);
-  if (bare) {
-    const cand = bare[1];
-    // exclude 4-digit years masquerading as refs
-    if (!/^(?:19|20)\d\d$/.test(cand) && /\d{5,}/.test(cand.replace(/\D/g, '') + '0'.repeat(0)) ) {
-      // require the numeric core be ≥5 digits to qualify as a ref, or 4 digits
-      // with an alpha/slash suffix (116500LN vs a stray "1942")
-      const digits = (cand.match(/\d/g) || []).length;
-      const hasSuffix = /[a-z]/.test(cand) || cand.includes('/');
-      if (digits >= 5 || (digits >= 4 && hasSuffix)) {
-        return cleanRef(cand);
-      }
-    }
-  }
-
-  // 3 · a named model line — the identity when no ref number is printed.
-  const model = t.match(WATCH_MODELS);
-  if (model) return model[1].replace(/[-~ ]/g, '');
-
-  return null;
+  return readWatchReference(lot.title, maker);
 }

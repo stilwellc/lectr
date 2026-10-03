@@ -17,6 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CORPUS_DIR, gzipNdjson, readGzRows } from './corpus-io';
 import type { AuctionLot } from '../app/types';
+import { median } from '../app/lib/stats';
 
 export type TapeRow = {
   id: string;
@@ -96,7 +97,7 @@ export function gradeValueTape(
       if (t.k === 'e' && t.e) (t.s === 'b' ? a.fl : a.un).push(s.r / t.e);
     }
   }
-  const med = (x: number[]) => { const s = x.slice().sort((p, q) => p - q); const n = s.length; return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  const med = (x: number[]) => median(x);
   const out: Record<string, TapeCell & { flagged?: number; unflagged?: number }> = {};
   acc.forEach((a, k) => {
     const n = a.lr.length;

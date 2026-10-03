@@ -20,6 +20,7 @@
  * old constant (honesty doctrine — a conservative known beats a noisy fit).
  */
 import type { AuctionLot } from '../../app/types';
+import { median } from '../../app/lib/stats';
 
 /** the rungs we fit — the dense numeric grades. Half-grades (8.5/9.5) are
  *  thinner but still clear the support floor on this corpus. */
@@ -40,11 +41,6 @@ export function oldGradeMult(n: number | null | undefined): number {
   return 0.8;
 }
 
-function median(a: number[]): number {
-  const s = a.slice().sort((x, y) => x - y);
-  const n = s.length;
-  return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
-}
 
 export interface GradeLadder {
   /** the multiplier for a grade number (fitted where supported, old constant

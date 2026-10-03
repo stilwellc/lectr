@@ -5,7 +5,7 @@
 //   · SCP Auctions   catalogs.scpauctions.com   house slug `scp-auctions-inc`
 //   · Hake's         www.hakes.com              house slug `hakes-auctions`
 // (Hake's MIGRATED to Bidsquare in 2026 — the old ASP.NET `/{SLUG}-LOT{id}.aspx`
-//  + Akamai plan in scripts/_qa/sports-expansion-recon.md is DEAD; those URLs
+//  + Akamai plan in scripts/oneoff/qa/sports-expansion-recon.md is DEAD; those URLs
 //  now 404. Verified Sep 3 2026.)
 //
 // Platform shape (verified Sep 3 2026 against both hosts with a real Chrome UA,

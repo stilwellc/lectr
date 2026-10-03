@@ -3,7 +3,7 @@
 // Both live hosts are walled (Cloudflare 403 / AWS-WAF 202-empty, verified
 // Sep 3 2026), so realized prices come from Wayback captures of their
 // lot-details pages. Recon, CDX numbers and measured yields:
-// scripts/_qa/JULIENS_PROPSTORE_PLAN.md.
+// scripts/oneoff/qa/JULIENS_PROPSTORE_PLAN.md.
 //
 // Two phases:
 //   1. MANIFEST — query the Wayback CDX index for every captured lot-details
