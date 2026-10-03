@@ -203,6 +203,11 @@ export function CallPlate({
   if (!call) return null;
   const { lot, signal } = call;
   const meter = confidenceMeter(signal!.confidence);
+  // the head names the call's REAL tier — pickCall gates on medium-or-better
+  // and ranks by calibrated odds; it never guarantees the top tier
+  const callHead = `Today\u2019s call · ${meter.word} confidence, ranked by calibrated odds`;
+  const confDotsLabel = `Confidence: ${meter.word}, ${(meter.dots.match(/●/g) || []).length} of 4`;
+  const callTitle = craftTitle(lot.title);
   const saved = isSaved ? isSaved(lot.id) : false;
   const imgOk = !!lot.imageUrl && failedImgId !== lot.id;
   const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
@@ -230,7 +235,7 @@ export function CallPlate({
     <button
       className="ray-save-btn"
       onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
-      aria-label={saved ? 'Remove from saved' : 'Save lot'}
+      aria-label={saved ? `Remove ${callTitle} from saved` : `Save ${callTitle}`}
       // position/zIndex: on the full-density plate the button must ride ABOVE
       // the stretched /value link overlay (a sibling, never a descendant —
       // button-inside-link is invalid interactive nesting)
@@ -253,7 +258,7 @@ export function CallPlate({
       <div className="glass lit lectr-cp lectr-cp-compact">
         <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
+          <span>{callHead}</span>
           {saveBtn}
         </div>
         <div className={`lectr-cpc-grid${imgOk ? '' : ' lectr-cpc-noimg'}`}>
@@ -266,7 +271,7 @@ export function CallPlate({
               <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
               <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
               <LeaderRow k="Confidence">
-                <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
+                <span className="lectr-cp-dots" role="img" aria-label={confDotsLabel} title={confDotsLabel}>{meter.dots}</span>{meter.word}
               </LeaderRow>
               <LeaderRow k={closingWord ? 'Closing' : 'Hammers'} sub={lot.auctionHouse}>
                 {closingWord
@@ -279,7 +284,7 @@ export function CallPlate({
             </div>
             <div className="ray-call-ctas" style={{ marginTop: 16 }}>
               {onSeeComps ? (
-                <button className="ray-call-btn ray-call-btn-primary" onClick={() => onSeeComps(lot)}>
+                <button className="ray-call-btn ray-call-btn-primary" onClick={() => onSeeComps(lot)} aria-label={`See the comps for ${callTitle}`}>
                   See the comps
                 </button>
               ) : (
@@ -338,7 +343,7 @@ export function CallPlate({
       <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
       <div className="lectr-cp-body">
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
+          <span>{callHead}</span>
           {saveBtn}
         </div>
 
@@ -380,7 +385,7 @@ export function CallPlate({
             <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
             <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
             <LeaderRow k="Confidence">
-              <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
+              <span className="lectr-cp-dots" role="img" aria-label={confDotsLabel} title={confDotsLabel}>{meter.dots}</span>{meter.word}
             </LeaderRow>
             <LeaderRow k={closingWord ? 'Closing' : 'Hammers'}>
               {closingWord
@@ -603,6 +608,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
               <Link href="/profile">My profile</Link>
               <Link href="/about">How it works</Link>
               <Link href="/blog">Notes from the desk</Link>
+              <Link href="/status">Data status</Link>
             </span>
           </div>
           <div className="ray-close-line" style={{ '--row-i': 2 } as React.CSSProperties}>

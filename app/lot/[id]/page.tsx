@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import { flaggedLots } from '../flagged';
 import LotPage from '../../components/LotPage';
 import { splitTitle, formatDate, httpsImg, formatPrice } from '../../utils';
-import { signalMagnitude } from '../../lib/comps';
+import { lotVerdict, fmtUsd } from '../../lib/verdict';
+
+/** comps ÷ estimate as the one × multiple (TonightsWall.gapMultiple's rule) */
+const gapMultiple = (pct: number) => (pct > 400 ? '5×+' : `${(pct / 100 + 1).toFixed(1)}×`);
 import { ARTIST_LABEL } from '../../constants';
 
 /**
@@ -34,8 +37,14 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
     : lot.estimateLow || lot.estimateHigh
       ? `${formatPrice((lot.estimateLow || lot.estimateHigh)!)} est.`
       : null;
+  // the Oct 3 frame: the engine's expected hammer against the house
+  // estimate when it made a value call; else the comps read in the one ×
+  // grammar — never "below market"
+  const vd = lotVerdict(lot);
   const description = [
-    `${maker} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
+    vd && vd.vsEstPct != null
+      ? `${maker} — lectr expects a ${fmtUsd(vd.expected)} hammer (${vd.vsEstPct >= 0 ? '+' : '−'}${Math.abs(vd.vsEstPct)}% vs the house estimate), likely ${fmtUsd(vd.bandLo)}–${fmtUsd(vd.bandHi)}.`
+      : `${maker} — flagged: comparable sales realized ${sig && sig.label === 'Below Market' ? gapMultiple(sig.pct) : 'over'} the estimate${sig?.basis ? ` across ${sig.basis} sales` : ''}.`,
     est,
     `Hammers ${formatDate(lot.saleDate)} at ${lot.auctionHouse}.`,
   ].filter(Boolean).join(' ');

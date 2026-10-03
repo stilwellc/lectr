@@ -11,6 +11,7 @@ import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
+import { confidenceA11y } from '../lib/verdict';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -378,7 +379,7 @@ function LotCard({
             padding: 0,
             zIndex: 2,
           }}
-          aria-label={saved ? 'Remove from saved' : 'Save lot'}
+          aria-label={saved ? `Remove ${craftTitle(lot.title)} from saved` : `Save ${craftTitle(lot.title)}`}
         >
           <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
             <path
@@ -480,7 +481,7 @@ function LotCard({
               padding: 0,
               zIndex: 2,
             }}
-            aria-label={saved ? 'Remove from saved' : 'Save lot'}
+            aria-label={saved ? `Remove ${craftTitle(lot.title)} from saved` : `Save ${craftTitle(lot.title)}`}
           >
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
               <path
@@ -553,8 +554,9 @@ function LotCard({
                   : <>comps median vs ask · {buySignal.basis} {(buySignal.form ? (FORM_LABEL as Record<string, string>)[buySignal.form] : null) || 'comps'}</>}
                 <span
                   className="ray-sigrow-dots"
-                  title={`${confidenceMeter(buySignal.confidence).word} confidence`}
-                  aria-label={`${confidenceMeter(buySignal.confidence).word} confidence`}
+                  role="img"
+                  title={confidenceA11y(buySignal.confidence)}
+                  aria-label={confidenceA11y(buySignal.confidence)}
                 >
                   {confidenceMeter(buySignal.confidence).dots}
                 </span>
@@ -584,8 +586,9 @@ function LotCard({
               </span>
               <span
                 style={{ color: 'var(--color-text-faint)', letterSpacing: '0.06em' }}
-                title={`${confidenceMeter(soldComp.confidence).word} confidence`}
-                aria-label={`${confidenceMeter(soldComp.confidence).word} confidence`}
+                role="img"
+                title={confidenceA11y(soldComp.confidence)}
+                aria-label={confidenceA11y(soldComp.confidence)}
               >
                 {confidenceMeter(soldComp.confidence).dots}
               </span>

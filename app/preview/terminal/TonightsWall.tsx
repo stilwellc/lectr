@@ -3,7 +3,9 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { AuctionLot } from '../../types';
 import { ARTIST_LABEL } from '../../constants';
-import { formatPrice, httpsImg, craftTitle, localToday } from '../../utils';
+import { formatPrice, httpsImg, craftTitle } from '../../utils';
+import { closeMs, closeWord } from '../../lib/closing';
+import { lotVerdict, fmtUsd } from '../../lib/verdict';
 import { useInView } from './hooks';
 import styles from './style.module.css';
 
@@ -45,11 +47,13 @@ export interface WallItem {
 export function gapMultiple(pct: number): string {
   return pct > 400 ? '5×+' : `${(pct / 100 + 1).toFixed(1)}×`;
 }
-function gapGrammar(label: string, pct: number): string {
-  if (label === 'Below Market') {
-    return `comps sell at ${gapMultiple(pct)} this ask`;
-  }
-  return `comps sell at ${Math.max(0.1, 1 - Math.min(pct, 99) / 100).toFixed(1)}× this ask`;
+/** A flagged plate's one line (Oct 3 2026 framing): the engine's expected
+    hammer against the estimate when it made a value call, else the comps
+    multiple in the one × grammar — never "priced under" language. */
+function flagLine(lot: AuctionLot, pct: number): string {
+  const v = lotVerdict(lot);
+  if (v && v.vsEstPct != null && v.vsEstPct > 0) return `expected ${fmtUsd(v.expected)} · +${v.vsEstPct}% over est.`;
+  return `comps ${gapMultiple(pct)} the estimate`;
 }
 
 function estLine(lot: AuctionLot): string {
@@ -67,12 +71,15 @@ export default function TonightsWall({
   onOpen,
   variant,
   play,
+  now,
 }: {
   /** ranked candidates (call lot first) — MORE than 5, so failures backfill */
   items: WallItem[];
   onOpen: (lot: AuctionLot) => void;
   variant: 'desktop' | 'mobile';
   play: boolean;
+  /** the reader's clock (closing.useNow) — close labels are computed from it */
+  now: number | null;
 }) {
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
   // #6 · AUCTION-NIGHT MODE — after 6pm LOCAL the wall re-ranks by soonest to
@@ -86,16 +93,15 @@ export default function TonightsWall({
       // soonest-closing first, but keep today's call in the lead
       return [...live].sort((a, b) => {
         if (a.call !== b.call) return a.call ? -1 : 1;
-        return (a.lot.saleDate || '').localeCompare(b.lot.saleDate || '');
+        return (closeMs(a.lot) ?? Infinity) - (closeMs(b.lot) ?? Infinity);
       }).slice(0, 5);
     }
     return live.slice(0, 5);
   }, [items, failed, evening]);
-  // "closes today" is a promise about the READER's day — judged on the local
-  // calendar (localToday), never toISOString's UTC day, which rolls to
-  // tomorrow every US evening and tags tomorrow's lots "today" (B3 finding 5).
-  // Evaluated inside the evening gate only, so the SSR path stays inert.
-  const closesToday = (it: WallItem) => evening && (it.lot.saleDate || '').slice(0, 10) <= localToday();
+  // every plate says when it closes, on the READER's clock at render time
+  // (closing.closeWord: 'closes in 5h' · 'today' · 'tomorrow') — null before
+  // mount, so the SSR path stays inert.
+  const closeLabel = (it: WallItem) => (now == null ? null : closeWord(it.lot, now));
   const [stripRef, seen] = useInView<HTMLDivElement>();
 
   // plates rise shortly after arrival (no entrance-clock coupling)
@@ -124,8 +130,8 @@ export default function TonightsWall({
           <h2 className={styles.roomTitle}>Tonight&rsquo;s wall</h2>
         </div>
         <p>{evening
-            ? 'The room tonight — closing soonest first, priced under where their comparables sell.'
-            : 'Hammering in the next 48 hours — flagged lots first, priced under where their comparables sell.'}</p>
+            ? 'The room tonight — closing soonest first. Flagged lots are the ones lectr expects to hammer over the house estimate.'
+            : 'Closing in the next 48 hours — flagged lots first: lectr expects them to hammer over the house estimate.'}</p>
       </div>
       <div className={styles.wallRow}>
         {shown.map((it, i) => (
@@ -159,10 +165,10 @@ export default function TonightsWall({
                 {it.call && <em className={styles.wallCallTag}>today&rsquo;s call</em>}
               </span>
               {it.flagged && it.pct != null && (
-                <span className={styles.wallSignal}>{gapGrammar('Below Market', it.pct)}</span>
+                <span className={styles.wallSignal}>{flagLine(it.lot, it.pct)}</span>
               )}
-              {closesToday(it) && (
-                <span className={styles.wallCloses}>closes today{it.lot.bidVelocity && it.lot.bidVelocity.delta > 0 ? ` · +${it.lot.bidVelocity.delta} ${it.lot.bidVelocity.delta === 1 ? 'bid' : 'bids'}` : ''}</span>
+              {closeLabel(it) && (
+                <span className={styles.wallCloses}>{closeLabel(it)}{it.lot.bidVelocity && it.lot.bidVelocity.delta > 0 ? ` · +${it.lot.bidVelocity.delta} ${it.lot.bidVelocity.delta === 1 ? 'bid' : 'bids'}` : ''}</span>
               )}
             </span>
           </button>
