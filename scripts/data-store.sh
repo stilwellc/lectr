@@ -329,7 +329,10 @@ push() {
   test -f public/data/ray/meta.json || { echo "[data-store] no served meta to push"; exit 1; }
   push_guard || exit 1
   # corpus members are already gzipped — plain tar, no double compression
-  (cd data/corpus && tar -cf "$TMP/corpus.tar" ./*.json.gz)
+  # + the columnar twin (corpus.parquet, scripts/lib/corpus-parquet.ts) when
+  # tonight's build wrote one — pull/pull-version extract it beside the gz
+  # NDJSON untouched (the tar is unpacked whole). Already zstd: plain tar.
+  (cd data/corpus && if [ -f corpus.parquet ]; then tar -cf "$TMP/corpus.tar" ./*.json.gz ./corpus.parquet; else tar -cf "$TMP/corpus.tar" ./*.json.gz; fi)
   (cd public/data/ray && tar -czf "$TMP/served.tar.gz" .)
   # WRITE-ONCE versioned keys — kills the GET-lag at the root. The lag only
   # afflicts same-key overwrites; a fresh key reads true on the first GET. So

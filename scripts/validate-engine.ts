@@ -120,13 +120,24 @@ function monotonic(sig: Record<string, { beat: number; n: number }>, opts: { fix
   return { ok, rates: parts.join(' · '), spread, measured: seen.length, dips };
 }
 
-function main() {
+export interface ValidateOpts {
+  /** the full corpus as readCorpus() returns it (the single-load nightly
+   *  passes its in-memory copy; standalone reads data/corpus). NOTE: the run
+   *  stamps _v/_vn on the engine rows (backtest-core.prepare). */
+  corpus?: AuctionLot[];
+  sample?: number;
+  market?: string | null;
+  json?: string | null;
+}
+
+/** THE GATE as a function: returns the failed-gate count (0 = ships). */
+export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
   const t0 = Date.now();
   const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
-  const onlyMarket = arg('market');
-  const sample = parseInt(arg('sample') || '30000', 10);
+  const onlyMarket = o.market ?? null;
+  const sample = o.sample ?? 30000;
   console.log('[validate] reading corpus…');
-  const corpus = readCorpus() as unknown as AuctionLot[];
+  const corpus = o.corpus ?? (readCorpus() as unknown as AuctionLot[]);
   const all = corpus.filter(l => !ENGINE_EXCLUDED.has(l.artist) && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia');
   setCalibration(null); // the raw engine — calibration is measured, not assumed
   const prep = prepare(all, console.log, elapsed);
@@ -365,7 +376,7 @@ function main() {
   console.log(`• Confidence tiers: 'high' must beat a 1.6× median-error floor AND be more accurate than 'low' in every market with n≥${MIN_N}`);
   for (const w of warnings) console.log(`• WARN ${w}`);
   for (const f of failures) console.log(`• FAIL ${f}`);
-  const outPath = arg('json');
+  const outPath = o.json ?? null;
   if (outPath) {
     fs.writeFileSync(outPath, JSON.stringify({
       generatedAt: new Date().toISOString(), cutoff: cutoff.slice(0, 10), test: test.length, coveragePct: Math.round(coveragePct * 10) / 10,
@@ -383,9 +394,15 @@ function main() {
   }
   if (failures.length) {
     console.error(`\n[validate] ${failures.length} gate(s) FAILED — exit 1`);
-    process.exit(1);
+    return { failures: failures.length };
   }
   console.log(`\n[validate] all gates passed (${elapsed()})`);
+  return { failures: 0 };
 }
 
-try { main(); } catch (e) { console.error('[validate] FAILED:', (e as Error).message); process.exit(1); }
+if (require.main === module) {
+  try {
+    const r = runValidateEngine({ market: arg('market'), sample: parseInt(arg('sample') || '30000', 10), json: arg('json') });
+    if (r.failures) process.exit(1);
+  } catch (e) { console.error('[validate] FAILED:', (e as Error).message); process.exit(1); }
+}

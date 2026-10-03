@@ -64,7 +64,9 @@ export function computeStats(lots: AuctionLot[], existingStats: MarketStats | nu
       // on even counts (the bare floor-index was biased to the upper-middle).
       medianPrice: (() => { const s = [...pxs].sort((a, b) => a - b); const n = s.length; return n % 2 ? s[n >> 1] : Math.round((s[n / 2 - 1] + s[n / 2]) / 2); })(),
       totalSales: pxs.length,
-      highPrice: Math.max(...pxs),
+      // reduce, not Math.max(...pxs): a spread of >~120k args overflows the
+      // call stack (a 3× corpus quarter does) — same value, NaN/empty alike
+      highPrice: pxs.reduce((m, x) => Math.max(m, x), -Infinity),
     }));
 
   // House distribution

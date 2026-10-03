@@ -388,34 +388,27 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: npx tsx scripts/lib/extract/run.ts
-      - name: Assemble + engine (sanity-gated)
-        # sentinel_warn_only is the MANUAL recovery valve for the price-bleed
-        # sentinel only. It does NOT relax the corpus-shrink sanity gate or
-        # the engine holdout gate.
-        run: npx tsx scripts/assemble.ts
-        env:
-          RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
-      - name: Rebuild eager upcoming payload
-        run: npx tsx scripts/build-upcoming.ts
-      # small precomputed page files (settlement numbers, settled calls,
-      # lot→shard index, per-lot comps, per-maker rows) so pages never load
-      # the full corpus. If it fails, pages fall back to the corpus path.
-      - name: Emit page data
-        continue-on-error: true
-        run: NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-page-stats.ts
-      # sharded search index (makers, refs, live + sold lot titles); search
-      # still covers makers/refs/live lots if this step fails
-      - name: Emit search index
-        continue-on-error: true
-        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/emit-search-index.ts
-      # ENGINE GATE (Sep 2 2026): temporal holdout through the production
-      # replay path. Runs BEFORE the R2 push so a failed gate keeps last-good live.
-      # Threshold changes follow the replay policy (scripts/ci/gate-replay.ts,
-      # docs/RUNBOOK.md "Engine-gate policy").
-      - name: Validate engine (temporal holdout gate)
+      # ── SINGLE LOAD (Oct 2026 scale pass): the corpus is parsed ONCE. This
+      # one step was five (assemble · build-upcoming · emit-page-stats ·
+      # emit-search-index · validate-engine), each re-reading the full corpus
+      # with its own 8-12GB heap; they now run as phases of one process over
+      # one in-memory copy (scripts/assemble.ts --single-load), with outputs
+      # byte-identical to the five steps (scripts/ci/equivalence.ts). Failure
+      # semantics are kept: a sanity/sentinel/coverage abort fails here before
+      # anything downstream runs; page data + search index stay advisory
+      # (::warning, run continues); a failed ENGINE GATE fails the step after
+      # every output is written, so the R2 push below never runs.
+      # sentinel_warn_only is the MANUAL recovery valve for the price-bleed
+      # sentinel only. It does NOT relax the corpus-shrink sanity gate or
+      # the engine holdout gate (threshold changes follow the replay policy:
+      # scripts/ci/gate-replay.ts, docs/RUNBOOK.md "Engine-gate policy").
+      - name: Assemble + engine + eager payload + engine gate + page data + search (one corpus load)
         run: |
           mkdir -p data/qa
-          NODE_OPTIONS=--max-old-space-size=10240 npx tsx scripts/validate-engine.ts --sample 30000 --json data/qa/validate-engine.json
+          npx tsx scripts/assemble.ts --single-load
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
       - name: Upload engine validation report
         if: always()
         uses: actions/upload-artifact@v7

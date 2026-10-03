@@ -60,7 +60,9 @@ function readCorpus(_dataDir: string): Lot[] {
   return (readCorpusShared() as unknown as Lot[]);
 }
 
-export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
+/** Returns the eager lots it wrote (upcoming.json `lots`) — the single-load
+ *  nightly hands their engine pool ids to emit-page-stats. */
+export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<string, unknown>[] {
   const lots: Lot[] = (allLots as unknown as Lot[]) ?? readCorpus(dataDir);
 
   // Zombie guard: the Sotheby's/Christie's crawlers skip closed-unsold lots
@@ -148,6 +150,18 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
     v.pctile = Math.round(((lo + hi / 2) / pool.length) * 100);
   }
 
+  // SAME-ARTIST BUCKETS (Oct 2026 scale pass): signalWithPool and
+  // soldCompBand each open with `allLots.filter(l => l.artist === lot.artist
+  // && …)` — that conjunct first — and read allLots nowhere else, so handing
+  // them the lot's own artist bucket (corpus order kept) yields the identical
+  // pool while sparing a full-corpus scan per upcoming lot (~9k × 1.1M).
+  const byArtist = new Map<unknown, AuctionLot[]>();
+  for (const l of lots as unknown as AuctionLot[]) {
+    const b = byArtist.get(l.artist);
+    if (b) b.push(l); else byArtist.set(l.artist, [l]);
+  }
+  const sameArtist = (lot: AuctionLot): AuctionLot[] => byArtist.get(lot.artist) || [];
+
   // evidence rows for FALLBACK-signal lots (client-engine pools over the full
   // corpus) — merged into build-market's comp-evidence.json below
   const fallbackEvidence = new Map<string, { i: string; t: string; h: string; d: string; p: number }[]>();
@@ -199,7 +213,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
         // build corpus (incl. the off-wire tier), so the client can't resolve
         // them and the comps surface would contradict the signal it prints.
         // The rows go into comp-evidence.json alongside the engine pools.
-        const read = signalWithPool(lot, lots as unknown as AuctionLot[]);
+        const read = signalWithPool(lot, sameArtist(lot));
         signal = read?.signal ?? null;
         if (read && signal && read.pool.length) {
           fallbackEvidence.set(String(l.id), read.pool.slice(0, 10).map(s => ({
@@ -288,7 +302,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       // loads. soldCompBand returns null for every non-sports/science-object lot
       // (single choke point), so this is a no-op for art/design/watches.
       if (isSportsScienceObject(lot)) {
-        const band = soldCompBand(lot, lots as unknown as AuctionLot[]);
+        const band = soldCompBand(lot, sameArtist(lot));
         emitted.soldComp = band
           ? { median: band.median, low: band.low, high: band.high, n: band.n, confidence: band.confidence, form: band.form }
           : null;
@@ -514,6 +528,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
   const velN = velById.size;
   const velPct = Array.from(velById.values()).filter(v => v.pctile != null).length;
   console.log(`upcoming.json: ${upcoming.length} lots, tape[${Object.keys(tape).map(k => `${k}:${tape[k].length}`).join(' ')}], recentSold[${recentCounts}], realized.sports:${realized.sports.length}, bidComp.sports:${bidComp.sports.length}${bcLast ? ` (now ${bcLast.value} bids/lot)` : ''}, bidVelocity:${velN} (${velPct} w/ pctile), ${kb}KB`);
+  return upcoming;
 }
 
 // standalone entry

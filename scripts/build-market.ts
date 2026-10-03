@@ -32,6 +32,7 @@ import { appendValueTape } from './build-market-tape';
 import { buildHedonicIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
 import { buildSubMarkets, buildDrillRows, buildVerticalRepeatSale } from './sub-markets';
 import { fitGradeLadder } from './lib/grade-ladder';
+import { markPhase } from './lib/mem-trace';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -111,7 +112,7 @@ function readGz(f: string): AuctionLot[] {
   return readGzRows(path.join(CORPUS, f + '.gz')) as AuctionLot[];
 }
 
-export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<AuctionLot[]> {
+async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   const t0 = Date.now();
   // the valuation clock — Date.now() for the nightly; a past day for the
   // point-in-time evaluation seam (every window/decay below reads NOW_MS)
@@ -233,6 +234,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // (NaN > cut is false either way), so the isNaN behaviour is preserved exactly.
   for (const l of all) (l as AuctionLot & { _saleMs?: number })._saleMs = new Date(l.saleDate as string).getTime();
 
+  markPhase('market: idf + vectors');
   // ── 1 · value every UPCOMING lot (the live product) ──
   // bucket sold lots by maker ONCE (time-order preserved from soldSorted) so each
   // upcoming lot reads its same-maker pool in O(1) instead of rescanning all 36k.
@@ -465,6 +467,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     console.log(`[market] comp evidence: ${evLots} signal lots → comp-evidence.json`);
   }
 
+  markPhase('market: upcoming valued');
   // ── 2 · repeat-sale groups: physical matches among SOLD lots ──
   // Extracted to scripts/lib/repeat-sale.ts (Sep 10 2026) so the grouping can be
   // validated offline (scripts/oneoff/qa/repeat-sale-equiv.ts) and so the eligibility
@@ -474,6 +477,12 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     console.log(`[market] repeat-sale: ${rs.physPairs} physical pairs → ${rs.physGroups} groups · ${rs.seconds}s (${rs.eligible}/${soldSorted.length} eligible, ${rs.candidatePairs} pairs scored)`);
   }
 
+  // the IDF vectors' last reader was the repeat-sale grouping above (they feed
+  // only value.resolveComps / similarity, §1–§2): release them now (~0.6GB)
+  // rather than carrying them through the series/hedonic peak. Cleared, not
+  // deleted (see the persist note); no output serializes them.
+  for (const l of engineAll) { const t = l as AuctionLot & { _v?: unknown }; if (t._v !== undefined) t._v = undefined; }
+  markPhase('market: repeat-sale');
   // ── 3 · market series (the dashboards) ──
   // Series run over `all` (INCLUDING cards): the analytics are O(n) aggregation,
   // not the O(pool) valuation/repeat-sale cards were held out of. So the sports
@@ -508,6 +517,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // are identical to the sequential loop (scripts/oneoff/qa/maker-pool-equiv.ts).
   if (!opts.evalOnly) {
     const pool = await buildMakerIndicesParallel(makerLotsBySlug);
+    markPhase('market: maker pool');
     Object.assign(makerIndex, pool.makerIndex);
     for (const slug of rosterSlugs) {
       const h1 = makerIndex[slug].horizons['1Y'];
@@ -550,6 +560,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   console.log(`[market] all      composite: pub=${cmpAll.publishable} components=${cmpAll.components.filter(c => c.publishable).length} 1Y=${cmpAll.horizons['1Y'].publishable ? `${cmpAll.horizons['1Y'].changePct!.toFixed(1)}% [${cmpAll.horizons['1Y'].ciLoPct!.toFixed(1)},${cmpAll.horizons['1Y'].ciHiPct!.toFixed(1)}]` : `NOT-PUB (${cmpAll.reason || cmpAll.horizons['1Y'].reason})`}`);
   } // !evalOnly — the market series / hedonic / composite pass
 
+  markPhase('market: maker indices + series');
   // per-maker mini-series for the big names (drill-down)
   const makers: Record<string, MarketSeries> = {};
   const makerCounts = new Map<string, number>();
@@ -673,6 +684,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     console.log(`[market] refs.json: ${refsOut.length} references (${(fs.statSync(path.join(SERVED, 'refs.json')).size / 1024).toFixed(0)}KB) · ${((Date.now() - tRef) / 1000).toFixed(0)}s`);
   }
 
+  markPhase('market: house cal + refs');
   // ── 3e · sports player dossiers (players.json) + live-card comps ──
   // The cross-market read Collin wants: one player, cards AND game-used AND
   // tickets/trophies — "how is this athlete doing in the wider market". All
@@ -1265,6 +1277,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     return all;
   }
 
+  markPhase('market: players + cards');
   // ── 3f · stats.json rows for corpus-only / non-ARTISTS slugs ──
   // The nightly stats loop iterates ARTISTS, which OMITS sports-cards (corpus-
   // only), sports-memorabilia, and the 3 culture slugs — so the client reads
@@ -1358,6 +1371,7 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
     }
   }
 
+  markPhase('market: sub-markets + drills');
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,
@@ -1419,10 +1433,35 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // persist same-object pairs queued for the next extraction run (no-op when off)
   flushExtractQueue();
   console.log(`[market] wrote market.json (${(fs.statSync(path.join(SERVED, 'market.json')).size / 1024).toFixed(0)}KB)`);
+  // the engine's module state is not read by the persist phase (build-upcoming
+  // never imports value.ts) — release it with the engine's working set
+  setTimeIndex(null);
+  setHouseBias(null);
+  markPhase('market: engine');
+  return all;
+}
 
+export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<AuctionLot[]> {
+  const t0 = Date.now();
+  // The engine runs in its OWN function so its working set (IDF vectors,
+  // pools, per-slug buckets, card maps — ~as large as the corpus) is garbage
+  // the moment it returns: the persist phase below then holds the corpus once.
+  const all = await runMarketEngine(opts);
+  if (opts.evalOnly) return all;
+  return persistMarket(all, t0);
+}
+
+async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[]> {
+  const lotsForSlug = (slug: string): AuctionLot[] => all.filter(l => l.artist === slug);
   // ── 4 · persist: full corpus (gz) + slim served (value flows to the client) ──
-  for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; delete t._v; delete t._saleMs; }
-  const { writeCorpusAndServed } = require('./corpus-io');
+  // The engine scratch keys are CLEARED (set undefined), not `delete`d:
+  // JSON.stringify and slimForClient skip an undefined value exactly as they
+  // skip an absent key, so every written byte is unchanged — while a `delete`
+  // drops a JSON-parsed V8 object into dictionary mode (measured: +2.8GB of
+  // heap over the corpus for one deleted key). The reparsed view returned by
+  // the persist below carries neither key.
+  for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; if (t._saleMs !== undefined) t._saleMs = undefined; if (t._v !== undefined) t._v = undefined; }
+  const { persistCorpusAndServed } = require('./corpus-io');
   // Served sold-card SAMPLE: the artist page / archive surfaces need real card
   // rows (record sale, past results, realized cohort) but 288k would blow the
   // payload — ship the most-recent 1,500 + top 500 by price (the record lives
@@ -1449,15 +1488,16 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // re-split runs after assemble and overwrites its output. Dropping the
   // `archived === true` clause once leaked the 252K-row RR sold archive into
   // the phase-2 shards (~290MB on the wire for every useFullLots surface).
-  writeCorpusAndServed(all as unknown as Record<string, unknown>[],
-    // NOTE: 'pokemon' is deliberately NOT in CULTURE_KEEP — its bulk sold
-    // history goes to the archive tier like sports cards, not phase-2 shards.
-    (l: Record<string, unknown>) => (l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string)) || l.archived === true,
-    // corpus-only: SOLD sport cards + Pokémon stay off the wire — except the
-    // samples above. Live lots always ship (they're on the block).
-    (l: Record<string, unknown>) =>
-      ((l.artist === 'sports-cards' || l.artist === 'graded-cards') && l.status === 'sold' && !cardSample.has(String(l.id))) ||
-      (l.artist === 'pokemon' && l.status === 'sold' && !pokemonSample.has(String(l.id))));
+  // NOTE: 'pokemon' is deliberately NOT in CULTURE_KEEP — its bulk sold
+  // history goes to the archive tier like sports cards, not phase-2 shards.
+  const isArchived = (l: Record<string, unknown>) => (l.auctionHouse === 'Goldin' && l.status === 'sold' && !CULTURE_KEEP.has(l.artist as string)) || l.archived === true;
+  // corpus-only: SOLD sport cards + Pokémon stay off the wire — except the
+  // samples above. Live lots always ship (they're on the block).
+  const isCorpusOnly = (l: Record<string, unknown>) =>
+    ((l.artist === 'sports-cards' || l.artist === 'graded-cards') && l.status === 'sold' && !cardSample.has(String(l.id))) ||
+    (l.artist === 'pokemon' && l.status === 'sold' && !pokemonSample.has(String(l.id)));
+  // (the corpus + served write runs LAST, below: it consumes `all` — every
+  // lot is replaced by its written-and-reparsed row as it streams out)
 
   // ── SOLD-OUTCOMES LEDGER — a slim id→[priceUsd, saleDate] map so the profile
   // can resolve SAVED lots that sold into the archive / corpus-only tiers (whose
@@ -1504,16 +1544,34 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
   // Hand it the IN-MEMORY corpus: letting it re-read the gz from disk doubled
   // the full lot set in RAM while `all` was still live — the +40k Pokémon rows
   // tipped that over the runner's ceiling (OOM, Aug 13 dispatch run).
+  // (Runs BEFORE the corpus write since the scale pass — it reads no file the
+  // write produces, and the write then consumes `all`. Its only mutation of a
+  // lot is the transient `_saleMs` stamp, cleared again before the write.)
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED, all as unknown as AuctionLot[]);
-  setTimeIndex(null);
-  setHouseBias(null);
+  for (const l of all) (l as AuctionLot & { _saleMs?: unknown })._saleMs = undefined; // see the clearing note above
+  markPhase('market: upcoming (in-memory)');
+
+  // ── the corpus gz + slim served shards (+ the columnar corpus.parquet) ──
+  // Returns the corpus exactly as readCorpus() would parse it back from the
+  // files just written (main tier, then archive; each row JSON-roundtripped) —
+  // the standalone readers' view, with no second parse of the files.
+  // the columnar corpus rides the same stream (advisory: a DuckDB failure
+  // costs tonight's corpus.parquet, never the publish)
+  let sink: import('./corpus-io').CorpusRowSink | null = null;
+  try {
+    const { openParquetSink, PARQUET_FILE } = require('./lib/corpus-parquet');
+    sink = await openParquetSink(path.join(CORPUS, PARQUET_FILE));
+  } catch (e) { console.log(`::warning title=corpus.parquet skipped::${(e as Error).message}`); }
+  const io = await persistCorpusAndServed(all as unknown as Record<string, unknown>[], isArchived, isCorpusOnly, { sink });
+  console.log(`[market] wrote corpus ${io.corpusMb}+${io.archiveMb}MB gz | served ${io.servedMb}MB`);
+  markPhase('market: persist');
   console.log(`[market] done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
-  return all;
+  return io.view as unknown as AuctionLot[];
 }
 
 // standalone entry — fail loud with a clear message + non-zero exit rather than
 // a raw stack, so a failed rebuild is never mistaken for a successful one.
 if (require.main === module) {
-  try { runMarketBuild(); } catch (err) { console.error('[market] build failed:', err); process.exit(1); }
+  runMarketBuild().catch(err => { console.error('[market] build failed:', err); process.exit(1); });
 }
