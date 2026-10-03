@@ -1,4 +1,5 @@
-import { MARKETS } from '../../constants';
+import { MARKETS, type Market } from '../../constants';
+import { marketFacts, n, shareMeta } from '../../lib/og-meta';
 
 /**
  * /analytics/<market> — the analytics desk with the market pinned in the URL
@@ -20,11 +21,14 @@ export function generateStaticParams() {
 export async function generateMetadata(props: { params: Promise<{ market: string }> }) {
   const params = await props.params;
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
-  return {
-    title: `${label} analytics`,
-    description: `Price indices, sell-through, house distribution and maker rankings across the ${label.toLowerCase()} market.`,
-    alternates: { canonical: `/analytics/${params.market}` },
-  };
+  const f = marketFacts(params.market as Market);
+  const noun = params.market === 'tcg' ? 'TCG' : label.toLowerCase();
+  return shareMeta({
+    title: `${label} analytics — lectr`,
+    absolute: true,
+    description: `The ${noun} market in numbers${f.settled ? ` — ${n(f.settled)} settled results` : ''}: price indices with their 95% intervals, sell-through, house share and maker rankings.`,
+    canonical: `/analytics/${params.market}`,
+  });
 }
 
 import Base from '../page';

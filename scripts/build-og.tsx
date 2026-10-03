@@ -1,100 +1,228 @@
 /**
- * Pre-renders every artist's OG share card to public/og/<slug>.png at build
- * time. This replaces app/[artist]/opengraph-image.tsx — Next can't export
- * dynamic-segment metadata images with `output: 'export'`, and a static host
- * has no server to render them per scrape anyway. Same satori pipeline
- * (next/og ImageResponse), same visual: sharing /kaws shows KAWS's own line
- * and numbers — the share IS the product.
+ * Pre-renders the share cards a static export cannot render per request
+ * (Next can't export dynamic-segment metadata images under output:'export',
+ * and a static host has no server to draw them per scrape). Card grammar:
+ * scripts/og/cards.tsx. Run before `next build` (package.json build script).
  *
- * Run before `next build` (wired into the build script in package.json).
+ *   public/og/<maker>.png          maker dossiers — name + the verified read
+ *                                  (committed, as before)
+ *   public/og/live/call-<m>.png    tonight's call, per market ('all' = /value)
+ *   public/og/live/record.png      the replayed record (/receipts)
+ *   public/og/lot/<id>.png         every static /lot/<id> page — its own call
+ *   (live/ and lot/ are build outputs, gitignored — regenerated every build)
+ *
+ * The call is chosen by the social desk's selector (scripts/social/lib.ts
+ * pickCall — the mirror of app/components/Terminal.tsx pickCall), scoped to
+ * a vertical exactly as the lander scopes it (the vertical's makers, then
+ * lotFitsMarket). Photographs are fetched once with a real Chrome UA and
+ * cached under .og-cache/ (gitignored); a photo that will not load drops the
+ * plate and the card reflows type-only.
+ *
+ * OG_LOTS=0 skips the per-lot cards (fast local iteration).
  */
-import React from 'react';
-import { ImageResponse } from 'next/og';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ARTISTS } from '../app/constants';
+import crypto from 'node:crypto';
+import { ARTISTS, MARKETS, marketArtists, marketOf } from '../app/constants';
+import { craftTitle, formatPrice, isLiveUpcoming, trueSaleDay } from '../app/utils';
+import { lotFitsMarket } from '../app/lib/comps';
+import { flaggedLots } from '../app/lot/flagged';
+import { loadData, pickCall, imageDataUri, makerLine, shortTitle, type Data, type Lot } from './social/lib';
+import { callCard, makerCard, ledgerCard, toPng, type CallCardProps } from './og/cards';
+import type { AuctionLot } from '../app/types';
+import { marketFacts, fmtExpected, lotNoun } from '../app/lib/og-meta';
 
-interface ArtistStats {
-  totalAuctionRevenue?: number;
-  avgPriceLast12Months?: number;
-  appreciationRate?: number;
-  recordPrice?: number;
-  priceHistory?: { date: string; avgPrice: number; totalSales: number }[];
+
+const ROOT = process.cwd();
+const OG = path.join(ROOT, 'public', 'og');
+const CACHE = path.join(ROOT, '.og-cache');
+
+// ── photographs, fetched once ───────────────────────────────────────────────
+const RETRY_FAIL_MS = 12 * 3600_000;
+async function photo(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
+  fs.mkdirSync(CACHE, { recursive: true });
+  const f = path.join(CACHE, crypto.createHash('sha1').update(url).digest('hex') + '.txt');
+  if (fs.existsSync(f)) {
+    const v = fs.readFileSync(f, 'utf8');
+    if (v) return v;
+    if (Date.now() - fs.statSync(f).mtimeMs < RETRY_FAIL_MS) return null; // a recent failure
+  }
+  const v = await imageDataUri(url, 800);
+  fs.writeFileSync(f, v || '');
+  return v;
 }
 
-const size = { width: 1200, height: 630 };
-// Next 16's next/og default font is Geist; every card through Next 14 used
-// next/og's bundled Noto Sans. Pin that exact file (OFL, vendored from
-// next@14.2.35) so the share cards keep their look across the upgrade.
-const fonts = [{ name: 'sans-serif', data: fs.readFileSync(path.join(process.cwd(), 'scripts/og-fonts/noto-sans-v27-latin-regular.ttf')), weight: 400 as const, style: 'normal' as const }];
-
-// The sign, embedded — this script runs pre-build with no host to fetch from.
-const mark = fs.readFileSync(path.join(process.cwd(), 'public', 'brand', 'lectr-ink-lg.png')).toString('base64');
-
-function fmt(n: number): string {
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
-  return `$${Math.round(n)}`;
+/** run fn over items, `limit` at a time */
+async function pool<T>(items: T[], limit: number, fn: (t: T) => Promise<void>) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) await fn(items[i++]);
+  }));
 }
 
-function card(label: string, s: ArtistStats) {
-  const hist = (s.priceHistory || []).map(p => p.avgPrice);
-  const salesCount = (s.priceHistory || []).reduce((x, p) => x + (p.totalSales || 0), 0);
-  const W = 1080, H = 200;
-  // true series min/max (an empty series falls back to a flat 0..1) — seeding
-  // min with 0 previously flattened real price variation into the top sliver.
-  const max = hist.length ? Math.max(...hist) : 1;
-  const min = hist.length ? Math.min(...hist) : 0;
-  const line = hist
-    .map((v, i) => `${((i / Math.max(hist.length - 1, 1)) * W).toFixed(1)},${(H - ((v - min) / Math.max(max - min, 1)) * H + 8).toFixed(1)}`)
-    .join(' ');
-  const up = hist.length >= 2 ? hist[hist.length - 1] >= hist[0] : true;
-  // print-density signal inks — they hold on the eggshell card
-  const lineColor = up ? '#0F7C43' : '#C13E2C';
-
-  return new ImageResponse(
-    (
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', background: '#FDFCFC', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
-        {/* mat frame — ink hairline holds the edge in light AND dark bubbles */}
-        <div style={{ position: 'absolute', top: 24, left: 24, right: 24, bottom: 24, border: '1px solid rgba(28,25,23,0.16)' }} />
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <img src={'data:image/png;base64,' + mark} width={150} height={96} alt="" />
-          <div style={{ fontSize: 20, color: '#777169' }}>maker market page · lectr.bid</div>
-        </div>
-        <div style={{ display: 'flex', fontSize: 66, fontWeight: 400, color: '#1C1917', letterSpacing: -2.5, marginTop: 22 }}>{label}</div>
-        <div style={{ display: 'flex', gap: 40, marginTop: 10, fontSize: 24, color: '#59544F' }}>
-          <div style={{ display: 'flex' }}>{`avg sale ${fmt(s.avgPriceLast12Months || 0)}`}</div>
-          <div style={{ display: 'flex' }}>{`record ${fmt(s.recordPrice || 0)}`}</div>
-          {/* the third figure used to print "prices up X.X% this year" green/red
-              from appreciationRate — a 3-year CAGR over non-empty quarters
-              wearing the verified-move grammar ("0.0%" on thin makers). Removed
-              exactly as app/opengraph-image.tsx did; the sales count is a fact. */}
-          <div style={{ display: 'flex' }}>{`${salesCount.toLocaleString()} tracked sales`}</div>
-        </div>
-        {hist.length >= 2 && (
-          <svg width={W} height={H + 16} style={{ marginTop: 30 }}>
-            <polyline points={line} fill="none" stroke={lineColor} strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" />
-          </svg>
-        )}
-      </div>
-    ),
-    { ...size, fonts }
-  );
+// ── the numbers a call card prints ──────────────────────────────────────────
+const expected = fmtExpected;
+function estimateRange(lo?: number | null, hi?: number | null): string | null {
+  const a = lo || hi, b = hi || lo;
+  if (!a || !b) return null;
+  if (b < 100_000) return a === b ? `$${a.toLocaleString('en-US')}` : `$${a.toLocaleString('en-US')}–${b.toLocaleString('en-US')}`;
+  return a === b ? formatPrice(a) : `${formatPrice(a)}–${formatPrice(b)}`;
 }
+const CONF_WORD: Record<string, string> = { 'very-high': 'very high confidence', high: 'high confidence', medium: 'medium confidence', low: 'low confidence' };
+function hammersLabel(lot: Pick<Lot, 'saleDate' | 'saleDateTime'>): string {
+  const day = trueSaleDay(lot as Parameters<typeof trueSaleDay>[0]) || lot.saleDate;
+  const t = Date.parse(`${day}T12:00:00Z`);
+  return Number.isFinite(t) ? `hammers ${new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'hammer date to come';
+}
+
+type CallLot = Lot & { value?: (Lot['value'] & { compValueUsd?: number | null }) | null; lotNumber?: number | null };
+function callProps(lot: CallLot, kicker: string, folio: string, img: string | null): CallCardProps | null {
+  const sig = lot.signal;
+  const estMid = lot.estimateLow && lot.estimateHigh ? (lot.estimateLow + lot.estimateHigh) / 2 : (lot.estimateLow || lot.estimateHigh || null);
+  // X = the engine's prediction; crawl-time signals that carry no value
+  // block fall back to the comps median, exactly as CallPlate derives it
+  const x = lot.value?.compValueUsd ?? sig?.med ?? (estMid != null && sig ? estMid * (1 + sig.pct / 100) : null);
+  if (!x || !Number.isFinite(x)) return null;
+  const maker = makerLine(lot.artist, lot.auctionHouse, marketOf(lot.artist));
+  return {
+    kicker,
+    house: lot.auctionHouse,
+    houseSays: estimateRange(lot.estimateLow, lot.estimateHigh),
+    recordSays: expected(x),
+    overPct: estMid ? (x / estMid - 1) * 100 : null,
+    maker,
+    title: shortTitle(craftTitle(lot.title).replace(new RegExp(`^${maker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:,—–-]\\s*`, 'i'), '').replace(/^["“]([^"”]*)["”]/, '$1'), 70),
+    hammers: hammersLabel(lot),
+    basis: sig ? `${sig.basis} comparable sale${sig.basis === 1 ? '' : 's'} · ${CONF_WORD[sig.confidence || 'low']}` : 'read from comparable sales',
+    photo: img,
+    folio,
+  };
+}
+
+async function write(file: string, res: Parameters<typeof toPng>[0]) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, await toPng(res));
+}
+
+// ── market + maker reads ────────────────────────────────────────────────────
+interface Horizon { publishable?: boolean; changePct: number | null; ciLoPct?: number | null; ciHiPct?: number | null; reason?: string }
+interface MakerIndex { horizons?: Record<string, Horizon> }
+interface MakerStats { totalSoldTracked?: number; recordPrice?: number; recordDate?: string; recordHouse?: string; medianPriceLast12Months?: number }
+const HZ_WORD: Record<string, string> = { '1Y': 'over one year', '3Y': 'over three years', '5Y': 'over five years' };
+const pct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}%`;
 
 async function main() {
-  const stats: Record<string, ArtistStats> = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'public', 'data', 'ray', 'stats.json'), 'utf8')
-  );
-  const outDir = path.join(process.cwd(), 'public', 'og');
-  fs.mkdirSync(outDir, { recursive: true });
-  for (const a of ARTISTS) {
-    const res = card(a.label, stats[a.slug] || {});
-    const buf = Buffer.from(await res.arrayBuffer());
-    fs.writeFileSync(path.join(outDir, `${a.slug}.png`), buf);
+  const t0 = Date.now();
+  const d: Data = loadData();
+  const folio = d.meta?.lastCrawl ? `No. ${d.meta.lastCrawl.slice(0, 10).replace(/-/g, '')}` : 'lectr.bid';
+  const market = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'ray', 'market.json'), 'utf8')) as { makerIndex?: Record<string, MakerIndex> };
+  const stats = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'ray', 'stats.json'), 'utf8')) as Record<string, MakerStats>;
+  const today = new Date().toISOString().slice(0, 10);
+  let photos = 0, misses = 0;
+  const shot = async (u?: string | null) => { const v = await photo(u); if (u) (v ? photos++ : misses++); return v; };
+
+  // ── tonight's call, per market ──
+  fs.mkdirSync(path.join(OG, 'live'), { recursive: true });
+  for (const m of MARKETS) {
+    const set = marketArtists(m.key);
+    const scoped: Data = m.key === 'all' ? d : { ...d, upcoming: d.upcoming.filter(l => set.has(l.artist) && lotFitsMarket(l as unknown as AuctionLot, m.key)) };
+    const call = pickCall(scoped, new Set());
+    const file = path.join(OG, 'live', `call-${m.key}.png`);
+    const label = m.key === 'all' ? null : m.label;
+    const props = call ? callProps(call.lot as CallLot, `Tonight's call${label ? ` · ${label}` : ''}`, folio, await shot(call.lot.imageUrl)) : null;
+    if (props) {
+      await write(file, callCard(props));
+    } else {
+      // a quiet vertical: say so, with the counts that are true tonight
+      const f = marketFacts(m.key);
+      await write(file, ledgerCard({
+        kicker: `Tonight · ${m.label}`,
+        headline: f.live ? `No ${lotNoun(m.key)} clears the bar tonight.` : `No ${lotNoun(m.key, 2)} on the block tonight.`,
+        sub: 'The engine reads each lot on the block against its comparable sales, and prints nothing it cannot stand behind.',
+        rows: [
+          { k: 'On the block', v: f.live.toLocaleString('en-US') },
+          { k: 'Flagged tonight', v: f.flagged.toLocaleString('en-US') },
+          ...(f.settled ? [{ k: 'Results on file', v: f.settled.toLocaleString('en-US') }] : []),
+        ],
+        folio,
+      }));
+    }
   }
-  console.log(`[og] ${ARTISTS.length} share cards → public/og/`);
+
+  // ── the record ──
+  const bt = d.backtest as (Data['backtest'] & { flagged: { hammerMedianPct?: number; hammerBeatPct?: number }; unflagged: { hammerMedianPct?: number; hammerBeatPct?: number } }) | null;
+  if (bt) {
+    const rows: { k: string; v: string; dir?: 'up' | 'down' }[] = [];
+    if (bt.flagged.hammerMedianPct != null) rows.push({ k: 'Flagged, hammer vs est.', v: pct(bt.flagged.hammerMedianPct).replace('.0%', '%'), dir: bt.flagged.hammerMedianPct >= 0 ? 'up' : 'down' });
+    if (bt.unflagged.hammerMedianPct != null) rows.push({ k: 'Unflagged', v: pct(bt.unflagged.hammerMedianPct).replace('.0%', '%'), dir: bt.unflagged.hammerMedianPct >= 0 ? 'up' : 'down' });
+    if (bt.flagged.hammerBeatPct != null) rows.push({ k: 'Flags past the high est.', v: `${bt.flagged.hammerBeatPct}%` });
+    rows.push({ k: 'Failed to sell', v: `${bt.flagged.failToSellPct}%` });
+    await write(path.join(OG, 'live', 'record.png'), ledgerCard({
+      kicker: 'The record, replayed',
+      headline: `${bt.flagged.n.toLocaleString('en-US')} calls, graded against the hammer.`,
+      sub: 'Each flag replayed against the price the lot actually made — misses printed exactly like hits.',
+      rows,
+      folio,
+    }));
+  }
+
+  // ── makers ──
+  for (const a of ARTISTS) {
+    const s = stats[a.slug] || {};
+    const hz = market.makerIndex?.[a.slug]?.horizons || {};
+    const okH = ['5Y', '3Y', '1Y'].find(h => hz[h]?.publishable && hz[h].changePct != null);
+    const read = okH ? {
+      line: `${pct(hz[okH].changePct!)} ${HZ_WORD[okH]}, like for like`,
+      ci: `95% interval ${pct(hz[okH].ciLoPct ?? hz[okH].changePct!)} to ${pct(hz[okH].ciHiPct ?? hz[okH].changePct!)}`,
+      dir: (hz[okH].changePct! >= 0 ? 'up' : 'down') as 'up' | 'down',
+    } : null;
+    const abstainRaw = hz['5Y']?.reason || hz['3Y']?.reason || hz['1Y']?.reason || '';
+    const abstain = /thin/.test(abstainRaw) ? 'too few like-for-like sales to measure'
+      : /spans zero/.test(abstainRaw) ? 'the interval still spans zero' : null;
+    const yr = s.recordDate ? new Date(s.recordDate).getUTCFullYear() : null;
+    const mk = marketOf(a.slug);
+    const mLabel = mk === 'tcg' ? 'TCG market' : `${(MARKETS.find(x => x.key === mk)?.label || 'collectibles').toLowerCase()} market`;
+    // the face: tonight's best photographed live lot by this maker, flags first
+    const live = d.upcoming
+      .filter(l => l.artist === a.slug && l.imageUrl && isLiveUpcoming(l, today))
+      .sort((x, y) => (y.signal?.label === 'Below Market' ? 1 : 0) - (x.signal?.label === 'Below Market' ? 1 : 0) || (y.estimateHigh || 0) - (x.estimateHigh || 0));
+    let img: string | null = null;
+    for (const l of live.slice(0, 3)) { img = await shot(l.imageUrl); if (img) break; }
+    await write(path.join(OG, `${a.slug}.png`), makerCard({
+      name: a.label,
+      market: mLabel,
+      read,
+      abstain,
+      sold: s.totalSoldTracked ?? null,
+      record: s.recordPrice ? `${formatPrice(s.recordPrice)}${s.recordHouse || yr ? ` · ${[s.recordHouse, yr].filter(Boolean).join(', ')}` : ''}` : null,
+      median: s.medianPriceLast12Months ? expected(s.medianPriceLast12Months) : null,
+      photo: img,
+      folio,
+    }));
+  }
+  const tMakers = Date.now();
+
+  // ── every static lot page: its own call ──
+  let lotCards = 0;
+  if (process.env.OG_LOTS !== '0') {
+    const lots = flaggedLots();
+    const dir = path.join(OG, 'lot');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    // fetch in parallel (network-bound), render serially (CPU-bound)
+    const imgs = new Map<string, string | null>();
+    await pool(lots, 16, async l => { imgs.set(l.id, await shot(l.imageUrl)); });
+    for (const l of lots) {
+      const kicker = `The call${l.lotNumber ? ` · Lot ${l.lotNumber}` : ''} · ${l.auctionHouse}`;
+      const props = callProps(l as unknown as CallLot, kicker, folio, imgs.get(l.id) ?? null);
+      if (!props) continue;
+      await write(path.join(dir, `${l.id}.png`), callCard(props));
+      lotCards++;
+    }
+  }
+  const t1 = Date.now();
+  console.log(`[og] ${MARKETS.length} call cards + record + ${ARTISTS.length} makers (${((tMakers - t0) / 1000).toFixed(1)}s) · ${lotCards} lot cards (${((t1 - tMakers) / 1000).toFixed(1)}s) · photos ${photos} ok / ${misses} missed`);
 }
 
 main().catch(err => { console.error('[og] failed:', err); process.exit(1); });

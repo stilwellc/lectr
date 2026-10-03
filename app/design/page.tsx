@@ -1,10 +1,15 @@
 export const dynamic = 'force-static';
 import type { Metadata } from 'next';
+import { shareMeta, verticalDescription } from '../lib/og-meta';
 
-export const metadata: Metadata = {
+// Counts are cut at build (the nightly rebuild refreshes them); the card is
+// tonight's call inside this vertical, drawn by scripts/build-og.tsx. The
+// title keeps the lander's noun — MARKET_TITLE in app/lib/market.tsx
+// re-asserts it on a client market switch.
+export const metadata: Metadata = shareMeta({
   title: 'Design',
-  description: 'Auction intelligence for the design market — furniture & objects by Nakashima, Eames, Prouvé, Jeanneret.',
-  openGraph: { title: 'Design — lectr', description: 'Auction intelligence for the design market — furniture & objects by Nakashima, Eames, Prouvé, Jeanneret.' },
-};
+  description: verticalDescription('design'),
+  image: '/og/live/call-design.png',
+});
 
 export { default } from '../page';

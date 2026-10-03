@@ -1,10 +1,15 @@
 export const dynamic = 'force-static';
 import type { Metadata } from 'next';
+import { shareMeta, verticalDescription } from '../lib/og-meta';
 
-export const metadata: Metadata = {
+// Counts are cut at build (the nightly rebuild refreshes them); the card is
+// tonight's call inside this vertical, drawn by scripts/build-og.tsx. The
+// title keeps the lander's noun — MARKET_TITLE in app/lib/market.tsx
+// re-asserts it on a client market switch.
+export const metadata: Metadata = shareMeta({
   title: 'Pop Culture',
-  description: 'Auction intelligence for the pop-culture market — screen-used props, stage-worn music & handwritten lyrics. The unrepeatable, never the mass market.',
-  openGraph: { title: 'Pop Culture — lectr', description: 'Auction intelligence for the pop-culture market — screen-used props, stage-worn music & handwritten lyrics. The unrepeatable, never the mass market.' },
-};
+  description: verticalDescription('culture'),
+  image: '/og/live/call-culture.png',
+});
 
 export { default } from '../page';

@@ -1,4 +1,5 @@
-import { MARKETS } from '../../constants';
+import { MARKETS, type Market } from '../../constants';
+import { lotNoun, marketFacts, n, shareMeta } from '../../lib/og-meta';
 
 /**
  * /value/<market> — the buy-signal desk with the market pinned in the URL
@@ -19,11 +20,19 @@ export function generateStaticParams() {
 export async function generateMetadata(props: { params: Promise<{ market: string }> }) {
   const params = await props.params;
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
-  return {
-    title: `${label} buy signals`,
-    description: `${label} lots trading below where their comparable sales clear — each call replayed against what the lot actually hammered for.`,
-    alternates: { canonical: `/value/${params.market}` },
-  };
+  const f = marketFacts(params.market as Market);
+  const noun = params.market === 'tcg' ? 'TCG' : label.toLowerCase();
+  return shareMeta({
+    title: `${label} buy signals — lectr`,
+    absolute: true,
+    description: f.flagged
+      ? `${n(f.flagged)} live ${noun} ${f.flagged === 1 ? 'lot' : 'lots'} where the record says the hammer lands above the house estimate, out of ${n(f.live)} on the block. Each call is logged tonight and graded against the result.`
+      : f.live
+        ? `No ${lotNoun(params.market as Market)} clears the bar tonight — ${n(f.live)} on the block, each read against its comparable sales.`
+        : `No ${lotNoun(params.market as Market)} on the block right now — the desk reads the next sale against its comparable sales the night it lists.`,
+    image: `/og/live/call-${params.market}.png`,
+    canonical: `/value/${params.market}`,
+  });
 }
 
 import Base from '../page';

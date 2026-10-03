@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { withShare } from '../../lib/og-meta';
 import BookTotal from '../../components/BookTotal';
 import Link from 'next/link';
 import ArtistNav from '../../components/ArtistNav';
@@ -19,11 +20,11 @@ const movers = verifiedMovers(marketJson as unknown as MarketData);
 const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const countWord = (n: number) => COUNT_WORDS[n] ?? String(n);
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withShare({
   title: 'How we built the price-movement engine — a hedonic index that abstains',
   description:
     'The math behind lectr\'s appreciation numbers: a per-maker Huber-robust hedonic log-price regression that controls for the within-maker mix, and a confidence gate that publishes a return only when its 95% CI resolves the sign. The result is that almost everything abstains — and the few makers that clear the bar are the whole point.',
-};
+});
 
 /* NORTH STAR editorial grammar (docs/NORTHSTAR_UI.md): 17px prose on a
    ~680px measure; heads bigger and lighter, never serif, never bold. */
