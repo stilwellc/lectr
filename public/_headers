@@ -77,3 +77,8 @@
   Cache-Control: public, max-age=31536000, immutable
 /data/ray/sold-ledger-*
   Cache-Control: public, max-age=31536000, immutable
+# The ⌘K search index + per-reference sale ledgers (scripts/emit-search-index.ts):
+# every shard is fetched with ?v=<search-meta.v>, so a new nightly is a new URL.
+# search-meta.json itself sits OUTSIDE this directory and keeps revalidating.
+/data/ray/search/*
+  Cache-Control: public, max-age=31536000, immutable

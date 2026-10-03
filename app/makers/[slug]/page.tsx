@@ -12,9 +12,9 @@ import { useMakerRows } from '../../hooks/useMakerRows';
 import type { MarketData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useMarket } from '../../lib/market';
-import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming, refLabel, median } from '../../utils';
+import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming, median } from '../../utils';
 import { useRefs, refsForMaker } from '../../hooks/useRefs';
-import { encodeRefPath } from '../../ref/ref-path';
+import RefList, { type RefListRow } from '../../ref/RefList';
 
 import ArtistNav from '../../components/ArtistNav';
 import ArtistHero from '../../components/ArtistHero';
@@ -177,13 +177,26 @@ function PlayerStrip({ lots, label }: { lots: AuctionLot[]; label: string }) {
   );
 }
 
-// #27 — WATCH DOSSIERS → /ref REFERENCE LEDGER. The reference is the watch
-// unit of decision. Top ~8 refs by sample depth, each into /ref/<maker>/<enc>.
-// n · median · TTM delta (a real measured median-over-median move, so it may
-// light up/down). Gated on refs loaded — honest loading/empty/failed states.
+// #27 — WATCH DOSSIERS → /ref REFERENCE BOOK. The reference is the watch
+// unit of decision. EVERY reference with a dossier (was: the deepest 8 —
+// 319 of Patek's 327 were unreachable), filterable and sortable, each into
+// /ref/<maker>/<enc> (app/ref/RefList.tsx). n · median · past-year delta (a
+// real measured median-over-median move, gated below). Honest loading/
+// empty/failed states.
 function RefLedger({ slug, label }: { slug: string; label: string }) {
   const { refs, failed, retry } = useRefs();
-  const rows = useMemo(() => refsForMaker(refs, slug).slice(0, 8), [refs, slug]);
+  const rows = useMemo<RefListRow[]>(() => refsForMaker(refs, slug).map(r => {
+    // TTM delta vs the all-time median — both sides are medians of realized
+    // sales, but with no window-n floor or magnitude gate the figure is a mix
+    // artifact at large sizes (prod rendered "+1155% ttm" in green on
+    // /makers/rolex). Gate hard: a deep reference line (n≥20) moving within
+    // ±100% may carry direction; anything outside abstains.
+    const raw = r.ttmMedianUsd != null && r.medianUsd > 0 ? ((r.ttmMedianUsd - r.medianUsd) / r.medianUsd) * 100 : null;
+    return {
+      key: r.key, maker: r.maker, ref: r.ref, n: r.n, med: r.medianUsd, houses: r.houses.length,
+      ttm: raw != null && r.n >= 20 && Math.abs(raw) <= 100 ? raw : null,
+    };
+  }), [refs, slug]);
 
   if (failed) {
     return (
@@ -207,46 +220,18 @@ function RefLedger({ slug, label }: { slug: string; label: string }) {
   if (rows.length < 2) return null;
 
   return (
-    <div className="ray-vm ray-vm-card glass glass-quiet mkr-panel">
+    <section className="ray-vm ray-vm-card glass glass-quiet mkr-panel" aria-label={`${label} references`} id="references">
       <div className="mkr-panel-head">
-        <span className="mkr-panel-title">References</span>
-        <span className="mkr-panel-method">{label} · the deepest reference lines · median realized, all houses</span>
+        <h2 className="mkr-panel-title" style={{ margin: 0 }}>References</h2>
+        <span className="mkr-panel-method">{label} · every reference with eight or more sales · median realized, all houses</span>
       </div>
-      <div className="mkr-rows">
-        {rows.map(r => {
-          // TTM delta vs the all-time median — both sides are medians of
-          // realized sales, but with no window-n floor or magnitude gate the
-          // figure is a mix artifact at large sizes (prod rendered "+1155%
-          // ttm" in green on /makers/rolex). Gate hard: a deep reference line
-          // (n≥20) moving within ±100% may carry direction; anything outside
-          // abstains — wrong is worse than blank.
-          const rawTtm = r.ttmMedianUsd != null && r.medianUsd > 0
-            ? ((r.ttmMedianUsd - r.medianUsd) / r.medianUsd) * 100
-            : null;
-          const ttmDelta = rawTtm != null && r.n >= 20 && Math.abs(rawTtm) <= 100 ? rawTtm : null;
-          return (
-            <Link key={r.key} href={`/ref/${slug}/${encodeRefPath(r.ref)}`} className="mkr-row">
-              <span className="mkr-row-name">
-                {/* the same display label /ref's h1 prints — never the raw
-                    lower-case refs.json key ('oysterperpetual') */}
-                {refLabel(r.ref)}
-                <span className="mkr-row-sub">{r.n.toLocaleString()} sales</span>
-              </span>
-              <span className="mkr-row-val">
-                <span className="num">{fmtUsdCompact(r.medianUsd)}</span>
-                {ttmDelta !== null && Math.abs(ttmDelta) >= 1 && (
-                  <span className="tag" style={{ color: ttmDelta >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                    {ttmDelta >= 0 ? '+' : ''}{ttmDelta.toFixed(0)}% ttm
-                  </span>
-                )}
-              </span>
-              <span className="mkr-row-meta">{r.houses.length} {r.houses.length === 1 ? 'house' : 'houses'}</span>
-            </Link>
-          );
-        })}
-      </div>
-      <p className="mkr-note">Each reference&rsquo;s median is over all its realized sales; the ttm figure compares the trailing year&rsquo;s median to the all-time median (both measured). The reference page carries the full yearly series.</p>
-    </div>
+      <RefList rows={rows} initial={20} />
+      <p className="mkr-note">
+        Each reference&rsquo;s median is over all its realized sales; the past-year figure compares the trailing year&rsquo;s
+        median to the all-time median (both measured) and shows only on deep lines.{' '}
+        <Link href="/ref" style={{ color: 'inherit' }}>Every maker&rsquo;s references</Link>
+      </p>
+    </section>
   );
 }
 

@@ -1217,7 +1217,8 @@ const DECK_CSS = `
   }
   .dk-chip { display: inline-flex; align-items: baseline; white-space: nowrap; font-size: var(--d-cap); }
   .dk-chip i { font-style: normal; color: var(--color-text-faint); }
-  .dk-chip em { font-style: normal; color: var(--color-text-faint); opacity: .7; margin-left: 8px; }
+  /* muted, not faint-at-70%: the faded chip label measured 2.69:1 (axe, Oct 3) */
+  .dk-chip em { font-style: normal; color: var(--color-text-muted); margin-left: 8px; }
   .dk-chip b { color: var(--color-fg); font-weight: 600; margin-left: 8px; font-variant-numeric: tabular-nums; }
 
   /* ── slides ─────────────────────────────────────────────────────── */
@@ -1429,7 +1430,7 @@ const DECK_CSS = `
     font-size: var(--d-cap); color: var(--color-text-faint);
   }
   .live-legend b { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-  .live-legend-on b { color: var(--color-butter); }
+  .live-legend-on b { color: var(--color-butter-text); } /* text-safe butter — display butter is 4.4:1 on the deck ground */
   .live-split {
     display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2vw, 24px);
     margin: clamp(24px, 2.8vw, 32px) 0 0;
@@ -1682,7 +1683,7 @@ const DECK_CSS = `
   .rec-table tbody .rec-num { font-size: var(--d-body); font-weight: 700; padding-left: 14px; }
   .rec-ctrl { color: var(--color-text-faint); }
   .rec-flag { color: var(--color-fg); }
-  .rec-edge { color: var(--color-butter); }
+  .rec-edge { color: var(--color-butter-text); }
   @media (max-width: 560px) {
     .rec-table tbody th i { display: none; }
     .rec-table tbody .rec-num, .rec-table thead th { font-size: var(--d-cap); }
