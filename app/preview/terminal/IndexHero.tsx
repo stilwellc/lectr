@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
@@ -67,53 +66,6 @@ function RailMark({ k }: { k: 'onBlock' | 'trend' | 'bids' | 'below' | 'search' 
    ============================================================ */
 
 const EASE = [0.23, 1, 0.32, 1] as const;
-
-/* ── THE WORD REVEAL (north star §1.6, `text-reveal-word`) ────────────────
-   The masthead headline resolves word by word: each word enters at
-   opacity 0, scaleY(.95) scaleX(.92), blur(12px) and settles sharp on the
-   measured signature curve cubic-bezier(.76,.31,.04,1.01). ~48ms stagger,
-   whole line settled ~1.05s. Gated on the SAME fresh-arrival contract as
-   rise(): reduce || !play → initial:false → renders resolved instantly
-   (cached back-nav / prefers-reduced-motion never see the blur). Plays
-   once on entrance only — nothing rebinds it to hover or scroll. */
-const REVEAL_EASE = [0.76, 0.31, 0.04, 1.01] as const;
-const revealLine = {
-  hidden: {},
-  visible: { transition: { delayChildren: 0.04, staggerChildren: 0.048 } },
-};
-// a plain fade per word (§2.6: no blur, no scale — the words simply arrive)
-const revealWord = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { duration: 0.5, ease: REVEAL_EASE },
-  },
-};
-
-/** The headline, split into word spans for the reveal. innerText stays the
- *  full sentence (spans hold the words, real spaces sit between them, so
- *  copy/SEO read the exact string); the h2 carries the sentence as its
- *  aria-label and the spans go aria-hidden so screen readers hear one
- *  unbroken line, never nine fragments. */
-function RevealHeadline({ text, className, play }: { text: string; className: string; play: boolean }) {
-  const words = useMemo(() => text.split(' '), [text]);
-  return (
-    <m.h2
-      className={className}
-      aria-label={text}
-      variants={revealLine}
-      initial={play ? 'hidden' : false}
-      animate="visible"
-    >
-      {words.map((w, i) => (
-        <span key={i} aria-hidden>
-          {i > 0 ? ' ' : null}
-          <m.span className={styles.nsMastWord} variants={revealWord}>{w}</m.span>
-        </span>
-      ))}
-    </m.h2>
-  );
-}
 
 /* ── THE PULSE BOARD PRIMITIVES ─────────────────────────────────────────────
    The "Right now" panel is the lander's heartbeat: a bento of live blocks
@@ -349,8 +301,8 @@ export default function IndexHero({
         {/* the one action on the board — butter, full width, unmissable */}
         {belowMkt ? (
           <button type="button" className={styles.pulseAction} data-below="true" onClick={onOpenBelow}
-            aria-label={`${belowMkt} below-market lots — see them`}>
-            <span className={styles.pulseLabel}>Below market now</span>
+            aria-label={`${belowMkt} lots flagged tonight — see them`}>
+            <span className={styles.pulseLabel}>Flagged tonight</span>
             <span className={styles.pulseTag}>
               <span className={styles.pulseTagVal}>{fmtInt(belowShown)}</span>
             </span>
@@ -362,7 +314,7 @@ export default function IndexHero({
           // permanent ghost there reads as a broken feature, not a fact).
           <div className={styles.pulseBlock} data-below="true">
             <span className={styles.pulseCellText}>
-              <span className={styles.pulseLabel}>Below market now</span>
+              <span className={styles.pulseLabel}>Flagged tonight</span>
               <span className={styles.pulseSub}>no flags in the live book</span>
             </span>
             <span className={`${styles.pulseTag} ${styles.pulseTagGhost}`} aria-hidden>

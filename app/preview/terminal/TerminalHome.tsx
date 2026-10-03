@@ -813,9 +813,10 @@ export default function TerminalHomePage() {
     const book = n === 0
       ? `No ${many} are on the block tonight.`
       : `${n.toLocaleString()} ${n === 1 ? `${one} is` : `${many} are`} on the block.`;
-    return resultsN
-      ? `${book} We score each against ${resultsN.toLocaleString()} ${RESULT_NOUN[activeKey] || 'results'}.`
-      : book;
+    if (!resultsN) return book;
+    return n === 0
+      ? `${book} The record holds ${resultsN.toLocaleString()} ${RESULT_NOUN[activeKey] || 'results'}.`
+      : `${book} We score each against ${resultsN.toLocaleString()} ${RESULT_NOUN[activeKey] || 'results'}.`;
   }, [activeKey, resultsN, upcoming.length]);
   // the replayed track record — hammer basis at full scope; a vertical prints
   // its own replay (all-in basis, labelled) and falls back to the whole book

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { httpsImg, sizedImg } from '../utils';
 import styles from './LotPlate.module.css';
 
@@ -43,11 +43,14 @@ export default function LotPlate({
   eager?: boolean;
   className?: string;
 }) {
-  const url = src ? sizedImg(httpsImg(src), size) : '';
-  const [ok, setOk] = useState(true);
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => { setOk(true); setLoaded(false); }, [url]);
-  const showImg = !!url && ok;
+  const url = (src ? sizedImg(httpsImg(src), size) : '') || '';
+  // keyed by url, so a re-keyed list never inherits the previous lot's state
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const loaded = loadedUrl === url;
+  const showImg = !!url && failedUrl !== url;
+  const setOk = (v: boolean) => { if (!v) setFailedUrl(url); };
+  const setLoaded = (v: boolean) => { if (v) setLoadedUrl(url); };
 
   return (
     <figure className={`${styles.plate}${className ? ` ${className}` : ''}`}>

@@ -115,8 +115,9 @@ export default function CallHero({
         {head}
         <div className={styles.quiet}>
           <p className={styles.quietLine}>
-            No call clears the bar on {marketWord} tonight — we only print a second opinion when
-            the record is deep enough to stand behind it.
+            {quiet && quiet.onBlock === 0
+              ? <>Nothing to call on {marketWord} tonight — the record keeps reading while the room is empty.</>
+              : <>No call clears the bar on {marketWord} tonight — we only print a second opinion when the record is deep enough to stand behind it.</>}
           </p>
           {quiet && (
             <div className={styles.ledger}>
@@ -125,7 +126,9 @@ export default function CallHero({
             </div>
           )}
           <div className={styles.ctas}>
-            <a href="#on-the-block" className="ray-call-btn ray-call-btn-primary">See what&rsquo;s on the block</a>
+            {quiet && quiet.onBlock > 0
+              ? <a href="#on-the-block" className="ray-call-btn ray-call-btn-primary">See what&rsquo;s on the block</a>
+              : <Link href="/receipts" className="ray-call-btn ray-call-btn-primary">Read the record</Link>}
           </div>
           {stub}
         </div>
@@ -164,7 +167,7 @@ export default function CallHero({
           />
         </Link>
         <div className={styles.read}>
-          <p className={styles.kicker}>Tonight&rsquo;s call · {when}</p>
+          <p className={styles.kicker}>{d != null && d <= 0 ? 'Tonight\u2019s call' : 'Today\u2019s call'} · {when}</p>
           <p className={styles.object}>
             <span className={styles.maker}>{maker}</span>
             <span className={styles.title}>{title}</span>
