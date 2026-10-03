@@ -60,3 +60,6 @@
 @media (prefers-reduced-motion: reduce) {
   .img { transition: none; }
 }
+
+/* inline (span) form — the plate inside a button keeps block layout */
+.inline { display: block; }

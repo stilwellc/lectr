@@ -53,7 +53,7 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                     <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px', fontFamily: 'var(--font-sans), sans-serif' }}>
                       <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 5 }}>{label} · {d.nFlagged} flagged lots</div>
                       {/* signed formatter — a down year must print "−12%", never "+-12%" */}
-                      <div style={{ fontSize: 13.5, color: 'var(--color-up)', fontWeight: 600 }}>flagged {fmtSignedPct(d.flaggedMedianPct)}</div>
+                      <div style={{ fontSize: 13.5, color: 'var(--color-up)', fontWeight: 500 }}>flagged {fmtSignedPct(d.flaggedMedianPct)}</div>
                       <div style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>unflagged {fmtSignedPct(d.unflaggedMedianPct)}</div>
                     </div>
                   );
@@ -66,7 +66,7 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                 ) : <g />)} />
               <Line type="monotone" dataKey="flaggedMedianPct" stroke="var(--color-up)" strokeWidth={1.75} dot={false} isAnimationActive={false}
                 label={(p: { index?: number; x?: number; y?: number }) => (p.index === data.length - 1 && p.x != null && p.y != null ? (
-                  <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={600} fill="var(--color-up)">flagged</text>
+                  <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={500} fill="var(--color-up)">flagged</text>
                 ) : <g />)} />
             </ComposedChart>
           </ResponsiveContainer>

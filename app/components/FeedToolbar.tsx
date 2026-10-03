@@ -237,7 +237,7 @@ export default function FeedToolbar({
         borderRadius: 10, padding: 6, boxShadow: '0 14px 34px -18px rgba(8,6,3,0.85)',
       }}
     >
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--color-text-muted)', padding: '6px 10px 7px', borderBottom: '1px solid var(--hairline)', marginBottom: 4 }}>
+      <div style={{ fontSize: 13, fontWeight: 400, color: 'var(--color-text-muted)', padding: '6px 10px 7px', borderBottom: '1px solid var(--hairline)', marginBottom: 4 }}>
         The categories
       </div>
       {verticals.map(v => (
@@ -464,8 +464,8 @@ export default function FeedToolbar({
         }
         .ray-feedsheet-head {
           font-family: var(--font-sans), sans-serif;
-          font-size: 10.5px; font-weight: 700;
-          letter-spacing: 0.16em; text-transform: uppercase;
+          font-size: 14px; font-weight: 400;
+          letter-spacing: 0;
           color: var(--color-text-muted);
           padding: 16px 2px 10px;
         }
@@ -485,7 +485,7 @@ export default function FeedToolbar({
         .ray-feedsheet-clear {
           border: none; background: none; cursor: pointer;
           font-family: var(--font-sans), sans-serif;
-          font-size: 14px; font-weight: 600;
+          font-size: 14px; font-weight: 500;
           color: var(--color-text-muted);
           padding: 12px 10px; min-height: 44px;
         }
@@ -495,7 +495,7 @@ export default function FeedToolbar({
           background: var(--color-butter);
           color: var(--color-butter-ink, #1C1712);
           font-family: var(--font-sans), sans-serif;
-          font-size: 15px; font-weight: 700;
+          font-size: 15px; font-weight: 500;
           border-radius: 12px; padding: 13px 16px; min-height: 46px;
         }
         .ray-feedsheet-done:active { filter: brightness(0.96); }

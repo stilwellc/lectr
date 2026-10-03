@@ -22,7 +22,7 @@ const CSS = `
 .lectr-pro ul { margin: 0; padding: 0; list-style: none; }
 .lectr-pro li { padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px; line-height: 1.45; color: var(--color-text-secondary); }
 .lectr-pro li:last-child { border-bottom: none; }
-.lectr-pro li b { color: var(--color-fg); font-weight: 600; }
+.lectr-pro li b { color: var(--color-fg); font-weight: 500; }
 .lectr-pro-prices { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; border: none; }
 .lectr-pro-prices legend { font-size: 12.5px; color: var(--color-text-muted); margin-bottom: 8px; padding: 0; }
 .lectr-pro-price { min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--color-border); background: none; color: var(--color-fg); font: inherit; font-size: 13.5px; font-variant-numeric: tabular-nums; cursor: pointer; }

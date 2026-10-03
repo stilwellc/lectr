@@ -767,79 +767,12 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   color: inherit;
   font: inherit;
 }
-.wallPlate:focus-visible { outline: 2px solid var(--ba-7, rgba(232, 218, 182, 0.7)); outline-offset: 3px; }
-/* THE MUSEUM MAT — a lit gallery frame, not a felt swatch: warm light pools
-   from the top of the mat, the base falls into shade, an inner bevel gives
-   the frame thickness, and the object casts a real contact shadow onto it. */
-.wallMat {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 150px;
-  padding: 14px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--lw-03, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--lw-08, rgba(255, 255, 255, 0.08));
-  box-shadow: none;
-  transform-origin: 50% 100%;
-  transition:
-    transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)),
-    box-shadow 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)),
-    border-color 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
-}
-/* the vitrine glass front — a fixed 105° glare on the EXACT axis of the
-   active pill's specular sweep four hundred pixels above: one lamp, one
-   room. On hover the reflection lags the frame — that lag is the glass. */
-.wallMat::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(105deg, rgba(255, 252, 245, 0.075) 0%, rgba(255, 252, 245, 0.02) 30%, transparent 48%);
-  pointer-events: none;
-  transition: transform 320ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
-}
-.wallPlate:hover .wallMat::after { transform: translateX(8px); }
-.wallMat img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain; /* never crop artwork */
-  display: block;
-}
-/* frame-lift: the visitor takes the frame off the wall — the mat rises, its
-   shadow deepens, the object's contact shadow stretches. The label stays. */
-.wallPlate:hover .wallMat {
-  border-color: var(--ba-28, rgba(232, 218, 182, 0.28));
-}
-.wallPlate:hover .wallMaker { color: var(--tt-butter); }
-/* the verdict ring — quieter than it was, still LIGHT: a 1.5px filament and
-   one tight skirt. Green stays a real below-market flag; five plates must
-   never read as five lamps. */
-.wallPlate[data-tone='up'] .wallMat {
-  border-color: rgba(87, 190, 135, 0.6);
-  box-shadow: none;
-}
-.wallPlate[data-tone='up']:hover .wallMat {
-  border-color: rgba(87, 190, 135, 0.85);
-  box-shadow: none;
-}
-/* the ignite — a filament striking: overshoot at 60%, settling to the exact
-   static ring. (This keyframe was referenced for months and never defined —
-   the mobile rings had never actually animated.) */
-@keyframes ttRingIgnite {
-  0% { border-color: rgba(87, 190, 135, 0); }
-  60% { border-color: rgba(87, 190, 135, 1); }
-  100% { border-color: rgba(87, 190, 135, 0.6); }
-}
-/* desktop: rings ignite after their plates land */
-@media (prefers-reduced-motion: no-preference) {
-  .wall[data-anim='true'][data-seen='true'] .wallPlate[data-tone='up'] .wallMat {
-    animation: ttRingIgnite 340ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
-    animation-delay: calc(660ms + var(--wall-i, 0) * 80ms);
-  }
-}
+.wallPlate:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: 4px; }
+/* the plate is the shared LotPlate (app/components/LotPlate.tsx, NORTHSTAR
+   §0.4): cream 4:5 mat, object at 80% multiplied in, FIG. caption. No glare,
+   no lift, no ring — the flag speaks once, in the green line below. Hover
+   underlines the maker, ink only. */
+.wallPlate:hover .wallMaker { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 /* museum wall-text: index · maker · fact, quiet tiers under the frame */
 .wallMeta { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 4px 2px 0; }
 .wallMaker {
@@ -899,10 +832,6 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
     opacity: 1;
     transform: none;
   }
-  .wall[data-anim='true'] .wallPlate[data-tone='up'] .wallMat,
-  .wallStrip[data-anim='true'] .wallPlate[data-tone='up'] .wallMat {
-    animation: none;
-  }
 }
 @keyframes ttWallRise {
   from { opacity: 0; transform: translateY(12px); }
@@ -932,7 +861,6 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   width: 176px;
   scroll-snap-align: start;
 }
-.wallStrip .wallMat { height: 158px; padding: 12px; }
 /* plates rise as the strip enters view; rings light left→right */
 .wallStrip[data-anim='true'] .wallPlate {
   opacity: 0;
@@ -941,11 +869,6 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .wallStrip[data-anim='true'][data-seen='true'] .wallPlate {
   animation: ttWallRise 520ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
   animation-delay: calc(var(--wall-i, 0) * 80ms);
-}
-.wallStrip[data-anim='true'][data-seen='true'] .wallPlate[data-tone='up'] .wallMat {
-  /* the filament strikes after its plate has landed — same pop curve as desktop */
-  animation: ttRingIgnite 340ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
-  animation-delay: calc(600ms + var(--wall-i, 0) * 60ms);
 }
 
 /* (the M11 serif-head size overrides retired with the north-star pass —
@@ -2804,7 +2727,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   --tt-panel: #FFFFFF;
   --tt-panel-2: #F5F3F1;
   --tt-fg: #1C1917;
-  --tt-butter: #7A5A14;          /* the lamp, module register — gold ink */
+  --tt-butter: #1C1917;          /* the lamp prints INK (NORTHSTAR §0.3: gold is FIG./folio/seal only) */
   --tt-secondary: #44403B;
   --tt-muted: #6B655D;
   --tt-faint: #726C63;  /* text-safe on eggshell (5.07:1; #8E877D read 3.46 — axe Oct 3) */
