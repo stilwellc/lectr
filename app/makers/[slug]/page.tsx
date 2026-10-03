@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ARTISTS, ARTIST_LABEL, ROSTER_PHRASE, marketOf } from '../../constants';
 import type { AuctionLot, LotCategory, MarketStats } from '../../types';
-import { useRayData, retryFullLoad, useSoldArchive, retryArchiveLoad } from '../../hooks/useRayData';
+import { useRayData } from '../../hooks/useRayData';
 import { useMakerRows } from '../../hooks/useMakerRows';
 import type { MarketData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
@@ -432,6 +432,7 @@ function MakerSections({
         <div className="ray-enter" style={{ '--enter-delay': '270ms' } as React.CSSProperties}>
           <PastResults
             lots={sold}
+            remote={{ kind: 'maker', slug }}
             categoryFilter={categoryFilter}
             onCategoryChange={onCategoryChange}
             savedIds={savedIds}
@@ -449,17 +450,14 @@ function MakerSections({
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
-  // useFullLots (not useRayData): the lot-level sections below gate on
-  // fullLoaded, so this route must trigger the phase-2 corpus on mount.
-  // ONE MAKER'S BOOK (useMakerRows): the maker's own rows from the build's
-  // maker shards — not the whole corpus. A data build without them falls back
-  // to the corpus (the hook asks for it) and the old gates below.
+  // ONE MAKER'S BOOK (useMakerRows): the maker's own rows from the lot API
+  // in columns (/api/maker/:slug?view=summary) — never the corpus. The sold
+  // table pages through the API on its own (PastResults remote mode).
   const ray = useRayData();
   const { statsByArtist, allLots, lastCrawl, fromCache, market: marketData } = ray;
   const mk = useMakerRows(slug);
-  const viaMaker = mk.source !== 'corpus';
-  const fullLoaded = viaMaker ? mk.loaded : ray.fullLoaded;
-  const fullError = viaMaker ? mk.error : ray.fullError;
+  const fullLoaded = mk.loaded;
+  const fullError = mk.error;
   const { toggle, savedIds, ownedIds, toggleOwned } = useSavedLots();
   const { setMarket } = useMarket();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -467,10 +465,9 @@ export default function ArtistDetailPage() {
 
   const label = ARTIST_LABEL[slug];
   const valid = ARTISTS.some(a => a.slug === slug);
-  // A sports/science maker's Goldin sold history lives in the phase-3 archive
-  // (split out of the eager + phase-2 payloads). Only these makers pay for it —
-  // art/design/watches/culture makers never mount useSoldArchive() (Goldin
-  // culture sold rows are deliberately kept in the phase-2 shards).
+  // A sports/science maker's Goldin sold history lives in the archive tier;
+  // the lot API merges it into these makers' books (main-wins) — the archive
+  // body below waits on that book before its deep sections paint.
   const market = marketOf(slug);
   const isArchiveMaker = valid && (market === 'sports' || market === 'science');
 
@@ -548,7 +545,7 @@ export default function ArtistDetailPage() {
                 <MarketSwitch compact />
               </div>
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-                <ArtistHero animate={!fromCache} slug={slug} serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined} label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
+                <ArtistHero animate={!fromCache} slug={slug} serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined} label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} bookSettled={mk.loaded || mk.error} />
               </div>
               {/* watch makers: the model-family ledger — pre-aggregated drill
                   rows scoped to this maker (Daytona vs Cellini, honest reads) */}
@@ -596,13 +593,13 @@ export default function ArtistDetailPage() {
               categoryFilter={categoryFilter}
               onCategoryChange={setCategoryFilter}
               fromCache={fromCache}
-              pre={viaMaker ? { rows: mk.rows, error: mk.error } : null}
+              pre={{ rows: mk.rows, error: mk.error, retry: mk.retry }}
             />
           ) : !fullLoaded ? (
             fullError ? (
               // phase 2 (the full archive) failed after retries — say so and
               // offer a retry, never an eternal skeleton
-              <ArchiveErrorPanel onRetry={() => (viaMaker ? window.location.reload() : retryFullLoad())} />
+              <ArchiveErrorPanel onRetry={mk.retry} />
             ) : ray.loading ? (
               // phase 1 still landing: the hero above is about to grow —
               // hold the body with an unpainted spacer (a visible loader here
@@ -630,6 +627,16 @@ export default function ArtistDetailPage() {
             />
           )}
 
+          {/* the lot API isn't serving yet: the page stands on stats.json and
+              the live book — say what's missing instead of a silent gap */}
+          {mk.unavailable && (
+            <div className="rail" style={{ padding: '24px 0 56px', textAlign: 'center' }}>
+              <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0 }}>
+                {label}&rsquo;s full sold record isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.
+              </p>
+            </div>
+          )}
+
           {/* the closing colophon — corpus counts from meta.json */}
           <Colophon record={null} />
         </>
@@ -638,34 +645,10 @@ export default function ArtistDetailPage() {
   );
 }
 
-// The legacy phase-3 path, as a hook that only subscribes when asked:
-// useSoldArchive fetches on mount by contract, so it lives in a child that
-// mounts only for a data build without maker shards.
-function useLegacyArchive(on: boolean, slug: string, phaseLots: AuctionLot[]) {
-  const [st, setSt] = useState<{ archiveLoaded: boolean; archiveError: boolean; makerLots: AuctionLot[] }>(
-    { archiveLoaded: false, archiveError: false, makerLots: phaseLots },
-  );
-  useEffect(() => { if (!on) return; setSt(s => (s.archiveLoaded ? s : { ...s, makerLots: phaseLots })); }, [on, phaseLots]);
-  return { ...st, probe: on ? <LegacyArchiveProbe slug={slug} phaseLots={phaseLots} onState={setSt} /> : null };
-}
-function LegacyArchiveProbe({ slug, phaseLots, onState }: {
-  slug: string; phaseLots: AuctionLot[];
-  onState: (s: { archiveLoaded: boolean; archiveError: boolean; makerLots: AuctionLot[] }) => void;
-}) {
-  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
-  useEffect(() => {
-    onState({
-      archiveLoaded, archiveError,
-      makerLots: archiveLoaded ? allLotsWithArchive.filter(l => l.artist === slug) : phaseLots,
-    });
-  }, [allLotsWithArchive, archiveLoaded, archiveError, slug, phaseLots, onState]);
-  return null;
-}
-
-// Archive makers only: mounting this triggers useSoldArchive()'s phase-3
-// fetch. It merges the maker's archive sold rows into lots/sold and re-renders
-// the hero + the gated sections once the archive lands (RayLoading /
-// archiveError-retry until then, mirroring the phase-2 fullError pattern).
+// Archive makers (sports/science): the maker's book from the API already
+// carries the archive tier (main-wins merged nightly). The hero paints from
+// the eager rows at once and re-renders whole when the book lands; the gated
+// sections hold RayLoading / an error + retry until then.
 function ArchiveMakerBody({
   slug,
   serial,
@@ -682,7 +665,7 @@ function ArchiveMakerBody({
   fromCache,
   pre,
 }: {
-  pre: { rows: AuctionLot[] | null; error: boolean } | null;
+  pre: { rows: AuctionLot[] | null; error: boolean; retry: () => void };
   slug: string;
   serial?: string;
   label: string;
@@ -697,23 +680,19 @@ function ArchiveMakerBody({
   onCategoryChange: (c: CategoryFilter) => void;
   fromCache: boolean;
 }) {
-  // the maker shard already carries the archive tier (main-wins merged at
-  // build) — only a data build without it mounts the phase-3 archive
-  const legacy = useLegacyArchive(!pre, slug, phaseLots);
-  const archiveLoaded = pre ? !!pre.rows : legacy.archiveLoaded;
-  const archiveError = pre ? pre.error : legacy.archiveError;
-  const makerLots = pre ? (pre.rows || phaseLots) : legacy.makerLots;
+  const archiveLoaded = !!pre.rows;
+  const archiveError = pre.error;
+  const makerLots = pre.rows || phaseLots;
   const sold = useMemo(() => makerLots.filter(l => l.status === 'sold'), [makerLots]);
 
   return (
     <>
-      {legacy.probe}
       <RayEntrance animate={!fromCache}>
         <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}>
           <MarketSwitch compact />
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
-          <ArtistHero animate={!fromCache} slug={slug} serial={serial} label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
+          <ArtistHero animate={!fromCache} slug={slug} serial={serial} label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} bookSettled={archiveLoaded || archiveError} />
         </div>
         {/* #26 — sports player strip + #32 decade band ride the deep merged
             set, so they wait for the archive; the value/activity summaries
@@ -736,7 +715,7 @@ function ArchiveMakerBody({
 
       {!archiveLoaded ? (
         archiveError ? (
-          <ArchiveErrorPanel onRetry={() => (pre ? window.location.reload() : retryArchiveLoad())} />
+          <ArchiveErrorPanel onRetry={pre.retry} />
         ) : (
           <RayLoading />
         )

@@ -25,6 +25,7 @@ sidesteps R2's GET-lag on overwritten keys — see the header of
 | `latest/house-ledger.json` | the per-house crawl ledger (`scripts/lib/house-status.ts`): last OK crawl, fail streak, reason — written every night, publish or not; drives the stale-house rule and `status.json` |
 | `qa/validate-engine/<UTC>-<run>.json` | every night's engine-gate report, kept (KBs) — `scripts/ci/gate-replay.ts` replays them |
 | `drill/<run_id>/…` | the restore drill's scratch prefix — deleted by the drill itself |
+| `api/current.json`, `api/v/<version>/…` | the lot API's precomputed objects (§3) — write-once versions (~525MB, 12 objects), only the pointer is overwritten; read by the `/api/*` Pages Functions through the `CORPUS` binding |
 
 The bucket is **private**: its `r2.dev` URL is disabled and it has no custom
 domain (verified Sep 27 2026) — only the API token can read it.
@@ -279,8 +280,8 @@ Schema: `supabase/migrations/` in numeric order (see `SUPABASE_SETUP.md`).
 `SUPABASE_SERVICE_KEY`) upserts every **upcoming** lot: queryable columns
 (artist / market / status / sale_date / price…) plus the full slim client
 lot in the `data` jsonb column. `LotPage` uses it as the permalink fast
-path: one anon-key PostgREST fetch (~1KB) resolves the certificate before
-the 25MB shard stream lands; live shard data supersedes it on arrival.
+path: one anon-key PostgREST fetch (~1KB) resolves the certificate; the lot
+API (`/api/lot/:id`, §3) resolves whatever it misses.
 
 **Retention contract (Sep 2 2026):** a row is NOT deleted when its lot
 leaves the live book. It is refreshed from the corpus into a slim settled
@@ -311,9 +312,194 @@ service key where pg_cron is off).
 **NO EMAIL FEATURES** (standing law, Aug 28 2026): alerts live in-product
 only. The email digest and its `emailed_at` column are gone.
 
-## 3. Cache + version skew
+## 3. The lot API — lot-level history without the corpus (Oct 2026)
 
-Shard families (`lots-*`, `sold-archive-*`, `sold-ledger-*`) are fetched
+The browser **never downloads the served corpus** (`lots-*.json`,
+`sold-archive-*.json`, `pages/maker-*`, `pages/lot-idx-*`) any more. Every
+surface that read lot-level history asks a small read-only API instead:
+Cloudflare **Pages Functions** under `/api/*` (`functions/api/[[path]].ts` →
+`functions/_lib/api.ts`), reading R2 through the binding **`CORPUS` →
+`lectr-data`**. Per-lot static files are impossible on Pages (20,000 files per
+deploy, 25 MiB per file).
+
+**Built for the Workers FREE plan (10ms CPU per request).** Every answer is
+precomputed nightly by `scripts/emit-r2-index.ts`; a request maps a key to a
+byte range and hands the stored bytes back. The edge never computes a comp,
+sorts a table or scans a pool. The only JSON the edge parses is one
+plain-JSON id bucket or location shard (≤6KB), plus a 60s pointer and a
+manifest once per isolate. Lot rows are plain JSON spliced into the response
+unparsed. Comps answers, table pages, summaries and settled flags are stored
+gzip and served as-is (`Content-Encoding: gzip`).
+
+| endpoint | answers | used by |
+| --- | --- | --- |
+| `GET /api/version` | `{ version, lastCrawl, generatedAt, compsWindow }`; `{ version: null, available: false }` (200) before any index is published | `app/lib/api.ts apiAvailable()` — checked once per session before any API-backed section loads |
+| `GET /api/lot/:id` | one lot (the served row: main, archive and corpus-only tiers) | `/lot` permalinks the eager tape, prerender and Supabase all missed |
+| `GET /api/lots?ids=a,b,…` | ≤12 lots by id (missing ids omitted) | the profile desk (every alias of every saved id, batched) |
+| `GET /api/comps?lot=:id` | the precomputed comp reads, a superset of the build-time `LotPack`: engine pool resolved to rows (`c`), client read + its signal (`c`, `sig`), sports/science realized band (`b`), appraisal (`a`, `ap`), science/culture reference band (`r`), maker reference band (`mr`), provenance (`p`), modal context rows (`ctx`), exact-item repeat sale (`exact`). `{ np: true }` = sold before the precompute window | `LotPage` (via `loadLotPackStrict` when the build packed nothing), `ComparableModal`, `/value` (pack fallback), the profile desk |
+| `GET /api/maker/:slug?view=summary` | the maker's book in columns (status, price, date, category, estimates, house, sport, player) + the 60 top-priced rows whole; main + archive tier for sports/science (main wins); **minus the eager lots** (the page lays those on top) | `/makers/[slug]` hero, price chart, decade band, player strip |
+| `GET /api/maker/:slug?sort=date\|price&cat=&sport=&page=` | the maker's sold table, 20 rows a page | `PastResults` remote mode on maker pages |
+| `GET /api/archive?market=&sort=&cat=&sport=&page=` | the market's sold-and-priced table, 20 rows a page; sports/science include the archive tier | home "Show the archive" |
+| `GET /api/market/:key?view=summary` | a market's concluded rows in columns | `/analytics` deep pools |
+| `GET /api/ref/:maker/:ref?page=` | one watch reference's sold rows, newest first, 50 a page | (available; `/ref` pages still read `refs.json` + search shards) |
+| `GET /api/settled-flags?market=` | the 50 latest stamped Below Market lots that have since priced, with their flag | `/receipts` |
+
+**Tables** are materialized nightly for every sort (`date` = newest first,
+round-robined across houses in order of first appearance, exactly as
+`PastResults` ordered it; `price` = highest first) × every category chip ×
+every sport chip (sports scopes). Each table stores its first **25 pages (500
+rows)**; deeper pages answer `{ rows: [], capped: true }` and the table says
+"Showing the first 500 of N — filter by category or sort by price to reach
+the rest". There is no title search on the tables; the static search index
+(`/data/ray/search/`) remains the search path.
+
+**Comps coverage (measured, then decided).** With the comp pools partitioned
+(`scripts/r2/pools.ts`) and memoized title/dims/scorer parsing, one answer
+costs 0.1ms (culture), 1ms (Rolex) and up to 35ms (Picasso prints, a 26.6k-row
+pool), about 180ms at worst. Precomputing all 583k sold lots would take about 45
+minutes for Picasso alone. So the nightly computes **the live book (eager
+lots) + every lot sold or bought in within the last 730 days + the settled
+flags**: 97k lots, 34k answers + 63k "nothing to print", about 2.8 minutes on an
+M-series laptop. Older lots answer `np: true`, and the certificate and the
+modal say so ("Comparable sales are precomputed for lots sold in the last two
+years and for the live book — this lot sold before that window"). They never
+say "no comps". `compsDays` widens the window if nightly time allows.
+
+**Honesty + safety.** Every comp read is computed with the SAME `app/lib`
+functions over candidate partitions proven to be supersets of what each
+function can admit (`scripts/r2/pools.ts` documents the proof). The tests
+(`scripts/__tests__/api-routes.test.ts`) check stored answers against
+whole-pool answers. Read-only (GET/HEAD; 405 otherwise), inputs validated
+(lot ids `^[A-Za-z0-9][A-Za-z0-9._:~+-]{0,199}$`, slugs and markets against
+the roster, fixed page size, `page ≤ 5000`, `ids ≤ 12`). User input never
+becomes an R2 key; it only looks up entries in location tables. No PII exists
+in the rows. Same-origin only (no CORS headers; `Sec-Fetch-Site: cross-site` →
+403), `X-Content-Type-Options: nosniff`, `Cross-Origin-Resource-Policy:
+same-origin`. The site CSP's `connect-src 'self'` already covers `/api`.
+
+**Caching.** Every answer carries `ETag: "<version>"` (304 on
+`If-None-Match`), `Cache-Control: public, max-age=300,
+stale-while-revalidate=3600` and `Server-Timing: api;dur=…`. The Function also
+stores 200s in the edge Cache API under a key that includes the corpus
+version, so a new nightly is a new key and nothing is purged by hand. Failures
+are `no-store` 503 (`Retry-After: 30`), never an empty 200.
+
+**CPU, measured** (`npx tsx scripts/r2/bench-api.ts <out-dir>` runs the
+same handler in Node over the real emitted index, `process.cpuUsage()` per
+request, R2 = in-memory ranges; Miniflare doesn't enforce CPU limits and
+Workers freeze timers during compute). On the Oct 2 book, worst **cold**
+(fresh isolate: pointer + manifest + dir.bin) is 1.6ms, with an occasional GC
+spike to 4.3ms. Worst **warm** is 0.6ms (`/api/market/all?view=summary`, a
+1.2MB pass-through). Picasso-print comps: 0.3ms cold, 0.1ms warm. The deepest
+archive page: 0.2ms. The game-used maker summary (230KB): 0.3ms.
+
+**Free-plan request budget.** 100,000 Function requests a day. A session
+spends one `/api/version` check plus what it opens: an archive page or a
+comps modal is 1 request, a maker page 2 (summary + first table page), a
+saved desk 1 + ⌈ids/12⌉ + one per resolved save. So it fits about 30–40k
+API-backed page views a day. Static pages and the eager payload cost no
+Function requests (`_routes.json` limits Functions to `/api/*`). R2 Class B
+reads: about 2 per uncached request (id bucket or location shard + object),
+against 10M/month free.
+
+### R2 layout (`api/` prefix of `lectr-data`)
+
+| object | contents |
+| --- | --- |
+| `api/current.json` | `{ version, prefix }` — the ONE overwritten object (read via the binding, which is strongly consistent; memoized 60s per isolate) |
+| `api/v/<version>/manifest.json` | version, crawl stamp, blob names, row/comps counts, comps window |
+| `api/v/<version>/dir.bin` | Uint32 triples `[blob, offset, length]`: 8,192 id buckets then 128 location shards (100KB, read once per isolate as a typed view) |
+| `api/v/<version>/blob-<n>.bin` | ≤64MB each: plain-JSON lot rows, gzip comps answers, gzip table/ref pages, gzip summaries, plain-JSON id buckets + location shards |
+
+Id bucket entry (`functions/_lib/format.ts`): `[rowBlob, rowOff, rowLen]` (no
+comps precomputed), `+ [-1]` (computed, nothing to print), or
+`+ [cBlob, cOff, cLen]` (the gzip answer). Location keys: `s:` summaries,
+`t:<scope>|<sort>|<cat>|<sport>` tables (`[blob, start, total, …pageLens]`,
+pages consecutive), `f:<scope>` chip facets (inline), `r:<maker>|<ref>` ref
+ledgers, `z:<market>` settled flags.
+
+Tonight's real book (lastCrawl 2026-10-02) has 609,815 rows, 34,129 comps
+answers, 900 table combos (10,034 pages) and 9,932 ref ledgers. That's **12
+objects, 523MB** (the plain-JSON rows are 335MB of it, the price of zero-parse
+lot reads), emitted in about 3 minutes locally. The upload is 12 PUTs.
+
+### Nightly: emit + upload (after assemble's R2 push)
+
+`scripts/emit-r2-index.ts` writes everything into a LOCAL directory
+(`data/r2-api/`, gitignored) from the served payload assemble just built
+(+ `data/corpus/*.json.gz`, optional, to resolve engine pool ids that never
+ship on the wire). `scripts/r2-api-push.sh` uploads it in
+`api/UPLOAD_ORDER.txt` order — payloads first, `api/current.json` LAST —
+verifying every PUT's etag against the local md5, 3 tries each. A failure
+leaves the pointer on the previous version (the API keeps answering).
+
+Add to `.github/workflows/nightly.yml`, job `assemble`, right after the
+`Push corpus + served to R2` step (`id: push`):
+
+```yaml
+      # THE LOT API (docs/data-pipeline.md §3): everything the /api/* Pages
+      # Functions serve, precomputed (Free plan: no compute at the edge).
+      # Emitted from tonight's served payload, uploaded write-once under
+      # api/v/<version>/, pointer flipped LAST. Best-effort: a failure keeps
+      # the API on the previous version.
+      - name: Emit + push the lot-API index → R2
+        if: ${{ steps.push.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts --served public/data/ray --corpus data/corpus --out data/r2-api
+          bash scripts/r2-api-push.sh data/r2-api
+```
+
+Retention: each version is about 525MB. Add an R2 lifecycle rule (Collin, once):
+`npx wrangler r2 bucket lifecycle add lectr-data api-versions api/v/ --expire-days 5`.
+That keeps about 2.6GB, inside the free 10GB. The pointer always names the
+newest version. To roll back, point `api/current.json` at an older
+`api/v/<version>/`.
+
+### Turning it on (one time)
+
+Nothing breaks before step 2: `/api/version` answers `available: false`, and
+every API-backed section says so. The archive table, the maker's sold record,
+the deep pools and the settled flags all print "isn't available yet — it
+opens once tonight's index is published". A sold-lot permalink reads "This
+lot's record isn't available yet". Saved settled lots fall back to the
+sold-outcomes ledger.
+
+1. **R2 binding.** `wrangler.toml` (repo root) declares the Pages project
+   `collectr` with `pages_build_output_dir = "out"` and
+   `[[r2_buckets]] binding = "CORPUS", bucket_name = "lectr-data"`.
+   `wrangler pages deploy out` (deploy.yml / nightly deploy job) uploads
+   `functions/` and applies that binding with the deployment. The deploy
+   token needs **Account → Cloudflare Pages → Edit** (CF_PAGES_TOKEN has
+   it). If the deploy rejects the binding (token scope), set it by hand:
+   Dashboard → Workers & Pages → `collectr` → Settings → Bindings → Add →
+   R2 bucket, variable name **`CORPUS`**, bucket **`lectr-data`**, for
+   Production (and Preview). Note: once `wrangler.toml` exists it is the
+   source of truth for the project's Functions config.
+2. **Data.** Run the nightly step above once (or locally:
+   `npx tsx scripts/emit-r2-index.ts` + `CLOUDFLARE_API_TOKEN=… bash
+   scripts/r2-api-push.sh`).
+3. **Routing.** Pages generates `_routes.json` so only `/api/*` invokes a
+   Function; static files stay free static requests.
+
+### Local development
+
+```bash
+npx tsx scripts/emit-r2-index.ts --out data/r2-api        # from public/data/ray
+R2_LOCAL=1 bash scripts/r2-api-push.sh data/r2-api         # → .wrangler/state
+npx tsx scripts/r2/bench-api.ts data/r2-api                # per-route CPU
+npm run build
+npx wrangler@4.120.1 pages dev out --persist-to .wrangler/state   # site + /api on :8788
+```
+
+## 4. Cache + version skew
+
+Shard families (`sold-ledger-*`, `pages/lot-pack-*`; the client no longer
+fetches `lots-*` / `sold-archive-*`) are fetched
 with `?v=<lastCrawl>` and served `immutable` (`public/_headers`); the
 phase-1 files (`meta`, `upcoming`, `market`, `backtest`, `receipts`,
 `close-board`) revalidate. The build stamps the served `meta.json`'s

@@ -9,7 +9,7 @@ import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import { Colophon, pickCall, CallPlate, daysUntil } from '../components/Terminal';
-import { useRayData, triggerFullLoad, retryFullLoad } from '../hooks/useRayData';
+import { useRayData } from '../hooks/useRayData';
 import { loadLotPack, loadPageStats, markFallbackProjections, type LotPack, type PageStats, type SettledCallRow } from '../lib/page-data';
 import type { Backtest } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
@@ -49,7 +49,7 @@ import {
 // globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
 // forced-color cell classes re-plate the call. Never redefined here.
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
-import { signalWithPool, dealScore } from '../lib/comps';
+import { dealScore } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 import { isOpen, closeWord, useNow } from '../lib/closing';
@@ -680,7 +680,7 @@ export default function ValuePage() {
   // useRayData + sentinel: the cockpit/board/record all paint from phase 1;
   // the corpus loads only on approach to the settled tape or on modal open.
   const ray = useRayData();
-  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, receipts } = ray;
+  const { allLots, backtest, lastCrawl, loading, fromCache, receipts } = ray;
   const { market, setMarket } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -701,7 +701,6 @@ export default function ValuePage() {
   const reopenedDuringBack = useRef(false); // reader reopened inside that window
   const setModalLot = useCallback((lot: AuctionLot | null) => {
     if (lot) {
-      triggerFullLoad(); // comps depth rides the corpus — start it now
       if (pendingBack.current) {
         // close→reopen race: our entry is mid-pop — mark it; onPop re-pushes
         reopenedDuringBack.current = true;
@@ -1029,16 +1028,8 @@ export default function ValuePage() {
       if (rows && rows.length >= 3) {
         return { prices: rows.map(r => r.p).sort((a, b) => a - b), median: callStamp.compValueUsd! };
       }
-      // 2) pool ids resolved against the corpus once it lands
-      if (fullLoaded) {
-        const byId = new Map(marketLots.map(l => [l.id, l]));
-        const prices = (callStamp.poolIds || [])
-          .map(id => byId.get(id))
-          .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd)
-          .map(l => l.priceUsd!)
-          .sort((a, b) => a - b);
-        return { prices, median: callStamp.compValueUsd! };
-      }
+      // (the pool ids are resolved by the pack above — /api/comps when the
+      // build packed nothing — so there is no corpus pass left to wait on)
       return null;
     }
     // 3) signal-stamped call (no deep-engine pool): the evidence rows still
@@ -1048,12 +1039,8 @@ export default function ValuePage() {
     if (sigMed && rows && rows.length >= 3) {
       return { prices: rows.map(r => r.p).sort((a, b) => a - b), median: sigMed };
     }
-    // 4) last resort: the client engine over the corpus
-    if (!fullLoaded) return null;
-    const pool = signalWithPool(call.lot, marketLots);
-    if (!pool || pool.signal.med == null) return null;
-    return { prices: pool.pool.map(l => l.priceUsd!).sort((a: number, b: number) => a - b), median: pool.signal.med };
-  }, [call, callStamp, callPack, evidence, marketLots, fullLoaded]);
+    return null;
+  }, [call, callStamp, callPack, evidence]);
 
   const hasFlags = deals.length > 0;
   const coverage = ray.market?.markets?.[activeKey]?.n;
@@ -2032,16 +2019,6 @@ export default function ValuePage() {
           </section>
 
           {/* ════ ROOM 2 · THE BOARD ════ */}
-          {/* phase-2 failed: the ledger stands on the precomputed stamps —
-              say what's missing instead of blanking the page */}
-          {fullError && (
-            <div className="rail ray-enter" style={{ paddingTop: 12, textAlign: 'center' }}>
-              <button className="ray-call-btn ray-call-btn-quiet" style={{ cursor: 'pointer' }} onClick={() => retryFullLoad()}>
-                Part of the book didn&rsquo;t load — comps depth is missing · try again
-              </button>
-            </div>
-          )}
-
           {call && (
             <section id="call" className="rail ray-enter vd-room ns-plate" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
               {/* THE CALL AS COLOR — the ONE forced-color cell on the desk:
@@ -2074,7 +2051,7 @@ export default function ValuePage() {
                     estHigh={call.lot.estimateHigh}
                     below={true}
                   />
-                ) : ((callStamp || callPack === undefined) && !fullLoaded && !fullError ? <div style={{ height: 102 }} aria-hidden /> : null)}
+                ) : (callPack === undefined ? <div style={{ height: 102 }} aria-hidden /> : null)}
               />
               </div>
             </section>

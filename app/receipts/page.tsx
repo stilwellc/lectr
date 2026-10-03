@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useFullLotsOnDemand, retryFullLoad } from '../hooks/useRayData';
+import { useRayData } from '../hooks/useRayData';
+import { fetchSettledFlags, isApiUnavailable } from '../lib/api';
 import { markFallbackProjections } from '../lib/page-data';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
@@ -87,8 +88,20 @@ export default function ReceiptsPage() {
   // section 3 reads the sold corpus, so the corpus now opens on the reader's
   // ask (see the block below) instead of streaming at first paint. Measured:
   // 256.4MB → 10.8-11.0MB before network idle.
-  const { allLots, lastCrawl, loading, fullLoaded, fullError, fullRequested, requestFullLots, backtest, market } =
-    useFullLotsOnDemand(false);
+  const { allLots, lastCrawl, loading, backtest, market } = useRayData();
+  // THE SETTLED FLAGS come from the lot API (/api/settled-flags — the nightly
+  // picks every stamped Below Market lot that has since priced, newest first;
+  // a few KB). No corpus to wait on, so they load with the page.
+  const [flagRows, setFlagRows] = useState<AuctionLot[] | null>(null);
+  const [fullError, setFullError] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const fullLoaded = flagRows !== null;
+  const requestFullLots = useCallback(() => {
+    setFullError(false);
+    fetchSettledFlags().then(r => setFlagRows(r), e => { if (isApiUnavailable(e)) setUnavailable(true); else setFullError(true); });
+  }, []);
+  const retryFullLoad = requestFullLots;
+  useEffect(() => { requestFullLots(); }, [requestFullLots]);
 
   const [tape, setTape] = useState<ReceiptsFile | null | 'missing'>(null);
   useEffect(() => {
@@ -123,7 +136,7 @@ export default function ReceiptsPage() {
   const settledFlags = useMemo(() => {
     if (!fullLoaded) return [];
     const today = localToday();
-    return (allLots as AuctionLot[])
+    return (flagRows || [])
       .filter(l => (l.priceUsd || 0) > 0 && (l.saleDate || '').slice(0, 10) < today)
       .map(l => ({ l, sig: l.signal ?? null }))
       .filter((x): x is { l: AuctionLot; sig: NonNullable<AuctionLot['signal']> } =>
@@ -131,7 +144,7 @@ export default function ReceiptsPage() {
       .sort((a, b) => (b.l.saleDate || '').localeCompare(a.l.saleDate || ''))
       .slice(0, 20)
       .map(({ l, sig }) => ({ l, sig, vsEst: overEstimatePct(l) }));
-  }, [allLots, fullLoaded]);
+  }, [flagRows, fullLoaded]);
 
   const F = backtest?.flagged;
   const U = backtest?.unflagged;
@@ -313,32 +326,21 @@ export default function ReceiptsPage() {
                 also the page's cheapest content to defer: at most 20 rows of
                 already-settled history, against the whole sold book. So it
                 opens on the ask — home's "Show the archive" pattern — instead
-                of streaming the corpus at first paint. Nothing is withheld:
-                the head, the promise and the button are always printed, and
-                the tape is one click away.
+                of streaming the corpus at first paint. (Oct 2026: the lot API
+                answers it in a few KB, so it now loads with the page.)
 
                 HONESTY: the list is `fullLoaded`-gated, never drawn from a
                 half-arrived corpus — a settled-flags tape missing shards is a
                 silently short record, not a slow one. */}
-            <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }} aria-busy={fullRequested && !fullLoaded ? true : undefined}>
+            <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }} aria-busy={!fullLoaded && !fullError && !unavailable ? true : undefined}>
               <div className="rcp-head">
                 <span className="kicker">Recently settled flags · the signal was in the nightly data before the sale</span>
                 <i className="rcp-rule" />
               </div>
 
-              {!fullRequested ? (
+              {unavailable ? (
                 <p className="rcp-note">
-                  Every lot that carried a Below Market flag while live and has since hammered, judged against its
-                  estimate. Reading them means loading the full sold book, so it waits to be asked for.{' '}
-                  <button
-                    type="button"
-                    className="rcp-link"
-                    aria-expanded={false}
-                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
-                    onClick={requestFullLots}
-                  >
-                    Show the settled flags <Flick size={9} />
-                  </button>
+                  The settled flags read the sold archive, which isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.
                 </p>
               ) : fullError && !fullLoaded ? (
                 <p className="rcp-note">

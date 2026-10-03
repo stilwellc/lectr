@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
-// would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
+// would defeat downstream memoization.
 const EMPTY_LOTS: AuctionLot[] = [];
 
 export interface TapeItem { artist: string; title: string; price: string; house: string }
@@ -79,11 +79,6 @@ export interface RayData {
   totalLots?: number;
   totalSold?: number;
   loading: boolean;
-  /** the full sold history has arrived (comps, analytics, artist pages) */
-  fullLoaded: boolean;
-  /** phase 2 (lots.json) failed after retries — fullLoaded-gated pages should
-      show an error + retry, never an eternal skeleton */
-  fullError: boolean;
   error: string | null;
   /** true when the module cache was already warm at mount —
       revisits render instantly, no arrival choreography. */
@@ -237,57 +232,25 @@ interface RayPayload {
   // sold-archive that the slim lots.json omits. Falls back to allLots.length.
   totalLots?: number;
   totalSold?: number;
-  fullLoaded: boolean;
-  fullError: boolean;
   error: string | null;
 }
 
-// Module-level cache + subscriber list: the payloads are fetched once per
-// session; phase 2 (the 9MB history) streams in behind the first paint and
-// re-notifies every mounted route.
+// Module-level cache + subscriber list: the eager payloads are fetched once
+// per session and re-notify every mounted route.
+//
+// THE FULL CORPUS IS NEVER DOWNLOADED (Oct 2026). Phases 2 and 3 — the whole
+// served book (lots-*.json, ~257MB raw) and the Goldin sold-archive
+// (sold-archive-*.json) — are retired from the client. Every surface that
+// read lot-level history now asks the lot API (app/lib/api.ts → functions/api,
+// R2-backed) for exactly the rows or the answer it needs: one lot, one lot's
+// comps, one page of a table, one maker's/market's book in columns.
 let cached: RayPayload | null = null;
 let inflight: Promise<RayPayload> | null = null;
-// Phase 2 gets its own inflight guard + retry hook: a single flaky fetch of
-// the largest asset must never brick fullLoaded-gated routes for the session.
-let inflightFull = false;
-let retryFull: (() => void) | null = null;
-// Phase 2 (the full history — 9 shards, ~152MB raw / ~28MB over the wire after
-// brotli; the "~10MB" this comment used to claim has been wrong since the
-// corpus passed 700K lots, and it masked the RR-archive leak that briefly put
-// it at ~290MB) is now OPT-IN, mirroring
-// phase 3: it fires only when a surface asks for it via useFullLots() /
-// triggerFullLoad(). The home lander renders its feed from the eager
-// upcoming.json alone, so it never pays this — the sold "Record" band lazy-
-// mounts useFullLots() behind its reveal. This flag persists the request so a
-// trigger that arrives before phase 1 resolves still kicks phase 2 the moment
-// the eager payload lands.
-let fullRequested = false;
-// Phase 3 (the Goldin sold-archive, ~10MB) is NEVER auto-fetched. It only
-// streams in when a surface mounts useSoldArchive(). Its own module cache +
-// inflight guard + retry hook keep it independent of phases 1/2.
-let cachedArchive: AuctionLot[] | null = null;
-let archiveLoadedState = false;
-let archiveErrorState = false;
-let inflightArchive = false;
-let retryArchive: (() => void) | null = null;
 const listeners = new Set<(p: RayPayload) => void>();
-// Archive subscribers get their own notify path — a soldComp-merged pool arrival
-// re-renders only the mounted sports/science surfaces, not the whole app.
-interface ArchiveState { soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }
-const archiveListeners = new Set<(s: ArchiveState) => void>();
 
 function notify(p: RayPayload) {
   cached = p;
   listeners.forEach(fn => fn(p));
-}
-
-function notifyArchive() {
-  const s: ArchiveState = {
-    soldArchive: cachedArchive || [],
-    archiveLoaded: archiveLoadedState,
-    archiveError: archiveErrorState,
-  };
-  archiveListeners.forEach(fn => fn(s));
 }
 
 async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
@@ -308,12 +271,7 @@ function parseStats(statsData: unknown, lots: AuctionLot[]): Record<string, Mark
 }
 
 function loadRayData(): Promise<RayPayload> {
-  if (cached) {
-    // a requested-but-failed (or never-finished) phase 2 re-kicks on the next
-    // mount instead of staying dead — but only once a surface has asked for it
-    if (fullRequested && !cached.fullLoaded && retryFull && !inflightFull) retryFull();
-    return Promise.resolve(cached);
-  }
+  if (cached) return Promise.resolve(cached);
   if (inflight) return inflight;
 
   inflight = (async () => {
@@ -436,141 +394,27 @@ function loadRayData(): Promise<RayPayload> {
         sources: metaData.sources || [],
         totalLots: metaData.totalLots,
         totalSold: metaData.totalSold,
-        fullLoaded: false,
-        fullError: false,
         error: null,
       };
       notify(core);
-
-      // ── phase 2: stream the full history behind the paint; re-attach the
-      // precomputed signals so upcoming cards never flicker to a recompute.
-      // The URL is versioned by lastCrawl and fetched force-cache, so a
-      // revisit on the same crawl day reuses the browser cache instead of
-      // re-downloading the multi-MB archive; a new crawl is a new URL.
-      // Failures retry with backoff, then surface fullError — the eager
-      // payload keeps the app alive, but gated pages get a real error state.
-      // lots.json is SHARDED (lots-0.json, lots-1.json, …) — a single file
-      // outgrew Cloudflare Pages' 25 MiB/file hard cap. lots-index.json says
-      // how many shards; they download in parallel and concat in order.
-      const ver = metaData.lastCrawl ? `?v=${encodeURIComponent(metaData.lastCrawl)}` : '';
-      const loadFull = () => {
-        if (inflightFull || cached?.fullLoaded) return;
-        inflightFull = true;
-        // a retry after fullError returns gated pages to their loading state
-        if (cached?.fullError) notify({ ...cached, fullError: false });
-        (async () => {
-          for (let attempt = 0; attempt < 3; attempt++) {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
-            try {
-              // first try trusts the cache; retries bypass it in case the
-              // cached body itself was the problem (truncated download).
-              // No version (meta.json failed → ver='') ⇒ never force-cache:
-              // the shard paths are immutable-cached, and a bare force-cache
-              // fetch would silently pin a stale corpus for a year.
-              const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
-              const idx = await fetchJson(`/data/ray/lots-index.json${ver}`, { cache: cacheMode }) as { shards: number };
-              const shardArrs = await Promise.all(
-                Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) =>
-                  fetchJson(`/data/ray/lots-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>)
-              );
-              const full = ([] as AuctionLot[]).concat(...shardArrs);
-              const signals = new Map((up.lots || []).map(l => [l.id, l.signal]));
-              // soldComp is precomputed onto the SAME eager upcoming lots (sports/
-              // science bands); re-attach it here too, or the feed cards — which
-              // render from allLots, not upcoming.json — never see the band.
-              const soldComps = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).soldComp]));
-              // bidVelocity is stamped only on the eager upcoming lots (not the
-              // corpus shards) — re-attach it or the shard version overwrites it
-              // and LotPage's bid-velocity row never appears after phase 2.
-              const bidVels = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).bidVelocity]));
-              // saleDateTime is stripped from the shards (STRIP) but rides the
-              // eager upcoming lots — re-attach or every countdown dies the
-              // moment phase 2 lands (same class as the bidVelocity loss)
-              const closeTimes = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).saleDateTime]));
-              // THE BID STATE (Aug 25 2026, "the Gap says zero"): bidProj is
-              // ALSO stripped from the shards, and currentBid/bidCount on a
-              // shard are nightly-stale versus the eager lots (the close-board
-              // overlay refreshed them in place ~4-hourly). Without this
-              // re-attach the whole Gap lane — and every Bid-now cell — died
-              // the moment the corpus landed: 10 wire calls at first paint,
-              // zero after one scroll past the sentinel.
-              const bidStates = new Map((up.lots || []).map(l => {
-                const w = l as AuctionLot;
-                return [l.id, { bidProj: w.bidProj, currentBid: w.currentBid, bidCount: w.bidCount, overlayAt: w.overlayAt }] as const;
-              }));
-              const merged = full.map(l => {
-                let x = l;
-                // has() + !== undefined: the build stamps signal:null ON
-                // PURPOSE (a x5-sanity-killed flag must stay killed — an
-                // undefined signal lets lotSignal client-recompute and could
-                // resurrect it). Attach explicit nulls; skip only true absence.
-                if (signals.has(l.id) && signals.get(l.id) !== undefined) x = { ...x, signal: signals.get(l.id) };
-                if (soldComps.get(l.id) != null) x = { ...x, soldComp: soldComps.get(l.id) };
-                if (bidVels.get(l.id) != null) x = { ...x, bidVelocity: bidVels.get(l.id) };
-                if (closeTimes.get(l.id) != null) x = { ...x, saleDateTime: closeTimes.get(l.id) };
-                const bs = bidStates.get(l.id);
-                if (bs) {
-                  if (bs.bidProj != null) x = { ...x, bidProj: bs.bidProj };
-                  if (bs.currentBid != null) x = { ...x, currentBid: bs.currentBid };
-                  if (bs.bidCount != null) x = { ...x, bidCount: bs.bidCount };
-                  if (bs.overlayAt != null) x = { ...x, overlayAt: bs.overlayAt };
-                }
-                return x;
-              });
-              notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });
-              // phase 2 is done for the session — drop the retry closure so the
-              // eager payload (up.lots et al) it captures can be collected.
-              retryFull = null;
-              return;
-            } catch { /* retry, then surface */ }
-          }
-          notify({ ...(cached || core), fullError: true });
-        })().finally(() => { inflightFull = false; });
-      };
-      retryFull = loadFull;
-      // OPT-IN: only fire phase 2 if a surface has already asked (or asks
-      // later, via triggerFullLoad, which will call retryFull directly).
-      if (fullRequested) loadFull();
-
       inflight = null;
       return core;
     }
 
-    // ── fallback: no upcoming.json yet (older deploy) — the classic single load.
-    // Version the shard URLs by lastCrawl like the primary path: the shard paths
-    // are immutable-cached (public/_headers), so an un-versioned fetch here could
-    // pin a stale shard for a year.
-    const fbVer = metaData.lastCrawl ? `?v=${encodeURIComponent(metaData.lastCrawl)}` : '';
-    // unversioned (meta failed) ⇒ bypass the browser cache: the shard paths
-    // are immutable-cached, and a default fetch would pin stale for a year.
-    const fbCache: RequestCache | undefined = fbVer ? undefined : 'reload';
-    const lotsR = await Promise.allSettled([(async () => {
-      const idx = await fetchJson(`/data/ray/lots-index.json${fbVer}`, { cache: fbCache }) as { shards: number };
-      const arrs = await Promise.all(Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) => fetchJson(`/data/ray/lots-${i}.json${fbVer}`, { cache: fbCache }) as Promise<AuctionLot[]>));
-      return ([] as AuctionLot[]).concat(...arrs);
-    })()]);
-    const lotsData = (lotsR[0].status === 'fulfilled' ? lotsR[0].value : []) as AuctionLot[];
-    const lotsOk = lotsR[0].status === 'fulfilled';
-    const statsOk = statsR.status === 'fulfilled';
+    // no upcoming.json (a data-less or broken deploy): say so — the old
+    // fallback streamed the whole corpus here, which is exactly what this
+    // layer no longer does.
     const payload: RayPayload = {
-      statsByArtist: parseStats(statsData, lotsData),
-      allLots: lotsData,
-      tape: {},
-      demand: {},
-      realized: {},
-      bidComp: {},
-      recentSold: {},
-      deepValue: {},
-      market: null,
-      receipts: null,
-      backtest,
+      statsByArtist: parseStats(statsData, []),
+      allLots: [],
+      tape: {}, demand: {}, realized: {}, bidComp: {}, recentSold: {}, deepValue: {},
+      market, receipts, backtest,
       lastCrawl: metaData.lastCrawl || '',
       sources: metaData.sources || [],
-      fullLoaded: lotsOk,
-      fullError: !lotsOk,
-      error: (!lotsOk && !statsOk) ? 'Unable to load auction data. Please try again later.' : null,
+      totalLots: metaData.totalLots,
+      totalSold: metaData.totalSold,
+      error: 'Unable to load auction data. Please try again later.',
     };
-    if (lotsOk || statsOk) cached = payload;
     inflight = null;
     return payload;
   })();
@@ -578,109 +422,10 @@ function loadRayData(): Promise<RayPayload> {
   return inflight;
 }
 
-/** Opt-in trigger for the phase-2 full history. Marks the request so it fires
-    the moment phase 1 resolves (or immediately if phase 1 is already done),
-    and survives a phase-1-not-yet-ready mount. Idempotent per session. */
-export function triggerFullLoad() {
-  fullRequested = true;
-  // phase 1 already landed → kick now; otherwise loadRayData's phase-1 tail
-  // reads fullRequested and fires loadFull itself.
-  if (retryFull && !inflightFull && !cached?.fullLoaded) retryFull();
-}
-
-/** Re-attempt the phase-2 archive fetch after a fullError (no-op while a
-    fetch is already inflight or once the archive has loaded). A retry implies
-    the surface still wants the corpus, so it keeps the request latched.
-    FALLBACK PATH (no upcoming.json): loadRayData never assigns retryFull, so
-    a fullError there previously left this a dead button — now it resets the
-    cached payload and re-runs the load from the top. */
-export function retryFullLoad() {
-  fullRequested = true;
-  if (retryFull && !inflightFull && !cached?.fullLoaded) { retryFull(); return; }
-  if (!retryFull && !inflight && !inflightFull && (!cached || cached.fullError)) {
-    cached = null;
-    loadRayData().then(p => notify(p)).catch(() => { /* surfaces keep their error state */ });
-  }
-}
-
 /** Re-attempt the sold-outcomes ledger after a failure (loadSoldLedger clears
     its own error state on entry and is guarded against double-fires). */
 export function retrySoldLedger() {
   loadSoldLedger();
-}
-
-// ── phase 3: the Goldin sold-archive tier. Mirrors loadFull (3-try backoff,
-// force-cache first try, ?v=lastCrawl) but is never invoked from loadRayData —
-// only from a mounted useSoldArchive(). On success it re-attaches the
-// precomputed soldComp from the eager upcoming payload, exactly as phase 2
-// re-attaches signal, so a sports card never flickers to a client recompute.
-function loadSoldArchive() {
-  if (inflightArchive || archiveLoadedState) return;
-  inflightArchive = true;
-  // a retry after archiveError returns gated surfaces to their loading state
-  if (archiveErrorState) { archiveErrorState = false; notifyArchive(); }
-  (async () => {
-    // Phase 1 FIRST: on a cold session `cached` is null here, which used to
-    // read lastCrawl as '' and fetch the archive shards UNVERSIONED — and the
-    // shard paths are immutable-cached (public/_headers), so that pinned a
-    // year-stale archive and latched the soldComp merge empty for the session.
-    // Awaiting loadRayData also seats the eager soldComps map for re-attach.
-    let core = cached;
-    if (!core) { try { core = await loadRayData(); } catch { core = cached; } }
-    const lastCrawl = core?.lastCrawl || '';
-    const ver = lastCrawl ? `?v=${encodeURIComponent(lastCrawl)}` : '';
-    // the precomputed soldComp lives on the eager upcoming lots, keyed by id
-    const soldComps = new Map((core?.allLots || []).map(l => [l.id, l.soldComp]));
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
-      try {
-        // first try trusts the cache; retries bypass it in case the cached
-        // body itself was the problem (truncated download). No version ⇒
-        // never force-cache (immutable-cached paths would pin stale a year).
-        const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
-        // SHARDED like phase 2 (the single file crossed 22MB against the CDN's
-        // 25MB cap): index → shards in parallel. Single-file fallback covers
-        // the transition window where a client has new code but cached old data.
-        let archive: AuctionLot[];
-        try {
-          const idx = await fetchJson(`/data/ray/sold-archive-index.json${ver}`, { cache: cacheMode }) as { shards: number };
-          const nShards = Number(idx?.shards) || 0;
-          if (nShards < 1) throw new Error('bad sold-archive index');
-          const parts = await Promise.all(Array.from({ length: nShards }, (_, i) =>
-            fetchJson(`/data/ray/sold-archive-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>));
-          archive = parts.flat();
-        } catch {
-          archive = await fetchJson(`/data/ray/sold-archive.json${ver}`, { cache: cacheMode }) as AuctionLot[];
-        }
-        // DEDUPE (Sep 2 2026): the archive can carry ids the main shards also
-        // ship (17 goldin-2026* ids were duplicated main↔archive in the audit)
-        // and, across a shard boundary, itself. Drop self-duplicates here;
-        // main-wins against allLots happens in useSoldArchive's merge, which
-        // is the only place that sees phase 2 land AFTER the archive did.
-        const seenIds = new Set<string>();
-        const merged: AuctionLot[] = [];
-        for (const l of archive) {
-          if (seenIds.has(l.id)) continue;
-          seenIds.add(l.id);
-          merged.push(soldComps.has(l.id) ? { ...l, soldComp: soldComps.get(l.id) } : l);
-        }
-        cachedArchive = merged;
-        archiveLoadedState = true;
-        archiveErrorState = false;
-        notifyArchive();
-        return;
-      } catch { /* retry, then surface */ }
-    }
-    archiveErrorState = true;
-    notifyArchive();
-  })().finally(() => { inflightArchive = false; });
-}
-retryArchive = loadSoldArchive;
-
-/** Re-attempt the phase-3 sold-archive fetch after an archiveError (no-op
-    while a fetch is inflight or once the archive has loaded). */
-export function retryArchiveLoad() {
-  if (retryArchive && !inflightArchive && !archiveLoadedState) retryArchive();
 }
 
 // ── the SOLD-OUTCOMES LEDGER (id → [priceUsd, saleDate]) — a slim on-demand
@@ -725,8 +470,8 @@ function loadSoldLedger() {
     ledgerErrorState = true; notifyLedger();
   })().finally(() => { inflightLedger = false; });
 }
-/** On-demand sold-outcomes ledger. Mounting fetches it (contract, like
-    useSoldArchive) — only mount it behind a real need (saved-lot orphans). */
+/** On-demand sold-outcomes ledger. Mounting fetches it (by contract) — only
+    mount it behind a real need (saved-lot orphans). */
 export function useSoldLedger(): LedgerState {
   const [state, setState] = useState<LedgerState>(() => ({ ledger: cachedLedger || new Map(), ledgerLoaded: ledgerLoadedState, ledgerError: ledgerErrorState }));
   useEffect(() => {
@@ -774,75 +519,9 @@ export function useRayData(): RayData {
     totalLots: data?.totalLots,
     totalSold: data?.totalSold,
     loading: data === null,
-    fullLoaded: data?.fullLoaded || false,
-    fullError: data?.fullError || false,
     error: data?.error || null,
     fromCache,
   };
-}
-
-/** Opt-in phase-2 tier: mounting this hook triggers the full-history fetch
-    (once per session, module-cached) and otherwise returns the same view as
-    useRayData(). The bare useRayData() mount NEVER pulls phase 2 — only routes
-    that read the full corpus (artist, analytics, value, saved, lot permalinks)
-    or a surface that lazy-reveals sold history mount this. fullLoaded flips
-    true once the ~10MB shards land, exactly as before. */
-export function useFullLots(): RayData {
-  const base = useRayData();
-  useEffect(() => { triggerFullLoad(); }, []);
-  return base;
-}
-
-/** The on-demand shape of the phase-2 tier: everything useRayData() returns,
-    plus the trigger and its request state — so a surface can hold the corpus
-    back until a section that actually reads it is reachable. */
-export interface OnDemandLots extends RayData {
-  /** a surface has ASKED for the corpus this session. NOT arrival — the
-      fetch may still be in flight; `fullLoaded` is arrival. */
-  fullRequested: boolean;
-  /** ask for the corpus now. Idempotent per session; safe from an event
-      handler, an effect, or an IntersectionObserver callback. */
-  requestFullLots: () => void;
-}
-
-/**
- * THE ONE LAZY MECHANISM (Sep 2026 perf pass).
- *
- * `useFullLots()` streams the entire sold corpus (14 `lots-*.json` shards,
- * ~257MB raw / ~35MB brotli) the moment it mounts. Four surfaces paid that on
- * FIRST PAINT — /profile, /lot/*, /makers, /receipts — for figures most
- * visits never reach (a signed-out desk, a lot whose certificate already
- * resolved from Supabase, a maker face photo, a settled-flags tape three
- * screens down). This hook is the same tier, DEMAND-DRIVEN:
- *
- *   const { allLots, fullLoaded, fullRequested, requestFullLots } =
- *     useFullLotsOnDemand(needItNow);
- *
- * `enabled` requests immediately — pass a CHEAP, CORPUS-FREE predicate ("this
- * desk has saved lots", "this lot carries no stamped engine call"). The
- * returned trigger covers everything else: a section scrolling into view
- * (useVisibilityTrigger below), a dossier opening, a hover pre-warm.
- *
- * The eager `useFullLots()` is unchanged for callers that legitimately need
- * the corpus at mount (/analytics, /makers/[slug], ComparableModal), and
- * `retryFullLoad()` still works from either.
- *
- * HONESTY LAW: `fullRequested` is not `fullLoaded`. Any count, median or
- * total derived from the corpus must still gate on `fullLoaded` — a pool that
- * is still arriving must abstain (quiet loading state), never print small.
- */
-export function useFullLotsOnDemand(enabled = false): OnDemandLots {
-  const base = useRayData();
-  // seeded from the module flag so a second surface in the same session
-  // (or a warm back-nav) renders its arrived state rather than replaying a
-  // "not asked yet" frame
-  const [requested, setRequested] = useState(() => fullRequested);
-  const requestFullLots = useCallback(() => {
-    triggerFullLoad();
-    setRequested(true);
-  }, []);
-  useEffect(() => { if (enabled) requestFullLots(); }, [enabled, requestFullLots]);
-  return { ...base, fullRequested: requested, requestFullLots };
 }
 
 /**
@@ -877,57 +556,4 @@ export function useVisibilityTrigger(
     io.observe(el);
     ioRef.current = io;
   }, [enabled, rootMargin, onVisible]);
-}
-
-export interface SoldArchive {
-  /** the Goldin sold history (~10MB) — populated only after mount */
-  soldArchive: AuctionLot[];
-  archiveLoaded: boolean;
-  archiveError: boolean;
-  /** the eager main lots concat the archive, so sports/science surfaces get a
-      single full-corpus pool once the archive lands. */
-  allLotsWithArchive: AuctionLot[];
-}
-
-/** Opt-in phase-3 tier: mounting this hook triggers the sold-archive fetch
-    (once per session, module-cached) and returns the archive + a merged
-    full-corpus pool. The default useRayData() mount NEVER pulls this — only
-    sports/science deep views pay the 10MB. */
-export function useSoldArchive(): SoldArchive {
-  const base = useRayData();
-  const [state, setState] = useState<ArchiveState>(() => ({
-    soldArchive: cachedArchive || [],
-    archiveLoaded: archiveLoadedState,
-    archiveError: archiveErrorState,
-  }));
-
-  useEffect(() => {
-    let active = true;
-    const listener = (s: ArchiveState) => { if (active) setState(s); };
-    archiveListeners.add(listener);
-    // reflect any state that landed before this subscribe, then kick the fetch
-    listener({ soldArchive: cachedArchive || [], archiveLoaded: archiveLoadedState, archiveError: archiveErrorState });
-    loadSoldArchive();
-    return () => { active = false; archiveListeners.delete(listener); };
-  }, []);
-
-  // Memoized so identity is stable across renders — an un-memoized new array
-  // each render drives ArchiveLoader's effect into an infinite setState loop.
-  const allLotsWithArchive = useMemo(() => {
-    if (!state.soldArchive.length) return base.allLots;
-    // MAIN WINS: an id present in the main pool (eager lots, then the phase-2
-    // shards once they land) is dropped from the archive side — the main row
-    // carries the live signal/bid state and the archive copy is stale history
-    // of the same lot. Recomputed only when either pool changes.
-    const mainIds = new Set<string>();
-    for (const l of base.allLots) mainIds.add(l.id);
-    const archiveOnly = state.soldArchive.filter(l => !mainIds.has(l.id));
-    return [...base.allLots, ...archiveOnly];
-  }, [base.allLots, state.soldArchive]);
-  return {
-    soldArchive: state.soldArchive,
-    archiveLoaded: state.archiveLoaded,
-    archiveError: state.archiveError,
-    allLotsWithArchive,
-  };
 }

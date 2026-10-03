@@ -2,13 +2,11 @@
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTISTS, MARKETS, ROSTER, marketArtists, marketOf, rosterNoun, type Market } from '../constants';
+import { ARTISTS, MARKETS, ROSTER, marketArtists, rosterNoun, type Market } from '../constants';
 import { useMarket } from '../lib/market';
-import { classifyForm, formsForMarket } from '../lib/comps';
-import { isMisattributed } from '../lib/attribution';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
-import { useFullLotsOnDemand } from '../hooks/useRayData';
+import { useRayData } from '../hooks/useRayData';
 import { loadPageStats, type PageStats } from '../lib/page-data';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
@@ -558,8 +556,7 @@ export default function MakersPage() {
   // a figure that could mislead — so the ~35MB stream now waits for a reader
   // who is actually looking: opening a dossier, or the first scroll/keypress/
   // pointer on the directory. A bounce pays nothing.
-  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand, requestFullLots } =
-    useFullLotsOnDemand(false);
+  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand } = useRayData();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -649,33 +646,13 @@ export default function MakersPage() {
     loadPageStats().then(p => { if (on) setPageStats(p); });
     return () => { on = false; };
   }, []);
-  const facesFallback = pageStats === null;
-  const askCorpus = useCallback(() => { if (facesFallback) requestFullLots(); }, [facesFallback, requestFullLots]);
+  // faces are decorative: a data build without page-stats shows the
+  // monogram plates (the corpus fallback that used to fill them is retired)
   const heroBySlug = useMemo(() => {
     const best = new Map<string, { url: string; val: number }>();
-    if (pageStats?.makerFaces) {
-      for (const [slug, f] of Object.entries(pageStats.makerFaces)) best.set(slug, f);
-      return best;
-    }
-    for (const l of allLots) {
-      if (!l.imageUrl) continue;
-      // the shared attribution guard drops cars in art pools + name-collision
-      // lots (the same guard the pipeline scrubs the corpus with — once the
-      // rebuild lands these are gone from the corpus, but this keeps the face
-      // clean on the current shards too). Plus a form gate so the photo is a
-      // real in-market work, never an uncategorized oddity.
-      if (isMisattributed(l.artist, l.title || '')) continue;
-      const forms = formsForMarket(marketOf(l.artist));
-      if (forms) {
-        const f = classifyForm(l);
-        if (f === 'unknown' || !forms.has(f)) continue;
-      }
-      const val = l.priceUsd || l.currentBid || l.estimateHigh || l.estimateLow || 0;
-      const cur = best.get(l.artist);
-      if (!cur || val > cur.val) best.set(l.artist, { url: l.imageUrl, val });
-    }
+    for (const [slug, f] of Object.entries(pageStats?.makerFaces || {})) best.set(slug, f);
     return best;
-  }, [allLots, pageStats]);
+  }, [pageStats]);
 
   // ── THE LIVE BOOK + THE ENGINE'S READ, one pass over the eager set ──
   const liveBySlug = useMemo(() => {
@@ -813,9 +790,8 @@ export default function MakersPage() {
   // opening a dossier is the explicit ask for the maker's own photograph —
   // the corpus is the only place that image comes from
   const onToggleOpen = useCallback((slug: string) => {
-    askCorpus();
     setOpen(o => (o === slug ? null : slug));
-  }, [askCorpus]);
+  }, []);
   const onToggleCompare = useCallback((slug: string) => {
     setCompare(c => c.includes(slug) ? c.filter(s => s !== slug) : c.length >= 4 ? c : [...c, slug]);
   }, []);
@@ -825,20 +801,6 @@ export default function MakersPage() {
     if (existing) void removeSearch(existing.id);
     else void saveSearch(`Following ${label}`, { player: slug, playerName: label });
   }, [user, openLogin, searches, removeSearch, saveSearch]);
-
-  /* PRE-WARM on the first sign of engagement — one shot, passive listeners,
-     removed the moment it fires. First paint stays free of the corpus; a
-     reader who scrolls or reaches for the keyboard gets the faces streaming
-     before they open anything. (Deep-linked ?open= asks for it outright.) */
-  useEffect(() => {
-    if (!facesFallback) return;             // faces ship in page-stats — no corpus
-    if (deepLinked.current) { requestFullLots(); return; }
-    const ev = ['scroll', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
-    const fire = () => { off(); requestFullLots(); };
-    const off = () => ev.forEach(e => window.removeEventListener(e, fire));
-    ev.forEach(e => window.addEventListener(e, fire, { passive: true, once: true }));
-    return off;
-  }, [requestFullLots, facesFallback]);
 
   // deep link ?open= — land on the dossier once the ledger has painted.
   // `open` is a dep too: on a WARM cache loading is already false at mount,

@@ -205,8 +205,19 @@ function parseFrac(s: string): number {
   return val;
 }
 
+const DIMS_CACHE = new Map<string, [number, number] | null>();
+/** cached per dimensions string (the comparableTo size gate re-parses every
+    candidate per anchor). Callers must not mutate the returned pair. */
 export function parseDims(dims: string | null | undefined): [number, number] | null {
   if (!dims) return null;
+  const hit = DIMS_CACHE.get(dims);
+  if (hit !== undefined) return hit;
+  const out = parseDimsUncached(dims);
+  if (DIMS_CACHE.size > 200_000) DIMS_CACHE.clear();
+  DIMS_CACHE.set(dims, out);
+  return out;
+}
+function parseDimsUncached(dims: string): [number, number] | null {
   let str = dims;
   const sheet = dims.match(/[IS]\.\s*(.+?)(?:\(|[IS]\.|$)/);
   if (sheet) str = sheet[1].trim();
@@ -608,14 +619,23 @@ function seriesOf(t: string | null | undefined): string | null {
   return s.length >= 3 ? s : null;
 }
 
+const NORM_CACHE = new Map<string, string>();
+/** cached per title string (the pool scans re-normalize every candidate per
+    anchor — the nightly comps precompute runs millions of these) */
 export function normalizeTitle(t: string | null | undefined): string {
-  return (t || '')
+  const k = t || '';
+  const hit = NORM_CACHE.get(k);
+  if (hit !== undefined) return hit;
+  const out = k
     .toLowerCase()
     .replace(/["“”'’]/g, '')
     .replace(/\(.*?\)/g, '')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  if (NORM_CACHE.size > 200_000) NORM_CACHE.clear();
+  NORM_CACHE.set(k, out);
+  return out;
 }
 
 export interface DeepSignal {

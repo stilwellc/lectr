@@ -8,6 +8,7 @@ import { ARTIST_LABEL, marketOf } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle, overEstimatePct } from '../utils';
 import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
+import { fetchTablePage, isApiUnavailable, TABLE_BROWSABLE, type TableScope, type TablePage } from '../lib/api';
 import SectionMark from './SectionMark';
 
 /** Known irregular plurals the naive strip-s would mangle ("wristwatches" →
@@ -41,6 +42,48 @@ function objectSubLabel(lot: AuctionLot): string | null {
 type SortMode = 'date' | 'price';
 type CategoryFilter = 'all' | LotCategory;
 
+const PAGE = 20;
+const NO_LOTS: AuctionLot[] = [];
+
+/** REMOTE mode (Oct 2026): the table's rows live behind the lot API
+ *  (/api/maker/:slug, /api/archive) — the server applies THIS component's
+ *  filter + order (category, sport, date-woven-by-house / price) and hands
+ *  back one page at a time, so a maker's or a market's whole sold book never
+ *  rides to the browser. Pages are module-memoized in app/lib/api.ts. */
+function useRemoteTable(remote: TableScope | undefined, sort: SortMode, cat: string, sport: string, visible: number) {
+  const key = remote ? JSON.stringify([remote, sort, cat, sport]) : '';
+  const scopeKey = remote ? JSON.stringify(remote) : '';
+  const [st, setSt] = useState<{ key: string; rows: AuctionLot[]; total: number | null; error: boolean; loading: boolean; unavailable?: boolean }>(
+    { key: '', rows: [], total: null, error: false, loading: false },
+  );
+  const [facets, setFacets] = useState<{ scope: string; f: TablePage['facets'] } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const need = Math.max(1, Math.ceil(Math.min(visible, TABLE_BROWSABLE) / PAGE));
+  useEffect(() => {
+    if (!key) return;
+    let dead = false;
+    const [scope, s0, c0, sp0] = JSON.parse(key) as [TableScope, SortMode, string, string];
+    setSt(prev => (prev.key === key ? { ...prev, loading: true, error: false } : { key, rows: [], total: null, error: false, loading: true }));
+    Promise.all(Array.from({ length: need }, (_, page) => fetchTablePage(scope, { sort: s0, cat: c0, sport: sp0, page, size: PAGE })))
+      .then(pages => {
+        if (dead) return;
+        setSt({ key, rows: pages.flatMap(pg => pg.rows), total: pages[0].total, error: false, loading: false });
+        setFacets({ scope: JSON.stringify(scope), f: pages[0].facets });
+      }, e => { if (!dead) setSt(prev => ({ ...prev, key, loading: false, error: !isApiUnavailable(e), unavailable: isApiUnavailable(e) })); });
+    return () => { dead = true; };
+  }, [key, need, attempt]);
+  const live = st.key === key;
+  return {
+    rows: live ? st.rows : [],
+    total: live ? st.total : null,
+    error: live && st.error,
+    unavailable: live && !!st.unavailable,
+    loading: !live || (st.loading && !st.unavailable),
+    facets: facets && facets.scope === scopeKey ? facets.f : null,
+    retry: () => setAttempt(a => a + 1),
+  };
+}
+
 interface Props {
   lots: AuctionLot[];
   showArtist?: boolean;
@@ -55,9 +98,13 @@ interface Props {
   mark?: string;
   /** small verdict line under the header (e.g. /saved's "how your eye did") */
   sub?: React.ReactNode;
+  /** page the rows from the lot API instead of `lots` (which is then ignored) */
+  remote?: TableScope;
 }
 
-export default function PastResults({ lots, showArtist = false, categoryFilter: externalFilter, onCategoryChange, savedIds = [], onToggleSave, ownedIds = [], onToggleOwned, mark, sub }: Props) {
+export default function PastResults({ lots: lotsProp, showArtist = false, categoryFilter: externalFilter, onCategoryChange, savedIds = [], onToggleSave, ownedIds = [], onToggleOwned, mark, sub, remote }: Props) {
+  // remote mode never computes over a local pool
+  const lots = remote ? NO_LOTS : lotsProp;
   const [visible, setVisible] = useState(20);
   const [sortBy, setSortBy] = useState<SortMode>('date');
   const [internalFilter, setInternalFilter] = useState<CategoryFilter>('all');
@@ -130,11 +177,19 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
     return woven;
   }, [filtered, sortBy]);
 
-  const shown = sorted.slice(0, visible);
+  const rt = useRemoteTable(remote, sortBy, categoryFilter, sportFilter, visible);
+  const availableCats = remote ? (rt.facets?.cats || []) : availableCategories;
+  const sportChips = remote ? (rt.facets?.sports || null) : sportGroups;
+  const resultCount = remote ? rt.total : filtered.length;
+  const shown = remote ? rt.rows.slice(0, visible) : sorted.slice(0, visible);
+  // remote tables page as deep as the API materializes (TABLE_BROWSABLE)
+  const browsable = remote ? Math.min(rt.total ?? 0, TABLE_BROWSABLE) : sorted.length;
+  const hasMore = visible < browsable;
+  const reachedCap = !!remote && !hasMore && (rt.total ?? 0) > TABLE_BROWSABLE && rt.rows.length >= TABLE_BROWSABLE;
 
   // Over a handful of rows the Date/Price pills + category chips are more
   // chrome than table — the toolbar earns its place only on a real archive.
-  const showToolbar = lots.length >= 8;
+  const showToolbar = remote ? ((rt.total ?? 0) >= 8 || categoryFilter !== 'all' || sportFilter !== 'all') : lots.length >= 8;
 
   return (
     <section className="ray-results rail">
@@ -238,7 +293,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               Recent <span style={{ fontStyle: 'normal' }}>results</span>
             </h2>
             <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
-              {filtered.length.toLocaleString()} results
+              {resultCount == null ? (remote && rt.unavailable ? 'The archive' : 'Loading results') : `${resultCount.toLocaleString()} results`}
               {categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}
             </p>
             {sub && (
@@ -268,7 +323,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           </div>
         </div>
 
-        {showToolbar && availableCategories.length > 1 && (
+        {showToolbar && availableCats.length > 1 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
             <button
               className="ray-sort-pill"
@@ -277,7 +332,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
             >
               All
             </button>
-            {availableCategories.map(cat => (
+            {availableCats.map(cat => (
               <button
                 key={cat}
                 className="ray-sort-pill"
@@ -290,7 +345,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           </div>
         )}
 
-        {showToolbar && sportGroups && (
+        {showToolbar && sportChips && (
           <div className="ray-sport-chips" role="radiogroup" aria-label="Filter by sport" style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
             <button
               className="ray-sort-pill"
@@ -301,7 +356,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
             >
               All
             </button>
-            {sportGroups.map(([sport, n]) => (
+            {sportChips.map(([sport, n]) => (
               <button
                 key={sport}
                 className="ray-sort-pill"
@@ -323,6 +378,20 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         borderRadius: 16,
         overflow: 'hidden',
       }}>
+        {remote && shown.length === 0 && (
+          <div style={{ padding: '28px 24px', textAlign: 'center', fontSize: 13.5, color: 'var(--color-text-muted)' }} aria-busy={rt.loading || undefined}>
+            {rt.unavailable ? (
+              <>The full sold archive isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.</>
+            ) : rt.error ? (
+              <>
+                The results didn&rsquo;t load.{' '}
+                <button onClick={rt.retry} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', textDecoration: 'underline', font: 'inherit', padding: 0 }}>
+                  Try again
+                </button>
+              </>
+            ) : rt.loading ? 'Loading results…' : 'No results match this filter.'}
+          </div>
+        )}
         {shown.map((lot, i) => {
           const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
           const catColor = (lot.category && lot.category !== 'unknown') ? categoryColors[lot.category] : null;
@@ -547,9 +616,22 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
         })}
       </div>
 
-      {visible < sorted.length && (
+      {remote && rt.error && shown.length > 0 && (
+        <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13.5, color: 'var(--color-text-muted)' }}>
+          More results didn&rsquo;t load.{' '}
+          <button onClick={rt.retry} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', textDecoration: 'underline', font: 'inherit', padding: 0 }}>
+            Try again
+          </button>
+        </p>
+      )}
+      {reachedCap && (
+        <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13.5, color: 'var(--color-text-muted)' }}>
+          Showing the first {TABLE_BROWSABLE.toLocaleString()} of {(rt.total ?? 0).toLocaleString()} &mdash; filter by category or sort by price to reach the rest.
+        </p>
+      )}
+      {hasMore && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
-          <button className="ray-show-more" onClick={() => setVisible((v) => v + 20)}>
+          <button className="ray-show-more" onClick={() => setVisible((v) => v + 20)} disabled={remote ? rt.loading && shown.length < visible : undefined}>
             Show more
           </button>
         </div>
