@@ -1,0 +1,68 @@
+# ENGINE-GATE POLICY CHECK — any change to the gate (scripts/validate-engine.ts
+# or its mirrored thresholds scripts/ci/gate-thresholds.ts) replays the last 30
+# nights' archived validation reports and prints which nights would flip.
+#
+#   automatic: on a push/PR that touches either file (replays CURRENT_GATE — the
+#              committed values — against every archived night; a night whose
+#              verdict differs from what it recorded is listed as a flip/drift)
+#   by hand:   gh workflow run engine-gate-replay.yml -f set="g1.spreadMin=8 g2.dipBlocks=false"
+#
+# The policy itself (and why — G1 flipped 3× in 23 days) is in
+# docs/RUNBOOK.md "Engine-gate policy". Reads R2 only.
+name: Engine gate replay
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/validate-engine.ts'
+      - 'scripts/ci/gate-thresholds.ts'
+      - 'scripts/ci/gate-replay.ts'
+  pull_request:
+    paths:
+      - 'scripts/validate-engine.ts'
+      - 'scripts/ci/gate-thresholds.ts'
+  workflow_dispatch:
+    inputs:
+      set:
+        description: 'proposed overrides, space-separated (e.g. "g1.spreadMin=8 g2.dipBlocks=false")'
+        type: string
+        default: ''
+      nights:
+        description: 'how many archived nights'
+        type: string
+        default: '30'
+
+permissions:
+  contents: read
+  actions: read   # --gh reads the nightly's validate-engine artifacts too
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Replay the archived nights
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          SETS: ${{ inputs.set }}
+          NIGHTS: ${{ inputs.nights || '30' }}
+        run: |
+          args=(--nights "$NIGHTS" --gh)
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then args+=(--r2); fi
+          for s in $SETS; do args+=(--set "$s"); done
+          npx tsx scripts/ci/gate-replay.ts "${args[@]}" --json gate-replay.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gate-replay
+          path: gate-replay.json
+          retention-days: 90

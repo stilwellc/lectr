@@ -9,13 +9,19 @@
 # data drifted the frames (red 28/28 days, catching nothing).
 #
 # A missing baseline FAILS (it used to seed itself silently).
-# Re-baseline deliberately — CI renders with Linux fonts, so approve HERE:
-#   gh workflow run ui-shots.yml -f approve=true
-#   gh run download <run-id> -n ui-baseline -D tests/ui-baseline
-#   git add tests/ui-baseline && git commit -m "ui-shots: re-baseline"
-# To move the pinned data as well, first run (needs R2 write)
-#   bash scripts/data-store.sh pin-fixture
-# and commit the rewritten tests/ui-baseline/FIXTURE with the new baselines.
+# RE-BASELINE ENTIRELY IN CI (Oct 3 2026 — no local R2 token needed):
+#   gh workflow run ui-shots.yml -f pin_fixture=true -f approve=true
+#     pin      copies the CURRENT published served payload to a write-once
+#              fixtures/ui-shots/<version>/ key (data-store.sh pin-fixture,
+#              R2 write token, 'production' environment)
+#     shots    builds + captures against THAT fixture and writes every frame
+#              as the new baseline (CI renders with Linux fonts — approve here)
+#     propose  pushes tests/ui-baseline/ (+ FIXTURE) to the branch
+#              ui-shots/rebaseline-<run_id> and opens a PR — review the frames
+#              in the PR diff, merge it, done.
+#   Code-only re-baseline (same data): -f approve=true alone.
+# (If the repo forbids Actions from opening PRs, the branch is still pushed
+#  and the job prints the compare URL.) docs/RUNBOOK.md "UI-shots re-baseline".
 name: ui-shots
 on:
   schedule:
@@ -23,7 +29,11 @@ on:
   workflow_dispatch:
     inputs:
       approve:
-        description: 'Approve: write every frame as the new baseline and upload it as the ui-baseline artifact (commit it yourself)'
+        description: 'Approve: write every frame as the new baseline and open a PR with them'
+        type: boolean
+        default: false
+      pin_fixture:
+        description: 'Re-pin the data fixture to the CURRENT published payload first (R2 write), then render against it'
         type: boolean
         default: false
 
@@ -35,7 +45,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pin:
+    if: ${{ inputs.pin_fixture }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    outputs:
+      key: ${{ steps.pin.outputs.key }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Pin the current published payload as the UI fixture
+        id: pin
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bash scripts/data-store.sh pin-fixture
+          echo "key=$(tr -d '[:space:]' < tests/ui-baseline/FIXTURE)" >> "$GITHUB_OUTPUT"
+
   shots:
+    needs: pin
+    # runs when pinning succeeded or was not asked for
+    if: ${{ !cancelled() && needs.pin.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -52,9 +85,11 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Install the pinned data fixture
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bash scripts/data-store.sh pull-fixture
+          FIXTURE_KEY: ${{ needs.pin.outputs.key }}
+        # the just-pinned key when pin ran, else the committed tests/ui-baseline/FIXTURE
+        run: bash scripts/data-store.sh pull-fixture "$FIXTURE_KEY"
       # no NEXT_PUBLIC_SUPABASE_* → auth stays dormant: no account UI to drift
       - name: Build the site against the fixture
         run: npm run build
@@ -102,3 +137,49 @@ jobs:
             shots/current/
           retention-days: 14
           if-no-files-found: ignore
+
+  # Commit the approved frames (+ the new FIXTURE) to a branch and open a PR —
+  # the only job with write scopes, and only on a deliberate dispatch.
+  propose:
+    needs: [pin, shots]
+    if: ${{ !cancelled() && (needs.pin.result == 'success' || (inputs.approve && needs.shots.result == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fetch the approved baselines
+        if: ${{ inputs.approve && needs.shots.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ui-baseline
+          path: tests/ui-baseline
+      - name: Record the pinned fixture
+        if: ${{ needs.pin.result == 'success' }}
+        env:
+          KEY: ${{ needs.pin.outputs.key }}
+        run: printf '%s\n' "$KEY" > tests/ui-baseline/FIXTURE
+      - name: Push a branch + open the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED: ${{ inputs.approve && needs.shots.result == 'success' }}
+          KEY: ${{ needs.pin.outputs.key }}
+        run: |
+          if git diff --quiet -- tests/ui-baseline && [ -z "$(git ls-files --others --exclude-standard tests/ui-baseline)" ]; then
+            echo "nothing changed under tests/ui-baseline — no PR"; exit 0
+          fi
+          branch="ui-shots/rebaseline-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add tests/ui-baseline
+          what="re-baseline"
+          if [ -n "$KEY" ]; then what="pin fixture ${KEY} + re-baseline"; fi
+          git commit -m "ui-shots: ${what}"
+          git push origin "$branch"
+          body="Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} · fixture: ${KEY:-unchanged} · baselines approved: ${APPROVED}"
+          if [ "$APPROVED" != "true" ]; then body="${body} — WARNING: the fixture moved but the baselines were NOT re-approved; dispatch again with approve=true before merging."; fi
+          gh pr create --base main --head "$branch" --title "ui-shots: ${what}" --body "$body" \
+            || echo "::warning title=PR not opened::Actions may not be allowed to open PRs here — open it by hand: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}"

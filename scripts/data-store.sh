@@ -14,6 +14,14 @@
 #   latest/served.tar.gz   (no longer written; pull() keeps them as a last-resort
 #                          fallback for a pointer-less bucket)
 #   snapshots/YYYYMMDD/corpus.tar   daily corpus snapshot (30-day lifecycle)
+#   latest/segments/<house>.ndjson.gz             the LAST-GOOD per-house segment
+#   segment-versions/<house>/<UTC>.ndjson.gz      WRITE-ONCE copy of every segment
+#                          push (rollback ladder: `list-segment-versions`,
+#                          `restore-segment`; `prune-segment-versions` drops
+#                          versions > 30 days old, always keeping 3 per house)
+#   latest/house-ledger.json      per-house crawl ledger (scripts/emit-status.ts)
+#   qa/validate-engine/<UTC>-<run>.json   every night's engine-gate report
+#                          (scripts/ci/gate-replay.ts replays them)
 #
 # Retention: versions/ accumulates ~176MB/day (corpus.tar + served.tar.gz per
 # push). Prefer an R2 lifecycle rule on the versions/ prefix; until one is
@@ -404,6 +412,11 @@ prune() { # keep the newest N versions/ prefixes (default 14), delete the rest.
 # latest/segments/<name>.ndjson.gz. A pull miss (new segment) is non-fatal.
 SEGMENTS="goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other"
 seg_etag_file() { echo "data/corpus/segments/.$1.pulled-etag"; }
+seg_stats_file() { echo "data/corpus/segments/.$1.pulled-stats.json"; }
+seg_gate() { # stats <file> | check <house> <prev-stats> <file>  (scripts/ci/segment-gate.ts)
+  npx --no-install tsx scripts/ci/segment-gate.ts "$@"
+}
+seg_version_key() { echo "segment-versions/$1/$(date -u +%Y%m%dT%H%M%SZ).ndjson.gz"; }
 seg_stats() { # gz-ndjson file → "<rows> <max stamp>" (validatedAt, else firstSeen, else '')
   python3 - "$1" <<'EOF'
 import gzip, json, sys
@@ -470,10 +483,34 @@ push_segment() {
         return 1
       fi
       echo "[data-store] segment $name: local ${lrows} rows/${lstamp:-none} ≥ remote ${rrows} rows/${rstamp:-none} — safe to replace"
+      [ -s "$(seg_stats_file "$name")" ] || seg_gate stats "$remote_f" > "$(seg_stats_file "$name")" 2>/dev/null || rm -f "$(seg_stats_file "$name")"
     else
       echo "[data-store] WARNING: push-segment $name: no pull record, SEGMENT_PUSH_FORCE=1 — overwriting unverified"
     fi
   fi
+  # PER-HOUSE SHRINK + PRICE GATE (Oct 3 2026, scripts/ci/segment-gate.ts):
+  # a collapsed or price-poisoned segment must not replace this house's
+  # last-good. rc 3 = BLOCKED → the caller's step fails, this house rides its
+  # R2 last-good tonight, every other house (and the publish) proceeds.
+  # A gate TOOL failure (rc ≠ 0/3) warns and proceeds: the CAS above still holds.
+  local stats; stats="$(seg_stats_file "$name")"
+  if [ "${SEGMENT_SHRINK_OK:-0}" = "1" ]; then
+    echo "[data-store] WARNING: push-segment $name: SEGMENT_SHRINK_OK=1 — per-house shrink gate skipped (deliberate)"
+  elif [ -s "$stats" ]; then
+    rc=0; seg_gate check "$name" "$stats" "$f" || rc=$?
+    if [ "$rc" -eq 3 ]; then
+      echo "[data-store] ERROR: push-segment $name BLOCKED by the per-house shrink gate — last-good kept (SEGMENT_SHRINK_OK=1 to override a deliberate shrink)"
+      return 3
+    elif [ "$rc" -ne 0 ]; then
+      echo "::warning title=segment gate unavailable ($name)::gate tool failed (rc $rc) — pushing on the CAS guard alone"
+    fi
+  else
+    echo "[data-store] push-segment $name: no gate baseline (first write, or no prior pull) — shrink gate skipped"
+  fi
+  # WRITE-ONCE VERSION FIRST (the rollback ladder): segment-versions/<house>/<UTC>.
+  # Non-fatal — a failed version write must never cost the night's crawl.
+  local vkey; vkey=$(seg_version_key "$name")
+  obj_put "$vkey" "$f" || echo "::warning title=segment version not written ($name)::$vkey failed — no rollback copy of tonight's $name"
   obj_put "$key" "$f"
   # the etag we just stored is the new CAS baseline (etag == md5, single-part)
   { md5 -q "$f" 2>/dev/null || md5sum "$f" | cut -d' ' -f1; } > "$(seg_etag_file "$name")"
@@ -506,12 +543,17 @@ pull_segment_once() {
   # fresh-only subset. The bucket LISTING is the authority on existence.
   local name="$1" key="latest/segments/$1.ndjson.gz" f="data/corpus/segments/$1.ndjson.gz" grc=0
   mkdir -p data/corpus/segments
-  rm -f "$(seg_etag_file "$name")"
+  rm -f "$(seg_etag_file "$name")" "$(seg_stats_file "$name")"
   obj_get_fresh "$key" "$f" || grc=$?
   if [ "$grc" -eq 0 ]; then
     # CAS record for push_segment: what we pulled IS the etag (etag == md5 for
     # single-part uploads, and obj_get_fresh only returns 0 on a verified read)
     { md5 -q "$f" 2>/dev/null || md5sum "$f" | cut -d' ' -f1; } > "$(seg_etag_file "$name")"
+    # shrink-gate BASELINE for push_segment (assemble never pushes: it skips this)
+    if [ "${SEGMENT_STATS:-1}" = "1" ]; then
+      seg_gate stats "$f" > "$(seg_stats_file "$name")" 2>/dev/null \
+        || { rm -f "$(seg_stats_file "$name")"; echo "[data-store] WARNING: could not compute gate stats for $name — its push will run without the shrink gate"; }
+    fi
     return 0
   fi
   rm -f "$f"   # never leave a zero-byte gz — missing reads as [], empty THROWS
@@ -695,15 +737,142 @@ assemble_segments() { # houses…
   local h pids="" rc=0 p
   for h in "$@"; do
     (
-      hrc=0
+      # .<house>.source records WHERE tonight's segment came from — the house
+      # ledger (scripts/emit-status.ts) counts only a 'handoff' as a fresh crawl
+      hrc=0; src="data/corpus/segments/.$h.source"
       if [ -n "${GITHUB_RUN_ID:-}" ]; then handoff_get "segment-$h" "data/corpus/segments/$h.ndjson.gz" || hrc=$?; else hrc=3; fi
-      if [ "$hrc" -eq 0 ]; then echo "[data-store] segment $h fresh from this run's crawl"; exit 0; fi
+      if [ "$hrc" -eq 0 ]; then echo "[data-store] segment $h fresh from this run's crawl"; echo handoff > "$src"; exit 0; fi
       [ "$hrc" -ne 3 ] && echo "[data-store] WARNING: segment $h handoff unreadable (rc $hrc) — falling back to R2 last-good"
-      pull_segment "$h"
+      SEGMENT_STATS=0   # subshell-local: assemble never pushes, skip the gate baseline
+      if pull_segment "$h"; then echo last-good > "$src"; exit 0; fi
+      echo absent > "$src"; exit 1
     ) & pids="$pids $!"
   done
   for p in $pids; do wait "$p" || rc=1; done
   return $rc
+}
+
+# ── SEGMENT ROLLBACK LADDER (Oct 3 2026) ─────────────────────────────────────
+# Every push_segment first writes a WRITE-ONCE copy to
+# segment-versions/<house>/<YYYYMMDDTHHMMSSZ>.ndjson.gz, then replaces
+# latest/segments/<house>.ndjson.gz. (Not under versions/: `prune` treats
+# every versions/<x>/ prefix as a corpus version and would count these.)
+list_objects() { # prefix → "key<TAB>size<TAB>last_modified" per object (paginated)
+  local enc cursor="" page
+  enc=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$1")
+  while :; do
+    page=$(curl -sf -H "Authorization: Bearer $TOKEN" "$API?prefix=$enc&per_page=1000${cursor:+&cursor=$cursor}") || return 1
+    echo "$page" | python3 -c "import json,sys;[print(f\"{o['key']}\t{o.get('size','')}\t{o.get('last_modified','')}\") for o in json.load(sys.stdin).get('result',[])]"
+    cursor=$(echo "$page" | python3 -c "import json,sys;print(json.load(sys.stdin).get('result_info',{}).get('cursor') or '')" 2>/dev/null || true)
+    [ -n "$cursor" ] || break
+  done
+}
+list_segment_versions() { # house
+  local house="${1:?usage: list-segment-versions <house>}" rows
+  rows=$(list_objects "segment-versions/$house/") || { echo "[data-store] list-segment-versions: listing failed"; return 1; }
+  if [ -z "$rows" ]; then echo "[data-store] no versions of $house yet (versions start with the first push after Oct 3 2026)"; return 0; fi
+  echo "$rows" | sort | awk -F'\t' '{ k=$1; sub(".*/", "", k); sub(/\.ndjson\.gz$/, "", k); printf "%-22s %10.1f MB  %s\n", k, $2/1048576, $3 }'
+}
+pick_segment_version() { # house date|stamp → the newest version key on/at that date (stdout)
+  local house="$1" want keys key
+  want=$(echo "${2:?date (YYYY-MM-DD, YYYYMMDD or a full stamp) required}" | tr -d ':-')
+  keys=$(list_keys_retry "segment-versions/$house/") || { echo "[data-store] listing failed" >&2; return 1; }
+  key=$(printf '%s\n' "$keys" | grep -F "segment-versions/$house/$want" | sort | tail -n 1 || true)
+  [ -n "$key" ] || { echo "[data-store] ERROR: no version of $house matches '$2' — see: bash scripts/data-store.sh list-segment-versions $house" >&2; return 1; }
+  echo "$key"
+}
+restore_segment() { # house date|stamp — copy that version back over the target (latest/ by default)
+  # RESTORE_PREFIX (default 'latest/') redirects the write — the restore drill
+  # restores into drill/<run>/ and never touches latest/. Restoring latest/
+  # takes effect at the NEXT assemble: publish it now with
+  #   gh workflow run nightly.yml -f skip_crawl=true
+  # Run it under the house's segment lock (the segment-restore workflow does),
+  # or when no nightly/heal is writing that house: in-flight writers are then
+  # refused by the CAS guard (their pulled etag no longer matches).
+  local house="${1:?usage: restore-segment <house> <date>}" key prefix target cur rc
+  prefix="${RESTORE_PREFIX:-latest/}"
+  key=$(pick_segment_version "$house" "${2:-}") || return 1
+  target="${prefix}segments/$house.ndjson.gz"
+  with_retry obj_get_once "$key" "$TMP/restore.ndjson.gz" || { echo "[data-store] ERROR: $key unreadable"; return 1; }
+  gzip -t "$TMP/restore.ndjson.gz" || { echo "[data-store] ERROR: $key is not a valid gzip — refusing to restore it"; return 1; }
+  echo "[data-store] restore $house ← $key → $target"
+  seg_gate stats "$TMP/restore.ndjson.gz" 2>/dev/null | sed 's/^/[data-store]   restored stats: /' || true
+  if [ "$prefix" = "latest/" ]; then
+    # the restore is itself reversible: version the segment it replaces
+    rc=0; obj_exists "$target" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      obj_get_fresh "$target" "$TMP/current.ndjson.gz" || { echo "[data-store] ERROR: cannot read the current $target to version it first — refusing"; return 1; }
+      cur="segment-versions/$house/$(date -u +%Y%m%dT%H%M%SZ)-prerestore.ndjson.gz"
+      obj_put "$cur" "$TMP/current.ndjson.gz"
+      echo "[data-store] current $house saved as $cur (undo: restore-segment $house ${cur##*/})"
+    elif [ "$rc" -eq 2 ]; then echo "[data-store] ERROR: listing unavailable — refusing to restore blind"; return 1; fi
+  fi
+  obj_put "$target" "$TMP/restore.ndjson.gz"
+  echo "[data-store] restored. $([ "$prefix" = "latest/" ] && echo "Publish it: gh workflow run nightly.yml -f skip_crawl=true")"
+}
+prune_segment_versions() { # [days=30] [keep_min=3] — age-based, newest keep_min per house always kept
+  local days="${1:-30}" keep="${2:-3}" keys doomed k n=0
+  keys=$(list_keys_retry "segment-versions/") || { echo "[data-store] prune-segment-versions: listing failed"; return 1; }
+  [ -n "$keys" ] || { echo "[data-store] prune-segment-versions: no versions yet"; return 0; }
+  doomed=$(printf '%s\n' "$keys" | python3 -c "
+import sys, datetime, collections, re
+days, keep = float(sys.argv[1]), int(sys.argv[2])
+cut = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)).strftime('%Y%m%dT%H%M%SZ')
+by = collections.defaultdict(list)
+for k in sys.stdin.read().split():
+    p = k.split('/')
+    if len(p) == 3 and re.match(r'^\d{8}T\d{6}Z', p[2]): by[p[1]].append(k)
+for h, ks in by.items():
+    ks.sort()
+    for k in ks[:-keep] if keep else ks:
+        if k.split('/')[2][:16] < cut: print(k)
+" "$days" "$keep")
+  for k in $doomed; do obj_delete "$k"; n=$((n + 1)); done
+  echo "[data-store] prune-segment-versions: deleted $n version(s) older than ${days}d (newest $keep per house always kept)"
+}
+drill_segment() { # house [date] — RESTORE DRILL: restore into a scratch prefix, verify, diff, clean up
+  local house="${1:?usage: restore-drill <house> [date]}" when="${2:-}" key prefix want have keys rc=0
+  if [ -z "$when" ]; then
+    keys=$(list_keys_retry "segment-versions/$house/") || { echo "[drill] listing failed"; return 1; }
+    key=$(printf '%s\n' "$keys" | grep -v prerestore | sort | tail -n 1 || true)
+    [ -n "$key" ] || { echo "[drill] FAIL: no versions of $house exist — the rollback ladder is empty"; return 1; }
+    when=$(basename "$key" .ndjson.gz)
+  fi
+  prefix="drill/${GITHUB_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}/"
+  echo "[drill] restoring $house @ $when into $prefix (latest/ untouched)"
+  RESTORE_PREFIX="$prefix" restore_segment "$house" "$when" || return 1
+  key=$(pick_segment_version "$house" "$when") || return 1
+  want=$(listed_etag "$key")
+  with_retry obj_get_once "${prefix}segments/$house.ndjson.gz" "$TMP/drill.ndjson.gz" || { echo "[drill] FAIL: restored copy unreadable"; rc=1; }
+  if [ "$rc" -eq 0 ]; then
+    have=$(md5 -q "$TMP/drill.ndjson.gz" 2>/dev/null || md5sum "$TMP/drill.ndjson.gz" | cut -d' ' -f1)
+    if [ -n "$want" ] && [ "$have" != "$want" ]; then echo "[drill] FAIL: restored md5 $have ≠ version etag $want"; rc=1; else echo "[drill] ✓ restored bytes match the version (md5 $have)"; fi
+    if gzip -t "$TMP/drill.ndjson.gz"; then echo "[drill] ✓ gzip intact"; else echo "[drill] FAIL: restored copy is not valid gzip"; rc=1; fi
+    seg_gate stats "$TMP/drill.ndjson.gz" > "$TMP/drill-stats.json" || { echo "[drill] FAIL: restored segment does not parse as NDJSON lots"; rc=1; }
+    if obj_get_fresh "latest/segments/$house.ndjson.gz" "$TMP/live.ndjson.gz"; then
+      echo "[drill] diff vs live latest/segments/$house (restored → live):"
+      seg_gate check "$house" "$TMP/drill-stats.json" "$TMP/live.ndjson.gz" || true
+    fi
+  fi
+  for k in $(list_keys_retry "$prefix" || true); do obj_delete "$k" || true; done
+  [ "$rc" -eq 0 ] && echo "[drill] PASS: $house restorable from $when" || echo "[drill] FAILED"
+  return "$rc"
+}
+
+# ── NIGHT STATE: house ledger + engine-gate reports ──────────────────────────
+put_gate_report() { # file — every night's validate-engine.json, write-once, kept (KBs)
+  local f="${1:-data/qa/validate-engine.json}"
+  [ -s "$f" ] || { echo "[data-store] no gate report at $f"; return 0; }
+  obj_put "qa/validate-engine/$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID:-local}.json" "$f"
+}
+pull_gate_reports() { # dir [n=30] — the newest n archived reports (scripts/ci/gate-replay.ts)
+  local dir="${1:-data/qa/gate-reports}" n="${2:-30}" keys k
+  mkdir -p "$dir"
+  keys=$(list_keys_retry "qa/validate-engine/") || { echo "[data-store] pull-gate-reports: listing failed"; return 1; }
+  for k in $(printf '%s\n' "$keys" | sort | tail -n "$n"); do
+    with_retry obj_get_once "$k" "$dir/$(basename "$k")" || echo "[data-store] WARNING: $k unreadable"
+  done
+  echo "[data-store] pulled $(find "$dir" -name '*.json' | wc -l | tr -d ' ') gate report(s) into $dir"
 }
 
 # ── UI-SHOTS FIXTURE (a pinned served payload the visual rig renders) ────────
@@ -771,5 +940,15 @@ case "${1:-}" in
     test -f data/corpus/backtest-state.json.gz && obj_put "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" || echo "[data-store] no backtest state to push"
     ;;
   prune) prune "${2:-14}" ;;
-  *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…>|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, DATA_FRESH_ALLOW_STALE=1)"; exit 1 ;;
+  list-segment-versions) list_segment_versions "${2:-}" ;;
+  restore-segment) restore_segment "${2:-}" "${3:-}" ;;
+  prune-segment-versions) prune_segment_versions "${2:-30}" "${3:-3}" ;;
+  restore-drill) drill_segment "${2:-}" "${3:-}" ;;
+  # the per-house crawl ledger (scripts/emit-status.ts): pulled to .prev, the
+  # updated one pushed back EVERY night — publish or not (crawl truth)
+  pull-ledger) mkdir -p data/qa; obj_get_clean "latest/house-ledger.json" "data/qa/house-ledger.prev.json" "[data-store] no house ledger yet (first night — bootstrap)" ;;
+  push-ledger) test -s data/qa/house-ledger.json && obj_put "latest/house-ledger.json" "data/qa/house-ledger.json" || echo "[data-store] no house ledger to push" ;;
+  put-gate-report) put_gate_report "${2:-data/qa/validate-engine.json}" ;;
+  pull-gate-reports) pull_gate_reports "${2:-data/qa/gate-reports}" "${3:-30}" ;;
+  *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…>|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]|list-segment-versions <house>|restore-segment <house> <date>|prune-segment-versions [days=30] [keep=3]|restore-drill <house> [date]|pull-ledger|push-ledger|put-gate-report [file]|pull-gate-reports [dir] [n=30]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, SEGMENT_SHRINK_OK=1, DATA_FRESH_ALLOW_STALE=1, RESTORE_PREFIX=)"; exit 1 ;;
 esac

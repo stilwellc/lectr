@@ -1,0 +1,18 @@
+# lectr-cron-trigger — on-time workflow_dispatch for the nightly + close board.
+# Deployed by .github/workflows/cron-trigger-deploy.yml (docs/RUNBOOK.md
+# "On-time nightly"). The crons MUST match src/index.ts SCHEDULE keys exactly
+# (scripts/__tests__/cron-trigger.test.ts checks).
+name = "lectr-cron-trigger"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[triggers]
+crons = ["17 4 * * *", "43 2,6,10,14,18,22 * * *"]
+
+[vars]
+GITHUB_REPO = "stilwellc/lectr"
+GITHUB_REF = "main"
+
+[observability]
+enabled = true

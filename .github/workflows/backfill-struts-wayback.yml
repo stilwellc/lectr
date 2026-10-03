@@ -63,7 +63,7 @@ jobs:
       # merge-and-push would publish a slice-only segment over the real one.
       - name: Pull last-good segment
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-segment "$HOUSE"
       # The manifest is derived, not checked in: one CDX query, reduced to the
@@ -77,6 +77,6 @@ jobs:
         run: npx tsx scripts/backfill-struts-wayback.ts --house "$HOUSE" --skip "$SKIP" --cap "$CAP" --conc 2 --delay "$DELAY" --write
       - name: Push segment
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-segment "$HOUSE"

@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 // Aggregate the nightly crawl legs' leg-health.json files into the job summary
-// and FAIL (exit 1) when any leg reported ok=false. Non-blocking by design:
-// nightly.yml's `health` job depends on the crawl, nothing depends on it.
+// and ANNOTATE every leg that reported ok=false. Since Oct 3 2026 this is
+// WARN-ONLY by default (exit 0): a sick house no longer reddens the run — the
+// run's red means "did not publish"; house health rides the per-house ledger,
+// its rolling issue and status.json (docs/RUNBOOK.md). --strict restores the
+// old exit 1 on any ok=false.
 //
-//   node scripts/ci/leg-health-summary.mjs <dir> [expected houses, comma-sep]
+//   node scripts/ci/leg-health-summary.mjs <dir> [expected houses, comma-sep] [--strict]
+//
+// Several records for one house are MERGED (ok = AND, reasons joined): the
+// crawl leg writes leg-health.json, and the per-house shrink gate in
+// data-store.sh push-segment writes data/qa/leg-health-gate.json.
 //
 // <dir> holds the downloaded `health-<house>` artifacts (any depth; every
 // *.json with a `house` field counts). Record shape (written by each leg):
@@ -15,7 +22,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const dir = process.argv[2] || 'health';
-const expected = (process.argv[3] || '').split(',').map(s => s.trim()).filter(Boolean);
+const strict = process.argv.includes('--strict');
+const expected = (process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3] : '').split(',').map(s => s.trim()).filter(Boolean);
 
 function walk(d, out) {
   let es;
@@ -33,7 +41,11 @@ for (const f of walk(dir, [])) {
   try {
     const j = JSON.parse(fs.readFileSync(f, 'utf8'));
     for (const r of Array.isArray(j) ? j : [j]) {
-      if (r && typeof r.house === 'string') recs.set(r.house, r);
+      if (!r || typeof r.house !== 'string') continue;
+      const prev = recs.get(r.house);
+      if (!prev) { recs.set(r.house, r); continue; }
+      const reasons = [...new Set([prev.reason, r.reason].filter(Boolean))];
+      recs.set(r.house, { ...prev, ok: prev.ok === true && r.ok === true, reason: reasons.join(' | ') || null });
     }
   } catch (e) {
     console.log(`::warning title=leg-health unreadable::${f}: ${e.message}`);
@@ -69,6 +81,6 @@ if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_S
 if (missing.length) console.log(`::warning title=leg-health missing::no leg-health.json from ${missing.join(', ')}`);
 for (const h of bad) {
   const r = recs.get(h);
-  console.log(`::error title=crawl leg ${h} not ok::${esc(r.reason) || 'ok=false'} (fetched ${num(r.fetched)}, parsed ${num(r.parsed)}, settled ${num(r.settled)})`);
+  console.log(`::${strict ? 'error' : 'warning'} title=crawl leg ${h} not ok::${esc(r.reason) || 'ok=false'} (fetched ${num(r.fetched)}, parsed ${num(r.parsed)}, settled ${num(r.settled)})`);
 }
-process.exit(bad.length ? 1 : 0);
+process.exit(strict && bad.length ? 1 : 0);

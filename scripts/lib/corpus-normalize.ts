@@ -11,6 +11,7 @@ import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
 import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
+import { segmentOf } from '../corpus-io';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -459,6 +460,7 @@ type DQLot = Lot & {
 
 export const COMP_EXCLUDE = {
   staleUpcoming: 'stale-upcoming',          // never resolved >3d past close
+  staleHouse: 'stale-house',                // live lot of a house with no successful crawl in >48h
   priceUnder10: 'price-under-10',           // sold < $10 — fee rows, stubs, lot-of-magazines
   priceVsEstimate: 'price-vs-estimate',     // > 50× high est or < 2% low est
   fxUnconverted: 'fx-unconverted',          // native HKD/CNY figure stored as USD
@@ -702,6 +704,33 @@ export function demoteStaleUpcoming(lots: Lot[], now: Date = new Date(), graceDa
   return { total, byHouse };
 }
 
+// ── STALE HOUSE (Oct 3 2026, ops audit): 1,384 Hake's lots last seen Sep 23
+// were still served as live a week after the house's crawl stopped landing.
+// A house whose last SUCCESSFUL crawl is older than 48h (the per-house ledger,
+// scripts/lib/house-status.ts → assemble passes the stale segment keys here)
+// has its 'upcoming' lots demoted to 'unknown-result' + staleHidden:true, so
+// no consumer (upcoming.json, the Supabase live sync, every lane that filters
+// status==='upcoming') serves a bid/close we can no longer vouch for. The
+// segment is untouched — NOTHING is deleted: the first night the house crawls
+// OK again its rows arrive 'upcoming' and the hide lifts by itself.
+export function hideStaleHouseLive(lots: Lot[], staleSegments: ReadonlySet<string>): { total: number; byHouse: Record<string, number> } {
+  const byHouse: Record<string, number> = {};
+  let total = 0;
+  if (!staleSegments.size) return { total, byHouse };
+  for (const l of lots as DQLot[]) {
+    if (l.status !== 'upcoming') continue;
+    const seg = segmentOf(String(l.auctionHouse || ''));
+    if (!staleSegments.has(seg)) continue;
+    (l as { status: string }).status = 'unknown-result';
+    (l as { staleHidden?: boolean }).staleHidden = true;
+    if ('resultsPending' in l) l.resultsPending = false;
+    markExclude(l, COMP_EXCLUDE.staleHouse);
+    byHouse[seg] = (byHouse[seg] || 0) + 1;
+    total++;
+  }
+  return { total, byHouse };
+}
+
 // ── COMP-EXCLUDE PRICE / PROVENANCE RULES ──
 // Genuine blow-out single-owner sales (celebrity provenance; charity) whose
 // prices legitimately run 50–275× a nominal estimate — verified in the corpus:
@@ -819,13 +848,14 @@ export type HygieneReport = {
   foreignMaker: { rerouted: number; dropped: number };
   setCodeCards: number;
   staleUpcoming: { total: number; byHouse: Record<string, number> };
+  staleHouse: { total: number; byHouse: Record<string, number> };
   compExclude: Record<string, number>;
   images: Record<string, number>;
   datePrecision: { month: number; year: number };
   hammer: { recomputed: number; nulled: number };
 };
 
-export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date } = {}): HygieneReport {
+export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHouses?: ReadonlySet<string> } = {}): HygieneReport {
   const ls = lots as Lot[];
   // LLM extraction (advisory, Sep 28 2026): attach cached, validated fields
   // keyed by id + hash of the CRAWLED text — before any pass rewrites a title.
@@ -894,6 +924,7 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date } = {}): 
   // Sep 27 data-quality stamps — AFTER reconcileSaleDates (stale-upcoming reads
   // the reconciled date) and healExpansionRows (images get their scheme first).
   const staleUpcoming = demoteStaleUpcoming(ls, opts.now);
+  const staleHouse = hideStaleHouseLive(ls, opts.staleHouses ?? new Set());
   const compExclude = stampCompExcludes(ls);
   const images = nullPlaceholderImages(ls);
   const datePrecision = stampDatePrecision(ls);
@@ -901,11 +932,12 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date } = {}): 
   const kv = (o: Record<string, number>) => Object.entries(o).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
   console.log(
     `[normalize] data-quality: stale upcoming→unknown-result=${staleUpcoming.total} (${kv(staleUpcoming.byHouse)}) · ` +
+    `stale-house live hidden=${staleHouse.total} (${kv(staleHouse.byHouse)}) · ` +
     `compExclude ${kv(compExclude)} · placeholder images nulled ${kv(images)} · ` +
     `datePrecision month=${datePrecision.month} year=${datePrecision.year} · ` +
     `wright-family hammer==all-in recomputed=${hammer.recomputed} nulled=${hammer.nulled}`
   );
-  return { rrStubs, rrDupes, urlDupes, bruun, foreignMaker, setCodeCards, staleUpcoming, compExclude, images, datePrecision, hammer };
+  return { rrStubs, rrDupes, urlDupes, bruun, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, hammer };
 }
 
 /* ── CULTURE→SCIENCE REROUTE (Aug 14) — Apple/computing lots filed under the
