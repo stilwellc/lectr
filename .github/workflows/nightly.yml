@@ -403,6 +403,11 @@ jobs:
       - name: Emit page data
         continue-on-error: true
         run: NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-page-stats.ts
+      # sharded search index (makers, refs, live + sold lot titles); search
+      # still covers makers/refs/live lots if this step fails
+      - name: Emit search index
+        continue-on-error: true
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/emit-search-index.ts
       # ENGINE GATE (Sep 2 2026): temporal holdout through the production
       # replay path. Runs BEFORE the R2 push so a failed gate keeps last-good live.
       # Threshold changes follow the replay policy (scripts/ci/gate-replay.ts,
