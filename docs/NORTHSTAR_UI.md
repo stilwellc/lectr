@@ -289,3 +289,17 @@ Record deviations and verdicts here as they land.
   keyboard surfaces), Stripe docs (tables/code), Amie (playful motion),
   Arc/browser co (personality moments), Vercel (data viz restraint). Each
   rotation appends its findings here — this doc is the accumulating law.
+
+## PART 5 — THE CATALOGUE LEDGER (Oct 3 2026)
+- Home + every vertical lander lead with `app/components/CallHero.tsx` (pickCall, the one
+  selector): H1 is a live claim ("Every lot arrives with a guess. We score it against N
+  results." on home; "<n> <vertical> lots are on the block. We score each against N
+  <vertical> results." on a lander), the call card, the receipt stub. Index rows moved
+  below the fold; the black vault, the bento ("One desk, four instruments") and the
+  cream rail wells are retired for ruled ledgers on eggshell.
+- `app/components/LotPlate.tsx` is the plate spec (§0.4) — adopt it wherever a lot photo
+  hangs (still to adopt: LotPage hero, /value CallPlate, LotCard, TonightsWall).
+- The greeting signs on a blank eggshell plate and holds until the book is ready
+  (1.1s min, 2.6s max), then fades to the call; `?greet=1` forces it under automation.
+- Share cards: `scripts/og/cards.tsx` (home brand card, call card per market + per flagged
+  lot, maker card, ledger card); folios are dated ("Read 2026-09-18"), never serials.
