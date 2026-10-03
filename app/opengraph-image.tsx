@@ -23,6 +23,6 @@ export default function OG() {
     houses: book.houses ?? 0,
     flaggedHammerPct: bt.flagged?.hammerMedianPct ?? null,
     restHammerPct: bt.unflagged?.hammerMedianPct ?? null,
-    folio: book.asOf ? `No. ${book.asOf.replace(/-/g, '')}` : 'lectr.bid',
+    folio: book.asOf ? `Read ${book.asOf}` : 'lectr.bid',
   });
 }

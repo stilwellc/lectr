@@ -115,7 +115,7 @@ const pct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}%`;
 async function main() {
   const t0 = Date.now();
   const d: Data = loadData();
-  const folio = d.meta?.lastCrawl ? `No. ${d.meta.lastCrawl.slice(0, 10).replace(/-/g, '')}` : 'lectr.bid';
+  const folio = d.meta?.lastCrawl ? `Read ${d.meta.lastCrawl.slice(0, 10)}` : 'lectr.bid';
   const market = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'ray', 'market.json'), 'utf8')) as { makerIndex?: Record<string, MakerIndex> };
   const stats = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'ray', 'stats.json'), 'utf8')) as Record<string, MakerStats>;
   const today = new Date().toISOString().slice(0, 10);

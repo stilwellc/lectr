@@ -203,7 +203,7 @@ export function callCard(p: CallCardProps) {
         <div style={{ ...F, alignItems: 'baseline', justifyContent: 'space-between', width: textW, marginTop: 18 }}>
           <div style={sans(24, 400, INK)}>The record says</div>
           {p.overPct != null && Math.abs(p.overPct) >= 1 && (
-            <div style={mono(18, 500, p.overPct > 0 ? UP : DOWN)}>
+            <div style={mono(18, 500, INK2)}>
               {`${p.overPct > 0 ? '+' : '−'}${Math.abs(Math.round(p.overPct))}% vs the estimate`}
             </div>
           )}
