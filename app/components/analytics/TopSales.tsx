@@ -76,7 +76,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           cursor: pointer;
           text-align: left;
         }
-        .ray-disc-t { font-size: 15px; font-weight: 550; letter-spacing: -0.01em; }
+        .ray-disc-t { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
         .ray-disc-stat {
           font-family: var(--font-mono), monospace;
           font-size: 11.5px; color: var(--color-text-muted);
@@ -117,7 +117,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           margin: 0,
           fontFamily: 'var(--font-sans), sans-serif',
           fontSize: 30,
-          fontWeight: 340,
+          fontWeight: 300,
           letterSpacing: '-0.02em',
           lineHeight: 1.12,
         }}>
@@ -226,7 +226,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                       style={{
                         fontFamily: 'var(--font-sans), sans-serif',
                         fontSize: 15,
-                        fontWeight: 450,
+                        fontWeight: 500,
                         letterSpacing: '-0.01em',
                         lineHeight: 1.3,
                         display: 'inline',

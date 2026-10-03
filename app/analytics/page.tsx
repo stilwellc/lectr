@@ -176,7 +176,7 @@ export default function AnalyticsPage() {
            lands) so the row never reflows (CLS). */
         .ray-desk-byline { margin-top: 24px; }
         .ray-desk-byline > div { min-height: 62px; }
-        .ray-desk-byline .v { font-size: 18px; font-weight: 450; letter-spacing: -0.01em; }
+        .ray-desk-byline .v { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
         .ray-desk-byline .s { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
         .ray-desk-microgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
         /* min-width:0 — a 1fr track's minimum is otherwise the item's CONTENT
@@ -201,7 +201,7 @@ export default function AnalyticsPage() {
         .ray-methods .ns-ledger-row .k { flex: 0 0 122px; font-size: 12.5px; color: var(--color-text-muted); }
         .ray-methods .ns-ledger-row .val { flex: 1; font-size: 12.5px; line-height: 1.65; color: var(--color-text-secondary); }
         /* the room headline — big and LIGHT (authority through lightness) */
-        .ray-room-h { margin: 0; font-family: var(--font-sans), sans-serif; font-size: 30px; font-weight: 340; letter-spacing: -0.02em; line-height: 1.12; color: var(--color-fg); }
+        .ray-room-h { margin: 0; font-family: var(--font-sans), sans-serif; font-size: 30px; font-weight: 300; letter-spacing: -0.02em; line-height: 1.12; color: var(--color-fg); }
         /* a room whose instrument abstained (rendered null) must not print
            a stray plate rule — an empty plate erases itself. (Kept as its
            own rule: a selector list sharing :has would drop :empty too on
@@ -219,7 +219,7 @@ export default function AnalyticsPage() {
         <Masthead
           kicker="The research desk"
           serial={lastCrawl || meta.lastCrawl}
-          title={<>Every market, read as one book.</>}
+          title={<>{drillCount} sub-markets, read as one book.</>}
           sub={<>Indexes, relative strength, microstructure and the engine&rsquo;s own science —{' '}
             <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{bookLots.toLocaleString()} lots</b>,{' '}
             <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{drillCount} sub-markets tracked</b>

@@ -28,7 +28,7 @@ export default function NotFound() {
       }}
     >
       <img src="/brand/lectr.png" alt="lectr" style={{ height: 40, opacity: 0.9, marginBottom: 20 }} />
-      <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>
+      <h1 style={{ fontSize: 34, fontWeight: 300, letterSpacing: '-0.02em', margin: 0 }}>
         This page isn&rsquo;t on the block
       </h1>
       <p style={{ fontSize: 14, color: 'var(--color-text-muted)', margin: '10px 0 24px', maxWidth: 420 }}>

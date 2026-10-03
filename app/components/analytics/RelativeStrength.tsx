@@ -20,7 +20,7 @@ const CSS = `
 .ray-rs-spread{margin:0 0 10px;font-size:11.5px;color:var(--color-text-muted,#8a8f98)}
 .ray-rs-spread .num{font-family:var(--font-mono,ui-monospace),monospace;font-variant-numeric:tabular-nums;color:var(--color-fg,#E8EAED)}
 .ray-rs-cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 30px}
-.ray-rs-colhead{font-family:var(--font-mono,ui-monospace),monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-muted,#8a8f98);padding:4px 0 7px;border-bottom:1px solid var(--hairline,rgba(255,255,255,0.09))}
+.ray-rs-colhead{font-family:var(--font-mono,ui-monospace),monospace;font-size:10px;font-weight: 500;letter-spacing: 0;color:var(--color-text-muted,#8a8f98);padding:4px 0 7px;border-bottom:1px solid var(--hairline,rgba(255,255,255,0.09))}
 .ray-rs-row{display:grid;grid-template-columns:20px minmax(0,1fr) 90px auto;gap:10px;align-items:center;padding:8px 6px;margin:0 -6px;border-bottom:2px dotted var(--hairline,rgba(255,255,255,0.09));border-radius:8px;color:inherit;text-decoration:none;cursor:pointer;transition:background 0.14s ease}
 .ray-rs-row:last-child{border-bottom:none}
 a.ray-rs-row:hover{background:var(--color-hover-item,rgba(255,255,255,0.045))}
@@ -161,7 +161,7 @@ export default function RelativeStrength({ marketData, scope }: {
       <div className="ray-vm-head" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <span style={{ minWidth: 0 }}>
           <span className="ns-kicker" style={{ marginBottom: 4 }}>What&rsquo;s running, what&rsquo;s cooling</span>
-          <span style={{ display: 'block', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+          <span style={{ display: 'block', fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
             <span className="ray-sect-mark" aria-hidden><StrengthMark size={18} /></span>Relative strength
           </span>
         </span>

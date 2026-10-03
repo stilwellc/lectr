@@ -17,17 +17,16 @@ import React from 'react';
    only per-slot color/numeric overrides live inline here */
 
 /** ONE accent, option A: the key word set in text-safe butter. */
+/* THE CATALOGUE (Oct 3 2026): the gold-word device is retired — a headline
+   carries no accent (docs/NORTHSTAR_UI.md §0.5). Both helpers stay so no
+   caller breaks; they render plain ink. */
 export function Accent({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: 'var(--color-butter-text)' }}>{children}</span>;
+  return <>{children}</>;
 }
 
 /** ONE accent, option B: the ceremonial 3px butter-deep stroke under the key word. */
 export function Underscore({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{ borderBottom: '3px solid var(--color-butter-deep)', paddingBottom: 4 }}>
-      {children}
-    </span>
-  );
+  return <>{children}</>;
 }
 
 export default function Masthead({
@@ -70,7 +69,7 @@ export default function Masthead({
           /* NORTH STAR: page statements carry authority through lightness —
              bigger and thinner, never bold (docs/NORTHSTAR_UI.md §2.2) */
           fontFamily: 'var(--font-inter), sans-serif',
-          fontWeight: 320,
+          fontWeight: 300,
           letterSpacing: '-0.02em',
           lineHeight: 1.08,
           color: 'var(--color-fg)',
