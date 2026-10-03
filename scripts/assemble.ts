@@ -29,6 +29,7 @@ import * as path from 'path';
 import { readAllSegmentsLean, roundtripCorpusView, segmentOf, isServedUpcoming, CORPUS_DIR, SERVED_DIR } from './corpus-io';
 import { staleHouseKeys, STALE_AFTER_H, type Ledger, type HouseStats } from './lib/house-status';
 import { normalizeCorpus } from './lib/corpus-normalize';
+import { markPhase } from './lib/mem-trace';
 import { computeStats } from './compute-stats';
 import { ARTISTS } from '../app/constants';
 import type { AuctionLot, MarketStats } from '../app/types';
@@ -167,12 +168,11 @@ export function readStaleHouses(file: string, now: Date = new Date()): Set<strin
 async function main() {
   const DATA_DIR = SERVED_DIR;
   const SINGLE_LOAD = process.argv.includes('--single-load');
-  const tStart = Date.now();
   // streamed + lean: same rows in the same order as readAllSegments, minus the
   // dead engine scratch fields older builds left in the segments
   const allLotsRaw = (await readAllSegmentsLean()) as unknown as AuctionLot[];
   if (!allLotsRaw.length) throw new Error('[assemble] no segments found — refusing to publish an empty corpus');
-  phase('read segments', tStart);
+  markPhase('read segments');
   // JUNK GATE (Aug 13 audit): broken scrapes that carry CSS instead of a title
   // (435 rows, Lelands/LOTG windows-era) and the one "Lot Withdrawn … Status:
   // Sold" row — dead weight in token space, never a real lot.
@@ -395,19 +395,19 @@ async function main() {
     fs.writeFileSync(path.join(qa, 'house-stats.json'), JSON.stringify({ generatedAt: new Date().toISOString(), houses: computeHouseStats(allLots as never) }, null, 2));
   } catch (e) { console.log(`::warning title=house stats::${(e as Error).message}`); }
 
-  phase('assemble', tStart);
+  markPhase('assemble');
   // ── HANDOFF: the market build's input is exactly what it used to read back
   // from the corpus gz this step wrote — main tier then archive tier (THIS
   // step's split), each row the JSON roundtrip of the in-memory one — built
   // in place, so the corpus stays resident once.
   const handoff = roundtripCorpusView(allLots as unknown as Record<string, unknown>[], isArchiveTier) as unknown as AuctionLot[];
-  phase('handoff', tStart);
+  markPhase('handoff');
   const { runMarketBuild } = await import('./build-market');
   const corpus = await runMarketBuild({ lots: handoff });
-  phase('market', tStart);
+  markPhase('market');
   console.log(`[assemble] done — corpus in ${CORPUS_DIR}, served in ${SERVED_DIR}`);
   if (!SINGLE_LOAD) return;
-  await runDownstream(corpus as unknown as Record<string, unknown>[], tStart);
+  await runDownstream(corpus as unknown as Record<string, unknown>[]);
 }
 
 /** The steps that each used to re-read the corpus, as phases over the ONE
@@ -418,12 +418,12 @@ async function main() {
  *  two served-book emitters. Failure semantics match the nightly's steps:
  *  page data and search are advisory (warn + continue), the gate fails the
  *  run (exit 1) AFTER everything else has been written. */
-async function runDownstream(corpus: Record<string, unknown>[], tStart: number): Promise<void> {
+async function runDownstream(corpus: Record<string, unknown>[]): Promise<void> {
   // 1 · eager upcoming payload (was: the "Rebuild eager upcoming payload" step)
   const { buildUpcoming } = await import('./build-upcoming');
   const eager = buildUpcoming(SERVED_DIR, corpus as unknown as AuctionLot[]);
-  for (const l of corpus) delete l._saleMs; // its transient sort stamp (last key: fast delete)
-  phase('eager upcoming', tStart);
+  for (const l of corpus) l._saleMs = undefined; // its transient sort stamp — cleared, not deleted (a delete drops each row to V8 dictionary mode)
+  markPhase('eager upcoming');
   // 2 · the off-book corpus rows page data resolves engine pools from
   const ps = await import('./emit-page-stats');
   const corpusRows = ps.pageStatsCorpusRows(corpus, ps.pageStatsCandidateIds(eager));
@@ -434,46 +434,21 @@ async function runDownstream(corpus: Record<string, unknown>[], tStart: number):
   try {
     gate = runValidateEngine({ corpus: corpus as unknown as AuctionLot[], sample: Number(process.env.RAY_VALIDATE_SAMPLE || 30000), json: process.env.RAY_VALIDATE_JSON || path.join('data', 'qa', 'validate-engine.json') });
   } catch (e) { console.error('[validate] FAILED:', (e as Error).message); }
-  phase('engine gate', tStart);
+  markPhase('engine gate');
   corpus.length = 0; // the corpus is released: the emitters below read the served book
   // 4 · page data + search index — advisory, as their nightly steps were
   try { await ps.emitPageStats({ corpusRows }); }
   catch (e) { console.log(`::warning title=emit page data failed::${(e as Error).message} — pages fall back to the corpus path`); }
-  phase('page data', tStart);
+  markPhase('page data');
   try { (await import('./emit-search-index')).emitSearchIndex(); }
   catch (e) { console.log(`::warning title=emit search index failed::${(e as Error).message} — search covers makers/refs/live lots only`); }
-  phase('search index', tStart);
+  markPhase('search index');
   if (gate.failures) {
     console.error(`[assemble] engine gate FAILED (${gate.failures}) — exit 1 (outputs written; the push step will not run)`);
     process.exitCode = 1;
   }
 }
 
-/** One phase line: wall clock since start, heap + rss (hrtime-based clock is
- *  unaffected by a frozen Date in the equivalence harness). */
-function phase(name: string, _t0: number): void {
-  // live heap, not garbage, when the run exposes gc (the measurement harness)
-  (globalThis as { gc?: () => void }).gc?.();
-  const mu = process.memoryUsage();
-  console.log(`[phase] ${name} · t+${(performance.now() / 1000).toFixed(0)}s · heap ${(mu.heapUsed / 1048576).toFixed(0)}MB · rss ${(mu.rss / 1048576).toFixed(0)}MB · peak live heap so far ${(peakLive / 1048576).toFixed(0)}MB`);
-}
-
-// PEAK LIVE HEAP: the heap left right after each major (mark-compact) GC —
-// the honest high-water mark of what the run actually holds, as opposed to
-// heapUsed at an arbitrary instant (which includes uncollected garbage).
-let peakLive = 0;
-try {
-  const { PerformanceObserver, constants } = require('perf_hooks') as typeof import('perf_hooks');
-  const obs = new PerformanceObserver(list => {
-    for (const e of list.getEntries()) {
-      if ((e as unknown as { detail?: { kind?: number } }).detail?.kind === constants.NODE_PERFORMANCE_GC_MAJOR) {
-        const h = process.memoryUsage().heapUsed;
-        if (h > peakLive) peakLive = h;
-      }
-    }
-  });
-  obs.observe({ entryTypes: ['gc'] });
-} catch { /* observer unavailable — phase lines still print */ }
 
 // RAY_SKIP_MAIN=1 lets the module be IMPORTED without running the pipeline —
 // the repo-wide convention (close-board, the crawlers, the backfills all use

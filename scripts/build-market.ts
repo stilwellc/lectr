@@ -32,6 +32,7 @@ import { appendValueTape } from './build-market-tape';
 import { buildHedonicIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
 import { buildSubMarkets, buildDrillRows, buildVerticalRepeatSale } from './sub-markets';
 import { fitGradeLadder } from './lib/grade-ladder';
+import { markPhase } from './lib/mem-trace';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -233,6 +234,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // (NaN > cut is false either way), so the isNaN behaviour is preserved exactly.
   for (const l of all) (l as AuctionLot & { _saleMs?: number })._saleMs = new Date(l.saleDate as string).getTime();
 
+  markPhase('market: idf + vectors');
   // ── 1 · value every UPCOMING lot (the live product) ──
   // bucket sold lots by maker ONCE (time-order preserved from soldSorted) so each
   // upcoming lot reads its same-maker pool in O(1) instead of rescanning all 36k.
@@ -465,6 +467,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     console.log(`[market] comp evidence: ${evLots} signal lots → comp-evidence.json`);
   }
 
+  markPhase('market: upcoming valued');
   // ── 2 · repeat-sale groups: physical matches among SOLD lots ──
   // Extracted to scripts/lib/repeat-sale.ts (Sep 10 2026) so the grouping can be
   // validated offline (scripts/oneoff/qa/repeat-sale-equiv.ts) and so the eligibility
@@ -474,6 +477,12 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     console.log(`[market] repeat-sale: ${rs.physPairs} physical pairs → ${rs.physGroups} groups · ${rs.seconds}s (${rs.eligible}/${soldSorted.length} eligible, ${rs.candidatePairs} pairs scored)`);
   }
 
+  // the IDF vectors' last reader was the repeat-sale grouping above (they feed
+  // only value.resolveComps / similarity, §1–§2): release them now (~0.6GB)
+  // rather than carrying them through the series/hedonic peak. Cleared, not
+  // deleted (see the persist note); no output serializes them.
+  for (const l of engineAll) { const t = l as AuctionLot & { _v?: unknown }; if (t._v !== undefined) t._v = undefined; }
+  markPhase('market: repeat-sale');
   // ── 3 · market series (the dashboards) ──
   // Series run over `all` (INCLUDING cards): the analytics are O(n) aggregation,
   // not the O(pool) valuation/repeat-sale cards were held out of. So the sports
@@ -508,6 +517,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // are identical to the sequential loop (scripts/oneoff/qa/maker-pool-equiv.ts).
   if (!opts.evalOnly) {
     const pool = await buildMakerIndicesParallel(makerLotsBySlug);
+    markPhase('market: maker pool');
     Object.assign(makerIndex, pool.makerIndex);
     for (const slug of rosterSlugs) {
       const h1 = makerIndex[slug].horizons['1Y'];
@@ -550,6 +560,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   console.log(`[market] all      composite: pub=${cmpAll.publishable} components=${cmpAll.components.filter(c => c.publishable).length} 1Y=${cmpAll.horizons['1Y'].publishable ? `${cmpAll.horizons['1Y'].changePct!.toFixed(1)}% [${cmpAll.horizons['1Y'].ciLoPct!.toFixed(1)},${cmpAll.horizons['1Y'].ciHiPct!.toFixed(1)}]` : `NOT-PUB (${cmpAll.reason || cmpAll.horizons['1Y'].reason})`}`);
   } // !evalOnly — the market series / hedonic / composite pass
 
+  markPhase('market: maker indices + series');
   // per-maker mini-series for the big names (drill-down)
   const makers: Record<string, MarketSeries> = {};
   const makerCounts = new Map<string, number>();
@@ -673,6 +684,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     console.log(`[market] refs.json: ${refsOut.length} references (${(fs.statSync(path.join(SERVED, 'refs.json')).size / 1024).toFixed(0)}KB) · ${((Date.now() - tRef) / 1000).toFixed(0)}s`);
   }
 
+  markPhase('market: house cal + refs');
   // ── 3e · sports player dossiers (players.json) + live-card comps ──
   // The cross-market read Collin wants: one player, cards AND game-used AND
   // tickets/trophies — "how is this athlete doing in the wider market". All
@@ -1265,6 +1277,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     return all;
   }
 
+  markPhase('market: players + cards');
   // ── 3f · stats.json rows for corpus-only / non-ARTISTS slugs ──
   // The nightly stats loop iterates ARTISTS, which OMITS sports-cards (corpus-
   // only), sports-memorabilia, and the 3 culture slugs — so the client reads
@@ -1358,6 +1371,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     }
   }
 
+  markPhase('market: sub-markets + drills');
   const market = {
     generatedAt: new Date().toISOString().slice(0, 10),
     markets,
@@ -1423,16 +1437,8 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // never imports value.ts) — release it with the engine's working set
   setTimeIndex(null);
   setHouseBias(null);
-  logPhase('engine', t0);
+  markPhase('market: engine');
   return all;
-}
-
-/** Wall-clock + heap for one phase (hrtime: unaffected by a frozen Date). */
-function logPhase(name: string, t0: number): void {
-  // live heap, not garbage, when the run exposes gc (the measurement harness)
-  (globalThis as { gc?: () => void }).gc?.();
-  const mu = process.memoryUsage();
-  console.log(`[phase] ${name} done · ${((Date.now() - t0) / 1000).toFixed(0)}s · heap ${(mu.heapUsed / 1048576).toFixed(0)}MB · rss ${(mu.rss / 1048576).toFixed(0)}MB · t+${(performance.now() / 1000).toFixed(0)}s`);
 }
 
 export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<AuctionLot[]> {
@@ -1448,11 +1454,13 @@ export async function runMarketBuild(opts: MarketBuildOpts = {}): Promise<Auctio
 async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[]> {
   const lotsForSlug = (slug: string): AuctionLot[] => all.filter(l => l.artist === slug);
   // ── 4 · persist: full corpus (gz) + slim served (value flows to the client) ──
-  // (deleted LAST-ADDED first: `_saleMs` was stamped after buildVectors'
-  // `_v`, so each delete removes the object's final key — V8's fast
-  // map-rollback; deleting a middle key would drop ~600k lots into
-  // dictionary mode, +1/3 heap. Same keys removed as before.)
-  for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; delete t._saleMs; delete t._v; }
+  // The engine scratch keys are CLEARED (set undefined), not `delete`d:
+  // JSON.stringify and slimForClient skip an undefined value exactly as they
+  // skip an absent key, so every written byte is unchanged — while a `delete`
+  // drops a JSON-parsed V8 object into dictionary mode (measured: +2.8GB of
+  // heap over the corpus for one deleted key). The reparsed view returned by
+  // the persist below carries neither key.
+  for (const l of all) { const t = l as AuctionLot & { _v?: unknown; _saleMs?: unknown }; if (t._saleMs !== undefined) t._saleMs = undefined; if (t._v !== undefined) t._v = undefined; }
   const { persistCorpusAndServed } = require('./corpus-io');
   // Served sold-card SAMPLE: the artist page / archive surfaces need real card
   // rows (record sale, past results, realized cohort) but 288k would blow the
@@ -1538,12 +1546,11 @@ async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[
   // tipped that over the runner's ceiling (OOM, Aug 13 dispatch run).
   // (Runs BEFORE the corpus write since the scale pass — it reads no file the
   // write produces, and the write then consumes `all`. Its only mutation of a
-  // lot is the transient `_saleMs` stamp, removed again before the write —
-  // the last-added key, so `delete` is V8's fast map-rollback path.)
+  // lot is the transient `_saleMs` stamp, cleared again before the write.)
   const { buildUpcoming } = require('./build-upcoming');
   buildUpcoming(SERVED, all as unknown as AuctionLot[]);
-  for (const l of all) delete (l as AuctionLot & { _saleMs?: unknown })._saleMs;
-  logPhase('upcoming (in-memory)', t0);
+  for (const l of all) (l as AuctionLot & { _saleMs?: unknown })._saleMs = undefined; // see the clearing note above
+  markPhase('market: upcoming (in-memory)');
 
   // ── the corpus gz + slim served shards (+ the columnar corpus.parquet) ──
   // Returns the corpus exactly as readCorpus() would parse it back from the
@@ -1558,7 +1565,7 @@ async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[
   } catch (e) { console.log(`::warning title=corpus.parquet skipped::${(e as Error).message}`); }
   const io = await persistCorpusAndServed(all as unknown as Record<string, unknown>[], isArchived, isCorpusOnly, { sink });
   console.log(`[market] wrote corpus ${io.corpusMb}+${io.archiveMb}MB gz | served ${io.servedMb}MB`);
-  logPhase('persist', t0);
+  markPhase('market: persist');
   console.log(`[market] done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   return io.view as unknown as AuctionLot[];
 }
