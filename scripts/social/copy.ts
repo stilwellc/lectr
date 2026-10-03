@@ -33,11 +33,11 @@ const NO_ADVICE = 'Editorial analysis from public auction results, not investmen
  *  title beneath it on the card. Still true, still the desk's voice. */
 export function headline(p: Post): string {
   switch (p.type) {
-    case 'call': return `${p.lot.auctionHouse} says ${p.estimate || money(p.askUsd)}. The record says ${money(p.med)}.`;
+    case 'call': return `${p.lot.auctionHouse} says ${p.estimate || money(p.askUsd)}. The record says ${money(p.expected ?? p.med)}.`;
     case 'receipt': return `Called ${money(p.row.p)}. Hammered ${money(p.row.r)}.`;
     case 'index': return `${marketLabel(p.market)}, ${signed(p.changePct, 1)} over ${({ '1Y': 'one year', '3Y': 'three years', '5Y': 'five years' } as Record<string, string>)[p.horizon] || p.horizon}.`;
     case 'record': return `${p.n.toLocaleString()} calls, replayed against the hammer.`;
-    case 'board': return `${p.liveCount} lots on the block are priced under their comparables.`;
+    case 'board': return `${p.liveCount} lots on the block are forecast to hammer above their estimate.`;
     case 'abstain': return `We can't publish a ${p.horizon} number for ${marketLabel(p.market)}.`;
   }
 }

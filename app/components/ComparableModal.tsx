@@ -544,7 +544,7 @@ export default function ComparableModal({
   // the call; 'at comparable market' means the engine looked and called it
   // fair — no call, no client second-guessing.
   const called = useMemo(() => {
-    const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; compValueUsd?: number; compMedianUsd?: number | null; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
+    const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; flagRatio?: number | null; compValueUsd?: number; compMedianUsd?: number | null; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
     // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
     // outside [1/5, 5] is a data fault the build killed at the source — the
     // modal must never resurrect it. Treat it as no engine call and fall
@@ -562,7 +562,9 @@ export default function ComparableModal({
       return {
         signal: {
           label: (below ? 'Below Market' : 'Above Market') as 'Below Market' | 'Above Market',
-          pct: Math.round((below ? ev.compRatio - 1 : 1 - ev.compRatio) * 100),
+          // the Flags' printed % reads the house-normalized ratio when the
+          // engine served one (flagRatio), else the raw comp ratio
+          pct: Math.round((below ? (ev.flagRatio ?? ev.compRatio) - 1 : 1 - (ev.flagRatio ?? ev.compRatio)) * 100),
           basis: ev.n || pool.length,
           med: ev.compMedianUsd ?? ev.compValueUsd,
           kind: 'form' as const,
