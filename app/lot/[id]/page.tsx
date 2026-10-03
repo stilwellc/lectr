@@ -21,7 +21,8 @@ export function generateStaticParams() {
   return flaggedLots().map(l => ({ id: l.id }));
 }
 
-export function generateMetadata({ params }: { params: { id: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const lot = flaggedLots().find(l => l.id === params.id);
   if (!lot) return { title: 'Lot' };
 
@@ -62,7 +63,8 @@ export function generateMetadata({ params }: { params: { id: string } }): Metada
   };
 }
 
-export default function StaticLotPage({ params }: { params: { id: string } }) {
+export default async function StaticLotPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const lot = flaggedLots().find(l => l.id === params.id) || null;
   // key: navigating between static lot pages must remount (fresh dbLot/
   // imgFailed state) — same doctrine as the /lot?id= query route.

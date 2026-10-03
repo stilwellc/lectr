@@ -56,7 +56,8 @@ for (const m of MARKETS) MARKET_LABEL[m.key] = m.key === 'tcg' ? 'TCG' : m.label
 // sub-market · lectr'; /ref: 'X — reference · lectr'), the description is
 // built per maker from measured stats.json facts only, and each page
 // declares its self canonical (metadataBase resolves it absolute).
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const label = ARTISTS.find(a => a.slug === params.slug)?.label || params.slug;
   const market = MARKET_LABEL[marketOf(params.slug)] || '';
   const s = statsFor(params.slug);

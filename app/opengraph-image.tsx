@@ -4,9 +4,15 @@ import path from 'node:path';
 import stats from '../public/data/ray/stats.json';
 import backtest from '../public/data/ray/backtest.json';
 
+export const dynamic = 'force-static'; // required for route handlers under output:'export' (Next 15+)
 export const alt = 'lectr — auction intelligence for the collectibles market';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
+
+// Next 16's next/og default font is Geist; every card through Next 14 used
+// next/og's bundled Noto Sans. Pin that exact file (OFL, vendored from
+// next@14.2.35) so the share cards keep their look across the upgrade.
+const fonts = [{ name: 'sans-serif', data: fs.readFileSync(path.join(process.cwd(), 'scripts/og-fonts/noto-sans-v27-latin-regular.ttf')), weight: 400 as const, style: 'normal' as const }];
 
 interface ArtistStats {
   totalAuctionRevenue?: number;
@@ -101,6 +107,6 @@ export default function OG() {
         )}
       </div>
     ),
-    { ...size }
+    { ...size, fonts }
   );
 }
