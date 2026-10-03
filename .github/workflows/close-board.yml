@@ -87,6 +87,14 @@ jobs:
           path: public/data/ray/close-board.json
           retention-days: 1
           if-no-files-found: error
+      - name: Push close alerts (watched lots closing ≤24h / ≤90m)
+        # inert without VAPID keys; failures are ::warning:: and exit 0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+        run: npx tsx scripts/push-send.ts --kinds close24,close1
   deploy:
     needs: board
     if: needs.board.outputs.built == 'true'
