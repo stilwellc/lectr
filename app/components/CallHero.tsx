@@ -1,5 +1,6 @@
 'use client';
 
+import { lotVerdict } from '../lib/verdict';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
@@ -44,8 +45,10 @@ export interface HeroRecord {
 /** the expected hammer the hero prints — exported so OG/share code and the
  *  hero can never disagree */
 export function expectedHammer(lot: AuctionLot, signal: HeroCall['signal']): number | null {
-  const v = lot.value?.compValueUsd;
-  if (typeof v === 'number' && v > 0) return v;
+  // hammer basis, the same basis as the house estimate it sits beside — the
+  // lot page's verdict (engine expectedHammerUsd, else compValueUsd ÷ premium)
+  const vd = lotVerdict(lot);
+  if (vd && vd.expected > 0) return vd.expected;
   if (signal?.med && signal.med > 0) return signal.med;
   const estMid = lot.estimateLow && lot.estimateHigh
     ? (lot.estimateLow + lot.estimateHigh) / 2

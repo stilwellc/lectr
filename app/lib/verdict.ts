@@ -75,13 +75,17 @@ export function lotVerdict(lot: AuctionLot): Verdict | null {
   const eLo = rawLo || rawHi || null;
   const eHi = rawHi || rawLo || null;
   const estMid = eLo && eHi ? (eLo + eHi) / 2 : null;
-  const expected = toHammer(v.compValueUsd);
+  // the engine publishes hammer-basis fields (Oct 3, engine 2026.10.03):
+  // prefer them so the page and the engine can never disagree; fall back
+  // to deriving them for values served before that engine
+  const ve = v as typeof v & { expectedHammerUsd?: number; bandLowUsd?: number; bandHighUsd?: number; maxBidUsd?: number };
+  const expected = ve.expectedHammerUsd && ve.expectedHammerUsd > 0 ? ve.expectedHammerUsd : toHammer(v.compValueUsd);
   const fl = valueFloor(lot);
   const flagged = v.signal?.label === 'below comparable market';
   return {
     expected,
-    bandLo: toHammer(v.low || v.compValueUsd),
-    bandHi: toHammer(v.high || v.compValueUsd),
+    bandLo: ve.bandLowUsd && ve.bandLowUsd > 0 ? ve.bandLowUsd : toHammer(v.low || v.compValueUsd),
+    bandHi: ve.bandHighUsd && ve.bandHighUsd > 0 ? ve.bandHighUsd : toHammer(v.high || v.compValueUsd),
     expectedAllIn: v.compValueUsd,
     confidence: v.confidence,
     estLow: rawLo || null,
@@ -94,7 +98,7 @@ export function lotVerdict(lot: AuctionLot): Verdict | null {
     compMedianAllIn: v.compMedianUsd ?? null,
     compN: v.n || 0,
     floorAllIn: fl ? fl.floor : null,
-    maxBid: fl ? maxHammerFor(fl.floor, lot) : null,
+    maxBid: ve.maxBidUsd && ve.maxBidUsd > 0 ? ve.maxBidUsd : fl ? maxHammerFor(fl.floor, lot) : null,
     premiumPct: Math.round((f - 1) * 100),
   };
 }
@@ -125,14 +129,14 @@ export const VERDICT_CSS = `
 .lectr-vd-cell{min-height:0;padding:20px 22px;border-radius:16px}
 .lectr-vd-cell .ns-cell-label{font-size:13px}
 .lectr-vd-stat{font-family:var(--font-mono),monospace;font-size:clamp(30px,3.2vw,40px);font-weight:500;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;margin:10px 0 8px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.lectr-vd-vs{font-family:var(--font-sans);font-size:15px;font-weight:450;letter-spacing:0;opacity:.82}
-.lectr-vd-cell .ns-cell-body{font-size:13px;font-weight:450;line-height:1.5;max-width:46ch}
+.lectr-vd-vs{font-family:var(--font-sans);font-size:15px;font-weight:400;letter-spacing:0;opacity:.82}
+.lectr-vd-cell .ns-cell-body{font-size:13px;font-weight:400;line-height:1.5;max-width:46ch}
 .lectr-vd-rows{margin-top:8px}
 .lectr-vd-row{display:flex;justify-content:space-between;align-items:baseline;gap:6px 16px;flex-wrap:wrap}
 .lectr-vd-k{font-size:13px;color:var(--color-text-muted);flex:none}
 .lectr-vd-v{display:flex;align-items:baseline;justify-content:flex-end;gap:10px;min-width:0;text-align:right;flex-wrap:wrap}
-.lectr-vd-sub{font-size:11.5px;font-weight:450;color:var(--color-text-muted);line-height:1.45}
-.lectr-vd-num{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-vd-sub{font-size:11.5px;font-weight:400;color:var(--color-text-muted);line-height:1.45}
+.lectr-vd-num{font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-vd-note{font-size:12px;line-height:1.55;color:var(--color-text-muted);margin:10px 0 0;max-width:62ch}
 /* the comp strip — HTML-positioned marks on a log axis (text inside a
    stretched svg distorts; law) */

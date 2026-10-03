@@ -30,6 +30,16 @@
  *      (a tier that isn't more accurate than 'low' is mislabeled).
  *   G4 coverage sanity: ≥ 10% of holdout lots valued globally (an engine that
  *      silently stopped valuing must not pass on an empty table).
+ *   (Oct 3 2026) G1/G2 bucket on the FLAG ratio (comps vs the house-adjusted
+ *      estimate) and count a beat against the HOUSE-ADJUSTED top
+ *      (value.adjustedTop) — the claim the house-normalized Flags make.
+ *   CANDIDATE (RAY_ENGINE_CANDIDATE=1): every holdout lot's ONE comp pool is
+ *      also priced under ENGINE_FLAGS_CURRENT and ENGINE_FLAGS_CANDIDATE with
+ *      the point-in-time calibration each would have loaded (the backtest
+ *      state's rows before the lot's quarter, refit under that engine's
+ *      flags); backtest-core.compareEngines grades value error + directional
+ *      edge and emits `candidate` (with `promote`) into the JSON. A failed
+ *      promotion is reported, never a gate failure — it only blocks a promote.
  *
  * Run: npx tsx scripts/validate-engine.ts [--sample 30000] [--market art]
  *      [--json path]   (nightly: after build-market; see ENGINE_WORKFLOW_PATCH)
@@ -37,11 +47,20 @@
 import * as fs from 'fs';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';
-import { setCalibration, setTimeIndex, quarterKey, type TimeIndex } from '../app/lib/value';
+import {
+  setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, estimateValueEx, houseFactorOf, adjustedTop, quarterKey,
+  ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, type TimeIndex, type HouseBias, type EngineFlags, type EngineCalibration,
+} from '../app/lib/value';
+import { inferHammerUsd } from '../app/lib/premiums';
+import * as zlib from 'zlib';
+import * as path from 'path';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { quantile as statsQuantile } from '../app/lib/stats';
 import { readCorpus } from './corpus-io';
-import { prepare, targetsOf, valueOne, ENGINE_VERSION, type L } from './backtest-core';
+import {
+  prepare, targetsOf, compsOne, calibrationFor, rehydrateState, compareEngines, engineRowOf, hasAnyEst, ENGINE_VERSION,
+  type L, type BacktestState, type EngineRow,
+} from './backtest-core';
 import { readValueTape, gradeValueTape, type TapeRow } from './build-market-tape';
 
 const arg = (n: string): string | null => { const i = process.argv.indexOf(`--${n}`); return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : null; };
@@ -112,11 +131,38 @@ function main() {
   setCalibration(null); // the raw engine — calibration is measured, not assumed
   const prep = prepare(all, console.log, elapsed);
   const tiCache = new Map<string, TimeIndex | null>();
+  const qStartOf = (saleDate: string) => { const q = quarterKey(saleDate); return `${q.slice(0, 4)}-${String((+q.slice(5) - 1) * 3 + 1).padStart(2, '0')}-01`; };
   const timeIndexFor = (saleDate: string): TimeIndex | null => {
     const q = quarterKey(saleDate);
-    if (!tiCache.has(q)) tiCache.set(q, prep.timeIndexer ? prep.timeIndexer(`${q.slice(0, 4)}-${String((+q.slice(5) - 1) * 3 + 1).padStart(2, '0')}-01`) : null);
+    if (!tiCache.has(q)) tiCache.set(q, prep.timeIndexer ? prep.timeIndexer(qStartOf(saleDate)) : null);
     return tiCache.get(q)!;
   };
+  // the house-bias index the lot's quarter would have loaded (Flags read
+  // comps vs the house-adjusted estimate)
+  const houseBiasFor = (saleDate: string): HouseBias | null => (prep.houseBiasIndexer ? prep.houseBiasIndexer(qStartOf(saleDate)) : null);
+  // ── CANDIDATE comparison (RAY_ENGINE_CANDIDATE=1) — the point-in-time
+  // calibration each engine would have loaded, from the backtest state
+  const CANDIDATE = process.env.RAY_ENGINE_CANDIDATE === '1';
+  let cmpState: BacktestState | null = null;
+  if (CANDIDATE) {
+    try {
+      cmpState = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(process.cwd(), 'data', 'corpus', 'backtest-state.json.gz'))).toString('utf8')) as BacktestState;
+      rehydrateState(cmpState, prep, console.log);
+    } catch { cmpState = null; console.log('[validate] candidate: no backtest state — comparing uncalibrated engines'); }
+  }
+  const calCache = new Map<string, EngineCalibration | null>();
+  const calFor = (f: EngineFlags, saleDate: string): EngineCalibration | null => {
+    if (!cmpState) return null;
+    const k = `${f.version}|${qStartOf(saleDate)}`;
+    if (!calCache.has(k)) {
+      const served = getEngineFlags();
+      setEngineFlags(f);
+      calCache.set(k, calibrationFor(cmpState, qStartOf(saleDate), prep.marketBySlug));
+      setEngineFlags(served);
+    }
+    return calCache.get(k)!;
+  };
+  const cmpRows: Record<'current' | 'candidate', EngineRow[]> = { current: [], candidate: [] };
   const { soldTargets } = targetsOf(prep);
   const sorted = soldTargets.slice().sort((a, b) => (a.saleDate < b.saleDate ? -1 : 1));
   const cutoff = sorted[Math.floor(sorted.length * 0.4)].saleDate;
@@ -151,7 +197,19 @@ function main() {
     // the point-in-time market index production would have had for this
     // lot's quarter (comps are time-adjusted before the median)
     setTimeIndex(timeIndexFor(lot.saleDate));
-    const v = valueOne(prep, lot);
+    setHouseBias(houseBiasFor(lot.saleDate));
+    const comps = compsOne(prep, lot);
+    if (CANDIDATE) {
+      const et = (lot.estLowUsd || 0) > 0 && (lot.estHighUsd || 0) > 0 ? 'b' : 'p';
+      const hfc = hasAnyEst(lot) ? houseFactorOf(m, lot.auctionHouse, et)?.f : undefined;
+      for (const [k, f] of [['current', ENGINE_FLAGS_CURRENT], ['candidate', ENGINE_FLAGS_CANDIDATE]] as ['current' | 'candidate', EngineFlags][]) {
+        setEngineFlags(f); setCalibration(calFor(f, lot.saleDate));
+        const cv = comps ? estimateValueEx(lot, comps, prep.tbl).value : null;
+        cmpRows[k].push(engineRowOf(lot, hasAnyEst(lot) ? m : `noest:${m}`, cv, hfc));
+      }
+      setEngineFlags(null); setCalibration(null);
+    }
+    const v = comps ? estimateValueEx(lot, comps, prep.tbl).value : null;
     if (!v) continue;
     covered++;
     const err = Math.abs(Math.log(v.compValueUsd / lot.realizedUsd!));
@@ -161,15 +219,17 @@ function main() {
       // the house benchmark on the SAME all-in basis as the value (the
       // estimate is hammer-basis; the value and realized are premium-in)
       houseErr[m].push(Math.abs(Math.log(em * lotAllInFactor(lot, em) / lot.realizedUsd!)));
-      // directional signal calibration
+      // directional signal calibration — on the FLAG ratio, beat counted
+      // against the house-adjusted top (= the raw high when no house factor)
       if (v.compRatio != null) {
-        const b = bucketOf(v.compRatio);
+        const b = bucketOf(v.flagRatio ?? v.compRatio);
         sigGlobal[b].n++; sigByM[m][b].n++;
-        if (lot.realizedUsd! > lot.estHighUsd) { sigGlobal[b].beat++; sigByM[m][b].beat++; }
+        if (lot.realizedUsd! > adjustedTop(lot.estLowUsd, lot.estHighUsd, v.houseFactor ?? 1)) { sigGlobal[b].beat++; sigByM[m][b].beat++; }
       }
     }
   }
 
+  setHouseBias(null); setTimeIndex(null);
   const coveragePct = test.length ? covered / test.length * 100 : 0;
   console.log(`\nCOVERAGE: ${coveragePct.toFixed(0)}% of test lots got an engine value (${elapsed()})\n`);
   console.log('VALUE ERROR by market × confidence (engine) vs the house benchmark:');
@@ -240,14 +300,36 @@ function main() {
   // coverage leaves 60–85%. Estimate lots also re-check the Flags' live
   // direction: flagged lots must realize above unflagged vs their estimate.
   // Until a path has LIVE_MIN_N graded rows it is reported as accruing.
+  // (Oct 3 2026) WHY G5 NEVER GRADED: the tape lived only inside the corpus
+  // tar, and the nightly assemble rebuilds data/corpus from segments — so the
+  // tape was reborn empty every night (exactly the Aug 14–24 calls-ledger
+  // bug) and validate-engine, running the same night, only ever saw rows
+  // served THAT day, none of which can have sold. data-store.sh now persists
+  // latest/value-tape.json.gz like the calls ledger (push + pull-backtest).
+  // Every version on the tape is graded and emitted (`live`); the GATE reads
+  // the current version, and a candidate's shadow rows are graded beside it.
+  let liveOut: Record<string, unknown> = {};
   {
     const LIVE_MIN_N = 100;
-    const tape = readValueTape().filter((r: TapeRow) => r.v === ENGINE_VERSION);
-    const soldMap = new Map<string, { r: number; sd: string }>();
+    const allTape = readValueTape();
+    const tape = allTape.filter((r: TapeRow) => r.v === ENGINE_VERSION && !r.sh);
+    const soldMap = new Map<string, { r: number; sd: string; h?: number }>();
     // the FULL corpus (card tiers grade against sold cards the engine excludes)
-    for (const l of corpus) if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldMap.set(String(l.id), { r: l.realizedUsd!, sd: l.saleDate });
-    const graded = gradeValueTape(tape, soldMap, r => [`path:${r.k}`, `path:${r.k}:${r.c}`, `market:${r.m || 'other'}:${r.k}`]);
-    console.log(`\nLIVE FORWARD CHECK (value tape, engine ${ENGINE_VERSION}: ${tape.length} served values, graded where sold):`);
+    for (const l of corpus) if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldMap.set(String(l.id), { r: l.realizedUsd!, sd: l.saleDate, h: inferHammerUsd(l) });
+    const keyOf = (r: TapeRow) => [`path:${r.k}`, `path:${r.k}:${r.c}`, `market:${r.m || 'other'}:${r.k}`];
+    const graded = gradeValueTape(tape, soldMap, keyOf);
+    // every version (served and shadow) — the accrual is visible per version
+    const versions = Array.from(new Set(allTape.map(r => `${r.v}${r.sh ? '|shadow' : ''}`)));
+    const byVersion: Record<string, unknown> = {};
+    for (const vk of versions) {
+      const [ver, sh] = vk.split('|');
+      const rows = allTape.filter(r => r.v === ver && !!r.sh === (sh === 'shadow'));
+      const g = gradeValueTape(rows, soldMap, r => ['all', `path:${r.k}`]);
+      byVersion[vk] = { rows: rows.length, graded: g.all?.n || 0, ...g };
+    }
+    liveOut = { engineVersion: ENGINE_VERSION, minN: LIVE_MIN_N, byVersion };
+    console.log(`\nLIVE FORWARD CHECK (value tape, engine ${ENGINE_VERSION}: ${tape.length} served values, graded where sold; tape holds ${allTape.length} rows over ${versions.length} version(s)):`);
+    for (const vk of versions) { const b = byVersion[vk] as { rows: number; graded: number; all?: { medAbsErrPct: number | null; within30Pct: number | null; bias: number | null; bandCoveragePct: number | null; belowMaxBidPct?: number | null } }; console.log(`    ${vk.padEnd(40)} ${b.rows} rows · ${b.graded} graded${b.all?.bias != null ? ` · medErr ${b.all.medAbsErrPct}% · ±30% ${b.all.within30Pct}% · bias ${b.all.bias}× · band ${b.all.bandCoveragePct}% · ≤maxBid ${b.all.belowMaxBidPct ?? '-'}%` : ''}`); }
     const PATH_LABEL: Record<string, string> = { e: 'estimate lots (blend)', n: 'no-estimate hedonic', c: 'card tiers' };
     for (const k of ['e', 'n', 'c']) {
       const cell = graded[`path:${k}`];
@@ -264,6 +346,17 @@ function main() {
     }
   }
 
+  // ── CANDIDATE vs CURRENT (RAY_ENGINE_CANDIDATE=1) ──
+  let candidateOut: ReturnType<typeof compareEngines> | null = null;
+  if (CANDIDATE) {
+    candidateOut = compareEngines(cmpRows.current, cmpRows.candidate, { current: ENGINE_FLAGS_CURRENT.version, candidate: ENGINE_FLAGS_CANDIDATE.version });
+    const c = candidateOut.current.all, n = candidateOut.candidate.all;
+    console.log(`\nCANDIDATE vs CURRENT on the holdout (${candidateOut.both} lots valued by both; ${cmpState ? 'point-in-time calibration from the backtest state' : 'uncalibrated'}):`);
+    console.log(`    current   ${ENGINE_FLAGS_CURRENT.version.padEnd(32)} medErr ${c.medAbsErrPct}% · ±30% ${c.within30Pct}% · bias ${c.bias} · band ${c.bandCoveragePct}% · ≤maxBid ${c.belowMaxBidPct}% · flags ${c.flags.nFlagged} edge(adj) ${c.flags.edgeAdjPt}pt prec(adj) ${c.flags.precisionAdjPct}%`);
+    console.log(`    candidate ${ENGINE_FLAGS_CANDIDATE.version.padEnd(32)} medErr ${n.medAbsErrPct}% · ±30% ${n.within30Pct}% · bias ${n.bias} · band ${n.bandCoveragePct}% · ≤maxBid ${n.belowMaxBidPct}% · flags ${n.flags.nFlagged} edge(adj) ${n.flags.edgeAdjPt}pt prec(adj) ${n.flags.precisionAdjPct}%`);
+    console.log(`    → ${candidateOut.promote ? 'PROMOTE (candidate ≥ current on value error, no loss of directional edge)' : `HOLD — ${candidateOut.reasons.join('; ')}`}`);
+  }
+
   // ── VERDICT ──
   console.log('\n════ VERDICT ════');
   const signalStatus = (g.spread != null && g.spread >= 10) ? (g.ok ? 'validated' : 'degraded') : 'failed';
@@ -277,6 +370,9 @@ function main() {
     fs.writeFileSync(outPath, JSON.stringify({
       generatedAt: new Date().toISOString(), cutoff: cutoff.slice(0, 10), test: test.length, coveragePct: Math.round(coveragePct * 10) / 10,
       signal: signalStatus,
+      engineVersion: ENGINE_VERSION,
+      live: liveOut,
+      candidate: candidateOut,
       global: { buckets: sigGlobal, monotonic: g.ok, spreadPt: g.spread }, byMarket: Object.fromEntries(markets.filter(m => testN[m]).map(m => [m, {
         test: testN[m], signal: sigByM[m], spreadPt: monotonic(sigByM[m]).spread, monotonic: monotonic(sigByM[m]).ok,
         tiers: Object.fromEntries(['high', 'medium', 'low'].map(c => [c, { n: valErr[m][c].length, medErr: tierMed(valErr[m][c]) }])),

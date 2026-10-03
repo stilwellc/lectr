@@ -372,6 +372,10 @@ push() {
   # ledger silently reset nightly from Aug 14–24 2026 because of exactly
   # this; grading always saw zero rows).
   test -f data/corpus/calls-ledger.json.gz && obj_put "latest/calls-ledger.json.gz" "data/corpus/calls-ledger.json.gz" || echo "[data-store] no calls ledger to push"
+  # the VALUE TAPE (first value every upcoming lot was served — G5's live
+  # forward check) persists the same way: it too lived only inside the corpus
+  # tar, so the segments rebuild reset it every night and G5 never graded a row
+  test -f data/corpus/value-tape.json.gz && obj_put "latest/value-tape.json.gz" "data/corpus/value-tape.json.gz" || echo "[data-store] no value tape to push"
   # the LLM extraction cache (scripts/lib/extract) persists the same way —
   # paid-for results must survive the segments rebuild. Absent until the
   # extraction layer is switched on (ANTHROPIC_API_KEY); then written nightly.
@@ -932,6 +936,7 @@ case "${1:-}" in
     obj_get_clean "latest/backtest.json" "public/data/ray/backtest.json" "[data-store] no prior backtest.json yet (first run)"
     obj_get_clean "latest/backtest-state.json.gz" "data/corpus/backtest-state.json.gz" "[data-store] no prior backtest state yet (incremental will full-build)"
     obj_get_clean "latest/calls-ledger.json.gz" "data/corpus/calls-ledger.json.gz" "[data-store] no prior calls ledger yet (accrual starts tonight)"
+    obj_get_clean "latest/value-tape.json.gz" "data/corpus/value-tape.json.gz" "[data-store] no prior value tape yet (accrual starts tonight)"
     # advisory: an unreadable cache must never cost a night (it only re-spends)
     obj_get_clean "latest/extract-cache.json.gz" "data/corpus/extract-cache.json.gz" "[data-store] no extraction cache yet (LLM extraction off, or its first night)" || { rm -f data/corpus/extract-cache.json.gz; touch data/corpus/.extract-cache-unreadable; echo "[data-store] WARNING: extraction cache unreadable — running without it, and tonight will NOT overwrite it in R2"; }
     ;;

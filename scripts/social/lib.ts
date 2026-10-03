@@ -70,7 +70,7 @@ export interface Lot {
   url?: string;
   category?: string;
   subCat?: string;
-  value?: { signal?: { beatRatePct?: number } | null; compRatio?: number | null; compValueUsd?: number | null } | null;
+  value?: { signal?: { beatRatePct?: number } | null; compRatio?: number | null; compValueUsd?: number | null; expectedHammerUsd?: number | null } | null;
   signal?: { label: string; pct: number; basis: number; med: number; confidence?: string } | null;
 }
 
@@ -193,7 +193,8 @@ export interface CallPost {
   lot: Lot;
   pct: number;
   multiple: string;
-  med: number;      // comps median, USD
+  med: number;      // comps median, USD (all-in)
+  expected: number | null; // the engine's expected hammer (hammer basis, like the estimate)
   askUsd: number;   // the engine's own USD read of the ask
   estimate: string | null; // the house's printed estimate, native currency
   basis: number;
@@ -221,6 +222,7 @@ export function pickCall(d: Data, exclude: Set<string>): CallPost | null {
     pct,
     multiple: gapMultiple(pct),
     med,
+    expected: lot.value?.expectedHammerUsd && lot.value.expectedHammerUsd > 0 ? Math.round(lot.value.expectedHammerUsd) : null,
     askUsd: Math.round(med / (pct / 100 + 1)),
     estimate: houseEstimate(lot),
     basis: lot.signal.basis,

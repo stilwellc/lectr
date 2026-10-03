@@ -161,7 +161,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       // as the modal and the published record. The client computeDeepSignal
       // remains only as a fallback for lots the engine declined (its flags
       // still beat unflagged), with the contradiction guard as before.
-      type EngineValue = { signal?: { label: string; beatRatePct: number } | null; compRatio?: number | null; compValueUsd?: number; compMedianUsd?: number; n?: number; confidence?: 'high' | 'medium' | 'low' } | null;
+      type EngineValue = { signal?: { label: string; beatRatePct: number } | null; compRatio?: number | null; flagRatio?: number | null; compValueUsd?: number; compMedianUsd?: number; n?: number; confidence?: 'high' | 'medium' | 'low' } | null;
       const ev = (lot as { value?: EngineValue }).value;
       let signal = null as ReturnType<typeof computeDeepSignal>;
       // ×5 ESTIMATE-BAND SANITY (mirrors the comps.ts form-pool guard): a
@@ -173,16 +173,20 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): void {
       if (ev && ev.signal && !evSane) {
         // data-fault flag killed at the source — the card carries no signal
       } else if (ev && ev.signal) {
-        if (ev.signal.label.startsWith('below') && ev.compRatio != null) {
+        // (Oct 3) the printed % is the FLAG ratio the signal was called on —
+        // comps vs the HOUSE-ADJUSTED estimate (value.flagRatio); compRatio
+        // (raw) only for values stamped before the house-normalized engine
+        const fr = ev.flagRatio ?? ev.compRatio;
+        if (ev.signal.label.startsWith('below') && fr != null) {
           signal = {
-            label: 'Below Market', pct: Math.round((ev.compRatio - 1) * 100),
+            label: 'Below Market', pct: Math.round((fr - 1) * 100),
             basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
             form: (lot as { formKey?: string }).formKey || 'unknown',
             confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
           } as NonNullable<ReturnType<typeof computeDeepSignal>>;
-        } else if (ev.signal.label.startsWith('above') && ev.compRatio != null) {
+        } else if (ev.signal.label.startsWith('above') && fr != null) {
           signal = {
-            label: 'Above Market', pct: Math.round((1 - ev.compRatio) * 100),
+            label: 'Above Market', pct: Math.round((1 - fr) * 100),
             basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
             form: (lot as { formKey?: string }).formKey || 'unknown',
             confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
