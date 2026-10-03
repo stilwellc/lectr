@@ -1,4 +1,80 @@
-# NORTH STAR UI — the ElevenLabs audit (Aug 29 2026)
+# NORTH STAR UI — the auction catalogue (Oct 3 2026)
+
+**The position.** lectr is the second opinion in the saleroom. The house prints a guess;
+we print the record. Every surface leads with the validated edge — lectr forecasts the
+hammer better than the house estimate — never with "priced under where the market
+clears" (flagged lots realize *above* estimate; that line told buyers the wrong thing).
+
+**The look.** The auction catalogue: matted object plates, registration frames, dotted
+ledgers, FIG. captions, light ink on eggshell. ElevenLabs (Part 1 below, Aug 29) is where
+the craft was learned — lightness-not-boldness, pills, the frame, the 150ms curve — it is
+no longer the look. When the two disagree, the catalogue wins.
+
+## PART 0 — THE CATALOGUE (standing law, supersedes anything below that conflicts)
+
+### 0.1 One ground
+- Eggshell `#FDFCFC` page, cream `#F5F3F1` plate mats, white only for raised controls.
+- **No dark slabs** in the light site. The black "vault" rooms are retired; markets,
+  the engine and the settlement print on eggshell. Dark exists only as the `?light=0`
+  archive skin.
+- **No tan.** `--paper #E2D9C4` and every beige/putty fill are gone; a well is cream or
+  nothing.
+
+### 0.2 Type: three Inter weights, two Plex weights
+- Inter **300** display (headlines, the one large numeral), **400** body, **500** emphasis
+  and control labels. IBM Plex Mono **400/500** for figures, folios and data cells.
+- Nothing at 600/650/700/750. A hero numeral is never bold — impact through lightness.
+- Minimum rendered size **10px**.
+- **No uppercase-tracked labels** (eyebrows). A kicker is 14px Inter 400, sentence case,
+  warm gray, and most headlines need none. No italic heads, no serif.
+- No zero-padded ordinals anywhere: `No. 1`, never `No. 001` / `01`.
+
+### 0.3 Colour
+- **Colour only means the market moved.** Green up, brick down — nothing else borrows them.
+- **Gold is the printer's mark**: folio numbers, the word `FIG.`, the seal. Never a CTA,
+  never an active pill, never an accent word inside a headline. Active controls are ink.
+
+### 0.4 The plate (one spec for every lot photograph — `app/components/LotPlate.tsx`)
+- A cream mat, 4:5 portrait unless a surface overrides, hairline edge, no radius > 2px.
+- The object sits at **80%** of the mat (contain), centred, `mix-blend-mode: multiply`
+  so white studio grounds fall into the mat. **No scrims, no gradients, no overlays.**
+- A FIG. caption under the mat: `FIG. n` in gold Plex 500, then lot · house · close in
+  Plex 400 muted. A dead hotlink falls back to the maker's initial on the same mat.
+
+### 0.5 Headlines
+- A headline is a **specific, checkable claim with a live number** — "41 lots are forecast
+  to hammer above their estimate tonight", not "Every X, one Y". One "Every…" headline
+  sitewide, maximum (it belongs to home: "Every lot arrives with a guess. We score it
+  against N results.").
+- No gold word, no underscore accent — the `Accent` helper now renders plain ink.
+
+### 0.6 The frame
+- The content column is bounded by **vertical registration rails** (1px hairlines,
+  full height), section rules run past them to the viewport edge, crop dots at the
+  crossings (`.ns-plate`). Sections are plates in a catalogue.
+
+### 0.7 Ledgers, not bento
+- Lists of facts are **dotted ledgers** (label · dotted leader · figure), never grids of
+  rounded cards. Cream wells survive only as photo mats.
+
+### 0.8 The signature
+- The script wordmark is a **signature**: header, favicon, the corner of a share card,
+  the greeting. Never set inline inside a sentence — in copy, lectr is the plain word.
+
+### 0.9 The call card
+- The best brand object is the social desk's call card (`scripts/social/render.tsx`):
+  photo plate left, the read right. Home's hero, /value's call and every share image use
+  its layout: "<House> says $A–B. The record says $X." — the expected hammer in Inter 300,
+  the one large numeral, a receipt stub carrying the track record.
+
+### 0.10 Motion
+- The greeting signs `lectr` on a blank eggshell plate, then fades to the call. No
+  skeleton blocks behind it. `prefers-reduced-motion` skips it.
+
+---
+
+## PART 1 (history) — the ElevenLabs audit (Aug 29 2026)
+
 
 Collin's mandate: elevenlabs.io is the north star for lectr's UI moving forward.
 This document is the full audit — raw findings from a live crawl (desktop screenshots
