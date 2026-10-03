@@ -160,7 +160,7 @@ export default function HammerWeek({
               <span style={{
                 fontSize: 17,
                 lineHeight: '18px',
-                fontWeight: 600,
+                fontWeight: 500,
                 fontVariantNumeric: 'tabular-nums',
                 color: n === 0 ? 'var(--color-text-muted)' : 'var(--color-fg)',
               }}>

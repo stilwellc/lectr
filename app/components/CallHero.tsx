@@ -176,7 +176,8 @@ export default function CallHero({
             <span className={styles.title}>{title}</span>
           </p>
           {/* one sentence for AT; the numeral is its visual climax */}
-          <p className={styles.claim} aria-label={`${houseLine} The record says ${x != null ? formatPrice(x) : 'more'}.`}>
+          <p className={styles.claim}>
+            <span className={styles.srOnly}>{`${houseLine} The record says ${x != null ? formatPrice(x) : 'more'}.`}</span>
             <span className={styles.house} aria-hidden>{houseLine}</span>
             <span className={styles.recordSays} aria-hidden>The record says</span>
             <span className={styles.numeral} aria-hidden>{x != null ? formatPrice(x) : '—'}</span>

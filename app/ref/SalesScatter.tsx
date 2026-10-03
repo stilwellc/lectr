@@ -127,7 +127,7 @@ export default function SalesScatter({ sales, yearly, label }: {
           padding: '7px 10px', fontSize: 12, lineHeight: 1.45, color: 'var(--color-fg)', pointerEvents: 'none',
           boxShadow: '0 6px 20px rgba(0,0,0,.12)',
         }}>
-          <b style={{ fontWeight: 600 }}>{formatPrice(hv.p)}</b> · {hv.s[3]} · {hv.s[0].slice(0, 10)}
+          <b style={{ fontWeight: 500 }}>{formatPrice(hv.p)}</b> · {hv.s[3]} · {hv.s[0].slice(0, 10)}
           <div style={{ color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hv.s[4]}</div>
         </div>
       )}

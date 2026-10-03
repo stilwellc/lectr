@@ -580,10 +580,10 @@ const AUTH_CSS = `
 .ray-auth-scrim { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,14,10,0.66); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: rayAuthIn 160ms var(--ease-signature) both; }
 .ray-auth-card { width: 100%; max-width: 380px; background: var(--color-bg-elevated); border: 1px solid var(--color-border); border-radius: 16px; padding: 22px 22px 24px; animation: rayAuthUp 220ms var(--ease-signature) both; }
 .ray-auth-head { display: flex; align-items: center; justify-content: space-between; }
-.ray-auth-title { font-size: 16px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
+.ray-auth-title { font-size: 16px; font-weight: 500; color: var(--color-fg); letter-spacing: -0.01em; }
 .ray-auth-x { border: none; background: none; color: var(--color-text-muted); font-size: 15px; cursor: pointer; padding: 6px; margin: -6px; }
 .ray-auth-lede { font-size: 13px; line-height: 1.5; color: var(--color-text-secondary); margin: 8px 0 18px; }
-.ray-auth-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px; border-radius: 10px; border: 1px solid var(--color-border); background: #fff; color: #1f1f1f; font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ray-auth-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px; border-radius: 10px; border: 1px solid var(--color-border); background: #fff; color: #1f1f1f; font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; }
 .ray-auth-google:hover { background: #f3f3f3; }
 @keyframes rayAuthIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rayAuthUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }

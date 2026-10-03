@@ -152,7 +152,9 @@ export default function MarketSwitch({
         );
       })}
       {flap && (
-        <div className="ray-rail-flap" aria-live="polite">
+        // visual echo of the selected tab (whose label already carries the
+        // count) — hidden from AT: a tablist may own only tabs
+        <div className="ray-rail-flap" aria-hidden="true">
           {flap.map((tok, i) => (
             <span key={i}>
               {i > 0 && <span className="ray-rail-flap-dot" aria-hidden="true">·</span>}

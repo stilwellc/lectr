@@ -297,8 +297,10 @@ Record deviations and verdicts here as they land.
   <vertical> results." on a lander), the call card, the receipt stub. Index rows moved
   below the fold; the black vault, the bento ("One desk, four instruments") and the
   cream rail wells are retired for ruled ledgers on eggshell.
-- `app/components/LotPlate.tsx` is the plate spec (§0.4) — adopt it wherever a lot photo
-  hangs (still to adopt: LotPage hero, /value CallPlate, LotCard, TonightsWall).
+- `app/components/LotPlate.tsx` is the plate spec (§0.4) — every lot photo hangs on it:
+  CallHero, the LotPage hero, /value's CallPlate, LotCard and Tonight's wall (its `inline`
+  span form sits inside the wall's buttons; `onFail` lets the wall and cards drop a dead
+  photograph). No verdict rings, glare or vignettes on a plate — the flag prints in the row.
 - The greeting signs on a blank eggshell plate and holds until the book is ready
   (1.1s min, 2.6s max), then fades to the call; `?greet=1` forces it under automation.
 - Share cards: `scripts/og/cards.tsx` (home brand card, call card per market + per flagged

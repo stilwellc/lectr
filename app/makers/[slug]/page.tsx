@@ -59,7 +59,7 @@ function ArchiveErrorPanel({ onRetry }: { onRetry: () => void }) {
       <h2 style={{
         fontFamily: 'var(--font-sans), sans-serif',
         fontSize: 34,
-        fontWeight: 350,
+        fontWeight: 300,
         letterSpacing: '-0.02em',
         marginBottom: 10,
       }}>
@@ -88,7 +88,7 @@ const DOSSIER_FEATURE_CSS = `
 .mkr-chart-well{height:300px}
 @media (max-width:768px){.mkr-chart-well{height:200px}}
 .mkr-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:2px}
-.mkr-panel-title{font-size:15px;font-weight:550;letter-spacing:-0.01em;color:var(--color-fg,#E8EAED)}
+.mkr-panel-title{font-size:15px;font-weight:500;letter-spacing:-0.01em;color:var(--color-fg,#E8EAED)}
 .mkr-panel-method{font-size:11.5px;color:var(--color-text-faint,#7A8087)}
 .mkr-rows{display:flex;flex-direction:column;margin-top:8px}
 .mkr-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:baseline;padding:9px 6px;margin:0 -6px;border-bottom:2px dotted var(--hairline,rgba(255,255,255,0.09));border-radius:8px;color:inherit;text-decoration:none;transition:background 0.14s ease}
@@ -523,7 +523,7 @@ export default function ArtistDetailPage() {
           <h2 style={{
             fontFamily: 'var(--font-sans), sans-serif',
             fontSize: 34,
-            fontWeight: 350,
+            fontWeight: 300,
             letterSpacing: '-0.02em',
             marginBottom: 10,
           }}>

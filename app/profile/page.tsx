@@ -1476,7 +1476,7 @@ export default function SavedPage() {
                             <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
                           ) : null}
                         </span>
-                        <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
+                        <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 500 : 400, whiteSpace: 'nowrap' }}>
                           {days === 0 && lot.saleDateTime
                             ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
                             : hammerWord(days)}

@@ -22,7 +22,7 @@ type Range = '1Y' | '5Y' | 'MAX';
    numeral (the homepage rule: Inter on levels, mono only on %-deltas) */
 const heroNumStyle: CSSProperties = {
   fontFamily: 'var(--font-inter), sans-serif',
-  fontWeight: 650,
+  fontWeight: 500,
   letterSpacing: '-0.02em',
   fontVariantNumeric: 'tabular-nums',
 };
@@ -266,7 +266,7 @@ export default function ArtistHero({
             style={{
               marginBottom: 10,
               fontFamily: 'var(--font-sans), sans-serif',
-              fontWeight: 320,
+              fontWeight: 300,
               letterSpacing: '-0.03em',
             }}
           >

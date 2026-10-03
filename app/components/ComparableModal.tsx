@@ -1016,7 +1016,7 @@ export default function ComparableModal({
               </div>
             )}
 
-            <div style={{ fontSize: 16, color: 'var(--color-fg)', fontWeight: 450, fontVariantNumeric: 'tabular-nums', marginBottom: 3 }}>
+            <div style={{ fontSize: 16, color: 'var(--color-fg)', fontWeight: 400, fontVariantNumeric: 'tabular-nums', marginBottom: 3 }}>
               {formatEstimate(lot)}
             </div>
             <LotValueBlock lot={lot} allLots={allLots} market={market} backtest={backtest} />

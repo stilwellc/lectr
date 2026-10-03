@@ -518,7 +518,7 @@ export async function renderTonight(opts: { force?: PostType; exclude?: Set<stri
 
   const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
   const stamp = new Date().toISOString().slice(0, 10);
-  const folio = `No. ${String(ledger.posted.length + 1).padStart(3, '0')}`;
+  const folio = `No. ${ledger.posted.length + 1}`;
 
   // the pictures — an item wherever one exists, even on the market posts
   const photo = post.type === 'call' ? await imageDataUri(post.lot.imageUrl) : post.type === 'receipt' ? await imageDataUri(post.lot?.imageUrl) : null;
