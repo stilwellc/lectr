@@ -7,7 +7,7 @@ import { markFallbackProjections } from '../lib/page-data';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import Masthead, { Accent } from '../components/Masthead';
+import Masthead from '../components/Masthead';
 import Flick from '../components/Flick';
 import { lotSignal } from '../components/LotCard';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
@@ -150,7 +150,9 @@ export default function ReceiptsPage() {
             <Masthead
               kicker="The record"
               serial={lastCrawl || undefined}
-              title={<>Every call, <Accent>graded</Accent> against the hammer.</>}
+              title={record
+                ? <>{(record.card.graded + record.vsbid.graded + (record.gap?.graded ?? 0) + (record.quiet?.graded ?? 0)).toLocaleString()} calls logged before the sale, graded at the hammer.</>
+                : <>Calls logged before the sale, graded at the hammer.</>}
               sub={
                 <>
                   The house prints an estimate; lectr prints where the hammer will land. Every call is logged the
@@ -267,7 +269,7 @@ export default function ReceiptsPage() {
                           : `Bid projection, logged ${r.d}${r.f ? ` · floor ${formatPrice(r.f)}` : ''}`}>
                           {formatPrice(r.p)}<span className="rcp-kind">{({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as const)[r.k] || r.k}</span>
                         </span>
-                        <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(r.r)}</span>
+                        <span className="rcp-num" style={{ fontWeight: 500 }}>{formatPrice(r.r)}</span>
                         <span className="rcp-num" style={MISS_STYLE[miss.band]} title={miss.title}>
                           {miss.text}
                           <span className="rcp-kind" style={KIND_PLAIN}>{MISS_LABEL[miss.band]}</span>
@@ -391,8 +393,8 @@ export default function ReceiptsPage() {
                         <span className="rcp-date">{formatDate(l.saleDate)}</span>
                         <span className="rcp-work"><b>{ARTIST_LABEL[l.artist] || l.artist}</b> {craftTitle(l.title)}</span>
                         <span className="rcp-num" style={{ color: 'var(--color-text-secondary)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind" style={KIND_PLAIN}>comps vs est.</span></span>
-                        <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(l.priceUsd!)}</span>
-                        <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 } : { color: 'var(--color-text-faint)' }}>
+                        <span className="rcp-num" style={{ fontWeight: 500 }}>{formatPrice(l.priceUsd!)}</span>
+                        <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 500 } : { color: 'var(--color-text-faint)' }}>
                           {vsEst != null ? fmtSignedPct(Math.round(vsEst)) : '—'}
                         </span>
                       </Link>

@@ -7,6 +7,7 @@ import { MarketProvider } from './lib/market';
 import { AccountProvider } from './lib/account';
 import { ROSTER_PHRASE } from './constants';
 import Analytics from './components/retention/Analytics';
+import { bookFacts } from './lib/og-meta';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -37,6 +38,12 @@ const plexMono = IBM_Plex_Mono({
   display: 'swap',
 });
 
+// THE POSITION (Oct 3 2026): the second opinion in the saleroom — the house
+// prints a guess, lectr prints the record. Counts are read from the served
+// payload at build (app/lib/og-meta.ts), never typed.
+const BOOK = bookFacts();
+const SITE_DESCRIPTION = `The second opinion in the saleroom. The house prints a guess; lectr prints the record — live lots read against ${BOOK.settled ? `${BOOK.settled.toLocaleString('en-US')} settled results` : 'the settled record'}${BOOK.houses ? ` from ${BOOK.houses} auction houses` : ''}, nightly.`;
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://lectr.bid'),
   // NO global canonical: './' collapsed every query/dossier URL onto its bare
@@ -45,18 +52,18 @@ export const metadata: Metadata = {
     default: 'lectr — auction intelligence',
     template: '%s — lectr',
   },
-  description: `Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`,
+  description: SITE_DESCRIPTION,
   openGraph: {
-    title: 'lectr — auction intelligence',
-    description: `Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`,
+    title: 'lectr — the second opinion in the saleroom',
+    description: SITE_DESCRIPTION,
     siteName: 'lectr',
     type: 'website',
     locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'lectr — auction intelligence',
-    description: `Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`,
+    title: 'lectr — the second opinion in the saleroom',
+    description: SITE_DESCRIPTION,
   },
 };
 

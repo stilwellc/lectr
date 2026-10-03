@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { withShare } from '../lib/og-meta';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
@@ -6,10 +7,10 @@ import Flick from '../components/Flick';
 import Masthead, { Underscore } from '../components/Masthead';
 import meta from '../../public/data/ray/meta.json';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withShare({
   title: 'Notes from the desk',
   description: 'Writing from lectr — how the pricing engine works, what the market data actually says, and what we got wrong on the way.',
-};
+});
 
 // `href` is the special case — a card that lives outside /blog/* (the systems
 // walk-through at /about). Cards without it link to /blog/{slug} as before.
@@ -78,14 +79,14 @@ const BLOG_CSS = `
    huge, LIGHT, tight — and every label speaks the quiet sentence-case
    kicker voice. Ledger rows keep their grammar; the double certificate
    rule collapses to one hairline. */
-.ray-blog-head .ray-masthead-h1{font-weight:320 !important;letter-spacing:-0.02em !important;font-size:clamp(36px,5vw,48px) !important;line-height:1.08 !important}
+.ray-blog-head .ray-masthead-h1{font-weight: 300 !important;letter-spacing:-0.02em !important;font-size:clamp(36px,5vw,48px) !important;line-height:1.08 !important}
 @media (max-width:480px){.ray-blog-head .ray-masthead-h1{font-size:clamp(28px,8vw,34px) !important}}
 .ray-blog-shelf{display:flex;flex-direction:column;gap:14px}
 .ray-blog-lead,.ray-blog-entry{display:block;text-decoration:none;color:inherit;border:1px solid var(--hairline);border-radius:12px;padding:22px 24px;background:var(--color-bg-elevated)}
 .ray-blog-date{font-family:var(--font-mono),monospace;font-size:11.5px;color:var(--color-text-faint);margin-bottom:8px;font-variant-numeric:tabular-nums}
-.ray-blog-title{font-size:21px;font-weight:550;letter-spacing:-0.015em;margin:0 0 8px;line-height:1.3;color:var(--color-fg)}
+.ray-blog-title{font-size:21px;font-weight: 500;letter-spacing:-0.015em;margin:0 0 8px;line-height:1.3;color:var(--color-fg)}
 .ray-blog-dek{font-size:14.5px;line-height:1.55;color:var(--color-text-secondary);margin:0}
-.ray-blog-read{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:13px;font-weight:500;color:var(--color-text-muted)}
+.ray-blog-read{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:13px;font-weight: 500;color:var(--color-text-muted)}
 .ray-blog-lead-kicker{display:none}
 .ray-blog-shelf .ray-blog-lead-ledger{display:none}
 .ray-blog-entry-flick{display:none}
@@ -98,7 +99,7 @@ const BLOG_CSS = `
   .ray-blog-lead:hover{border:none;transform:none}
   .ray-blog-lead .ray-blog-date{display:none}
   .ray-blog-lead-kicker{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
-  .ray-blog-lead .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:clamp(34px,4.2vw,46px);font-weight:330;letter-spacing:-0.022em;line-height:1.08;margin:0 0 16px;max-width:24ch}
+  .ray-blog-lead .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:clamp(34px,4.2vw,46px);font-weight: 300;letter-spacing:-0.022em;line-height:1.08;margin:0 0 16px;max-width:24ch}
   .ray-blog-lead:hover .ray-blog-title{color:var(--color-text-secondary)}
   /* the featured note carries the byline-ledger provenance columns */
   .ray-blog-lead .ray-blog-lead-ledger{display:flex;margin:0 0 16px;padding-bottom:14px}
@@ -109,7 +110,7 @@ const BLOG_CSS = `
   .ray-blog-entry{display:grid;grid-template-columns:118px 1fr auto;gap:1px 22px;align-items:baseline;border:none;border-radius:0;background:none;padding:13px 2px;border-top:1px solid var(--hairline);transition:background var(--duration-fast) var(--ease-signature)}
   .ray-blog-entry:hover{border-color:var(--hairline);transform:none;background:var(--color-hover-item)}
   .ray-blog-entry .ray-blog-date{grid-row:1 / span 2;margin:0;align-self:baseline}
-  .ray-blog-entry .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:19px;font-weight:500;letter-spacing:-0.015em;line-height:1.25;margin:0}
+  .ray-blog-entry .ray-blog-title{font-family:var(--font-sans),sans-serif;font-size:19px;font-weight: 500;letter-spacing:-0.015em;line-height:1.25;margin:0}
   .ray-blog-entry:hover .ray-blog-title{color:var(--color-fg)}
   .ray-blog-entry .ray-blog-dek{grid-column:2;font-size:12.5px;line-height:1.5;color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ray-blog-entry .ray-blog-read{display:none}

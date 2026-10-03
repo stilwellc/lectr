@@ -23,7 +23,7 @@ const fmtN = (n: number) =>
 const CSS = `
 .ray-ss.ray-vm-card{padding:var(--card-pad)}
 .ray-ss .ray-vm-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.ray-ss .ray-vm-title{font-size:13.5px;font-weight:550;color:var(--color-fg);white-space:nowrap}
+.ray-ss .ray-vm-title{font-size:13.5px;font-weight: 500;color:var(--color-fg);white-space:nowrap}
 .ray-ss .ray-vm-method{font-size:10.5px;color:var(--color-text-muted);text-align:right}
 .ray-ss-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:6px}
 @media (max-width:720px){.ray-ss-grid{grid-template-columns:repeat(6,1fr)}}
@@ -42,7 +42,7 @@ html[data-lectr-light] .ray-ss-cell[data-dir="up"] .ray-ss-pct{color:color-mix(i
 html[data-lectr-light] .ray-ss-cell[data-dir="down"] .ray-ss-pct{color:color-mix(in srgb,var(--color-down-text,var(--color-down)) 82%,#000)}
 html[data-lectr-light] .ray-ss-cell .ray-ss-n{color:var(--color-text-secondary)}
 .ray-ss-take{font-size:12.5px;color:var(--color-text-secondary);line-height:1.5;margin:12px 0 0}
-.ray-ss-take b{font-weight:650;color:var(--color-fg)}
+.ray-ss-take b{font-weight: 500;color:var(--color-fg)}
 `;
 
 export default function SeasonalityStrip({ marketData, scope }: {

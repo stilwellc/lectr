@@ -41,6 +41,7 @@ import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedTo
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
+import CallHero, { type HeroRecord } from '../../components/CallHero';
 import { OPEN_CK_EVENT } from '../../components/CommandK';
 
 // Terminal design assets (the DESIGN win)
@@ -282,36 +283,27 @@ function FeedRow({ lot, onOpen, tone, now }: { lot: AuctionLot; onOpen: () => vo
   );
 }
 
-/* THE INSTRUMENT SET's chip icons — 20px cuts of the cell system's patent
-   grammar (solid ink + dotted construction lines, currentColor). Drawn here,
-   not in cells.tsx: the figures there are 132px plates; these are chips. */
-const ICO = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.3 } as const;
-const ICO_DOT = { ...ICO, strokeDasharray: '1 2.4' } as const;
-function IcoRecord() { // the settled tape — ticks print, one result steps up
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden>
-      <line x1="2.5" y1="13.5" x2="17.5" y2="13.5" {...ICO} />
-      <line x1="5.5" y1="13.5" x2="5.5" y2="11.5" {...ICO} />
-      <line x1="14.5" y1="13.5" x2="14.5" y2="11.5" {...ICO} />
-      <path d="M8.5 13.5 L8.5 8 L11.5 8 L11.5 13.5" {...ICO} />
-      <line x1="2.5" y1="8" x2="17.5" y2="8" {...ICO_DOT} />
-    </svg>
-  );
-}
-function IcoDesk() { // the save mark — the same bookmark the feed prints
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden>
-      <path d="M5.5 3.5 H14.5 V16.5 L10 13.2 L5.5 16.5 Z" {...ICO} />
-      <line x1="5.5" y1="6.8" x2="14.5" y2="6.8" {...ICO_DOT} />
-    </svg>
-  );
-}
-
-// The instrument set's honest platform counts — static, from the same
+// The desk ledger's honest platform counts — static, from the same
 // constants every page already trusts ('all' is the anchor, not a vertical).
 // ROSTER splits named makers from category pseudo-artists: "54 makers" was
 // counting 22 categories as people.
 const VERTICAL_COUNT = MARKETS.length - 1;
+
+/** how a vertical names its own lots in a headline */
+const LOT_NOUN: Partial<Record<Market, [string, string]>> = {
+  all: ['lot', 'lots'],
+  art: ['art lot', 'art lots'],
+  design: ['design lot', 'design lots'],
+  watches: ['watch', 'watches'],
+  sports: ['sports lot', 'sports lots'],
+  tcg: ['TCG card', 'TCG cards'],
+  science: ['science lot', 'science lots'],
+  culture: ['pop-culture lot', 'pop-culture lots'],
+};
+const RESULT_NOUN: Partial<Record<Market, string>> = {
+  art: 'art results', design: 'design results', watches: 'watch results', sports: 'sports results',
+  tcg: 'TCG results', science: 'science results', culture: 'pop-culture results',
+};
 
 export default function TerminalHomePage() {
   const ray = useRayData();
@@ -637,31 +629,6 @@ export default function TerminalHomePage() {
   ) : null;
 
 
-  // The Value Engine's chapter-01 hero: ONE lot — the best flag on the book
-  // by THE ONE FLAGGED RANKING (dealScore: calibrated odds first, then the
-  // capped gap — never confidence+pct, which is a second ranking).
-  // Prefers a high-confidence lot not already hanging on Tonight's Wall
-  // (confidence is a GATE here, not the sort); falls back to the absolute
-  // best when no high-confidence flag exists off the wall.
-  const engineHero = useMemo(() => {
-    const CONF: Record<string, number> = { 'very-high': 3, high: 2, medium: 1, low: 0 };
-    const wallSet = new Set(wallItems.map(w => w.lot.id));
-    const cands = upcoming
-      .filter(l => l.imageUrl && belowIds.has(l.id)
-        // the engine's showcase must be ACTIONABLE: live by the true sale day
-        // AND, when the close time is known, the clock not yet run out (a
-        // timed lot that closed earlier today slips day-level guards)
-        && isLiveUpcoming(l) && !l.resultsPending
-        && (!l.saleDateTime || Date.parse(l.saleDateTime) > Date.now()))
-      .map(l => ({ lot: l, signal: lotSignal(l, allLots) }))
-      .filter((x): x is { lot: AuctionLot; signal: NonNullable<ReturnType<typeof lotSignal>> } =>
-        !!x.signal && x.signal.label === 'Below Market')
-      .sort((a, b) => dealScore(b.lot, b.signal.pct) - dealScore(a.lot, a.signal.pct));
-    const offWall = cands.find(x => !wallSet.has(x.lot.id) && CONF[x.signal.confidence || 'low'] >= 2);
-    return offWall ?? cands[0] ?? null;
-  }, [upcoming, belowIds, allLots, wallItems]);
-
-
   // The feed the reader actually sees — search + lenses + sort applied.
   const feed = useMemo(() => {
     const f = feedFilters;
@@ -845,14 +812,48 @@ export default function TerminalHomePage() {
   // below-market count for the hero stat (scoped to the live book)
   const belowMktCount = belowIds.size;
 
+  // ── THE CALL HERO's words — a specific, checkable claim with a live number
+  // (docs/NORTHSTAR_UI.md §0.5). Home keeps the site's one "Every…" line; a
+  // vertical states its own book against its own record.
+  const resultsN = activeKey === 'all' ? (meta.totalSold ?? null) : scopedSold;
+  const heroHeadline = useMemo(() => {
+    if (activeKey === 'all') {
+      return resultsN
+        ? `Every lot arrives with a guess. We score it against ${resultsN.toLocaleString()} results.`
+        : 'Every lot arrives with a guess. We score it against the record.';
+    }
+    const [one, many] = LOT_NOUN[activeKey] || ['lot', 'lots'];
+    const n = upcoming.length;
+    const book = n === 0
+      ? `No ${many} are on the block tonight.`
+      : `${n.toLocaleString()} ${n === 1 ? `${one} is` : `${many} are`} on the block.`;
+    if (!resultsN) return book;
+    return n === 0
+      ? `${book} The record holds ${resultsN.toLocaleString()} ${RESULT_NOUN[activeKey] || 'results'}.`
+      : `${book} We score each against ${resultsN.toLocaleString()} ${RESULT_NOUN[activeKey] || 'results'}.`;
+  }, [activeKey, resultsN, upcoming.length]);
+  // the replayed track record — hammer basis at full scope; a vertical prints
+  // its own replay (all-in basis, labelled) and falls back to the whole book
+  const heroRecord = useMemo<HeroRecord | null>(() => {
+    if (!backtest?.flagged) return null;
+    const bm = (backtest as unknown as { byMarket?: Record<string, { flagged: { n: number; medPct: number }; unflagged: { n: number; medPct: number } }> }).byMarket;
+    const mk = activeKey !== 'all' ? bm?.[activeKey] : undefined;
+    if (mk && mk.flagged.n >= 500) return { n: mk.flagged.n, flaggedPct: mk.flagged.medPct, restPct: mk.unflagged.medPct, basis: 'all-in' };
+    const fh = backtest.flagged.hammerMedianPct, uh = backtest.unflagged?.hammerMedianPct;
+    if (fh != null && uh != null) return { n: backtest.flagged.n, flaggedPct: fh, restPct: uh, basis: 'hammer' };
+    return { n: backtest.flagged.n, flaggedPct: backtest.flagged.medianPerfPct, restPct: backtest.unflagged.medianPerfPct, basis: 'all-in' };
+  }, [backtest, activeKey]);
+
   return (
     <>
     {/* the page's primary heading — visually hidden (the hero leads with the
         market number, not a title) but present for crawlers/AT. */}
-    <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
-      lectr — auction intelligence for the collectibles market
-    </h1>
-    <Greeting />
+    {(loading || !!error) && (
+      <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+        Every lot arrives with a guess. lectr scores it against the record.
+      </h1>
+    )}
+    <Greeting ready={!loading} />
     <div className={`${styles.root} terminal-shell`} data-mounted={mounted}>
       {/* the feed grid — global ray-* classes the reused LotCard renders into,
           re-authored here (page.tsx carried these in an inline style block). */}
@@ -881,7 +882,7 @@ export default function TerminalHomePage() {
       <div className={styles.grain} aria-hidden />
 
       {/* REAL CHROME — ArtistNav mounts CommandK (⌘K search, alerts, mobile sheet) */}
-      <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+      <ArtistNav activeSlug={activeKey === 'all' ? null : `vertical:${activeKey}`} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {/* THE EXCHANGE RAIL — the door; re-scopes the WHOLE page in place */}
       <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
@@ -897,12 +898,35 @@ export default function TerminalHomePage() {
           </button>
         </div>
       ) : loading ? (
-        <RayLoading />
+        // the blank plate — the signature writing on eggshell, no skeleton
+        // blocks (the greeting, when it plays, sits over exactly this)
+        <div className={styles.signPlate} role="status" aria-label="Loading tonight's book">
+          <img src="/brand/lectr-nav.png" alt="" className={styles.signMark} />
+        </div>
       ) : (
         <RayEntrance animate={!fromCache}>
           <div className={styles.deskShell}>
 
-            {/* ══ HERO — the market-scoped index glyph + chart draw-in ══ */}
+            {/* ══ HERO — tonight's call in the desk-card layout: the house's
+                guess against the record's expected hammer (pickCall, the one
+                selector). The index rows moved below the fold. ══ */}
+            <CallHero
+              call={call ? { lot: call.lot, signal: call.signal as never } : null}
+              headline={heroHeadline}
+              dek="lectr is the second opinion in the saleroom. The house prints a guess; we print the record."
+              record={heroRecord}
+              marketWord={activeKey === 'all' ? 'the book' : `the ${marketMeta.label === 'TCG' ? 'TCG' : marketMeta.label.toLowerCase()} book`}
+              onOpen={setTableLot}
+              quiet={{ onBlock: upcoming.length, next: nextHammer ? { house: nextHammer.lot.auctionHouse, word: nextHammer.word } : null }}
+            />
+
+            {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
+                section opens on a registration plate (north-star frame). ══ */}
+            {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
+
+            {/* ══ THE MARKETS TONIGHT — the index rows + the right-now board,
+                below the fold (the call leads) ══ */}
+            <div className={`${styles.indexPlate} ns-plate`}>
             <IndexHero
               activeKey={activeKey}
               marketLabel={activeKey === 'all' ? 'Total market' : marketMeta.label}
@@ -923,26 +947,25 @@ export default function TerminalHomePage() {
               closingNext={closingNext}
             />
 
-            {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
-                section opens on a registration plate (north-star frame). ══ */}
-            {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
+            </div>
+
 
             {/* ══ ROOM · THE VERIFIED BOARD — every certified read, on paper.
                 The movers ARE the board's top rows (one table, no duplicate
                 strip); the record sentence prints ONCE as the room's footer.
-                NORTH STAR: the engine's intro head lives OUT HERE on the page
-                ground in the split grammar; the vault below stays the one
-                dark room. ══ */}
+                CATALOGUE (Oct 3): the vault is retired — the board prints on
+                the eggshell like every other plate. The call hero above IS the
+                engine's demonstration, so the board no longer hangs a second
+                lot. ══ */}
             {marketData?.subMarkets && (
               <div className="ns-plate">
                 <div className={`ns-split ${styles.engineIntro}`}>
                   <div>
-                    <span className="ns-kicker">The value engine</span>
-                    <h2 className={styles.engineIntroHead}>We find what the room misprices.</h2>
+                    <h2 className={styles.engineIntroHead}>Each market, read at the strength its data supports.</h2>
                   </div>
                   <p>
-                    Live lots flagged under their comparables, the market indices behind
-                    them, and the replayed record that keeps us honest.
+                    A certified index where the 95% interval clears zero, demand against
+                    estimate where it doesn&rsquo;t, the typical price where neither holds.
                   </p>
                 </div>
               <section className={styles.roomPaper}>
@@ -960,7 +983,7 @@ export default function TerminalHomePage() {
                       n: backtest.flagged.n,
                       asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
                     } : null}
-                    hero={engineHero}
+                    hero={null}
                     onOpenLot={setTableLot}
                   />
                 </div>
@@ -968,99 +991,59 @@ export default function TerminalHomePage() {
               </div>
             )}
 
-            {/* ══ ROOM · THE INSTRUMENT SET — the platform cells, taken
-                directly from the elevenlabs.io feature-cell grammar: four
-                quiet cream wells for the desk's four surfaces, and ONE
-                forced-color cell carrying today's call. LAMP LAW: the color
-                cell's dir is the call's real signal direction — 'up' because
-                a Below Market flag means comps sell ABOVE this ask (the same
-                tone the wall's ring wears) — or 'ink' when no call exists.
-                Its multiple prints through gapMultiple, the wall's own
-                formatter. Never invented, never decorative. ══ */}
-            <section className={`${styles.cellsSection} ns-plate`}>
+            {/* ══ THE DESK — the four rooms as a dotted ledger (the bento of
+                cells retired, docs/NORTHSTAR_UI.md §0.7). Every figure is a
+                live value the page already holds; nothing invented. ══ */}
+            <section className={`${styles.deskLedgerSection} ns-plate`} aria-labelledby="desk-ledger-h">
               <div className={`ns-split ${styles.cellsHead}`}>
                 <div>
-                  <span className="ns-kicker">The instrument set</span>
-                  <h2 className={styles.engineIntroHead}>One desk, four instruments.</h2>
+                  <h2 id="desk-ledger-h" className={styles.engineIntroHead}>Where every number on this page is made.</h2>
                 </div>
                 <p>
-                  Every number on this page is made in one of these rooms — the
-                  engine that prices the book, the record that keeps it honest,
-                  the makers it tracks, and the desk you keep.
+                  The engine that reads the book, the record that grades it, the makers
+                  it tracks, and the desk you keep.
                 </p>
               </div>
-              <CellGrid min={300} className={styles.cellsGrid}>
-                {todaysCall ? (
-                  <ColorCell
-                    dir="up"
-                    span={2}
-                    stat={gapMultiple(todaysCall.pct)}
-                    label="Today's call"
-                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
-                    href={`/lot/${todaysCall.lot.id}`}
-                  />
-                ) : (
-                  <ColorCell
-                    dir="ink"
-                    span={2}
-                    stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : upcoming.length > 0 ? upcoming.length.toLocaleString() : undefined}
-                    label="Today's call"
-                    body={
-                      belowMktCount > 0
-                        ? `No single call tonight — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged under their comparables on the live book.`
-                        : upcoming.length > 0
-                          ? `No flags on this book tonight — ${upcoming.length.toLocaleString()} ${upcoming.length === 1 ? 'lot' : 'lots'} on the block, priced in line with their comps.`
-                          : 'The book is quiet — the crawl refreshes daily.'
-                    }
-                    href="#on-the-block"
-                  />
-                )}
-                {/* THE POP (Collin: "nothing POPs, dead space"): every cell
-                    leads with its big mono numeral — numbers are the desk's
-                    product art — and carries its patent figure as a top-right
-                    watermark. Stats are the same live values the bodies
-                    already printed; nothing invented. */}
-                <Cell
-                  stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : '1.3×'}
-                  statNote={belowMktCount > 0 ? 'flagged on the book tonight' : 'where a flag becomes legal'}
-                  mark={<FigGate size={96} />}
-                  label="The value engine"
-                  body={belowMktCount > 0
-                    ? 'Live asks priced against where their comparables actually sold.'
-                    : 'Live asks priced against where their comparables actually sold — every flag on this page starts here.'}
-                  href="/value"
-                />
-                <Cell
-                  stat={backtest?.flagged?.n ? backtest.flagged.n.toLocaleString() : undefined}
-                  statNote={backtest?.flagged?.n ? 'settled calls replayed' : undefined}
-                  icon={<IcoRecord />}
-                  mark={<FigCorpus size={96} />}
-                  label="The record"
-                  body={backtest?.flagged?.n
-                    ? 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'
-                    : 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'}
-                  href="/analytics"
-                />
-                <Cell
-                  stat={ROSTER.makers.toLocaleString()}
-                  statNote={`makers · ${ROSTER.categories} categories across ${VERTICAL_COUNT} verticals`}
-                  mark={<FigPools size={96} />}
-                  label="The makers ledger"
-                  body="Sale history, live coverage and market reads, one dossier per name."
-                  href="/makers"
-                />
-                <Cell
-                  stat={savedIds.length > 0 ? savedIds.length.toLocaleString() : undefined}
-                  statNote={savedIds.length > 0 ? (savedIds.length === 1 ? 'lot on your desk' : 'lots on your desk') : undefined}
-                  icon={<IcoDesk />}
-                  mark={<FigTape size={96} />}
-                  label="Your desk"
-                  body={savedIds.length > 0
-                    ? 'What moved since you saved it, the next hammers, and your own record.'
-                    : 'Save any lot on the block and it reports here — what moved since you saved it, and when it hammers.'}
-                  href="/profile"
-                />
-              </CellGrid>
+              <ol className={styles.deskLedger}>
+                {[
+                  {
+                    href: '/value',
+                    k: 'The value desk',
+                    d: 'Tonight\u2019s calls — every lot the record reads above its estimate.',
+                    v: belowMktCount > 0 ? `${belowMktCount.toLocaleString()} flagged` : `${upcoming.length.toLocaleString()} on the block`,
+                  },
+                  {
+                    href: '/receipts',
+                    k: 'The record',
+                    d: 'Each call graded against the hammer that followed, misses included.',
+                    v: backtest?.flagged?.n ? `${backtest.flagged.n.toLocaleString()} replayed` : '—',
+                  },
+                  {
+                    href: '/makers',
+                    k: 'The makers ledger',
+                    d: 'Sale history, live coverage and the market read, one dossier per name.',
+                    v: `${ROSTER.makers.toLocaleString()} makers · ${ROSTER.categories} categories · ${VERTICAL_COUNT} markets`,
+                  },
+                  {
+                    href: '/profile',
+                    k: 'Your desk',
+                    d: savedIds.length > 0
+                      ? 'What moved since you saved it, the next hammers, and your own record.'
+                      : 'Save any lot and it reports here — what moved, and when it hammers.',
+                    v: savedIds.length > 0 ? `${savedIds.length.toLocaleString()} saved` : 'empty',
+                  },
+                ].map((r, i) => (
+                  <li key={r.href}>
+                    <Link href={r.href} className={styles.deskRow}>
+                      <span className={styles.deskFolio} aria-hidden>{i + 1}</span>
+                      <span className={styles.deskK}>{r.k}</span>
+                      <span className={styles.deskD}>{r.d}</span>
+                      <span className={styles.deskLead} aria-hidden />
+                      <span className={styles.deskV}>{r.v}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
             </section>
 
             {/* the watchlist strip — the reader's saved lots (small, personal) */}

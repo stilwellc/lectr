@@ -64,9 +64,9 @@ export default function BookIndex({ kind }: { kind: Kind }) {
 
   const pending = kind === 'lot' ? loading : !stats && !failed;
   const head = {
-    lot: { k: 'Lot certificates', h: 'Every lot on the book has a certificate', d: 'Open one from the tape, a maker, or search. These are the lots the engine flagged below their comps, closing soonest.' },
-    ref: { k: 'Reference dossiers', h: 'Watch references, read by the hammer', d: `${stats ? stats.refIndex.length.toLocaleString() + ' references' : 'References'} with at least eight sales on the book — each with its yearly median and the recent hammers behind it.` },
-    player: { k: 'Player dossiers', h: 'Athletes across the whole market', d: `${stats ? stats.playerIndex.length.toLocaleString() + ' players' : 'Players'} with at least 25 sales — cards, game-worn, trophies and tickets in one read. The deepest books first.` },
+    lot: { k: 'Lot certificates', h: 'Each lot gets a certificate: the house estimate beside the record', d: 'Open one from the tape, a maker, or search. These are the lots the record reads above their estimate, closing soonest.' },
+    ref: { k: 'Reference dossiers', h: stats ? `${stats.refIndex.length.toLocaleString()} watch references, read by the hammer` : 'Watch references, read by the hammer', d: `${stats ? stats.refIndex.length.toLocaleString() + ' references' : 'References'} with at least eight sales on the book — each with its yearly median and the recent hammers behind it.` },
+    player: { k: 'Player dossiers', h: stats ? `${stats.playerIndex.length.toLocaleString()} athletes, read across the whole market` : 'Athletes across the whole market', d: `${stats ? stats.playerIndex.length.toLocaleString() + ' players' : 'Players'} with at least 25 sales — cards, game-worn, trophies and tickets in one read. The deepest books first.` },
   }[kind];
 
   return (
@@ -87,7 +87,7 @@ export default function BookIndex({ kind }: { kind: Kind }) {
                 <span className="lectr-lot-comp-t">
                   <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title)}</span>
                   <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                    {ARTIST_LABEL[l.artist] || l.artist} · <span style={{ color: houseColors[l.auctionHouse] || 'inherit', fontWeight: 600 }}>{l.auctionHouse}</span> · hammers {formatDate(trueSaleDay(l))}
+                    {ARTIST_LABEL[l.artist] || l.artist} · <span style={{ color: houseColors[l.auctionHouse] || 'inherit', fontWeight: 500 }}>{l.auctionHouse}</span> · hammers {formatDate(trueSaleDay(l))}
                   </span>
                 </span>
                 <span className="lectr-lot-comp-p" style={{ color: 'var(--color-up)' }}>{signalMagnitude('Below Market', l.signal!.pct)}</span>

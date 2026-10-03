@@ -37,7 +37,7 @@ import { useReducedMotion } from '../preview/terminal/hooks';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import FigCap from '../components/FigCap';
 import RecordBand from '../components/RecordBand';
-import Masthead, { Accent } from '../components/Masthead';
+import Masthead from '../components/Masthead';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import CountUp from '../components/CountUp';
@@ -347,7 +347,7 @@ function GapAnnex({ rows, receipts, activeKey, activeLabel, play, isSaved, onTog
           <span className="vd-cell">{(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'no bids'}</span>
           <span className="vd-cell">
             {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
-              ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
+              ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 500 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
               : formatDate(lot.saleDate)}
           </span>
           {/* mobile stack */}
@@ -549,7 +549,7 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
                   <span className="vd-cell">0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
                   <span className="vd-cell">
                     {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
-                      ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
+                      ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 500 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
                       : formatDate(q.closes)}
                   </span>
                   <span className="vd-lane-mob">
@@ -1230,7 +1230,7 @@ export default function ValuePage() {
         .vd-sect-cap { font-size: 12px; color: var(--color-text-faint); white-space: nowrap; }
         .vd-pulse-read { display: flex; align-items: center; gap: 14px; margin-top: 10px; min-height: 30px; }
         .vd-pulse-fig {
-          font-family: var(--font-mono), monospace; font-size: 20px; font-weight: 600;
+          font-family: var(--font-mono), monospace; font-size: 20px; font-weight: 500;
           font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--color-fg);
           flex: none;
         }
@@ -1324,19 +1324,19 @@ export default function ValuePage() {
           align-items: center;
           justify-content: center;
           font-size: 16px;
-          font-weight: 700;
+          font-weight: 500;
           color: var(--color-text-faint);
           flex-shrink: 0;
         }
         .ray-value-row-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .vd-thumb-letter { font-family: var(--font-inter), sans-serif; font-weight: 600; font-size: 18px; line-height: 1; color: color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint)); }
+        .vd-thumb-letter { font-family: var(--font-inter), sans-serif; font-weight: 500; font-size: 18px; line-height: 1; color: color-mix(in srgb, var(--color-accent-gold) 55%, var(--color-text-faint)); }
         /* the WORK leads in ink; its maker / category bucket rides muted */
         .ray-value-row-maker.ray-value-row-maker { font-size: 12.5px; font-weight: 400; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .ray-value-row-title { font-size: 13.5px; font-weight: 600; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ray-value-row-title { font-size: 13.5px; font-weight: 500; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         /* phones: the hammer date is its own line under the title (never inside
            the ellipsized title span, where it was the first thing cut) */
         .ray-value-mobdate { display: block; font-size: 11.5px; color: var(--color-text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-        .ray-value-row-sig { font-size: 13.5px; font-weight: 700; color: var(--color-up); text-align: right; white-space: nowrap; }
+        .ray-value-row-sig { font-size: 13.5px; font-weight: 500; color: var(--color-up); text-align: right; white-space: nowrap; }
         .ray-value-row-est { font-size: 12.5px; color: var(--color-text-muted); text-align: right; white-space: nowrap; }
         @media (max-width: 768px) {
           .ray-value-section { padding-block: calc(var(--sect-t) - 10px) calc(var(--sect-b) + var(--space-2)); }
@@ -1347,7 +1347,7 @@ export default function ValuePage() {
              rides first in ink and the bucket drops to the muted line */
           .ray-value-row-maker, .ray-value-row-title { display: block; }
           .ray-value-row > span:nth-child(2) { display: flex !important; flex-direction: column; }
-          .ray-value-row .ray-value-row-title { order: -1; font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+          .ray-value-row .ray-value-row-title { order: -1; font-size: 13.5px; font-weight: 500; color: var(--color-fg); }
           .ray-value-row .ray-value-row-maker { font-size: 12px; font-weight: 400; color: var(--color-text-muted); }
         }
         /* desktop ledger (≥900px): thumb · maker/work · house · hammers ·
@@ -1383,8 +1383,8 @@ export default function ValuePage() {
             min-width: 0;
           }
           .ray-value-cell-num { text-align: right; }
-          .ray-value-cell-gap { color: var(--color-up); font-weight: 700; }
-          .ray-value-cell-odds { color: var(--color-text-secondary); font-weight: 600; }
+          .ray-value-cell-gap { color: var(--color-up); font-weight: 500; }
+          .ray-value-cell-odds { color: var(--color-text-secondary); font-weight: 500; }
           .ray-value-cell-est { color: var(--color-fg); }
         }
         /* row save affordance — sibling of the row button, floated right */
@@ -1443,8 +1443,8 @@ export default function ValuePage() {
           opacity: 1;
           margin-top: 6px;
         }
-        .ray-value-leader b { color: var(--color-fg); font-weight: 600; }
-        .ray-value-leader .up { color: var(--color-up); font-weight: 700; }
+        .ray-value-leader b { color: var(--color-fg); font-weight: 500; }
+        .ray-value-leader .up { color: var(--color-up); font-weight: 500; }
 
         /* ── the board's order chips ── */
         .vd-sort { display: inline-flex; gap: 6px; margin-left: 4px; }
@@ -1469,7 +1469,7 @@ export default function ValuePage() {
         .vd-dist-bar-f { background: var(--paper-up, #1B7A48); }
         .vd-dist-bar-u { background: rgba(28, 23, 18, 0.28); }
         .vd-dist-pcts { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--paper-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-        .vd-dist-pcts b { color: var(--paper-up-text); font-weight: 700; }
+        .vd-dist-pcts b { color: var(--paper-up-text); font-weight: 500; }
         .vd-dist-label { font-size: 10.5px; color: var(--paper-muted); text-align: center; line-height: 1.25; }
         .vd-dist-legend { display: flex; gap: 22px; margin-top: 12px; font-size: 12px; color: var(--paper-muted); }
         .vd-dist-key { display: inline-block; width: 12px; height: 8px; margin-right: 6px; vertical-align: baseline; }
@@ -1505,10 +1505,10 @@ export default function ValuePage() {
         .vd-annex-row:hover { background: var(--color-hover-item); }
         .vd-annex-thumb { width: 44px; height: 36px; position: relative; }
         .vd-annex-main { min-width: 0; }
-        .vd-annex-maker { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vd-annex-maker { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vd-annex-title { display: block; font-size: 12px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vd-annex-cells { text-align: right; font-variant-numeric: tabular-nums; }
-        .vd-annex-depth { display: block; font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 600; color: var(--color-fg); }
+        .vd-annex-depth { display: block; font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 500; color: var(--color-fg); }
         .vd-annex-proj { display: block; font-size: 11.5px; color: var(--color-text-muted); }
         .vd-annex-close { display: block; font-size: 11.5px; color: var(--color-text-faint); }
         /* ── the lane head: constructed mark + name + live count + rule ── */
@@ -1526,13 +1526,13 @@ export default function ValuePage() {
         /* north star: authority through lightness — the room title is
            bigger and thinner, never bold */
         .vd-lane-name {
-          font-size: 28px; font-weight: 340; letter-spacing: -0.02em;
+          font-size: 28px; font-weight: 300; letter-spacing: -0.02em;
           line-height: 1.1; margin: 0; white-space: nowrap;
         }
         @media (max-width: 640px) { .vd-lane-name { font-size: 23px; } }
         .vd-lane-count {
           font-family: var(--font-mono), monospace;
-          font-size: 12px; font-weight: 600;
+          font-size: 12px; font-weight: 500;
           font-variant-numeric: tabular-nums;
           color: var(--color-text-secondary);
           border: 1px solid var(--color-border); border-radius: 100px;
@@ -1579,7 +1579,7 @@ export default function ValuePage() {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
           text-align: right; min-width: 0;
         }
-        .vd-cell-strong { color: var(--color-fg); font-weight: 700; }
+        .vd-cell-strong { color: var(--color-fg); font-weight: 500; }
         .vd-lane-mob {
           text-align: right; font-variant-numeric: tabular-nums;
           font-size: 11.5px; color: var(--color-text-muted);
@@ -1636,10 +1636,10 @@ export default function ValuePage() {
           font-variant-numeric: tabular-nums;
           color: var(--paper-muted);
         }
-        .vd-honesty-row b { color: var(--paper-ink); font-weight: 600; }
+        .vd-honesty-row b { color: var(--paper-ink); font-weight: 500; }
         .vd-honesty-fill { flex: 1; border-bottom: 2px dotted var(--paper-line); transform: translateY(-3px); min-width: 16px; }
-        .vd-honesty-up { color: var(--paper-up-text); font-weight: 700; }
-        .vd-honesty-down { color: var(--paper-down-text); font-weight: 700; }
+        .vd-honesty-up { color: var(--paper-up-text); font-weight: 500; }
+        .vd-honesty-down { color: var(--paper-down-text); font-weight: 500; }
 
         /* ── ROOM 4b settled tape ── */
         .vd-tape-row {
@@ -1654,13 +1654,13 @@ export default function ValuePage() {
           transition: background var(--duration-fast) var(--ease-signature);
         }
         .vd-tape-row:hover { background: var(--color-hover-item); }
-        .vd-tape-maker { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vd-tape-maker { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vd-tape-title { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vd-tape-cells { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .vd-tape-real { font-family: var(--font-mono), monospace; font-size: 12.5px; color: var(--color-fg); }
         .vd-tape-vs { display: block; font-family: var(--font-mono), monospace; font-size: 11.5px; color: var(--color-text-muted); }
-        .vd-tape-vs [data-tone="up"] { color: var(--color-up); font-weight: 700; }
-        .vd-tape-vs [data-tone="down"] { color: var(--color-down-text); font-weight: 700; }
+        .vd-tape-vs [data-tone="up"] { color: var(--color-up); font-weight: 500; }
+        .vd-tape-vs [data-tone="down"] { color: var(--color-down-text); font-weight: 500; }
         .vd-tape-ghost { height: 44px; border-bottom: 1px solid var(--color-hair, rgba(255,255,255,0.06)); background: var(--lw-02, rgba(255, 255, 255, 0.02)); }
         @media (max-width: 640px) {
           .vd-tape-row { grid-template-columns: minmax(0, 1fr); }
@@ -1738,7 +1738,7 @@ export default function ValuePage() {
           margin: 0; padding: 14px 16px 0;
           font-size: 13px; color: var(--color-text-secondary);
         }
-        .vd-detail-lead b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .vd-detail-lead b { color: var(--color-fg); font-weight: 500; font-variant-numeric: tabular-nums; }
         .vd-detail-grid {
           display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
           gap: 12px 26px; padding: 12px 16px 0;
@@ -1876,7 +1876,7 @@ export default function ValuePage() {
            only .up value on the compact plate is "The gap") */
         .vd-call-cell .lectr-cp-v.up {
           font-family: var(--font-mono), monospace;
-          font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+          font-size: 20px; font-weight: 500; letter-spacing: -0.01em;
         }
         /* CTAs on the white-on-signal ramp: primary = paper pill / ink text;
            quiet = translucent paper (the light-mode white-ring override
@@ -1895,7 +1895,7 @@ export default function ValuePage() {
            is value-only; the paper tokens stay) ── */
         .ray-engine-head {
           font-family: var(--font-sans), sans-serif;
-          font-weight: 340;
+          font-weight: 300;
           letter-spacing: -0.02em;
         }
 
@@ -1944,13 +1944,15 @@ export default function ValuePage() {
                 <Masthead
                   kicker=""
                   title={hasFlags
-                    ? <>Lots the {activeLabel === 'collectible' ? 'room' : `${activeLabel} room`} should bid <Accent>past</Accent> the estimate.</>
-                    : <>The {activeLabel === 'collectible' ? 'whole' : activeLabel} book is read. <Accent>No lot</Accent> clears the bar tonight.</>}
+                    // THE SECOND OPINION (Oct 3 2026): the house prints a guess,
+                    // the record prints the answer — a checkable count, not a slogan
+                    ? <>{deals.length.toLocaleString()} {activeLabel === 'collectible' ? '' : `${activeLabel} `}{deals.length === 1 ? 'lot is' : 'lots are'} forecast to hammer above the house estimate.</>
+                    : <>{appraisedCount.toLocaleString()} {activeLabel === 'collectible' ? '' : `${activeLabel} `}lots read against the record. None clears the bar tonight.</>}
                   sub={hasFlags
                     ? <>
-                        <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{deals.length}</b> flags live ·{' '}
-                        <span style={{ color: 'var(--color-up)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                          comps median {flagGap(Math.round(summary.medianGap))} the estimate
+                        The house prints a guess; the record prints the answer ·{' '}
+                        <span style={{ color: 'var(--color-up)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                          median read {flagGap(Math.round(summary.medianGap))} the estimate
                         </span>{' '}
                         · {formatPrice(summary.totalEst)} at estimate · {summary.artists} makers
                         {summary.soonest && <> · <span style={{ whiteSpace: 'nowrap' }}>first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
@@ -2168,7 +2170,7 @@ export default function ValuePage() {
                             const dU = daysUntil(day);
                             if (!past && dU != null && dU <= 0) {
                               const tonight = !!d.lot.saleDateTime && new Date(d.lot.saleDateTime).getHours() >= 17;
-                              return <><span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
+                              return <><span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>
                                 {tonight ? 'closes tonight' : 'closes today'}
                                 {d.lot.saleDateTime && <> · <CloseClock iso={d.lot.saleDateTime} windowHours={24} /></>}
                               </span></>;
@@ -2184,7 +2186,7 @@ export default function ValuePage() {
                         const iso = d.lot.saleDateTime;
                         const ms = iso ? Date.parse(iso) - Date.now() : null;
                         return ms != null && ms > 0 && ms < 24 * 3600e3
-                          ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
+                          ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 500 }}><CloseClock iso={iso!} windowHours={24} /></span>
                           : formatDate(trueSaleDay(d.lot) || d.lot.saleDate);
                       })()}
                     </span>
@@ -2211,7 +2213,7 @@ export default function ValuePage() {
                         {flagGap(Math.round(d.signal!.pct))}
                       </span>
                       {d.lot.value?.signal?.beatRatePct != null && Math.round(d.lot.value.signal.beatRatePct) !== prevailingOdds && (
-                        <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                        <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                           {Math.round(d.lot.value.signal.beatRatePct)}% odds
                         </span>
                       )}
@@ -2402,13 +2404,13 @@ export default function ValuePage() {
                   return (
                     <Link key={`${s.id}|${s.k}`} href={`/lot?id=${encodeURIComponent(s.id)}`} className="vd-tape-row">
                       <span style={{ minWidth: 0 }}>
-                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s.t ? craftTitle(s.t) : s.id}</span>
+                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 500 }}>{s.t ? craftTitle(s.t) : s.id}</span>
                         <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s.a ? (ARTIST_LABEL[s.a] || s.a) : ''}{s.h ? ` · ${s.h}` : ''}</span>
                       </span>
                       <span className="vd-tape-cells">
                         <span className="vd-tape-real">realized {formatPrice(s.r)} all-in{s.sd ? ` · ${formatDate(s.sd)}` : ''}</span>
                         <span className="vd-tape-vs">
-                          called {formatPrice(s.p)} <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em' }}>{kind}</span>
+                          called {formatPrice(s.p)} <span style={{ fontSize: 10, letterSpacing: 0 }}>{kind}</span>
                           {delta != null && <> · <span data-tone={toneOf(delta)}>{fmtSignedPct(delta)}</span> vs the call</>}
                         </span>
                       </span>

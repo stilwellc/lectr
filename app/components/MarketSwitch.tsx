@@ -100,12 +100,13 @@ export default function MarketSwitch({
   };
 
   // THE FLAP LINE (mobile door) — the split-flap destination row for the
-  // active market. Uppercase mono tokens, one quiet register.
+  // active market. Sentence-case mono tokens, one quiet register (no
+  // tracked caps — docs/NORTHSTAR_UI.md §0.2).
   const flap = (() => {
     if (!door) return null;
-    const tokens: string[] = [active.label.toUpperCase()];
+    const tokens: string[] = [active.label];
     const n = reads?.[active.key];
-    if (n != null) tokens.push(`${fmtCount(n)} LIVE ${n === 1 ? 'LOT' : 'LOTS'}`);
+    if (n != null) tokens.push(`${fmtCount(n)} live ${n === 1 ? 'lot' : 'lots'}`);
     return tokens;
   })();
 
