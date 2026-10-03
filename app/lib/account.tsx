@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase, authEnabled } from './supabase';
 import type { AuctionLot } from '../types';
 import { craftTitle } from '../utils';
+import { track } from './analytics';
 
 /**
  * The account layer. ONE responsibility beyond auth: saved lots are scoped to a
@@ -338,6 +339,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const toggle = useCallback((lotId: string, lot?: AuctionLot) => {
     // no auth configured → localStorage, exactly like before
     if (!supabase) {
+      track(entriesRef.current.some(e => e.id === lotId) ? 'unsave_lot' : 'save_lot');
       setEntries(prev => {
         const next = prev.some(e => e.id === lotId) ? prev.filter(e => e.id !== lotId) : [...prev, entryFromLot(lotId, lot)];
         writeStored(next);
@@ -363,6 +365,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     // Optimistic UI, but roll the state change back if the write fails so the
     // star never lies about what's actually persisted.
     const exists = entriesRef.current.some(e => e.id === lotId);
+    track(exists ? 'unsave_lot' : 'save_lot');
     if (exists) {
       const removed = entriesRef.current.find(e => e.id === lotId);
       if (fetchInFlight.current) mutationLog.current.set(lotId, 'DELETED');

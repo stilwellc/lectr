@@ -6,6 +6,7 @@ import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
 import { AccountProvider } from './lib/account';
 import { ROSTER_PHRASE } from './constants';
+import Analytics from './components/retention/Analytics';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -126,6 +127,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </AccountProvider>
           </MarketProvider>
         </ThemeProvider>
+        {/* CF Web Analytics beacon (only with NEXT_PUBLIC_CF_BEACON_TOKEN) + outbound counter */}
+        <Analytics />
       </body>
     </html>
   );

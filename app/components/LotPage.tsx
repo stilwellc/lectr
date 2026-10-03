@@ -1,5 +1,6 @@
 'use client';
 
+import TrackOnMount from './retention/TrackOnMount';
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
@@ -1002,11 +1003,14 @@ export default function LotPage({ lotId, initialLot }: {
                 const floor = gatedFloor(lot);
                 if (!floor) return null;
                 return (
-                  <LeaderRow
-                    k="Max bid"
-                    v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
-                    sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
-                  />
+                  <>
+                    <LeaderRow
+                      k="Max bid"
+                      v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
+                      sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
+                    />
+                    <TrackOnMount event="maxbid_view" onceKey={lot.id} />
+                  </>
                 );
               })()}
               {isUpcoming && lot.bidProj?.allIn != null && (() => {
