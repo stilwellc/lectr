@@ -12,7 +12,7 @@ import nextTs from 'eslint-config-next/typescript';
 export default defineConfig([
   globalIgnores([
     'node_modules/**', '.next/**', 'out/**', 'build/**', 'public/**', 'data/**',
-    'coverage/**', 'shots/**', '.claude/**', 'next-env.d.ts', '**/*.d.ts',
+    'coverage/**', 'shots/**', '.claude/**', '.wrangler/**', 'next-env.d.ts', '**/*.d.ts',
     // research harnesses, tsconfig-excluded and allowed to drift (see scripts/oneoff/README.md)
     'scripts/oneoff/qa/**',
   ]),

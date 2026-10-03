@@ -6,14 +6,16 @@ import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
-import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
+import { isSportsScienceObject, FORM_LABEL, signalMagnitude, type signalWithPool } from '../lib/comps';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { signedPct, dirOf } from './SubMarketDirectory';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import { safeHref } from '../lib/safe-href';
 import { medianSorted } from '../lib/stats';
 import type { MarketData, Backtest } from '../hooks/useRayData';
-import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
+import { useRayData } from '../hooks/useRayData';
+import { fetchComps, type CompsAnswer } from '../lib/api';
+import { packRowsToLots } from '../lib/page-data';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
 // "$500–$500 EUR" where the card said "$500 est.").
@@ -426,21 +428,6 @@ function scoreComparable(upcoming: AuctionLot, sold: AuctionLot): number {
 
 const MAX_COMPARABLES = 15;
 
-/**
- * ArchiveLoader — the phase-3 sold-archive is the 10MB tier, and `useSoldArchive`
- * fetches on mount (by contract). Hooks can't be called conditionally, so we
- * isolate the trigger in a child that the modal renders ONLY for sports/science
- * object lots. Art/watch/design modals never mount this, never pay the 10MB.
- * Renders nothing; reports the merged corpus + load flag up via a callback.
- */
-function ArchiveLoader({ onState }: { onState: (s: { allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }) => void }) {
-  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
-  useEffect(() => {
-    onState({ allLotsWithArchive, archiveLoaded, archiveError });
-  }, [allLotsWithArchive, archiveLoaded, archiveError, onState]);
-  return null;
-}
-
 export default function ComparableModal({
   lot,
   allLots,
@@ -460,14 +447,39 @@ export default function ComparableModal({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Opening comps is a full-corpus interaction: the sold pool the modal maps
-  // (poolIds → allLots) lives in the phase-2 history. On the lean home lander
-  // that isn't loaded yet, so kick it here — idempotent, and pages that already
-  // mount useFullLots() are unaffected. The frozen call still renders instantly
-  // from lot.value; the comparable-sales rows fill in as the corpus lands.
-  // fullLoaded/fullError gate the CLIENT-computed read below: a "0 comparable
-  // sales (no call)" verdict must never print against a still-loading corpus.
-  const { fullLoaded, fullError, market, backtest } = useFullLots();
+  // THE COMPS API (Oct 2026): opening comps used to stream the whole sold
+  // corpus (+ the Goldin archive) to the browser. Now one request answers it:
+  // /api/comps computes this lot's reads at the edge over its own candidate
+  // pool — the engine pool resolved to rows, the client read (signalWithPool),
+  // the sports/science realized band, the context comps, the exact-item
+  // repeat sale. The frozen call still renders instantly from lot.value.
+  // fullLoaded/fullError keep their meaning for the gates below: "the comp
+  // reads have arrived" / "the API failed" — a "0 comparable sales (no call)"
+  // verdict never prints against an answer that hasn't come back.
+  const { market, backtest } = useRayData();
+  const [comps, setComps] = useState<CompsAnswer | null | undefined>(undefined);
+  const [compsErr, setCompsErr] = useState(false);
+  const [compsTry, setCompsTry] = useState(0);
+  useEffect(() => {
+    let on = true;
+    setComps(undefined);
+    setCompsErr(false);
+    fetchComps(lot.id).then(
+      a => { if (on) setComps(a); },
+      () => { if (on) { setComps(null); setCompsErr(true); } },
+    );
+    return () => { on = false; };
+  }, [lot.id, compsTry]);
+  const fullLoaded = comps !== undefined && !compsErr;
+  const fullError = compsErr;
+  // every row the API sent (engine/client pool, band pool, context, exact)
+  const apiPool = useMemo(() => {
+    if (!comps) return [] as AuctionLot[];
+    const p = comps.pack;
+    const rows = [...(p.c?.rows || []), ...(p.b?.rows || []), ...comps.ctx, ...(comps.exact ? [comps.exact] : [])];
+    const seen = new Set<string>();
+    return packRowsToLots(rows).filter(l => (seen.has(l.id) ? false : (seen.add(l.id), true)));
+  }, [comps]);
 
   // Bottom-sheet drag (under 900px): the handle tracks the finger, and a
   // decisive pull down dismisses — the native sheet gesture.
@@ -553,7 +565,7 @@ export default function ComparableModal({
     if (ev && ev.signal && ev.compRatio != null && evSane) {
       if (ev.signal.label.startsWith('at')) return null;
       const below = ev.signal.label.startsWith('below');
-      const byId = new Map(allLots.map(l => [l.id, l]));
+      const byId = new Map(apiPool.map(l => [l.id, l]));
       // sold-with-price only: a pool id resolving to a relisted/faulted lot
       // must never feed a `priceUsd!` read ($NaN stats, cx="NaN%" dots)
       const pool = (ev.poolIds || [])
@@ -574,8 +586,11 @@ export default function ComparableModal({
         pool,
       };
     }
-    return signalWithPool(lot, allLots);
-  }, [lot, allLots]);
+    // engine-declined: the client read, computed by the API over the lot's pool
+    const c = comps?.pack.c;
+    const sig = comps?.pack.sig as NonNullable<ReturnType<typeof signalWithPool>>['signal'] | undefined;
+    return c && sig ? { signal: sig, pool: packRowsToLots(c.rows) } : null;
+  }, [lot, apiPool, comps]);
 
   // EVIDENCE FALLBACK: the engine's pool draws on the corpus-only tier, so
   // poolIds often resolve to ZERO on-wire rows — and the section would then
@@ -608,29 +623,19 @@ export default function ComparableModal({
   // Suppress that section for these lots; the card block IS the proof surface.
   const isCardComp = (lot as AuctionLot & { value?: { basis?: string } | null }).value?.basis === 'card-comp';
 
-  // The Goldin sold-archive is the 10MB tier — only sports/science object lots
-  // (with no estimate-based call) can build a realized band, and only they need
-  // the archive to fill the comp pool. Fetch on demand via <ArchiveLoader>
-  // (mounted below, only when wantsArchive); block the band until it lands so
-  // the pool isn't computed against a truncated corpus. Watches are also
-  // `object` but their frozen `called` path never touches the archive.
+  // The realized band's pool spans the Goldin archive tier — the API pools
+  // main + archive for sports/science objects, so the band is whole on arrival.
   const wantsArchive = lot.category === 'object' && isSportsScienceObject(lot);
-  const [archive, setArchive] = useState<{ allLotsWithArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }>({
-    allLotsWithArchive: allLots,
-    archiveLoaded: false,
-    archiveError: false,
-  });
-  const archiveLoaded = wantsArchive ? archive.archiveLoaded : true;
-  const archiveFailed = wantsArchive && archive.archiveError && !archive.archiveLoaded;
-  const bandPoolLots = wantsArchive && archive.archiveLoaded ? archive.allLotsWithArchive : allLots;
+  const archiveLoaded = !wantsArchive || comps !== undefined;
 
   // No call, and this is a Goldin sports/science object → a descriptive
   // realized band (median, range, n) — NEVER a below/above-market call.
   // Goldin publishes no estimates, so there is nothing to call against.
-  const band = useMemo(
-    () => (called ? null : isSportsScienceObject(lot) ? soldCompBand(lot, bandPoolLots) : null),
-    [called, lot, bandPoolLots]
-  );
+  const band = useMemo(() => {
+    if (called || !isSportsScienceObject(lot)) return null;
+    const b = comps?.pack.b;
+    return b ? { form: b.form, median: b.median, low: b.low, high: b.high, n: b.n, confidence: b.confidence, pool: packRowsToLots(b.rows) } : null;
+  }, [called, lot, comps]);
 
   // No frozen engine call and no realized band yet, while the phase-2 corpus
   // is still downloading: the client read is running against a truncated pool,
@@ -656,14 +661,9 @@ export default function ComparableModal({
         .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
         .map(l => ({ lot: l, score: 1 }));
     }
-    // context only: gated comps ranked by similarity
-    const sold = allLots.filter(l =>
-      l.artist === lot.artist &&
-      l.status === 'sold' &&
-      l.priceUsd &&
-      l.id !== lot.id &&
-      areComparable(lot, l)
-    );
+    // context only: gated comps ranked by similarity (the API sends the top
+    // gated rows; the ranking is re-scored here, the modal's own scorer)
+    const sold = packRowsToLots(comps?.ctx);
     const scored = sold.map(s => ({ lot: s, score: scoreComparable(lot, s) }));
     scored.sort((a, b) => {
       if (Math.abs(a.score - b.score) > 0.01) return b.score - a.score;
@@ -677,7 +677,7 @@ export default function ComparableModal({
         .map(l => ({ lot: l, score: 1 }));
     }
     return scored.slice(0, MAX_COMPARABLES);
-  }, [lot, allLots, called, band, evRows]);
+  }, [lot, comps, called, band, evRows]);
 
   const compStats = useMemo(() => {
     if (comparables.length === 0) return null;
@@ -820,9 +820,6 @@ export default function ComparableModal({
           .comp-modal-price { min-width: 60px; }
         }
       ` }} />
-      {/* Mounted only for sports/science objects — its mount triggers the
-          10MB sold-archive fetch. Renders nothing. */}
-      {wantsArchive && <ArchiveLoader onState={setArchive} />}
       <div
         ref={panelRef}
         onClick={e => e.stopPropagation()}
@@ -1019,7 +1016,7 @@ export default function ComparableModal({
             <div style={{ fontSize: 16, color: 'var(--color-fg)', fontWeight: 450, fontVariantNumeric: 'tabular-nums', marginBottom: 3 }}>
               {formatEstimate(lot)}
             </div>
-            <LotValueBlock lot={lot} allLots={allLots} market={market} backtest={backtest} />
+            <LotValueBlock lot={lot} allLots={apiPool.length ? apiPool : allLots} market={market} backtest={backtest} />
             <CardCompsBlock lot={lot} />
             <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)' }}>
               {formatDate(lot.saleDate, { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -1180,11 +1177,11 @@ export default function ComparableModal({
             </div>
           )}
 
-          {archiveFailed ? (
+          {fullError && comparables.length === 0 ? (
             <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--color-text-faint)', fontSize: 13.5 }}>
               Comparable sales couldn&rsquo;t be loaded.
               <button
-                onClick={() => { setArchive(a => ({ ...a, archiveError: false })); retryArchiveLoad(); }}
+                onClick={() => setCompsTry(t => t + 1)}
                 style={{ display: 'block', margin: '12px auto 0', background: 'none', border: '1px solid var(--hairline)', color: 'var(--color-text-secondary)', padding: '7px 16px', borderRadius: 8, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 Try again

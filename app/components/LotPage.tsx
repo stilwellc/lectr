@@ -5,11 +5,12 @@ import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState }
 import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
-import { loadLotPack, loadLotFromShard, loadPageStats, loadMakerLots, packRowsToLots, type LotPack } from '../lib/page-data';
+import { loadLotPackStrict, packRowsToLots, type LotPack } from '../lib/page-data';
+import { fetchLot } from '../lib/api';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
-import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
+import { useRayData, useVisibilityTrigger } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
@@ -270,18 +271,9 @@ function LeaderRow({ k, v, tone, sub, children }: {
   );
 }
 
-/** The phase-3 trigger, isolated so only Goldin-sports/science needs mount it
-    (useSoldArchive fetches on mount by contract — the 10MB tier must never
-    ride along on an art lot's permalink). Renders nothing. */
-function ArchiveProbe({ onState }: {
-  onState: (s: { soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }) => void;
-}) {
-  const { soldArchive, archiveLoaded, archiveError } = useSoldArchive();
-  useEffect(() => {
-    onState({ soldArchive, archiveLoaded, archiveError });
-  }, [soldArchive, archiveLoaded, archiveError, onState]);
-  return null;
-}
+const ARCHIVE_VIA_API: { soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean } = {
+  soldArchive: [], archiveLoaded: true, archiveError: false,
+};
 
 /** The reference certificate row — the /ref dossier link renders ONLY when
     refs.json proves the page exists (dynamicParams=false: every ungated link
@@ -373,8 +365,17 @@ export default function LotPage({ lotId, initialLot }: {
   // the page will compute a number from it (needsCorpusRead), or when the
   // comps section becomes reachable (compsSentinel). Nothing this page can
   // eventually show has been given up — it just arrives on demand.
-  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots, sources, requestFullLots } =
-    useFullLotsOnDemand(false);
+  const { allLots, loading, lastCrawl, market, totalLots, sources } = useRayData();
+  // THE LOT API (Oct 2026): the certificate never downloads the corpus. The
+  // lot resolves through /api/lot and every comp read arrives as a pack
+  // (build-time for packed upcoming lots, else /api/comps — the same reads
+  // over this lot's own candidate pool). `fullLoaded` stays false for good;
+  // `fullError` is "the API failed" (lot or comps) and drives the retry.
+  const fullLoaded = false;
+  const [apiError, setApiError] = useState(false);
+  const fullError = apiError;
+  const [apiTry, setApiTry] = useState(0);
+  const retryApi = useCallback(() => { setApiError(false); setApiTry(t => t + 1); }, []);
   const { savedIds, isSaved, toggle } = useSavedLots();
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
@@ -388,14 +389,10 @@ export default function LotPage({ lotId, initialLot }: {
 
   const live = useMemo(() => allLots.find(l => l.id === lotId) || null, [allLots, lotId]);
 
-  // Phase-3 sold-archive tier (10MB, Goldin) — mounted ONLY when this page can
-  // actually need it: a resolved sports/science object (band pool) or an
-  // unresolved goldin-* id after the main corpus finished (sports sold lots
-  // live nowhere else). Every archive id is goldin-*, so a fake art id never
-  // pays the download to learn it's fake.
-  const [archive, setArchive] = useState<{ soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }>({
-    soldArchive: [], archiveLoaded: false, archiveError: false,
-  });
+  // The phase-3 sold-archive tier is retired from the client: /api/lot
+  // resolves archive-tier ids and /api/comps pools them. The archive is
+  // therefore always "settled, nothing local" — never a pending download.
+  const archive = ARCHIVE_VIA_API;
   // Phase-2 permalink fast path — one indexed row from the Supabase lots
   // table resolves the certificate in ~1KB instead of waiting on the 25MB
   // shard stream. It is also the long memory: rows are upserted nightly and
@@ -420,24 +417,23 @@ export default function LotPage({ lotId, initialLot }: {
     // one shot per id on mount — live/initialLot arriving later is fine, they win below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotId]);
-  // SINGLE-SHARD RESOLUTION (Sep 27 2026): a permalink the eager tape, the
-  // prerender and Supabase all missed used to pull the WHOLE corpus (~35MB)
-  // to find one row. The build's lot index (pages/lot-idx-XX.json, ~20KB)
-  // names the one served shard that carries the id — fetch only that.
-  // undefined = looking · null = the index answered "not on the book" ·
-  // 'noindex' = no index on this data build (fall back to the corpus).
+  // ONE-LOT RESOLUTION (Oct 2026): a permalink the eager tape, the prerender
+  // and Supabase all missed resolves through the lot API (/api/lot/:id —
+  // main, archive and corpus-only tiers alike), one row, never a shard.
+  // undefined = looking · null = the API answered "not on the book" ·
+  // 'noindex' = the API failed (fullError → the retry below).
   const [shardLot, setShardLot] = useState<AuctionLot | null | undefined | 'noindex'>(undefined);
   useEffect(() => {
     if (!lotId || live || initialLot) { setShardLot(null); return; }
-    if (loading) return;                       // wait for the crawl stamp (?v=)
     let dead = false;
-    loadLotFromShard(lotId, lastCrawl).then(r => {
-      if (dead) return;
-      setShardLot(r.indexed ? r.lot : 'noindex');
-    });
+    setShardLot(undefined);
+    fetchLot(lotId).then(
+      l => { if (!dead) setShardLot(l); },
+      () => { if (!dead) { setShardLot('noindex'); setApiError(true); } },
+    );
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotId, loading]);
+  }, [lotId, apiTry]);
   const shardHit = shardLot && shardLot !== 'noindex' ? shardLot : null;
   const preResolved = live || initialLot || dbLot || shardHit || null;
 
@@ -445,18 +441,23 @@ export default function LotPage({ lotId, initialLot }: {
   // band, appraisal, reference band, provenance) — ~15KB instead of the
   // corpus. undefined = loading · null = no pack (not an upcoming lot, or a
   // data build that predates the emitter → the corpus paths below stand).
+  // An API 404 (a lot only Supabase still remembers) is a SETTLED empty pack
+  // — no comps to print, never an eternal "loading"; an API failure leaves
+  // the pack null and raises fullError (the comps block offers a retry).
   const [pack, setPack] = useState<LotPack | null | undefined>(undefined);
   useEffect(() => {
     if (!lotId) { setPack(null); return; }
     if (loading) return;
     let dead = false;
-    loadLotPack(lotId, lastCrawl).then(p => { if (!dead) setPack(p); });
+    loadLotPackStrict(lotId, lastCrawl).then(
+      p => { if (!dead) setPack(p || {}); },
+      () => { if (!dead) { setPack(null); setApiError(true); } },
+    );
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotId, loading]);
+  }, [lotId, loading, apiTry]);
   const hasPack = !!pack && !fullLoaded;
-  // set when no maker shard could answer → the corpus (+ archive) path stands
-  const [poolFallback, setPoolFallback] = useState(false);
+  const poolFallback = false;
   const isGoldinId = lotId.startsWith('goldin');
   const wantsArchive =
     (!!preResolved && isSportsScienceObject(preResolved) && pack === null && poolFallback) ||
@@ -467,70 +468,20 @@ export default function LotPage({ lotId, initialLot }: {
   );
   const lot = preResolved || archiveLot;
 
-  // THE MAKER POOL (Sep 27 2026): every comp read here (signalWithPool,
-  // appraiseLot, soldCompBand, the science reference band) pools SAME-ARTIST
-  // rows only — so a lot with no build-time pack (a settled lot) reads its
-  // comps over its maker's own shard (pages/maker-<slug>-N.json, archive tier
-  // included for sports/science) instead of the ~35MB corpus. Same pool, same
-  // answer; a maker without a shard (or an old data build) still asks for
-  // the corpus.
-  const [makerPool, setMakerPool] = useState<AuctionLot[] | null>(null);
+  // THE MAKER POOL is retired with the corpus: every comp read (signalWithPool,
+  // appraiseLot, soldCompBand, the reference bands, provenance) arrives in the
+  // pack above, computed at the edge over this lot's own candidate pool. The
+  // pool paths below only ever see the eager tape now.
+  const makerPool = null as AuctionLot[] | null;
+  const requestPool = useCallback(() => { /* the pack answers — nothing to fetch */ }, []);
+  const poolLots = allLots;
 
-  const poolAsked = useRef(false);
-  const requestPool = useCallback(() => {
-    if (poolAsked.current || fullLoaded) return;
-    poolAsked.current = true;
-    const artist = lot?.artist;
-    const fallback = () => { setPoolFallback(true); requestFullLots(); };
-    if (!artist) { fallback(); return; }
-    loadPageStats().then(st => {
-      const n = st?.makerShards?.[artist];
-      if (!n) { fallback(); return; }
-      loadMakerLots(artist, n, lastCrawl).then(rows => {
-        if (rows) setMakerPool(rows); else fallback();
-      });
-    });
-  }, [lot, fullLoaded, requestFullLots, lastCrawl]);
-  const poolLots = fullLoaded || !makerPool ? allLots : makerPool;
-  // a settled sports/science object prints its realized band near the top —
-  // ask for the maker pool at mount (it replaces the 25MB archive probe)
-  useEffect(() => {
-    if (lot && pack === null && isSportsScienceObject(lot)) requestPool();
-  }, [lot, pack, requestPool]);
-
-  /* ── THE CORPUS GATE ───────────────────────────────────────────────────
-     Read off the lot's OWN stamped fields — never off the pool, which is the
-     thing we are deciding whether to fetch.
-
-     `engineCalled` = the nightly engine made this call over the whole corpus
-     and stamped its n / median / poolIds onto the lot. Those numbers are
-     honest with zero shards on the wire, and the evidence rows behind them
-     have a build-shipped fallback (loadCompEvidence). Everything else — an
-     uncalled lot's client-computed read, an "at comparable market" lot's
-     appraisal, the science/culture reference band, the repeat-sale
-     provenance ledger, and resolving a permalink the fast paths all missed —
-     is computed here, over the corpus, so it must ask for it. */
+  // `engineCalled` = the nightly engine made this call over the whole corpus
+  // and stamped its n / median / poolIds onto the lot — honest with no pool
+  // on the wire (the pack's rows, or comp-evidence.json, carry the evidence).
   const engineCall = lot?.value;
   const engineCalled = !!(engineCall && engineCall.signal && engineCall.compRatio != null
     && (engineCall.compRatio <= 5 && engineCall.compRatio >= 1 / 5));
-  const needsCorpusRead = useMemo(() => {
-    // last-resort resolution — only when the build ships no lot index
-    if (!lot) return dbSettled && shardLot === 'noindex';
-    if (pack === undefined) return false;                     // the pack is still answering
-    if (pack) return false;                                   // the build already read the corpus
-    // a settled/unpacked lot's comps are read on demand (the comps sentinel),
-    // never at first paint — the certificate itself needs nothing more
-    if (lot.status !== 'upcoming') return false;
-    if (lot.repeatSaleGroupId) return true;                   // provenance ledger
-    const mkt = ARTIST_MARKET[lot.artist];
-    if (mkt === 'science' || mkt === 'culture') return true;  // reference band
-    if (isSportsScienceObject(lot)) return false;             // the archive tier answers
-    // a fair call ('at comparable market') prints no engine median — the
-    // certificate falls through to appraiseLot, which is corpus-fed
-    if (engineCalled) return !!engineCall?.signal?.label.startsWith('at');
-    return true;                                              // client-computed read
-  }, [lot, dbSettled, shardLot, pack, engineCalled, engineCall]);
-  useEffect(() => { if (needsCorpusRead) requestFullLots(); }, [needsCorpusRead, requestFullLots]);
   // a pack IS a settled corpus read (computed over the whole book at build)
   const corpusSettled = fullLoaded || fullError || hasPack || !!makerPool;
 
@@ -737,7 +688,6 @@ export default function LotPage({ lotId, initialLot }: {
     return (
       <div className="terminal-shell">
         <ArtistNav activeSlug="" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
-        {wantsArchive && <ArchiveProbe onState={setArchive} />}
         {settled ? (
           <>
             <NotOnTheBook id={lotId} />
@@ -746,10 +696,7 @@ export default function LotPage({ lotId, initialLot }: {
                 <button
                   className="ray-call-btn ray-call-btn-quiet"
                   style={{ cursor: 'pointer' }}
-                  onClick={() => {
-                    if (fullError) retryFullLoad();
-                    if (archive.archiveError) { setArchive(a => ({ ...a, archiveError: false })); retryArchiveLoad(); }
-                  }}
+                  onClick={retryApi}
                 >
                   Part of the book didn&rsquo;t load — try again
                 </button>
@@ -803,7 +750,6 @@ export default function LotPage({ lotId, initialLot }: {
   return (
     <div className="terminal-shell">
       <ArtistNav activeSlug={lot.artist in ARTIST_LABEL ? lot.artist : ''} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
-      {wantsArchive && <ArchiveProbe onState={setArchive} />}
       <div className="lectr-lot rail">
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
 
@@ -1261,7 +1207,7 @@ export default function LotPage({ lotId, initialLot }: {
                 {fullError
                   ? <>
                       Comparable sales couldn&rsquo;t be loaded.{' '}
-                      <button onClick={() => retryFullLoad()} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
+                      <button onClick={retryApi} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
                         Try again
                       </button>
                     </>

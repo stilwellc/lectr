@@ -8,7 +8,8 @@ import type { MarketStats } from '../types';
 import { useMarket } from '../lib/market';
 import { countSubMarkets } from '../lib/submarkets';
 import MarketSwitch from '../components/MarketSwitch';
-import { useRayData, useFullLots, useSoldArchive, retryArchiveLoad, retryFullLoad } from '../hooks/useRayData';
+import { useRayData } from '../hooks/useRayData';
+import { fetchSummary } from '../lib/api';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { formatDate, getUpcomingCounts, fmtSignedPct } from '../utils';
@@ -432,52 +433,41 @@ function DeepPools({ activeKey, mktSet, marketStats }: {
 // settled height while it loads.
 const POOLS_HOLD = 'clamp(1740px, 175vw, 2520px)'; // measured settled: 2,518px @1440 · ~1,740px @390
 
-function DeepPoolsBody(props: {
+// THE POOLS read the market's book IN COLUMNS from the lot API
+// (/api/market/:key?view=summary — status, price, date, category, estimates,
+// house, sport, player per row; the top-priced rows whole). Same rows the
+// corpus path aggregated (main tier; + the Goldin archive tier for sports and
+// science), at a few percent of the bytes — never the 251MB corpus.
+function DeepPoolsBody({ activeKey, mktSet, marketStats }: {
   activeKey: Market;
   mktSet: Set<string>;
   marketStats: Record<string, MarketStats>;
 }) {
-  // sports/science aggregate over the Goldin sold-archive — ONLY those
-  // markets may mount useSoldArchive (its mount triggers the phase-3 fetch)
-  const isArchiveMarket = props.activeKey === 'sports' || props.activeKey === 'science';
-  return isArchiveMarket ? <ArchivePoolsBody {...props} /> : <PlainPoolsBody {...props} />;
-}
-
-function PlainPoolsBody({ activeKey, mktSet, marketStats }: {
-  activeKey: Market;
-  mktSet: Set<string>;
-  marketStats: Record<string, MarketStats>;
-}) {
-  // mounting THIS component triggers phase 2
-  const { allLots, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
-  const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
-  if (fullError) return <PoolsError />;
-  if (!fullLoaded) return <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}><RayLoading /></div>;
+  const { fromCache, market: marketData } = useRayData();
+  const [st, setSt] = useState<{ key: string; rows: import('../types').AuctionLot[] | null; error: boolean }>({ key: '', rows: null, error: false });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let on = true;
+    setSt({ key: activeKey, rows: null, error: false });
+    fetchSummary('market', activeKey).then(
+      rows => { if (on) setSt({ key: activeKey, rows, error: false }); },
+      () => { if (on) setSt({ key: activeKey, rows: null, error: true }); },
+    );
+    return () => { on = false; };
+  }, [activeKey, attempt]);
+  const marketLots = useMemo(() => (st.key === activeKey && st.rows ? st.rows.filter(l => mktSet.has(l.artist)) : null), [st, activeKey, mktSet]);
+  if (st.key === activeKey && st.error) return <PoolsError onRetry={() => setAttempt(n => n + 1)} />;
+  if (!marketLots) return <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}><RayLoading /></div>;
   return <PoolsGrid activeKey={activeKey} marketLots={marketLots} marketStats={marketStats} marketData={marketData} fromCache={fromCache} />;
 }
 
-function ArchivePoolsBody({ activeKey, mktSet, marketStats }: {
-  activeKey: Market;
-  mktSet: Set<string>;
-  marketStats: Record<string, MarketStats>;
-}) {
-  const { fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
-  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
-  const marketLots = useMemo(() => allLotsWithArchive.filter(l => mktSet.has(l.artist)), [allLotsWithArchive, mktSet]);
-  const ready = fullLoaded && archiveLoaded;
-  const errored = fullError || archiveError;
-  if (errored) return <PoolsError />;
-  if (!ready) return <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}><RayLoading /></div>;
-  return <PoolsGrid activeKey={activeKey} marketLots={marketLots} marketStats={marketStats} marketData={marketData} fromCache={fromCache} />;
-}
-
-function PoolsError() {
+function PoolsError({ onRetry }: { onRetry: () => void }) {
   return (
     <div style={{ padding: '60px 24px 100px', textAlign: 'center' }}>
       <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 20 }}>
         The sold archive didn&rsquo;t load. Check your connection and try again.
       </p>
-      <button className="ray-call-btn ray-call-btn-primary" onClick={() => { retryFullLoad(); retryArchiveLoad(); }}>
+      <button className="ray-call-btn ray-call-btn-primary" onClick={onRetry}>
         Retry
       </button>
     </div>

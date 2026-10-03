@@ -12,8 +12,8 @@
    the market-scoped IndexHero + RecordBoard,
    and the whole page is composed inside the Terminal's dark
    shell. Every MUST-PRESERVE behavior survives because we start
-   from the working logic. Reads eager phase-1 data only; phase-2
-   via Phase2Sentinel, phase-3 via useSoldArchive. Static-export
+   from the working logic. Reads eager phase-1 data only; the sold
+   archive table pages through the lot API (/api/archive). Static-export
    safe (all client hooks guard window/matchMedia).
    ============================================================ */
 
@@ -21,7 +21,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import Link from 'next/link';
 import { ARTIST_LABEL, MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
-import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFullLoad } from '../../hooks/useRayData';
+import { useRayData } from '../../hooks/useRayData';
 import { loadPageStats, type PageStats } from '../../lib/page-data';
 import { signalCallOf } from '../../lib/account';
 import { useSavedLots } from '../../hooks/useSavedLots';
@@ -32,7 +32,7 @@ import { dealScore } from '../../lib/comps';
 import ComparableModal from '../../components/ComparableModal';
 import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
-import RayEntrance, { RayLoading } from '../../components/RayEntrance';
+import RayEntrance from '../../components/RayEntrance';
 import SettlementSlip from '../../components/SettlementSlip';
 import { sportOfLot } from '../../lib/submarkets';
 import { subCatLabel } from '../../lib/subcat-labels';
@@ -88,64 +88,26 @@ function diversifyFeed(arr: AuctionLot[], windowSize: number): AuctionLot[] {
   return out;
 }
 
-// The full sports/science results table — mounted ONLY when the reader opens
-// "Show the archive" (which triggers useSoldArchive's phase-3 fetch).
+// THE ARCHIVE TABLE — mounted ONLY when the reader opens "Show the archive".
+// It pages the market's sold book through the lot API (/api/archive — the
+// server applies PastResults' own filter + order; sports/science include the
+// Goldin archive tier), so opening it costs one page of rows, never the
+// corpus (it used to stream the whole sold book + the sold-archive).
+const NO_LOTS: AuctionLot[] = [];
 function ArchiveResults({
-  mktSet,
+  market,
   savedIds,
   onToggleSave,
 }: {
-  mktSet: Set<string>;
+  market: string;
   savedIds: string[];
   onToggleSave: (id: string) => void;
 }) {
-  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
-  const archiveSold = useMemo(
-    () =>
-      allLotsWithArchive
-        .filter(l => l.status === 'sold' && l.priceUsd && mktSet.has(l.artist))
-        .sort((a, b) => (a.saleDate > b.saleDate ? -1 : a.saleDate < b.saleDate ? 1 : 0)),
-    [allLotsWithArchive, mktSet]
-  );
-
-  if (archiveError) {
-    return (
-      <div className="ray-recordband" style={{ marginTop: 24, textAlign: 'center', padding: '48px 20px' }}>
-        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', marginBottom: 16 }}>
-          The sold archive didn&rsquo;t load. Check your connection and try again.
-        </p>
-        <button className="ray-call-btn ray-call-btn-primary" onClick={() => retryArchiveLoad()}>
-          Retry
-        </button>
-      </div>
-    );
-  }
-  if (!archiveLoaded) {
-    return <div className="ray-recordband" style={{ marginTop: 24 }}><RayLoading /></div>;
-  }
   return (
     <div className="ray-recordband" style={{ marginTop: 24 }}>
-      <PastResults lots={archiveSold} showArtist savedIds={savedIds} onToggleSave={onToggleSave} />
+      <PastResults lots={NO_LOTS} remote={{ kind: 'archive', market }} showArtist savedIds={savedIds} onToggleSave={onToggleSave} />
     </div>
   );
-}
-
-// Below-the-fold sentinel that triggers phase 2 as the reader descends — the
-// art/design/watches/all Record band reads sold history from the phase-2 corpus.
-function Phase2Sentinel() {
-  const ref = React.useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') { triggerFullLoad(); return; }
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      entries => { if (entries.some(e => e.isIntersecting)) { triggerFullLoad(); io.disconnect(); } },
-      { rootMargin: '600px 0px' },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return <div ref={ref} aria-hidden style={{ height: 1 }} />;
 }
 
 // The dead ⌘K → the real CommandK palette.
@@ -453,8 +415,6 @@ export default function TerminalHomePage() {
     return () => { dead = true; };
   }, []);
   const statsFallback = pageStats === null;
-  // opening the archive is what asks for the corpus (PastResults browses it)
-  useEffect(() => { if (showArchive && !statsFallback) triggerFullLoad(); }, [showArchive, statsFallback]);
 
   // The layout choice persists — read after mount (SSR renders the default).
   // A stored preference always wins; with none, desktop (≥900px) earns the
@@ -1305,10 +1265,6 @@ export default function TerminalHomePage() {
               </section>
             )}
 
-            {/* phase-2 trigger — ONLY for a data build without page-stats
-                (the old path: the slip below read the full sold corpus) */}
-            {statsFallback && <Phase2Sentinel />}
-
             {/* ══ ROOM · THE SETTLEMENT — the slip is the room. ══ */}
             <div className="ns-plate">
             <section className={styles.roomPaper}>
@@ -1325,7 +1281,7 @@ export default function TerminalHomePage() {
                 the moment real content exists. Only while phase 2 is pending —
                 a market that resolves to no sold rows keeps its natural
                 collapse rather than a permanent gap. */}
-            {((pageStats === undefined && !isSportsScience) || (statsFallback && !ray.fullLoaded && sold.length === 0 && recentRows.length === 0)) && (
+            {(pageStats === undefined && !isSportsScience) && (
               <div aria-hidden className={styles.slipHold} />
             )}
             {isSportsScience ? (
@@ -1349,7 +1305,7 @@ export default function TerminalHomePage() {
                   />
                   {showArchive && (
                     <section className="rail" style={{ paddingBlock: '8px 40px' }}>
-                      <ArchiveResults mktSet={mktSet} savedIds={savedIds} onToggleSave={toggle} />
+                      <ArchiveResults market={activeKey} savedIds={savedIds} onToggleSave={toggle} />
                     </section>
                   )}
                 </div>
@@ -1372,11 +1328,7 @@ export default function TerminalHomePage() {
                 {showArchive && (
                   <section className="rail" style={{ paddingBlock: '8px 40px' }}>
                     <div className="ray-recordband" style={{ marginTop: 0 }}>
-                      {ray.fullLoaded
-                        ? <PastResults lots={sold} showArtist savedIds={savedIds} onToggleSave={toggle} />
-                        : ray.fullError
-                          ? <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', textAlign: 'center', padding: '32px 0' }}>The sold archive didn&rsquo;t load. <button className="link-action" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', textDecoration: 'underline' }} onClick={() => retryFullLoad()}>Try again</button></p>
-                          : <RayLoading />}
+                      <PastResults lots={NO_LOTS} remote={{ kind: 'archive', market: activeKey }} showArtist savedIds={savedIds} onToggleSave={toggle} />
                     </div>
                   </section>
                 )}

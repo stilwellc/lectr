@@ -1,0 +1,17 @@
+# Cloudflare Pages project "collectr" (lectr.bid). The site itself is the
+# static export in out/ (deploy.yml / nightly.yml: `wrangler pages deploy out`);
+# functions/ adds the read-only lot API under /api/* (functions/api/[[path]].ts).
+#
+# NOTE: once this file exists, `wrangler pages deploy` treats it as the source
+# of truth for the project's Functions config — bindings set here replace the
+# dashboard's. See docs/data-pipeline.md "The lot API" for the binding step if
+# the deploy token cannot apply it.
+name = "collectr"
+pages_build_output_dir = "out"
+compatibility_date = "2025-09-01"
+
+# The lot API reads the nightly per-key objects (scripts/emit-r2-index.ts →
+# scripts/r2-api-push.sh) from the corpus bucket, read-only, under api/.
+[[r2_buckets]]
+binding = "CORPUS"
+bucket_name = "lectr-data"

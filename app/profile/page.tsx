@@ -3,7 +3,9 @@
 import React, { useMemo, useCallback, useEffect, useLayoutEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { retryFullLoad, retrySoldLedger, useFullLotsOnDemand, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
+import { retrySoldLedger, useRayData, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
+import { useSavedBook } from '../hooks/useSavedBook';
+import type { ApiLotPack } from '../lib/api';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { signalCallOf } from '../lib/account';
 import { useAuth } from '../lib/account';
@@ -12,7 +14,7 @@ import { useCollectionSnapshots } from '../lib/snapshots';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon, daysUntil as daysUntilOrNull } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate, LiveStamp } from '../components/LotCard';
-import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
+import { dealScore } from '../lib/comps';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
 import { sleeperRead } from '../lib/lanes';
 import HeroChart from '../preview/terminal/HeroChart';
@@ -257,11 +259,11 @@ function PieceEditor({ paid, note, onSave, onClose }: {
     the cards view buried (the saved-delta narrative, the engine read with
     its basis, the live bid state) without leaving the ledger. Mounted only
     while open, so collapsed rows keep zero of its links in the tab order. */
-function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
+function RowDossier({ lot, meta, sig, appr, onRemove }: {
   lot: AuctionLot; meta: SavedMeta | undefined; sig: LiveSignal | null;
-  allLots: AuctionLot[]; fullLoaded: boolean; onRemove: () => void;
+  /** the lot API's appraisal (/api/comps) — null until it answers */
+  appr: ApiLotPack['ap'] | null; onRemove: () => void;
 }) {
-  const appr = useMemo(() => (fullLoaded ? appraiseLot(lot, allLots) : null), [fullLoaded, lot, allLots]);
   const call = signalCallOf(meta);
   const days = daysUntil(lot.saleDate);
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
@@ -545,8 +547,13 @@ export default function SavedPage() {
   // every figure below is already `fullLoaded`-gated, and a saved lot must
   // never resolve against half a corpus and be printed as an orphan.
   const deskNeedsCorpus = savedReady && (savedIds.length > 0 || ownedIds.length > 0);
-  const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } =
-    useFullLotsOnDemand(deskNeedsCorpus);
+  // THE DESK'S BOOK (Oct 2026): exactly the saved rows + their comp reads,
+  // from the lot API (useSavedBook) — never the corpus. fullLoaded / fullError
+  // keep their meaning for every gate below: "the saves are resolved and
+  // appraised" / "part of that failed" (retry).
+  const { allLots: eagerLots, lastCrawl, loading, fromCache, market: marketData } = useRayData();
+  const book = useSavedBook([...savedIds, ...ownedIds], idAliases, eagerLots, deskNeedsCorpus);
+  const { lots: allLots, packs, loaded: fullLoaded, error: fullError, retry: retryFullLoad } = book;
   const { unseen: unseenAlerts } = useAlerts();
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
@@ -741,18 +748,18 @@ export default function SavedPage() {
         const m = metaFor(l.id);
         // YOUR number first: the recorded cost basis beats the hammer price
         const paid = m?.paidUsd ?? (l.priceUsd || null);
-        const appr = appraiseLot(l, allLots);
-        const band = !appr && isSportsScienceObject(l) ? soldCompBand(l, allLots) : null;
+        // the lot API's reads over this lot's own pool (/api/comps)
+        const pk = packs.get(l.id);
+        const appr = pk?.ap ?? null;
+        const band = !appr && pk?.b ? pk.b : null;
         const appraised = appr?.value ?? band?.median ?? null;
         const basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
         let refRange: string | null = null;
         if (appraised == null && fullLoaded) {
-          const mkt = ARTIST_MARKET[l.artist];
-          // domain reference tiers first; then the maker band — a unique work
-          // reads against the maker's own sold record for the same form
-          const rb = (mkt === 'science' ? scienceReferenceBand(l, allLots)
-            : mkt === 'culture' ? cultureReferenceBand(l, allLots) : null)
-            ?? makerReferenceBand(l, allLots);
+          // domain reference tiers first (science/culture: pack.r); then the
+          // maker band — a unique work reads against the maker's own sold
+          // record for the same form (pack.mr)
+          const rb = (pk?.r ?? null) ?? (pk?.mr ?? null);
           if (rb) {
             refRange = rb.scope
               ? `${ARTIST_LABEL[l.artist] || l.artist} ${rb.scope} reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`
@@ -788,7 +795,7 @@ export default function SavedPage() {
     const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
     const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
     return { rows, totalPaid, totalAppraised, deltaPct };
-  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
+  }, [savedLots, ownedLotIds, packs, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
   const exposure = useMemo(() => {
@@ -930,7 +937,7 @@ export default function SavedPage() {
           });
           found++;
         } else {
-          const a = appraiseLot(l, allLots);
+          const a = packs.get(l.id)?.ap;
           if (a && a.kind === 'edition' && a.n >= 3) {
             rows.push({
               key: `dc-${claim(l).id}`, tag: 'Direct comps', lot: l,
@@ -961,7 +968,7 @@ export default function SavedPage() {
       });
     }
     return rows.slice(0, 8);
-  }, [upcoming, allLots, fullLoaded, signalById]);
+  }, [upcoming, packs, fullLoaded, signalById]);
 
   /* ── THE ROOM — the watching ledger with the brief fused in: every row
      carries its reason tag and the ledger sorts action-first. ── */
@@ -1483,7 +1490,7 @@ export default function SavedPage() {
                         </span>
                       </div>
                       {open && (
-                        <RowDossier lot={lot} meta={m} sig={sig} allLots={allLots} fullLoaded={fullLoaded}
+                        <RowDossier lot={lot} meta={m} sig={sig} appr={fullLoaded ? packs.get(lot.id)?.ap ?? null : null}
                           onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
                       )}
                     </div>
