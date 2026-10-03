@@ -332,7 +332,9 @@ push() {
   # + the columnar twin (corpus.parquet, scripts/lib/corpus-parquet.ts) when
   # tonight's build wrote one — pull/pull-version extract it beside the gz
   # NDJSON untouched (the tar is unpacked whole). Already zstd: plain tar.
-  (cd data/corpus && if [ -f corpus.parquet ]; then tar -cf "$TMP/corpus.tar" ./*.json.gz ./corpus.parquet; else tar -cf "$TMP/corpus.tar" ./*.json.gz; fi)
+  # corpus.parquet stays local: nothing reads it from R2 yet, and it would add
+  # ~250MB to every write-once version (set CORPUS_TAR_PARQUET=1 to archive it)
+  (cd data/corpus && if [ "${CORPUS_TAR_PARQUET:-0}" = 1 ] && [ -f corpus.parquet ]; then tar -cf "$TMP/corpus.tar" ./*.json.gz ./corpus.parquet; else tar -cf "$TMP/corpus.tar" ./*.json.gz; fi)
   (cd public/data/ray && tar -czf "$TMP/served.tar.gz" .)
   # WRITE-ONCE versioned keys — kills the GET-lag at the root. The lag only
   # afflicts same-key overwrites; a fresh key reads true on the first GET. So
