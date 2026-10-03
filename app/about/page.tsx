@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { withShare } from '../lib/og-meta';
 import BookTotal from '../components/BookTotal';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
@@ -36,12 +37,12 @@ import { httpsImg, sizedImg } from '../utils';
  * is DeckFx, which choreographs — it holds no data.
  */
 
-export const metadata: Metadata = {
-  title: 'What is lectr — the auction market, priced',
+export const metadata: Metadata = withShare({
+  title: 'What is lectr — the second opinion in the saleroom',
   // Derived, not typed: a previous revision hardcoded the corpus count here
   // and it drifted 772 lots stale within two nightlies.
   description: `lectr reads every published estimate against every realised hammer across ${meta.sources.length} auction houses and three decades — ${Number(meta.totalSold).toLocaleString('en-US')} settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.`,
-};
+});
 
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.6 };

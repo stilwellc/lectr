@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
+import { withShare } from '../../lib/og-meta';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withShare({
   title: 'Q2 2026 sports market in review — a $126M quarter led by the cards',
   description: 'A $2.93M LeBron rookie patch auto on top, a $2.81M Gretzky jersey behind it, and 19,000-plus lots through Goldin. The Q2 2026 sports market, reported as the descriptive tape it is: cards set the ceiling, game-used held the marquee, and we read it by volume and record — not a manufactured return.',
-};
+});
 
 export default function Q2Sports() {
   return (

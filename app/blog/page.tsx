@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { withShare } from '../lib/og-meta';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
@@ -6,10 +7,10 @@ import Flick from '../components/Flick';
 import Masthead, { Underscore } from '../components/Masthead';
 import meta from '../../public/data/ray/meta.json';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withShare({
   title: 'Notes from the desk',
   description: 'Writing from lectr — how the pricing engine works, what the market data actually says, and what we got wrong on the way.',
-};
+});
 
 // `href` is the special case — a card that lives outside /blog/* (the systems
 // walk-through at /about). Cards without it link to /blog/{slug} as before.
