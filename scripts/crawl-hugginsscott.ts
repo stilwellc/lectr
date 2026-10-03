@@ -198,7 +198,7 @@ async function main() {
     const lg = liveOnly(r.live);
     if (lg.dropped) console.log(`[H&S] dropped ${lg.dropped} malformed live lots`);
     liveLots = lg.good;
-    console.log(`[H&S] live: ${liveLots.length} upcoming lots, ${r.resolved.length} settled (grid ${liveOk ? 'ok' : 'FAILED — keeping prior snapshot, stale rows age out'})`);
+    console.log(`[H&S] live: ${liveLots.length} upcoming lots, ${r.resolved.length} settled (grid ${liveOk ? 'ok' : r.stats.betweenSales ? 'empty, between sales — prior rows demote + resolve' : 'FAILED — keeping prior snapshot, stale rows age out'})`);
     summarizeSettled('H&S', r.resolved);
   }
 

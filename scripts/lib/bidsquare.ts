@@ -85,13 +85,33 @@ export interface BidsquareHouse {
 
 // ── page readers (all subject-anchored) ──────────────────────────────────────
 
-export function ldProduct(html: string): Record<string, unknown> | null {
+/** The page's JSON-LD Product. With `itemId`, ONLY the Product whose own
+ *  productID/sku is that item — a related-lot rail that ever ships its own
+ *  Product block can never be read as the subject. */
+export function ldProduct(html: string, itemId?: string): Record<string, unknown> | null {
   const blocks = html.match(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi) || [];
   for (const b of blocks) {
     const json = b.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '');
-    try { const d = JSON.parse(json); if (d && d['@type'] === 'Product') return d; } catch { /* skip */ }
+    try {
+      const d = JSON.parse(json);
+      if (!d || d['@type'] !== 'Product') continue;
+      if (itemId && String(d.productID || d.sku || '') !== itemId) continue;
+      return d;
+    } catch { /* skip */ }
   }
   return null;
+}
+
+/** The item id a lot URL names (`…/<slug>-<itemId>`). */
+export function itemIdFromUrl(url: string): string | null {
+  const m = url.split(/[?#]/)[0].match(/-(\d+)\/?$/);
+  return m ? m[1] : null;
+}
+
+/** The event id a catalog URL names (`…/auctions/<house>/<slug>-<eventId>/catalog`). */
+export function eventIdFromCatalogUrl(url: string): string | null {
+  const m = url.split(/[?#]/)[0].match(/-(\d+)(?:\/catalog)?\/?$/);
+  return m ? m[1] : null;
 }
 
 /** `event_status='past'` — the platform's own settled/live flag, and a stronger
@@ -197,33 +217,119 @@ function commonFields(cfg: BidsquareHouse, p: Record<string, unknown>, html: str
   };
 }
 
-/** A SETTLED lot: the subject's own figure labelled "Sold for". */
-export function parseBidsquareSold(cfg: BidsquareHouse, html: string, url: string): AuctionLot | null {
-  const p = ldProduct(html);
+/** SOLD-LEG CENSUS — how each settled page was read. `gatedHammer` = sold via
+ *  the login-gated path below; `unsold` = the platform's own "not sold" signal
+ *  (an honest parse, not a failure — the silent-zero gate counts it). */
+export const SOLD_STATS = { tcbSold: 0, gatedHammer: 0, unsold: 0 };
+
+/** LOGIN-GATED SOLD PRICE (Hake's, verified Oct 2 2026 on event 24709).
+ *
+ *  Some sellers hide the settled figure from logged-out visitors: the subject's
+ *  bid area renders a "Login for Price" button (`f_event_button_view_hammer_
+ *  price`) and NO lbl_/tcb_ pair at all — which is why Hake's first sold sweep
+ *  fetched 600 pages and parsed 0. The settled HAMMER is still server-rendered
+ *  in the subject's JSON-LD Product: on a past event `offers.availability` is
+ *  `SoldOut` (sold) or `Discontinued` (unsold) and `offers.price` is the hammer.
+ *  Proven on SCP, where both are public: LD price × 1.20 == the "Sold for …
+ *  includes BP" tcb figure on every settled lot checked (700→840, 850→1,020,
+ *  275→330, 425→510), and live/upcoming LD price == the "Starting Bid" tcb.
+ *
+ *  ANCHORING (the item+event law): every condition below names the subject's
+ *  item id AND one event id, and they must agree —
+ *    · the JSON-LD Product is the one whose productID IS the subject item
+ *    · the subject's bid area `ba_<item>_<event>` exists (event = the catalog
+ *      we crawled, when the caller knows it)
+ *    · the subject's own `data-item_id="<item>" data-event_id='<event>'
+ *      data-event_status='past'` marker exists for that same event
+ *    · the gate button inside that bid area carries the same event id
+ *  so neither a related-lot card nor another sale's markup can supply it. */
+export function gatedSoldHammer(
+  html: string, itemId: string, p: Record<string, unknown>, expectEventId?: string | null,
+): { amount: number; eventId: string } | null {
+  const id = itemId.replace(/[^0-9]/g, '');
+  if (!id || String(p.productID || p.sku || '') !== id) return null;
+  const ba = html.match(new RegExp(`\\bid="ba_${id}_(\\d+)"`));
+  if (!ba || ba.index == null) return null;
+  const ev = ba[1];
+  if (expectEventId && ev !== expectEventId) return null;
+  if (!new RegExp(`data-item_id="${id}"\\s+data-event_id='${ev}'\\s+data-event_status='past'`).test(html)) return null;
+  const area = html.slice(ba.index, ba.index + 2000);
+  if (!new RegExp(`f_event_button_view_hammer_price"[^>]*data-event_id\\s*=\\s*"${ev}"`).test(area)) return null;
+  // the gated state prints no figure for the subject; if it ever does, the tcb
+  // path owns the read
+  if (new RegExp(`id="tcb_${id}_`).test(html)) return null;
+  const offers = (p.offers || {}) as Record<string, unknown>;
+  if (!/SoldOut/i.test(String(offers.availability || ''))) return null;
+  const amount = typeof offers.price === 'number' ? offers.price : parseFloat(String(offers.price ?? '').replace(/,/g, ''));
+  if (!isFinite(amount) || amount <= 0) return null;
+  return { amount, eventId: ev };
+}
+
+/** The platform's own NOT-SOLD signal for the subject: its label reads
+ *  "Unsold"/"Passed", or (gated pages) its past-event LD reads Discontinued. */
+export function recognizedUnsold(html: string, itemId: string, p: Record<string, unknown> | null): boolean {
+  const id = itemId.replace(/[^0-9]/g, '');
+  if (!id) return false;
+  const lbl = html.match(new RegExp(`id="lbl_${id}_\\d+"[^>]*>([^<]{0,40})<`));
+  if (lbl) return /unsold|passed|not\s+sold|bought\s*in/i.test(lbl[1]);
+  if (!p || String(p.productID || p.sku || '') !== id) return false;
+  const past = new RegExp(`data-item_id="${id}"\\s+data-event_id='\\d+'\\s+data-event_status='past'`).test(html);
+  return past && /Discontinued/i.test(String(((p.offers || {}) as Record<string, unknown>).availability || ''));
+}
+
+/** A SETTLED lot: the subject's own figure labelled "Sold for" — or, on a
+ *  login-gated seller, the subject's own past-event hammer (gatedSoldHammer).
+ *  `eventId` = the catalog the page was reached from (anchors the gated read). */
+export function parseBidsquareSold(cfg: BidsquareHouse, html: string, url: string, eventId?: string | null): AuctionLot | null {
+  const urlItem = itemIdFromUrl(url);
+  const p = ldProduct(html, urlItem ?? undefined) ?? (urlItem ? null : ldProduct(html));
   if (!p) return null;
   const f = commonFields(cfg, p, html, url);
   if (!f.title || !f.id) return null;
 
-  const price = subjectPrice(html, f.id, cfg.label);
-  // the LABEL is the sold gate: "Current Bid"/"Starting Bid" is a live figure,
-  // never a result. A withdrawn/passed lot prints no figure at all.
-  if (!price || !/sold/i.test(price.label)) return null;
-
   const offers = (p.offers || {}) as Record<string, unknown>;
   const endsRaw = String(offers.availabilityEnds || offers.priceValidUntil || '');
   const saleDate = endsRaw.slice(0, 10).match(/^\d{4}-\d{2}-\d{2}$/) ? endsRaw.slice(0, 10) : null;
-  if (!saleDate) return null;
 
-  const basis = price.includesBp ? 'realized' : (cfg.defaultBasis ?? 'realized');
-  if (!price.includesBp) ANCHOR_STATS.bpMarkerMissing++;
+  const price = subjectPrice(html, f.id, cfg.label);
+  let money: Record<string, unknown>;
+  if (price) {
+    // the LABEL is the sold gate: "Current Bid"/"Starting Bid" is a live figure,
+    // never a result. A withdrawn/passed lot prints no figure at all.
+    if (!/sold/i.test(price.label) || /unsold/i.test(price.label)) return null;
+    if (eventId && price.eventId !== eventId) return null;
+    if (!saleDate) return null;
+    const basis = price.includesBp ? 'realized' : (cfg.defaultBasis ?? 'realized');
+    if (!price.includesBp) ANCHOR_STATS.bpMarkerMissing++;
+    money = {
+      ...stampRealizedUsd(price.amount, saleDate, { basis }),
+      // the house's PUBLISHED premium, only where we read it off their terms
+      ...(cfg.bpPct != null && basis === 'realized' ? { buyerPremiumPct: cfg.bpPct } : {}),
+    };
+    SOLD_STATS.tcbSold++;
+  } else {
+    const g = gatedSoldHammer(html, f.id, p, eventId);
+    if (!g || !saleDate) return null;
+    if (cfg.bpPct != null) {
+      // Stored exactly like SCP (premium-inclusive `realized`, the house's
+      // published BP stamped) — realized = hammer × (1 + BP) — and the hammer
+      // the page actually carries is kept alongside, not thrown away.
+      const realized = Math.round(g.amount * (1 + cfg.bpPct / 100) * 100) / 100;
+      const s = stampRealizedUsd(realized, saleDate, { basis: 'realized' });
+      const hammerUsd = Math.round(g.amount * s.fxRate * 100) / 100;
+      money = { ...s, buyerPremiumPct: cfg.bpPct, hammerNative: g.amount, hammerPrice: g.amount, hammerUsd };
+    } else {
+      // no published premium → never invent one: store the hammer as hammer
+      money = stampRealizedUsd(g.amount, saleDate, { basis: 'hammer' });
+    }
+    SOLD_STATS.gatedHammer++;
+  }
   const est = parseEstimate(html);
 
   return {
     ...f.base,
     saleDate,
-    ...stampRealizedUsd(price.amount, saleDate, { basis }),
-    // the house's PUBLISHED premium, only where we read it off their terms
-    ...(cfg.bpPct != null && basis === 'realized' ? { buyerPremiumPct: cfg.bpPct } : {}),
+    ...money,
     ...(est.low != null ? { estLowNative: est.low, estLowUsd: est.low, estimateLow: est.low } : {}),
     ...(est.high != null ? { estHighNative: est.high, estHighUsd: est.high, estimateHigh: est.high } : {}),
     status: 'sold',
@@ -388,12 +494,17 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
   console.log(`[${L}] ${cats.length} past-auction catalogs across ${opts.pastPages} page(s); crawling ${Math.min(opts.auctions, cats.length)}`);
 
   const lots: AuctionLot[] = [];
-  let soldFetched = 0, soldNulls = 0, soldMisses = 0, soldUrlCount = 0;
+  let soldFetched = 0, soldNulls = 0, soldMisses = 0, soldUrlCount = 0, soldUnsold = 0;
   for (const cu of cats.slice(0, opts.auctions)) {
     const urls = (await lotUrls(cfg, cu, opts.maxPages, opts.delayMs)).slice(0, opts.cap);
     soldUrlCount += urls.length;
     console.log(`  [${L}] ${cu.split('/').slice(-2)[0]}: ${urls.length} lot urls (cap ${opts.cap})`);
-    const h = await harvest(`${L}:sold`, urls, opts.conc, opts.delayMs, (html, u) => parseBidsquareSold(cfg, html, u));
+    const ev = eventIdFromCatalogUrl(cu);
+    const h = await harvest(`${L}:sold`, urls, opts.conc, opts.delayMs, (html, u) => {
+      const lot = parseBidsquareSold(cfg, html, u, ev);
+      if (!lot) { const id = itemIdFromUrl(u); if (id && recognizedUnsold(html, id, ldProduct(html, id))) soldUnsold++; }
+      return lot;
+    });
     soldFetched += h.fetched; soldNulls += h.nulls; soldMisses += h.misses;
     console.log(`  [${L}] batch: fetched ${h.fetched} / parsed ${h.lots.length} / null ${h.nulls} / miss ${h.misses}`);
     // INCREMENTAL: persist per auction so a mid-run crash keeps progress — but
@@ -406,11 +517,12 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
     }
     for (const l of h.lots) lots.push(l);
   }
-  console.log(`[${L}] SOLD: ${soldUrlCount} urls → fetched ${soldFetched}, parsed ${lots.length}, null ${soldNulls}, miss ${soldMisses}`);
+  console.log(`[${L}] SOLD: ${soldUrlCount} urls → fetched ${soldFetched}, parsed ${lots.length} sold (tcb ${SOLD_STATS.tcbSold}, gated-hammer ${SOLD_STATS.gatedHammer}), ${soldUnsold} recognized unsold, null ${soldNulls} (incl. unsold), miss ${soldMisses}`);
 
   // NO SILENT ZERO: pages came back but nothing parsed = the parser is broken or
   // the markup moved. Refuse the run; the prior segment rides untouched.
-  if (soldFetched >= 20 && lots.length === 0) {
+  // (a sale that genuinely sold nothing still parses: recognized-unsold counts)
+  if (soldFetched >= 20 && lots.length === 0 && soldUnsold === 0) {
     console.error(`[${L}] FATAL: fetched ${soldFetched} sold lot pages and parsed 0 — refusing to write (markup change?). Prior segment kept.`);
     reportAndExit({ house: cfg.segment, fetched: soldFetched, parsed: 0, settled: 0, reason: `fetched ${soldFetched} sold lot pages and parsed 0 (markup change?)` });
   }
@@ -451,7 +563,7 @@ export async function crawlBidsquare(cfg: BidsquareHouse, opts: CrawlOpts): Prom
   {
     const reasons: string[] = [];
     if (opts.live && !liveOk) reasons.push(liveFetchedTotal >= 20 && !liveLots.length ? `live leg fetched ${liveFetchedTotal} pages and parsed 0` : 'live leg NOT ok (no current catalogs answered)');
-    reportLegHealth({ house: cfg.segment, ok: reasons.length === 0, fetched: soldFetched + liveFetchedTotal, parsed: lots.length + liveLots.length, settled: lots.length, reason: reasons.join('; ') || null });
+    reportLegHealth({ house: cfg.segment, ok: reasons.length === 0, fetched: soldFetched + liveFetchedTotal, parsed: lots.length + soldUnsold + liveLots.length, settled: lots.length, reason: reasons.join('; ') || null });
   }
 
   // ── report ────────────────────────────────────────────────────────────────

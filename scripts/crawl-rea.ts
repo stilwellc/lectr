@@ -287,7 +287,46 @@ export interface ReaLiveResult {
   /** settled rows (sold + bought_in) for the segment */
   resolved: AuctionLot[];
   ok: boolean;
-  stats: { gridIds: number; fetched: number; live: number; sold: number; unsold: number; known: number; unparsed: number; resolveTried: number; resolveFetched: number; resolveSettled: number; reason: string | null };
+  stats: { gridIds: number; fetched: number; live: number; sold: number; unsold: number; known: number; unparsed: number; resolveTried: number; resolveFetched: number; resolveSettled: number; reason: string | null;
+    /** set ONLY when the site positively says no auction is running (see
+     *  betweenSalesNote) — a healthy empty grid, reported ok with this note */
+    betweenSales?: string | null };
+}
+
+/** The bid.* site's own auction gate, read off the /lots shell. Between sales
+ *  the Livewire stack renders (verified Oct 3 2026 on BOTH bid.collectrea.com
+ *  and bid.hugginsandscott.com, after REA Sep 2026 + H&S Summer 2026 closed):
+ *    x-data="{ status: 'pending', showTimer: true }"
+ *    <h1 class="mb-4">Our October 2026 Auction Is Opening Soon.</h1>
+ *    … let countDownDate = new Date(1791475200 * 1000) …
+ *  and no /lots/{id} link at all. A running sale renders its lot grid under a
+ *  non-pending status instead. */
+export function readAuctionGate(html: string): { status: string | null; saleName: string | null; opensAt: string | null } {
+  const st = html.match(/x-data="\{\s*status:\s*'([a-z_]+)'/i);
+  const name = html.match(/<h1[^>]*>\s*Our\s+([^<]{2,80}?)\s+Is\s+Opening\s+Soon\.?\s*<\/h1>/i);
+  const cd = html.match(/countDownDate\s*=\s*new Date\(\s*(\d{9,11})\s*\*\s*1000\s*\)/);
+  return {
+    status: st ? st[1].toLowerCase() : null,
+    saleName: name ? decodeHtml(name[1]).replace(/\s+/g, ' ').trim() : null,
+    opensAt: cd ? new Date(parseInt(cd[1], 10) * 1000).toISOString() : null,
+  };
+}
+
+/** POSITIVE "no current auction" read: non-null ONLY when the site itself says
+ *  the next sale has not opened — status 'pending' AND the "… Is Opening Soon"
+ *  heading, no lot link on the page, and the countdown (when printed) has not
+ *  run out more than a day ago (a sale that should be open but still shows an
+ *  empty grid is the silent zero, not a quiet week). Anything else — a
+ *  live/open/closed status, a missing heading, an unreadable shell — returns
+ *  null and an empty grid stays ok=false. */
+export function betweenSalesNote(html: string | null, now: number = Date.now()): string | null {
+  if (!html) return null;
+  if (/\/lots\/\d+/.test(html)) return null; // a grid that lists lots is not between sales
+  const g = readAuctionGate(html);
+  if (g.status !== 'pending' || !g.saleName) return null;
+  if (g.opensAt && Date.parse(g.opensAt) < now - 86_400_000) return null;
+  const when = g.opensAt ? g.opensAt.slice(0, 10) : null;
+  return `between sales (next: ${when ? `${g.saleName} opens ${when}` : g.saleName})`;
 }
 
 /** Enumerate + fetch the CURRENT auction's lots off a bid.* Livewire site.
@@ -322,12 +361,14 @@ export async function crawlReaLive(
 ): Promise<ReaLiveResult> {
   const ids = new Set<string>();
   let gridReached = false;
+  let firstGridHtml: string | null = null;
   const MAX_GRID_PAGES = 1000; // 12/page → 12K lots; REA Sep 2026 ≈ 385 pages
   let page = 1;
   for (; page <= MAX_GRID_PAGES; page++) {
     const html = await getHtml(`${site}/lots?page=${page}`);
     if (!html) break;
     gridReached = true;
+    if (page === 1) firstGridHtml = html;
     const before = ids.size;
     for (const m of Array.from(html.matchAll(/\/lots\/(\d+)/g))) ids.add(m[1]);
     if (ids.size === before) break; // page past the end repeats/empties → done
@@ -337,7 +378,7 @@ export async function crawlReaLive(
   console.log(`[${house}] live grid: ${ids.size} lot ids${gridReached ? '' : ' (grid unreachable)'}`);
 
   const idPrefix = house === 'REA' ? 'rea' : 'hugginsscott';
-  const stats: ReaLiveResult['stats'] = { gridIds: ids.size, fetched: 0, live: 0, sold: 0, unsold: 0, known: 0, unparsed: 0, resolveTried: 0, resolveFetched: 0, resolveSettled: 0, reason: null };
+  const stats: ReaLiveResult['stats'] = { gridIds: ids.size, fetched: 0, live: 0, sold: 0, unsold: 0, known: 0, unparsed: 0, resolveTried: 0, resolveFetched: 0, resolveSettled: 0, reason: null, betweenSales: null };
   const unparsedWhy: Record<string, number> = {};
   const noteUnparsed = (why: string) => { stats.unparsed++; unparsedWhy[why] = (unparsedWhy[why] || 0) + 1; };
   const resolved: AuctionLot[] = [];
@@ -367,7 +408,15 @@ export async function crawlReaLive(
 
   let ok = true;
   if (!gridReached) { ok = false; stats.reason = 'live grid unreachable'; console.error(`[${house}] live grid unreachable — NOT ok; prior upcoming snapshot rides (stale rows age out)`); }
-  else if (ids.size === 0) { ok = false; stats.reason = 'live grid returned 0 lot ids'; console.warn(`[${house}] live grid returned 0 lot ids — NOT ok; prior upcoming snapshot rides (stale rows age out)`); }
+  else if (ids.size === 0) {
+    // `ok` here is the live-REPLACE gate and stays false either way: an empty
+    // snapshot must never evict prior rows (they demote + keep resolving).
+    // Leg HEALTH differs: an empty grid the site itself explains is healthy.
+    ok = false;
+    const note = betweenSalesNote(firstGridHtml);
+    if (note) { stats.betweenSales = note; console.log(`[${house}] live grid empty — ${note}; healthy (prior upcoming rows still demote + resolve)`); }
+    else { stats.reason = 'live grid returned 0 lot ids'; console.warn(`[${house}] live grid returned 0 lot ids and the site does NOT say it is between sales — NOT ok; prior upcoming snapshot rides (stale rows age out)`); }
+  }
   else if (stats.live + stats.sold + stats.unsold + stats.known === 0) {
     ok = false;
     stats.reason = `grid listed ${ids.size} ids, ${stats.fetched} pages fetched, 0 recognized (${JSON.stringify(unparsedWhy)})`;
@@ -468,7 +517,8 @@ export function reportReaLegHealth(house: string, st: ReaLiveResult['stats'] | n
   // a resolve that fetched pages for open ids and settled none of them is the
   // exact Sep 2026 silent zero — even on a night the grid itself looked ok
   if (st && st.resolveFetched >= 20 && st.resolveSettled === 0) reasons.push(`resolve fetched ${st.resolveFetched} closed-lot pages and settled 0`);
-  reportLegHealth({ house, ok: reasons.length === 0, fetched, parsed, settled, reason: reasons.join('; ') || null });
+  const ok = reasons.length === 0;
+  reportLegHealth({ house, ok, fetched, parsed, settled, reason: ok ? (st?.betweenSales || null) : reasons.join('; ') });
 }
 
 async function main() {
@@ -509,7 +559,7 @@ async function main() {
     const { good, dropped } = liveOnly(r.live);
     if (dropped) console.log(`[REA] dropped ${dropped} malformed live lots`);
     liveLots = good;
-    console.log(`[REA] live: ${liveLots.length} upcoming lots, ${r.resolved.length} settled (grid ${liveOk ? 'ok' : 'FAILED — keeping prior snapshot, stale rows age out'})`);
+    console.log(`[REA] live: ${liveLots.length} upcoming lots, ${r.resolved.length} settled (grid ${liveOk ? 'ok' : r.stats.betweenSales ? 'empty, between sales — prior rows demote + resolve' : 'FAILED — keeping prior snapshot, stale rows age out'})`);
     summarizeSettled('REA', r.resolved);
   }
 
