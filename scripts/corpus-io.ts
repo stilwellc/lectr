@@ -112,6 +112,144 @@ export function readAllSegments(): Record<string, unknown>[] {
   return out;
 }
 
+// ── STREAMING CODECS (Oct 2026 scale pass) ─────────────────────────────────
+// The sync readers above gunzip a whole file into ONE Buffer before parsing —
+// the goldin segment alone is ~1.3GB raw, the merged corpus ~2GB, all off-heap
+// on top of the parsed rows. The streaming reader inflates in 1MB chunks and
+// parses each '\n'-terminated line as it completes, so the transient cost is
+// one chunk. It splits on 0x0A ONLY (never readline: readline also breaks on
+// \r, which JSON strings never carry raw but a stray CR in a crawled title
+// would), and flattens a legacy array-line exactly like parseNdjson.
+
+/** Stream a gzipped NDJSON file line by line: onLine(buf, start, end) for every
+ *  non-empty '\n'-terminated line (the trailing unterminated one included).
+ *  `buf` is only valid during the call. */
+export async function streamGzLines(file: string, onLine: (buf: Buffer, start: number, end: number) => void): Promise<void> {
+  if (!fs.existsSync(file)) return;
+  let carry: Buffer | null = null;
+  const src = fs.createReadStream(file, { highWaterMark: 1 << 20 }).pipe(zlib.createGunzip({ chunkSize: 1 << 20 }));
+  for await (const chunk of src as AsyncIterable<Buffer>) {
+    const buf: Buffer = carry ? Buffer.concat([carry, chunk]) : chunk;
+    let start = 0;
+    for (let nl = buf.indexOf(10, start); nl >= 0; nl = buf.indexOf(10, start)) {
+      if (nl > start) onLine(buf, start, nl);
+      start = nl + 1;
+    }
+    carry = start < buf.length ? Buffer.from(buf.subarray(start)) : null;
+  }
+  if (carry && carry.length) onLine(carry, 0, carry.length);
+}
+
+/** Stream a gzipped NDJSON file, calling onRow for every parsed row in file
+ *  order (a legacy array-line is flattened, exactly like parseNdjson). */
+export async function streamGzRows(file: string, onRow: (row: Record<string, unknown>) => void): Promise<void> {
+  await streamGzLines(file, (buf, s, e) => {
+    const v = JSON.parse(buf.toString('utf8', s, e));
+    if (Array.isArray(v)) { for (const x of v) onRow(x); } else onRow(v);
+  });
+}
+
+/** Engine scratch fields that ride the crawl segments from older builds but
+ *  are overwritten (or never read) before any output is produced:
+ *  `_v` (the IDF vector, rebuilt by buildVectors for every engine lot and
+ *  deleted before the corpus write — ~190MB of JSON, ~1GB of heap as
+ *  dictionary objects) and `_saleMs` (re-stamped for every lot before its
+ *  first read, deleted before the write). Dropping them at read changes no
+ *  output; scripts/ci/equivalence.ts proves it on the real corpus. */
+export const DEAD_SEGMENT_FIELDS = ['_v', '_saleMs'] as const;
+
+/** Remove top-level `"key":value` members from one JSON object line, as TEXT,
+ *  before it is parsed. Text, not `delete` (or a rebuilt copy): an object
+ *  JSON.parse builds is packed exactly to its keys, while deleting a
+ *  non-final key drops it to V8 dictionary mode and a key-by-key copy grows
+ *  an out-of-object backing store — both measured +33% heap on the corpus.
+ *  Structural matches only (a `"` inside a JSON string is always escaped), at
+ *  depth 1 only (a nested key of the same name is kept). */
+export function stripTopLevelKeysText(line: string, keys: readonly string[]): string {
+  let hit = false;
+  for (const k of keys) if (line.indexOf(`"${k}":`) >= 0) { hit = true; break; }
+  if (!hit) return line;
+  const n = line.length;
+  let out = '';
+  let from = 0;
+  let depth = 0;
+  let i = 0;
+  // skip a JSON string starting at quote index q; returns index after the closing quote
+  const skipStr = (q: number): number => {
+    let j = q + 1;
+    while (j < n) {
+      const c = line.charCodeAt(j);
+      if (c === 92) j += 2; else if (c === 34) return j + 1; else j++;
+    }
+    return n;
+  };
+  // skip one JSON value starting at v (after any whitespace); returns index after it
+  const skipVal = (v: number): number => {
+    let j = v, d = 0;
+    while (j < n) {
+      const c = line.charCodeAt(j);
+      if (c === 34) { j = skipStr(j); if (d === 0) return j; continue; }
+      if (c === 123 || c === 91) d++;
+      else if (c === 125 || c === 93) { if (d === 0) return j; d--; if (d === 0) return j + 1; }
+      else if (d === 0 && c === 44) return j;
+      j++;
+    }
+    return j;
+  };
+  while (i < n) {
+    const c = line.charCodeAt(i);
+    if (c === 34) {
+      const e = skipStr(i);
+      if (depth === 1 && line.charCodeAt(e) === 58) { // a top-level key
+        const key = line.slice(i + 1, e - 1);
+        if (keys.indexOf(key) >= 0) {
+          const ve = skipVal(e + 1);
+          // drop `,"k":v` (or `"k":v,` when it is the first member)
+          let ks = i;
+          let vend = ve;
+          if (line.charCodeAt(i - 1) === 44) ks = i - 1;
+          else if (line.charCodeAt(ve) === 44) vend = ve + 1;
+          out += line.slice(from, ks);
+          from = vend;
+          i = vend;
+          continue;
+        }
+        i = e;
+        continue;
+      }
+      i = e;
+      continue;
+    }
+    if (c === 123 || c === 91) depth++;
+    else if (c === 125 || c === 93) depth--;
+    i++;
+  }
+  return from === 0 ? line : out + line.slice(from);
+}
+
+/** readAllSegments, streamed + lean: same rows, same order, same per-segment
+ *  corruption isolation (a segment's rows land only if the WHOLE segment
+ *  parsed), minus DEAD_SEGMENT_FIELDS (stripped as text before the parse). */
+export async function readAllSegmentsLean(): Promise<Record<string, unknown>[]> {
+  if (!fs.existsSync(SEGMENTS_DIR)) return [];
+  const out: Record<string, unknown>[] = [];
+  for (const f of fs.readdirSync(SEGMENTS_DIR).sort()) {
+    if (!f.endsWith('.ndjson.gz')) continue;
+    const rows: Record<string, unknown>[] = [];
+    try {
+      await streamGzLines(path.join(SEGMENTS_DIR, f), (buf, s, e) => {
+        const v = JSON.parse(stripTopLevelKeysText(buf.toString('utf8', s, e), DEAD_SEGMENT_FIELDS));
+        if (Array.isArray(v)) { for (const x of v) rows.push(stripKeys(x, DEAD_SEGMENT_FIELDS)); } else rows.push(v);
+      });
+    } catch (e) {
+      console.error(`[corpus-io] SEGMENT CORRUPT — skipping ${f}: ${(e as Error).message}`);
+      continue;
+    }
+    for (const r of rows) out.push(r);
+  }
+  return out;
+}
+
 /** Partition a full lot list into per-segment buckets (bootstrap + tests). */
 export function splitIntoSegments(allLots: Record<string, unknown>[]): Record<string, Record<string, unknown>[]> {
   const byName: Record<string, Record<string, unknown>[]> = {};
@@ -240,6 +378,155 @@ export function readCorpus(): Record<string, unknown>[] {
   // a silent empty here would starve the sports comp pool — log the counts loud.
   if (archive === null) console.warn(`[corpus] sold-archive.json(.gz) not found — proceeding with ${main.length} main lots and NO archive`);
   return main.concat(archive || []);
+}
+
+/** A copy of `r` without `keys`, key order kept. Returns `r` itself when none
+ *  is present. (For bulk rows prefer stripTopLevelKeysText before the parse.) */
+export function stripKeys<T extends Record<string, unknown>>(r: T, keys: readonly string[]): T {
+  let hit = false;
+  for (const k of keys) if (k in r) { hit = true; break; }
+  if (!hit) return r;
+  const drop = new Set(keys);
+  const o: Record<string, unknown> = {};
+  for (const k in r) if (!drop.has(k)) o[k] = r[k];
+  return o as T;
+}
+
+const SHARD_TARGET = 18 * 1048576;
+/** The served-shard writer, streamed: identical shard boundaries and bytes to
+ *  the array version in writeCorpusAndServed (boundaries depend only on the
+ *  row strings in order), but only ONE shard's strings are ever resident. */
+function writeShardedStream(base: string, rows: Record<string, unknown>[]): { bytes: number; shards: number } {
+  let cur: string[] = [];
+  let curBytes = 2;
+  let n = 0, bytes = 0;
+  const flush = () => {
+    const body = '[' + cur.join(',') + ']';
+    bytes += Buffer.byteLength(body);
+    fs.writeFileSync(path.join(SERVED_DIR, `${base}-${n}.json`), body);
+    n++; cur = []; curBytes = 2;
+  };
+  for (const l of rows) {
+    const s = JSON.stringify(slimForClient(l));
+    if (cur.length && curBytes + s.length + 1 > SHARD_TARGET) { flush(); cur = [s]; curBytes = 2 + s.length; }
+    else { cur.push(s); curBytes += s.length + 1; }
+  }
+  flush(); // the array version always writes shard 0, even for an empty tier
+  for (let i = n; ; i++) {
+    const p = path.join(SERVED_DIR, `${base}-${i}.json`);
+    if (fs.existsSync(p)) fs.unlinkSync(p); else break;
+  }
+  const legacy = path.join(SERVED_DIR, `${base}.json`);
+  if (fs.existsSync(legacy)) fs.unlinkSync(legacy);
+  fs.writeFileSync(path.join(SERVED_DIR, `${base}-index.json`), JSON.stringify({ shards: n }));
+  console.log(`[corpus] served ${base} sharded ×${n} (${(bytes / 1048576).toFixed(1)}MB total)`);
+  return { bytes, shards: n };
+}
+
+/** Gzip writer over a libuv-threadpool stream: deflate runs OFF the main
+ *  thread while JS serializes the next rows. Same zlib defaults as gzipSync. */
+class GzFile {
+  private gz = zlib.createGzip();
+  private out: fs.WriteStream;
+  private done: Promise<void>;
+  constructor(file: string) {
+    this.out = fs.createWriteStream(file);
+    this.done = new Promise((res, rej) => { this.out.on('finish', () => res()); this.out.on('error', rej); this.gz.on('error', rej); });
+    this.gz.pipe(this.out);
+  }
+  /** resolves when the pipe can take more (backpressure) */
+  write(s: string): Promise<void> | null {
+    return this.gz.write(s) ? null : new Promise(r => this.gz.once('drain', () => r()));
+  }
+  async end(): Promise<number> {
+    this.gz.end();
+    await this.done;
+    return this.out.bytesWritten;
+  }
+}
+
+export type CorpusRowSink = { add(tier: 'main' | 'archive', ord: number, line: string, row: Record<string, unknown>): void | Promise<void>; finish(): Promise<void> };
+
+/** persistCorpusAndServed — writeCorpusAndServed for the single-load nightly.
+ *  Writes byte-identical files (served shards from the in-memory rows exactly
+ *  as before; lots.json.gz / sold-archive.json.gz with the same NDJSON
+ *  content), then CONSUMES `allLots`: each row is serialized once for the
+ *  gz, and replaced by `JSON.parse` of that very line — so the returned
+ *  `view` is exactly what readCorpus() would return from the files just
+ *  written (main tier, then archive), while only one copy of the corpus is
+ *  ever resident. `allLots` is emptied (the caller must not hold other
+ *  references to the rows if it wants the memory back). `sink` receives
+ *  every written line (the columnar corpus writer). */
+export async function persistCorpusAndServed(
+  allLots: Record<string, unknown>[],
+  isArchived: (l: Record<string, unknown>) => boolean,
+  isCorpusOnly: (l: Record<string, unknown>) => boolean = () => false,
+  opts: { sink?: CorpusRowSink | null } = {},
+): Promise<{ corpusMb: string; servedMb: string; archiveMb: string; view: Record<string, unknown>[] }> {
+  fs.mkdirSync(CORPUS_DIR, { recursive: true });
+  fs.mkdirSync(SERVED_DIR, { recursive: true });
+  const mb = (n: number) => (n / 1048576).toFixed(1);
+  // the columnar sink is ADVISORY: a failure drops it, never the write
+  let sink = opts.sink ?? null;
+  const tierOf: Uint8Array = new Uint8Array(allLots.length);
+  let nArch = 0;
+  for (let i = 0; i < allLots.length; i++) if (isArchived(allLots[i])) { tierOf[i] = 1; nArch++; }
+  const served = (tier: number) => allLots.filter((l, i) => tierOf[i] === tier && !isCorpusOnly(l));
+  // served first — slimForClient reads the IN-MEMORY rows (a NaN or an
+  // undefined-valued key serializes differently once roundtripped)
+  const sMain = writeShardedStream('lots', served(0));
+  writeShardedStream('sold-archive', served(1));
+  // corpus: main tier then archive, one line per row; each row is replaced in
+  // the view by its own reparsed line and released from allLots
+  const view: Record<string, unknown>[] = [];
+  const archView: Record<string, unknown>[] = [];
+  const sizes: number[] = [];
+  for (const tier of [0, 1] as const) {
+    const gz = new GzFile(path.join(CORPUS_DIR, tier === 0 ? 'lots.json.gz' : 'sold-archive.json.gz'));
+    const dest = tier === 0 ? view : archView;
+    for (let i = 0; i < allLots.length; i++) {
+      if (tierOf[i] !== tier) continue;
+      const line = JSON.stringify(allLots[i]) + '\n';
+      const row = JSON.parse(line) as Record<string, unknown>;
+      if (sink) {
+        try { await sink.add(tier === 0 ? 'main' : 'archive', dest.length, line, row); }
+        catch (e) { console.log(`::warning title=columnar corpus skipped::${(e as Error).message}`); sink = null; }
+      }
+      dest.push(row);
+      allLots[i] = null as unknown as Record<string, unknown>;
+      const wait = gz.write(line);
+      if (wait) await wait;
+    }
+    sizes.push(await gz.end());
+  }
+  allLots.length = 0;
+  if (sink) {
+    try { await sink.finish(); }
+    catch (e) { console.log(`::warning title=columnar corpus skipped::${(e as Error).message}`); }
+  }
+  for (const r of archView) view.push(r);
+  return { corpusMb: mb(sizes[0]), archiveMb: mb(sizes[1]), servedMb: mb(sMain.bytes), view };
+}
+
+/** The corpus as the market build used to read it back from the files assemble
+ *  wrote (readCorpus order: main tier, then archive; every row the JSON
+ *  roundtrip of the in-memory one) — without writing or parsing any file.
+ *  Consumes `allLots` (emptied) so the corpus is resident once. */
+export function roundtripCorpusView(allLots: Record<string, unknown>[], isArchived: (l: Record<string, unknown>) => boolean): Record<string, unknown>[] {
+  const tierOf = new Uint8Array(allLots.length);
+  let nArch = 0;
+  for (let i = 0; i < allLots.length; i++) if (isArchived(allLots[i])) { tierOf[i] = 1; nArch++; }
+  const view: Record<string, unknown>[] = [];
+  const arch: Record<string, unknown>[] = new Array(nArch);
+  let j = 0;
+  for (let i = 0; i < allLots.length; i++) {
+    const r = JSON.parse(JSON.stringify(allLots[i])) as Record<string, unknown>;
+    if (tierOf[i] === 1) arch[j++] = r; else view.push(r);
+    allLots[i] = null as unknown as Record<string, unknown>;
+  }
+  allLots.length = 0;
+  for (const r of arch) view.push(r);
+  return view;
 }
 
 /** Write the full corpus (gz) + slim served files from an in-memory allLots.
