@@ -1,5 +1,5 @@
 {
-  "_what": "Lots the engine priced from comparable SOLD evidence that then sold UNDER that value. Point-in-time: each valuation used only sales dated strictly before the lot (scripts/_qa/deep-value.ts -> valueOne, the same resolveComps/estimateValue production runs).",
+  "_what": "Lots the engine priced from comparable SOLD evidence that then sold UNDER that value. Point-in-time: each valuation used only sales dated strictly before the lot (scripts/oneoff/qa/deep-value.ts -> valueOne, the same resolveComps/estimateValue production runs).",
   "_note": "houseEstLow/High are null where the house published NO estimate (Goldin, Sotheby’s NBA auctions) — those are the strongest cases: our number was the only valuation that existed.",
   "generatedAt": "2026-08-05",
   "cases": [

@@ -85,7 +85,7 @@ interface SeriesRow { year: number; flaggedMedianPct: number; unflaggedMedianPct
 
 // Prefer the live block and fall back to the committed snapshot — same
 // gitignored-payload reasoning as coverage above. Regenerate the snapshot with
-// `npx tsx scripts/_qa/gen-distribution.ts`.
+// `npx tsx scripts/oneoff/qa/gen-distribution.ts`.
 type Dist = typeof distribution;
 const DIST: Dist = (() => {
   const live = (backtest as Record<string, unknown>).distribution as Dist | undefined;
@@ -403,7 +403,7 @@ interface CompRow { title: string; house: string; saleDate: string; priceUsd: nu
 /** The comps behind one call, as a disclosure. A native <details> rather than
  *  a modal: server component, static export, no client JS needed, and it
  *  stays keyboard- and screen-reader-addressable. The rows are SHIPPED
- *  (scripts/_qa/gen-proof-comps.ts), not linked to /lot?id= — settled lots
+ *  (scripts/oneoff/qa/gen-proof-comps.ts), not linked to /lot?id= — settled lots
  *  carry no `value` stamp, so the lot page would gate to "no comparables"
  *  under a card claiming the opposite. */
 function CompTable({ comps, pool, label }: { comps: CompRow[]; pool: number; label: string }) {

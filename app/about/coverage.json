@@ -1,5 +1,5 @@
 {
-  "_what": "Per-house archive coverage for /about §01. Regenerate with: npx tsx scripts/_qa/gen-coverage.ts",
+  "_what": "Per-house archive coverage for /about §01. Regenerate with: npx tsx scripts/oneoff/qa/gen-coverage.ts",
   "_note": "`first` is the earliest settled record; `dense` is the first year with >=25 — drawn faint between them so one stray lot cannot claim a decade.",
   "generatedAt": "2026-08-06T03:16:48.642Z",
   "coverage": [

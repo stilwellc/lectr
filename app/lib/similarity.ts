@@ -197,7 +197,7 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
   // hard gate: AREA RATIO >4×, ART ONLY (Engine Spec v2 item 7, adopted
   // Aug 30 2026). The 1.6× max-dim gate above is blind to ASPECT mismatch —
   // a 100×100cm canvas and a 65×10cm panel pass max-dim at 1.54× while their
-  // areas differ 15×. LOO receipt (scripts/_qa/dims-gate-loo.ts, 4,000 art
+  // areas differ 15×. LOO receipt (scripts/oneoff/qa/dims-gate-loo.ts, 4,000 art
   // anchors, temporal holdout): gate touches 95/2,185 reads, touched med|err|
   // 49.4%→39.9%, 3 reads lost (99.9% coverage kept), aggregate 45.4%→44.9%.
   // Band choice: ≤2.5× (the CLIENT engine's 2D band) measured WORSE on the
@@ -248,7 +248,7 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
 
   // year proximity, discounted when the year came from the title not a field.
   // SOFT bonus only, deliberately: a HARD era gate (±10y/±15y, Engine Spec v2
-  // item 6) was measured and DECLINED in every vertical (scripts/_qa/
+  // item 6) was measured and DECLINED in every vertical (scripts/oneoff/qa/
   // era-gate-loo.ts, Aug 30 2026). Watches at n=4,000: ±15y touched-read err
   // 35.8%→36.2% (worse), ±10y −1.3pt touched at the cost of 73 lost reads —
   // and the n=1,500 run had shown a PHANTOM −2.5pt win, so do not re-litigate
