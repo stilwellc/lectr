@@ -15,8 +15,8 @@
  */
 import type { AuctionLot } from '../types';
 import { inferHammerUsd } from './premiums';
-import { median as statsMedian } from './stats';
-import { knownKey, quarterKey, type TimeIndex } from './value';
+import { median as statsMedian, weightedMedian } from './stats';
+import { knownKey, quarterKey, type TimeIndex, type HouseBias } from './value';
 
 export interface IndexPoint { period: string; value: number; n: number; }
 export interface MarketSeries {
@@ -256,4 +256,94 @@ export function makeTimeIndexer(lots: AuctionLot[], marketBySlug: Record<string,
 /** One-shot time index for `asOf` (see makeTimeIndexer). */
 export function buildTimeIndex(lots: AuctionLot[], marketBySlug: Record<string, string>, asOf: string): TimeIndex {
   return makeTimeIndexer(lots, marketBySlug)(asOf);
+}
+
+/* ── THE HOUSE-BIAS INDEX (Oct 3 2026 engine pass) ────────────────────────
+   Each house prints its estimates with its own habit: RR Auction posts a
+   single low "$500+" by policy and clears ~3× it; the big three band their
+   estimates to sell through. The Flags compare comps to the estimate, so an
+   un-normalized flag partly reads the house's POLICY, not the lot (Oct 3
+   audit: the top-50 Flags were 50/50 RR lots at 3–8×). This index learns the
+   habit POINT-IN-TIME: the recency-weighted median of log(realized all-in /
+   estimate mid) over sales KNOWN strictly before `asOf` (value.knownKey),
+   per estimate kind (band 'b' / single-point 'p'), in a shrinkage ladder
+     global:et → market:et, house:et → market×house:et
+   (each cell shrunk toward its parent by HB_K effective weight). Read through
+   value.houseFactorOf as a multiplier RELATIVE TO THE GLOBAL BAND HABIT, so a
+   typical band-estimate house reads ≈1 and the flag ratio is unchanged
+   there. Never a `compExclude` lot, never an undated/year-precision sale. */
+type HBRow = { k: string; m: string; h: string; et: 'b' | 'p'; y: number };
+const HB_WINDOW_Y = 6;
+const HB_HL_Y = 2;
+const HB_K = 20;
+const HB_MIN_N = 10;
+
+/** Pre-bucket every sold estimate lot once; the returned function builds the
+ *  index for any asOf (exclusive) in O(rows · log rows). */
+export function makeHouseBiasIndexer(lots: AuctionLot[], marketBySlug: Record<string, string>): (asOf: string) => HouseBias {
+  const rows: HBRow[] = [];
+  for (const l of lots) {
+    if (l.status !== 'sold' || !((l.realizedUsd || 0) > 0) || !l.saleDate || !l.auctionHouse) continue;
+    const lx = l as AuctionLot & { datePrecision?: string | null; compExclude?: string | null };
+    if (lx.compExclude || lx.datePrecision === 'year' || lx.datePrecision === 'unknown') continue;
+    const lo = l.estLowUsd || 0, hi = l.estHighUsd || 0;
+    const mid = lo && hi ? (lo + hi) / 2 : (lo || hi);
+    if (!(mid > 0)) continue;
+    const y = Math.log(l.realizedUsd! / mid);
+    if (!Number.isFinite(y) || Math.abs(y) > 4) continue; // ×55 either way is a unit/FX fault, not a habit
+    rows.push({ k: knownKey(lx), m: marketBySlug[l.artist] || 'other', h: String(l.auctionHouse), et: lo && hi ? 'b' : 'p', y });
+  }
+  rows.sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0));
+  const cache = new Map<string, HouseBias>();
+  return (asOf: string): HouseBias => {
+    const hit = cache.get(asOf);
+    if (hit) return hit;
+    const t = Date.parse(asOf);
+    const winStart = new Date(t - HB_WINDOW_Y * 31_557_600_000).toISOString().slice(0, 10);
+    const acc = new Map<string, [number, number][]>();
+    const push = (key: string, y: number, w: number) => { const a = acc.get(key); if (a) a.push([y, w]); else acc.set(key, [[y, w]]); };
+    for (const r of rows) {
+      if (r.k >= asOf) break;              // rows are knownKey-sorted: nothing later is known yet
+      if (r.k < winStart) continue;
+      // a month-precision key ('2025-06-32') ages from the end of its month
+      const age = (t - Date.parse(r.k.slice(8, 10) > '31' ? `${r.k.slice(0, 7)}-28` : r.k.slice(0, 10))) / 31_557_600_000;
+      const w = Math.pow(0.5, Math.max(0, Number.isFinite(age) ? age : HB_WINDOW_Y) / HB_HL_Y);
+      push(`g:${r.et}`, r.y, w);
+      push(`m:${r.m}:${r.et}`, r.y, w);
+      push(`h:${r.h}:${r.et}`, r.y, w);
+      push(`mh:${r.m}|${r.h}:${r.et}`, r.y, w);
+    }
+    const raw = new Map<string, { med: number; W: number; n: number }>();
+    acc.forEach((pairs, key) => {
+      if (pairs.length < HB_MIN_N) return;
+      raw.set(key, { med: weightedMedian(pairs), W: pairs.reduce((s, p) => s + p[1], 0), n: pairs.length });
+    });
+    const cells: Record<string, number> = {};
+    const n: Record<string, number> = {};
+    const shrink = (key: string, parent: number | undefined) => {
+      const c = raw.get(key);
+      if (!c) return;
+      cells[key] = Math.round((parent == null ? c.med : (c.W * c.med + HB_K * parent) / (c.W + HB_K)) * 10000) / 10000;
+      n[key] = c.n;
+    };
+    for (const et of ['b', 'p']) shrink(`g:${et}`, undefined);
+    raw.forEach((_, key) => {
+      const et = key.slice(-1);
+      if (key.startsWith('m:') || key.startsWith('h:')) shrink(key, cells[`g:${et}`]);
+    });
+    raw.forEach((_, key) => {
+      if (!key.startsWith('mh:')) return;
+      const et = key.slice(-1);
+      const [m, h] = key.slice(3, -2).split('|');
+      shrink(key, cells[`h:${h}:${et}`] ?? cells[`m:${m}:${et}`] ?? cells[`g:${et}`]);
+    });
+    const out: HouseBias = { asOf, ref: cells['g:b'] ?? 0, cells, n };
+    cache.set(asOf, out);
+    return out;
+  };
+}
+
+/** One-shot house-bias index for `asOf` (see makeHouseBiasIndexer). */
+export function buildHouseBias(lots: AuctionLot[], marketBySlug: Record<string, string>, asOf: string): HouseBias {
+  return makeHouseBiasIndexer(lots, marketBySlug)(asOf);
 }
