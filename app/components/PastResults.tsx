@@ -8,7 +8,7 @@ import { ARTIST_LABEL, marketOf } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle, overEstimatePct } from '../utils';
 import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
-import { fetchTablePage, type TableScope, type TablePage } from '../lib/api';
+import { fetchTablePage, isApiUnavailable, TABLE_BROWSABLE, type TableScope, type TablePage } from '../lib/api';
 import SectionMark from './SectionMark';
 
 /** Known irregular plurals the naive strip-s would mangle ("wristwatches" →
@@ -53,12 +53,12 @@ const NO_LOTS: AuctionLot[] = [];
 function useRemoteTable(remote: TableScope | undefined, sort: SortMode, cat: string, sport: string, visible: number) {
   const key = remote ? JSON.stringify([remote, sort, cat, sport]) : '';
   const scopeKey = remote ? JSON.stringify(remote) : '';
-  const [st, setSt] = useState<{ key: string; rows: AuctionLot[]; total: number | null; error: boolean; loading: boolean }>(
+  const [st, setSt] = useState<{ key: string; rows: AuctionLot[]; total: number | null; error: boolean; loading: boolean; unavailable?: boolean }>(
     { key: '', rows: [], total: null, error: false, loading: false },
   );
   const [facets, setFacets] = useState<{ scope: string; f: TablePage['facets'] } | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const need = Math.max(1, Math.ceil(visible / PAGE));
+  const need = Math.max(1, Math.ceil(Math.min(visible, TABLE_BROWSABLE) / PAGE));
   useEffect(() => {
     if (!key) return;
     let dead = false;
@@ -69,7 +69,7 @@ function useRemoteTable(remote: TableScope | undefined, sort: SortMode, cat: str
         if (dead) return;
         setSt({ key, rows: pages.flatMap(pg => pg.rows), total: pages[0].total, error: false, loading: false });
         setFacets({ scope: JSON.stringify(scope), f: pages[0].facets });
-      }, () => { if (!dead) setSt(prev => ({ ...prev, key, loading: false, error: true })); });
+      }, e => { if (!dead) setSt(prev => ({ ...prev, key, loading: false, error: !isApiUnavailable(e), unavailable: isApiUnavailable(e) })); });
     return () => { dead = true; };
   }, [key, need, attempt]);
   const live = st.key === key;
@@ -77,7 +77,8 @@ function useRemoteTable(remote: TableScope | undefined, sort: SortMode, cat: str
     rows: live ? st.rows : [],
     total: live ? st.total : null,
     error: live && st.error,
-    loading: !live || st.loading,
+    unavailable: live && !!st.unavailable,
+    loading: !live || (st.loading && !st.unavailable),
     facets: facets && facets.scope === scopeKey ? facets.f : null,
     retry: () => setAttempt(a => a + 1),
   };
@@ -181,7 +182,10 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
   const sportChips = remote ? (rt.facets?.sports || null) : sportGroups;
   const resultCount = remote ? rt.total : filtered.length;
   const shown = remote ? rt.rows.slice(0, visible) : sorted.slice(0, visible);
-  const hasMore = remote ? visible < (rt.total ?? 0) : visible < sorted.length;
+  // remote tables page as deep as the API materializes (TABLE_BROWSABLE)
+  const browsable = remote ? Math.min(rt.total ?? 0, TABLE_BROWSABLE) : sorted.length;
+  const hasMore = visible < browsable;
+  const reachedCap = !!remote && !hasMore && (rt.total ?? 0) > TABLE_BROWSABLE && rt.rows.length >= TABLE_BROWSABLE;
 
   // Over a handful of rows the Date/Price pills + category chips are more
   // chrome than table — the toolbar earns its place only on a real archive.
@@ -289,7 +293,7 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
               Recent <span style={{ fontStyle: 'normal' }}>results</span>
             </h2>
             <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
-              {resultCount == null ? 'Loading results' : `${resultCount.toLocaleString()} results`}
+              {resultCount == null ? (remote && rt.unavailable ? 'The archive' : 'Loading results') : `${resultCount.toLocaleString()} results`}
               {categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}
             </p>
             {sub && (
@@ -376,7 +380,9 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
       }}>
         {remote && shown.length === 0 && (
           <div style={{ padding: '28px 24px', textAlign: 'center', fontSize: 13.5, color: 'var(--color-text-muted)' }} aria-busy={rt.loading || undefined}>
-            {rt.error ? (
+            {rt.unavailable ? (
+              <>The full sold archive isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.</>
+            ) : rt.error ? (
               <>
                 The results didn&rsquo;t load.{' '}
                 <button onClick={rt.retry} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', textDecoration: 'underline', font: 'inherit', padding: 0 }}>
@@ -616,6 +622,11 @@ export default function PastResults({ lots: lotsProp, showArtist = false, catego
           <button onClick={rt.retry} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', textDecoration: 'underline', font: 'inherit', padding: 0 }}>
             Try again
           </button>
+        </p>
+      )}
+      {reachedCap && (
+        <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13.5, color: 'var(--color-text-muted)' }}>
+          Showing the first {TABLE_BROWSABLE.toLocaleString()} of {(rt.total ?? 0).toLocaleString()} &mdash; filter by category or sort by price to reach the rest.
         </p>
       )}
       {hasMore && (

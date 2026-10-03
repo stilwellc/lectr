@@ -1,31 +1,33 @@
 /**
  * api.ts — the read-only lot API (Cloudflare Pages Functions, mounted by
  * functions/api/[[path]].ts). No framework: one tiny router, strict input
- * validation, every answer edge-cached under the corpus version.
+ * validation, edge-cached under the corpus version.
  *
- *   GET /api/version                         { version, lastCrawl }
- *   GET /api/lot/:id                         one lot (the served row)
- *   GET /api/lots?ids=a,b,…                  ≤60 lots by id (missing ids omitted)
- *   GET /api/comps?lot=:id                   the lot's comp reads (LotPack superset)
- *   GET /api/maker/:slug?view=summary        the maker's book in columns (charts/hero)
- *   GET /api/maker/:slug?sort=&cat=&sport=&page=&size=   the maker's sold table, paged
- *   GET /api/archive?market=&sort=&cat=&sport=&page=&size=   the home archive table, paged
- *   GET /api/market/:key?view=summary        a market's book in columns (/analytics pools)
- *   GET /api/ref/:maker/:ref?page=&size=     one watch reference's sold rows, paged
- *   GET /api/settled-flags?market=           the settled below-market flags (/receipts)
+ * FREE PLAN (10ms CPU/request): every answer is precomputed nightly
+ * (scripts/emit-r2-index.ts). A request is a key lookup and, for most routes,
+ * a pass-through of stored gzip bytes — the edge never computes a comp,
+ * sorts a table or scans a pool.
  *
- * Paged tables: sort=date (newest first, round-robined across houses — the
- * PastResults order) | price (highest first); size ≤ MAX_SIZE.
+ *   GET /api/version                          { version, lastCrawl, … }
+ *   GET /api/lot/:id                          one lot (the served row)
+ *   GET /api/lots?ids=a,b,…                   ≤12 lots by id (missing ids omitted)
+ *   GET /api/comps?lot=:id                    the lot's precomputed comp reads
+ *                                             ({ np: true } outside the coverage window)
+ *   GET /api/maker/:slug?view=summary         the maker's book in columns
+ *   GET /api/maker/:slug?sort=&cat=&sport=&page=   the maker's sold table (20/page)
+ *   GET /api/archive?market=&sort=&cat=&sport=&page=   the market's sold table
+ *   GET /api/market/:key?view=summary         a market's book in columns
+ *   GET /api/ref/:maker/:ref?page=            a watch reference's sold rows (50/page)
+ *   GET /api/settled-flags?market=            settled Below Market flags
  */
-import type { AuctionLot } from '../../app/types';
 import { ARTISTS, MARKETS } from '../../app/constants';
-import { decodeScopeIndex, ID_RE, SLUG_RE, type ScopeIndex } from './format';
-import { Store, NotFound, StoreUnavailable, type Env } from './store';
-import { compsFor, slimRow } from './comps-api';
+import {
+  ID_RE, MAX_IDS, REF_PAGE, SLUG_RE, TABLE_PAGE, pageRange, refKey, tableKey,
+  type Loc, type PagedLoc, type TablePageBody,
+} from './format';
+import { Store, NotFound, StoreUnavailable, type Env, type R2ObjectBodyLike } from './store';
 
-export const MAX_SIZE = 200;
 const MAX_PAGE = 5000;
-const MAX_IDS = 60;
 const MAKER_SLUGS = new Set<string>(ARTISTS.map(a => a.slug));
 const MARKET_KEYS = new Set<string>(MARKETS.map(m => m.key));
 
@@ -45,12 +47,19 @@ const BASE_HEADERS: Record<string, string> = {
 // keyed by version, so it can live a day — a new nightly is a new key
 const CLIENT_CC = 'public, max-age=300, stale-while-revalidate=3600';
 const EDGE_CC = 'public, max-age=86400';
+// Workers: hand our gzip bytes through as-is instead of re-encoding the body
+const MANUAL = { encodeBody: 'manual' } as ResponseInit;
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...BASE_HEADERS, ...extra } });
 }
 function errorResponse(status: number, error: string): Response {
   return json({ error }, status, { 'Cache-Control': 'no-store', ...(status === 503 ? { 'Retry-After': '30' } : {}) });
+}
+/** stored gzip JSON → the response, untouched (no parse, no CPU) */
+async function gzipThrough(obj: R2ObjectBodyLike): Promise<Response> {
+  const body = obj.body ?? new Uint8Array(await obj.arrayBuffer());
+  return new Response(body as BodyInit, { status: 200, headers: { ...BASE_HEADERS, 'Content-Encoding': 'gzip' }, ...MANUAL });
 }
 
 // ── input validation ───────────────────────────────────────────────────────
@@ -71,7 +80,7 @@ function enumParam<T extends string>(sp: URLSearchParams, k: string, allowed: re
 function labelParam(sp: URLSearchParams, k: string): string | null {
   const v = sp.get(k);
   if (v == null || v === '' || v === 'all') return null;
-  if (v.length > 60 || /[\u0000-\u001f<>]/.test(v)) throw new BadRequest(`bad ${k}`);
+  if (v.length > 60 || /[\u0000-\u001f<>|*]/.test(v)) throw new BadRequest(`bad ${k}`);
   return v;
 }
 function lotId(v: string | null): string {
@@ -79,86 +88,33 @@ function lotId(v: string | null): string {
   return v;
 }
 
-// ── paged tables over a scope index ────────────────────────────────────────
-export interface TableQuery { sort: 'date' | 'price'; cat: string | null; sport: string | null; page: number; size: number }
-
-/** PastResults' filter + order, over the index columns. Returns base indices. */
-export function orderScope(ix: ScopeIndex, q: Pick<TableQuery, 'sort' | 'cat' | 'sport'>): Int32Array {
-  const { head } = ix;
-  const n = head.n;
-  const catId = q.cat == null ? -1 : head.cats.indexOf(q.cat);
-  // the sport filter applies only where PastResults shows sport chips
-  const sportOn = !!head.facetSports && q.sport != null;
-  const sportId = sportOn ? head.sports.indexOf(q.sport === 'Other' ? '' : q.sport!) : -1;
-  if ((q.cat != null && catId < 0) || (sportOn && sportId < 0)) return new Int32Array(0);
-  const keep = (i: number) => (catId < 0 || ix.cat[i] === catId) && (!sportOn || ix.sport[i] === sportId);
-  const out = new Int32Array(n);
-  let k = 0;
-  if (q.sort === 'price') {
-    for (let j = 0; j < n; j++) { const i = ix.byPrice[j]; if (keep(i)) out[k++] = i; }
-    return out.subarray(0, k);
-  }
-  // date: newest first, then woven round-robin across houses in order of
-  // each house's first appearance — so one high-volume house never buries
-  // the rest (PastResults' exact weave)
-  const queues = new Map<number, number[]>();
-  for (let i = 0; i < n; i++) {
-    if (!keep(i)) continue;
-    let qh = queues.get(ix.house[i]);
-    if (!qh) { qh = []; queues.set(ix.house[i], qh); }
-    qh.push(i);
-  }
-  const qs = Array.from(queues.values());
-  if (qs.length < 2) {
-    for (const qh of qs) for (const i of qh) out[k++] = i;
-    return out.subarray(0, k);
-  }
-  const longest = qs.reduce((m, qh) => Math.max(m, qh.length), 0);
-  for (let r = 0; r < longest; r++) for (const qh of qs) if (r < qh.length) out[k++] = qh[r];
-  return out.subarray(0, k);
+// ── paged objects ──────────────────────────────────────────────────────────
+type Facets = TablePageBody['facets'];
+async function pagedResponse(store: Store, key: string, page: number, size: number, facets: Facets | null): Promise<Response> {
+  const p = (await store.loc(key)) as PagedLoc | null;
+  if (!p) return json({ total: 0, page, size, rows: [], facets: facets || { cats: [], sports: null }, capped: false });
+  const r = pageRange(p, page);
+  if (r) return gzipThrough(await store.range(r as Loc));
+  // past the last stored page: honest end (capped = the table goes deeper
+  // than the materialized pages; narrow the filter or flip the sort)
+  const total = p[2];
+  return json({ total, page, size, rows: [], facets: facets || { cats: [], sports: null }, capped: page * size < total });
 }
 
-async function scopeIndex(store: Store, scope: string): Promise<ScopeIndex | null> {
-  return store.cached(`x:${scope}`, async () => {
-    const b = await store.raw(`x:${scope}`);
-    return b ? decodeScopeIndex(b) : null;
-  }, 'big');
-}
-
-async function table(store: Store, scope: string, sp: URLSearchParams) {
-  // the tables list SOLD rows only (status kept explicit for future tiers)
+async function table(store: Store, scope: string, sp: URLSearchParams): Promise<Response> {
   enumParam(sp, 'status', ['sold'] as const, 'sold');
-  const q: TableQuery = {
-    sort: enumParam(sp, 'sort', ['date', 'price'] as const, 'date'),
-    cat: labelParam(sp, 'cat'),
-    sport: labelParam(sp, 'sport'),
-    page: intParam(sp, 'page', 0, 0, MAX_PAGE),
-    size: intParam(sp, 'size', 20, 1, MAX_SIZE),
-  };
-  const ix = await scopeIndex(store, scope);
-  if (!ix) {
-    // a known maker/market with no sold rows: an honest empty table
-    return { total: 0, page: q.page, size: q.size, rows: [], facets: { cats: [], sports: null } };
-  }
-  const order = orderScope(ix, q);
-  const slice = order.subarray(q.page * q.size, q.page * q.size + q.size);
-  const rows = await store.rowsAt(Array.from(slice, i => ix.pos[i]));
-  return {
-    total: order.length, page: q.page, size: q.size,
-    rows: rows.map(slimRow),
-    facets: { cats: ix.head.facetCats, sports: ix.head.facetSports },
-  };
+  const sort = enumParam(sp, 'sort', ['date', 'price'] as const, 'date');
+  const cat = labelParam(sp, 'cat');
+  const sport = labelParam(sp, 'sport');
+  const page = intParam(sp, 'page', 0, 0, MAX_PAGE);
+  intParam(sp, 'size', TABLE_PAGE, TABLE_PAGE, TABLE_PAGE); // fixed page size
+  const facets = (await store.loc(`f:${scope}`)) as unknown as Facets | null;
+  return pagedResponse(store, tableKey(scope, sort, cat, sport), page, TABLE_PAGE, facets);
 }
 
-async function summary(store: Store, scope: string): Promise<Response> {
-  const gz = await store.raw(`s:${scope}`);
-  if (!gz) return json({ v: 1, scope, n: 0, dict: { a: [], s: [], c: [], h: [], sp: [], pl: [], pn: [], d: [] }, cols: { a: [], s: [], c: [], h: [], sp: [], pl: [], d: [], p: [], el: [], eh: [] }, top: [] });
-  // already gzip JSON — hand the bytes through untouched (no parse, no CPU)
-  return new Response(gz as BodyInit, {
-    headers: { ...BASE_HEADERS, 'Content-Encoding': 'gzip' },
-    // Workers: keep our gzip as-is instead of re-encoding the body
-    ...({ encodeBody: 'manual' } as ResponseInit),
-  });
+async function located(store: Store, key: string): Promise<Response | null> {
+  const l = (await store.loc(key)) as Loc | null;
+  return l ? gzipThrough(await store.range(l)) : null;
 }
 
 // ── routes ─────────────────────────────────────────────────────────────────
@@ -168,63 +124,63 @@ async function route(store: Store, path: string[], sp: URLSearchParams): Promise
     case 'version': {
       if (path.length !== 1) break;
       const m = await store.manifest();
-      return json({ version: store.version, lastCrawl: m.lastCrawl, generatedAt: m.generatedAt });
+      return json({ version: store.version, lastCrawl: m.lastCrawl, generatedAt: m.generatedAt, compsWindow: m.compsWindow });
     }
     case 'lot': {
       if (path.length !== 2) break;
-      const row = await store.rowById(lotId(a));
-      if (!row) throw new NotFound();
-      return json({ lot: slimRow(row) });
+      const e = await store.entry(lotId(a));
+      if (!e) throw new NotFound();
+      // the stored row is plain JSON — spliced in, never parsed
+      return new Response(`{"lot":${await store.rowText(e)}}`, { headers: BASE_HEADERS });
     }
     case 'lots': {
       if (path.length !== 1) break;
       const raw = (sp.get('ids') || '').split(',').filter(Boolean);
       if (!raw.length || raw.length > MAX_IDS) throw new BadRequest(`ids: 1..${MAX_IDS} lot ids`);
-      const ids = Array.from(new Set(raw.map(lotId)));
-      const got = await store.rowsById(ids);
-      const lots: Record<string, unknown> = {};
-      got.forEach((r, id) => { lots[id] = slimRow(r); });
-      return json({ lots });
+      const got = await store.rowTextsById(Array.from(new Set(raw.map(lotId))));
+      const parts: string[] = [];
+      got.forEach((t, id) => { parts.push(`${JSON.stringify(id)}:${t}`); });
+      return new Response(`{"lots":{${parts.join(',')}}}`, { headers: BASE_HEADERS });
     }
     case 'comps': {
       if (path.length !== 1) break;
       const id = lotId(sp.get('lot'));
-      const row = await store.rowById(id);
-      if (!row) throw new NotFound();
-      return json(await compsFor(store, row as unknown as AuctionLot));
+      const e = await store.entry(id);
+      if (!e) throw new NotFound();
+      // outside the precompute window: say so (the surface prints it)
+      if (e.length < 4) return json({ id, np: true, pack: {}, ctx: [], exact: null });
+      // computed, nothing a surface would print
+      if (e[3] === -1) return json({ id, pack: {}, ctx: [], exact: null });
+      return gzipThrough(await store.range([e[3], e[4], e[5]]));
     }
     case 'maker': {
       if (path.length !== 2 || !SLUG_RE.test(a) || !MAKER_SLUGS.has(a)) break;
-      if (sp.get('view') === 'summary') return summary(store, `m:${a}`);
-      return json(await table(store, `m:${a}`, sp));
+      if (sp.get('view') === 'summary') return (await located(store, `s:m:${a}`)) ?? (() => { throw new NotFound(); })();
+      return table(store, `m:${a}`, sp);
     }
     case 'archive': {
       if (path.length !== 1) break;
       const market = sp.get('market') || 'all';
       if (!MARKET_KEYS.has(market)) throw new BadRequest('unknown market');
-      return json(await table(store, `k:${market}`, sp));
+      return table(store, `k:${market}`, sp);
     }
     case 'market': {
       if (path.length !== 2 || !MARKET_KEYS.has(a)) break;
       if (sp.get('view') !== 'summary') throw new BadRequest('view=summary');
-      return summary(store, `k:${a}`);
+      return (await located(store, `s:k:${a}`)) ?? (() => { throw new NotFound(); })();
     }
     case 'ref': {
       if (path.length !== 3 || !SLUG_RE.test(a) || !MAKER_SLUGS.has(a)) break;
-      const ref = b || '';  // already decoded per path segment
-      if (!ref || ref.length > 80 || /[\u0000-\u001f]/.test(ref)) throw new BadRequest('bad reference');
+      const ref = b || '';
+      if (!ref || ref.length > 80 || /[\u0000-\u001f|]/.test(ref)) throw new BadRequest('bad reference');
       const page = intParam(sp, 'page', 0, 0, MAX_PAGE);
-      const size = intParam(sp, 'size', 50, 1, MAX_SIZE);
-      const rows = await store.partition(`r|${a}|${ref.toLowerCase().replace(/\|/g, '/')}`);
-      return json({ total: rows.length, page, size, rows: rows.slice(page * size, page * size + size).map(slimRow) });
+      return pagedResponse(store, refKey(a, ref), page, REF_PAGE, null);
     }
     case 'settled-flags': {
       if (path.length !== 1) break;
       const market = sp.get('market') || 'all';
       if (!MARKET_KEYS.has(market)) throw new BadRequest('unknown market');
-      const all = (await store.json<{ m: string; row: Record<string, unknown> }[]>('z:settled')) || [];
-      const rows = all.filter(x => market === 'all' || x.m === market).slice(0, 50).map(x => x.row);
-      return json({ rows });
+      return (await located(store, `z:${market}`)) ?? json({ rows: [] });
     }
   }
   throw new NotFound();
@@ -238,11 +194,15 @@ function cacheKeyOf(url: URL, version: string): Request {
 }
 
 export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache?: EdgeCache | null): Promise<Response> {
+  // instrumentation: wall time of everything after the request arrives
+  // (Server-Timing). On Workers the clock only advances across I/O, so this
+  // reads as R2 latency there; scripts/r2/bench-api.ts measures the CPU.
+  const t0 = performance.now();
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return json({ error: 'method not allowed' }, 405, { Allow: 'GET, HEAD', 'Cache-Control': 'no-store' });
   }
-  // same-origin only: a browser on another site gets nothing (no CORS headers
-  // are ever sent, and cross-site fetch metadata is refused outright)
+  // same-origin only: no CORS headers are ever sent, and cross-site fetch
+  // metadata is refused outright
   if (request.headers.get('Sec-Fetch-Site') === 'cross-site') return errorResponse(403, 'cross-site');
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean).map(s => {
@@ -251,23 +211,31 @@ export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache
   if (path.length === 0 || path.length > 3 || url.search.length > 2000) return errorResponse(400, 'bad path');
 
   let store: Store;
-  try { store = await Store.open(env); } catch { return errorResponse(503, 'corpus unavailable'); }
+  try { store = await Store.open(env); } catch {
+    // the rollout probe: clients check /api/version once and hide or explain
+    // API-backed sections — answer it plainly (200) so a not-yet-published
+    // index never shows up as a failed request in the console
+    if (path.length === 1 && path[0] === 'version') return json({ version: null, available: false }, 200, { 'Cache-Control': 'no-store' });
+    return errorResponse(503, 'corpus unavailable');
+  }
   const etag = `"${store.version}"`;
   const inm = request.headers.get('If-None-Match');
   if (inm && inm.split(',').map(s => s.trim().replace(/^W\//, '')).includes(etag)) {
     return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': CLIENT_CC } });
   }
   const key = cacheKeyOf(url, store.version);
-  const finish = (res: Response) => {
+  const finish = (res: Response, hit: boolean) => {
     const h = new Headers(res.headers);
     h.set('ETag', etag);
     h.set('Cache-Control', CLIENT_CC);
     h.set('X-Corpus-Version', store.version);
-    return new Response(request.method === 'HEAD' ? null : res.body, { status: res.status, headers: h, ...({ encodeBody: 'manual' } as ResponseInit) });
+    h.set('X-Api-Cache', hit ? 'hit' : 'miss');
+    h.set('Server-Timing', `api;dur=${(performance.now() - t0).toFixed(2)}`);
+    return new Response(request.method === 'HEAD' ? null : res.body, { status: res.status, headers: h, ...MANUAL });
   };
   if (cache) {
     const hit = await cache.match(key).catch(() => undefined);
-    if (hit) return finish(hit);
+    if (hit) return finish(hit, true);
   }
   let res: Response;
   try {
@@ -280,11 +248,12 @@ export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache
     return errorResponse(500, 'internal error');
   }
   if (cache && res.status === 200) {
-    const stored = res.clone();
-    const h = new Headers(stored.headers);
+    const [a, b] = res.body ? res.body.tee() : [null, null];
+    const h = new Headers(res.headers);
     h.set('Cache-Control', EDGE_CC);
-    const p = cache.put(key, new Response(stored.body, { status: 200, headers: h, ...({ encodeBody: 'manual' } as ResponseInit) })).catch(() => { /* best effort */ });
+    const p = cache.put(key, new Response(b, { status: 200, headers: h, ...MANUAL })).catch(() => { /* best effort */ });
     if (ctx.waitUntil) ctx.waitUntil(p); else await p;
+    res = new Response(a, { status: res.status, headers: res.headers, ...MANUAL });
   }
-  return finish(res);
+  return finish(res, false);
 }

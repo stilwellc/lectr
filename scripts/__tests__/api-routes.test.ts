@@ -3,7 +3,7 @@
  * scripts/emit-r2-index.ts writes a small synthetic book to a temp dir, a
  * fake bucket serves it (ranged GETs included), and every route is checked
  * against the answer the old client-side corpus path computed over the WHOLE
- * pool — the partitions must never change a number.
+ * pool — the precompute (partitions, window, pages) must never change a number.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,12 +12,12 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import type { AuctionLot } from '../../app/types';
-import { emitR2Index } from '../emit-r2-index';
+import { emitR2Index, orderRows } from '../emit-r2-index';
 import { handleApi } from '../../functions/_lib/api';
 import { resetStoreMemo, type R2BucketLike } from '../../functions/_lib/store';
 import { decodeSummary } from '../../app/lib/api';
 import { signalWithPool, soldCompBand, cultureReferenceBand, appraiseLot, areComparable } from '../../app/lib/comps';
-import type { SummaryJson } from '../../functions/_lib/format';
+import { TABLE_MAX_PAGES, TABLE_PAGE, type SummaryJson } from '../../functions/_lib/format';
 
 // ── fake R2 over a directory ────────────────────────────────────────────────
 class DirBucket implements R2BucketLike {
@@ -37,10 +37,15 @@ class DirBucket implements R2BucketLike {
   }
 }
 class FakeCache {
-  store = new Map<string, Response>();
+  store = new Map<string, { body: ArrayBuffer; headers: Headers; status: number }>();
   hits = 0;
-  async match(req: Request) { const r = this.store.get(req.url); if (r) { this.hits++; return r.clone(); } return undefined; }
-  async put(req: Request, res: Response) { this.store.set(req.url, res); }
+  async match(req: Request) {
+    const r = this.store.get(req.url);
+    if (!r) return undefined;
+    this.hits++;
+    return new Response(r.body.slice(0), { status: r.status, headers: r.headers });
+  }
+  async put(req: Request, res: Response) { this.store.set(req.url, { body: await res.arrayBuffer(), headers: new Headers(res.headers), status: res.status }); }
 }
 
 // ── a synthetic book ─────────────────────────────────────────────────────────
@@ -62,7 +67,10 @@ for (let i = 0; i < 40; i++) {
     auctionHouse: houses[i % 4], saleDate: `20${15 + (i % 10)}-0${1 + (i % 9)}-1${i % 9}`, formKey: 'print',
   }));
 }
-main.push(lot({ title: 'Femme assise, oil on canvas', category: 'original', medium: 'oil on canvas', formKey: 'painting', priceUsd: 2_500_000, estimateLow: 2e6, estimateHigh: 3e6, saleDate: '2024-05-14' }));
+main.push(lot({ title: 'Femme assise, oil on canvas', category: 'original', medium: 'oil on canvas', formKey: 'painting', priceUsd: 2_500_000, estimateLow: 2e6, estimateHigh: 3e6, saleDate: '2025-05-14' }));
+// sold long before the comps window → { np: true }
+const old = lot({ title: 'Tête, oil on canvas', category: 'original', medium: 'oil on canvas', formKey: 'painting', priceUsd: 900_000, estimateLow: 6e5, estimateHigh: 8e5, saleDate: '2012-05-14' });
+main.push(old);
 main.push(lot({ title: 'Untitled, bought in print', status: 'bought_in', formKey: 'print', estimateLow: 5000, estimateHigh: 7000 }));
 // the anchor: an upcoming print with an estimate (no engine call → client read)
 const anchor = lot({ title: 'Le Repas Frugal, etching', medium: 'etching', dimensions: '12 x 15 in.', estimateLow: 8000, estimateHigh: 12000, status: 'upcoming', saleDate: '2026-11-01', formKey: 'print' });
@@ -103,25 +111,33 @@ const prop = lot({ artist: 'entertainment-memorabilia', category: 'object', titl
 main.push(prop);
 // provenance: one object sold twice
 const g1 = lot({ title: 'La Colombe, lithograph', repeatSaleGroupId: 'grp-1', priceUsd: 12000, saleDate: '2010-01-01', formKey: 'print' });
-const g2 = lot({ title: 'La Colombe, lithograph', repeatSaleGroupId: 'grp-1', priceUsd: 18000, saleDate: '2020-01-01', formKey: 'print' });
+const g2 = lot({ title: 'La Colombe, lithograph', repeatSaleGroupId: 'grp-1', priceUsd: 18000, saleDate: '2025-06-01', formKey: 'print' });
 main.push(g1, g2);
 // a settled flag
 const flagged = lot({ title: 'Flagged then sold', priceUsd: 21000, estimateLow: 10000, estimateHigh: 14000, saleDate: '2026-09-20', signal: { label: 'Below Market', pct: 40 } as unknown as AuctionLot['signal'] });
 main.push(flagged);
+// a deep maker table (more sold rows than the materialized pages)
+for (let i = 0; i < TABLE_MAX_PAGES * TABLE_PAGE + 30; i++) {
+  main.push(lot({ artist: 'kaws', category: i % 2 ? 'print' : 'original', title: `Companion ${i}`, priceUsd: 1000 + i, auctionHouse: houses[i % 3], saleDate: `2019-0${1 + (i % 9)}-1${i % 9}` }));
+}
 
 const eager = [anchor, called, watch];
 
 let dir = '';
 let bucket: DirBucket;
-const call = async (p: string, init: RequestInit = {}, cache: FakeCache | null = null) => {
-  const res = await handleApi(new Request(`https://lectr.test${p}`, init), { CORPUS: bucket }, {}, cache);
-  return res;
+const call = async (p: string, init: RequestInit = {}, cache: FakeCache | null = null) =>
+  handleApi(new Request(`https://lectr.test${p}`, init), { CORPUS: bucket }, {}, cache);
+/** read a response like a browser would (stored gzip is passed through) */
+const raw = async (res: Response) => {
+  const b = Buffer.from(await res.arrayBuffer());
+  return res.headers.get('Content-Encoding') === 'gzip' ? zlib.gunzipSync(b).toString('utf8') : b.toString('utf8');
 };
-const body = async (res: Response) => JSON.parse(await res.text());
+const body = async (res: Response) => JSON.parse(await raw(res));
+const NOW = new Date('2026-10-03T00:00:00Z');
 
 before(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'r2api-'));
-  emitR2Index({ main, archive, eager, extras: [extra], lastCrawl: '2026-10-02T16:02:52.000Z' }, dir);
+  emitR2Index({ main, archive, eager, extras: [extra], lastCrawl: '2026-10-02T16:02:52.000Z', now: NOW, compsDays: 730 }, dir);
   bucket = new DirBucket(dir);
   resetStoreMemo();
 });
@@ -130,9 +146,7 @@ after(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 test('version + one lot + many lots', async () => {
   const v = await body(await call('/api/version'));
   assert.equal(v.lastCrawl, '2026-10-02T16:02:52.000Z');
-  const r = await call(`/api/lot/${main[3].id}`);
-  assert.equal(r.status, 200);
-  const j = await body(r);
+  const j = await body(await call(`/api/lot/${main[3].id}`));
   assert.equal(j.lot.id, main[3].id);
   assert.equal(j.lot.title, main[3].title);
   // the archive tier and the off-wire extras resolve by id too
@@ -142,17 +156,19 @@ test('version + one lot + many lots', async () => {
   assert.equal((await call('/api/lot/%3Cscript%3E')).status, 400);
   const many = await body(await call(`/api/lots?ids=${main[0].id},${main[1].id},missing-1`));
   assert.deepEqual(Object.keys(many.lots).sort(), [main[0].id, main[1].id].sort());
-  assert.equal((await call(`/api/lots?ids=${Array.from({ length: 61 }, (_, i) => `x${i}`).join(',')}`)).status, 400);
+  assert.equal((await call(`/api/lots?ids=${Array.from({ length: 13 }, (_, i) => `x${i}`).join(',')}`)).status, 400);
 });
 
-test('comps: the client read over the partition equals the read over the whole book', async () => {
+test('comps: the precomputed client read equals the read over the whole book', async () => {
   const book = main.filter(l => l.artist === 'pablo-picasso');
   const want = signalWithPool(anchor, book)!;
   assert.ok(want, 'fixture must produce a read');
-  const j = await body(await call(`/api/comps?lot=${anchor.id}`));
+  const r = await call(`/api/comps?lot=${anchor.id}`);
+  assert.equal(r.headers.get('Content-Encoding'), 'gzip', 'answers pass through as stored');
+  const j = await body(r);
   assert.equal(j.pack.c.n, want.pool.length);
   assert.equal(j.pack.c.med, want.signal.med);
-  assert.deepEqual(j.pack.c.rows.map((r: AuctionLot) => r.id).sort(), want.pool.map(l => l.id).sort());
+  assert.deepEqual(j.pack.c.rows.map((x: AuctionLot) => x.id).sort(), want.pool.map(l => l.id).sort());
   assert.equal(j.pack.ap.value, appraiseLot(anchor, book)!.value);
   assert.equal(j.pack.sig.label, want.signal.label);
 });
@@ -161,68 +177,64 @@ test('comps: engine call resolves its pool ids, including off-wire rows', async 
   const j = await body(await call(`/api/comps?lot=${called.id}`));
   assert.equal(j.pack.c.n, 3);
   assert.equal(j.pack.c.resolved, 3);
-  assert.ok(j.pack.c.rows.some((r: AuctionLot) => r.id === 'off-wire-1'));
+  assert.ok(j.pack.c.rows.some((x: AuctionLot) => x.id === 'off-wire-1'));
   assert.equal(j.pack.c.med, 18000);
 });
 
-test('comps: watch reference, sports band over main+archive, culture band, provenance, modal context', async () => {
-  const rolexBook = main.filter(l => l.artist === 'rolex');
-  const w = signalWithPool(watch, rolexBook);
+test('comps: watch reference, sports band over main+archive, culture band, provenance, context, window', async () => {
+  const w = signalWithPool(watch, main.filter(l => l.artist === 'rolex'));
   const jw = await body(await call(`/api/comps?lot=${watch.id}`));
   assert.equal(jw.pack.c?.n ?? null, w ? w.pool.length : null);
 
-  const sportsBook = [...main, ...archive].filter(l => l.artist === 'game-used');
-  const band = soldCompBand(jersey, sportsBook)!;
+  const band = soldCompBand(jersey, [...main, ...archive].filter(l => l.artist === 'game-used'))!;
   assert.ok(band);
-  const jj = await body(await call(`/api/comps?lot=goldin-anchor`));
+  const jj = await body(await call('/api/comps?lot=goldin-anchor'));
   assert.equal(jj.pack.b.n, band.n);
   assert.equal(jj.pack.b.median, band.median);
 
-  const cultureMain = main.filter(l => l.artist === 'entertainment-memorabilia');
-  const cb = cultureReferenceBand(prop, cultureMain)!;
+  const cb = cultureReferenceBand(prop, main.filter(l => l.artist === 'entertainment-memorabilia'))!;
   assert.ok(cb);
   const jc = await body(await call(`/api/comps?lot=${prop.id}`));
   assert.equal(jc.pack.r.med, cb.med);
   assert.equal(jc.pack.r.n, cb.n);
 
   const jg = await body(await call(`/api/comps?lot=${g2.id}`));
-  assert.deepEqual(jg.pack.p.map((r: AuctionLot) => r.id), [g1.id, g2.id]);
+  assert.deepEqual(jg.pack.p.map((x: AuctionLot) => x.id), [g1.id, g2.id]);
 
-  // a sold art lot with no estimate: no call, no band → the modal's context rows
+  // a sold art lot with no call and no band → the modal's context rows
   const plain = main.find(l => l.title === 'Femme assise, oil on canvas')!;
   const jp = await body(await call(`/api/comps?lot=${plain.id}`));
   const ctxWant = main.filter(l => l.artist === plain.artist && l.status === 'sold' && l.priceUsd && l.id !== plain.id && areComparable(plain, l)).length;
   assert.equal(jp.ctx.length, Math.min(15, ctxWant));
+
+  // sold before the window: an honest "not precomputed", never "no comps"
+  const jo = await body(await call(`/api/comps?lot=${old.id}`));
+  assert.equal(jo.np, true);
+  assert.equal((await call('/api/comps?lot=nope-404')).status, 404);
 });
 
-/** PastResults' own order (the reference implementation the API mirrors). */
-function pastResultsOrder(lots: AuctionLot[], sort: 'date' | 'price', cat?: string): AuctionLot[] {
-  const filtered = cat ? lots.filter(l => l.category === cat) : lots;
-  const copy = [...filtered];
-  if (sort === 'price') return copy.sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0));
-  copy.sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
-  const groups = new Map<string, AuctionLot[]>();
-  for (const l of copy) { const g = groups.get(l.auctionHouse) || []; g.push(l); groups.set(l.auctionHouse, g); }
-  if (groups.size < 2) return copy;
-  const qs = Array.from(groups.values());
-  const woven: AuctionLot[] = [];
-  for (let i = 0; woven.length < copy.length; i++) for (const q of qs) if (i < q.length) woven.push(q[i]);
-  return woven;
-}
-
-test('maker table: PastResults order, filters, paging, facets', async () => {
+test('maker table: PastResults order, filters, pages, facets, cap', async () => {
   const sold = main.filter(l => l.artist === 'pablo-picasso' && l.status === 'sold');
   for (const sort of ['date', 'price'] as const) {
-    const want = pastResultsOrder(sold, sort).map(l => l.id);
-    const p0 = await body(await call(`/api/maker/pablo-picasso?sort=${sort}&page=0&size=10`));
-    const p1 = await body(await call(`/api/maker/pablo-picasso?sort=${sort}&page=1&size=10`));
+    const want = orderRows(sold as never[], sort).map(l => l.id);
+    const p0 = await body(await call(`/api/maker/pablo-picasso?sort=${sort}&page=0`));
+    const p1 = await body(await call(`/api/maker/pablo-picasso?sort=${sort}&page=1`));
     assert.equal(p0.total, sold.length);
-    if (sort === 'date') assert.deepEqual([...p0.rows, ...p1.rows].map((r: AuctionLot) => r.id), want.slice(0, 20));
-    else assert.deepEqual([...p0.rows, ...p1.rows].map((r: AuctionLot) => r.priceUsd), want.slice(0, 20).map(id => sold.find(l => l.id === id)!.priceUsd));
+    assert.deepEqual([...p0.rows, ...p1.rows].map((r: AuctionLot) => r.id), want.slice(0, 40));
   }
-  const orig = await body(await call('/api/maker/pablo-picasso?cat=original&size=50'));
+  const orig = await body(await call('/api/maker/pablo-picasso?cat=original'));
   assert.equal(orig.total, sold.filter(l => l.category === 'original').length);
   assert.deepEqual(orig.facets.cats, ['original', 'print']);
+  const none = await body(await call('/api/maker/pablo-picasso?cat=sculpture'));
+  assert.equal(none.total, 0);
+  assert.deepEqual(none.facets.cats, ['original', 'print'], 'an empty filter keeps the chips');
+  // deep table: pages stop at the materialized depth and say so
+  const deep = await body(await call(`/api/maker/kaws?page=${TABLE_MAX_PAGES - 1}`));
+  assert.equal(deep.rows.length, TABLE_PAGE);
+  assert.equal(deep.capped, true);
+  const past = await body(await call(`/api/maker/kaws?page=${TABLE_MAX_PAGES}`));
+  assert.equal(past.rows.length, 0);
+  assert.equal(past.capped, true);
   assert.equal((await call('/api/maker/not-a-maker')).status, 404);
   assert.equal((await call('/api/maker/pablo-picasso?size=999')).status, 400);
   assert.equal((await call('/api/maker/pablo-picasso?sort=random')).status, 400);
@@ -230,41 +242,40 @@ test('maker table: PastResults order, filters, paging, facets', async () => {
 });
 
 test('archive table: sports carries the archive tier and sport chips', async () => {
-  const j = await body(await call('/api/archive?market=sports&size=50'));
   const want = [...main, ...archive].filter(l => l.artist === 'game-used' && l.status === 'sold' && (l.priceUsd || 0) > 0);
+  const j = await body(await call('/api/archive?market=sports'));
   assert.equal(j.total, want.length);
   assert.ok(j.facets.sports && j.facets.sports.length === 2);
-  const bb = await body(await call('/api/archive?market=sports&sport=Basketball&size=50'));
+  const bb = await body(await call('/api/archive?market=sports&sport=Basketball'));
   assert.equal(bb.total, want.filter(l => l.sport === 'Basketball').length);
   assert.equal((await call('/api/archive?market=mars')).status, 400);
-  const all = await body(await call('/api/archive?market=all&size=1'));
+  const all = await body(await call('/api/archive?market=all'));
   assert.equal(all.total, main.filter(l => l.status === 'sold' && (l.priceUsd || 0) > 0).length);
 });
 
 test('summaries: maker book minus the eager lots, decoded; market summary', async () => {
   const r = await call('/api/maker/pablo-picasso?view=summary');
   assert.equal(r.headers.get('Content-Encoding'), 'gzip');
-  const j = JSON.parse(zlib.gunzipSync(Buffer.from(await r.arrayBuffer())).toString('utf8')) as SummaryJson;
-  const rows = decodeSummary(j);
+  const rows = decodeSummary(await body(r) as SummaryJson);
   const want = main.filter(l => l.artist === 'pablo-picasso' && !eager.some(e => e.id === l.id));
   assert.equal(rows.length, want.length);
   assert.equal(rows.filter(l => l.status === 'sold').length, want.filter(l => l.status === 'sold').length);
-  const top = rows.reduce((m, l) => Math.max(m, l.priceUsd || 0), 0);
-  assert.equal(top, 2_500_000);
+  assert.equal(rows.reduce((m, l) => Math.max(m, l.priceUsd || 0), 0), 2_500_000);
   assert.ok(rows.find(l => l.priceUsd === 2_500_000)!.title.includes('Femme'), 'top rows come back whole');
-  const mr = await call('/api/market/sports?view=summary');
-  const mj = JSON.parse(zlib.gunzipSync(Buffer.from(await mr.arrayBuffer())).toString('utf8')) as SummaryJson;
+  const mj = await body(await call('/api/market/sports?view=summary')) as SummaryJson;
   assert.equal(mj.n, [...main, ...archive].filter(l => l.artist === 'game-used').length);
 });
 
-test('settled flags + ref rows', async () => {
+test('settled flags carry their flag; ref ledgers page', async () => {
   const j = await body(await call('/api/settled-flags'));
   assert.deepEqual(j.rows.map((r: AuctionLot) => r.id), [flagged.id]);
+  assert.equal(j.rows[0].signal.label, 'Below Market');
   const ref = await body(await call('/api/ref/rolex/116500'));
   assert.equal(ref.total, 9);
+  assert.equal(ref.rows.length, 9);
 });
 
-test('caching: ETag 304, edge cache hit, headers; method + cross-site refusals', async () => {
+test('caching: ETag 304, edge cache hit (gzip pass-through too), headers; refusals', async () => {
   const cache = new FakeCache();
   const a = await call(`/api/lot/${main[0].id}`, {}, cache);
   const etag = a.headers.get('ETag')!;
@@ -272,24 +283,38 @@ test('caching: ETag 304, edge cache hit, headers; method + cross-site refusals',
   assert.equal(a.headers.get('X-Content-Type-Options'), 'nosniff');
   assert.match(a.headers.get('Cache-Control')!, /max-age=300/);
   assert.equal(a.headers.get('Access-Control-Allow-Origin'), null);
+  await a.arrayBuffer();
   const b = await call(`/api/lot/${main[0].id}`, {}, cache);
-  assert.equal(b.status, 200);
-  assert.equal(cache.hits, 1);
+  assert.equal(b.headers.get('X-Api-Cache'), 'hit');
   assert.equal((await body(b)).lot.id, main[0].id);
-  const c = await call(`/api/lot/${main[0].id}`, { headers: { 'If-None-Match': etag } });
-  assert.equal(c.status, 304);
+  await (await call(`/api/comps?lot=${anchor.id}`, {}, cache)).arrayBuffer();
+  const c2 = await call(`/api/comps?lot=${anchor.id}`, {}, cache);
+  assert.equal(c2.headers.get('X-Api-Cache'), 'hit');
+  assert.equal((await body(c2)).id, anchor.id, 'a cached gzip pass-through stays readable');
+  assert.equal((await call(`/api/lot/${main[0].id}`, { headers: { 'If-None-Match': etag } })).status, 304);
   assert.equal((await call('/api/version', { method: 'POST' })).status, 405);
   assert.equal((await call('/api/version', { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
   assert.equal((await call('/api/nope')).status, 404);
 });
 
+test('a warm comps request is two small reads', async () => {
+  // pointer, manifest and dir.bin are per-isolate memos; then one id bucket
+  // and the answer itself (passed through, never parsed)
+  await (await call(`/api/comps?lot=${anchor.id}`)).arrayBuffer();
+  bucket.gets = [];
+  await (await call(`/api/comps?lot=${called.id}`)).arrayBuffer();
+  assert.ok(bucket.gets.length <= 2, `reads: ${bucket.gets.join(', ')}`);
+});
+
 test('no corpus → 503, never a hang or an empty 200', async () => {
   resetStoreMemo();
   const empty = new DirBucket(fs.mkdtempSync(path.join(os.tmpdir(), 'r2api-empty-')));
-  const res = await handleApi(new Request('https://lectr.test/api/version'), { CORPUS: empty }, {}, null);
+  const res = await handleApi(new Request('https://lectr.test/api/lot/t-1'), { CORPUS: empty }, {}, null);
   assert.equal(res.status, 503);
   assert.equal(res.headers.get('Cache-Control'), 'no-store');
-  const none = await handleApi(new Request('https://lectr.test/api/version'), {}, {}, null);
-  assert.equal(none.status, 503);
+  // the rollout probe answers plainly
+  const v = await handleApi(new Request('https://lectr.test/api/version'), {}, {}, null);
+  assert.equal(v.status, 200);
+  assert.deepEqual(await v.json(), { version: null, available: false });
   resetStoreMemo();
 });

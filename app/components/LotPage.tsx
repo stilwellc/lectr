@@ -6,7 +6,7 @@ import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import { loadLotPackStrict, packRowsToLots, type LotPack } from '../lib/page-data';
-import { fetchLot } from '../lib/api';
+import { fetchLot, isApiUnavailable } from '../lib/api';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
@@ -323,7 +323,7 @@ export function LotPageSkeleton() {
   );
 }
 
-function NotOnTheBook({ id }: { id: string }) {
+function NotOnTheBook({ id, pending = false }: { id: string; pending?: boolean }) {
   return (
     <div className="lectr-lot rail" style={{ paddingTop: 60, paddingBottom: 100, textAlign: 'center' }}>
       <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
@@ -331,10 +331,12 @@ function NotOnTheBook({ id }: { id: string }) {
         {id ? `no. ${id}` : 'no lot number'}
       </span>
       <h1 style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 300, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
-        This lot isn&rsquo;t on the book
+        {pending ? <>This lot&rsquo;s record isn&rsquo;t available yet</> : <>This lot isn&rsquo;t on the book</>}
       </h1>
       <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', maxWidth: 420, margin: '0 auto 26px', lineHeight: 1.55 }}>
-        It may have left the tape — concluded sales roll off as the crawl moves on — or the link may be misprinted.
+        {pending
+          ? 'The sold archive opens once tonight’s index is published — check back then.'
+          : 'It may have left the tape — concluded sales roll off as the crawl moves on — or the link may be misprinted.'}
       </p>
       <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none' }}>
         Back to the tape <Flick size={11} />
@@ -365,7 +367,9 @@ export default function LotPage({ lotId, initialLot }: {
   // `fullError` is "the API failed" (lot or comps) and drives the retry.
   const fullLoaded = false;
   const [apiError, setApiError] = useState(false);
-  const fullError = apiError;
+  // the lot API isn't serving yet (no index uploaded): settled, not failed
+  const [apiDown, setApiDown] = useState(false);
+  const fullError = apiError || apiDown;
   const [apiTry, setApiTry] = useState(0);
   const retryApi = useCallback(() => { setApiError(false); setApiTry(t => t + 1); }, []);
   const { savedIds, isSaved, toggle } = useSavedLots();
@@ -420,7 +424,7 @@ export default function LotPage({ lotId, initialLot }: {
     setShardLot(undefined);
     fetchLot(lotId).then(
       l => { if (!dead) setShardLot(l); },
-      () => { if (!dead) { setShardLot('noindex'); setApiError(true); } },
+      e => { if (!dead) { setShardLot(isApiUnavailable(e) ? null : 'noindex'); if (isApiUnavailable(e)) setApiDown(true); else setApiError(true); } },
     );
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -442,7 +446,7 @@ export default function LotPage({ lotId, initialLot }: {
     let dead = false;
     loadLotPackStrict(lotId, lastCrawl).then(
       p => { if (!dead) setPack(p || {}); },
-      () => { if (!dead) { setPack(null); setApiError(true); } },
+      e => { if (!dead) { setPack(null); if (isApiUnavailable(e)) setApiDown(true); else setApiError(true); } },
     );
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -681,8 +685,8 @@ export default function LotPage({ lotId, initialLot }: {
         <ArtistNav activeSlug="" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
         {settled ? (
           <>
-            <NotOnTheBook id={lotId} />
-            {(fullError || archive.archiveError) && lotId && (
+            <NotOnTheBook id={lotId} pending={apiDown && !dbLot} />
+            {apiError && lotId && (
               <div className="rail" style={{ textAlign: 'center', paddingBottom: 60, marginTop: -60 }}>
                 <button
                   className="ray-call-btn ray-call-btn-quiet"
@@ -1183,7 +1187,11 @@ export default function LotPage({ lotId, initialLot }: {
                wording preserved verbatim */
             <div className="ns-well lectr-lot-note">
               <div className="ns-well-body">
-                {fullError
+                {apiDown
+                  ? <>Comparable sales open once tonight&rsquo;s archive index is published.</>
+                  : pack?.np
+                  ? <>Comparable sales are precomputed for lots sold in the last two years and for the live book &mdash; this lot sold before that window.</>
+                  : fullError
                   ? <>
                       Comparable sales couldn&rsquo;t be loaded.{' '}
                       <button onClick={retryApi} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>

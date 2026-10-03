@@ -23,7 +23,7 @@
  */
 import type { AuctionLot } from '../../app/types';
 import { classifyForm, normalizeTitle, cleanGoldinTitle, isSportsScienceObject, watchKey } from '../../app/lib/comps';
-import { fnv1a } from './format';
+import { fnv1a } from '../../functions/_lib/format';
 
 // mirrors of comps.ts module constants (not exported there) — keep in step
 export const WATCH_FORMS = new Set(['wristwatch', 'pocket-watch']);

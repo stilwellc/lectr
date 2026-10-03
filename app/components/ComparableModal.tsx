@@ -14,7 +14,7 @@ import { safeHref } from '../lib/safe-href';
 import { medianSorted } from '../lib/stats';
 import type { MarketData, Backtest } from '../hooks/useRayData';
 import { useRayData } from '../hooks/useRayData';
-import { fetchComps, type CompsAnswer } from '../lib/api';
+import { fetchComps, isApiUnavailable, type CompsAnswer } from '../lib/api';
 import { packRowsToLots } from '../lib/page-data';
 // One formatter, one string: the card and the modal must print the same
 // estimate for the same lot (the modal's old local copy produced
@@ -459,14 +459,16 @@ export default function ComparableModal({
   const { market, backtest } = useRayData();
   const [comps, setComps] = useState<CompsAnswer | null | undefined>(undefined);
   const [compsErr, setCompsErr] = useState(false);
+  const [compsDown, setCompsDown] = useState(false);
   const [compsTry, setCompsTry] = useState(0);
   useEffect(() => {
     let on = true;
     setComps(undefined);
     setCompsErr(false);
+    setCompsDown(false);
     fetchComps(lot.id).then(
       a => { if (on) setComps(a); },
-      () => { if (on) { setComps(null); setCompsErr(true); } },
+      e => { if (on) { setComps(null); if (isApiUnavailable(e)) setCompsDown(true); else setCompsErr(true); } },
     );
     return () => { on = false; };
   }, [lot.id, compsTry]);
@@ -1177,7 +1179,13 @@ export default function ComparableModal({
             </div>
           )}
 
-          {fullError && comparables.length === 0 ? (
+          {(compsDown || comps?.np) && comparables.length === 0 ? (
+            <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--color-text-faint)', fontSize: 13.5 }}>
+              {compsDown
+                ? <>Comparable sales open once tonight&rsquo;s archive index is published.</>
+                : <>Comparable sales are precomputed for lots sold in the last two years and for the live book &mdash; this lot sold before that window.</>}
+            </div>
+          ) : fullError && comparables.length === 0 ? (
             <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--color-text-faint)', fontSize: 13.5 }}>
               Comparable sales couldn&rsquo;t be loaded.
               <button

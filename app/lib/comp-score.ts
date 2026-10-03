@@ -72,14 +72,29 @@ function parseYear(y: string | null): number | null {
   return m ? parseInt(m[1]) : null;
 }
 
-/** Simple word overlap score between two medium strings (0-1) */
-function mediumSimilarity(a: string | null, b: string | null): number {
-  if (!a || !b) return 0;
-  const wordsA = new Set(a.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean));
-  const wordsB = new Set(b.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean));
+/** Per-lot features the scorer reads, derived once per lot object (the
+    nightly comps precompute scores every candidate against every anchor). */
+interface Feat { cls: string | null; words: Set<string>; area: number | null; year: number | null }
+const FEAT = new WeakMap<object, Feat>();
+function feat(l: AuctionLot): Feat {
+  let f = FEAT.get(l);
+  if (!f) {
+    f = {
+      cls: mediumClass(l.medium),
+      words: new Set((l.medium || '').toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean)),
+      area: parseArea(l.dimensions),
+      year: parseYear(l.year),
+    };
+    FEAT.set(l, f);
+  }
+  return f;
+}
+
+/** Simple word overlap score between two medium word sets (0-1) */
+function mediumSimilarity(wordsA: Set<string>, wordsB: Set<string>): number {
   if (wordsA.size === 0 || wordsB.size === 0) return 0;
   let overlap = 0;
-  Array.from(wordsA).forEach(w => { if (wordsB.has(w)) overlap++; });
+  wordsA.forEach(w => { if (wordsB.has(w)) overlap++; });
   return overlap / Math.max(wordsA.size, wordsB.size);
 }
 
@@ -98,22 +113,19 @@ function mediumClass(medium: string | null): string | null {
 
 export function scoreComparable(upcoming: AuctionLot, sold: AuctionLot): number {
   let score = 0;
+  const fa = feat(upcoming), fb = feat(sold);
 
   // Medium sub-class match (weight: 25) — distinguishes sketches from paintings
-  const classA = mediumClass(upcoming.medium);
-  const classB = mediumClass(sold.medium);
-  if (classA && classB) {
-    if (classA === classB) score += 25;
+  if (fa.cls && fb.cls) {
+    if (fa.cls === fb.cls) score += 25;
     else score += 3;
   }
   // Word-level medium similarity as tiebreaker (weight: 5)
-  score += mediumSimilarity(upcoming.medium, sold.medium) * 5;
+  score += mediumSimilarity(fa.words, fb.words) * 5;
 
   // Dimensions similarity (weight: 35) — critical for matching scale
-  const areaA = parseArea(upcoming.dimensions);
-  const areaB = parseArea(sold.dimensions);
-  if (areaA && areaB) {
-    const ratio = Math.min(areaA, areaB) / Math.max(areaA, areaB);
+  if (fa.area && fb.area) {
+    const ratio = Math.min(fa.area, fb.area) / Math.max(fa.area, fb.area);
     score += ratio * 35;
   }
 
@@ -127,10 +139,8 @@ export function scoreComparable(upcoming: AuctionLot, sold: AuctionLot): number 
   }
 
   // Year proximity (weight: 10)
-  const yearA = parseYear(upcoming.year);
-  const yearB = parseYear(sold.year);
-  if (yearA && yearB) {
-    const diff = Math.abs(yearA - yearB);
+  if (fa.year && fb.year) {
+    const diff = Math.abs(fa.year - fb.year);
     score += Math.max(0, 1 - diff / 50) * 10;
   }
 

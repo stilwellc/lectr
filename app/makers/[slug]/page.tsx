@@ -627,6 +627,16 @@ export default function ArtistDetailPage() {
             />
           )}
 
+          {/* the lot API isn't serving yet: the page stands on stats.json and
+              the live book — say what's missing instead of a silent gap */}
+          {mk.unavailable && (
+            <div className="rail" style={{ padding: '24px 0 56px', textAlign: 'center' }}>
+              <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0 }}>
+                {label}&rsquo;s full sold record isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.
+              </p>
+            </div>
+          )}
+
           {/* the closing colophon — corpus counts from meta.json */}
           <Colophon record={null} />
         </>

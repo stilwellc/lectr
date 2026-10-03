@@ -79,6 +79,8 @@ export interface LotPack {
   r?: { kind: 'reference' | 'edition-like'; confidence: 'low'; med: number; q1: number; q3: number; n: number; scope?: string } | null;
   /** provenance rows (repeatSaleGroupId), oldest first */
   p?: PackRow[];
+  /** lot API: this lot sold outside the comps precompute window */
+  np?: boolean;
 }
 
 /** THE FALLBACK-PROJECTION RULE (one definition — the emitter and /receipts
@@ -142,7 +144,7 @@ export async function loadLotPackStrict(id: string, ver?: string): Promise<LotPa
   const stat = await loadStaticLotPack(id, ver);
   if (stat) return stat;
   const ans = await fetchComps(id);
-  return ans ? ans.pack : null;
+  return ans ? (ans.np ? { np: true } : ans.pack) : null;
 }
 
 /** loadLotPackStrict, failing SOFT (null) — for surfaces with their own fallbacks. */

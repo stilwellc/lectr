@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRayData } from '../hooks/useRayData';
-import { fetchSettledFlags } from '../lib/api';
+import { fetchSettledFlags, isApiUnavailable } from '../lib/api';
 import { markFallbackProjections } from '../lib/page-data';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
@@ -94,10 +94,11 @@ export default function ReceiptsPage() {
   // a few KB). No corpus to wait on, so they load with the page.
   const [flagRows, setFlagRows] = useState<AuctionLot[] | null>(null);
   const [fullError, setFullError] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const fullLoaded = flagRows !== null;
   const requestFullLots = useCallback(() => {
     setFullError(false);
-    fetchSettledFlags().then(r => setFlagRows(r), () => setFullError(true));
+    fetchSettledFlags().then(r => setFlagRows(r), e => { if (isApiUnavailable(e)) setUnavailable(true); else setFullError(true); });
   }, []);
   const retryFullLoad = requestFullLots;
   useEffect(() => { requestFullLots(); }, [requestFullLots]);
@@ -331,13 +332,17 @@ export default function ReceiptsPage() {
                 HONESTY: the list is `fullLoaded`-gated, never drawn from a
                 half-arrived corpus — a settled-flags tape missing shards is a
                 silently short record, not a slow one. */}
-            <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }} aria-busy={!fullLoaded && !fullError ? true : undefined}>
+            <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }} aria-busy={!fullLoaded && !fullError && !unavailable ? true : undefined}>
               <div className="rcp-head">
                 <span className="kicker">Recently settled flags · the signal was in the nightly data before the sale</span>
                 <i className="rcp-rule" />
               </div>
 
-              {fullError && !fullLoaded ? (
+              {unavailable ? (
+                <p className="rcp-note">
+                  The settled flags read the sold archive, which isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.
+                </p>
+              ) : fullError && !fullLoaded ? (
                 <p className="rcp-note">
                   The sold book didn&rsquo;t load, so the settled flags can&rsquo;t be read.{' '}
                   <button

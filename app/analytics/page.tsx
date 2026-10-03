@@ -9,7 +9,7 @@ import { useMarket } from '../lib/market';
 import { countSubMarkets } from '../lib/submarkets';
 import MarketSwitch from '../components/MarketSwitch';
 import { useRayData } from '../hooks/useRayData';
-import { fetchSummary } from '../lib/api';
+import { fetchSummary, isApiUnavailable } from '../lib/api';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { formatDate, getUpcomingCounts, fmtSignedPct } from '../utils';
@@ -444,18 +444,27 @@ function DeepPoolsBody({ activeKey, mktSet, marketStats }: {
   marketStats: Record<string, MarketStats>;
 }) {
   const { fromCache, market: marketData } = useRayData();
-  const [st, setSt] = useState<{ key: string; rows: import('../types').AuctionLot[] | null; error: boolean }>({ key: '', rows: null, error: false });
+  const [st, setSt] = useState<{ key: string; rows: import('../types').AuctionLot[] | null; error: boolean; unavailable?: boolean }>({ key: '', rows: null, error: false });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let on = true;
     setSt({ key: activeKey, rows: null, error: false });
     fetchSummary('market', activeKey).then(
       rows => { if (on) setSt({ key: activeKey, rows, error: false }); },
-      () => { if (on) setSt({ key: activeKey, rows: null, error: true }); },
+      e => { if (on) setSt({ key: activeKey, rows: null, error: true, unavailable: isApiUnavailable(e) }); },
     );
     return () => { on = false; };
   }, [activeKey, attempt]);
   const marketLots = useMemo(() => (st.key === activeKey && st.rows ? st.rows.filter(l => mktSet.has(l.artist)) : null), [st, activeKey, mktSet]);
+  if (st.key === activeKey && st.unavailable) {
+    return (
+      <div style={{ padding: '60px 24px 100px', textAlign: 'center' }}>
+        <p style={{ fontSize: 14, color: 'var(--color-text-muted)', margin: 0 }}>
+          The deep pools read the full sold archive, which isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.
+        </p>
+      </div>
+    );
+  }
   if (st.key === activeKey && st.error) return <PoolsError onRetry={() => setAttempt(n => n + 1)} />;
   if (!marketLots) return <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}><RayLoading /></div>;
   return <PoolsGrid activeKey={activeKey} marketLots={marketLots} marketStats={marketStats} marketData={marketData} fromCache={fromCache} />;

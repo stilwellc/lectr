@@ -1,30 +1,31 @@
 /**
- * emit-r2-index.ts — writes the per-key objects the read-only lot API
+ * emit-r2-index.ts — writes every object the read-only lot API
  * (functions/api, Cloudflare Pages Functions) reads from R2, into a LOCAL
- * directory. Uploading that directory is a separate step
- * (scripts/r2-api-push.sh; docs/data-pipeline.md "The lot API").
+ * directory. Uploading it is a separate step (scripts/r2-api-push.sh;
+ * docs/data-pipeline.md "The lot API").
  *
- * WHY: every surface that needed lot-level history (the home archive table,
- * the comps modal, sold-lot comps, maker tables and charts, /analytics pools,
- * /receipts, the profile desk) used to stream the whole served corpus to the
- * browser (lots-*.json + sold-archive-*.json, ~500MB raw). Cloudflare Pages
- * caps a deploy at 20,000 files of ≤25MiB, so per-lot static files are
- * impossible; instead the API reads only the bytes one answer needs from a
- * handful of R2 blobs via ranged GETs (functions/_lib/format.ts has the
- * layout and every constant both sides share).
+ * WHY: every surface that needed lot-level history used to stream the whole
+ * served corpus to the browser (lots-*.json + sold-archive-*.json, ~500MB
+ * raw). Pages caps a deploy at 20,000 files of ≤25MiB, so per-lot static
+ * files are impossible — and the Workers FREE plan caps each request at 10ms
+ * of CPU. So ALL the work happens here, once a night: comps answers, sorted
+ * and filtered table pages, column summaries, ref ledgers. The API only maps
+ * a key to a byte range and hands the stored gzip bytes back
+ * (functions/_lib/format.ts has the layout both sides share).
  *
  *   NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts \
  *     [--served public/data/ray] [--corpus data/corpus] [--out data/r2-api]
  *
  * Reads the SERVED book (meta, upcoming, lots-*.json, sold-archive-*.json) —
- * the same rows the browser used to stream, the eager upcoming lots' stamped
+ * the rows the browser used to stream, the eager upcoming lots' stamped
  * fields re-attached exactly as useRayData's phase 2 / emit-page-stats did —
  * plus, optionally, the full corpus (data/corpus/{lots,sold-archive}.json.gz)
  * to resolve engine pool ids that never ship on the wire. Pure read of those
  * inputs; writes only under --out:
  *
  *   <out>/api/current.json          the pointer (upload LAST)
- *   <out>/api/v/<version>/…         manifest.json, blob-N.bin, loc-NN.json
+ *   <out>/api/v/<version>/…         manifest.json, dir.bin, blob-N.bin
+ *   <out>/api/UPLOAD_ORDER.txt      payloads first, pointer last
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,10 +33,12 @@ import zlib from 'node:zlib';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS, MARKETS, marketArtists, marketOf } from '../app/constants';
 import {
-  BLOB_CAP, CHUNK_ROWS, FORMAT_VERSION, ID_BUCKETS, LOC_SHARDS, encodeScopeIndex, idBucketOf, locShardOf, locShardName,
-  type Loc, type Manifest, type ScopeIndex, type SummaryJson,
+  BLOB_CAP, FORMAT_VERSION, ID_BUCKETS, LOC_SHARDS, REF_PAGE, ROW_DROP, TABLE_MAX_PAGES, TABLE_PAGE,
+  displayRow, idBucketOf, locShardOf, refKey, tableKey,
+  type IdEntry, type Loc, type Manifest, type PagedLoc, type SummaryJson, type TablePageBody,
 } from '../functions/_lib/format';
-import { bookPartitionsOf, culturePartitionsOf, formOf, isCandidate } from '../functions/_lib/pools';
+import { bookPartitionsOf, culturePartitionsOf } from './r2/pools';
+import { compsFor, isEmptyAnswer, type CompSource } from './r2/comps';
 
 type Row = AuctionLot & Record<string, unknown>;
 
@@ -46,12 +49,16 @@ export interface EmitInput {
   /** corpus-only rows an engine pool names (resolvable by id, in no table) */
   extras?: AuctionLot[];
   lastCrawl: string;
+  /** comps precompute window in days (default 730 — the saveable window) */
+  compsDays?: number;
+  /** "today" for the window (tests pin it) */
+  now?: Date;
 }
-export interface EmitResult { version: string; dir: string; manifest: Manifest; objects: string[]; bytes: number }
+export interface EmitResult { version: string; dir: string; manifest: Manifest; objects: string[]; bytes: number; stats: Record<string, number> }
 
 const ARCHIVE_MARKETS = new Set(['sports', 'science']);
 const TOP_ROWS = 60;
-const SETTLED_KEEP = 300;
+const SETTLED_KEEP = 50;
 
 // ── blob writer ─────────────────────────────────────────────────────────────
 class BlobWriter {
@@ -59,18 +66,26 @@ class BlobWriter {
   private fd = -1;
   private size = 0;
   total = 0;
-  readonly locs = new Map<string, Loc>();
   constructor(private dir: string) {}
-  put(key: string, buf: Uint8Array): void {
-    if (this.locs.has(key)) throw new Error(`duplicate key ${key}`);
+  put(buf: Uint8Array): Loc {
     if (this.fd < 0 || (this.size > 0 && this.size + buf.length > BLOB_CAP)) this.rotate();
     fs.writeSync(this.fd, buf);
-    this.locs.set(key, [this.blobs.length - 1, this.size, buf.length]);
+    const loc: Loc = [this.blobs.length - 1, this.size, buf.length];
     this.size += buf.length;
     this.total += buf.length;
+    return loc;
   }
-  putJsonGz(key: string, v: unknown): void {
-    this.put(key, zlib.gzipSync(Buffer.from(JSON.stringify(v)), { level: 6 }));
+  gz(v: unknown): Loc {
+    return this.put(zlib.gzipSync(Buffer.from(JSON.stringify(v)), { level: 6 }));
+  }
+  /** consecutive gzip members in ONE blob → [blob, start, total, …lens] */
+  paged(total: number, pages: unknown[]): PagedLoc {
+    const bufs = pages.map(p => zlib.gzipSync(Buffer.from(JSON.stringify(p)), { level: 6 }));
+    const sum = bufs.reduce((s, b) => s + b.length, 0);
+    if (this.fd < 0 || (this.size > 0 && this.size + sum > BLOB_CAP)) this.rotate();
+    const start = this.size;
+    for (const b of bufs) { fs.writeSync(this.fd, b); this.size += b.length; this.total += b.length; }
+    return [this.blobs.length - 1, start, total, ...bufs.map(b => b.length)];
   }
   private rotate() {
     if (this.fd >= 0) fs.closeSync(this.fd);
@@ -104,44 +119,37 @@ function versionOf(lastCrawl: string): string {
   return `${stamp}-${Date.now().toString(36)}`;
 }
 
-/** Build the scope index for a set of SOLD rows (positions in the row store). */
-function buildScopeIndex(rows: { row: Row; pos: number }[]): ScopeIndex {
-  // base order: saleDate desc, stable on input order (PastResults' date sort)
-  const base = rows.map((r, i) => ({ ...r, i, t: dateMs(r.row) }))
-    .sort((a, b) => (b.t - a.t) || (a.i - b.i));
-  const houses: string[] = [], cats: string[] = [], sports: string[] = [];
-  const hIx = new Map<string, number>(), cIx = new Map<string, number>(), sIx = new Map<string, number>();
-  const idx = (m: Map<string, number>, arr: string[], v: string) => {
-    let i = m.get(v); if (i === undefined) { i = arr.length; arr.push(v); m.set(v, i); } return i;
-  };
-  const n = base.length;
-  const ix: ScopeIndex = {
-    head: { n, houses, cats, sports, facetCats: [], facetSports: null },
-    pos: new Int32Array(n), price: new Float64Array(n), house: new Uint16Array(n),
-    cat: new Uint8Array(n), sport: new Uint16Array(n), byPrice: new Int32Array(n),
-  };
-  const sportCounts = new Map<string, number>();
-  let allSports = n > 0;
-  base.forEach((b, i) => {
-    const l = b.row;
-    ix.pos[i] = b.pos;
-    ix.price[i] = l.priceUsd || 0;
-    ix.house[i] = idx(hIx, houses, String(l.auctionHouse || ''));
-    ix.cat[i] = idx(cIx, cats, String(l.category || ''));
-    const sp = String((l as Row).sport || '');
-    ix.sport[i] = idx(sIx, sports, sp);
-    const label = sp || 'Other';
-    sportCounts.set(label, (sportCounts.get(label) || 0) + 1);
-    if (marketOf(l.artist) !== 'sports') allSports = false;
-  });
-  if (cats.length > 255 || houses.length > 65535 || sports.length > 65535) throw new Error('scope index dictionary overflow');
-  const perm = Array.from({ length: n }, (_, i) => i).sort((a, b) => (ix.price[b] - ix.price[a]) || (a - b));
-  ix.byPrice.set(perm);
-  ix.head.facetCats = cats.filter(c => c && c !== 'unknown').sort();
-  ix.head.facetSports = allSports && sportCounts.size >= 2
-    ? Array.from(sportCounts.entries()).sort((a, b) => (a[0] === 'Other' ? 1 : b[0] === 'Other' ? -1 : b[1] - a[1]))
-    : null;
-  return ix;
+function storedRow(l: Row): Record<string, unknown> {
+  const o: Record<string, unknown> = {};
+  for (const k in l) if (!ROW_DROP.has(k)) o[k] = l[k];
+  return o;
+}
+
+// ── tables: PastResults' filter + order, materialized ─────────────────────
+type Facets = TablePageBody['facets'];
+function facetsOf(rows: Row[]): Facets {
+  const cats = new Set<string>();
+  for (const l of rows) if (l.category && l.category !== 'unknown') cats.add(String(l.category));
+  let sports: [string, number][] | null = null;
+  if (rows.length && rows.every(l => marketOf(l.artist) === 'sports')) {
+    const counts = new Map<string, number>();
+    for (const l of rows) { const s = String(l.sport || 'Other'); counts.set(s, (counts.get(s) || 0) + 1); }
+    if (counts.size >= 2) sports = Array.from(counts.entries()).sort((a, b) => (a[0] === 'Other' ? 1 : b[0] === 'Other' ? -1 : b[1] - a[1]));
+  }
+  return { cats: Array.from(cats).sort(), sports };
+}
+/** PastResults' order: price = highest first (stable); date = newest first,
+ *  then woven round-robin across houses in order of first appearance. */
+export function orderRows(rows: Row[], sort: 'date' | 'price'): Row[] {
+  if (sort === 'price') return rows.map((l, i) => ({ l, i })).sort((a, b) => ((b.l.priceUsd || 0) - (a.l.priceUsd || 0)) || (a.i - b.i)).map(x => x.l);
+  const byDate = rows.map((l, i) => ({ l, i, t: dateMs(l) })).sort((a, b) => (b.t - a.t) || (a.i - b.i)).map(x => x.l);
+  const groups = new Map<string, Row[]>();
+  for (const l of byDate) { const g = groups.get(l.auctionHouse) || []; g.push(l); groups.set(l.auctionHouse, g); }
+  if (groups.size < 2) return byDate;
+  const qs = Array.from(groups.values());
+  const out: Row[] = [];
+  for (let i = 0; out.length < byDate.length; i++) for (const q of qs) if (i < q.length) out.push(q[i]);
+  return out;
 }
 
 /** Columnar summary of a scope's rows (the aggregate surfaces' input).
@@ -185,14 +193,8 @@ function buildSummary(scope: string, input: Row[], opts: { players?: boolean } =
     .filter(x => x.l.status === 'sold' && (x.l.priceUsd || 0) > 0)
     .sort((a, b) => (b.l.priceUsd! - a.l.priceUsd!) || (a.i - b.i))
     .slice(0, TOP_ROWS)
-    .map(x => [x.i, slimForTop(x.l)] as [number, Record<string, unknown>]);
+    .map(x => [x.i, displayRow(x.l)] as [number, Record<string, unknown>]);
   return { v: 1, scope, n: rows.length, dict, cols, top };
-}
-const TOP_DROP = new Set(['firstSeen', '_vn', 'entitySrc', 'heightCm', 'widthCm', 'depthCm', 'subjectKeys', 'itemClass', 'drill', 'value', 'signal', 'bidProj']);
-function slimForTop(l: Row): Record<string, unknown> {
-  const o: Record<string, unknown> = {};
-  for (const k in l) if (!TOP_DROP.has(k)) o[k] = l[k];
-  return o;
 }
 
 export function emitR2Index(input: EmitInput, outRoot: string, log: (s: string) => void = () => {}): EmitResult {
@@ -201,6 +203,10 @@ export function emitR2Index(input: EmitInput, outRoot: string, log: (s: string) 
   const dir = path.join(outRoot, prefix);
   fs.mkdirSync(dir, { recursive: true });
   const w = new BlobWriter(dir);
+  const locs = new Map<string, unknown>();
+  const stats: Record<string, number> = {};
+  const t0 = Date.now();
+  const lap = () => ((Date.now() - t0) / 1000).toFixed(0) + 's';
 
   // ── 1 · the book: main (eager re-attached) ∪ archive-only ∪ extras ───────
   const reattach = reattacher(input.eager);
@@ -218,105 +224,162 @@ export function emitR2Index(input: EmitInput, outRoot: string, log: (s: string) 
   const known = new Set<string>([...Array.from(mainIds), ...archiveOnly.map(l => l.id)]);
   const extras = (input.extras || []).filter(l => !known.has(l.id) && known.add(l.id)) as Row[];
 
-  // row store: (artist, saleDate desc) — a maker's rows sit in adjacent chunks
+  // row store: one PLAIN JSON object per lot, (artist, saleDate desc) —
+  // /api/lot hands the bytes back without a parse or a gunzip
   const store = [...main, ...archiveOnly, ...extras]
     .map((row, i) => ({ row, i, t: dateMs(row) }))
     .sort((a, b) => (a.row.artist < b.row.artist ? -1 : a.row.artist > b.row.artist ? 1 : (b.t - a.t) || (a.i - b.i)))
     .map(x => x.row);
-  const posOf = new Map<string, number>();
-  store.forEach((l, i) => posOf.set(l.id, i));
-  let chunks = 0;
-  for (let i = 0; i < store.length; i += CHUNK_ROWS) w.putJsonGz(`c:${chunks++}`, store.slice(i, i + CHUNK_ROWS));
-  log(`row store: ${store.length.toLocaleString()} rows (${main.length} main · ${archiveOnly.length} archive-only · ${extras.length} extra) in ${chunks} chunks`);
+  const entries = new Map<string, IdEntry>();
+  for (const l of store) entries.set(l.id, [...w.put(Buffer.from(JSON.stringify(storedRow(l))))]);
+  stats.rows = store.length;
+  log(`row store: ${store.length.toLocaleString()} rows (${main.length} main · ${archiveOnly.length} archive-only · ${extras.length} extra) · ${lap()}`);
 
-  // ── 2 · id → position buckets ────────────────────────────────────────────
-  {
-    const buckets: Record<string, number>[] = Array.from({ length: ID_BUCKETS }, () => ({}));
-    store.forEach((l, i) => { buckets[idBucketOf(l.id)][l.id] = i; });
-    buckets.forEach((b, k) => { if (Object.keys(b).length) w.putJsonGz(`b:${k}`, b); });
-  }
+  // ── 2 · comps, precomputed over in-memory candidate partitions ───────────
+  const parts = new Map<string, AuctionLot[]>();
+  const addPart = (k: string, l: AuctionLot) => { const p = parts.get(k); if (p) p.push(l); else parts.set(k, [l]); };
+  for (const l of main) for (const k of bookPartitionsOf(l)) addPart(k, l);
+  for (const l of archiveOnly) if (ARCHIVE_MARKETS.has(marketOf(l.artist))) for (const k of bookPartitionsOf(l)) addPart(k, l);
+  for (const l of main) for (const k of culturePartitionsOf(l)) addPart(k, l);
+  for (const l of store) if (l.repeatSaleGroupId) addPart(`g|${String(l.repeatSaleGroupId).replace(/\|/g, '/')}`, l);
+  const byId = new Map<string, AuctionLot>(store.map(l => [l.id, l]));
+  const src: CompSource = { partition: k => parts.get(k) || [], byId: id => byId.get(id) };
 
-  // ── 3 · maker books: table index + summary + comp partitions ─────────────
+  const days = input.compsDays ?? 730;
+  const cutoff = new Date((input.now ?? new Date()).getTime() - days * 86_400_000).toISOString().slice(0, 10);
   const eagerIds = new Set(input.eager.map(l => l.id));
+  const settledIds = new Set<string>();
+  const settledRows = main
+    .filter(l => (l.priceUsd || 0) > 0 && (l.signal as { label?: string } | null | undefined)?.label === 'Below Market')
+    .sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
+  for (const l of settledRows.slice(0, 300)) settledIds.add(l.id);
+  const inWindow = (l: Row) => eagerIds.has(l.id) || settledIds.has(l.id)
+    || ((l.status === 'sold' || l.status === 'bought_in') && (l.saleDate || '') >= cutoff);
+  let nComps = 0, nEmpty = 0, slow = 0, slowId = '';
+  for (const l of store) {
+    if (!inWindow(l)) continue;
+    const ts = performance.now();
+    const ans = compsFor(src, l);
+    const dt = performance.now() - ts;
+    if (dt > slow) { slow = dt; slowId = l.id; }
+    const e = entries.get(l.id)!;
+    if (isEmptyAnswer(ans)) { e.push(-1); nEmpty++; continue; }
+    const loc = w.gz(ans);
+    e.push(loc[0], loc[1], loc[2]);
+    nComps++;
+  }
+  stats.comps = nComps; stats.compsEmpty = nEmpty;
+  log(`comps: ${nComps.toLocaleString()} answers + ${nEmpty.toLocaleString()} empty (window ${cutoff}→, slowest ${slow.toFixed(0)}ms ${slowId}) · ${lap()}`);
+
+  // ── 3 · tables (maker books + market archives), refs, summaries ─────────
   const bookBySlug = new Map<string, Row[]>();
   for (const a of ARTISTS) bookBySlug.set(a.slug, []);
   for (const l of main) bookBySlug.get(l.artist)?.push(l);
   for (const l of archiveOnly) if (ARCHIVE_MARKETS.has(marketOf(l.artist))) bookBySlug.get(l.artist)?.push(l);
 
-  const parts = new Map<string, Row[]>();
-  const addPart = (k: string, l: Row) => { const p = parts.get(k); if (p) p.push(l); else parts.set(k, [l]); };
-  const makers: Manifest['makers'] = {};
-  for (const [slug, book] of Array.from(bookBySlug.entries())) {
-    const sold = book.filter(l => l.status === 'sold');
-    if (sold.length) w.put(`x:m:${slug}`, encodeScopeIndex(buildScopeIndex(sold.map(row => ({ row, pos: posOf.get(row.id)! })))));
-    // the summary carries the maker's rows MINUS the eager ones — the client
-    // lays the eager upcoming lots (live bid state, signal) over it by id,
-    // exactly as useMakerRows did over the maker shards
-    w.putJsonGz(`s:m:${slug}`, buildSummary(`m:${slug}`, book.filter(l => !eagerIds.has(l.id))));
-    const forms = new Set<string>();
-    for (const l of book) {
-      for (const k of bookPartitionsOf(l)) addPart(k, l);
-      if (isCandidate(l)) forms.add(formOf(l));
-      // one watch reference's sold rows (/api/ref)
-      if (l.status === 'sold' && l.reference) addPart(`r|${slug}|${String(l.reference).toLowerCase().replace(/\|/g, '/')}`, l);
+  let nPages = 0, nCombos = 0;
+  const emitTable = (scope: string, sold: Row[]) => {
+    if (!sold.length) return;
+    const facets = facetsOf(sold);
+    locs.set(`f:${scope}`, facets);
+    const cats: (string | null)[] = [null, ...facets.cats];
+    const sports: (string | null)[] = [null, ...(facets.sports ? facets.sports.map(s => s[0]) : [])];
+    for (const sort of ['date', 'price'] as const) {
+      const ordered = orderRows(sold, sort);
+      for (const cat of cats) for (const sport of sports) {
+        const rows = ordered.filter(l => (cat == null || l.category === cat) && (sport == null || String(l.sport || 'Other') === sport));
+        if (!rows.length) continue;
+        const pages: TablePageBody[] = [];
+        for (let p = 0; p < TABLE_MAX_PAGES && p * TABLE_PAGE < rows.length; p++) {
+          pages.push({
+            total: rows.length, page: p, size: TABLE_PAGE,
+            rows: rows.slice(p * TABLE_PAGE, (p + 1) * TABLE_PAGE).map(displayRow), facets,
+            capped: rows.length > TABLE_MAX_PAGES * TABLE_PAGE,
+          });
+        }
+        locs.set(tableKey(scope, sort, cat, sport), w.paged(rows.length, pages));
+        nPages += pages.length; nCombos++;
+      }
     }
-    makers[slug] = { market: marketOf(slug), n: book.length, sold: sold.length, forms: Array.from(forms).sort() };
-  }
-  // the culture band pools the main tier across every culture slug
-  for (const l of main) for (const k of culturePartitionsOf(l)) addPart(k, l);
-  // provenance: every row of the same physical object, any tier, any status
-  for (const l of store) if (l.repeatSaleGroupId) addPart(`g|${String(l.repeatSaleGroupId).replace(/\|/g, '/')}`, l);
-  let maxPart = 0, maxKey = '';
-  for (const [k, rows] of Array.from(parts.entries())) {
-    if (rows.length > maxPart) { maxPart = rows.length; maxKey = k; }
-    w.putJsonGz(`p:${k}`, rows);
-  }
-  log(`comp partitions: ${parts.size.toLocaleString()} (largest ${maxKey} · ${maxPart.toLocaleString()} rows)`);
+  };
 
-  // ── 4 · markets: archive table index + analytics summary ────────────────
-  const markets: Manifest['markets'] = {};
+  let nRefs = 0;
+  for (const [slug, book] of Array.from(bookBySlug.entries())) {
+    emitTable(`m:${slug}`, book.filter(l => l.status === 'sold'));
+    // the summary carries the maker's rows MINUS the eager ones — the client
+    // lays the eager upcoming lots (live bid state, signal) over it by id
+    locs.set(`s:m:${slug}`, w.gz(buildSummary(`m:${slug}`, book.filter(l => !eagerIds.has(l.id)))));
+    // one watch reference's sold rows, newest first (/api/ref)
+    const byRef = new Map<string, Row[]>();
+    for (const l of book) {
+      if (l.status !== 'sold' || !l.reference || String(l.reference).includes('|')) continue;
+      const k = String(l.reference).toLowerCase();
+      (byRef.get(k) || byRef.set(k, []).get(k)!).push(l);
+    }
+    byRef.forEach((rows, ref) => {
+      const ordered = rows.map((l, i) => ({ l, i, t: dateMs(l) })).sort((a, b) => (b.t - a.t) || (a.i - b.i)).map(x => x.l);
+      const pages = [];
+      for (let p = 0; p < TABLE_MAX_PAGES && p * REF_PAGE < ordered.length; p++) {
+        pages.push({ total: ordered.length, page: p, size: REF_PAGE, rows: ordered.slice(p * REF_PAGE, (p + 1) * REF_PAGE).map(displayRow), capped: ordered.length > TABLE_MAX_PAGES * REF_PAGE });
+      }
+      locs.set(refKey(slug, ref), w.paged(ordered.length, pages));
+      nRefs++;
+    });
+  }
   for (const m of MARKETS) {
     const set = marketArtists(m.key);
-    const withArchive = ARCHIVE_MARKETS.has(m.key);
-    const rows = main.filter(l => set.has(l.artist)).concat(withArchive ? archiveOnly.filter(l => set.has(l.artist)) : []);
-    const sold = rows.filter(l => l.status === 'sold' && (l.priceUsd || 0) > 0);
-    if (sold.length) w.put(`x:k:${m.key}`, encodeScopeIndex(buildScopeIndex(sold.map(row => ({ row, pos: posOf.get(row.id)! })))));
-    // the /analytics pools read only concluded rows (sold, bought in) and no
-    // player column
-    w.putJsonGz(`s:k:${m.key}`, buildSummary(`k:${m.key}`, rows.filter(l => l.status === 'sold' || l.status === 'bought_in'), { players: false }));
-    markets[m.key] = { sold: sold.length };
+    const rows = main.filter(l => set.has(l.artist)).concat(ARCHIVE_MARKETS.has(m.key) ? archiveOnly.filter(l => set.has(l.artist)) : []);
+    emitTable(`k:${m.key}`, rows.filter(l => l.status === 'sold' && (l.priceUsd || 0) > 0));
+    // the /analytics pools read only concluded rows (sold, bought in), no players
+    locs.set(`s:k:${m.key}`, w.gz(buildSummary(`k:${m.key}`, rows.filter(l => l.status === 'sold' || l.status === 'bought_in'), { players: false })));
+    // settled flags (/receipts): the row + the flag it carried while live
+    const flagged = settledRows.filter(l => m.key === 'all' || set.has(l.artist)).slice(0, SETTLED_KEEP)
+      .map(l => ({ ...displayRow(l), signal: l.signal }));
+    locs.set(`z:${m.key}`, w.gz({ rows: flagged }));
   }
+  stats.tableCombos = nCombos; stats.tablePages = nPages; stats.refs = nRefs;
+  log(`tables: ${nCombos.toLocaleString()} filter×sort combos · ${nPages.toLocaleString()} pages · ${nRefs.toLocaleString()} ref ledgers · ${lap()}`);
 
-  // ── 5 · settled flags (/receipts): stamped Below Market, now priced ─────
+  // ── 4 · id buckets + location shards → dir.bin ──────────────────────────
+  const dirArr = new Uint32Array((ID_BUCKETS + LOC_SHARDS) * 3);
   {
-    const rows = main
-      .filter(l => (l.priceUsd || 0) > 0 && (l.signal as { label?: string } | null | undefined)?.label === 'Below Market')
-      .sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''))
-      .slice(0, SETTLED_KEEP)
-      .map(l => ({ m: marketOf(l.artist), row: slimForTop(l) }));
-    w.putJsonGz('z:settled', rows);
+    const buckets: Record<string, IdEntry>[] = Array.from({ length: ID_BUCKETS }, () => ({}));
+    entries.forEach((e, id) => { buckets[idBucketOf(id)][id] = e; });
+    let maxB = 0;
+    buckets.forEach((b, i) => {
+      if (!Object.keys(b).length) return;
+      // id buckets + loc shards stay PLAIN JSON (a few KB): the hot path of
+      // every request parses one with no gunzip at all
+      const txt = JSON.stringify(b);
+      const loc = w.put(Buffer.from(txt));
+      maxB = Math.max(maxB, txt.length);
+      dirArr.set(loc, i * 3);
+    });
+    const shards: Record<string, unknown>[] = Array.from({ length: LOC_SHARDS }, () => ({}));
+    locs.forEach((v, k) => { shards[locShardOf(k)][k] = v; });
+    let maxS = 0;
+    shards.forEach((s, i) => {
+      if (!Object.keys(s).length) return;
+      const txt = JSON.stringify(s);
+      maxS = Math.max(maxS, txt.length);
+      dirArr.set(w.put(Buffer.from(txt)), (ID_BUCKETS + i) * 3);
+    });
+    stats.maxIdBucketBytes = maxB; stats.maxLocShardBytes = maxS; stats.locKeys = locs.size;
   }
   w.close();
+  fs.writeFileSync(path.join(dir, 'dir.bin'), Buffer.from(dirArr.buffer));
 
-  // ── 6 · location tables, manifest, pointer ──────────────────────────────
-  const shards: Record<string, Loc>[] = Array.from({ length: LOC_SHARDS }, () => ({}));
-  w.locs.forEach((loc, key) => { shards[locShardOf(key)][key] = loc; });
-  const objects: string[] = [...w.blobs.map(b => prefix + b)];
-  shards.forEach((s, i) => {
-    fs.writeFileSync(path.join(dir, locShardName(i)), JSON.stringify(s));
-    objects.push(prefix + locShardName(i));
-  });
   const manifest: Manifest = {
     format: FORMAT_VERSION, version, lastCrawl: input.lastCrawl, generatedAt: new Date().toISOString(),
-    blobs: w.blobs, rows: store.length, chunks, makers, markets,
+    blobs: w.blobs, rows: store.length, comps: nComps, compsWindow: cutoff,
   };
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
-  objects.push(prefix + 'manifest.json');
   fs.writeFileSync(path.join(outRoot, 'api', 'current.json'), JSON.stringify({ version, prefix }));
-  objects.push('api/current.json'); // LAST — the pointer flips only after every payload is up
+  const objects = [...w.blobs.map(b => prefix + b), prefix + 'dir.bin', prefix + 'manifest.json', 'api/current.json'];
   fs.writeFileSync(path.join(outRoot, 'api', 'UPLOAD_ORDER.txt'), objects.join('\n') + '\n');
-  log(`wrote ${objects.length} objects · ${(w.total / 1048576).toFixed(1)}MB of blobs · version ${version}`);
-  return { version, dir, manifest, objects, bytes: w.total };
+  stats.objects = objects.length; stats.blobBytes = w.total;
+  log(`wrote ${objects.length} objects · ${(w.total / 1048576).toFixed(1)}MB · largest id bucket ${stats.maxIdBucketBytes}B · largest loc shard ${stats.maxLocShardBytes}B (${stats.locKeys} keys) · version ${version} · ${lap()}`);
+  return { version, dir, manifest, objects, bytes: w.total, stats };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────

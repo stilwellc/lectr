@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
-import { fetchComps, fetchLots, type ApiLotPack } from '../lib/api';
+import { fetchComps, fetchLots, isApiUnavailable, type ApiLotPack } from '../lib/api';
 
 /**
  * THE DESK'S BOOK (Oct 2026): the profile desk used to stream the whole sold
@@ -66,7 +66,13 @@ export function useSavedBook(ids: string[], aliasesOf: (id: string) => string[],
         }
       }));
       if (!dead) setSt({ key, rows, packs, loaded: !failed, error: failed });
-    })().catch(() => { if (!dead) setSt({ key, rows: new Map(), packs: NO_PACKS, loaded: false, error: true }); });
+    })().catch(e => {
+      if (dead) return;
+      // the lot API isn't serving yet: resolve against the eager book only —
+      // settled saves fall to the sold-outcomes ledger, appraisals abstain
+      if (isApiUnavailable(e)) setSt({ key, rows: new Map(), packs: NO_PACKS, loaded: true, error: false });
+      else setSt({ key, rows: new Map(), packs: NO_PACKS, loaded: false, error: true });
+    });
     return () => { dead = true; };
     // aliasesOf is a module function; eagerIds follows eager
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -16,6 +16,28 @@ import type { SummaryJson } from '../../functions/_lib/format';
 export class ApiError extends Error {
   constructor(readonly status: number, msg: string) { super(msg); }
 }
+/** the lot API isn't serving yet (no R2 data uploaded / no binding): the
+    surfaces print "not available yet" — never a broken or empty page */
+export class ApiUnavailable extends Error {
+  constructor() { super('lot API not available yet'); }
+}
+
+let availP: Promise<boolean> | null = null;
+/** ONE /api/version check per session: true only on a 200 with a version. */
+export function apiAvailable(): Promise<boolean> {
+  if (!availP) {
+    availP = fetch('/api/version', { headers: { Accept: 'application/json' } })
+      .then(async r => r.ok && !!((await r.json()) as { version?: string }).version)
+      .catch(() => false);
+    // a transient miss is re-checked on the next ask
+    availP.then(ok => { if (!ok) setTimeout(() => { availP = null; }, 30_000); });
+  }
+  return availP;
+}
+async function requireApi(): Promise<void> {
+  if (!(await apiAvailable())) throw new ApiUnavailable();
+}
+export const isApiUnavailable = (e: unknown) => e instanceof ApiUnavailable;
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -33,6 +55,7 @@ async function apiFetch(path: string): Promise<Response> {
 }
 
 async function apiJson<T>(path: string): Promise<T | null> {
+  await requireApi();
   const r = await apiFetch(path);
   if (r.status === 404) return null;
   if (!r.ok) throw new ApiError(r.status, `${path}: ${r.status}`);
@@ -60,12 +83,12 @@ export function fetchLot(id: string): Promise<AuctionLot | null> {
   });
 }
 
-/** Many lots by id (batched ≤60 per request); ids the book lacks are absent. */
+/** Many lots by id (batched ≤12 per request — the API's CPU ceiling); ids the book lacks are absent. */
 export async function fetchLots(ids: string[]): Promise<Map<string, AuctionLot>> {
   const uniq = Array.from(new Set(ids.filter(Boolean)));
   const out = new Map<string, AuctionLot>();
-  for (let i = 0; i < uniq.length; i += 60) {
-    const batch = uniq.slice(i, i + 60);
+  for (let i = 0; i < uniq.length; i += 12) {
+    const batch = uniq.slice(i, i + 12);
     const j = await apiJson<{ lots: Record<string, AuctionLot> }>(`/api/lots?ids=${batch.map(encodeURIComponent).join(',')}`);
     for (const [id, l] of Object.entries(j?.lots || {})) out.set(id, l);
   }
@@ -78,7 +101,9 @@ export interface ApiLotPack extends LotPack {
   mr?: { kind: string; confidence: string; med: number; q1: number; q3: number; n: number; scope?: string } | null;
   sig?: unknown;
 }
-export interface CompsAnswer { id: string; pack: ApiLotPack; ctx: PackRow[]; exact: PackRow | null }
+/** `np`: the lot sold outside the nightly precompute window — no comps are
+    stored for it (the surface says so; it never prints "no comps"). */
+export interface CompsAnswer { id: string; pack: ApiLotPack; ctx: PackRow[]; exact: PackRow | null; np?: boolean }
 
 const compsP = new Map<string, Promise<CompsAnswer | null>>();
 /** One lot's comp reads, computed at the edge over its own candidate pool. */
@@ -92,7 +117,11 @@ export interface TableQuery { sort: 'date' | 'price'; cat?: string | null; sport
 export interface TablePage {
   total: number; page: number; size: number; rows: AuctionLot[];
   facets: { cats: string[]; sports: [string, number][] | null };
+  /** the table holds more rows than the API materializes (TABLE_MAX_PAGES) */
+  capped?: boolean;
 }
+/** rows a table can page through (deeper → narrow the filter / flip the sort) */
+export const TABLE_BROWSABLE = 500;
 const tableP = new Map<string, Promise<TablePage>>();
 export function fetchTablePage(scope: TableScope, q: TableQuery): Promise<TablePage> {
   const sp = new URLSearchParams({ sort: q.sort, page: String(q.page), size: String(q.size) });

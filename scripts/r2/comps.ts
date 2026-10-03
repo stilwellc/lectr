@@ -1,10 +1,11 @@
 /**
- * comps-api.ts — one lot's comp reads, computed at the edge over ONLY the
- * candidate partitions it can draw from (pools.ts), with the SAME app/lib
- * functions the certificate, the comps modal and the nightly lot-pack
- * emitter (scripts/emit-page-stats.ts) run. The answer is a superset of the
- * build-time LotPack so LotPage / ComparableModal / the profile desk read it
- * through their existing pack paths.
+ * comps.ts — one lot's comp reads, computed at BUILD time (scripts/emit-r2-index.ts)
+ * over ONLY the candidate partitions it can draw from (pools.ts), with the
+ * SAME app/lib functions the certificate, the comps modal and the nightly
+ * lot-pack emitter (scripts/emit-page-stats.ts) run. The stored answer is a
+ * superset of the build-time LotPack, so LotPage / ComparableModal / the
+ * profile desk read it through their existing pack paths. The API only
+ * hands the stored bytes back (Free-plan CPU budget: no comp math at the edge).
  */
 import type { AuctionLot } from '../../app/types';
 import type { LotPack, PackRow } from '../../app/lib/page-data';
@@ -15,28 +16,17 @@ import {
 } from '../../app/lib/comps';
 import { scoreComparable } from '../../app/lib/comp-score';
 import { anchorPartitions } from './pools';
-import type { Store } from './store';
+import { displayRow } from '../../functions/_lib/format';
 
-/** the bookkeeping no page reads (emit-page-stats' maker-shard DROP list) */
-const DROP = new Set(['firstSeen', '_vn', 'entitySrc', 'heightCm', 'widthCm', 'depthCm', 'subjectKeys', 'itemClass', 'drill']);
-export function slimRow(l: Record<string, unknown>): Record<string, unknown> {
-  const o: Record<string, unknown> = {};
-  for (const k in l) if (!DROP.has(k)) o[k] = l[k];
-  return o;
-}
-const slim = (l: AuctionLot) => slimRow(l as unknown as Record<string, unknown>) as unknown as PackRow;
+const slim = (l: AuctionLot) => displayRow(l as unknown as Record<string, unknown>) as unknown as PackRow;
 
 const MAX_CONTEXT = 15;
 const byDateDesc = (a: AuctionLot, b: AuctionLot) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime();
 const pricesOf = (pool: AuctionLot[]) => pool.map(l => Math.round(l.priceUsd || 0)).filter(p => p > 0).sort((a, b) => a - b);
 
 export interface ApiLotPack extends LotPack {
-  /** appraiseLot over the maker book (always computed — the profile desk's
-      collection value and its "same-edition comps" read) */
   ap?: { value: number; n: number; kind: 'edition' | 'form'; confidence: string } | null;
-  /** makerReferenceBand (unique works' context range on the profile desk) */
   mr?: { kind: string; confidence: string; med: number; q1: number; q3: number; n: number; scope?: string } | null;
-  /** the client-read signal behind `c` when the engine made no call */
   sig?: unknown;
 }
 export interface CompsAnswer {
@@ -48,38 +38,41 @@ export interface CompsAnswer {
   exact: PackRow | null;
 }
 
-function dedupe(rows: Record<string, unknown>[][]): AuctionLot[] {
+/** the in-memory book the build computes over */
+export interface CompSource {
+  partition(key: string): AuctionLot[];
+  byId(id: string): AuctionLot | undefined;
+}
+
+function union(input: AuctionLot[][]): AuctionLot[] {
+  const parts = input.filter(p => p.length);
+  if (parts.length === 0) return [];
+  if (parts.length === 1) return parts[0];
   const seen = new Set<string>();
   const out: AuctionLot[] = [];
-  for (const part of rows) for (const r of part) {
-    const id = String(r.id);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(r as unknown as AuctionLot);
+  for (const part of parts) for (const r of part) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push(r);
   }
   return out;
 }
 
-export async function compsFor(store: Store, lot: AuctionLot): Promise<CompsAnswer> {
+export function compsFor(src: CompSource, lot: AuctionLot): CompsAnswer {
   const parts = anchorPartitions(lot);
   const mkt = marketOf(lot.artist);
   const sso = isSportsScienceObject(lot);
-  const many = async (keys: string[]) => dedupe(await Promise.all(keys.map(k => store.partition(k))));
-  const [formPool, idPool, sciPool, culPool, groupRows] = await Promise.all([
-    many(parts.form),
-    parts.identity ? many([parts.identity]) : Promise.resolve([] as AuctionLot[]),
-    mkt === 'science' ? many(parts.science) : Promise.resolve([] as AuctionLot[]),
-    mkt === 'culture' ? many(parts.culture) : Promise.resolve([] as AuctionLot[]),
-    parts.group ? many([parts.group]) : Promise.resolve([] as AuctionLot[]),
-  ]);
+  const many = (keys: string[]) => union(keys.map(k => src.partition(k)));
+  const formPool = many(parts.form);
+  const idPool = parts.identity ? many([parts.identity]) : [];
   // the maker-book pool LotPage reads (same artist; form ∪ identity covers
   // every candidate compPoolRead / appraiseLot can admit)
-  const pool = dedupe([formPool as unknown as Record<string, unknown>[], idPool as unknown as Record<string, unknown>[]]);
+  const pool = union([formPool, idPool]);
 
   const pack: ApiLotPack = {};
   if (sso) {
     const band = soldCompBand(lot, idPool);
-    if (band) pack.b = { form: band.form, median: band.median, low: band.low, high: band.high, n: band.n, confidence: band.confidence, rows: band.pool.map(slim) };
+    if (band) pack.b = { form: band.form, median: band.median, low: band.low, high: band.high, n: band.n, confidence: band.confidence, rows: [...band.pool].sort(byDateDesc).map(slim) };
   }
   if (!pack.b) {
     const ev = lot.value;
@@ -87,9 +80,7 @@ export async function compsFor(store: Store, lot: AuctionLot): Promise<CompsAnsw
     if (ev && ev.signal && ev.compRatio != null && evSane) {
       // 'at comparable market' = the engine looked and called it fair: no call
       if (!ev.signal.label.startsWith('at')) {
-        const ids = (ev.poolIds || []).map(String);
-        const got = await store.rowsById(ids);
-        const resolved = ids.map(id => got.get(id) as unknown as AuctionLot | undefined)
+        const resolved = (ev.poolIds || []).map(id => src.byId(String(id)))
           .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
         pack.c = {
           n: ev.n || resolved.length,
@@ -112,11 +103,11 @@ export async function compsFor(store: Store, lot: AuctionLot): Promise<CompsAnsw
   const ap = appraiseLot(lot, pool);
   pack.ap = ap ? { value: ap.value, n: ap.n, kind: ap.kind, confidence: String(ap.confidence) } : null;
   pack.a = ap?.value ?? null;
-  if (mkt === 'science') pack.r = scienceReferenceBand(lot, sciPool);
-  else if (mkt === 'culture') pack.r = cultureReferenceBand(lot, culPool);
+  if (mkt === 'science') pack.r = scienceReferenceBand(lot, many(parts.science));
+  else if (mkt === 'culture') pack.r = cultureReferenceBand(lot, many(parts.culture));
   pack.mr = makerReferenceBand(lot, formPool);
-  if (lot.repeatSaleGroupId) {
-    const rows = groupRows.filter(r => r.repeatSaleGroupId === lot.repeatSaleGroupId);
+  if (parts.group) {
+    const rows = src.partition(parts.group).filter(r => r.repeatSaleGroupId === lot.repeatSaleGroupId);
     if (!rows.some(r => r.id === lot.id)) rows.push(lot);
     if (rows.length >= 2) pack.p = rows.sort((a, b) => ((a.saleDate || '') < (b.saleDate || '') ? -1 : 1)).map(slim);
   }
@@ -126,16 +117,19 @@ export async function compsFor(store: Store, lot: AuctionLot): Promise<CompsAnsw
   if (!pack.c && !pack.b) {
     const scored = formPool
       .filter(l => l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id && areComparable(lot, l))
-      .map(s => ({ lot: s, score: scoreComparable(lot, s) }));
-    scored.sort((a, b) => (Math.abs(a.score - b.score) > 0.01 ? b.score - a.score : byDateDesc(a.lot, b.lot)));
+      .map(s => ({ lot: s, score: scoreComparable(lot, s), t: new Date(s.saleDate).getTime() }));
+    // the modal's exact comparator, with each date parsed once
+    scored.sort((a, b) => (Math.abs(a.score - b.score) > 0.01 ? b.score - a.score : b.t - a.t));
     ctx = scored.slice(0, MAX_CONTEXT).map(x => slim(x.lot));
   }
 
-  let exact: PackRow | null = null;
   const exId = lot.value?.exact?.id;
-  if (exId) {
-    const r = await store.rowById(String(exId));
-    exact = r ? slim(r as unknown as AuctionLot) : null;
-  }
-  return { id: lot.id, pack, ctx, exact };
+  const ex = exId ? src.byId(String(exId)) : undefined;
+  return { id: lot.id, pack, ctx, exact: ex ? slim(ex) : null };
+}
+
+/** an answer that carries nothing a surface would print */
+export function isEmptyAnswer(a: CompsAnswer): boolean {
+  const p = a.pack;
+  return !p.b && !p.c && !p.ap && !p.r && !p.mr && !p.p && !a.ctx.length && !a.exact;
 }
