@@ -23,6 +23,10 @@ interface ArtistStats {
 }
 
 const size = { width: 1200, height: 630 };
+// Next 16's next/og default font is Geist; every card through Next 14 used
+// next/og's bundled Noto Sans. Pin that exact file (OFL, vendored from
+// next@14.2.35) so the share cards keep their look across the upgrade.
+const fonts = [{ name: 'sans-serif', data: fs.readFileSync(path.join(process.cwd(), 'scripts/og-fonts/noto-sans-v27-latin-regular.ttf')), weight: 400 as const, style: 'normal' as const }];
 
 // The sign, embedded — this script runs pre-build with no host to fetch from.
 const mark = fs.readFileSync(path.join(process.cwd(), 'public', 'brand', 'lectr-ink-lg.png')).toString('base64');
@@ -75,7 +79,7 @@ function card(label: string, s: ArtistStats) {
         )}
       </div>
     ),
-    { ...size }
+    { ...size, fonts }
   );
 }
 

@@ -62,7 +62,8 @@ export function generateStaticParams() {
   return refRows().map(r => ({ maker: r.maker, key: encodeRefPath(r.ref) }));
 }
 
-export function generateMetadata({ params }: { params: { maker: string; key: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ maker: string; key: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const row = findRow(params.maker, params.key);
   const makerName = ARTIST_LABEL[params.maker] || params.maker;
   const label = row ? refLabel(row.ref) : refLabel(decodeRefPath(params.key));
@@ -85,7 +86,8 @@ export function generateMetadata({ params }: { params: { maker: string; key: str
   };
 }
 
-export default function StaticRefPage({ params }: { params: { maker: string; key: string } }) {
+export default async function StaticRefPage(props: { params: Promise<{ maker: string; key: string }> }) {
+  const params = await props.params;
   const refKey = `${params.maker}:${decodeRefPath(params.key)}`;
   // key: navigating between ref dossiers must remount — same doctrine as the
   // query route it replaces.

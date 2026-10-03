@@ -15,9 +15,9 @@
 # install hard-capped at 8 min, the job at 90, and `house` + `sale_date` /
 # `auction` inputs target ONE house's auctions around ONE sale (e.g. Memory
 # Lane 2026-06-06) instead of the whole archive. If CF still walls the
-# postback from CI, the residential-IP path is scripts/_qa/heal-local.sh
+# postback from CI, the residential-IP path is scripts/oneoff/qa/heal-local.sh
 # (same script, needs a valid local Cloudflare token — see
-# scripts/_qa/MEMORYLANE_HEAL_STATUS.md).
+# scripts/oneoff/qa/MEMORYLANE_HEAL_STATUS.md).
 name: Gallery heal (CreateAuction trio)
 on:
   workflow_dispatch:

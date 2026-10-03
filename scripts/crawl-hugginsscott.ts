@@ -54,23 +54,27 @@ async function lotUrlsForMonth(monthUrl: string, maxPages = 300): Promise<string
       break;
     }
     pageMisses = 0;
-    const $ = cheerio.load(html);
-    const found: string[] = [];
-    $('a[href*="/auction/"]').each((_, el) => {
-      const href = $(el).attr('href') || '';
-      // detail = /auction/{yr}/{mo}/{lot#}/{slug}
-      if (/\/auction\/\d{4}\/[A-Za-z]+\/\d+\/[a-z0-9-]+/i.test(href)) {
-        out.push(href.startsWith('http') ? href : BASE + href);
-        found.push(href);
-      }
-    });
+    const found = monthLotLinks(html);
+    out.push(...found);
     if (!found.length) break;
     await new Promise(r => setTimeout(r, 350));
   }
   return Array.from(new Set(out));
 }
 
-function idFromUrl(url: string): string {
+/** lot detail URLs (absolute, page order, duplicates kept) on ONE month-index
+ *  page — detail = /auction/{yr}/{mo}/{lot#}/{slug} */
+export function monthLotLinks(html: string): string[] {
+  const $ = cheerio.load(html);
+  const found: string[] = [];
+  $('a[href*="/auction/"]').each((_, el) => {
+    const href = $(el).attr('href') || '';
+    if (/\/auction\/\d{4}\/[A-Za-z]+\/\d+\/[a-z0-9-]+/i.test(href)) found.push(href.startsWith('http') ? href : BASE + href);
+  });
+  return found;
+}
+
+export function idFromUrl(url: string): string {
   const m = url.match(/\/auction\/(\d{4})\/([A-Za-z]+)\/(\d+)\//);
   return m ? `${m[1]}-${m[2].toLowerCase()}-${m[3]}` : url.replace(/[^0-9a-z]+/gi, '-').slice(-40);
 }
@@ -234,4 +238,8 @@ async function main() {
     console.log('[H&S] dry run (pass --write to persist)');
   }
 }
-main().catch(e => { console.error('[H&S] fatal', e); reportAndExit({ house: 'hugginsscott', fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
+// run main() ONLY when executed directly — importing the pure readers
+// (monthLotLinks, monthIndexRank) from a test must NOT spawn a crawl.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(e => { console.error('[H&S] fatal', e); reportAndExit({ house: 'hugginsscott', fetched: 0, parsed: 0, settled: 0, reason: `crashed: ${String((e as Error)?.message || e).slice(0, 200)}` }); });
+}

@@ -3,7 +3,7 @@
 //
 // MIGRATION (verified Sep 3 2026, plain curl 200 with a real Chrome UA):
 // hakes.com is now a Bidsquare white-label. The old ASP.NET plan in
-// scripts/_qa/sports-expansion-recon.md — `/{SLUG}-LOT{id}.aspx`,
+// scripts/oneoff/qa/sports-expansion-recon.md — `/{SLUG}-LOT{id}.aspx`,
 // `pastauctionlanding.aspx`, the Akamai wall, Playwright — is DEAD: those URLs
 // return 404 and no bot wall was hit anywhere on the new site.
 //

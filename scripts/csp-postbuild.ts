@@ -1,7 +1,7 @@
 /**
  * csp-postbuild — make the static export satisfy a strict script-src.
  *
- * Next 14's static export inlines the RSC flight payload into every page as a
+ * Next's static export (14 through 16) inlines the RSC flight payload into every page as a
  * run of `<script>self.__next_f.push(...)</script>` tags. Their contents differ
  * per page (3,600+ unique bodies across ~1,200 pages), so a hash allow-list is
  * unworkable (Cloudflare caps a header value at 2,000 chars) and a nonce needs

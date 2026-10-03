@@ -4,7 +4,7 @@
 # propstoreauction.com = AWS-WAF 202-empty; julienslive.com 301s to a host that
 # no longer resolves), so realized prices come from Wayback captures of their
 # lot-details pages. Recon, CDX counts and MEASURED yields live in
-# scripts/_qa/JULIENS_PROPSTORE_PLAN.md — headline: Julien's ≈ 14,038 captured
+# scripts/oneoff/qa/JULIENS_PROPSTORE_PLAN.md — headline: Julien's ≈ 14,038 captured
 # lots at a 76% sold-rate (≈10K rows); Propstore ≈ 6,899 at 14% (≈1K rows,
 # because the Archive mostly captured its lots BEFORE the sale closed).
 #

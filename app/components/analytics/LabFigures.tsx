@@ -27,6 +27,7 @@ import type { MarketData, Backtest, HedonicEntry } from '../../hooks/useRayData'
 import type { AuctionLot } from '../../types';
 import { marketOf } from '../../constants';
 import { MARKET_COLOR } from '../../lib/heroLayers';
+import { medianUpperSorted } from '../../lib/stats';
 import FigCap from '../FigCap';
 import { GapMark, OddsMark, DepthMark, SalesMark } from '../marks';
 
@@ -551,7 +552,8 @@ export function BidVelocityFigure({ lots, scope = 'all' }: { lots: AuctionLot[];
     }
     counts.sort((a, b) => a - b);
     const active = counts.filter(c => c > 0);
-    const med = (a: number[]) => (a.length ? a[Math.floor(a.length / 2)] : 0);
+    // the UPPER-middle count (an observed integer: "the median lot holds N bids")
+    const med = (a: number[]) => medianUpperSorted(a, 0);
     return {
       counts, active, zero: counts.length - active.length,
       med: med(counts), medActive: med(active),
