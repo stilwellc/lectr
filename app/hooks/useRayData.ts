@@ -399,7 +399,8 @@ function loadRayData(): Promise<RayPayload> {
         if (!entryNewer) continue;
         if (o.b > 0 && o.b >= baseBid) lw.currentBid = o.b;
         if (o.n > 0 && o.n >= baseN) lw.bidCount = o.n;
-        if (o.proj) lw.bidProj = { g: lw.bidProj?.g ?? 1, allIn: o.proj, ...(o.floor ? { floor: o.floor, below: o.below } : {}) };
+        // (Oct 6) keep the build's cell validation (bidProj.ok) across the overlay
+        if (o.proj) lw.bidProj = { g: lw.bidProj?.g ?? 1, allIn: o.proj, ...(o.floor ? { floor: o.floor, below: o.below } : {}), ...(lw.bidProj?.ok ? { ok: true } : {}) };
         // the lot's bid state is now INTRADAY-fresh — stamp the overlay's
         // generatedAt so surfaces can say "LIVE · refreshed Nh ago" instead
         // of letting close-day bids read as last night's numbers

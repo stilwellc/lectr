@@ -4,7 +4,9 @@ import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
 import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
-import { titleTokens as titleTokensOf, extractEdition, extractSerials } from '../../app/lib/normalize';
+import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
+import { isCurrency } from '../../app/types';
+import { christiesLocationCurrency } from './houses/common';
 import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
@@ -745,6 +747,88 @@ export function dedupeBruunUnderBonhams(lots: Lot[]): { dropped: number; relabel
   return { dropped: compact(lots, drop), relabelled };
 }
 
+// ── BRUUN RASMUSSEN CURRENCY (Oct 6 2026): the Bonhams search API reports
+// BR's brk_ sales in DKK (`currency.iso_code: 'DKK'`, checked on live lots;
+// bruun-rasmussen.dk prints the same figures in DKK), but the money layer had
+// no DKK and the crawler's iso mapper defaulted unknown codes to 'USD' — so
+// every BR row carried its DKK figures at fxRate 1 (~6.5× too high in USD).
+// The crawler is fail-closed now; the rows already in the segments are
+// re-stamped here: the native figures ARE DKK, re-derived to dated USD.
+// Idempotent (only rows still stamped USD at rate 1 are touched).
+export function restampBruunCurrency(lots: Lot[]): number {
+  let n = 0;
+  for (const l of lots as (DQLot & Record<string, unknown>)[]) {
+    if (!/^bonhams-brk_/.test(String(l.id)) || l.nativeCurrency !== 'USD' || (l.fxRate as number | undefined) !== 1) continue;
+    const sd = l.saleDate ? String(l.saleDate) : null;
+    const conv = (x: unknown) => toUsdDated(typeof x === 'number' ? x : null, 'DKK', sd);
+    const fx = conv(null);
+    l.nativeCurrency = 'DKK'; l.currency = 'DKK';
+    l.fxRate = fx.rate; l.fxAsOf = fx.asOf;
+    l.estLowUsd = conv(l.estLowNative).usd; l.estHighUsd = conv(l.estHighNative).usd;
+    l.estimateLow = l.estLowUsd; l.estimateHigh = l.estHighUsd;
+    l.hammerUsd = conv(l.hammerNative).usd; l.premiumUsd = conv(l.premiumNative).usd;
+    l.realizedUsd = conv(l.realizedNative).usd; l.priceUsd = l.realizedUsd;
+    n++;
+  }
+  return n;
+}
+
+// ── CHRISTIE'S SALEROOM CURRENCY (Oct 6 2026): the artist-page crawler read
+// the currency off the estimate string only and defaulted to USD, so a lot
+// whose estimate was "on request" kept its LOCAL figure under a USD label —
+// 19 sold rows (17 London, 1 Hong Kong, 1 Paris; e.g. christies-6377627 a
+// HK$174.95M Picasso stored as $174.95M, true ≈ $22.4M). The saleroom prices
+// the sale (saleName "<Location> Sale <n>"): a USD-stamped row from a
+// non-USD saleroom is re-labelled to that saleroom's currency (restampFx then
+// re-derives every USD field); a saleroom we cannot convert is quarantined.
+export function restampChristiesSaleroomCurrency(lots: Lot[]): { restamped: number; quarantined: number } {
+  let restamped = 0, quarantined = 0;
+  for (const l of lots as (DQLot & Record<string, unknown>)[]) {
+    if (l.auctionHouse !== "Christie's" || !/^christies-\d+~?$/.test(String(l.id)) || l.nativeCurrency !== 'USD') continue;
+    const m = /^(.*) Sale \d+$/.exec(String(l.saleName || ''));
+    if (!m || /^new york\b/i.test(m[1])) continue;
+    const cur = christiesLocationCurrency(m[1]);
+    if (cur === 'USD') continue;
+    if (cur == null) {
+      if (/^(?:mumbai|dubai)\b/i.test(m[1])) { markExclude(l, FX_UNKNOWN); quarantined++; }
+      continue;
+    }
+    l.nativeCurrency = cur; l.currency = cur;
+    restamped++;
+  }
+  return { restamped, quarantined };
+}
+const FX_UNKNOWN = 'fx-unknown-currency';
+
+// ── FX RE-APPLIED NIGHTLY (Oct 6 2026): rates were stamped once at crawl time
+// and never revisited, so a row crawled before a table correction kept the
+// old rate (1,590 sold lots, $13.4M understated — the 2025 GBP/EUR
+// placeholders, pre-2000 sales at the 2000 rate). Native is the fact: every
+// non-USD row's USD fields are re-derived from its native amounts at the
+// table rate for its sale date (toUsdDated — the crawler's own conversion).
+// A USD field whose native twin is absent is left as it is. Returns the rows
+// whose USD figures changed.
+export function restampFx(lots: Lot[]): number {
+  let changed = 0;
+  for (const l of lots as (DQLot & Record<string, unknown>)[]) {
+    const cur = l.nativeCurrency;
+    if (!cur || cur === 'USD' || !isCurrency(cur)) continue;
+    const sd = l.saleDate ? String(l.saleDate) : null;
+    const { rate, asOf } = fxRateFor(cur, sd);
+    const conv = (n: unknown) => (typeof n === 'number' ? toUsdDated(n, cur, sd).usd : undefined);
+    const before = `${l.realizedUsd}|${l.hammerUsd}|${l.premiumUsd}|${l.estLowUsd}|${l.estHighUsd}`;
+    const set = (usdKey: string, nativeKey: string) => { const v = conv(l[nativeKey]); if (v !== undefined) l[usdKey] = v; };
+    set('hammerUsd', 'hammerNative'); set('premiumUsd', 'premiumNative'); set('realizedUsd', 'realizedNative');
+    set('estLowUsd', 'estLowNative'); set('estHighUsd', 'estHighNative');
+    if (typeof l.realizedNative === 'number') l.priceUsd = l.realizedUsd as number | null;
+    if (typeof l.estLowNative === 'number') l.estimateLow = l.estLowUsd as number | null;
+    if (typeof l.estHighNative === 'number') l.estimateHigh = l.estHighUsd as number | null;
+    l.fxRate = rate; l.fxAsOf = asOf;
+    if (`${l.realizedUsd}|${l.hammerUsd}|${l.premiumUsd}|${l.estLowUsd}|${l.estHighUsd}` !== before) changed++;
+  }
+  return changed;
+}
+
 // ── FOREIGN LEADING MAKER (Chagall under Picasso, Basquiat/Cocteau under Warhol,
 // Miró under Matisse): a title that LEADS with a different artist's full name —
 // "Jean-Michel Basquiat", "MIRÓ, Joan et René CHAR", "After Marc Chagall" — and
@@ -1008,7 +1092,8 @@ export function fixFamilyHammerEqualsPrice(lots: Lot[]): { recomputed: number; n
 
 export type HygieneReport = {
   rrStubs: number; rrDupes: number; urlDupes: number;
-  bruun: { dropped: number; relabelled: number };
+  bruun: { dropped: number; relabelled: number; restamped: number };
+  fx: { saleroom: number; quarantined: number; restamped: number };
   foreignMaker: { rerouted: number; dropped: number };
   setCodeCards: number;
   staleUpcoming: { total: number; byHouse: Record<string, number> };
@@ -1038,9 +1123,18 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // the Sep 27 dedupe family (next to the Wright mirrors — same compaction):
   const rrDupes = dedupeRRSameSaleItems(ls);
   const urlDupes = dedupeUrlSchemeCollisions(ls);
-  const bruun = dedupeBruunUnderBonhams(ls);
+  const bruun = { ...dedupeBruunUnderBonhams(ls), restamped: restampBruunCurrency(ls) };
   const nflRelists = markNflRelists(ls);
-  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's/phillips url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} · nfl relists (earlier sale unpaid)=${nflRelists.marked} ($${Math.round(nflRelists.usd)})`);
+  // currency labels first, then every non-USD row's USD figures re-derived at
+  // today's table (before any pass reads a USD price)
+  const saleroom = restampChristiesSaleroomCurrency(ls);
+  // sale-local day BEFORE the FX restamp (dated rates key on saleDate) and
+  // after the saleroom currency labels (Sotheby's zone is read from currency)
+  const localized = localizeSaleDates(ls);
+  console.log(`[normalize] saleDate → sale-local day: ${localized.total} (${Object.entries(localized.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'})`);
+  const fx = { saleroom: saleroom.restamped, quarantined: saleroom.quarantined, restamped: restampFx(ls) };
+  console.log(`[normalize] fx: christie's saleroom currency re-labelled=${fx.saleroom} quarantined=${fx.quarantined} · USD fields re-derived from native on ${fx.restamped} rows`);
+  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's/phillips url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} DKK-restamped=${bruun.restamped} · nfl relists (earlier sale unpaid)=${nflRelists.marked} ($${Math.round(nflRelists.usd)})`);
   // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
   // isMisattributed reads the raw title (car marques / life-dates survive any
   // title clean), and dropping early shrinks every pass that follows.
@@ -1067,8 +1161,6 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const players = recoverPlayerSlugs(ls);
   const signers = recoverAutographSigners(ls);
   const cultureStamped = stampCultureAxes(ls);
-  const localized = localizeSaleDates(ls);
-  console.log(`[normalize] saleDate → sale-local day: ${localized.total} (${Object.entries(localized.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'})`);
   const datesFixed = reconcileSaleDates(ls);
   const restamped = restampIdentityKeys(ls);
   const sub = stampSubCats(ls);
@@ -1112,7 +1204,7 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
     `datePrecision month=${datePrecision.month} year=${datePrecision.year} · ` +
     `wright-family hammer==all-in recomputed=${hammer.recomputed} nulled=${hammer.nulled}`
   );
-  return { rrStubs, rrDupes, urlDupes, bruun, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, seasonDates, hammer };
+  return { rrStubs, rrDupes, urlDupes, bruun, fx, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, seasonDates, hammer };
 }
 
 /* ── CULTURE→SCIENCE REROUTE (Aug 14) — Apple/computing lots filed under the

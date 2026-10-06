@@ -46,6 +46,26 @@
  *    "hot" cards are over-represented vs buy-and-hold. This tilts the sample.
  *  • THIN TAILS: early quarters carry few pairs; their β is noisy and their CI
  *    wide. The gating refuses to publish a horizon anchored on a thin quarter.
+ *  • HOUSE LEVELS (Oct 2026): a pair that buys at one house and resells at
+ *    another carries that house-level gap in its relative. Model-level keys
+ *    (watch REFERENCE, not serial) make it worse: a quarter Sotheby's
+ *    dominates moves β by Sotheby's level, not by price. House FIXED EFFECTS
+ *    (+1 resale house, −1 purchase house; most-traded house = reference) take
+ *    the level out of the time dummies.
+ *  • OUTLIER PAIRS: a reference resold as a gold vs a steel variant, or a
+ *    box-and-papers set vs a bare head, is a ×3 relative that is not price
+ *    movement. Least squares lets a handful of those move a quarter; Huber
+ *    IRLS (k = 1.345 × MAD scale, the hedonic's constants) down-weights them
+ *    instead of either trusting or hard-dropping them.
+ *  • DEPENDENT PAIRS: every pair on one key shares that key's quirks (and a
+ *    reference contributes many pairs), so the classical σ²(D'WD)⁻¹ CI was far
+ *    too narrow. The covariance is the CLUSTER-ROBUST sandwich, clustered by
+ *    object key.
+ *  • SEASONAL / MIX ENDPOINTS: the horizon ends on the last complete quarter
+ *    whose sold volume is ≥ 60% of its trailing-4-quarter median (the hedonic's
+ *    partial-quarter rule — watches trade in May/Nov; a thin Q3 dominated by
+ *    one house is not an endpoint), and an endpoint pair whose house mix
+ *    breaks (one house > 40% of one endpoint, < 12% of the other) abstains.
  *
  * BUILD-TIME ONLY (Node/tsx). No client bundle impact. Mirrors the ml-matrix /
  * Cholesky / gating conventions of scripts/hedonic-index.ts.
@@ -67,6 +87,9 @@ export interface RepeatSaleHorizon {
   ciHiPct: number | null;
   publishable: boolean;
   reason: string;             // '' when publishable, else why not
+  /** the same lag ending on neighbouring periods (one earlier; any later
+      complete period the volume rule skipped) — reported, never gated */
+  endSensitivity?: { end: string; changePct: number }[];
 }
 export interface RepeatSaleResult {
   series: RepeatSalePoint[];
@@ -95,6 +118,12 @@ export interface RepeatSaleOpts {
       clears them. A documented aggregation choice, not a gate change: the
       same pair floors apply to the half-year endpoints. */
   periodsPerYear?: 4 | 2;
+  /** house fixed effects in the pair regression (+1 resale house, −1
+      purchase house). Houses with fewer pair-endpoints than this fold into
+      the reference house (no own level). 0 disables house effects. */
+  minHousePairs?: number;
+  /** Huber IRLS passes after the GLS stage (0 = plain GLS) */
+  huberPasses?: number;
 }
 const DEFAULTS: Required<Omit<RepeatSaleOpts, 'now'>> = {
   minPairs: 150,
@@ -105,7 +134,13 @@ const DEFAULTS: Required<Omit<RepeatSaleOpts, 'now'>> = {
   maxLogRelative: 3.0,
   ridge: 1e-6,
   periodsPerYear: 4,
+  minHousePairs: 30,
+  huberPasses: 5,
 };
+const HUBER_K = 1.345;          // × robust residual scale (hedonic-index.ts)
+const PARTIAL_VOL_FRAC = 0.6;   // endpoint volume ≥ 60% of trailing-4-period median
+const COMP_HI = 0.40;           // one house > 40% of one endpoint…
+const COMP_LO = 0.12;           // …and < 12% of the other ⇒ composition break
 
 // ── small helpers (mirror hedonic-index.ts) ─────────────────────────────────
 function quarterOf(saleDate: string, ppy: 4 | 2 = 4): string | null {
@@ -154,14 +189,17 @@ function pseudoInverse(A: Matrix): Matrix {
 }
 
 // ── pair extraction ─────────────────────────────────────────────────────────
-interface Sale { period: string; ord: number; logP: number; date: string; price: number; }
+interface Sale { period: string; ord: number; logP: number; date: string; price: number; house: string; }
 interface Pair {
   q1: string; q2: string;   // sale periods (q1 < q2 by construction after sort)
   ord1: number; ord2: number;
   r: number;                // ln(p2/p1)
   gap: number;              // q2ord − q1ord (in quarters, ≥1 for kept pairs)
   key: string;              // object key (for distinct-object counting per horizon)
+  h1: string; h2: string;   // purchase / resale house
 }
+/** sold volume + house mix of the keyed pool in one period (endpoint gates) */
+export interface PeriodStat { n: number; houses: Map<string, number>; }
 /** Group a lot's SOLD sales by key, keep keys with ≥2 dated sales, form
  *  consecutive-sale pairs. Returns pairs + the distinct-object count. */
 function extractPairs(
@@ -169,8 +207,9 @@ function extractPairs(
   keyOf: (l: AuctionLot) => string | null,
   maxLogRelative: number,
   ppy: 4 | 2 = 4,
-): { pairs: Pair[]; nObjects: number; totalConsecutive: number } {
+): { pairs: Pair[]; nObjects: number; totalConsecutive: number; periodStats: Map<string, PeriodStat> } {
   const byKey = new Map<string, Sale[]>();
+  const periodStats = new Map<string, PeriodStat>();
   for (const l of lots) {
     if (l.status !== 'sold') continue;
     const price = l.priceUsd || 0;
@@ -181,9 +220,13 @@ function extractPairs(
     if (!period) continue;
     const key = keyOf(l);
     if (!key) continue;
+    const house = l.auctionHouse || 'unknown';
     (byKey.get(key) || byKey.set(key, []).get(key)!).push({
-      period, ord: quarterOrdinal(period), logP: Math.log(price), date, price,
+      period, ord: quarterOrdinal(period), logP: Math.log(price), date, price, house,
     });
+    const ps = periodStats.get(period) || periodStats.set(period, { n: 0, houses: new Map() }).get(period)!;
+    ps.n++;
+    ps.houses.set(house, (ps.houses.get(house) || 0) + 1);
   }
   const pairs: Pair[] = [];
   let nObjects = 0;
@@ -205,32 +248,43 @@ function extractPairs(
       // they'd inflate residual dof; standard BMN drops them from the fit).
       if (Math.abs(r) > maxLogRelative) continue;
       if (b.ord === a.ord) continue;
-      pairs.push({ q1: a.period, q2: b.period, ord1: a.ord, ord2: b.ord, r, gap: b.ord - a.ord, key });
+      pairs.push({ q1: a.period, q2: b.period, ord1: a.ord, ord2: b.ord, r, gap: b.ord - a.ord, key, h1: a.house, h2: b.house });
       pushedForKey++;
     }
     // the honesty floor counts objects that CONTRIBUTE — an object whose pairs
     // were all dropped (same-period / >20x) inflated "over N linked objects"
     if (pushedForKey > 0) nObjects++;
   }
-  return { pairs, nObjects, totalConsecutive };
+  return { pairs, nObjects, totalConsecutive, periodStats };
 }
 
 // ── the BMN regression ───────────────────────────────────────────────────────
 // Columns = quarters that earn a β (≥ minQuarterPairs pairs touch them), minus
-// the BASE (earliest such quarter, β≡0). Each pair row is +1 @ q2, −1 @ q1.
+// the BASE (earliest such quarter, β≡0), then one column per non-reference
+// house (house fixed effects). Each pair row is +1 @ q2, −1 @ q1, +1 @ h2,
+// −1 @ h1 (the house terms cancel on a same-house resale).
 // We never materialize the dense n×p design: we accumulate D'WD (p×p) and D'Wr
-// by touching only each pair's two nonzero entries — O(nPairs) not O(nPairs·p).
+// by touching only each pair's nonzero entries — O(nPairs) not O(nPairs·p).
 interface FitOut {
   cols: string[];                 // quarter for each β column (base excluded)
   colOf: Map<string, number>;     // quarter → column index (base absent ⇒ β=0)
-  beta: number[];                 // length p (log index level, base=0 implied)
-  cov: number[][];                // p×p covariance of β
+  beta: number[];                 // length p (log index level, base=0 implied; house FE after the quarters)
+  cov: number[][];                // p×p cluster-robust covariance of β
   sigma2: number;
   base: string;
   quarters: string[];             // ALL indexable quarters incl. base, sorted
   pairsTouching: Map<string, number>;
+  /** house → log level vs the reference house (reference and folded houses absent) */
+  houseFx: Map<string, number>;
+  refHouse: string | null;
 }
-function fitBMN(pairs: Pair[], minQuarterPairs: number, ridge: number, gls: boolean): FitOut | null {
+type Row = { c: number[]; v: number[] };
+function fitBMN(
+  pairs: Pair[], minQuarterPairs: number, ridge: number, gls: boolean,
+  opts: { minHousePairs?: number; huberPasses?: number } = {},
+): FitOut | null {
+  const minHousePairs = opts.minHousePairs ?? 0;
+  const huberPasses = opts.huberPasses ?? 0;
   // count pairs touching each quarter (endpoint membership)
   const touch = new Map<string, number>();
   for (const p of pairs) {
@@ -251,74 +305,134 @@ function fitBMN(pairs: Pair[], minQuarterPairs: number, ridge: number, gls: bool
   const cols = quarters.filter((q) => q !== base);
   const colOf = new Map<string, number>();
   cols.forEach((q, i) => colOf.set(q, i));
-  const p = cols.length;
-  if (p < 1) return null;
+  const nq = cols.length;
+  if (nq < 1) return null;
 
-  // GLS weights: BMN 3-stage. Stage 1 = OLS (w=1). Stage 2 = regress squared OLS
-  // residuals on the gap to estimate Var(ε)=A+B·gap, weight by 1/Var. We compute
-  // a single GLS refit here when `gls` is true, using an OLS pass to get resids.
-  const solveWeighted = (weights: number[]): { beta: number[]; cov: number[][]; sigma2: number } => {
+  // house fixed effects: only CROSS-house pairs identify a house level, so a
+  // house earns a column only with ≥ minHousePairs cross-house endpoints; the
+  // most-traded house is the reference (level 0), the rest fold into it.
+  const houseCol = new Map<string, number>();
+  let refHouse: string | null = null;
+  if (minHousePairs > 0) {
+    const cross = new Map<string, number>();
+    const all = new Map<string, number>();
+    for (const p of usable) {
+      all.set(p.h1, (all.get(p.h1) || 0) + 1); all.set(p.h2, (all.get(p.h2) || 0) + 1);
+      if (p.h1 !== p.h2) { cross.set(p.h1, (cross.get(p.h1) || 0) + 1); cross.set(p.h2, (cross.get(p.h2) || 0) + 1); }
+    }
+    const ranked = Array.from(all.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    refHouse = ranked.length ? ranked[0][0] : null;
+    for (const [h] of ranked) {
+      if (h === refHouse || (cross.get(h) || 0) < minHousePairs) continue;
+      houseCol.set(h, nq + houseCol.size);
+    }
+  }
+  const p = nq + houseCol.size;
+
+  // sparse design rows (≤ 4 nonzeros; same-house terms cancel)
+  const rows: Row[] = usable.map((pr) => {
+    const m = new Map<number, number>();
+    const add = (c: number | undefined, v: number) => { if (c !== undefined) m.set(c, (m.get(c) || 0) + v); };
+    add(colOf.get(pr.q2), 1); add(colOf.get(pr.q1), -1);
+    add(houseCol.get(pr.h2), 1); add(houseCol.get(pr.h1), -1);
+    const c: number[] = [], v: number[] = [];
+    for (const [k, x] of Array.from(m.entries())) if (x !== 0) { c.push(k); v.push(x); }
+    return { c, v };
+  });
+  const n = usable.length;
+
+  const solveWeighted = (weights: number[]): { beta: number[]; resid: number[]; A: Matrix } => {
     const DtWD = new Float64Array(p * p);
     const DtWr = new Float64Array(p);
-    for (let i = 0; i < usable.length; i++) {
-      const pr = usable[i];
+    for (let i = 0; i < n; i++) {
+      const { c, v } = rows[i];
       const w = weights[i];
-      const c2 = colOf.has(pr.q2) ? colOf.get(pr.q2)! : -1; // base ⇒ -1 (β=0)
-      const c1 = colOf.has(pr.q1) ? colOf.get(pr.q1)! : -1;
-      // row has +1 @ c2, −1 @ c1. Accumulate outer product · w and D'Wr.
-      if (c2 >= 0) { DtWr[c2] += w * pr.r; DtWD[c2 * p + c2] += w; }
-      if (c1 >= 0) { DtWr[c1] += -w * pr.r; DtWD[c1 * p + c1] += w; }
-      if (c2 >= 0 && c1 >= 0) { DtWD[c2 * p + c1] -= w; DtWD[c1 * p + c2] -= w; }
+      for (let a = 0; a < c.length; a++) {
+        DtWr[c[a]] += w * v[a] * usable[i].r;
+        for (let b = 0; b < c.length; b++) DtWD[c[a] * p + c[b]] += w * v[a] * v[b];
+      }
     }
     for (let c = 0; c < p; c++) DtWD[c * p + c] += ridge;
     const A = new Matrix(p, p);
     for (let r = 0; r < p; r++) for (let c = 0; c < p; c++) A.set(r, c, DtWD[r * p + c]);
-    const B = Matrix.columnVector(Array.from(DtWr));
-    const beta = solveSPD(A, B).to1DArray();
-    // residuals + robust-ish σ² (weighted RSS / dof)
-    let wrss = 0;
-    const resid = new Float64Array(usable.length);
-    for (let i = 0; i < usable.length; i++) {
-      const pr = usable[i];
-      const b2 = colOf.has(pr.q2) ? beta[colOf.get(pr.q2)!] : 0;
-      const b1 = colOf.has(pr.q1) ? beta[colOf.get(pr.q1)!] : 0;
-      const e = pr.r - (b2 - b1);
-      resid[i] = e;
-      wrss += weights[i] * e * e;
+    const beta = solveSPD(A, Matrix.columnVector(Array.from(DtWr))).to1DArray();
+    const resid = new Array<number>(n);
+    for (let i = 0; i < n; i++) {
+      const { c, v } = rows[i];
+      let fit = 0;
+      for (let a = 0; a < c.length; a++) fit += v[a] * beta[c[a]];
+      resid[i] = usable[i].r - fit;
     }
-    const sigma2 = wrss / Math.max(usable.length - p, 1);
-    const Ainv = pseudoInverse(A);
-    const cov = Ainv.mul(sigma2).to2DArray();
-    return { beta, cov, sigma2, resid: Array.from(resid) } as unknown as { beta: number[]; cov: number[][]; sigma2: number };
+    return { beta, resid, A };
   };
 
   // Stage 1: OLS
-  const ols = solveWeighted(new Array(usable.length).fill(1));
-  let final = ols;
+  let w = new Array<number>(n).fill(1);
+  let cur = solveWeighted(w);
   if (gls) {
     // Stage 2: Var(ε_i) ≈ a + b·gap_i, fit by OLS on squared residuals; floor at
     // a small positive so 1/Var is finite. Weight = 1/Var, refit (Stage 3).
-    const resids = (ols as unknown as { resid?: number[] }).resid;
-    if (resids && resids.length === usable.length) {
-      // simple 2-param regression of e² on gap
-      let sg = 0, sgg = 0, se = 0, sge = 0; const n = usable.length;
-      for (let i = 0; i < n; i++) { const g = usable[i].gap, e2 = resids[i] * resids[i]; sg += g; sgg += g * g; se += e2; sge += g * e2; }
-      const det = n * sgg - sg * sg;
-      let a = ols.sigma2, b = 0;
-      if (Math.abs(det) > 1e-12) { b = (n * sge - sg * se) / det; a = (se - b * sg) / n; }
-      const floor = Math.max(ols.sigma2 * 0.05, 1e-6);
-      const weights = usable.map((pr) => {
-        const v = a + b * pr.gap;
-        return 1 / Math.max(v, floor);
-      });
-      final = solveWeighted(weights);
-    }
+    const e = cur.resid;
+    let sg = 0, sgg = 0, se = 0, sge = 0;
+    for (let i = 0; i < n; i++) { const g = usable[i].gap, e2 = e[i] * e[i]; sg += g; sgg += g * g; se += e2; sge += g * e2; }
+    const s2ols = se / Math.max(n - p, 1);
+    const det = n * sgg - sg * sg;
+    let a = s2ols, b = 0;
+    if (Math.abs(det) > 1e-12) { b = (n * sge - sg * se) / det; a = (se - b * sg) / n; }
+    const floor = Math.max(s2ols * 0.05, 1e-6);
+    w = usable.map((pr) => 1 / Math.max(a + b * pr.gap, floor));
+    cur = solveWeighted(w);
+  }
+  // Huber IRLS on the variance-standardized residuals: a pair more than
+  // k·scale out keeps weight k/|z| instead of 1 (never dropped).
+  const w0 = w.slice();
+  for (let pass = 0; pass < huberPasses; pass++) {
+    const z = cur.resid.map((e, i) => Math.abs(e) * Math.sqrt(w0[i]));
+    const scale = medianOf(z) / 0.6745;
+    if (!(scale > 0)) break;
+    const k = HUBER_K * scale;
+    w = w0.map((wi, i) => wi * (z[i] <= k ? 1 : k / z[i]));
+    cur = solveWeighted(w);
   }
 
+  // σ² (weighted RSS / dof) — reported in the note's diagnostics only
+  let wrss = 0;
+  for (let i = 0; i < n; i++) wrss += w[i] * cur.resid[i] * cur.resid[i];
+  const sigma2 = wrss / Math.max(n - p, 1);
+
+  // CLUSTER-ROBUST sandwich, clustered by object key:
+  //   V = A⁻¹ (Σ_g s_g s_gᵀ) A⁻¹ · G/(G−1),  s_g = Σ_{i∈g} w_i e_i d_i
+  const Ainv = pseudoInverse(cur.A);
+  const scores = new Map<string, Map<number, number>>();
+  for (let i = 0; i < n; i++) {
+    const { c, v } = rows[i];
+    const k = usable[i].key;
+    const sg = scores.get(k) || scores.set(k, new Map()).get(k)!;
+    const we = w[i] * cur.resid[i];
+    for (let a = 0; a < c.length; a++) sg.set(c[a], (sg.get(c[a]) || 0) + we * v[a]);
+  }
+  const meat = new Float64Array(p * p);
+  for (const sg of Array.from(scores.values())) {
+    const ks = Array.from(sg.keys()), vs = Array.from(sg.values());
+    for (let a = 0; a < ks.length; a++) for (let b = 0; b < ks.length; b++) meat[ks[a] * p + ks[b]] += vs[a] * vs[b];
+  }
+  const G = scores.size;
+  const M = new Matrix(p, p);
+  for (let r = 0; r < p; r++) for (let c = 0; c < p; c++) M.set(r, c, meat[r * p + c]);
+  const cov = Ainv.mmul(M).mmul(Ainv).mul(G > 1 ? G / (G - 1) : 1).to2DArray();
+
+  const houseFx = new Map<string, number>();
+  for (const [h, c] of Array.from(houseCol.entries())) houseFx.set(h, cur.beta[c]);
   return {
-    cols, colOf, beta: final.beta, cov: final.cov, sigma2: final.sigma2,
-    base, quarters, pairsTouching: touch,
+    cols, colOf, beta: cur.beta, cov, sigma2,
+    base, quarters, pairsTouching: touch, houseFx, refHouse,
   };
+}
+function medianOf(xs: number[]): number {
+  if (!xs.length) return 0;
+  const s = xs.slice().sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
 // ── main entry ────────────────────────────────────────────────────────────
@@ -330,7 +444,7 @@ export function buildRepeatSaleIndex(
   const o = { ...DEFAULTS, ...opts };
   const now = opts.now || new Date();
 
-  const { pairs, nObjects } = extractPairs(lots, keyOf, o.maxLogRelative, o.periodsPerYear);
+  const { pairs, nObjects, periodStats } = extractPairs(lots, keyOf, o.maxLogRelative, o.periodsPerYear);
   const nPairs = pairs.length;
 
   const abstain = (reason: string): RepeatSaleResult => ({
@@ -340,7 +454,7 @@ export function buildRepeatSaleIndex(
   if (nPairs < o.minPairs) return abstain(`insufficient repeat-sale pairs (${nPairs} < ${o.minPairs})`);
   if (nObjects < o.minObjects) return abstain(`too few linked objects (${nObjects} < ${o.minObjects})`);
 
-  const fit = fitBMN(pairs, o.minQuarterPairs, o.ridge, /* gls */ true);
+  const fit = fitBMN(pairs, o.minQuarterPairs, o.ridge, /* gls */ true, { minHousePairs: o.minHousePairs, huberPasses: o.huberPasses });
   if (!fit) return abstain('fewer than 2 index-able quarters after pooling thin quarters');
 
   // β for a quarter: its column coefficient, or 0 for the base (dropped level).
@@ -386,21 +500,28 @@ export function buildRepeatSaleIndex(
   };
 
   // last complete quarter = latest indexed quarter strictly before the current
-  // (stub) quarter (never end on the partial current quarter).
+  // (stub) quarter (never end on the partial current quarter) whose sold
+  // volume clears PARTIAL_VOL_FRAC of its trailing-4-period median — the
+  // hedonic's rule. A seasonal market's off-quarter (watches: one house's
+  // thin September sale after the May marquee week) is not an endpoint.
   const curQ = currentQuarter(now, o.periodsPerYear);
-  const past = fit.quarters.filter((q) => q < curQ);
-  const lastComplete = past.length ? past[past.length - 1] : null;
+  const lastComplete = pickLastComplete(fit.quarters, curQ, periodStats);
 
+  // complete periods AFTER the chosen end (skipped by the volume rule) — the
+  // end-point sensitivity reports what the read would be had it ended there
+  const laterEnds = lastComplete ? fit.quarters.filter((q) => q > lastComplete && q < curQ) : [];
+  const ctx: Ctx = { fit, betaOf, varOfDiff, endpointStats, periodStats, o };
   const horizons: Record<string, RepeatSaleHorizon> = {};
   // horizon lags in PERIODS (quarters or halves)
   const perYr = o.periodsPerYear;
   const HZ: [string, number][] = [['1Y', perYr], ['3Y', 3 * perYr], ['5Y', 5 * perYr]];
   for (const [lbl, back] of HZ) {
-    horizons[lbl] = computeHorizon(lbl, back, lastComplete, fit, betaOf, varOfDiff, endpointStats, o);
+    horizons[lbl] = computeHorizon(back, lastComplete, ctx, laterEnds);
   }
 
   const note =
-    `BMN repeat-sales regression (GLS gap-weighted); ${nPairs} contrast pairs over ` +
+    `BMN repeat-sales regression (GLS gap-weighted, Huber, house fixed effects ` +
+    `${fit.houseFx.size} vs ${fit.refHouse ?? 'none'}, key-clustered CI); ${nPairs} contrast pairs over ` +
     `${nObjects} linked objects; ${fit.quarters.length} quarters; base ${fit.base}. ` +
     `Mix-immune (each object is its own control); biases: interval/holding-time ` +
     `heteroskedasticity (GLS-corrected), resale-selection (flippers over-sampled), ` +
@@ -409,38 +530,82 @@ export function buildRepeatSaleIndex(
   return { series, horizons, nPairs, nObjects, note };
 }
 
+type Ctx = {
+  fit: FitOut;
+  betaOf: (q: string) => { b: number; col: number | null };
+  varOfDiff: (a: number | null, b: number | null) => number;
+  endpointStats: (q: string) => { pairs: number; objects: number };
+  periodStats: Map<string, PeriodStat>;
+  o: Required<Omit<RepeatSaleOpts, 'now'>>;
+};
+
+/** The INTEGRITY gates of one start→end span: both endpoints carry a fitted
+ *  level, clear the pair/object floors, keep a comparable house mix, and the
+ *  implied compound rate is plausible. (The CI sign/width gates are NOT here:
+ *  a longer span may resolve a direction its 1-year pieces can't — that is
+ *  signal, not a defect.) Returns the failure reason or the log change. */
+function spanCheck(start: string, end: string, years: number, c: Ctx):
+  { ok: false; reason: string } | { ok: true; diff: number; se: number } {
+  const { fit, o } = c;
+  if (!fit.quarters.includes(start)) return { ok: false, reason: `no index-able quarter ${years}y before ${end}` };
+  if (!fit.quarters.includes(end)) return { ok: false, reason: `${end} has no index level (pooled)` };
+  if (start === end) return { ok: false, reason: 'start and end are the same quarter' };
+  const { b: bE, col: colE } = c.betaOf(end);
+  const { b: bS, col: colS } = c.betaOf(start);
+  if (!isFinite(bE) || !isFinite(bS)) return { ok: false, reason: 'an endpoint quarter has no index level (pooled)' };
+
+  // endpoint thinness gate — the repeat-sales analogue of the hedonic density gate
+  const sE = c.endpointStats(end), sS = c.endpointStats(start);
+  if (sE.pairs < o.horizonMinPairs) return { ok: false, reason: `${end} thin (${sE.pairs} pairs < ${o.horizonMinPairs})` };
+  if (sS.pairs < o.horizonMinPairs) return { ok: false, reason: `${start} thin (${sS.pairs} pairs < ${o.horizonMinPairs})` };
+  if (sE.objects < o.horizonMinObjects) return { ok: false, reason: `${end} too few objects (${sE.objects} < ${o.horizonMinObjects})` };
+  if (sS.objects < o.horizonMinObjects) return { ok: false, reason: `${start} too few objects (${sS.objects} < ${o.horizonMinObjects})` };
+  const brk = compositionBreak(c.periodStats.get(start), c.periodStats.get(end));
+  if (brk) return { ok: false, reason: `house mix breaks between ${start} and ${end} (${brk})` };
+
+  const diff = bE - bS;
+  // PLAUSIBILITY CEILING — the hedonic gate 6f mirrored (see hedonic-index):
+  // relative gates let an absurd estimate self-certify; judge the absolute
+  // implied compound rate. Repeat pairs are same-object (controls inherent),
+  // so the ceiling sits at the control-rich tier. `years` is the span in
+  // YEARS (it used to be back/4, which halved a half-year market's span).
+  const impliedCagr = Math.exp(diff / Math.max(0.25, years)) - 1;
+  if (Number.isFinite(impliedCagr) && Math.abs(impliedCagr) > 0.75) {
+    return { ok: false, reason: `implied ${(impliedCagr * 100).toFixed(0)}%/yr compound move over ${years.toFixed(1)}y exceeds the ±75%/yr plausibility ceiling — reads as pair-mix artifact, not price` };
+  }
+  return { ok: true, diff, se: Math.sqrt(c.varOfDiff(colE, colS)) };
+}
+
 function computeHorizon(
-  label: string,
   back: number,
   lastComplete: string | null,
-  fit: FitOut,
-  betaOf: (q: string) => { b: number; col: number | null },
-  varOfDiff: (a: number | null, b: number | null) => number,
-  endpointStats: (q: string) => { pairs: number; objects: number },
-  o: Required<Omit<RepeatSaleOpts, 'now'>>,
+  c: Ctx,
+  laterEnds: string[],
 ): RepeatSaleHorizon {
   const notPub = (reason: string): RepeatSaleHorizon =>
     ({ changePct: null, ciLoPct: null, ciHiPct: null, publishable: false, reason });
 
   if (!lastComplete) return notPub('no complete quarter to end on (partial-quarter guard)');
+  const perYr = c.o.periodsPerYear;
+  const years = back / perYr;
   const end = lastComplete;
   const start = shiftQuarter(end, back);
-  if (!fit.quarters.includes(start)) return notPub(`no index-able quarter ${back / 4}y before ${end}`);
-  if (start === end) return notPub('start and end are the same quarter');
+  const span = spanCheck(start, end, years, c);
+  if (!span.ok) return notPub(span.reason);
 
-  const { b: bE, col: colE } = betaOf(end);
-  const { b: bS, col: colS } = betaOf(start);
-  if (!isFinite(bE) || !isFinite(bS)) return notPub('an endpoint quarter has no index level (pooled)');
+  // CONSTITUENT WINDOWS: a multi-year horizon is a chain of 1-year windows; if
+  // any of them fails an integrity gate (thin, pooled, house-mix break,
+  // implausible), the long span is built on that same broken quarter and must
+  // not certify either (TCG: 1Y rejected as a pair-mix artifact while the 3Y
+  // that contains it published +285%).
+  for (let k = 0; years > 1 && k < years; k++) {
+    const wEnd = shiftQuarter(end, k * perYr);
+    const wStart = shiftQuarter(wEnd, perYr);
+    const w = spanCheck(wStart, wEnd, 1, c);
+    if (!w.ok) return notPub(`constituent window ${wStart}→${wEnd} fails: ${w.reason}`);
+  }
 
-  // endpoint thinness gate — the repeat-sales analogue of the hedonic density gate
-  const sE = endpointStats(end), sS = endpointStats(start);
-  if (sE.pairs < o.horizonMinPairs) return notPub(`${end} thin (${sE.pairs} pairs < ${o.horizonMinPairs})`);
-  if (sS.pairs < o.horizonMinPairs) return notPub(`${start} thin (${sS.pairs} pairs < ${o.horizonMinPairs})`);
-  if (sE.objects < o.horizonMinObjects) return notPub(`${end} too few objects (${sE.objects} < ${o.horizonMinObjects})`);
-  if (sS.objects < o.horizonMinObjects) return notPub(`${start} too few objects (${sS.objects} < ${o.horizonMinObjects})`);
-
-  const diff = bE - bS;
-  const se = Math.sqrt(varOfDiff(colE, colS));
+  const { diff, se } = span;
   const changePct = 100 * (Math.exp(diff) - 1);
   const loPct = 100 * (Math.exp(diff - 1.96 * se) - 1);
   const hiPct = 100 * (Math.exp(diff + 1.96 * se) - 1);
@@ -452,17 +617,45 @@ function computeHorizon(
     return notPub(`CI too wide (±${halfWidth.toFixed(1)}% vs point ${changePct.toFixed(1)}%) — magnitude is noise`);
   }
 
-  // PLAUSIBILITY CEILING — the hedonic gate 6f mirrored (see hedonic-index):
-  // relative gates let an absurd estimate self-certify; judge the absolute
-  // implied compound rate. Repeat pairs are same-object (controls inherent),
-  // so the ceiling sits at the control-rich tier.
-  const yearsSpanned = Math.max(0.25, back / 4);
-  const impliedCagr = Math.exp(diff / yearsSpanned) - 1;
-  if (Number.isFinite(impliedCagr) && Math.abs(impliedCagr) > 0.75) {
-    return notPub(`implied ${(impliedCagr * 100).toFixed(0)}%/yr compound move over ${yearsSpanned.toFixed(1)}y exceeds the ±75%/yr plausibility ceiling — reads as pair-mix artifact, not price`);
+  // END-POINT SENSITIVITY (reported, never gated): the same lag ending one
+  // period earlier, and ending on any later complete period the volume rule
+  // skipped — how much of the read is the choice of endpoint.
+  const endSensitivity: { end: string; changePct: number }[] = [];
+  for (const e of [shiftQuarter(end, 1)].concat(laterEnds)) {
+    const s0 = shiftQuarter(e, back);
+    if (!c.fit.quarters.includes(e) || !c.fit.quarters.includes(s0)) continue;
+    const bE = c.betaOf(e).b, bS = c.betaOf(s0).b;
+    if (isFinite(bE) && isFinite(bS)) endSensitivity.push({ end: e, changePct: 100 * (Math.exp(bE - bS) - 1) });
   }
+  return { changePct, ciLoPct: loPct, ciHiPct: hiPct, publishable: true, reason: '', endSensitivity };
+}
 
-  return { changePct, ciLoPct: loPct, ciHiPct: hiPct, publishable: true, reason: '' };
+/** Latest indexed period before the stub whose sold volume is ≥
+ *  PARTIAL_VOL_FRAC × the median of the 4 periods ending at it (inclusive). */
+function pickLastComplete(quarters: string[], curQ: string, stats: Map<string, PeriodStat>): string | null {
+  const past = quarters.filter((q) => q < curQ);
+  for (let i = past.length - 1; i >= 0; i--) {
+    const q = past[i];
+    const win: number[] = [];
+    for (let k = 0; k < 4; k++) win.push(stats.get(shiftQuarter(q, k))?.n ?? 0);
+    const med = medianOf(win);
+    if (med > 0 && (stats.get(q)?.n ?? 0) >= PARTIAL_VOL_FRAC * med) return q;
+  }
+  return null;
+}
+
+/** The hedonic's composition-break test on house shares: one house above
+ *  COMP_HI of one endpoint's sold volume while below COMP_LO of the other's. */
+function compositionBreak(a: PeriodStat | undefined, b: PeriodStat | undefined): string | null {
+  if (!a || !b || !a.n || !b.n) return null;
+  const houses = new Set(Array.from(a.houses.keys()).concat(Array.from(b.houses.keys())));
+  for (const h of Array.from(houses)) {
+    const sa = (a.houses.get(h) || 0) / a.n, sb = (b.houses.get(h) || 0) / b.n;
+    if ((sa > COMP_HI && sb < COMP_LO) || (sb > COMP_HI && sa < COMP_LO)) {
+      return `${h} ${(sa * 100).toFixed(0)}% vs ${(sb * 100).toFixed(0)}%`;
+    }
+  }
+  return null;
 }
 
 function emptyHorizons(reason: string): Record<string, RepeatSaleHorizon> {

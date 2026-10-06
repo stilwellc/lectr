@@ -1064,8 +1064,37 @@ export function dealScore(lot: AuctionLot, signalPct: number): number {
   return br * 1000 + Math.min(signalPct, 400);
 }
 
-export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepSignal | null {
-  return signalWithPool(lot, allLots)?.signal ?? null;
+/** THE FLAG A LOT WEARS (Oct 6 2026) — the ENGINE's call, never a client
+ *  synthesis. The build used to fall back to signalWithPool for lots the
+ *  engine declined to value: 119 of the 374 'Below Market' flags on the Oct 5
+ *  book (+46 'Above') came from that never-backtested read (e.g. 62 Hake's
+ *  comic pages "+259%" off Babe Ruth book pages). Now: no engine value, or an
+ *  engine value with no directional call → no flag. The printed % is the FLAG
+ *  ratio the signal was called on (value.flagRatio, fallback compRatio — on
+ *  the hammer basis from the Oct 6 engine); a ratio outside [1/5, 5] is a data
+ *  fault and carries no flag (the ×5 estimate-band sanity). 'at comparable
+ *  market' → null. One source for scripts/build-upcoming and the client. */
+export function engineFlagOf(lot: AuctionLot): DeepSignal | null {
+  const ev = lot.value;
+  if (!ev || !ev.signal) return null;
+  if (ev.compRatio != null && !(ev.compRatio <= 5 && ev.compRatio >= 1 / 5)) return null;
+  const fr = ev.flagRatio ?? ev.compRatio;
+  if (fr == null) return null;
+  const below = ev.signal.label.startsWith('below');
+  if (!below && !ev.signal.label.startsWith('above')) return null;
+  return {
+    label: below ? 'Below Market' : 'Above Market',
+    pct: Math.round((below ? fr - 1 : 1 - fr) * 100),
+    basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
+    form: ((lot as { formKey?: string }).formKey || 'unknown') as Form,
+    confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
+  };
+}
+
+/** The client-side signal read: the engine's flag (engineFlagOf). `allLots`
+ *  is kept for the call signature; no flag is synthesized from it. */
+export function computeDeepSignal(lot: AuctionLot, _allLots?: AuctionLot[]): DeepSignal | null {
+  return engineFlagOf(lot);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

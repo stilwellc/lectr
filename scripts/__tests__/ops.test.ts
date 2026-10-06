@@ -97,6 +97,10 @@ test('TRIPWIRE: validate-engine.ts thresholds still match scripts/ci/gate-thresh
     `if (!mono.ok) ${CURRENT_GATE.g2.dipBlocks ? 'failures' : 'warnings'}.push`,
     `hi >= ${CURRENT_GATE.g3.highMaxMedErr}) failures.push`,
     `coveragePct < ${CURRENT_GATE.g4.minCoveragePct}) failures.push`,
+    // (Oct 6 2026) G5 per path × tier — warns unless g5.blocks
+    `if (t.n < ${CURRENT_GATE.g5.minN}) continue;`,
+    `if (t.bias < ${CURRENT_GATE.g5.biasLo} || t.bias > ${CURRENT_GATE.g5.biasHi}) ${CURRENT_GATE.g5.blocks ? 'failures' : 'warnings'}.push`,
+    `t.within30Pct < ${CURRENT_GATE.g5.minWithin30Pct}) ${CURRENT_GATE.g5.blocks ? 'failures' : 'warnings'}.push`,
   ];
   const missing = must.filter(m => !src.includes(m));
   assert.deepEqual(missing, [], 'validate-engine.ts gate changed — update scripts/ci/gate-thresholds.ts to match AND run `npx tsx scripts/ci/gate-replay.ts --r2 --gh --set …` (docs/RUNBOOK.md "Engine-gate policy")');

@@ -81,15 +81,45 @@ export interface EngineFlags {
    *  (calibration.noEstGate; build-market applies it at publish — the record
    *  keeps scoring every value, gated or not) */
   noEstGate: boolean;
+  /** (Oct 6 2026) THE HAMMER BASIS: compRatio / flagRatio compare the comps'
+   *  HAMMER (the all-in median through this lot's dated premium inverse) to
+   *  the hammer-basis estimate, and the Flags' odds count a beat only when the
+   *  HAMMER clears the (house-adjusted) top — so at-market reads 1 and the
+   *  1.3 / 0.75 thresholds sit symmetric on one basis */
+  hammerBasis?: boolean;
+  /** (Oct 6) beat-rate calibration recency half-life of 1 year (was 3) */
+  calHalfLife1y?: boolean;
+  /** (Oct 6) a single printed figure (low == high) is its own estimate kind
+   *  's' — never read as a range; flags only where its own odds row exists */
+  singleFigure?: boolean;
+  /** (Oct 6) confidence demotes at most ONE notch (else-if), on the record's
+   *  error of the PUBLISHED value (rp), not the comp pool's (r) */
+  confOnPublished?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
 export const ENGINE_FLAGS_LEGACY: EngineFlags = {
   version: '2026.09.27-blend-tadj', houseNormFlags: false, houseAnchor: false, cardGate: false, noEstGate: false,
 };
-export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+/** The Oct 3 engine (house-normalized Flags on the all-in basis) — kept so
+ *  the harnesses can replay it against CURRENT. */
+export const ENGINE_FLAGS_HOUSE_GATE: EngineFlags = {
   version: '2026.10.03-house-gate',
   houseNormFlags: true, houseAnchor: true, cardGate: true, noEstGate: true,
+};
+/** (Oct 6 2026) THE HAMMER BASIS + one-notch confidence, promoted on the
+ *  test-year holdout (oneoff/qa/engine-ab.ts, 4,917 estimate lots, one
+ *  yardstick for both: the hammer over the house-adjusted top): flags 2,257 →
+ *  1,148 at FLAG_GATE.minOddsHammer 45, precision 43.4% → 49.7%, edge 19.0 →
+ *  21.2pt; flagged-odds calibration error per quarter 0.5–5.8pt (mean 3.0) →
+ *  0.2–3.3pt (mean 1.4); value medErr 32.3% = 32.3%, ±30% 47.7% → 47.8%;
+ *  band coverage 72.0% → 68.2%. Measured and NOT adopted: calHalfLife1y
+ *  (fewer flags, odds calibration 1.4 → 3.1pt), singleFigure (flat: 1,152
+ *  flags, same edge). docs/ENGINE_LANES.md §11. */
+export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+  ...ENGINE_FLAGS_HOUSE_GATE,
+  version: '2026.10.06-hammer-basis',
+  hammerBasis: true, confOnPublished: true,
 };
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
@@ -123,9 +153,25 @@ const HOUSE_FACTOR_CLAMP = [0.25, 4] as const;
  *  (market×house → house → market → global). `log` is the cell itself
  *  (log realized all-in / estimate mid); `f` = exp(log − ref), the habit
  *  relative to the global band habit. */
-export function houseFactorOf(market: string | null | undefined, house: string | null | undefined, et: 'b' | 'p', hb: HouseBias | null = HB): { f: number; log: number; key: string } | null {
+export function houseFactorOf(market: string | null | undefined, house: string | null | undefined, et: EstKind, hb: HouseBias | null = HB): { f: number; log: number; key: string } | null {
   if (!hb) return null;
   const m = market || 'other';
+  // (Oct 6) under the single-figure split a band reads the TRUE-range cells
+  // ('r': low < high) and a single figure its own ('s'); both relative to the
+  // true-range global habit
+  if (FLAGS.singleFigure && (et === 'b' || et === 's')) {
+    const k2 = et === 'b' ? 'r' : 's';
+    const ref = hb.cells['g:r'] ?? hb.ref;
+    const keys2 = house ? [`mh:${m}|${house}:${k2}`, `h:${house}:${k2}`, `m:${m}:${k2}`, `g:${k2}`] : [`m:${m}:${k2}`, `g:${k2}`];
+    for (const k of keys2) {
+      const c = hb.cells[k];
+      if (typeof c === 'number' && Number.isFinite(c)) {
+        const f = Math.min(HOUSE_FACTOR_CLAMP[1], Math.max(HOUSE_FACTOR_CLAMP[0], Math.exp(c - ref)));
+        return { f, log: Math.log(f) + ref, key: k };
+      }
+    }
+    if (et === 's') return null;
+  }
   const keys = house ? [`mh:${m}|${house}:${et}`, `h:${house}:${et}`, `m:${m}:${et}`, `g:${et}`] : [`m:${m}:${et}`, `g:${et}`];
   for (const k of keys) {
     const c = hb.cells[k];
@@ -136,6 +182,17 @@ export function houseFactorOf(market: string | null | undefined, house: string |
   }
   return null;
 }
+/** The estimate kind of a lot under the flags in force: 'b' a two-sided band,
+ *  'p' a single bound (RR's "$500+"), and — with FLAGS.singleFigure — 's' a
+ *  single printed figure (low == high; Wright/Rago "$5,000"), which clears its
+ *  "high" 78–89% of the time against 45–68% for real ranges. */
+export type EstKind = 'b' | 'p' | 's';
+export function estKindOf(estLow: number | null | undefined, estHigh: number | null | undefined, flags: EngineFlags = FLAGS): EstKind {
+  const lo = estLow || 0, hi = estHigh || 0;
+  if (lo > 0 && hi > 0) return flags.singleFigure && lo === hi ? 's' : 'b';
+  return 'p';
+}
+
 /** Median estimate high / estimate mid over band estimates (sold archive,
  *  n=4,496: 1.20, IQR 1.17–1.33) — the band-equivalent top of a single-point
  *  estimate. */
@@ -146,8 +203,9 @@ export const BAND_TOP_RATIO = 1.2;
  *  BAND_TOP_RATIO. "Beat" in the Flags' odds and precision means realized
  *  above THIS (a single-point low is beaten ~85% of the time by policy, which
  *  made every RR flag read 85% odds). f = 1 when no index is loaded. */
-export function adjustedTop(estLow: number | null | undefined, estHigh: number | null | undefined, f = 1): number {
+export function adjustedTop(estLow: number | null | undefined, estHigh: number | null | undefined, f = 1, kind?: EstKind): number {
   const lo = estLow || 0, hi = estHigh || 0;
+  if (kind === 's') return lo * f * BAND_TOP_RATIO;
   if (lo > 0 && hi > 0) return hi * f;
   return (lo || hi) * f * BAND_TOP_RATIO;
 }
@@ -199,6 +257,54 @@ export function buyerFields(
     expectedHammerUsd: Math.round(xh), bandLowUsd: r(lowAllIn), bandHighUsd: r(highAllIn), maxBidUsd: r(mb),
     premiumFactor: Math.round(pf * 1000) / 1000, engineVersion: FLAGS.version,
   };
+}
+
+/** (Oct 6 2026) THE LIVE-BID FLOOR. A live lot's hammer cannot land below the
+ *  bid already on it (currentBid is a HAMMER bid), so every served value is
+ *  floored there: expectedHammerUsd = max(xh, bid), and inside the last
+ *  BID_FLOOR_LATE_DAYS of the sale max(xh, bid × BID_FLOOR_LATE_LIFT) — a lot
+ *  that close still draws at least one more increment. The band low and max
+ *  bid are floored at the bid itself; the all-in fields keep their meaning
+ *  (compValueUsd / low / estimateUsd = hammer × the lot's premium at that
+ *  hammer). vsBid stays the COMPS read (it is computed before the floor).
+ *  Measured on the served tape (Sep 20 – Oct 5, 3,189 graded lots, first
+ *  served value): median abs error 154% → 86.0% (floor alone 86.9%), ±30%
+ *  17.8% → 25.0%, bias 1.61 → 1.29; last served value 154% → 60.2% (floor
+ *  alone 66.5%); card exact tier 67% → 36%. Applied at publish (build-market),
+ *  never inside the replay — a holdout lot has no bid at valuation time. */
+export const BID_FLOOR_LATE_DAYS = 3;
+export const BID_FLOOR_LATE_LIFT = 1.1;
+export function floorAtBid<V extends Partial<ValueResult> & { compValueUsd: number }>(
+  v: V, lot: { currentBid?: number | null; auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null; saleDateTime?: string | null },
+  nowMs: number,
+): V {
+  const bid = lot.currentBid || 0;
+  if (!(bid > 0)) return v;
+  const closeMs = Date.parse(String(lot.saleDateTime || lot.saleDate || ''));
+  const late = Number.isFinite(closeMs) && (closeMs - nowMs) / 86_400_000 <= BID_FLOOR_LATE_DAYS;
+  const floor = bid * (late ? BID_FLOOR_LATE_LIFT : 1);
+  const xh = v.expectedHammerUsd ?? (v.premiumFactor ? v.compValueUsd / v.premiumFactor : lotHammerFromAllIn(lot, v.compValueUsd));
+  if (xh >= floor && !((v.bandLowUsd ?? Infinity) < bid)) return v;
+  const out = { ...v } as V;
+  if (xh < floor) {
+    const pf = lotAllInFactor(lot, floor);
+    const allIn = Math.round(floor * pf);
+    out.expectedHammerUsd = Math.round(floor);
+    out.premiumFactor = Math.round(pf * 1000) / 1000;
+    out.compValueUsd = allIn;
+    if (out.estimateUsd != null) out.estimateUsd = allIn;
+    if ((out.high ?? 0) < allIn) out.high = allIn;
+    if ((out.bandHighUsd ?? 0) < out.expectedHammerUsd) out.bandHighUsd = out.expectedHammerUsd;
+    out.bidFloor = Math.round(floor);
+  }
+  const bidAllIn = Math.round(bid * lotAllInFactor(lot, bid));
+  if (out.bandLowUsd != null && out.bandLowUsd < bid) out.bandLowUsd = Math.round(bid);
+  if (out.low != null && out.low < bidAllIn) out.low = bidAllIn;
+  if (out.maxBidUsd != null) {
+    const lo = out.bandLowUsd ?? 0, hi = out.expectedHammerUsd ?? Infinity;
+    out.maxBidUsd = Math.min(hi, Math.max(lo, out.maxBidUsd));
+  }
+  return out;
 }
 
 export interface ValueResult {
@@ -269,6 +375,9 @@ export interface ValueResult {
   premiumFactor?: number;
   /** the engine version that produced this value */
   engineVersion?: string;
+  /** (Oct 6 2026) set when the live-bid floor lifted the expected hammer:
+   *  the floor it was lifted to (hammer USD) — see floorAtBid */
+  bidFloor?: number;
   /** (Oct 3 2026, card/TCG values) the publish-gate record of this value's
    *  market × tier × confidence cell over the trailing year, out of sample:
    *  graded n, share within ±30%, median realized / value */
@@ -479,7 +588,7 @@ export const BLEND_W_DEFAULT: Record<string, number> = { high: 0.4, medium: 0.25
  *  when calibrated, else house mid × premium × (comps vs house all-in)^w. */
 export function blendPredict(
   lot: { artist: string; auctionHouse?: string | null; buyerPremiumPct?: number | null },
-  estMid: number, estKind: 'b' | 'p', compMedian: number, confidence: string,
+  estMid: number, estKind: EstKind, compMedian: number, confidence: string,
   cal: EngineCalibration | null = CAL,
 ): { value: number; w: number } {
   const market = cal?.marketBySlug?.[lot.artist];
@@ -493,8 +602,9 @@ export function blendPredict(
   if (b) {
     const w = b.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1;
     // house × market intercept (the house's own estimate habit) → market → global
-    const a = (market != null && lot.auctionHouse ? b.a[`${market}|${lot.auctionHouse}:${estKind}`] : undefined)
-      ?? (market != null ? b.a[`${market}:${estKind}`] : undefined) ?? b.a[`global:${estKind}`] ?? b.a['global:b'];
+    const ek = estKind === 's' ? 'b' : estKind;
+    const a = (market != null && lot.auctionHouse ? b.a[`${market}|${lot.auctionHouse}:${ek}`] : undefined)
+      ?? (market != null ? b.a[`${market}:${ek}`] : undefined) ?? b.a[`global:${ek}`] ?? b.a['global:b'];
     if (typeof a === 'number' && Number.isFinite(a)) {
       return { value: estMid * Math.exp(a + w * Math.log(ratio)), w };
     }
@@ -523,14 +633,23 @@ export function noEstimateBias(artist: string, confidence: string, cal: EngineCa
  *  sample with a 6.6pt edge (179 flags, test year) — a coin flip is not a
  *  flag; every other market's flag buckets calibrate at 57–75%. The legacy
  *  engine keeps its 50 (raw-high odds). Mutable for the harness sweep. */
-export const FLAG_GATE = { minOdds: 55, minLiftPt: 10 };
+export const FLAG_GATE = { minOdds: 55, minLiftPt: 10, minOddsHammer: 45 };
 
 /** Calibrated beat-high rate as a function of compRatio (comps / estimate-mid).
  *  Falls back to the original holdout fit (n=5,215, monotonic 42% → 69%). */
-function beatRate(compRatio: number, market?: string, estKind?: 'b' | 'p'): number {
+function beatRate(compRatio: number, market?: string, estKind?: EstKind): number {
   if (CAL) {
     // single-point (RR "$500+") lots read the ':pt' row when calibrated —
-    // there "beat" means beating the LOW estimate, a different base rate
+    // there "beat" means beating the LOW estimate, a different base rate.
+    // (Oct 6) a single printed figure reads ONLY its own ':sf' row (market,
+    // then global); none calibrated → NaN (the caller never flags on it)
+    if (estKind === 's') {
+      const sf = (market && CAL.beatRate[`${market}:sf`]) || CAL.beatRate['global:sf'];
+      if (!sf || sf.length !== CAL.edges.length + 1) return NaN;
+      let b = 0;
+      for (const e of CAL.edges) { if (compRatio < e) break; b++; }
+      return sf[b];
+    }
     const row = (market && estKind === 'p' && CAL.beatRate[`${market}:pt`])
       || (market && CAL.beatRate[market]) || CAL.beatRate.global;
     if (row && row.length === CAL.edges.length + 1) {
@@ -637,7 +756,10 @@ export function estimateValueEx(
   const md = market ? CAL?.mdape?.[market] : undefined;
   if (md) {
     if (confidence === 'high' && typeof md.high === 'number' && md.high > CONF_MDAPE_CEIL.high) confidence = 'medium';
-    if (confidence === 'medium' && typeof md.medium === 'number' && md.medium > CONF_MDAPE_CEIL.medium) confidence = 'low';
+    // (Oct 6, FLAGS.confOnPublished) at most ONE notch: a 'high' demoted for
+    // its own tier's error is not demoted again for the 'medium' tier's
+    else if (confidence === 'medium' && typeof md.medium === 'number' && md.medium > CONF_MDAPE_CEIL.medium) confidence = 'low';
+    if (!FLAGS.confOnPublished && confidence === 'medium' && typeof md.medium === 'number' && md.medium > CONF_MDAPE_CEIL.medium) confidence = 'low';
   }
 
 
@@ -649,15 +771,18 @@ export function estimateValueEx(
   const eLo = lot.estLowUsd ?? lot.estHighUsd;
   const eHi = lot.estHighUsd ?? lot.estLowUsd;
   const estMid = eLo && eHi ? (eLo + eHi) / 2 : null;
-  const estKind: 'b' | 'p' = (lot.estLowUsd && lot.estHighUsd) ? 'b' : 'p';
+  const estKind: EstKind = estKindOf(lot.estLowUsd, lot.estHighUsd);
 
   // DIRECTIONAL signal (estimate lots)
   let signal: ValueResult['signal'] = null;
   let compRatio: number | null = null;
   let flagRatio: number | null = null;
   let houseF: number | undefined;
+  // (Oct 6, FLAGS.hammerBasis) the comps' median through THIS lot's dated
+  // premium inverse — hammer vs the hammer-basis estimate
+  const ratioOf = (allIn: number) => (FLAGS.hammerBasis ? lotHammerFromAllIn(lot, allIn) : allIn) / estMid!;
   if (estMid && estMid > 0) {
-    compRatio = compRawUsd / estMid;
+    compRatio = ratioOf(compRawUsd);
     // EXACT-MATCH CONSISTENCY GUARD (holdout-validated ADOPT): an extreme
     // ratio that contradicts the lot's own strongest evidence — an exact comp
     // realized inside the estimate band — is comp-pool pollution, not alpha.
@@ -674,7 +799,7 @@ export function estimateValueEx(
       if (exactPool.length) {
         compRawUsd = weightedMedian(exactPool.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)] as [number, number]));
         compAdjUsd = weightedMedian(exactPool.map(c => [adjOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
-        compRatio = compRawUsd / estMid;
+        compRatio = ratioOf(compRawUsd);
         if (confidence === 'high') confidence = 'medium';
       }
     }
@@ -701,13 +826,17 @@ export function estimateValueEx(
     // a flag that only reads a soft yardstick is not a flag
     const lifted = !FLAGS.houseNormFlags || !CAL
       || br - beatRate(1, CAL?.marketBySlug?.[lot.artist], estKind) >= FLAG_GATE.minLiftPt;
-    const minOdds = FLAGS.houseNormFlags && CAL ? FLAG_GATE.minOdds : 50;
-    const label: SignalLabel = flagRatio >= 1.3 && br >= minOdds && lifted ? SIGNAL_LABEL.below
-      : flagRatio <= 0.75 ? SIGNAL_LABEL.above
-        : SIGNAL_LABEL.at;
+    const minOdds = FLAGS.houseNormFlags && CAL ? (FLAGS.hammerBasis ? FLAG_GATE.minOddsHammer : FLAG_GATE.minOdds) : 50;
+    // (Oct 6) a single printed figure with no odds row of its own carries no
+    // directional call either way (br NaN)
+    const uncal = Number.isNaN(br);
+    const label: SignalLabel = uncal ? SIGNAL_LABEL.at
+      : flagRatio >= 1.3 && br >= minOdds && lifted ? SIGNAL_LABEL.below
+        : flagRatio <= 0.75 ? SIGNAL_LABEL.above
+          : SIGNAL_LABEL.at;
     const strength = (flagRatio >= 2 && br >= 60) || flagRatio <= 0.55 ? 'strong'
       : flagRatio >= 1.3 || flagRatio <= 0.75 ? 'moderate' : 'slight';
-    signal = { label, strength, beatRatePct: br };
+    signal = { label, strength, beatRatePct: uncal ? 0 : br };
   }
 
   // THE PUBLISHED VALUE (Sep 27 2026 engine pass). Measured live (659 estimate
@@ -915,7 +1044,22 @@ export function resolveComps(
     // admit down to the RELAXED tier-b gate — estimateValue applies the strict
     // gate first and only reaches for these when the strict pool is thin
     if (!passesGateWith(FALLBACK_GATE, m)) continue;
-    out.push({ id: c.id, match: m, realizedUsd: c.realizedUsd!, saleDate: c.saleDate });
+    out.push({ id: c.id, match: m, realizedUsd: compAllInUsd(c), saleDate: c.saleDate });
   }
   return out;
+}
+
+/** (Oct 6 2026) A comp's price ON THE POOL'S BASIS (all-in). Every pool
+ *  statistic is a median of premium-inclusive realized prices, but a row whose
+ *  priceBasis says the number is the HAMMER ('hammer-only' — Bonhams/Phillips
+ *  lots published without a premium; 'hammer' — the struts houses' stamp)
+ *  carries realizedUsd = hammer. Gross it with the house premium in force on
+ *  ITS sale date (premiums.lotAllInFactor — the stamped premium, else the dated
+ *  schedule; the exact inverse of lotHammerFromAllIn), so a hammer never sits
+ *  ~20% low in an all-in pool. */
+export function compAllInUsd(c: { realizedUsd?: number | null; hammerUsd?: number | null; priceBasis?: string | null; auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null }): number {
+  const r = c.realizedUsd || 0;
+  if (c.priceBasis !== 'hammer-only' && c.priceBasis !== 'hammer') return r;
+  const h = (c.hammerUsd || 0) > 0 ? c.hammerUsd! : r;
+  return h > 0 ? Math.round(h * lotAllInFactor(c, h) * 100) / 100 : r;
 }

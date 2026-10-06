@@ -617,7 +617,7 @@ jobs:
             console.log(`[backtest] generatedAt ${bt.generatedAt} (${age.toFixed(1)}d old) · engine ${bt.engineVersion} · rows on version ${bt.rowsOnVersionPct}% · n ${bt.calibration.n}`);
             if (!(age <= 3)) { console.error("::error title=stale backtest::backtest.json generatedAt is older than 3 days"); process.exit(1); }
             const exempt = new Set((process.env.EMPTY_MARKETS || "").split(",").filter(Boolean));
-            const dead = Object.entries(bt.byMarket || {}).filter(([k, v]) => !exempt.has(k) && (v.flagged.n + v.unflagged.n) === 0).map(([k]) => k);
+            const dead = Object.entries(bt.byMarket || {}).filter(([k, v]) => !exempt.has(k) && (v.flagged.n + v.unflagged.n + (v.soldOnly ? v.soldOnly.flagged.n + v.soldOnly.unflagged.n : 0) + (v.singleFigure ? v.singleFigure.flagged.n + v.singleFigure.unflagged.n : 0)) === 0).map(([k]) => k);
             if (dead.length) { console.error(`::error title=empty byMarket::${dead.join(",")} carry n=0`); process.exit(1); }
           '
       - name: Push refreshed backtest.json (+ accumulator state)

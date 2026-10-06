@@ -19,7 +19,7 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales, repeatSaleEligible, withVectors } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
@@ -597,7 +597,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     const mLots = all.filter(l => set.has(l.artist));
     markets[m] = buildMarketSeries(mLots, m);
     markets[m].analytics = marketAnalytics(mLots);
-    hedonic[m] = buildHedonicIndex(mLots);
+    // the MARKET hedonic reads the same population as its component maker
+    // indices: the Sotheby's Algolia backfill (thin metadata, its own price
+    // level) and the card mega-slug never enter (Oct 2026 — with them in, art
+    // 1Y read −28% off a backfill-heavy 2025-Q3 endpoint)
+    hedonic[m] = buildHedonicIndex(mLots.filter(l => !HEDONIC_EXCLUDE(l)));
     hedonic[m].composite = buildComposite(compositeFor(MARKETS[m]), MARKETS[m].length);
     const idxLen = markets[m].index.length;
     const h1 = hedonic[m].horizons['1Y'];
@@ -611,7 +615,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   const allMarketLots = all.filter(l => allSlugs.has(l.artist));
   markets.all = buildMarketSeries(allMarketLots, 'the market');
   markets.all.analytics = marketAnalytics(allMarketLots);
-  hedonic.all = buildHedonicIndex(allMarketLots);
+  hedonic.all = buildHedonicIndex(allMarketLots.filter(l => !HEDONIC_EXCLUDE(l)));
   hedonic.all.composite = buildComposite(compositeFor(rosterSlugs), rosterSlugs.length);
   const hAll1 = hedonic.all.horizons['1Y'];
   const cmpAll = hedonic.all.composite!;
@@ -1346,6 +1350,21 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · gated=${tierCounts.gated} · none=${tierCounts.none}`);
     console.log(`[market] cross-house live collisions stamped: ${crossLiveStamped}`);
   }
+  // THE LIVE-BID FLOOR (Oct 6 2026, value.floorAtBid): every served value —
+  // hedonic and card tier — at or above the hammer bid already on the lot
+  // (×1.1 inside the sale's last 3 days). Applied at publish, after every
+  // value is stamped, so the tape, the calls ledger and the book all carry it.
+  {
+    let floored = 0;
+    for (const l of all) {
+      if (l.status !== 'upcoming') continue;
+      const lw = l as AuctionLot & { value?: ValueResult | null; currentBid?: number; saleDateTime?: string | null };
+      if (!lw.value || !((lw.currentBid || 0) > 0)) continue;
+      const f = floorAtBid(lw.value, lw, NOW_MS);
+      if (f !== lw.value) { lw.value = f; if (f.bidFloor != null) floored++; }
+    }
+    console.log(`[market] live-bid floor: ${floored} served values lifted to the bid on the lot`);
+  }
   // the point-in-time evaluation seam stops here: every upcoming lot now
   // carries the value/abstain/cardComps it would have been served
   if (opts.evalOnly) {
@@ -1419,10 +1438,16 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // and art editions. Only verticals where at least one horizon certifies are
   // emitted — an all-abstain block would be dead weight.
   const repeatSale: Record<string, ReturnType<typeof buildVerticalRepeatSale>> = {};
+  const REPEAT_SALE_HELD = new Set(['art']);
   for (const v of ['watches', 'art', 'sports', 'tcg']) {
     try {
       const vLots = all.filter(l => (MARKETS[v] || []).includes(l.artist) && l.status === 'sold' && (l.priceUsd || 0) > 0);
       const r = buildVerticalRepeatSale(vLots, v);
+      // HELD (Oct 2026 index fix wave): art editions first certify under the
+      // house-effect / Huber fit (5Y ≈ −25%, end-point sensitive: −14% one
+      // quarter earlier). A vertical that never published before is a new
+      // visible read on the tape — it stays off market.json until reviewed.
+      if (r && REPEAT_SALE_HELD.has(v)) { console.log(`[market] ${v} repeat-sale HELD for review — ${Object.entries(r.horizons).filter(([, h]) => h.publishable).map(([k, h]) => `${k} ${h.changePct!.toFixed(1)}%`).join(' ') || 'none'}`); continue; }
       if (r) { repeatSale[v] = r; console.log(`[market] ${v} repeat-sale: pairs ${r.nPairs} objects ${r.nObjects} — ${Object.entries(r.horizons).filter(([, h]) => h.publishable).map(([k, h]) => `${k} ${h.changePct!.toFixed(1)}%`).join(' ') || 'none'}`); }
     } catch (e) { console.warn(`[market] ${v} repeat-sale failed:`, (e as Error).message); }
   }
@@ -1474,8 +1499,14 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   {
     const { gradeCalls } = require('./lib/calls-ledger');
     const soldById = new Map<string, { realizedUsd: number; saleDate: string }>();
-    for (const l of all) if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
-    const rec = gradeCalls(soldById);
+    // statusById = the FULL corpus: a call whose lot is bought in, has no
+    // result, or VANISHED from it grades as a miss 7 days after its close
+    const statusById = new Map<string, { status?: string; saleDate?: string | null }>();
+    for (const l of all) {
+      statusById.set(String(l.id), { status: l.status, saleDate: l.saleDate });
+      if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
+    }
+    const rec = gradeCalls(soldById, statusById, TODAY);
     (markets.all.analytics as unknown as Record<string, unknown>).callsRecord = rec;
     console.log(`[market] calls record — card: ${rec.card.graded}/${rec.card.n} graded medRatio=${rec.card.medRatio} within30=${rec.card.within30Pct}% · vsbid: ${rec.vsbid.graded}/${rec.vsbid.n} medRatio=${rec.vsbid.medRatio} belowHit=${rec.vsbid.belowHit}%`);
     // the receipts tape — graded rows with lot identity, served to /receipts
