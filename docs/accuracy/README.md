@@ -68,3 +68,35 @@ snapshots laid out as `<dir>/<YYYYMMDD…>/upcoming.json`, which are the
 are labelled *reconstructed* and get their own "By record origin" table. A lot
 first served before the earliest snapshot is graded on its first snapshot
 value, which is a later and easier claim.
+
+## The nightly live accuracy ledger
+
+`scripts/accuracy-ledger.ts` runs in every nightly after assemble (step "Live
+accuracy ledger", advisory) and writes `public/data/ray/accuracy-ledger.json`,
+served at `/data/ray/accuracy-ledger.json` and kept as R2
+`latest/accuracy-ledger.json` (tomorrow's prior; `data-store.sh
+pull-accuracy-ledger`). Same basis and error convention as above, with three
+differences:
+
+- **Last serve, not first.** Each settled lot is graded on the LAST value
+  served on or before its sale day: the tape row's first serve, or its `L`
+  (the last changed serve under that version, recorded from Oct 6 2026). A
+  serve dated after the sale is never used (`counts.lookahead`).
+- **Unsold.** A bought-in lot is a failed outcome (no beat, a flag miss, odds
+  outcome 0) only inside the record's unsold-captured house × quarter cells;
+  it never enters price error or band coverage.
+- **Shape.** `daily[]` holds one compact row per sale day (additive sums plus
+  that day's medians). Rows older than 14 days are frozen from the prior
+  ledger, so a lost tape night never rewrites history. `rollups["7"|"30"|"90"]`
+  hold full cells overall and by market, house, engine version and tier
+  (median abs error, ±30%, bias, band coverage, the house estimate on the same
+  lots, flag precision, odds Brier score and calibration buckets).
+
+Drift (`drift[]`, printed as `::warning`, never blocking): per market and
+overall at n ≥ 30 in the trailing 30 days, band coverage under 72%, median abs
+error more than 1.2× the previous 30 days', or bias outside 0.85–1.18.
+
+```sh
+npx tsx scripts/accuracy-ledger.ts --corpus-dir data/corpus --as-of 2026-10-06
+npx tsx scripts/accuracy-ledger.ts --snapshot-tape <dir>   # local backfill only: dated served snapshots as extra serves
+```

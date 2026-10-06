@@ -381,6 +381,10 @@ push() {
   # forward check) persists the same way: it too lived only inside the corpus
   # tar, so the segments rebuild reset it every night and G5 never graded a row
   test -f data/corpus/value-tape.json.gz && obj_put "latest/value-tape.json.gz" "data/corpus/value-tape.json.gz" || echo "[data-store] no value tape to push"
+  # the LIVE ACCURACY LEDGER (scripts/accuracy-ledger.ts): it also rides the
+  # served payload (data/ray/accuracy-ledger.json); this standalone copy is
+  # what tomorrow's run appends its daily rows to (pull-accuracy-ledger)
+  test -s public/data/ray/accuracy-ledger.json && obj_put "latest/accuracy-ledger.json" "public/data/ray/accuracy-ledger.json" || echo "[data-store] no accuracy ledger to push"
   # the LLM extraction cache (scripts/lib/extract) persists the same way —
   # paid-for results must survive the segments rebuild. Absent until the
   # extraction layer is switched on (ANTHROPIC_API_KEY); then written nightly.
@@ -994,7 +998,10 @@ case "${1:-}" in
   # updated one pushed back EVERY night — publish or not (crawl truth)
   pull-ledger) mkdir -p data/qa; obj_get_clean "latest/house-ledger.json" "data/qa/house-ledger.prev.json" "[data-store] no house ledger yet (first night — bootstrap)" ;;
   push-ledger) test -s data/qa/house-ledger.json && obj_put "latest/house-ledger.json" "data/qa/house-ledger.json" || echo "[data-store] no house ledger to push" ;;
+  # the live accuracy ledger's prior (append-only daily rows) — advisory:
+  # unreadable → a fresh ledger tonight, rebuilt from the value tape
+  pull-accuracy-ledger) mkdir -p data/qa; obj_get_clean "latest/accuracy-ledger.json" "data/qa/accuracy-ledger.prev.json" "[data-store] no accuracy ledger yet (first night)" || { rm -f data/qa/accuracy-ledger.prev.json; echo "[data-store] WARNING: accuracy ledger unreadable — starting fresh (frozen daily rows are rebuilt from the tape where it still holds them)"; } ;;
   put-gate-report) put_gate_report "${2:-data/qa/validate-engine.json}" ;;
   pull-gate-reports) pull_gate_reports "${2:-data/qa/gate-reports}" "${3:-30}" ;;
-  *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…> [--archive <segment…>]|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]|list-segment-versions <house>|restore-segment <house> <date>|prune-segment-versions [days=30] [keep=3]|restore-drill <house> [date]|pull-ledger|push-ledger|put-gate-report [file]|pull-gate-reports [dir] [n=30]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, SEGMENT_SHRINK_OK=1, DATA_FRESH_ALLOW_STALE=1, RESTORE_PREFIX=)"; exit 1 ;;
+  *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…> [--archive <segment…>]|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]|list-segment-versions <house>|restore-segment <house> <date>|prune-segment-versions [days=30] [keep=3]|restore-drill <house> [date]|pull-ledger|push-ledger|pull-accuracy-ledger|put-gate-report [file]|pull-gate-reports [dir] [n=30]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, SEGMENT_SHRINK_OK=1, DATA_FRESH_ALLOW_STALE=1, RESTORE_PREFIX=)"; exit 1 ;;
 esac

@@ -42,6 +42,7 @@ import { streamGzLines } from './corpus-io';
 import { inferHammerUsd, lotAllInFactor } from '../app/lib/premiums';
 import { marketOf } from '../app/constants';
 import { median } from '../app/lib/stats';
+import type { TapeServe } from './build-market-tape';
 
 // ── thresholds ──────────────────────────────────────────────────────────────
 /** below this a metric is not computed at all (printed as "—") */
@@ -56,6 +57,8 @@ const LN13 = Math.log(1.3);
 export type TapeRow = {
   id: string; d: string; m?: string; p: number; lo: number; hi: number; c: string;
   k: 'e' | 'n' | 'c'; e?: number; s?: 'b' | 'a' | 't'; v: string; sh?: 1; xh?: number; mb?: number;
+  /** (Oct 6) calibrated odds % + house factor at call time; the last served state (build-market-tape TapeRow) */
+  o?: number; hf?: number; L?: TapeServe;
   /** (report-only) 1 = RECONSTRUCTED from a dated served snapshot, not read off the tape */
   rc?: 1;
 };
@@ -221,7 +224,7 @@ export function gradeCallRows(calls: CallRow[], sold: Map<string, SoldInfo>, w: 
 /** One served upcoming lot (public/data/ray/upcoming.json `lots[]`). */
 export type ServedLot = {
   id: string | number; status?: string; artist?: string; estimateLow?: number | null; estimateHigh?: number | null;
-  value?: { compValueUsd?: number; low?: number; high?: number; confidence?: string; basis?: string; signal?: { label?: string } | null; expectedHammerUsd?: number; maxBidUsd?: number; engineVersion?: string } | null;
+  value?: { compValueUsd?: number; low?: number; high?: number; confidence?: string; basis?: string; signal?: { label?: string; beatRatePct?: number } | null; expectedHammerUsd?: number; maxBidUsd?: number; houseFactor?: number; engineVersion?: string } | null;
 };
 /** The tape row a served lot would have written that day (build-market-tape's
  *  appendValueTape, minus the shadow leg). */
@@ -239,6 +242,8 @@ export function tapeRowOfServed(l: ServedLot, day: string): TapeRow | null {
     ...(lab ? { s: lab.startsWith('below') ? 'b' as const : lab.startsWith('above') ? 'a' as const : 't' as const } : {}),
     ...((v.expectedHammerUsd || 0) > 0 ? { xh: Math.round(v.expectedHammerUsd!) } : {}),
     ...((v.maxBidUsd || 0) > 0 ? { mb: Math.round(v.maxBidUsd!) } : {}),
+    ...((v.signal?.beatRatePct || 0) > 0 ? { o: Math.round(v.signal!.beatRatePct! * 10) / 10 } : {}),
+    ...((v.houseFactor || 0) > 0 ? { hf: v.houseFactor } : {}),
     v: v.engineVersion || 'unversioned', rc: 1,
   };
 }
@@ -743,4 +748,5 @@ async function main() {
   console.log(`[accuracy] wrote ${path.relative(process.cwd(), base)}.md + .json`);
 }
 
-if (process.env.RAY_SKIP_MAIN !== '1') main().catch(e => { console.error(e); process.exit(1); });
+// entry-module only: scripts/accuracy-ledger.ts imports the graders above
+if (process.env.RAY_SKIP_MAIN !== '1' && process.argv[1] && /accuracy-report\.ts$/.test(process.argv[1])) main().catch(e => { console.error(e); process.exit(1); });

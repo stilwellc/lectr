@@ -43,7 +43,23 @@ export type TapeRow = {
   /** (Oct 3) the buyer's fields at call time (hammer basis): expected hammer
    *  and max bid — graded against the actual hammer */
   xh?: number; mb?: number;
+  /** (Oct 6) the Flags' calibrated odds at call time (signal.beatRatePct, %):
+   *  P(hammer beats the house-adjusted top) — graded by the accuracy ledger */
+  o?: number;
+  /** (Oct 6) the house factor the adjusted top was built from (value.houseFactor) */
+  hf?: number;
+  /** (Oct 6) THE LAST SERVED VALUE: the row's fields as most recently served
+   *  under the SAME version, set (with its day `d`) only on a night the served
+   *  fields differ from the current effective ones — "last change wins". The
+   *  first-served fields above never move (G5 and the monthly report read
+   *  them); the accuracy ledger grades the last serve on or before the sale. */
+  L?: TapeServe;
 };
+/** one served state of a tape row (the fields that can move night to night) */
+export type TapeServe = Pick<TapeRow, 'd' | 'p' | 'lo' | 'hi' | 'c' | 'k' | 'e' | 's' | 'xh' | 'mb' | 'o' | 'hf'>;
+const SERVE_KEYS = ['p', 'lo', 'hi', 'c', 'k', 'e', 's', 'xh', 'mb', 'o', 'hf'] as const;
+/** the served fields of a row (no day): equality key for "did the serve change" */
+export const serveSig = (r: Partial<TapeServe>) => SERVE_KEYS.map(k => r[k] ?? '').join('|');
 
 export const TAPE_FILE = path.join(CORPUS_DIR, 'value-tape.json.gz');
 /** unsold rows older than this are pruned (the lot never resolved) */
@@ -58,18 +74,21 @@ export function appendValueTape(
   lots: AuctionLot[], today: string, marketBySlug: Record<string, string>, version: string,
   soldIds: Set<string>, file = TAPE_FILE,
   shadow?: { version: string; values: Map<string, { compValueUsd: number; low: number; high: number; confidence: string; basis?: string; signal?: { label?: string } | null }> },
-): { total: number; added: number; pruned: number; shadowAdded: number } {
+): { total: number; added: number; pruned: number; shadowAdded: number; lastUpdated: number } {
   const rows = readValueTape(file);
   // first call wins PER VERSION: a lot's served row and its candidate shadow
   // row are separate claims
   const have = new Set(rows.map(r => `${r.v}|${r.id}`));
-  let added = 0, shadowAdded = 0;
+  // this version's served rows by lot — the LAST-serve update target
+  const servedRow = new Map<string, TapeRow>();
+  for (const r of rows) if (r.v === version && !r.sh) servedRow.set(r.id, r);
+  let added = 0, shadowAdded = 0, lastUpdated = 0;
   for (const l of lots) {
     if (l.status !== 'upcoming') continue;
     const id = String(l.id);
     const lo = l.estLowUsd ?? l.estHighUsd, hi = l.estHighUsd ?? l.estLowUsd;
     const e = lo && hi ? (lo + hi) / 2 : undefined;
-    type V = { compValueUsd?: number; low?: number; high?: number; confidence?: string; basis?: string; signal?: { label?: string } | null; expectedHammerUsd?: number; maxBidUsd?: number };
+    type V = { compValueUsd?: number; low?: number; high?: number; confidence?: string; basis?: string; signal?: { label?: string; beatRatePct?: number } | null; expectedHammerUsd?: number; maxBidUsd?: number; houseFactor?: number };
     const rowOf = (v: V, ver: string): TapeRow => {
       const lab = v.signal?.label || '';
       return {
@@ -79,12 +98,26 @@ export function appendValueTape(
         ...(lab ? { s: lab.startsWith('below') ? 'b' as const : lab.startsWith('above') ? 'a' as const : 't' as const } : {}),
         ...((v.expectedHammerUsd || 0) > 0 ? { xh: Math.round(v.expectedHammerUsd!) } : {}),
         ...((v.maxBidUsd || 0) > 0 ? { mb: Math.round(v.maxBidUsd!) } : {}),
+        ...((v.signal?.beatRatePct || 0) > 0 ? { o: Math.round(v.signal!.beatRatePct! * 10) / 10 } : {}),
+        ...((v.houseFactor || 0) > 0 ? { hf: v.houseFactor } : {}),
         v: ver,
       };
     };
     const v = (l as AuctionLot & { value?: V | null }).value;
     if (v && v.compValueUsd! > 0 && !have.has(`${version}|${id}`)) {
       rows.push(rowOf(v, version)); have.add(`${version}|${id}`); added++;
+    } else if (v && v.compValueUsd! > 0) {
+      // already on the tape under this version: record a CHANGED serve as the
+      // row's last served state (a later night only — the first day is the row)
+      const r = servedRow.get(id);
+      if (r && today > (r.L?.d ?? r.d)) {
+        const now = rowOf(v, version);
+        if (serveSig(now) !== serveSig(r.L ?? r)) {
+          const L: TapeServe = { d: today, p: now.p, lo: now.lo, hi: now.hi, c: now.c, k: now.k };
+          for (const k of ['e', 's', 'xh', 'mb', 'o', 'hf'] as const) if (now[k] != null) (L as Record<string, unknown>)[k] = now[k];
+          r.L = L; lastUpdated++;
+        }
+      }
     }
     const sv = shadow?.values.get(id);
     if (shadow && sv && sv.compValueUsd > 0 && !have.has(`${shadow.version}|${id}`)) {
@@ -95,7 +128,7 @@ export function appendValueTape(
   const kept = rows.filter(r => r.d >= cut || soldIds.has(r.id));
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, gzipNdjson(kept as unknown as Record<string, unknown>[]));
-  return { total: kept.length, added, pruned: rows.length - kept.length, shadowAdded };
+  return { total: kept.length, added, pruned: rows.length - kept.length, shadowAdded, lastUpdated };
 }
 
 export type TapeCell = { n: number; medAbsErrPct: number | null; within30Pct: number | null; bias: number | null; bandCoveragePct: number | null; belowMaxBidPct?: number | null };

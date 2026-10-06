@@ -434,6 +434,21 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh put-gate-report data/qa/validate-engine.json
+      # ── THE LIVE ACCURACY LEDGER (Oct 6 2026): every settled lot graded
+      # against the LAST value served before its sale (value tape, point in
+      # time, hammer basis), rolled up 7/30/90 days → public/data/ray/
+      # accuracy-ledger.json (rides the served push below; + R2
+      # latest/accuracy-ledger.json, tomorrow's prior). DRIFT is ::warning
+      # only — never blocks a publish (the G5 warn-not-block decision).
+      - name: Live accuracy ledger (advisory)
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bash scripts/data-store.sh pull-accuracy-ledger
+          npx tsx scripts/accuracy-ledger.ts
       # Emit the value book for Starling (the buy-side sibling) → PRIVATE R2.
       # Best-effort: a failure here must never break lectr's own nightly.
       - name: Emit value book → private R2 (Starling)

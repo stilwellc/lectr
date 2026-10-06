@@ -1599,7 +1599,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     for (const l of all) if (l.status === 'sold') soldIds.add(String(l.id));
     const t = appendValueTape(all, TODAY, MARKET_BY_SLUG, ENGINE_VERSION, soldIds, undefined,
       SHADOW ? { version: ENGINE_FLAGS_CANDIDATE.version, values: shadowValues } : undefined);
-    console.log(`[market] value tape — ${t.added} first-served values appended${SHADOW ? ` (+${t.shadowAdded} candidate shadow rows, ${ENGINE_FLAGS_CANDIDATE.version})` : ''} (${t.total} rows, ${t.pruned} pruned)`);
+    console.log(`[market] value tape — ${t.added} first-served values appended, ${t.lastUpdated} last-served states moved${SHADOW ? ` (+${t.shadowAdded} candidate shadow rows, ${ENGINE_FLAGS_CANDIDATE.version})` : ''} (${t.total} rows, ${t.pruned} pruned)`);
   }
   // ── CLOSE-DAY GROWTH CURVE (Aug 13 value audit; conditioned Sep 27) — how
   // much of final hammer arrives in the last days, fitted from Goldin's own
