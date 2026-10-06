@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { isCardTitle, goldinSportKind, reclassifyLot, artCategoryFix, DROP } from '../lib/classify';
 import { goldinRoute } from '../lib/houses/routing';
 import { classifyForm } from '../../app/lib/comps';
+import { subCatOf } from '../lib/sub-cats';
 import { reclassifyCorpus } from '../lib/corpus-normalize';
 
 type R = Record<string, any>;
@@ -194,4 +195,26 @@ test('class 8 · watch forms (pocket vs wrist, cushion cases, glued text) and je
   assert.equal(move({ auctionHouse: "Christie's", artist: 'rolex', title: 'Tudor. A fine stainless steel waterproof chronograph wristwatch with date and bracelet SIGNED TUDOR, OYSTER DA' }), DROP);
   assert.equal(move({ auctionHouse: "Christie's", artist: 'rolex', title: 'ROLEX/TUDOR. A STAINLESS STEEL SELF-WINDING WATERPROOF CHRONOGRAPH SIGNED ROLEX AND TUDOR' }), 'rolex');
   assert.equal(move({ auctionHouse: 'Phillips', artist: 'cartier', title: "A rare yellow gold 'Tank' wristwatch" }), 'cartier');
+});
+
+test('class 9 · design kinds: every table form, model codes, Conoid Cushion, the earliest-named form', () => {
+  const D = (title: string, description = '', category = 'design', artist = 'charles-eames') => {
+    const formKey = classifyForm({ title, medium: null, category } as never);
+    return subCatOf({ artist, title, description, category, formKey }).subCat;
+  };
+  assert.equal(D('dining table', '', 'design', 'george-nakashima'), 'tables');
+  assert.equal(D('coffee table from Chandigarh', '', 'design', 'pierre-jeanneret'), 'tables');
+  assert.equal(D('Sundra dining suite (7)', '', 'design', 'george-nakashima'), 'tables');
+  assert.equal(D('Guéridon, model no. 401', '', 'design', 'jean-prouve'), 'tables');
+  assert.equal(D('DSR'), 'seating');
+  assert.equal(D('RKR-1'), 'seating');
+  assert.equal(D('LCM, pair'), 'seating');
+  assert.equal(D("Pair of 'Committee' Chairscirca 1953model no. PJ-SI-30-A, teak, cowhideheight 33 in", '', 'design', 'pierre-jeanneret'), 'seating');
+  assert.equal(D('george nakashima | pair of "conoid cushion" armchairs', '', 'design', 'george-nakashima'), 'seating');
+  assert.equal(D("CHARLES (1907-1978) AND RAY (1912-1988) EAMES TWO 'ESU' STORAGE UNITS, CIRCA 1950"), 'case-storage');
+  assert.equal(D('Rare room divider', '', 'design', 'george-nakashima'), 'case-storage');
+  assert.equal(D('"potence" wall light', '', 'design', 'jean-prouve'), 'lighting');
+  assert.equal(D('designed 1962', 'Charles and Ray Eames, a pair of Soft Pad lounge chairs'), 'seating');
+  assert.equal(D('Charles Eames, Ray Eames: "Segmented". Dining table with white laminate top. And five chairs'), 'tables');
+  assert.equal(D('Rare mirror', 'with a matching chair', 'design', 'george-nakashima'), 'objects');
 });
