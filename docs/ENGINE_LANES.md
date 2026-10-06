@@ -209,3 +209,39 @@ Product decision (Collin, Oct 3): lead with **expected hammer + max bid** (forec
 | live card values kept / ±30% hit / median abs error | 477 / 45.9% / 35.7% | 267 / **60.7%** / **23.0%** |
 | live no-estimate values (±30% hit 26%) | 197 | 0 (abstain) |
 | today's book: top-50 Flags from RR | 50 / 50 | 43 / 50 |
+
+## 10 · OCT 5 2026 ENGINE PASS — headroom (byte-identical) + measured refinements
+
+**10.1 Headroom (outputs byte-identical).** `scripts/ci/equivalence.ts` on the real corpus (Oct 3 input, both builds under `scripts/ci/freeze-clock.cjs`, `--no-mask`): 3,775 files, 0 differences; the Starling value book identical to the byte.
+- **Comp candidate index** (`value.buildCompCandidateIndex` / `compCandidates`): the backtest's exact pre-filter (§ backtest-core header) as a shared, order-preserving index. build-market hands `resolveComps` only the roster members that can pass its admission gate — the maker roster, and the memoized sports maker × player / maker × sport rosters. Valuing the upcoming book: 219s → 10s at 1×, 3,476s → 40s at the 3× synthetic corpus.
+- **No unbounded argument spreads** in indices.ts / hedonic-index.ts (`stats.maxOf`/`minOf`, Math.max/min semantics).
+- **The value book in the single load**: `assemble.ts --single-load` builds it over the in-memory corpus (last corpus consumer) and leaves a marker keyed to the corpus files; the nightly's "Emit value book" step only pushes it (no second load; standalone/manual runs rebuild as before).
+
+| | 1× before | 1× after | 3× before (Oct 3 run) | 3× after |
+|---|---|---|---|---|
+| assemble --single-load wall | 501s | 313s | 4,760s | 1,145s |
+| upcoming valuation | 219s | 10s | 3,476s | 40s |
+| peak RSS | 5.44GB | 5.27GB | 9.88GB | 9.85GB |
+| peak live heap | 2,545MB | 2,756MB | 7,860MB | 7,277MB |
+| value book | +25s, 3.3GB RSS, 10GB heap step | 10s in-process | — | 30s in-process |
+
+Remaining superlinear phases at 3×: build-upcoming (runs twice: 152s + 152s), the engine gate (193s), persist (114s), page data (87s).
+
+**10.2 Refinements, each measured out of sample** — holdout = oneoff/qa/engine-ab.ts (test year from Oct 1 2025, point-in-time calibration per quarter from the Oct 4 full-replay state, Oct 5 corpus, 4,917 estimate + 1,020 no-estimate lots); live = oneoff/qa/live-ab.ts (the Sep 14 book re-served, graded on lots sold by Oct 5; 681 estimate lots).
+
+| refinement | measure | before | after | kept |
+|---|---|---|---|---|
+| Max bid: fit on point-in-time hammer residuals (xh) | holdout / live hammers ≤ max bid (nominal 30) | 28.6% / 33.6% | 29.2% / 34.5% | no (live moves away) |
+| Card grade-adj: rungs within ½ grade only | PIT record ±30%, trailing 365d (medium / low) | 34.6% / 28.8% | 48.5% / 46.5% | pricer yes |
+| | same, year to Oct 2025 | 31.8% / 26.4% | 55.5% / 41.3% | |
+| | live, raw tier value (medium / low) | 19.3% / 33.0% | 57.1% / 44.8% | |
+| | live, bias-corrected as published (medium / low) | (gated) | 35.7% / 39.7% | publish held (`CARD_TIER_HOLD`) |
+| TCG grade-adj: own Pokémon ladder / ±1 grade / proximity weights | PIT record ±30% | 21.3% | 21.5% / 22.7% / 21.4% | no (keeps abstaining) |
+| No-estimate bias correction (market × tier, house × market; 4y/2y/1y PIT fits) | holdout medErr / ±30% / bias | 67.1% / 29.2% / 1.069 | 67.1–67.9% / 28.7–29.0% / 1.00–1.04 | no |
+| | live medErr / ±30% / bias | 99.5% / 26.4% / 1.170 | 101.0% / 26.9% / 1.117 | |
+| Era-dated premiums in the hammer basis (`premiums.lotHammerFromAllIn`) | Christie's / Sotheby's USD-sale inferred hammers that are round bid increments | 7.2% / 20.3% | 97.6% / 99.2% | yes |
+| | holdout estimate lots, hammer basis: medErr / ±30% / ≤ max bid | 29.0% / 51.0% / 29.8% | 29.0% / 51.1% / 29.6% | |
+| | live, hammer basis: estimate lots medErr; Christie's; Sotheby's | 31.1%; 26.3%; 25.4% | 30.9%; 25.5%; 24.9% | |
+| | live REA (all values) hammer medErr / ±30% / ≤ max bid | 40.3% / 37.9% / 57.9% | 34.8% / 46.2% / 49.7% | |
+
+All-in figures (value error, ±30%, band coverage 72.0% holdout / 72.8% live, the Flags' adjusted edge 24.6pt / 22.3pt) are unchanged by every kept refinement. **The 22.6% "holdout ≤ max bid" of §9.8 was measured against the stale Aug 9 legacy state;** against the full-replay state the nightly now loads it is 28.6% (live 33.6%) — no recalibration was kept. True hammer for scoring = the published hammer, else realized through the dated inverse (validated by the round-increment test above).

@@ -32,7 +32,7 @@
  */
 import { Matrix, CholeskyDecomposition, EigenvalueDecomposition } from 'ml-matrix';
 import type { AuctionLot } from '../app/types';
-import { medianOr } from '../app/lib/stats';
+import { medianOr, maxOf } from '../app/lib/stats';
 
 // ── public shapes ──────────────────────────────────────────────────────────
 export interface HedonicSeriesPoint {
@@ -308,7 +308,7 @@ function pseudoInverse(A: Matrix): Matrix {
   const evd = new EigenvalueDecomposition(A);
   const V = evd.eigenvectorMatrix;         // columns are eigenvectors
   const d = evd.realEigenvalues;
-  const tol = 1e-10 * Math.max(...d.map(Math.abs));
+  const tol = 1e-10 * maxOf(d.map(Math.abs));
   const dInv = d.map((x) => (Math.abs(x) > tol ? 1 / x : 0));
   const Dinv = Matrix.diag(dInv);
   return V.mmul(Dinv).mmul(V.transpose());
@@ -527,7 +527,7 @@ export function buildComposite(inputs: CompositeInput[], marketSlugCount: number
 
   if (measurable.length < minComponents) return notPub(`only ${measurable.length} measurable component maker(s) (need ≥${minComponents})`, components);
   if (coverage < COMPOSITE_MIN_COVERAGE) return notPub(`measurable components cover ${(coverage * 100).toFixed(0)}% of realized (< ${COMPOSITE_MIN_COVERAGE * 100}%)`, components);
-  const maxW = Math.max(...Array.from(wMap.values()));
+  const maxW = maxOf(Array.from(wMap.values()));
   if (maxW > COMPOSITE_WEIGHT_CAP + 1e-6) return notPub(`a component exceeds the ${COMPOSITE_WEIGHT_CAP * 100}% cap after capping (${(maxW * 100).toFixed(0)}%)`, components);
 
   // ── composite SERIES: per-quarter capped-weight geometric mean of component

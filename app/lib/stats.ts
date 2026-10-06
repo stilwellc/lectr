@@ -108,3 +108,25 @@ export function weightedQuantile(pairs: readonly (readonly [number, number])[], 
   }
   return s[s.length - 1][0];
 }
+
+/** Math.max over an array WITHOUT spreading it into call arguments — a spread
+ *  of more than ~120k values overflows the call stack. Same semantics as
+ *  `Math.max(...vals)`: empty → -Infinity, any NaN → NaN, +0 beats −0. */
+export function maxOf(vals: readonly number[]): number {
+  let m = -Infinity;
+  for (const v of vals) {
+    if (v !== v) return NaN;
+    if (v > m || (v === 0 && m === 0 && Object.is(m, -0))) m = v;
+  }
+  return m;
+}
+
+/** Math.min counterpart of maxOf (empty → +Infinity, any NaN → NaN, −0 beats +0). */
+export function minOf(vals: readonly number[]): number {
+  let m = Infinity;
+  for (const v of vals) {
+    if (v !== v) return NaN;
+    if (v < m || (v === 0 && m === 0 && Object.is(v, -0))) m = v;
+  }
+  return m;
+}

@@ -22,10 +22,11 @@
  */
 import type { AuctionLot } from '../types';
 import { similarity, sizeRatio, type IdfTable, type Match } from './similarity';
-import { lotAllInFactor } from './premiums';
+import { lotAllInFactor, lotHammerFromAllIn } from './premiums';
 import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
+import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -180,17 +181,22 @@ export interface BuyerFields {
   engineVersion: string;
 }
 export function buyerFields(
-  lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null },
+  lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null },
   predAllIn: number, lowAllIn: number, highAllIn: number, mbAllIn?: number | null,
 ): BuyerFields {
-  const pf = lotAllInFactor(lot, predAllIn / 1.25);
   let mb = typeof mbAllIn === 'number' && mbAllIn > 0 ? mbAllIn
     : lowAllIn > 0 && lowAllIn < predAllIn ? predAllIn * Math.pow(lowAllIn / predAllIn, MAXBID_T) : predAllIn;
   if (mb > predAllIn) mb = predAllIn;
   if (lowAllIn > 0 && mb < lowAllIn) mb = lowAllIn;
-  const r = (x: number) => Math.round(x / pf);
+  // every figure through the lot's own all-in → hammer inverse (the dated
+  // schedule in force on its sale date where the house has one; else the
+  // undated schedule read at the predicted hammer's band, as before)
+  const hammerOf = (x: number) => lotHammerFromAllIn(lot, x, predAllIn / 1.25);
+  const xh = hammerOf(predAllIn);
+  const pf = xh > 0 ? predAllIn / xh : lotAllInFactor(lot, predAllIn / 1.25);
+  const r = (x: number) => Math.round(hammerOf(x));
   return {
-    expectedHammerUsd: r(predAllIn), bandLowUsd: r(lowAllIn), bandHighUsd: r(highAllIn), maxBidUsd: r(mb),
+    expectedHammerUsd: Math.round(xh), bandLowUsd: r(lowAllIn), bandHighUsd: r(highAllIn), maxBidUsd: r(mb),
     premiumFactor: Math.round(pf * 1000) / 1000, engineVersion: FLAGS.version,
   };
 }
@@ -499,8 +505,9 @@ export function blendPredict(
   return { value: estMid * pm * Math.pow(ratio / pm, w), w };
 }
 
-/** Whether the engine applies the no-estimate bias (measured: not yet — see
- *  estimateValueEx). The 'n' value band is fit on the SAME basis. */
+/** Whether the engine applies the no-estimate bias (measured: no — see
+ *  estimateValueEx; re-measured Oct 5 2026, still no). The 'n' value band is
+ *  fit on the SAME basis. */
 export const APPLY_NOEST_BIAS = false;
 /** The shrunk no-estimate bias multiplier for a market × tier (1 = none). */
 export function noEstimateBias(artist: string, confidence: string, cal: EngineCalibration | null = CAL): number {
@@ -723,6 +730,13 @@ export function estimateValueEx(
     // replay's no-estimate pools don't yet mirror production's same-player /
     // roster-tier pools closely enough for its level to transfer. The time
     // adjustment alone carries this path (0.97 → 1.00 vs 1.05 before).
+    // RE-MEASURED Oct 5 2026 with point-in-time fits by market × tier (and by
+    // house × market, 4y/2y/1y windows) on the full-replay record, test year
+    // Oct 25 → Oct 26 (7,936 no-estimate lots): bias 1.069 → 1.00–1.04 but
+    // median abs error 67.1% → 67.1–67.9% and ±30% 29.2% → 28.7–29.0% — it
+    // recentres the level without making a single value more accurate; live
+    // (Sep 14 book, 197 lots) 99.5% → 101.0% error. Stays off.
+    // docs/ENGINE_LANES.md §10.
     predUsd = compAdjUsd * (APPLY_NOEST_BIAS ? noEstimateBias(lot.artist, confidence) : 1);
   }
   if (!(predUsd > 0) || !Number.isFinite(predUsd)) return { value: null, abstain: 'no-value' };
@@ -795,6 +809,82 @@ export function vsBidRead(lot: { auctionHouse?: string | null; buyerPremiumPct?:
   const bidAllIn = bid * lotAllInFactor(lot, bid);
   const pct = Math.round((bidAllIn / compValueUsd - 1) * 100);
   return { label: pct <= -12 ? 'below recent comps' : pct >= 12 ? 'above recent comps' : 'in line', pct };
+}
+
+/* ── THE COMP CANDIDATE INDEX (Oct 5 2026 scale pass) ─────────────────────
+   resolveComps scores every candidate it is handed; the live book handed it
+   the lot's WHOLE maker roster, so valuing the upcoming book cost
+   O(upcoming × maker book) cosines — superlinear in corpus size (161s at 1×,
+   3,476s at a 3× synthetic corpus). The backtest replay has carried an EXACT
+   pre-filter since Sep 2 (backtest-core.candidatePriors); this is the same
+   necessary-condition filter as a shared, order-preserving index:
+     a comp is admitted only with cosine ≥ FALLBACK_GATE.cosFloor (or an exact
+     ref/edition identity), and cosine(a,b) ≤ ‖a restricted to the tokens b
+     shares‖ / ‖a‖ — so a candidate sharing NO token from the lot's
+     heaviest-IDF prefix (the prefix after which the remaining suffix norm
+     fraction drops under the floor) can never be admitted. Exact-identity
+     candidates come from their own posting list.
+   compCandidates returns the surviving roster positions in ASCENDING order, so
+   resolveComps sees the admissible candidates in the roster's own order and
+   returns byte-identically the comps the full scan would (proved on the real
+   corpus by scripts/ci/equivalence.ts; unit-tested in engine-core.test.ts).
+   CONTRACT: the roster and the lot carry `_v`/`_vn` from ONE buildVectors
+   pass (the norms cosine() trusts); the roster is not mutated after the index
+   is built. A lot without a vector gets `null` (caller scans the roster). */
+export interface CompCandidateIndex {
+  roster: readonly AuctionLot[];
+  posting: Map<string, number[]>;
+  idPosting: Map<string, number[]>;
+  mark: Int32Array;
+  gen: number;
+}
+/** The exact-identity key similarity's exactIdentity compares (numeric watch
+ *  reference / art edition) — a superset key: materials are checked later. */
+export function compIdentityKey(l: Pick<AuctionLot, 'artist' | 'reference' | 'title' | 'formKey' | 'medium'>): string | null {
+  if (WATCH_SLUGS.has(l.artist)) return numericWatchRef(l);
+  return isEditionLot(l) ? editionIdentityKey(l) : null;
+}
+export function buildCompCandidateIndex(roster: readonly (AuctionLot & { _v?: Record<string, number> })[]): CompCandidateIndex {
+  const posting = new Map<string, number[]>();
+  const idPosting = new Map<string, number[]>();
+  for (let i = 0; i < roster.length; i++) {
+    const c = roster[i];
+    const toks = c._v ? Object.keys(c._v) : Array.from(new Set(c.titleTokens || []));
+    for (const t of toks) { const p = posting.get(t); if (p) p.push(i); else posting.set(t, [i]); }
+    const k = compIdentityKey(c);
+    if (k) { const p = idPosting.get(k); if (p) p.push(i); else idPosting.set(k, [i]); }
+  }
+  return { roster, posting, idPosting, mark: new Int32Array(roster.length), gen: 0 };
+}
+/** Roster positions (ascending) that can possibly pass resolveComps' admission
+ *  gate for `lot`; null when the lot carries no precomputed vector. */
+export function compCandidates(ix: CompCandidateIndex, lot: AuctionLot & { _v?: Record<string, number>; _vn?: number }): number[] | null {
+  const v = lot._v;
+  const vn = lot._vn;
+  if (!v || typeof vn !== 'number') return null;
+  ix.gen++;
+  if (ix.gen === 0x7fffffff) { ix.mark.fill(0); ix.gen = 1; }
+  const gen = ix.gen, mark = ix.mark;
+  const hits: number[] = [];
+  const visit = (list: number[] | undefined) => {
+    if (!list) return;
+    for (let k = 0; k < list.length; k++) { const i = list[k]; if (mark[i] !== gen) { mark[i] = gen; hits.push(i); } }
+  };
+  if (vn > 0) {
+    // heaviest-IDF first; stop once the remaining suffix can no longer carry
+    // the cosine floor on its own
+    const toks = Object.keys(v).sort((a, b) => v[b] - v[a]);
+    const floor = FALLBACK_GATE.cosFloor - 1e-9;
+    let suffix2 = vn * vn;
+    for (const t of toks) {
+      if (Math.sqrt(Math.max(0, suffix2)) / vn < floor) break;
+      visit(ix.posting.get(t));
+      suffix2 -= v[t] * v[t];
+    }
+  }
+  const idk = compIdentityKey(lot);
+  if (idk) visit(ix.idPosting.get(idk));
+  return hits.sort((a, b) => a - b);
 }
 
 /**

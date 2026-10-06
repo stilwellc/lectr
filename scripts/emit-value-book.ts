@@ -12,8 +12,14 @@
  * vertical slugs. Two segments Starling hyphenates (art-edition titles, autograph
  * signers) are slug()'d here to match.
  *
- * Runs in the nightly `assemble` job after the corpus is built + normalized.
- * Standalone: loads the corpus itself (NODE_OPTIONS=--max-old-space-size≈8192).
+ * SINGLE LOAD (Oct 2026): the nightly builds the book INSIDE
+ * `assemble.ts --single-load` (buildValueBook over the in-memory corpus — the
+ * same rows this script would read back from the corpus gz) and writes it to
+ * the local tmp file + a marker naming the corpus files it was built from.
+ * The nightly's "Emit value book" step then only PUSHES it (it holds the R2
+ * write token; the assemble step does not) — no second full-corpus load.
+ * Standalone (no marker, or a marker for a different corpus): loads the
+ * corpus itself (NODE_OPTIONS=--max-old-space-size≈8192) and builds it.
  */
 import path from 'node:path';
 import os from 'node:os';
@@ -196,12 +202,21 @@ interface ValueBookRow {
 
 const YEAR_MS = 365.25 * 864e5;
 
-function main() {
+export interface ValueBook {
+  schema: 1;
+  builtAt: string;
+  rows: ValueBookRow[];
+  context: ContextRow[];
+  gradeLadder: unknown;
+  indexes: Record<string, unknown>;
+}
+
+/** Build the book from the full corpus (main tier + archive, readCorpus order).
+ *  Normalizes `all` IN PLACE first, exactly as the standalone read did — the
+ *  caller must not need the rows unmodified afterwards. Reads market.json
+ *  (grade ladder + vertical indexes) from the served dir. */
+export function buildValueBook(all: AuctionLot[]): ValueBook {
   const REF_MS = Date.now();
-  console.log('[value-book] reading corpus…');
-  const lots = readGzRows(path.join(CORPUS_DIR, 'lots.json.gz')) as unknown as AuctionLot[];
-  const archive = readGzRows(path.join(CORPUS_DIR, 'sold-archive.json.gz')) as unknown as AuctionLot[];
-  const all = lots.concat(archive);
   console.log(`[value-book] ${all.length.toLocaleString()} lots; normalizing…`);
   normalizeCorpus(all);
 
@@ -329,17 +344,62 @@ function main() {
       if (hs.length) indexes[v] = Object.fromEntries(hs.map(([k, h]) => [k, h.changePct]));
     }
   } catch { console.warn('[value-book] market.json not readable — no ladder/indexes this emit'); }
-  const book = { schema: 1 as const, builtAt: new Date().toISOString(), rows, context, gradeLadder, indexes };
+  const book: ValueBook = { schema: 1 as const, builtAt: new Date().toISOString(), rows, context, gradeLadder, indexes };
 
   // Per-vertical tally for the log.
   const byV: Record<string, number> = {};
   for (const r of rows) byV[r.v] = (byV[r.v] ?? 0) + 1;
   console.log(`[value-book] ${rows.length.toLocaleString()} rows: ${JSON.stringify(byV)}`);
+  return book;
+}
 
+/** The local book file (gz) and the marker naming the corpus it was built from. */
+export const VALUE_BOOK_FILE = () => process.env.RAY_VALUE_BOOK_FILE || path.join(os.tmpdir(), 'value-book.json.gz');
+const markerFile = () => VALUE_BOOK_FILE() + '.built.json';
+
+/** Identity of the corpus files on disk (size + mtime of both tiers) — a book
+ *  built from these exact files may be pushed without rebuilding. */
+export function corpusSignature(dir: string = CORPUS_DIR): string {
+  return ['lots.json.gz', 'sold-archive.json.gz'].map(f => {
+    try { const st = fs.statSync(path.join(dir, f)); return `${f}:${st.size}:${Math.round(st.mtimeMs)}`; }
+    catch { return `${f}:absent`; }
+  }).join('|');
+}
+
+/** Write the book gz locally (+ the marker when the corpus signature is known). */
+export function writeValueBook(book: ValueBook, corpusSig?: string): string {
   const gz = zlib.gzipSync(Buffer.from(JSON.stringify(book)));
-  const tmp = path.join(os.tmpdir(), 'value-book.json.gz');
+  const tmp = VALUE_BOOK_FILE();
   fs.writeFileSync(tmp, gz);
+  if (corpusSig) fs.writeFileSync(markerFile(), JSON.stringify({ builtAt: book.builtAt, corpus: corpusSig }));
+  else if (fs.existsSync(markerFile())) fs.unlinkSync(markerFile());
   console.log(`[value-book] wrote ${(gz.length / 1024).toFixed(0)}KB gz → ${tmp}`);
+  return tmp;
+}
+
+/** A book already built (by assemble --single-load) from the corpus on disk. */
+function prebuiltBook(): { file: string; builtAt: string } | null {
+  try {
+    const m = JSON.parse(fs.readFileSync(markerFile(), 'utf8')) as { builtAt?: string; corpus?: string };
+    if (!m.builtAt || m.corpus !== corpusSignature() || !fs.existsSync(VALUE_BOOK_FILE())) return null;
+    return { file: VALUE_BOOK_FILE(), builtAt: m.builtAt };
+  } catch { return null; }
+}
+
+function main() {
+  let tmp: string, builtAt: string;
+  const pre = process.env.RAY_VALUE_BOOK_REBUILD === '1' ? null : prebuiltBook();
+  if (pre) {
+    ({ file: tmp, builtAt } = pre);
+    console.log(`[value-book] using the book assemble --single-load built from this corpus (${builtAt}) → ${tmp}`);
+  } else {
+    console.log('[value-book] reading corpus…');
+    const lots = readGzRows(path.join(CORPUS_DIR, 'lots.json.gz')) as unknown as AuctionLot[];
+    const archive = readGzRows(path.join(CORPUS_DIR, 'sold-archive.json.gz')) as unknown as AuctionLot[];
+    const book = buildValueBook(lots.concat(archive));
+    tmp = writeValueBook(book);
+    builtAt = book.builtAt;
+  }
 
   // Push to PRIVATE R2 the house way (data-store.sh pattern): the payload goes
   // to a WRITE-ONCE versioned key — a fresh key can never be stale-cached, its
@@ -361,7 +421,7 @@ function main() {
       { stdio: 'inherit' },
     );
 
-  const stamp = book.builtAt.replace(/[-:]/g, '').replace(/\..+/, '');
+  const stamp = builtAt.replace(/[-:]/g, '').replace(/\..+/, '');
   const versionKey = `value-book/versions/${stamp}.json.gz`;
   put(versionKey, tmp);
   const ptr = path.join(os.tmpdir(), 'value-book-pointer.txt');
@@ -372,4 +432,5 @@ function main() {
   console.log(`[value-book] pushed → lectr-data/${versionKey} (+ pointer value-book/latest.txt)`);
 }
 
-main();
+// importable (assemble --single-load builds the book in-process)
+if (require.main === module) main();

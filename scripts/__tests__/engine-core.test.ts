@@ -21,7 +21,7 @@ import {
 } from '../../app/lib/comps';
 import { buildIdf, buildVectors, similarity, type Match } from '../../app/lib/similarity';
 import { titleTokens } from '../../app/lib/normalize';
-import { houseAllInFactor } from '../../app/lib/premiums';
+import { houseAllInFactor, houseAllInFactorAt, lotAllInFactor } from '../../app/lib/premiums';
 
 afterEach(() => { setCalibration(null); setTimeIndex(null); });
 
@@ -220,8 +220,11 @@ test('estimateValueEx: estimate lot → directional signal + house×premium blen
   // n=4, bestCos 1, disp = q3/q1 = 172.5k/157.5k ≤ 2.5 → medium (n<6 blocks high)
   assert.equal(value.confidence, 'medium');
   // uncalibrated blend: mid × premium × (ratio / premium)^w, w(medium) = .25
-  const pm = houseAllInFactor("Christie's", 100000);
-  assert.equal(pm, 1.26);
+  // — the premium IN FORCE on the lot's sale date (Oct 5 2026: the dated
+  // schedule; Christie's 2026 bands, not the undated flat 1.26)
+  const pm = lotAllInFactor(lot, 100000);
+  assert.equal(pm, houseAllInFactorAt("Christie's", 100000, lot.saleDate));
+  assert.notEqual(pm, houseAllInFactor("Christie's", 100000));
   const pred = 100000 * pm * Math.pow(1.6 / pm, 0.25);
   assert.equal(value.compValueUsd, Math.round(pred));
   assert.equal(value.blendW, 0.25);

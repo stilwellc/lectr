@@ -19,7 +19,7 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
@@ -87,6 +87,18 @@ for (const a of ARTISTS) (MARKETS[a.market] ||= []).push(a.slug);
 const CARD_WINDOW_Y = 1;
 const CARD_SINGLE_Y = 0.5;
 const CARD_HL_Y = 0.25;
+/** tier 2 (grade-adjusted) prices from rungs at most this many grades from the
+ *  card's own (Oct 5 2026 — see the tier's note in priceCard) */
+const CARD_GA_MAX_STEP = 0.5;
+/** Card tiers that never publish, whatever their gate cell reads (Oct 5 2026).
+ *  grade-adj: the neighbour-rung pricer clears the bar on its point-in-time
+ *  record (trailing 365d: medium 48.5%, low 46.5% within ±30%) but NOT on the
+ *  live forward test — the Sep 14 book re-served, graded on sales to Oct 5:
+ *  the 86 values the gate would have published landed 35.7% (medium, n28) /
+ *  39.7% (low, n58) within ±30%, bias 0.75–0.89 (the tier's 120-day bias
+ *  correction, ×1.146, pushed them high). It keeps abstaining until its own
+ *  forward record (value tape) clears the bar; the record keeps scoring it. */
+const CARD_TIER_HOLD = new Set<string>(['grade-adj']);
 const MARKET_BY_SLUG: Record<string, string> = {};
 for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) MARKET_BY_SLUG[s] = mkt;
 
@@ -325,6 +337,35 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   }
   const crossPooled = new Set<string>();
 
+  // THE CANDIDATE INDEX over the STABLE pools (Oct 5 scale pass): each maker
+  // roster, and each sports maker × player roster (memoized — the same
+  // filter the loop ran per lot, so the same rows in the same order). Built
+  // lazily on a pool's first lot; never mutated after. Ad-hoc per-lot pools
+  // (game-used axes, cross-player) are scanned as before.
+  const stablePools = new Set<AuctionLot[]>(soldByArtist.values());
+  const compIx = new Map<AuctionLot[], CompCandidateIndex>();
+  const playerPools = new Map<string, AuctionLot[]>();
+  const playerPool = (artist: string, pid: string): AuctionLot[] => {
+    const k = `${artist}\u0000${pid}`;
+    let p = playerPools.get(k);
+    if (!p) { p = (soldByArtist.get(artist) || []).filter(c => playerSlugOf(c) === pid); playerPools.set(k, p); stablePools.add(p); }
+    return p;
+  };
+  const sportPools = new Map<string, AuctionLot[]>();
+  const sportPool = (artist: string, sp: string): AuctionLot[] => {
+    const k = `${artist}\u0000${sp}`;
+    let p = sportPools.get(k);
+    if (!p) { p = (soldByArtist.get(artist) || []).filter(c => sportOfCached(c) === sp); sportPools.set(k, p); stablePools.add(p); }
+    return p;
+  };
+  const admissible = (lot: AuctionLot, pool: AuctionLot[]): AuctionLot[] => {
+    if (pool.length < 32 || !stablePools.has(pool)) return pool;
+    let ix = compIx.get(pool);
+    if (!ix) { ix = buildCompCandidateIndex(pool); compIx.set(pool, ix); }
+    const pos = compCandidates(ix, lot);
+    return pos ? pos.map(i => pool[i]) : pool;
+  };
+
   for (const lot of upcoming) {
     let pool = soldByArtist.get(lot.artist) || [];
     if (SPORTS_SET.has(lot.artist)) {
@@ -335,7 +376,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // lot simply won't seat enough comps and estimateValue abstains
         // (value=null). Do NOT fall back to same-sport — that reintroduces the
         // cross-player bug.
-        pool = pool.filter(c => playerSlugOf(c) === pid);
+        pool = playerPool(lot.artist, pid);
         if (lot.artist === 'game-used') {
           const use = useOf(lot), team = teamOf(lot), game = gameOf(lot);
           pool = pool.filter(c =>
@@ -375,14 +416,18 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // the best-available fallback, gated ≥3 as before.
         const sp = sportOfCached(lot);
         if (sp) {
-          const restricted = pool.filter(c => sportOfCached(c) === sp);
+          const restricted = sportPool(lot.artist, sp);
           if (restricted.length >= 3) pool = restricted;
         }
       }
     }
     // priorTo=TODAY: only sales KNOWN before today (month/year-precision
-    // dates count from the end of their period — value.knownKey)
-    const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl, TODAY);
+    // dates count from the end of their period — value.knownKey).
+    // THE CANDIDATE INDEX (Oct 5 scale pass): resolveComps is handed only the
+    // pool members that can pass its admission gate, in pool order — the
+    // comps are identical to the full scan (value.compCandidates), the cost
+    // is O(candidates) instead of O(maker book) per lot.
+    const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, admissible(lot, pool) as (AuctionLot & { _v?: Record<string, number> })[], tbl, TODAY);
     const ex = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
     let v = ex.value;
     let abstain: AbstainReason | string | null = ex.abstain;
@@ -431,6 +476,8 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       lotW.abstain = abstain || (pool.length ? 'pool<3' : 'no-candidates');
     }
   }
+  // the candidate indices + memoized player/sport rosters are valuation-only
+  compIx.clear(); playerPools.clear(); sportPools.clear(); stablePools.clear();
   console.log(`[market] valued ${valued}/${upcoming.length} upcoming lots (${noEstGated} no-estimate values withheld by the publish gate) · ${((Date.now() - tVal) / 1000).toFixed(0)}s`);
   {
     const reasons: Record<string, number> = {};
@@ -1024,11 +1071,22 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // the target — a 1977 Ryan PSA 9 sale ($919) outvotes a stack of
         // scaled-up PSA 4-5 copies (the ladder ratio is a market-wide
         // average; far rungs carry its error multiplied).
+        // NEIGHBOUR RUNGS ONLY (Oct 5 2026): a rung more than
+        // CARD_GA_MAX_STEP grades away never prices this card — the
+        // market-wide ladder ratio cannot carry one card's grade premium
+        // across whole grades. Point-in-time record of the tier (every sold
+        // card priced as of its own day; trailing 365d): ±30% hit medium
+        // 34.6% → 48.5%, low 28.8% → 46.5% (year to Oct 2025: medium 31.8%
+        // → 55.5%, low 26.4% → 41.3%); live (Sep 14 book, raw tier value):
+        // medium 19.3% → 57.1%, low 33.0% → 44.8%. It prices fewer cards
+        // (the far-rung ones abstain 'card:pool<2'). Publication stays held
+        // (CARD_TIER_HOLD — the bias-corrected live values missed the bar).
+        // docs/ENGINE_LANES.md §10.
         const target = c.gradeNum;
         const adj = ladderR
           .filter(s => !(s as PLot)._card?.gradeQual)
           .map(s => ({ g: (s as PLot)._card?.gradeNum ?? null, p: venueAdj(s, house), ms: saleMsOf(s) }))
-          .filter(r => r.p > 0 && r.g != null)
+          .filter(r => r.p > 0 && r.g != null && Math.abs(r.g - target) <= CARD_GA_MAX_STEP)
           .map(r => ({ p: r.p * (gradeMult(target) / gradeMult(r.g!)), ms: r.ms, w: Math.pow(0.5, Math.abs(r.g! - target)) }));
         if (adj.length >= 2) {
           out.value = Math.round(recentMedian(adj));
@@ -1087,7 +1145,14 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         value = Math.round(raw * tc.bias);
         low = Math.round(value * tc.lo); high = Math.round(value * tc.hi); mbAllIn = value * tc.mb;
       }
-      const g = cardGate(cal, market, tier, confidence);
+      // (Oct 5 2026) a tier with no calibration publishes nothing: its band
+      // would be the raw spread of one or two comps (live: 26% coverage); and
+      // a HELD tier publishes nothing whatever its cell reads (see
+      // CARD_TIER_HOLD)
+      const g0 = cardGate(cal, market, tier, confidence);
+      const g = !tc ? { ...g0, pass: false, reason: 'card:uncalibrated' as const }
+        : CARD_TIER_HOLD.has(tier) ? { ...g0, pass: false, reason: 'card:gate-accuracy' as const }
+          : g0;
       const flagsNow = getEngineFlags();
       // shadow: the candidate's verdict on the same priced value (never served)
       if (SHADOW) {
