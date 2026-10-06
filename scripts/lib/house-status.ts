@@ -41,6 +41,10 @@ export const HOUSE_LABELS: Record<string, string> = {
 export const ARCHIVE_SOURCES: Record<string, string> = {
   juliens: "Julien's",
   propstore: 'Propstore',
+  // (Oct 6 2026) MLB Auctions' WAF answers every CI request with a CAPTCHA
+  // page (HTTP 405, 14 straight nights); the crawl leg is off and its sold
+  // history serves as an archive until there is a sanctioned way back in
+  mlbauction: 'MLB Auctions',
 };
 export const isArchiveSource = (h: string): boolean => Object.prototype.hasOwnProperty.call(ARCHIVE_SOURCES, h);
 

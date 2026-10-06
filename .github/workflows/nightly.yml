@@ -155,13 +155,14 @@ jobs:
             *) if [ "$(date -u +%u)" = "7" ]; then full=true; else full=false; fi ;;
           esac
           # houses: rrauction + lelands/memorylane/lotg are the HEADLESS legs;
-          # rea/hugginsscott/scp/hakes/nflauction/mlbauction the standalone
+          # rea/hugginsscott/scp/hakes/nflauction the standalone
+          # (mlbauction: archive-only since Oct 6 2026 — its WAF blocks CI IPs)
           # sports/pop crawlers; the rest ride the ray-crawl.ts monolith.
           # markets: the engine roster's market keys + 'other' (backtest-merge.sh
           # re-checks this against backtestMarkets() and fails on a gap).
           {
             echo "full=$full"
-            echo 'houses=["goldin","sothebys","christies","bonhams","phillips","wright","rrauction","rea","hugginsscott","scp","hakes","lelands","memorylane","lotg","nflauction","mlbauction"]'
+            echo 'houses=["goldin","sothebys","christies","bonhams","phillips","wright","rrauction","rea","hugginsscott","scp","hakes","lelands","memorylane","lotg","nflauction"]'
             echo 'markets=["art","design","watches","sports","science","culture","tcg","other"]'
           } >> "$GITHUB_OUTPUT"
 
@@ -361,7 +362,7 @@ jobs:
         # (scripts/__tests__/archive-segments.test.ts checks).
         run: |
           read -r -a houses <<< "$HOUSES"
-          bash scripts/data-store.sh assemble-segments "${houses[@]}" --archive rrauction-archive other juliens propstore
+          bash scripts/data-store.sh assemble-segments "${houses[@]}" --archive rrauction-archive other juliens propstore mlbauction
       - name: Pull previous totals + backtest + house ledger (gate baselines + carried state)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
