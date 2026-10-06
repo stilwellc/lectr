@@ -48,7 +48,8 @@ import { crawlGoldin, goldinCompletedAuctions, goldinFeedComplete, goldinStatusO
 import { crawlLama } from './lib/houses/lama';
 import { crawlPhillips } from './lib/houses/phillips';
 import { crawlSothebys, crawlSothebysAuctions, enrichSothebysCloseTimes } from './lib/houses/sothebys';
-import { crawlWright } from './lib/houses/wright';
+import { buildSothebysKnown, crawlSothebysMakerHistory, SOTHEBYS_HISTORY } from './lib/houses/sothebys-history';
+import { WRIGHT_HOUSE_SKIPS, crawlWright } from './lib/houses/wright';
 
 // ── Lot Classification ──
 // Classifies a lot as original, print, photograph, sculpture, design, or unknown
@@ -339,6 +340,21 @@ async function main() {
     // accurate per-lot close times for the live Sotheby's lots (best-effort)
     await enrichSothebysCloseTimes(freshLots);
   }
+  // Sotheby's per-maker HISTORY (backfill only — SOTHEBYS_HISTORY=1 from
+  // backfill-history.yml; the nightly never sets it). Runs AFTER the live
+  // crawls so the dedupe sees tonight's rows too; a block stops the run before
+  // anything is written (no partial push).
+  const sothebysHistoryIds = new Set<string>();
+  if (SOTHEBYS_HISTORY && houseWanted('sothebys')) {
+    const known = buildSothebysKnown(existingLots.concat(freshLots));
+    const hist = await crawlSothebysMakerHistory(roster, known);
+    if (hist.blocked) throw new Error(`[Ray] Sotheby's history pass stopped (${hist.blocked}) — refusing to write a partial backfill`);
+    for (const l of hist.lots) { freshLots.push(l); sothebysHistoryIds.add(l.id); }
+    console.log(`[Ray] Sotheby's history: +${hist.lots.length} rows across ${hist.reports.length} maker(s)`);
+  }
+  if (houseWanted('wright') && Object.keys(WRIGHT_HOUSE_SKIPS).length) {
+    console.log(`[Ray] Wright-group feed: skipped sibling-house lots ${JSON.stringify(WRIGHT_HOUSE_SKIPS)} (LAMA → crawlLama; Wright/Rago → crawlWright; Toomey/PAI untracked)`);
+  }
   if (auctionScope && houseWanted('christies')) {
     freshLots.push(...await crawlChristiesAuctions(auctionScope));
   }
@@ -448,6 +464,11 @@ async function main() {
   const houseOk = new Set<string>(); // houses that returned ≥1 lot this run
   for (const l of freshLots) {
     if (l.auctionHouse !== 'Goldin') freshNonGoldinIds.add(l.id);
+    // a sold HISTORY row (Sotheby's backfill pass) says nothing about this
+    // run's live crawl of the maker — it must not authorize reconciling the
+    // maker's still-pending lots (a backfill scoped to Basquiat skips the art
+    // auction crawl entirely)
+    if (sothebysHistoryIds.has(l.id)) continue;
     crawledArtists.add(l.artist);
     houseOk.add(l.auctionHouse);
   }

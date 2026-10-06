@@ -1,0 +1,131 @@
+# Sotheby's / Wright HISTORY backfill (Oct 2026 depth audit). Two gaps:
+#   · sothebys — the corpus held 6 Basquiat / 8 Lichtenstein / 4 Koons Sotheby's
+#     sales while the public Algolia index holds hundreds each: the 2025 Algolia
+#     backfill routed with the maker table of its day, before the Aug 2026
+#     blue-chip makers existed. SOTHEBYS_HISTORY=1 adds a per-maker Algolia pass
+#     (scripts/lib/houses/sothebys-history.ts) producing crawler-shaped
+#     `sothebys-<lotId>` rows, deduped against both crawled id schemes + lot paths.
+#   · wright — the basic artist page returned before its full-history paginator
+#     (Picasso stopped at 2024), and the group-wide feed stamped every lamodern
+#     item LAMA. WRIGHT_DEEP=1 walks the paginator (wright.ts) with per-item house
+#     attribution (auction_house id: 1 Wright · 2 Rago · 5 LAMA).
+#
+# The crawl is the nightly's own path (ray-crawl.ts, RAY_HOUSE=<house>) scoped by
+# RAY_ONLY, so rows are classified/normalized exactly like nightly rows; neither
+# env var is ever set by the nightly. The result is unioned back over the
+# pre-crawl snapshot (fresh id wins, a pre id the crawl dropped is restored —
+# nothing is evicted) and pushed as the house segment; tonight's assemble picks
+# it up (its Wright-family mirror dedupe keeps a correctly attributed
+# Wright/Rago row over a mislabelled LAMA copy of the same lot). Dispatch-only;
+# dry_run (the default) crawls and reports the counts + push-gate verdict
+# without pushing.
+name: Backfill history (Sotheby's / Wright)
+on:
+  workflow_dispatch:
+    inputs:
+      house:
+        description: 'segment to backfill'
+        type: choice
+        options: [sothebys, wright]
+        default: sothebys
+      makers:
+        description: "makers: art | watches (sothebys) | all | comma list of roster slugs (e.g. jean-michel-basquiat,patek-philippe)"
+        default: art
+      since_year:
+        description: "sothebys only: keep sales ending on/after Jan 1 of this year (0 = the full index)"
+        default: '0'
+      dry_run:
+        description: 'crawl + report counts (and the push gate verdict) WITHOUT pushing the segment'
+        type: boolean
+        default: true
+      skip_gate:
+        description: 'set SEGMENT_SHRINK_OK=1 on push — ONLY after a dry run showed the gate blocking on a price-band shift from legitimate growth'
+        type: boolean
+        default: false
+# SEGMENT LOCK: the same per-house group nightly.yml's crawl matrix uses, so a
+# pull → crawl → union → push here can never interleave with another writer's.
+concurrency:
+  group: segments-${{ inputs.house }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HOUSE: ${{ inputs.house }}
+      MAKERS: ${{ inputs.makers || 'art' }}
+      SINCE_YEAR: ${{ inputs.since_year || '0' }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # the selector is resolved against the roster (unknown slug / a maker the
+      # house cannot serve = a failed dispatch, never a silent zero-maker crawl)
+      - name: Validate inputs
+        id: makers
+        run: |
+          [[ "$HOUSE" == "sothebys" || "$HOUSE" == "wright" ]] || { echo "::error::house must be sothebys|wright"; exit 1; }
+          [[ "$MAKERS" =~ ^[A-Za-z0-9,\ -]+$ ]] || { echo "::error::makers must be art|watches|all or a comma list of slugs"; exit 1; }
+          if ! [[ "$SINCE_YEAR" =~ ^[0-9]{1,4}$ ]] || { [ "$SINCE_YEAR" -ne 0 ] && { [ "$SINCE_YEAR" -lt 1998 ] || [ "$SINCE_YEAR" -gt 2100 ]; }; }; then
+            echo "::error::since_year must be 0 or 1998..2100"; exit 1
+          fi
+          only=$(npx tsx scripts/backfill-history.ts makers "$HOUSE" "$MAKERS")
+          [ -n "$only" ] || { echo "::error::selector '$MAKERS' resolved to no makers"; exit 1; }
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+          echo "- house \`$HOUSE\` · makers \`$MAKERS\` → \`$only\` · since_year $SINCE_YEAR · dry_run $DRY_RUN" >> "$GITHUB_STEP_SUMMARY"
+      # STRICT pull (no `|| echo` fallback): a failed pull followed by a
+      # union-and-push would publish a crawl-only segment over the real one.
+      - name: Pull last-good segment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull-segment "$HOUSE"
+      - name: Snapshot the pre-crawl segment
+        run: |
+          f="data/corpus/segments/$HOUSE.ndjson.gz"
+          if [ -f "$f" ]; then cp "$f" "$RUNNER_TEMP/$HOUSE.pre.ndjson.gz"; else echo "no $HOUSE segment in R2 yet — bootstrap"; fi
+      # sothebys: the nightly leg + the per-maker Algolia history pass (a 403 /
+      # persistent 429 STOPS the run before any write — never routed around).
+      # wright: the nightly leg with the paginator history walk (600ms/page).
+      - name: Crawl with history
+        timeout-minutes: 150
+        env:
+          RAY_HOUSE: ${{ inputs.house }}
+          RAY_ONLY: ${{ steps.makers.outputs.only }}
+          SOTHEBYS_HISTORY: ${{ inputs.house == 'sothebys' && '1' || '0' }}
+          SOTHEBYS_HISTORY_SINCE: ${{ inputs.since_year || '0' }}
+          WRIGHT_DEEP: ${{ inputs.house == 'wright' && '1' || '0' }}
+          CRAWL_CONCURRENCY: '2'
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/ray-crawl.ts
+      - name: Union over the snapshot (nothing evicted) + report
+        env:
+          ONLY: ${{ steps.makers.outputs.only }}
+        run: NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/backfill-history.ts union --house "$HOUSE" --pre "$RUNNER_TEMP/$HOUSE.pre.ndjson.gz" --makers "$ONLY" --write
+      # dry run: what push-segment's per-house shrink/price gate WOULD say
+      - name: Push-gate preview (dry run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          stats="data/corpus/segments/.$HOUSE.pulled-stats.json"
+          if [ ! -s "$stats" ]; then echo "- push gate: no baseline stats (first write) — would pass" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          rc=0; npx tsx scripts/ci/segment-gate.ts check "$HOUSE" "$stats" "data/corpus/segments/$HOUSE.ndjson.gz" || rc=$?
+          case "$rc" in
+            0) echo "- push gate: PASS" >> "$GITHUB_STEP_SUMMARY" ;;
+            3) echo "::warning title=push gate would block::see data/qa/leg-health-gate.json in the log above"; echo "- push gate: WOULD BLOCK (skip_gate=true overrides once verified)" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "- push gate: tool error rc $rc" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
+          echo "- DRY RUN — segment NOT pushed" >> "$GITHUB_STEP_SUMMARY"
+      - name: Push segment
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SEGMENT_SHRINK_OK: ${{ inputs.skip_gate && '1' || '0' }}
+        run: bash scripts/data-store.sh push-segment "$HOUSE"
