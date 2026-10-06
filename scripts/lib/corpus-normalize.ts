@@ -12,6 +12,7 @@ import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
+import { reclassifyLot } from './classify';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -704,6 +705,22 @@ export function rerouteSetCodeCards(lots: Lot[]): number {
   return n;
 }
 
+// ── RECLASSIFY (Oct 6 2026 categorization audit) — the shared classification
+// ladder (scripts/lib/classify.ts RECLASS_RULES) re-applied to EVERY row, every
+// nightly, so a rule fixes the back-catalogue as well as tomorrow's crawl.
+// A rule moves a lot to its correct artist slug or evicts it (no valid home);
+// per-class counts are logged so a rule's blast radius is visible nightly.
+export function reclassifyCorpus(lots: Lot[]): { byClass: Record<string, number>; dropped: number } {
+  const byClass: Record<string, number> = {};
+  const drop = new Set<number>();
+  for (let i = 0; i < lots.length; i++) {
+    const r = reclassifyLot(lots[i] as Lot & { saleName?: string | null; description?: string | null });
+    for (const c of r.fired) byClass[c] = (byClass[c] || 0) + 1;
+    if (r.drop) drop.add(i);
+  }
+  return { byClass, dropped: compact(lots, drop) };
+}
+
 // ── STALE UPCOMING (3,732 on Sep 27: H&S 2,350 · REA 1,068 · MLB 193 · Phillips
 // 74 · Bonhams 25 · Sotheby's 15 · Christie's 7): a lot still 'upcoming' more
 // than 3 days past its close never had its result resolved (REA/H&S closed-sale
@@ -907,6 +924,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const foreignMaker = rerouteForeignLeadMaker(ls);
   const setCodeCards = rerouteSetCodeCards(ls);
   console.log(`[normalize] category: foreign-lead-maker rerouted=${foreignMaker.rerouted} dropped=${foreignMaker.dropped} · pre-war set codes→graded-cards=${setCodeCards}`);
+  const reclass = reclassifyCorpus(ls);
+  console.log(`[normalize] reclassify (scripts/lib/classify.ts): ${Object.entries(reclass.byClass).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'} · evicted=${reclass.dropped}`);
   // ENGINE SPEC v2 order: category flips (2c) run BEFORE identity work;
   // restampIdentityKeys (5) runs LAST so every flip re-derives its formKey.
   // healExpansionRows runs FIRST: it cleans titles (every parser below reads

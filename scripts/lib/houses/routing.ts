@@ -5,6 +5,7 @@
  * Moved verbatim out of scripts/ray-crawl.ts (house split, Sep 2026).
  */
 import { looksLikeCard } from '../../../app/lib/cards';
+import { goldinSportKind, DROP } from '../classify';
 
 // Tracked art & design makers → slug. Order: specific before ambiguous.
 // Ambiguous surnames (condo=apartment, saul, sachs) require the full name.
@@ -159,8 +160,16 @@ export function goldinRoute(title: string, sportScoped = false): string | null {
   // so it honours the never-non-sport-cards doctrine. A RAW object (jersey/bat/
   // ball with game-used wording but no card product/number) has looksLikeCard
   // false and keeps the object routing below.
-  if (sportScoped && looksLikeCard(title)) return 'sports-cards';
-  if (sportScoped) return objectSignal || 'sports-cards';
+  // A Sport lot with no object signal is NOT presumed a card (Oct 6 2026 audit:
+  // 69k jerseys/balls/photos/sealed boxes/comics sat in sports-cards). The
+  // shared ladder decides — the same one corpus-normalize re-applies to the
+  // back-catalogue (classify.ts goldinSportKind): card detector → card, else
+  // the object's kind; non-sport TCG / comics → blocked.
+  if (sportScoped) {
+    if (objectSignal && !looksLikeCard(title)) return objectSignal;
+    const k = goldinSportKind(title);
+    return k === DROP ? 'blocked' : k;
+  }
   if (objectSignal) return objectSignal;
   // space first — Apollo/NASA artifacts head the science vertical's space slug
   if (/\b(apollo|nasa|lunar|moon landing|astronaut|spacesuit|space suit|mercury (program|capsule)|gemini (program|capsule)|saturn v|cosmonaut|sputnik|space[- ]?flown)\b/.test(t)) return 'space-exploration';
