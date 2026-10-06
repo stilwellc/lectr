@@ -1,0 +1,117 @@
+# Huggins & Scott FULL-MONTH backfill. Until Aug 13 2026 the archive leg read
+# a rate-limited month-index page (~page 41 on CI IPs) as "end of month", so
+# every month crawled 2018-02 → 2025-10 sits at exactly 400 lots (40 pages ×
+# 10) — ~1.2k/yr vs ~6k/yr for 2015–17. lotUrlsForMonth now backs off and
+# retries a null page; this re-reads those months in full. Lots the segment
+# already holds as sold are skipped (only the missing lot pages are fetched).
+#
+# The crawl is the nightly's own archive path (crawl-hugginsscott.ts, no
+# --live leg) scoped by --since/--until YYYY-MM; the result is unioned back
+# over the pre-crawl snapshot (fresh id wins, a dropped pre id is restored —
+# nothing evicted). A month whose lot pages mostly fail is treated as a wall:
+# the run stops non-zero and nothing is pushed. Dispatch-only; dry_run (the
+# default) crawls and reports new rows by category + the push-gate verdict.
+name: Backfill Huggins & Scott (full months)
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'first month index to re-read (YYYY-MM, inclusive)'
+        default: '2018-01'
+      until:
+        description: 'last month index to re-read (YYYY-MM, inclusive)'
+        default: '2019-12'
+      months:
+        description: 'max month indexes in this slice (newest first inside the range)'
+        default: '30'
+      conc:
+        description: 'concurrent lot fetches (keep small — small-business server)'
+        default: '2'
+      delay:
+        description: 'ms between lot requests, per worker'
+        default: '200'
+      skip_artists:
+        description: 'comma list of slugs whose NEW rows are left out ('''' = full months)'
+        default: ''
+      dry_run:
+        description: 'crawl + report counts (and the push gate verdict) WITHOUT pushing the segment'
+        type: boolean
+        default: true
+      skip_gate:
+        description: 'set SEGMENT_SHRINK_OK=1 on push — ONLY after a dry run showed the gate blocking on a price-band shift from legitimate growth'
+        type: boolean
+        default: false
+# SEGMENT LOCK: the same per-house group nightly.yml's crawl matrix uses.
+concurrency:
+  group: segments-hugginsscott
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      SINCE: ${{ inputs.since || '2018-01' }}
+      UNTIL: ${{ inputs.until || '2019-12' }}
+      MONTHS: ${{ inputs.months || '30' }}
+      CONC: ${{ inputs.conc || '2' }}
+      DELAY: ${{ inputs.delay || '200' }}
+      SKIP_ARTISTS: ${{ inputs.skip_artists }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Validate inputs
+        run: |
+          for v in SINCE UNTIL; do [[ "${!v}" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || { echo "::error::$v must be YYYY-MM"; exit 1; }; done
+          [[ "$SINCE" < "$UNTIL" || "$SINCE" == "$UNTIL" ]] || { echo "::error::since ($SINCE) is after until ($UNTIL)"; exit 1; }
+          if ! [[ "$MONTHS" =~ ^[0-9]+$ ]] || [ "$MONTHS" -lt 1 ] || [ "$MONTHS" -gt 100 ]; then echo "::error::months must be 1..100"; exit 1; fi
+          if ! [[ "$CONC" =~ ^[0-9]+$ ]] || [ "$CONC" -lt 1 ] || [ "$CONC" -gt 4 ]; then echo "::error::conc must be 1..4"; exit 1; fi
+          if ! [[ "$DELAY" =~ ^[0-9]+$ ]] || [ "$DELAY" -lt 100 ]; then echo "::error::delay must be an integer ≥ 100 (ms)"; exit 1; fi
+          [[ "$SKIP_ARTISTS" =~ ^[a-z0-9,-]*$ ]] || { echo "::error::skip_artists must be a comma list of slugs"; exit 1; }
+          echo "- months \`$SINCE\` → \`$UNTIL\` (max $MONTHS) · conc $CONC · delay ${DELAY}ms · skip new \`${SKIP_ARTISTS:-none}\` · dry_run ${{ inputs.dry_run }}" >> "$GITHUB_STEP_SUMMARY"
+      # STRICT pull (no `|| echo` fallback): a failed pull followed by a
+      # union-and-push would publish a slice-only segment over the real one.
+      - name: Pull last-good segment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull-segment hugginsscott
+      - name: Snapshot the pre-crawl segment
+        run: |
+          f=data/corpus/segments/hugginsscott.ndjson.gz
+          if [ -f "$f" ]; then cp "$f" "$RUNNER_TEMP/hugginsscott.pre.ndjson.gz"; else echo "::error::no hugginsscott segment pulled — a history backfill never bootstraps the segment"; exit 1; fi
+      # archive leg only (no --live: the nightly owns the live grid); --write
+      # persists after each month so the union below sees every finished month
+      - name: Re-read the month slice
+        timeout-minutes: 320
+        run: npx tsx scripts/crawl-hugginsscott.ts --since "$SINCE" --until "$UNTIL" --months "$MONTHS" --conc "$CONC" --delay "$DELAY" --write
+      - name: Union over the snapshot (nothing evicted) + report
+        run: npx tsx scripts/backfill-segment.ts union --house hugginsscott --pre "$RUNNER_TEMP/hugginsscott.pre.ndjson.gz" --skip-artists "$SKIP_ARTISTS" --write
+      # dry run: what push-segment's per-house shrink/price gate WOULD say
+      - name: Push-gate preview (dry run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          stats=data/corpus/segments/.hugginsscott.pulled-stats.json
+          echo "- segment size: $(wc -c < data/corpus/segments/hugginsscott.ndjson.gz | tr -d ' ') bytes" >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -s "$stats" ]; then echo "- push gate: no baseline stats — would pass" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          rc=0; npx tsx scripts/ci/segment-gate.ts check hugginsscott "$stats" data/corpus/segments/hugginsscott.ndjson.gz || rc=$?
+          case "$rc" in
+            0) echo "- push gate: PASS" >> "$GITHUB_STEP_SUMMARY" ;;
+            3) echo "::warning title=push gate would block::see data/qa/leg-health-gate.json in the log above"; echo "- push gate: WOULD BLOCK (skip_gate=true overrides once verified)" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "- push gate: tool error rc $rc" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
+          echo "- DRY RUN — segment NOT pushed" >> "$GITHUB_STEP_SUMMARY"
+      - name: Push segment
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SEGMENT_SHRINK_OK: ${{ inputs.skip_gate && '1' || '0' }}
+        run: bash scripts/data-store.sh push-segment hugginsscott

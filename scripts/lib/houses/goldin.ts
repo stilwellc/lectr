@@ -113,9 +113,49 @@ export function isPlaceholderClose(ts: string): boolean {
   return t > Date.now() + 5 * 365 * 86_400_000;
 }
 
+/**
+ * The §3b sold-sweep window over Completed auctions' end_timestamp.
+ *   default (nightly): the last RAY_GOLDIN_SWEEP_DAYS days (21).
+ *   backfill:          RAY_GOLDIN_SWEEP_FROM=YYYY-MM-DD (inclusive) and/or
+ *                      RAY_GOLDIN_SWEEP_TO=YYYY-MM-DD (exclusive) — a fixed
+ *                      date slice of Goldin's per-auction sold history (the
+ *                      auctions API lists Completed auctions back to 2012),
+ *                      so .github/workflows/backfill-goldin.yml can walk
+ *                      2019–22 one bounded slice per dispatch.
+ * Throws on a malformed date — a typo must fail the run, not sweep everything.
+ */
+export function goldinSweepWindow(env: Record<string, string | undefined> = process.env, now = Date.now()): { fromMs: number; toMs: number; label: string } {
+  const day = (k: string): number | null => {
+    const v = (env[k] || '').trim();
+    if (!v) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(`${v}T00:00:00Z`))) throw new Error(`${k} must be YYYY-MM-DD (got '${v}')`);
+    return Date.parse(`${v}T00:00:00Z`);
+  };
+  const from = day('RAY_GOLDIN_SWEEP_FROM'), to = day('RAY_GOLDIN_SWEEP_TO');
+  if (from === null && to === null) {
+    const days = parseInt(env.RAY_GOLDIN_SWEEP_DAYS || '21', 10);
+    return { fromMs: now - days * 86_400_000, toMs: Infinity, label: `≤${days}d` };
+  }
+  const fromMs = from ?? 0, toMs = to ?? Infinity;
+  if (fromMs >= toMs) throw new Error(`empty Goldin sweep window: RAY_GOLDIN_SWEEP_FROM ${env.RAY_GOLDIN_SWEEP_FROM} ≥ RAY_GOLDIN_SWEEP_TO ${env.RAY_GOLDIN_SWEEP_TO}`);
+  return { fromMs, toMs, label: `${env.RAY_GOLDIN_SWEEP_FROM || 'start'} → ${env.RAY_GOLDIN_SWEEP_TO || 'now'}` };
+}
+
 export async function crawlGoldin(): Promise<AuctionLot[]> {
   const byId = new Map<string, AuctionLot>();
-  console.log('  [Goldin] Fetching live auction lots (facet-driven: objects, never cards)...');
+  // BACKFILL MODE (RAY_GOLDIN_SWEEP_ONLY=1, backfill-goldin.yml): run ONLY the
+  // §3b per-auction sold sweep over the RAY_GOLDIN_SWEEP_FROM/TO slice. The
+  // live passes and the archive tail are skipped, so the feed is NOT
+  // enumerated (goldinFeedComplete=false → the merge evicts nothing) and the
+  // status fetch does not arm promotion (goldinStatusOk stays false → no
+  // tracked lot is promoted/evicted by a backfill). Sold rows only.
+  const sweepOnly = process.env.RAY_GOLDIN_SWEEP_ONLY === '1';
+  const sweepWindow = goldinSweepWindow(); // validate up front — a bad date fails before any fetch
+  if (sweepOnly) {
+    goldinFeedComplete = false;
+    console.log(`  [Goldin] SWEEP-ONLY backfill: per-auction sold sweep over ${sweepWindow.label}; live passes + archive tail skipped`);
+  }
+  if (!sweepOnly) console.log('  [Goldin] Fetching live auction lots (facet-driven: objects, never cards)...');
   let dropped = 0;
   // Title-cleaner from the comps lib — strips a leaked-note prefix and the
   // "Month DD, YYYY - " / "YYYY-YY - " date prefixes Goldin titles carry, so
@@ -278,184 +318,187 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
     return true;
   };
 
-  // 1 · LIVE inventory — object facets + science keyword passes. A failed or
-  // capped page marks the whole feed incomplete: the merge must never read
-  // "absent from a partial fetch" as "delisted".
-  for (const pass of GOLDIN_FACET_PASSES) {
-    let from = 0, total = Infinity;
-    const CAP = 3000; // headroom for flagship events; today's facets run ~30-160
-    while (from < Math.min(total, CAP)) {
-      try {
-        const { lots, total: t } = await goldinQuery({ item_type: [pass.itemType], size: 100, from });
-        total = t;
-        if (!lots.length) break;
-        lots.forEach((l: any) => ingest(l, pass.fallback));
-        from += 100;
-        await sleep(400);
-      } catch (e) {
-        console.log(`  [Goldin] facet '${pass.itemType}' truncated at ${from}:`, e);
-        goldinFeedComplete = false;
-        break;
-      }
-    }
-    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
-    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false; // windowed, not enumerated
-    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
-  }
-  // 1a · LIVE SPORT CARDS — the whole live Sport book (category:['Sport'],
-  // which is Goldin's own line: Non-Sport/Pokémon is a separate category we
-  // never touch). sportScoped ingest routes cards → sports-cards, objects →
-  // their slugs. ~3.5k live lots; capped generously. This is the on-the-block
-  // + ⌘K-searchable card feed; the 348k SOLD history is the one-time backfill.
-  {
-    let from = 0, total = Infinity;
-    const CAP = 8000;
-    while (from < Math.min(total, CAP)) {
-      try {
-        const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Sport'], size: 100, from });
-        total = t;
-        if (!lots.length) break;
-        lots.forEach((l: any) => ingest(l, 'sports-cards', true));
-        from += 100;
-        await sleep(400);
-      } catch (e) {
-        console.log(`  [Goldin] live Sport pass truncated at ${from}:`, e);
-        goldinFeedComplete = false;
-        break;
-      }
-    }
-    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
-    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
-    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
-    console.log(`  [Goldin] live Sport pass: ${Math.min(total, CAP)} lots enumerated`);
-  }
-  // 1a-culture · LIVE POP CULTURE — Goldin's curated Non-Sport sub-categories
-  // (Pop Culture/Entertainment, Rock N' Roll, History): the high-end 1/1
-  // artifacts. cultureScoped ingest drops mass/graded (comics/cards/games/VHS/
-  // vinyl/toys/posters) via routeCulture and routes the rest to culture slugs.
-  {
-    let from = 0, total = Infinity;
-    const CAP = 8000;
-    while (from < Math.min(total, CAP)) {
-      try {
-        const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Non-Sport'], sub_category: ['Pop Culture/Entertainment', "Rock N' Roll", 'History'], size: 100, from });
-        total = t;
-        if (!lots.length) break;
-        lots.forEach((l: any) => ingest(l, null, false, true));
-        from += 100;
-        await sleep(400);
-      } catch (e) {
-        console.log(`  [Goldin] live Culture pass truncated at ${from}:`, e);
-        goldinFeedComplete = false;
-        break;
-      }
-    }
-    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
-    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
-    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
-    console.log(`  [Goldin] live Culture pass: ${Math.min(total, CAP)} lots enumerated`);
-  }
-  // 1a-pokemon · LIVE POKÉMON — the one allowlisted Non-Sport TCG line
-  // (category:['Non-Sport'], sub_category:['Pokemon'] — Goldin's own facet, so
-  // the query scope IS the identity). Routes to the 'pokemon' culture slug;
-  // the 40k sold history is the one-time backfill (backfill-goldin-pokemon),
-  // the nightly Completed-flip + §3b sweep grow it — same doctrine as cards.
-  {
-    let from = 0, total = Infinity;
-    const CAP = 3000; // live Pokémon runs ~950 today; headroom for TCG Elite weeks
-    while (from < Math.min(total, CAP)) {
-      try {
-        const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Non-Sport'], sub_category: ['Pokemon'], size: 100, from });
-        total = t;
-        if (!lots.length) break;
-        lots.forEach((l: any) => ingest(l, 'pokemon'));
-        from += 100;
-        await sleep(400);
-      } catch (e) {
-        console.log(`  [Goldin] live Pokémon pass truncated at ${from}:`, e);
-        goldinFeedComplete = false;
-        break;
-      }
-    }
-    if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit ≠ enumerated
-    if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
-    if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP));
-    console.log(`  [Goldin] live Pokémon pass: ${Math.min(total, CAP)} lots enumerated`);
-  }
-  // 1b · AUCTION-AWARE LIVE PASS — newly launched flagship auctions (e.g.
-  // "2026 Summer Game Used Memorabilia Auction") can go Active with their
-  // lots carrying NO item_type facet yet, so the facet passes above miss the
-  // entire event (581 live lots invisible, verified Jul 2026). Enumerate
-  // Active object auctions by NAME from the auctions API and ingest their
-  // lots by auction_id through the SAME per-lot gates — the router still
-  // decides every lot (cards/slabs still drop), so a mixed auction is safe.
-  try {
-    const aRes = await fetchWithRetry(GOLDIN_AUCTIONS_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
-      body: JSON.stringify({ status: 'All', order: 'desc' }),
-      timeoutMs: 25000,
-    });
-    if (aRes.ok) {
-      const auctions = ((await aRes.json() as any).auctions || []) as any[];
-      const objectAuctions = auctions.filter(a =>
-        a.status === 'Active'
-        && /\b(game.used|memorabilia|jersey|sneaker)\b/i.test(a.name || a.title || '')
-        && !/\b(tcg|card|pok[eé]mon|comic|box break)\b/i.test(a.name || a.title || ''));
-      for (const a of objectAuctions) {
-        let from = 0, total = Infinity;
-        while (from < Math.min(total, 3000)) {
-          const { lots, total: t } = await goldinQuery({ auction_id: [a.auction_id], size: 100, from });
+  // (sections 1–2 are skipped in SWEEP-ONLY backfill mode — see the top)
+  let soldLogged = 0;
+  if (!sweepOnly) {
+    // 1 · LIVE inventory — object facets + science keyword passes. A failed or
+    // capped page marks the whole feed incomplete: the merge must never read
+    // "absent from a partial fetch" as "delisted".
+    for (const pass of GOLDIN_FACET_PASSES) {
+      let from = 0, total = Infinity;
+      const CAP = 3000; // headroom for flagship events; today's facets run ~30-160
+      while (from < Math.min(total, CAP)) {
+        try {
+          const { lots, total: t } = await goldinQuery({ item_type: [pass.itemType], size: 100, from });
           total = t;
           if (!lots.length) break;
-          lots.forEach((l: any) => ingest(l, 'game-used'));
+          lots.forEach((l: any) => ingest(l, pass.fallback));
           from += 100;
           await sleep(400);
+        } catch (e) {
+          console.log(`  [Goldin] facet '${pass.itemType}' truncated at ${from}:`, e);
+          goldinFeedComplete = false;
+          break;
         }
-        console.log(`  [Goldin] auction pass '${(a.name || '').slice(0, 48)}': ${Math.min(total, 3000)} lots enumerated`);
       }
+      if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
+      if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false; // windowed, not enumerated
+      if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
     }
-  } catch (e) {
-    console.log('  [Goldin] auction-aware live pass failed:', e);
-    goldinFeedComplete = false;
-  }
-
-  for (const q of GOLDIN_SCIENCE_QUERIES) {
+    // 1a · LIVE SPORT CARDS — the whole live Sport book (category:['Sport'],
+    // which is Goldin's own line: Non-Sport/Pokémon is a separate category we
+    // never touch). sportScoped ingest routes cards → sports-cards, objects →
+    // their slugs. ~3.5k live lots; capped generously. This is the on-the-block
+    // + ⌘K-searchable card feed; the 348k SOLD history is the one-time backfill.
+    {
+      let from = 0, total = Infinity;
+      const CAP = 8000;
+      while (from < Math.min(total, CAP)) {
+        try {
+          const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Sport'], size: 100, from });
+          total = t;
+          if (!lots.length) break;
+          lots.forEach((l: any) => ingest(l, 'sports-cards', true));
+          from += 100;
+          await sleep(400);
+        } catch (e) {
+          console.log(`  [Goldin] live Sport pass truncated at ${from}:`, e);
+          goldinFeedComplete = false;
+          break;
+        }
+      }
+      if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
+      if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+      if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
+      console.log(`  [Goldin] live Sport pass: ${Math.min(total, CAP)} lots enumerated`);
+    }
+    // 1a-culture · LIVE POP CULTURE — Goldin's curated Non-Sport sub-categories
+    // (Pop Culture/Entertainment, Rock N' Roll, History): the high-end 1/1
+    // artifacts. cultureScoped ingest drops mass/graded (comics/cards/games/VHS/
+    // vinyl/toys/posters) via routeCulture and routes the rest to culture slugs.
+    {
+      let from = 0, total = Infinity;
+      const CAP = 8000;
+      while (from < Math.min(total, CAP)) {
+        try {
+          const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Non-Sport'], sub_category: ['Pop Culture/Entertainment', "Rock N' Roll", 'History'], size: 100, from });
+          total = t;
+          if (!lots.length) break;
+          lots.forEach((l: any) => ingest(l, null, false, true));
+          from += 100;
+          await sleep(400);
+        } catch (e) {
+          console.log(`  [Goldin] live Culture pass truncated at ${from}:`, e);
+          goldinFeedComplete = false;
+          break;
+        }
+      }
+      if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit (empty page mid-pagination) ≠ enumerated
+      if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+      if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP)); // health: facet's own count
+      console.log(`  [Goldin] live Culture pass: ${Math.min(total, CAP)} lots enumerated`);
+    }
+    // 1a-pokemon · LIVE POKÉMON — the one allowlisted Non-Sport TCG line
+    // (category:['Non-Sport'], sub_category:['Pokemon'] — Goldin's own facet, so
+    // the query scope IS the identity). Routes to the 'pokemon' culture slug;
+    // the 40k sold history is the one-time backfill (backfill-goldin-pokemon),
+    // the nightly Completed-flip + §3b sweep grow it — same doctrine as cards.
+    {
+      let from = 0, total = Infinity;
+      const CAP = 3000; // live Pokémon runs ~950 today; headroom for TCG Elite weeks
+      while (from < Math.min(total, CAP)) {
+        try {
+          const { lots, total: t } = await goldinQuery({ queryType: 'Featured', category: ['Non-Sport'], sub_category: ['Pokemon'], size: 100, from });
+          total = t;
+          if (!lots.length) break;
+          lots.forEach((l: any) => ingest(l, 'pokemon'));
+          from += 100;
+          await sleep(400);
+        } catch (e) {
+          console.log(`  [Goldin] live Pokémon pass truncated at ${from}:`, e);
+          goldinFeedComplete = false;
+          break;
+        }
+      }
+      if (from < Math.min(total, CAP)) goldinFeedComplete = false; // early exit ≠ enumerated
+      if (Number.isFinite(total) && total > CAP) goldinFeedComplete = false;
+      if (Number.isFinite(total)) noteExpected('goldin', Math.min(total, CAP));
+      console.log(`  [Goldin] live Pokémon pass: ${Math.min(total, CAP)} lots enumerated`);
+    }
+    // 1b · AUCTION-AWARE LIVE PASS — newly launched flagship auctions (e.g.
+    // "2026 Summer Game Used Memorabilia Auction") can go Active with their
+    // lots carrying NO item_type facet yet, so the facet passes above miss the
+    // entire event (581 live lots invisible, verified Jul 2026). Enumerate
+    // Active object auctions by NAME from the auctions API and ingest their
+    // lots by auction_id through the SAME per-lot gates — the router still
+    // decides every lot (cards/slabs still drop), so a mixed auction is safe.
     try {
-      const { lots } = await goldinQuery({ searchTerm: q, size: 100, from: 0 });
-      lots.forEach((l: any) => ingest(l, null));
-      await sleep(400);
+      const aRes = await fetchWithRetry(GOLDIN_AUCTIONS_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+        body: JSON.stringify({ status: 'All', order: 'desc' }),
+        timeoutMs: 25000,
+      });
+      if (aRes.ok) {
+        const auctions = ((await aRes.json() as any).auctions || []) as any[];
+        const objectAuctions = auctions.filter(a =>
+          a.status === 'Active'
+          && /\b(game.used|memorabilia|jersey|sneaker)\b/i.test(a.name || a.title || '')
+          && !/\b(tcg|card|pok[eé]mon|comic|box break)\b/i.test(a.name || a.title || ''));
+        for (const a of objectAuctions) {
+          let from = 0, total = Infinity;
+          while (from < Math.min(total, 3000)) {
+            const { lots, total: t } = await goldinQuery({ auction_id: [a.auction_id], size: 100, from });
+            total = t;
+            if (!lots.length) break;
+            lots.forEach((l: any) => ingest(l, 'game-used'));
+            from += 100;
+            await sleep(400);
+          }
+          console.log(`  [Goldin] auction pass '${(a.name || '').slice(0, 48)}': ${Math.min(total, 3000)} lots enumerated`);
+        }
+      }
     } catch (e) {
-      console.log(`  [Goldin] science query '${q}' failed:`, e);
+      console.log('  [Goldin] auction-aware live pass failed:', e);
       goldinFeedComplete = false;
     }
-  }
 
-  // 2 · RESULTS ARCHIVE — show_only:'Sold' serves the full sold history with
-  // realized prices. Sold rows are permanent, so we pull DEEP once (the whole
-  // history) and a tail window daily. `Ending_Soonest` sorts oldest→newest, so
-  // the freshest closes sit at the tail (from ≈ total); the daily window reads
-  // just those. Skipping any lot already in byId keeps the live pass's own
-  // records authoritative.
-  let soldLogged = 0;
-  for (const pass of GOLDIN_SOLD_PASSES) {
-    try {
-      const scope = { queryType: 'Ending_Soonest', show_only: 'Sold', ...pass.scope };
-      const head = await goldinQuery({ ...scope, size: 1, from: 0 });
-      const total = head.total;
-      const windowN = DEEP ? total : 500; // daily: the last ~500 closes; DEEP: all of it
-      const start = Math.max(0, total - windowN);
-      for (let from = start; from < total; from += 100) {
-        const { lots } = await goldinQuery({ ...scope, size: 100, from });
-        if (!lots.length) break;
-        for (const l of lots) if (ingestSold(l, pass.fallback, pass.sportScoped)) soldLogged++;
+    for (const q of GOLDIN_SCIENCE_QUERIES) {
+      try {
+        const { lots } = await goldinQuery({ searchTerm: q, size: 100, from: 0 });
+        lots.forEach((l: any) => ingest(l, null));
         await sleep(400);
+      } catch (e) {
+        console.log(`  [Goldin] science query '${q}' failed:`, e);
+        goldinFeedComplete = false;
       }
-    } catch (e) {
-      console.log(`  [Goldin] sold '${pass.label}' pass failed:`, e);
     }
+
+    // 2 · RESULTS ARCHIVE — show_only:'Sold' serves the full sold history with
+    // realized prices. Sold rows are permanent, so we pull DEEP once (the whole
+    // history) and a tail window daily. `Ending_Soonest` sorts oldest→newest, so
+    // the freshest closes sit at the tail (from ≈ total); the daily window reads
+    // just those. Skipping any lot already in byId keeps the live pass's own
+    // records authoritative.
+    for (const pass of GOLDIN_SOLD_PASSES) {
+      try {
+        const scope = { queryType: 'Ending_Soonest', show_only: 'Sold', ...pass.scope };
+        const head = await goldinQuery({ ...scope, size: 1, from: 0 });
+        const total = head.total;
+        const windowN = DEEP ? total : 500; // daily: the last ~500 closes; DEEP: all of it
+        const start = Math.max(0, total - windowN);
+        for (let from = start; from < total; from += 100) {
+          const { lots } = await goldinQuery({ ...scope, size: 100, from });
+          if (!lots.length) break;
+          for (const l of lots) if (ingestSold(l, pass.fallback, pass.sportScoped)) soldLogged++;
+          await sleep(400);
+        }
+      } catch (e) {
+        console.log(`  [Goldin] sold '${pass.label}' pass failed:`, e);
+      }
+    }
+    console.log(`  [Goldin] results archive: ${soldLogged} sold lots logged (${DEEP ? 'DEEP full-history' : 'daily tail window'})`);
   }
-  console.log(`  [Goldin] results archive: ${soldLogged} sold lots logged (${DEEP ? 'DEEP full-history' : 'daily tail window'})`);
 
   // 3 · COMPLETION — a same-crawl fallback for the very freshest closes that
   // haven't hit the sold index yet: record which auctions Goldin marks
@@ -475,7 +518,7 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
     goldinCompletedAuctions = new Set<string>(
       auctions.filter((a: any) => a.status === 'Completed').map((a: any) => a.auction_id)
     );
-    goldinStatusOk = true; // only a verified fetch may drive promotion/eviction
+    goldinStatusOk = !sweepOnly; // only a verified fetch may drive promotion/eviction (never a backfill)
     console.log(`  [Goldin] ${goldinCompletedAuctions.size} auctions marked Completed (promotion source)`);
 
     // 3b · RECENT-CLOSE SOLD SWEEP — the authoritative price CORRECTION pass.
@@ -489,35 +532,44 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
     // fresh-wins overwrite then corrects any promoted placeholder, cards
     // included. N via RAY_GOLDIN_SWEEP_DAYS (default 21 — Goldin indexes sold
     // results within ~2 days; 21 is a wide safety net at ~2min of API time).
-    const SWEEP_DAYS = parseInt(process.env.RAY_GOLDIN_SWEEP_DAYS || '21', 10);
-    const sweepCut = Date.now() - SWEEP_DAYS * 86_400_000;
+    // RAY_GOLDIN_SWEEP_FROM/TO replace the rolling window with a fixed date
+    // slice (backfill) — see goldinSweepWindow.
     const recentDone = auctions.filter((a: any) => {
       if (a.status !== 'Completed' || !a.auction_id) return false;
       const end = new Date(a.end_timestamp || 0).getTime();
-      return !isNaN(end) && end >= sweepCut;
+      return !isNaN(end) && end >= sweepWindow.fromMs && end < sweepWindow.toMs;
     });
+    // nightly: 6000 lots/auction (headroom over a monthly). Backfill: up to
+    // the 10k Algolia window — an auction past it is logged as truncated.
+    const PER_AUCTION_CAP = sweepOnly ? 10_000 : 6000;
     let sweptSold = 0;
     for (const a of recentDone) {
       try {
-        let from = 0, total = Infinity;
-        while (from < Math.min(total, 6000)) {
+        let from = 0, total = Infinity, got = 0;
+        while (from < Math.min(total, PER_AUCTION_CAP)) {
           const { lots, total: t } = await goldinQuery({ queryType: 'Ending_Soonest', show_only: 'Sold', auction_id: [a.auction_id], size: 100, from });
           total = t;
           if (!lots.length) break;
-          for (const l of lots) if (ingestSold(l, null, true)) sweptSold++;
+          for (const l of lots) if (ingestSold(l, null, true)) { sweptSold++; got++; }
           from += 100;
           await sleep(400);
         }
+        if (Number.isFinite(total) && total > PER_AUCTION_CAP) console.log(`  [Goldin] sold sweep '${(a.title || '').slice(0, 40)}' TRUNCATED: ${total} sold > ${PER_AUCTION_CAP} reachable`);
+        if (sweepOnly) console.log(`  [Goldin] sold sweep ${(a.end_timestamp || '').slice(0, 10)} '${(a.title || '').slice(0, 48)}': ${Number.isFinite(total) ? total : 0} sold listed, ${got} ingested`);
       } catch (e) {
         console.log(`  [Goldin] sold sweep '${(a.title || '').slice(0, 40)}' failed:`, e);
+        // a backfill STOPS on the first failed auction (a WAF/403/5xx wall is
+        // never retried around) — the crash leaves the segment unwritten
+        if (sweepOnly) throw e;
       }
     }
-    console.log(`  [Goldin] recent-close sold sweep: ${recentDone.length} auctions (≤${SWEEP_DAYS}d), ${sweptSold} sold lots ingested`);
+    console.log(`  [Goldin] recent-close sold sweep: ${recentDone.length} auctions (${sweepWindow.label}), ${sweptSold} sold lots ingested`);
   } catch (e) {
     // Leave goldinStatusOk false: the merge skips the whole promotion/eviction
     // pass and tracked lots simply wait for the next run — nothing is lost by
     // waiting, everything is lost by evicting on an empty Completed set.
     console.log('  [Goldin] auction-status fetch FAILED — promotion/eviction deferred to next run:', e);
+    if (sweepOnly) throw e; // backfill: no partial slice is written
   }
 
   const goldinSold = Array.from(byId.values()).filter(l => l.status === 'sold').length;
