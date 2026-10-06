@@ -107,7 +107,7 @@ export function isIdentityLessTitle(l: PurityLot): boolean {
 /** Object nouns the wave-2 OBJECT_WORD list lacks — a Title Case object
  *  name ("Cosmonaut Suit", "Ed Sullivan Emmy Award Nomination") is not a
  *  bare person name. */
-const OBJECT_WORD_5 = /\b(?:awards?|nominations?|suits?|spacesuits?|valves?|computers?|modules?|panels?|switch(?:es)?|spacecraft|capsules?|parachutes?|tools?|instruments?|cameras?|lenses?|meteorites?|fossils?|rocks?|samples?|fabric|beta cloth|bills?|currency|notes?|stamps?|buttons?|pinbacks?|bracelets?|charms?|fobs?|ribbons?|toys?|dolls?|banners?|pennants?|robes?|belts?|boots?|scarf|scarves|sunglasses|glasses|spectacles|chairs?|desks?|tables?|lamps?|clocks?)\b/i;
+const OBJECT_WORD_5 = /\b(?:awards?|nominations?|suits?|spacesuits?|valves?|computers?|modules?|panels?|switch(?:es)?|spacecraft|capsules?|parachutes?|tools?|instruments?|cameras?|lenses?|meteorites?|fossils?|rocks?|samples?|fabric|beta cloth|bills?|currency|notes?|stamps?|buttons?|pinbacks?|bracelets?|charms?|fobs?|ribbons?|toys?|dolls?|banners?|pennants?|robes?|belts?|boots?|scarf|scarves|sunglasses|glasses|spectacles|chairs?|desks?|tables?|lamps?|clocks?|ashtrays?|mugs?|cups?|plates?|bowls?|vases?|bottles?|lighters?|boxes|figurines?|statuettes?|pitchers?|trays?)\b/i;
 const keyOf = (s: string) => fold(s.toLowerCase()).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 /** (wave 5, EngineFlags.objectBoundary / memIdLessAbstain) A memorabilia
  *  title that is only a SUBJECT — the bare-name reader's shape, confirmed:
@@ -556,6 +556,9 @@ export function flightOf(title: string | null | undefined): 'surface' | 'flown' 
   const t = (title || '').toLowerCase();
   if (/\bun-?flown\b|\bnot flown\b|\bnon-?flown\b/.test(t)) return 'unflown';
   if (/\blunar[- ]surface\b|\bsurface[- ](?:flown|carried)\b/.test(t)) return 'surface';
+  // "Lunar Flown" / "flown to the Moon" does not say surface or orbit — no
+  // stated status, so it excludes nothing (6 good TEST comps were dropped)
+  if (/\blunar[- ]flown\b|\bflown to the moon\b/.test(t)) return null;
   if (/\bflown\b|\bcarried (?:aboard|on|in space)\b/.test(t)) return 'flown';
   return null;
 }

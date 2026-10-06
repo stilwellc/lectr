@@ -136,3 +136,9 @@ test('engine: objectBoundary keeps signatures out of a letter pool; memIdLessAbs
   assert.equal(estimateValueEx(bare, wcomps, tbl).abstain, 'identity-less');
   setEngineFlags(null);
 });
+
+test('lunar-flown states no surface/orbit status; an object noun is not a bare name', () => {
+  assert.equal(flightOf('Apollo 11 Lunar Flown Beta Cloth'), null);
+  assert.ok(!flightConflict('Apollo 11 Lunar Flown Flag', 'Apollo 11 Lunar Surface-Flown Flag'));
+  assert.ok(!isBareSubjectTitle(space('USS Constitution Ashtray')));
+});
