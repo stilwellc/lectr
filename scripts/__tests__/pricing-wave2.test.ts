@@ -1,5 +1,5 @@
 /**
- * Pricing fix wave 2 (Oct 6 2026) — the engine-side contracts: the purity gate.
+ * Pricing fix wave 2 (Oct 6 2026) — the engine-side contracts: the purity gate and the hard comp boundaries.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,5 +42,18 @@ test('purity gate: a comp ratio outside ×5 strips the signal (it used to ship "
   assert.ok(v.compRatio! > 5);
   assert.equal(v.signal, null);
   assert.equal(v.abstain, 'flag:ratio-x5');
+  setEngineFlags(null);
+});
+
+test('hard boundaries: unsigned comps never price a signed lot (pool shrinks, under 3 → abstain)', () => {
+  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  const lot = target('Charles Lindbergh Signed Photograph');
+  const unsigned = [1, 2, 3].map(i => comp(`u${i}`, 'Charles Lindbergh Original Vintage Photograph', 300 + i));
+  const signed = [1, 2].map(i => comp(`s${i}`, 'Charles Lindbergh Signed Photograph', 2000 + i));
+  const r = estimateValueEx(lot, [...unsigned, ...signed], buildIdf([]));
+  assert.equal(r.value, null);
+  assert.equal(r.abstain, 'pool<3');
+  const r2 = estimateValueEx(lot, [...unsigned, ...signed, comp('s3', 'Charles Lindbergh Signed Photograph', 2100)], buildIdf([]));
+  assert.deepEqual(r2.value!.poolIds.slice().sort(), ['s1', 's2', 's3']);
   setEngineFlags(null);
 });

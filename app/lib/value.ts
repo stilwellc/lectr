@@ -27,7 +27,7 @@ import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
 import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
-import { compPurityFault, isIdentityLessTitle } from './comp-purity';
+import { compBoundaryFault, compPurityFault, isIdentityLessTitle } from './comp-purity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -102,6 +102,11 @@ export interface EngineFlags {
   /** (Oct 6) confidence demotes at most ONE notch (else-if), on the record's
    *  error of the PUBLISHED value (rp), not the comp pool's (r) */
   confOnPublished?: boolean;
+  /** (Oct 6, pricing wave 2) HARD comp boundaries (comp-purity.compBoundaryFault):
+   *  signed vs unsigned, a different subject, a different designator
+   *  ("Apollo 13" vs "Apollo 10"), a different object class — such a comp
+   *  never enters the pool */
+  compBoundary?: boolean;
   /** (Oct 6, pricing wave 2) THE PURITY GATE: a flag needs ≥ PURITY.minPure
    *  comps with an object-naming title, the target's medium family and
    *  edition class, ≤ PURITY.maxAgeY old and within PURITY.band× of the pool
@@ -140,11 +145,17 @@ export const ENGINE_FLAGS_HAMMER_BASIS: EngineFlags = {
   hammerBasis: true, confOnPublished: true,
 };
 /** (Oct 6 2026, pricing wave 2) COMP PURITY: the purity gate on every
- *  directional read + the ×5 strip (docs/ENGINE_LANES.md §13). */
+ *  directional read + the ×5 strip, and the hard comp boundaries. Measured
+ *  (docs/ENGINE_LANES.md §13): live (Sep 14 book graded to Oct 5) flag
+ *  precision 47.5% → 56.0%, edge 24.7 → 38.7pt, estimate-lot medErr 26.5% →
+ *  26.4%, band 70.7% → 71.8%; holdout precision 49.9% → 49.6%, edge 21.4 →
+ *  20.1pt (within EDGE_TOL_PT), medErr 28.0% → 27.7% on the same lots; the
+ *  hand-judged comp sample good 42.7% → 65.5%, wrong 18.0% → 11.0% among
+ *  the comps that may carry a call. Measured and NOT adopted: purityPool (§13). */
 export const ENGINE_FLAGS_CURRENT: EngineFlags = {
   ...ENGINE_FLAGS_HAMMER_BASIS,
   version: '2026.10.06-comp-purity',
-  purityGate: true,
+  purityGate: true, compBoundary: true,
 };
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
@@ -722,11 +733,15 @@ export function estimateValueEx(
   // seat 3 comps, retry once at the relaxed tier-b gate (validated: marginal
   // quality indistinguishable from the main engine) — never mix the two.
   let tier: 'main' | 'fallback' = 'main';
-  let pool = comps
+  // (Oct 6, FLAGS.compBoundary) a comp across a HARD boundary — signed vs
+  // unsigned, another subject, another designator, another object class —
+  // never enters either gate's pool (comp-purity.compBoundaryFault)
+  const src = FLAGS.compBoundary ? comps.filter(c => !c.lot || !compBoundaryFault(lot, c.lot)) : comps;
+  let pool = src
     .filter(c => passesGate(c.match) && c.realizedUsd > 0)
     .sort((a, b) => b.match.score - a.match.score);
   if (pool.length < 3) {
-    const relaxed = comps
+    const relaxed = src
       .filter(c => passesGateWith(FALLBACK_GATE, c.match) && c.realizedUsd > 0)
       .sort((a, b) => b.match.score - a.match.score);
     if (relaxed.length < 3) return { value: null, abstain: comps.length ? 'pool<3' : 'no-candidates' };
