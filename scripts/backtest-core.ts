@@ -51,7 +51,7 @@
  *    on the current version so drift is visible instead of silent.
  */
 import { buildIdf, buildVectors } from '../app/lib/similarity';
-import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, estKindOf as estKindOfLot, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
+import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, estKindOf as estKindOfLot, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, VB_MARKET, ODDS_FLOOR, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
 import { makeTimeIndexer, makeHouseBiasIndexer } from '../app/lib/indices';
 import { gateCell, type CardGateCell } from '../app/lib/cards-gate';
 import { weightedMedian, weightedQuantile, medianSorted } from '../app/lib/stats';
@@ -970,6 +970,9 @@ export function calibrationOf(calObs: CalObs[], noEst: NoEstObs[] = [], asOf?: s
   // over the (house-adjusted) top; rows without the hammer fields (never
   // rehydrated) fall back to the all-in figures
   const ham = !!flags.hammerBasis;
+  // (Oct 6, wave 7, FLAGS.oddsFloor) the odds floor: 0.30 clamped the low
+  // buckets (served 31%, realized 25% on the holdout)
+  const oddsLo = flags.oddsFloor ? ODDS_FLOOR.lo : 0.3;
   const beatOf = (o: CalObs) => (ham
     ? (normed ? ((flags.singleFigure && o.sf ? o.hbs : o.hba) ?? o.ba ?? o.beat) : (o.hb ?? o.beat))
     : (normed && typeof o.ba === 'boolean' ? o.ba : o.beat));
@@ -992,7 +995,7 @@ export function calibrationOf(calObs: CalObs[], noEst: NoEstObs[] = [], asOf?: s
       return (a.wb + K * globalLevels[b]) / (a.w + K);
     });
     for (let b = 1; b <= 4; b++) lv[b] = Math.max(lv[b], lv[b - 1]);
-    return lv.map(x => Math.round(Math.min(0.85, Math.max(0.3, x)) * 100));
+    return lv.map(x => Math.round(Math.min(0.85, Math.max(oddsLo, x)) * 100));
   };
   const allR = calObs.map(o => o.r).sort((a, b) => a - b);
   const bandFor = (conf: string, rows: CalObs[] = calObs, fallback: number[] = allR): Band => {
@@ -1032,7 +1035,7 @@ export function calibrationOf(calObs: CalObs[], noEst: NoEstObs[] = [], asOf?: s
     }
   }
   const beatRate: Record<string, number[]> = {
-    global: globalLevels.map(x => Math.round(Math.min(0.85, Math.max(0.3, x)) * 100)),
+    global: globalLevels.map(x => Math.round(Math.min(0.85, Math.max(oddsLo, x)) * 100)),
   };
   // EVERY market present gets a row (science/culture/sports ran on the
   // global fallback before), plus a ':pt' split where single-point (RR)
@@ -1256,7 +1259,7 @@ export function fitValueBands(
   calObs: CalObs[], noEst: NoEstObs[], blend: NonNullable<EngineCalibration['blend']> | null,
   bias: Record<string, Record<string, number>>, ref: string,
 ): { valueBand: Record<string, Record<string, VB>>; valueBandByMarket: Record<string, Record<string, Record<string, VB>>> } {
-  type P = { m: string; path: string; conf: string; z: number; wt: number };
+  type P = { m: string; path: string; conf: string; z: number; wt: number; age: number };
   const pts: P[] = [];
   const VBW = VB_WINDOW_Y, VBHL = VB_HL_Y, VBQ = VB_Q;
   if (blend) {
@@ -1266,14 +1269,14 @@ export function fitValueBands(
       if (!(age >= 0) || age > VBW) continue;
       const z = blendResidual(o, blend);
       if (z == null || !(z > 0)) continue;
-      pts.push({ m: o.m, path: 'e', conf: o.conf, z, wt: Math.pow(0.5, age / VBHL) });
+      pts.push({ m: o.m, path: 'e', conf: o.conf, z, wt: Math.pow(0.5, age / VBHL), age });
     }
   }
   for (const o of noEst) {
     const age = yrsBetween(o.sd, ref);
     if (!(age >= 0) || age > VBW || !(o.rn > 0)) continue;
     const b = APPLY_NOEST_BIAS ? (bias[o.m]?.[o.conf] ?? 1) : 1;
-    pts.push({ m: o.m, path: 'n', conf: o.conf, z: o.rn / b, wt: Math.pow(0.5, age / VBHL) });
+    pts.push({ m: o.m, path: 'n', conf: o.conf, z: o.rn / b, wt: Math.pow(0.5, age / VBHL), age });
   }
   const bandOf = (ps: P[]): VB => {
     const pairs = ps.map(p => [p.z, p.wt] as [number, number]);
@@ -1303,6 +1306,39 @@ export function fitValueBands(
           const ps = pts.filter(p => p.path === path && p.m === m && p.conf === c);
           if (ps.length >= VB_MARKET_MIN_N) ((valueBandByMarket[m] ||= {})[path] ||= {})[c] = bandOf(ps);
         }
+      }
+    }
+    // (Oct 6, wave 7, FLAGS.vbMarket) THE MARKET TAILS. A per-market × tier
+    // band drifts out of sample (above); the market's tail WIDTH relative to
+    // the global tier band is far steadier. Each market × path pools all its
+    // tiers and fits one exponent per tail: a row falls under lo^k iff
+    // log z / log lo > k, so k is the (1 − q) weighted quantile of that ratio
+    // (likewise above hi^k). The market's cell for every tier is then the
+    // global tier band with its tails raised to the market's k — RR's
+    // bimodal hammer (at the bid, or well past it) widens culture's tails,
+    // watches' narrow lower tail tightens.
+    if (getEngineFlags().vbMarket && valueBand[path]) {
+      const tiers = valueBand[path];
+      const markets = Array.from(new Set(pts.filter(p => p.path === path).map(p => p.m)));
+      for (const m of markets) {
+        const ps = pts.filter(p => p.path === path && p.m === m && tiers[p.conf] && p.age <= VB_MARKET.windowY);
+        if (ps.length < VB_MARKET.minN) continue;
+        const ratio = (side: 'lo' | 'hi') => ps
+          .filter(p => Math.abs(Math.log(tiers[p.conf][side])) > 1e-6)
+          .map(p => [Math.log(p.z) / Math.log(tiers[p.conf][side]), Math.pow(0.5, p.age / VB_MARKET.hlY)] as [number, number]);
+        const rl = ratio('lo'), rh = ratio('hi');
+        if (rl.length < VB_MARKET.minN || rh.length < VB_MARKET.minN) continue;
+        const clampK = (k: number) => Math.min(VB_MARKET.kMax, Math.max(VB_MARKET.kMin, k));
+        const kLo = clampK(weightedQuantile(rl, 1 - VB_MARKET.q));
+        const kHi = clampK(weightedQuantile(rh, 1 - VB_MARKET.q));
+        const out: Record<string, VB> = {};
+        for (const c of Object.keys(tiers)) {
+          const g = tiers[c];
+          const lo = Math.round(Math.min(1, Math.max(0.15, Math.pow(g.lo, kLo))) * 1000) / 1000;
+          const hi = Math.round(Math.min(8, Math.max(1, Math.pow(g.hi, kHi))) * 1000) / 1000;
+          out[c] = { lo, hi, ...(typeof g.mb === 'number' ? { mb: Math.round(Math.min(1, Math.max(lo, g.mb)) * 1000) / 1000 } : {}) };
+        }
+        (valueBandByMarket[m] ||= {})[path] = out;
       }
     }
   }

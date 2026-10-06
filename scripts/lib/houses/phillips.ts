@@ -164,6 +164,11 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
         medium: lot.medium || null,
         dimensions: lot.dimensions || null,
         description: lot.description || lot.catalogueNote || null,
+        // (Oct 6 2026, pricing wave 7) the watch reference lives ONLY in the
+        // API's structured field — the title ("A rare and attractive white
+        // gold dual-time wristwatch…") never prints it; corpus-normalize keys
+        // the comp pool on it (watch-ref.readHouseReference)
+        ...(lot.isWatch && typeof lot.wReferenceNo === 'string' && lot.wReferenceNo.trim() ? { houseReference: lot.wReferenceNo.trim() } : {}),
         category: 'unknown' as LotCategory,
         imageUrl,
         auctionHouse: 'Phillips',

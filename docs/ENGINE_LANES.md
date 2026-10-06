@@ -427,3 +427,57 @@ On the 17 changed Sep 14 values, error went 20.7% → 22.0% (n small). Judged "a
 - **Edition size and sheet dimensions as compatibility:** no judged DEV pair carries an edition size on both sides. Of 98 pairs with dimensions on both sides, the area ratio separates nothing (> 2.5×: 1 pair).
 
 Harness additions: `comp-precision.ts` and `engine-ab.ts` take `--a wave5`. Tests: `scripts/__tests__/pricing-wave6.test.ts`.
+
+## 18 · OCT 6 2026 PRICING WAVE 7 — band coverage, the RR bid, new releases, the odds floor (`2026.10.06-wave7`)
+
+**Why.** The round-3 re-audit graded the live tape on the PRODUCTION calibration (`live-ab.ts --full-cal`): band coverage 76%, not the 83% the legacy calibration read; culture / RR 66%; watches 17% above the band; cards 16% below. A quarter of RR lots hammered at the snapshot bid. Modern cards were over-called. The served odds looked off in the 40–59% buckets.
+
+Yardsticks: the test-year holdout (`engine-ab.ts`, 5,589 lots, calibration refit each quarter); the Sep 14 and Sep 24 live books graded to the Oct 6 corpus with the production calibration. The two books share 268 of the Sep 24 book's 335 valued lots (long Goldin and Memory Lane sales), so a card rule needs an independent check: the point-in-time card record (every card sold in the trailing year priced as of its own sale day).
+
+**Adopted:**
+- **The market tails** (`vbMarket`, `VB_MARKET = { q 0.10, minN 150, kMin 0.6, kMax 2.5, hlY 0.75, windowY 3 }`). A per-market × tier band drifted out of sample (§ Sep 27, `VB_PER_MARKET`). Each market × path now pools its tiers and fits one exponent per tail on the global path × tier band: a row falls under lo^k when log z / log lo > k, so k is that ratio's (1 − q) weighted quantile. The market's cell is the global band with its tails raised to k (backtest-core `fitValueBands` → `valueBandByMarket`). Values and Flags are unchanged.
+
+| holdout coverage / mean log width | wave 6 | wave 7 |
+|---|---|---|
+| all | 70.4% / 1.05 | 77.9% / 1.24 |
+| art | 69.8% / 0.81 | 72.7% / 0.85 |
+| culture | 63.6% / 0.79 | 71.4% / 0.94 |
+| design | 69.4% / 0.79 | 86.1% / 1.16 |
+| science | 62.1% / 0.84 | 79.4% / 1.28 |
+| sports | 65.9% / 0.84 | 81.1% / 1.18 |
+| watches | 76.9% / 0.76 | 78.9% / 0.80 |
+| no-estimate sports | 77.5% / 1.83 | 81.9% / 2.07 |
+
+Live, all wave-7 rules combined: Sep 14 76 → 83% (width 0.80 → 0.93); culture 66 → 81%, art 79 → 88%, watches 79 → 80% (above the band 17 → 15%), design 79 → 87%, cards 80 → 82%. Sep 24 80 → 86% (0.78 → 0.81); art 79 → 94%. Art over-covers live while it under-covers on the holdout, and design over-covers on both. q 0.08 reached 82.0% on the holdout at width 1.39. A 1.5y / 6y fit reached 77.5%; on the holdout it put culture at 69.2%, against 71.4% for the 0.75y / 3y fit.
+
+- **The RR bid pull** (`bidPull`, `BID_PULL = { houses [RR Auction], above 1.15, w 0.15 }`, `value.pullTowardBid`, applied at publish before `floorAtBid`). An RR value above 1.15× the live bid moves 15% of the way (in log) to the bid; the band, max bid and all-in figures scale with it. The rule was tuned on the Sep 14 RR book (253 lots), where it took error from 25.9 to 21.1%, bias from 0.91 to 1.00 and band coverage from 66 to 70%. Out of sample:
+
+| check | before | after |
+|---|---|---|
+| Sep 14 odd lots (w chosen on the even lots) | 27.4% | 21.1% |
+| Sep 14 even lots | 23.5% | 21.0% |
+| Sep 24 book, 11 RR lots | 18.9% | 16.7% |
+| Sep 25 sale on the served tape, 17 lots, Sep 20–24 snapshots | 37.5–52.6% | 25.5–33.1% |
+
+Run through the engine (Sep 14), culture error went 26 → 21% and band coverage 66 → 72%. The audit's w = 0.3 gave 21.4% in sample and 18.2% on Sep 24.
+
+- **The new release** (`cardNewRelease`, `CARD_NEW = { years 1 }`, abstain `'card:new-release'`). A sports card whose set year is at least the valuation year − 1 abstains.
+  - Point-in-time card record (trailing year, Oct 6 corpus): 56 new-release residuals at 52.1% median error, realized 0.79× the value. Older sets: 1,700 residuals at 27.6%.
+  - Live cards: Sep 14 20.8 → 20.3% (26 withdrawn at 43%); Sep 24 15.2 → 11.9% (35 withdrawn at 42%).
+  - The audit's rule (serial ≤ /25 or < 12 months old needs ≥ 2 exact comps) measured 20.5% on Sep 14 and 12.3% on Sep 24. New releases miss at every pool depth: medium-confidence new cards had 84% error on Sep 14.
+- **The odds floor** (`oddsFloor`, `ODDS_FLOOR.lo 0.10`). The calibrated odds were clamped at 30%, so the low buckets served 31% where 25% beat (holdout). After the change the holdout buckets serve 17.5 / 24.2 / 33.5% and realize 15.4 / 23.3 / 33.5%. Brier score: holdout 0.2051 → 0.2005; Sep 14 0.2086 → 0.2062; Sep 24 0.2152 → 0.2157 (54 lots). Flags are unchanged: 588, precision 50.5%, edge 20.6pt.
+
+**Measured and NOT adopted / not changed:**
+- **Refitting the 40–59% odds buckets.** On the holdout they are calibrated: served 45.4% realized 46.9%, served 52.8% realized 51.8% (850 lots). The live miss (served about 51%, realized 60% against the adjusted top) is 78 lots on one book, 47 of them RR single-figure estimates. The audit's 64–70% read the raw top.
+- **A REA venue factor by price tier.** The point-in-time card record has REA under-called (985 residuals, bias 1.05; commons under $250, 1.11). Only the Sep 14 sale over-called (0.87).
+- **The science "regression".** Of the 199 changed science lots (wave 3 → 6, all RR single-figure estimates), mean |log error| moved 0.398 → 0.404. Per step, wave 4 improved median error 39.0 → 37.3% (169 lots) and wave 5 52.9 → 51.5% (38 lots); wave 6 touched none. The bias move to 1.09 comes from `partialHabit`, which is neutral on science error (on 37.6% / off 38.6%) and better on culture (31.6 / 33.5%) and sports (33.9 / 38.2%). Nothing was reverted.
+- **The Phillips reference** (`houseReference` captured, `corpus-normalize.USE_HOUSE_REFERENCE = false`). Phillips titles never print the reference, and the stored description is the title. The maker API carries it as `wReferenceNo` (on 100% of sampled lots; 9,440 of 9,514 parse with `watch-ref.readHouseReference`). The crawler now stores it raw (stripped from served). Reading it into `reference`, measured on a back-stamped corpus:
+  - Holdout: Phillips values 351 → 425, but the 351 already-valued lots went 24.1 → 24.3% (band 77.5 → 74.6%) and watches overall 21.6 → 21.7%.
+  - Live: Sep 14 Sotheby's watches 22.0 → 22.2%.
+
+  The structured reference therefore stays out of the comp key. A `PHILLIPS_DEEP=1` crawl backfills the history.
+- **The reference-family bound** (`watchRefBound`; `WATCH_REF_BOUND.refless`). With the stamped corpus, on the holdout: 85 watch values changed (21.5 → 21.4%) and 43 were withdrawn. Live: Sotheby's 22.2 → 23.0%.
+- **The art plate key.** The catalogue floor misses because the data is missing, not because of the reader. Only 10 of 406 Sep 24 art lots cite a catalogue number: the Christie's and Bonhams text lacks the line, and most "B." / "plate" hits are birth years and plate sizes. Of 156 cited Sep 14 lots, 97 have no same-plate sale in 3 years. Reader fixes would lift Sep 14 qualifiers from 7 to 8 and Sep 24 stays at 1. Those fixes: read `medium`; Alan Ramié / Delteil / Duthuit tails; comp-purity dropping "IIIA.50" and merging II.50 with IIIA.50.
+- **RR rare-content under-calls** ("as President", ship's pass, Type I vs III, multi-signer): not attempted this wave.
+
+Harness additions: `engine-ab.ts` and `comp-precision.ts` take `--a wave6`. Tests: `scripts/__tests__/pricing-wave7.test.ts`.

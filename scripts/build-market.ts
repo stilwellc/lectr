@@ -19,7 +19,7 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales, repeatSaleEligible, withVectors } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, CARD_THIN, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, pullTowardBid, isNewReleaseCard, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, CARD_THIN, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, CARD_BAND_WIDE_Q, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
@@ -1382,6 +1382,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
           // when the card is keyed but its exact/ladder pools are thin,
           // 'card:player-tier' when only a player pool could have priced it.
           if (value == null) abstain = staleSeen ? 'card:stale' : (ck || lk) ? 'card:pool<2' : c.playerSlug ? 'card:player-tier' : 'no-identity';
+          // (Oct 6, wave 7, FLAGS.cardNewRelease) a fresh release trades down
+          // as its print run reaches the market: its weeks-old comps over-call
+          // it (trailing-year point-in-time record: 52% median error, realized
+          // 0.79× the value, vs 28% for older sets)
+          else if (getEngineFlags().cardNewRelease && isNewReleaseCard(c.year, NOW_MS)) { value = null; abstain = 'card:new-release'; }
 
           if (value != null && value > 0) {
             // signal is never asserted on cards; a vsBid call only on a value
@@ -1416,7 +1421,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (l.status !== 'upcoming') continue;
       const lw = l as AuctionLot & { value?: ValueResult | null; currentBid?: number; saleDateTime?: string | null };
       if (!lw.value || !((lw.currentBid || 0) > 0)) continue;
-      const f = floorAtBid(lw.value, lw, NOW_MS);
+      const f = floorAtBid(pullTowardBid(lw.value, lw), lw, NOW_MS); // (wave 7, FLAGS.bidPull) the RR value moves part-way to the bid first
       if (f !== lw.value) { lw.value = f; if (f.bidFloor != null) floored++; }
     }
     console.log(`[market] live-bid floor: ${floored} served values lifted to the bid on the lot`);

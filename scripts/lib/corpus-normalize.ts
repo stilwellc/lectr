@@ -5,7 +5,7 @@ import { athleteIn, ATHLETES } from './athlete-roster';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf, parseCard, cardYearKey, knownPlayerSet } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRun, personNameOf } from '../../app/lib/comps';
-import { vetReference, readDescriptionReference, splitWatchRef, isWatchModelLine } from '../../app/lib/watch-ref';
+import { vetReference, readDescriptionReference, readHouseReference, splitWatchRef, isWatchModelLine } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
 import { christiesLocationCurrency } from './houses/common';
@@ -240,6 +240,14 @@ export function rerouteRelicCards(lots: Lot[]): { total: number; examples: strin
 // ─────────────────────────────────────────────────────────────────────────────
 const WATCH_MAKER_SLUGS = new Set(['rolex', 'patek-philippe', 'cartier', 'audemars-piguet', 'omega']);
 const DESC_REF_FORMS = new Set(['wristwatch', 'pocket-watch']);
+/** (Oct 6 2026, pricing wave 7) read the house's structured reference field
+ *  (Phillips maker API `wReferenceNo`, captured raw as `houseReference`) into
+ *  `reference` when the title prints none. OFF: on the test-year holdout
+ *  (Oct 6 corpus with the Phillips field back-stamped) it added 74 Phillips
+ *  values at 23.0% median error but moved the 351 already-valued Phillips
+ *  lots 24.1 → 24.3% (±30% 60.4 → 59.0%, band 77.5 → 74.6%); live Sep 14
+ *  Sotheby's watches 22.0 → 22.2%. docs/ENGINE_LANES.md §18. */
+export const USE_HOUSE_REFERENCE = false;
 // (Oct 6 2026 categorization re-audit) `reference` holds a printed reference
 // NUMBER only. A model-line name ("submariner", "tank", "royaloak" — 6.8k
 // rows) is not a reference (the audit marked every one wrong); it moves to
@@ -265,8 +273,12 @@ export function enrichWatchReferences(lots: Lot[]): number {
     // or an AP cufflink must not join the reference's pool
     const desc = (l as Lot & { description?: string | null }).description;
     const watchLot = !l.formKey || DESC_REF_FORMS.has(String(l.formKey));
+    // (Oct 6, pricing wave 7) the house's structured reference field
+    // (Phillips wReferenceNo) beats the free-text description — OFF until it
+    // measures better (USE_HOUSE_REFERENCE)
+    const houseRef = !USE_HOUSE_REFERENCE ? null : readHouseReference((l as Lot & { houseReference?: string | null }).houseReference, l.artist);
     const regex = fromTitle && /\d/.test(fromTitle) ? fromTitle
-      : ((watchLot ? readDescriptionReference(desc, l.artist) : null) ?? fromTitle);
+      : (houseRef ?? (watchLot ? readDescriptionReference(desc, l.artist) : null) ?? fromTitle);
     if (x.referenceSrc === 'llm' && prev) {
       const regexRef = regex && /\d/.test(regex) ? regex : null;
       if (regexRef) { l.reference = regexRef; delete x.referenceSrc; healed++; }

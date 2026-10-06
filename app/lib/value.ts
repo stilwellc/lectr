@@ -240,6 +240,28 @@ export interface EngineFlags {
    *  (CR_WORK.idExact = 1: or share its full edition identity key) put at
    *  least CR_WORK.w of the prediction on the comps */
   crWork?: boolean;
+  /** (Oct 6, pricing wave 7) THE MARKET TAILS: each market × path stretches
+   *  (or tightens) the global path×tier value band's two tails so its own
+   *  recency-weighted residuals fall below / above them VB_MARKET.q of the
+   *  time (backtest-core.fitValueBands → valueBandByMarket) */
+  vbMarket?: boolean;
+  /** (Oct 6, pricing wave 7) THE REFERENCE FAMILY BOUND: a watch target with a
+   *  numeric reference never prices off a comp of ANOTHER reference family
+   *  (watchRefFamily: the leading digit run — 116610 ≠ 16610, 5711/1 = 5711);
+   *  WATCH_REF_BOUND.refless = 0 also drops comps without a reference */
+  watchRefBound?: boolean;
+  /** (Oct 6, pricing wave 7) THE RR BID PULL (pullTowardBid): an RR value
+   *  above BID_PULL.above × the live bid moves BID_PULL.w of the way (in log)
+   *  to the bid — a quarter of RR lots hammer AT the snapshot bid */
+  bidPull?: boolean;
+  /** (Oct 6, pricing wave 7) THE NEW RELEASE: a sports card whose set year
+   *  is within CARD_NEW.years of the valuation year abstains
+   *  ('card:new-release') — a fresh release trades down as its print run
+   *  reaches the market, so its comps (weeks old) over-call it */
+  cardNewRelease?: boolean;
+  /** (Oct 6, pricing wave 7) the calibrated odds clamp at ODDS_FLOOR.lo, not
+   *  0.30 (backtest-core.calibrationOf) */
+  oddsFloor?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -343,7 +365,18 @@ export const ENGINE_FLAGS_WAVE6: EngineFlags = {
   version: '2026.10.06-wave6',
   crWork: true,
 };
-export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE6;
+/** (Oct 6 2026, pricing wave 7) THE MARKET TAILS on the value band
+ *  (vbMarket), THE RR BID PULL (bidPull), THE NEW RELEASE card abstention
+ *  (cardNewRelease) and THE ODDS FLOOR (oddsFloor). Measured on the wave-6
+ *  engine (docs/ENGINE_LANES.md §18). Measured and NOT adopted: the
+ *  reference-family bound (watchRefBound), the Phillips structured
+ *  reference (corpus-normalize USE_HOUSE_REFERENCE). */
+export const ENGINE_FLAGS_WAVE7: EngineFlags = {
+  ...ENGINE_FLAGS_WAVE6,
+  version: '2026.10.06-wave7',
+  vbMarket: true, bidPull: true, cardNewRelease: true, oddsFloor: true,
+};
+export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE7;
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
 export const ENGINE_FLAGS_CANDIDATE: EngineFlags = { ...ENGINE_FLAGS_CURRENT, version: `${ENGINE_FLAGS_CURRENT.version}+cand` };
@@ -539,6 +572,39 @@ export function floorAtBid<V extends Partial<ValueResult> & { compValueUsd: numb
   return out;
 }
 
+/** (Oct 6 2026, pricing wave 7, EngineFlags.bidPull) THE RR BID PULL. RR
+ *  Auction's hammers are bimodal around the live bid: on the Sep 14 book 56
+ *  of 253 valued RR lots hammered AT the snapshot bid (no further bidding)
+ *  while the rest ran on — the comps value, which only sees the second mode,
+ *  over-called the book (median realized / value 0.91). A value above
+ *  BID_PULL.above × the live bid moves BID_PULL.w of the way to the bid in
+ *  log (value^(1−w) · bid^w); the band and every all-in figure scale with
+ *  it. Applied at publish before floorAtBid (the floor still holds). Tuned
+ *  on the Sep 14 RR book only (docs/ENGINE_LANES.md §18). */
+export const BID_PULL = { houses: ['RR Auction'] as string[], above: 1.15, w: 0.15 };
+export function pullTowardBid<V extends Partial<ValueResult> & { compValueUsd: number }>(
+  v: V, lot: { currentBid?: number | null; auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null },
+): V {
+  if (!FLAGS.bidPull) return v;
+  const bid = lot.currentBid || 0;
+  if (!(bid > 0) || !BID_PULL.houses.includes(String(lot.auctionHouse || ''))) return v;
+  const xh = v.expectedHammerUsd ?? (v.premiumFactor ? v.compValueUsd / v.premiumFactor : lotHammerFromAllIn(lot, v.compValueUsd));
+  if (!(xh > BID_PULL.above * bid)) return v;
+  const q = Math.exp((1 - BID_PULL.w) * Math.log(xh) + BID_PULL.w * Math.log(bid));
+  const s = q / xh;
+  const sc = (x: number) => Math.round(x * s);
+  const out = { ...v } as V;
+  out.compValueUsd = sc(v.compValueUsd);
+  out.expectedHammerUsd = Math.round(q);
+  if (typeof v.low === 'number') out.low = sc(v.low);
+  if (typeof v.high === 'number') out.high = sc(v.high);
+  if (v.estimateUsd != null) out.estimateUsd = sc(v.estimateUsd);
+  if (v.bandLowUsd != null) out.bandLowUsd = sc(v.bandLowUsd);
+  if (v.bandHighUsd != null) out.bandHighUsd = sc(v.bandHighUsd);
+  if (v.maxBidUsd != null) out.maxBidUsd = sc(v.maxBidUsd);
+  return out;
+}
+
 export interface ValueResult {
   /** the pool this was computed from (real sales, inspectable) */
   poolIds: string[];
@@ -633,6 +699,7 @@ export type AbstainReason =
   | 'card:player-tier'  // (Sep 27) only a PLAYER median exists — abstains (2.87× live)
   | 'card:stale'        // (Sep 27) the card's pools hold no sale in the last 3 years
   | 'tcg:pool<2'        // TCG tier: exact/ladder pools too thin
+  | 'card:new-release'  // (Oct 6, wave 7) a release under CARD_NEW.years old (cardNewRelease)
   // (Oct 3 2026) THE PUBLISH GATES — a value was computed but its cell's
   // trailing-year out-of-sample record misses the bar (cards-gate.CARD_GATE)
   | 'card:uncalibrated'   // card/TCG cell under 50 graded rows
@@ -910,6 +977,31 @@ export const COMP_SCALE = { est: 4, pool: 0, minKeep: 3, art: 1, design: 1, othe
 export const CR_POOL = { minN: 3 };
 /** (wave 6) EngineFlags.crWork's bar */
 export const CR_WORK = { minN: 3, maxAgeY: 3, w: 0.5, idExact: 1 };
+/** (wave 7) EngineFlags.vbMarket: the per-market tail share `q` (each
+ *  tail), the market × path row floor, and the clamp on the tail exponent k
+ *  (the market's tail = the global tier tail^k) */
+export const VB_MARKET = { q: 0.10, minN: 150, kMin: 0.6, kMax: 2.5, hlY: 0.75, windowY: 3 };
+/** (wave 7) EngineFlags.oddsFloor's clamp on a calibrated odds bucket */
+export const ODDS_FLOOR = { lo: 0.1 };
+/** (wave 7) EngineFlags.cardNewRelease: a card whose set year (the first
+ *  year of a season, "2025-26" → 2025) is ≥ the valuation year − years */
+export const CARD_NEW = { years: 1 };
+export function isNewReleaseCard(year: string | null | undefined, nowMs: number): boolean {
+  const y = parseInt(String(year || '').slice(0, 4), 10);
+  if (!(y > 1800)) return false;
+  return y >= new Date(nowMs).getUTCFullYear() - CARD_NEW.years;
+}
+/** (wave 7) EngineFlags.watchRefBound: keep comps that carry no reference (1) */
+export const WATCH_REF_BOUND = { refless: 1 };
+/** (wave 7) a watch lot's reference FAMILY — `maker|<leading digit run>` of
+ *  its numeric reference key (126719blro → 126719, 5711/1 → 5711,
+ *  pt25695 → 25695), or null without a numeric reference */
+export function watchRefFamily(l: Pick<AuctionLot, 'artist' | 'reference'>): string | null {
+  const k = numericWatchRef(l);
+  if (!k) return null;
+  const m = k.slice(k.indexOf('|') + 1).match(/^[a-z]{0,3}(\d+)/);
+  return m ? `${l.artist}|${m[1]}` : null;
+}
 /** (wave 4) EngineFlags.mediumKnownPool's floor */
 export const MEDIUM_POOL = { minN: 3 };
 export function exactBlendW(house: string | null | undefined): number {
@@ -1031,6 +1123,11 @@ export function estimateValueEx(
   let src = FLAGS.compBoundary ? comps.filter(c => !c.lot || !compBoundaryFault(lot, c.lot, bOpts)) : comps;
   // (Oct 6, wave 5, FLAGS.objectBoundary) the object-type boundaries
   if (FLAGS.objectBoundary) src = src.filter(c => !c.lot || !objectBoundaryFault(lot, c.lot, BOUNDARY5));
+  // (Oct 6, wave 7, FLAGS.watchRefBound) another reference family is another watch
+  if (FLAGS.watchRefBound) {
+    const fam = watchRefFamily(lot);
+    if (fam) src = src.filter(c => { if (!c.lot) return true; const f = watchRefFamily(c.lot); return f ? f === fam : !!WATCH_REF_BOUND.refless; });
+  }
   let pool = src
     .filter(c => passesGate(c.match) && c.realizedUsd > 0)
     .sort((a, b) => b.match.score - a.match.score);

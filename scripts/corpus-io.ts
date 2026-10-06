@@ -269,7 +269,7 @@ export function splitIntoSegments(allLots: Record<string, unknown>[]): Record<st
 // fallback there), so stripping it made every shard-loaded lot read 'unknown'.
 // It's a short string and nulls are omitted, so the cost is a few bytes/lot.
 const STRIP = new Set([
-  'titleTokens','normalizedTitle','objectFingerprint','modelKey',
+  'titleTokens','normalizedTitle','objectFingerprint','modelKey','houseReference',
   'materialTokens','mediumCanon','authCert','gradeLabel','description','titleRaw',
   'serialNo','caseNo','movementNo','editionOf','editionTotal','editionMarker','dimSource','yearSource',
   'yearIsCirca','sizeClass','fxRecovered','fxRate','fxAsOf',
