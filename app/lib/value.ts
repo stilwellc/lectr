@@ -117,6 +117,12 @@ export interface EngineFlags {
    *  ≥ PURITY.minPure of them exist (else the pool stands, unflagged).
    *  Measured, NOT adopted: holdout medErr 28.4% → 29.0% (§13) */
   purityPool?: boolean;
+  /** (Oct 6, pricing wave 2) estimate lots with ≥ EXACT_BLEND.minN exact comps
+   *  (cosine ≥ EXACT_BLEND.cos) put at least EXACT_BLEND.w on the comps.
+   *  Measured, NOT adopted: holdout medErr 28.4% → 29.6%; a point-in-time
+   *  fit per house × exact count learned LOWER weights (0.05–0.30) than the
+   *  tier weights and did not transfer to the test year (§13) */
+  exactBlend?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -151,7 +157,8 @@ export const ENGINE_FLAGS_HAMMER_BASIS: EngineFlags = {
  *  26.4%, band 70.7% → 71.8%; holdout precision 49.9% → 49.6%, edge 21.4 →
  *  20.1pt (within EDGE_TOL_PT), medErr 28.0% → 27.7% on the same lots; the
  *  hand-judged comp sample good 42.7% → 65.5%, wrong 18.0% → 11.0% among
- *  the comps that may carry a call. Measured and NOT adopted: purityPool (§13). */
+ *  the comps that may carry a call. Measured and NOT adopted: purityPool,
+ *  exactBlend (§13). */
 export const ENGINE_FLAGS_CURRENT: EngineFlags = {
   ...ENGINE_FLAGS_HAMMER_BASIS,
   version: '2026.10.06-comp-purity',
@@ -625,18 +632,21 @@ export const BLEND_W_DEFAULT: Record<string, number> = { high: 0.4, medium: 0.25
 export function blendPredict(
   lot: { artist: string; auctionHouse?: string | null; buyerPremiumPct?: number | null },
   estMid: number, estKind: EstKind, compMedian: number, confidence: string,
-  cal: EngineCalibration | null = CAL,
+  cal: EngineCalibration | null = CAL, nExact = 0,
 ): { value: number; w: number } {
   const market = cal?.marketBySlug?.[lot.artist];
   const ratio = compMedian > 0 && estMid > 0 ? compMedian / estMid : 1;
   const b = cal?.blend;
+  // (Oct 6, FLAGS.exactBlend) a pool holding ≥ EXACT_BLEND.minN exact comps
+  // (the same object by title) earns at least EXACT_BLEND.w on the comps
+  const exactW = (w: number) => (FLAGS.exactBlend && nExact >= EXACT_BLEND.minN ? Math.max(w, exactBlendW(lot.auctionHouse)) : w);
   if (FLAGS.houseAnchor) {
     const hf = houseFactorOf(market ?? TIDX?.marketBySlug?.[lot.artist], lot.auctionHouse, estKind);
-    const w = b?.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1;
+    const w = exactW(b?.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1);
     if (hf) return { value: estMid * Math.exp((1 - w) * hf.log + w * Math.log(ratio)), w };
   }
   if (b) {
-    const w = b.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1;
+    const w = exactW(b.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1);
     // house × market intercept (the house's own estimate habit) → market → global
     const ek = estKind === 's' ? 'b' : estKind;
     const a = (market != null && lot.auctionHouse ? b.a[`${market}|${lot.auctionHouse}:${ek}`] : undefined)
@@ -647,7 +657,7 @@ export function blendPredict(
   }
   // uncalibrated: house mid × the lot's own premium × (comps vs house all-in)^w
   const pm = lotAllInFactor(lot, estMid);
-  const w = BLEND_W_DEFAULT[confidence] ?? 0.1;
+  const w = exactW(BLEND_W_DEFAULT[confidence] ?? 0.1);
   return { value: estMid * pm * Math.pow(ratio / pm, w), w };
 }
 
@@ -656,6 +666,13 @@ export function blendPredict(
  *  ≥ minPure comps that pass comp-purity.compPurityFault, sold ≤ maxAgeY
  *  before the valuation, and inside band× of the pure comps' median. */
 export const PURITY = { minPure: 3, maxAgeY: 10, band: 5, ratioCap: 5 };
+/** EngineFlags.exactBlend: ≥ minN comps at title cosine ≥ cos → comp weight
+ *  ≥ w (per house where measured — EXACT_BLEND.byHouse). */
+export const EXACT_BLEND: { minN: number; cos: number; w: number; byHouse: Record<string, number> } = { minN: 2, cos: 0.95, w: 0.5, byHouse: {} };
+export function exactBlendW(house: string | null | undefined): number {
+  const v = house ? EXACT_BLEND.byHouse[house] : undefined;
+  return typeof v === 'number' ? v : EXACT_BLEND.w;
+}
 
 /** Whether the engine applies the no-estimate bias (measured: no — see
  *  estimateValueEx; re-measured Oct 5 2026, still no). The 'n' value band is
@@ -923,7 +940,8 @@ export function estimateValueEx(
   let blendW: number | undefined;
   let predUsd: number;
   if (estMid && estMid > 0) {
-    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence);
+    const nExact = top.filter(c => c.match.cosine >= EXACT_BLEND.cos).length;
+    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence, CAL, nExact);
     predUsd = bp.value; blendW = bp.w;
   } else {
     // The no-estimate market×tier bias (calibration.bias) is FITTED and

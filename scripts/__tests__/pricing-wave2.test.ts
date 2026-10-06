@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   estimateValueEx, setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HAMMER_BASIS, type Comp,
+  blendPredict, EXACT_BLEND,
 } from '../../app/lib/value';
 import { buildIdf, type Match } from '../../app/lib/similarity';
 import type { AuctionLot } from '../../app/types';
@@ -55,5 +56,15 @@ test('hard boundaries: unsigned comps never price a signed lot (pool shrinks, un
   assert.equal(r.abstain, 'pool<3');
   const r2 = estimateValueEx(lot, [...unsigned, ...signed, comp('s3', 'Charles Lindbergh Signed Photograph', 2100)], buildIdf([]));
   assert.deepEqual(r2.value!.poolIds.slice().sort(), ['s1', 's2', 's3']);
+  setEngineFlags(null);
+});
+
+test('exactBlend (measured, not adopted): ≥2 exact comps lift the comp weight to ≥ EXACT_BLEND.w only under the flag', () => {
+  const lot = { artist: 'andy-warhol', auctionHouse: "Christie's" };
+  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  assert.equal(blendPredict(lot, 1000, 'b', 3000, 'low', null, 5).w, 0.05, 'off in the served engine');
+  setEngineFlags({ ...ENGINE_FLAGS_CURRENT, exactBlend: true });
+  assert.equal(blendPredict(lot, 1000, 'b', 3000, 'low', null, 5).w, EXACT_BLEND.w);
+  assert.equal(blendPredict(lot, 1000, 'b', 3000, 'low', null, 1).w, 0.05, 'one exact comp is not a market');
   setEngineFlags(null);
 });
