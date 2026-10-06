@@ -17,7 +17,7 @@ import * as path from 'path';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
-import { groupRepeatSales } from './lib/repeat-sale';
+import { groupRepeatSales, repeatSaleEligible, withVectors } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
 import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
@@ -520,7 +520,20 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // validated offline (scripts/oneoff/qa/repeat-sale-equiv.ts) and so the eligibility
   // hoist that took it from ~28min to seconds is provably result-identical.
   if (!opts.evalOnly) {
-    const rs = groupRepeatSales(soldSorted, engineAll, tbl);
+    // The Sotheby's Algolia backfill stays OUT of the engine pool (above, ~:204)
+    // but joins the repeat-sale grouping (Oct 2026 identity fix): it is 29% of
+    // sold USD and carries the case numbers that tie Sotheby's resales to the
+    // same watch at Christie's/Bonhams. Only rows that can ever pair enter
+    // (repeatSaleEligible), as vector-carrying COPIES — the IDF table, the
+    // engine pool and the persisted rows are untouched; the group id lands on
+    // the corpus row through the targets list.
+    const algoliaSold = all.filter(l => (l as AuctionLot & { source?: string }).source === 'sothebys-algolia'
+      && l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length
+      && !isCompExcluded(l) && repeatSaleEligible(l));
+    const rsPool = algoliaSold.length
+      ? soldSorted.concat(algoliaSold.map(l => withVectors(l, tbl))).sort((a, b) => a.saleDate < b.saleDate ? -1 : a.saleDate > b.saleDate ? 1 : 0)
+      : soldSorted;
+    const rs = groupRepeatSales(rsPool, algoliaSold.length ? engineAll.concat(algoliaSold) : engineAll, tbl);
     console.log(`[market] repeat-sale: ${rs.physPairs} physical pairs → ${rs.physGroups} groups · ${rs.seconds}s (${rs.eligible}/${soldSorted.length} eligible, ${rs.candidatePairs} pairs scored)`);
   }
 
