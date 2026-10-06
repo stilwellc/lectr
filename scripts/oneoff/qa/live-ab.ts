@@ -48,6 +48,13 @@ async function main() {
   }
   console.log(`[live-ab] ${outcome.size} sold outcomes on/after ${asOf}`);
   const lots = (readGzRows(path.join(dir, 'lots.json.gz')) as Row[]).concat(readGzRows(path.join(dir, 'sold-archive.json.gz')) as Row[]);
+  // (Oct 6 2026) the corpus files are normalize's OUTPUT as of their night —
+  // re-apply the currency restamp a newer normalize would make (no-op on code
+  // that does not export it)
+  try {
+    const cn = require(path.join(code, 'scripts/lib/corpus-normalize'));
+    if (cn.restampBruunCurrency) console.log(`[live-ab] normalize: ${cn.restampBruunCurrency(lots)} Bruun Rasmussen rows re-stamped DKK`);
+  } catch { /* older code */ }
   const want = new Set<string>();
   const book = process.argv.includes('--book'); // the whole upcoming book (outcome may be absent)
   for (const l of lots) if (l.status === 'upcoming' && (book || outcome.has(String(l.id)))) want.add(String(l.id));

@@ -11,7 +11,7 @@ export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn' | 'unkno
 /** Every currency the money layer can carry and convert (normalize.ts FX
     table) — the ONE runtime list; `Currency` is derived from it, and crawlers
     validate a house-supplied code with `isCurrency` instead of re-typing it. */
-export const CURRENCIES = ['USD', 'GBP', 'EUR', 'HKD', 'CNY', 'AUD', 'CHF'] as const;
+export const CURRENCIES = ['USD', 'GBP', 'EUR', 'HKD', 'CNY', 'AUD', 'CHF', 'DKK', 'SEK', 'NOK', 'JPY'] as const;
 export type Currency = typeof CURRENCIES[number];
 export const isCurrency = (c: unknown): c is Currency =>
   typeof c === 'string' && (CURRENCIES as readonly string[]).includes(c);
@@ -137,6 +137,9 @@ export interface AuctionLot {
   // ── OLD money fields, retained as optional ALIASES during migration ──
   estimateLow: number | null;
   estimateHigh: number | null;
+  /** ABSENT at runtime on a row whose currency the money layer cannot convert
+      (crawler fail-closed: no price, no estimate, compExclude
+      'fx-unknown-currency' — never a native figure relabelled 'USD') */
   currency: Currency;
   hammerPrice: number | null;
   premiumPrice: number | null;

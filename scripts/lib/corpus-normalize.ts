@@ -4,7 +4,7 @@ import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
 import { vetReference } from '../../app/lib/watch-ref';
-import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
+import { titleTokens as titleTokensOf, toUsdDated } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
@@ -642,6 +642,32 @@ export function dedupeBruunUnderBonhams(lots: Lot[]): { dropped: number; relabel
   return { dropped: compact(lots, drop), relabelled };
 }
 
+// ── BRUUN RASMUSSEN CURRENCY (Oct 6 2026): the Bonhams search API reports
+// BR's brk_ sales in DKK (`currency.iso_code: 'DKK'`, checked on live lots;
+// bruun-rasmussen.dk prints the same figures in DKK), but the money layer had
+// no DKK and the crawler's iso mapper defaulted unknown codes to 'USD' — so
+// every BR row carried its DKK figures at fxRate 1 (~6.5× too high in USD).
+// The crawler is fail-closed now; the rows already in the segments are
+// re-stamped here: the native figures ARE DKK, re-derived to dated USD.
+// Idempotent (only rows still stamped USD at rate 1 are touched).
+export function restampBruunCurrency(lots: Lot[]): number {
+  let n = 0;
+  for (const l of lots as (DQLot & Record<string, unknown>)[]) {
+    if (!/^bonhams-brk_/.test(String(l.id)) || l.nativeCurrency !== 'USD' || (l.fxRate as number | undefined) !== 1) continue;
+    const sd = l.saleDate ? String(l.saleDate) : null;
+    const conv = (x: unknown) => toUsdDated(typeof x === 'number' ? x : null, 'DKK', sd);
+    const fx = conv(null);
+    l.nativeCurrency = 'DKK'; l.currency = 'DKK';
+    l.fxRate = fx.rate; l.fxAsOf = fx.asOf;
+    l.estLowUsd = conv(l.estLowNative).usd; l.estHighUsd = conv(l.estHighNative).usd;
+    l.estimateLow = l.estLowUsd; l.estimateHigh = l.estHighUsd;
+    l.hammerUsd = conv(l.hammerNative).usd; l.premiumUsd = conv(l.premiumNative).usd;
+    l.realizedUsd = conv(l.realizedNative).usd; l.priceUsd = l.realizedUsd;
+    n++;
+  }
+  return n;
+}
+
 // ── FOREIGN LEADING MAKER (Chagall under Picasso, Basquiat/Cocteau under Warhol,
 // Miró under Matisse): a title that LEADS with a different artist's full name —
 // "Jean-Michel Basquiat", "MIRÓ, Joan et René CHAR", "After Marc Chagall" — and
@@ -871,7 +897,7 @@ export function fixFamilyHammerEqualsPrice(lots: Lot[]): { recomputed: number; n
 
 export type HygieneReport = {
   rrStubs: number; rrDupes: number; urlDupes: number;
-  bruun: { dropped: number; relabelled: number };
+  bruun: { dropped: number; relabelled: number; restamped: number };
   foreignMaker: { rerouted: number; dropped: number };
   setCodeCards: number;
   staleUpcoming: { total: number; byHouse: Record<string, number> };
@@ -897,8 +923,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // the Sep 27 dedupe family (next to the Wright mirrors — same compaction):
   const rrDupes = dedupeRRSameSaleItems(ls);
   const urlDupes = dedupeUrlSchemeCollisions(ls);
-  const bruun = dedupeBruunUnderBonhams(ls);
-  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled}`);
+  const bruun = { ...dedupeBruunUnderBonhams(ls), restamped: restampBruunCurrency(ls) };
+  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} DKK-restamped=${bruun.restamped}`);
   // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
   // isMisattributed reads the raw title (car marques / life-dates survive any
   // title clean), and dropping early shrinks every pass that follows.

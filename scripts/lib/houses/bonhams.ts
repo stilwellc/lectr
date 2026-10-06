@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 import type { AuctionLot, LotStatus, LotCategory, PriceBasis } from '../../../app/types';
 import { fetchWithRetry } from '../fetch-retry';
 import type { ArtistConfig } from './artists';
-import { DEEP, type EnrichResult, MEDIUM_PATTERNS, UA, isSaleDayPast, isoCurrencyToInternal, noteEnrichFail, noteFetched, parseDrop, sleep, stampMoney } from './common';
+import { DEEP, type EnrichResult, MEDIUM_PATTERNS, UA, isSaleDayPast, isoCurrencyToInternal, noteEnrichFail, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
 
 // ── Bonhams Crawler ──
 // Bonhams uses Typesense search with a public API key.
@@ -171,7 +171,10 @@ export function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null
     }
   }
 
-  const currency = isoCurrencyToInternal(doc.currency?.iso_code || '');
+  // null = a currency the money layer cannot convert (fail-closed: the row
+  // carries no price/estimate and is comp-excluded — never relabelled USD;
+  // Bruun Rasmussen's brk_ sales arrive as DKK)
+  const currency = isoCurrencyToInternal(doc.currency?.iso_code);
   const hammerPrice = doc.price?.hammerPrice || null;
   const hammerPremium = doc.price?.hammerPremium || null;
   const estimateLow = doc.price?.estimateLow || null;
@@ -213,6 +216,16 @@ export function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null
   // Bonhams exposes both hammer + premium-inclusive: realized when a premium
   // number exists, else the hammer is the realized (hammer-only basis).
   const bonhamsBasis: PriceBasis = hammerPremium != null ? 'realized' : 'hammer-only';
+  const money = stampMoney({
+    isSold,
+    nativeCurrency: currency,
+    saleDate: saleDate || null,
+    hammerNative: hammerPrice,
+    premiumNative: hammerPremium,
+    estLowNative: estimateLow,
+    estHighNative: estimateHigh,
+    priceBasis: bonhamsBasis,
+  });
 
   return {
     id: `bonhams-${auctionId}-${lotId}`,
@@ -228,17 +241,8 @@ export function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null
     saleName: doc.heading || '',
     saleDate,
     lotNumber: doc.lotNo?.number || null,
-    ...stampMoney({
-      isSold,
-      nativeCurrency: currency,
-      saleDate: saleDate || null,
-      hammerNative: hammerPrice,
-      premiumNative: hammerPremium,
-      estLowNative: estimateLow,
-      estHighNative: estimateHigh,
-      priceBasis: bonhamsBasis,
-    }),
-    status,
+    ...money,
+    status: statusWithMoney(status, money),
     url: lotUrl,
   };
 }

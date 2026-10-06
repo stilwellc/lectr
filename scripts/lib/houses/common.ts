@@ -145,19 +145,48 @@ export async function runPool<T, R>(
 
 // ── Helpers ──
 
-export function detectCurrency(text: string): Currency {
-  if (!text) return 'USD';
+/** The sale currency named in a price / estimate string. FAIL-CLOSED (Oct 6
+ *  2026): null when the text names no currency the money layer converts, or
+ *  names an ambiguous one — a bare "¥" is CNY or JPY, a bare "kr" any of the
+ *  Scandinavian crowns. It used to fall through to 'USD', which is how a
+ *  non-USD figure got stamped fxRate 1 (Bruun Rasmussen's DKK estimates read
+ *  ~6.5× too high). Order matters: "HK$" / "AU$" before a bare "$". */
+export function detectCurrency(text: string): Currency | null {
+  if (!text) return null;
+  if (text.includes('HKD') || text.includes('HK$')) return 'HKD';
+  if (text.includes('AUD') || text.includes('AU$')) return 'AUD';
   if (text.includes('GBP') || text.includes('£')) return 'GBP';
   if (text.includes('EUR') || text.includes('€')) return 'EUR';
-  if (text.includes('HKD') || text.includes('HK$')) return 'HKD';
-  if (text.includes('CNY') || text.includes('¥')) return 'CNY';
-  if (text.includes('AUD') || text.includes('AU$')) return 'AUD';
   if (text.includes('CHF')) return 'CHF';
-  return 'USD';
+  if (text.includes('JPY') || text.includes('JP¥')) return 'JPY';
+  if (text.includes('CNY') || text.includes('RMB') || text.includes('CN¥')) return 'CNY';
+  if (text.includes('DKK')) return 'DKK';
+  if (text.includes('SEK')) return 'SEK';
+  if (text.includes('NOK')) return 'NOK';
+  // another ISO code printed against a number (INR 50,00,000 · 1,200 SGD) is a
+  // currency the layer cannot convert
+  const iso = /\b([A-Z]{3})\s*[\d]/.exec(text) || /[\d]\s*([A-Z]{3})\b/.exec(text);
+  if (iso && iso[1] !== 'USD') return null;
+  if (text.includes('USD') || text.includes('US$') || /(^|[^A-Za-z])\$/.test(text)) return 'USD';
+  return null;
 }
 
-export function isoCurrencyToInternal(iso: string): Currency {
-  return isCurrency(iso) ? iso : 'USD';
+/** A house-supplied ISO code → the money layer's Currency, or null when the
+ *  layer cannot convert it (never 'USD' by default — see detectCurrency). */
+export function isoCurrencyToInternal(iso: string | null | undefined): Currency | null {
+  const c = String(iso || '').trim().toUpperCase();
+  return isCurrency(c) ? c : null;
+}
+
+/** compExclude reason for a row whose currency the money layer cannot convert */
+export const FX_UNKNOWN_EXCLUDE = 'fx-unknown-currency';
+
+/** The status a crawler stamps when its money block may be fail-closed: a lot
+ *  the house reports SOLD whose currency is unknown carries no price (every
+ *  money field null), so it cannot stay 'sold' (a sold row must carry
+ *  realizedUsd > 0 — validate.ts invariant [1]); it becomes 'unknown-result'. */
+export function statusWithMoney<S extends string>(status: S, money: { compExclude?: string }): S | 'unknown-result' {
+  return status === 'sold' && money.compExclude === FX_UNKNOWN_EXCLUDE ? 'unknown-result' : status;
 }
 
 // The flat single-rate toUsd()/USD_RATES table was removed in the v2 money
@@ -178,7 +207,9 @@ export function isoCurrencyToInternal(iso: string): Currency {
 // every price field when !isSold, regardless of what a house returned.
 interface MoneyIn {
   isSold: boolean;
-  nativeCurrency: Currency;
+  /** null = a currency the money layer cannot convert → the row is stamped
+   *  with NO price and NO estimate and compExclude FX_UNKNOWN_EXCLUDE */
+  nativeCurrency: Currency | null;
   saleDate: string | null;
   hammerNative: number | null;
   premiumNative: number | null;
@@ -195,12 +226,31 @@ type MoneyBlock = Pick<AuctionLot,
   'priceBasis' | 'currency' | 'estimateLow' | 'estimateHigh' |
   'hammerPrice' | 'premiumPrice' | 'priceUsd'>;
 
-export function stampMoney(m: MoneyIn): MoneyBlock {
-  const { rate, asOf } = fxRateFor(m.nativeCurrency, m.saleDate);
+export function stampMoney(m: MoneyIn): MoneyBlock & { compExclude?: string } {
+  // FAIL-CLOSED (Oct 6 2026): an unknown currency carries no number at all —
+  // never a native figure relabelled USD. Callers route the status through
+  // statusWithMoney (a sold row without a price cannot stay 'sold').
+  if (m.nativeCurrency == null) {
+    // no nativeCurrency / currency / fx stamp: the row names no currency at
+    // all rather than a false one (the alias type is required on AuctionLot;
+    // every money field it would qualify is null here)
+    return {
+      hammerNative: null, premiumNative: null, realizedNative: null,
+      buyerPremiumPct: m.buyerPremiumPct ?? null,
+      hammerUsd: null, premiumUsd: null, realizedUsd: null,
+      estLowNative: null, estHighNative: null, estLowUsd: null, estHighUsd: null,
+      estimateLow: null, estimateHigh: null,
+      hammerPrice: null, premiumPrice: null, priceUsd: null,
+      priceBasis: undefined,
+      compExclude: FX_UNKNOWN_EXCLUDE,
+    } as MoneyBlock & { compExclude: string };
+  }
+  const cur: Currency = m.nativeCurrency;
+  const { rate, asOf } = fxRateFor(cur, m.saleDate);
   // conversion goes through toUsdDated (normalize.ts) so the fresh row's USD
   // rounding is byte-identical to the (completed) v2 backfill's — ONE
   // definition of "native → dated USD".
-  const conv = (n: number | null) => toUsdDated(n, m.nativeCurrency, m.saleDate).usd;
+  const conv = (n: number | null) => toUsdDated(n, cur, m.saleDate).usd;
 
   // estimates are ALWAYS native + derived (present on sold and upcoming alike)
   const estLowNative = m.estLowNative;
@@ -212,14 +262,14 @@ export function stampMoney(m: MoneyIn): MoneyBlock {
     // DOCTRINE: a non-sold lot has NULL price fields. Keep estimates + the fx
     // stamp (so a computed estUsd band is dated) but no realized/hammer/premium.
     return {
-      nativeCurrency: m.nativeCurrency,
+      nativeCurrency: cur,
       hammerNative: null, premiumNative: null, realizedNative: null,
       buyerPremiumPct: m.buyerPremiumPct ?? null,
       fxRate: rate, fxAsOf: asOf,
       hammerUsd: null, premiumUsd: null, realizedUsd: null,
       estLowNative, estHighNative, estLowUsd, estHighUsd,
       // old aliases
-      currency: m.nativeCurrency,
+      currency: cur,
       estimateLow: estLowUsd, estimateHigh: estHighUsd,
       hammerPrice: null, premiumPrice: null, priceUsd: null,
       priceBasis: undefined,
@@ -239,7 +289,7 @@ export function stampMoney(m: MoneyIn): MoneyBlock {
   }
 
   return {
-    nativeCurrency: m.nativeCurrency,
+    nativeCurrency: cur,
     hammerNative, premiumNative, realizedNative,
     buyerPremiumPct: bp,
     fxRate: rate, fxAsOf: asOf,
@@ -247,7 +297,7 @@ export function stampMoney(m: MoneyIn): MoneyBlock {
     estLowNative, estHighNative, estLowUsd, estHighUsd,
     priceBasis: m.priceBasis,
     // old aliases (priceUsd = realizedUsd; estimate* = *Usd, NOT native)
-    currency: m.nativeCurrency,
+    currency: cur,
     estimateLow: estLowUsd, estimateHigh: estHighUsd,
     hammerPrice: hammerNative, premiumPrice: premiumNative, priceUsd: realizedUsd,
   };
