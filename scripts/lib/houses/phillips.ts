@@ -114,9 +114,16 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
       // realized number is just the hammer (no premium published).
       const phillipsBasis: PriceBasis = hammerBP != null ? 'realized' : 'hammer-only';
 
+      // ONLINE sales (saleTypeId 3) run a week: every lot closes on the
+      // auction's END day (api: auctionEndDateTimeOffset, sale-local offset).
+      // The start stamp dated them to the opening day (date re-audit Oct 2026:
+      // HK080323 opened 28 Mar, lots closed 4 Apr 2023). Live sales keep the
+      // start — a two-day live sale's lot-to-session split isn't in the feed.
+      const online = lot.saleTypeId === 3 && typeof lot.auctionEndDateTimeOffset === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(lot.auctionEndDateTimeOffset);
+      const dayStamp: string | undefined = online ? lot.auctionEndDateTimeOffset : lot.auctionStartDateTimeOffset;
       let auctionInPast = false;
-      if (lot.auctionStartDateTimeOffset) {
-        const aDate = new Date(lot.auctionStartDateTimeOffset);
+      if (dayStamp) {
+        const aDate = new Date(dayStamp);
         auctionInPast = !isNaN(aDate.getTime()) && aDate < new Date();
       }
 
@@ -132,8 +139,8 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
       }
 
       let saleDate = '';
-      if (lot.auctionStartDateTimeOffset) {
-        saleDate = lot.auctionStartDateTimeOffset.split('T')[0];
+      if (dayStamp) {
+        saleDate = dayStamp.split('T')[0];
       } else if (lot.saleDate) {
         saleDate = lot.saleDate;
       }

@@ -54,6 +54,18 @@ test("Sotheby's: genuine instants read in the sale-currency zone", () => {
   assert.equal(saleDayOf("Sotheby's", '2026-04-05T23:00:00.000Z', { currency: 'XYZ' }), '2026-04-05');
 });
 
+test('MLB Auctions / NFL Auction: the GMT closeTime is read in ET (a 9:59 PM ET close is that night)', () => {
+  // mlbauction-6414160 (astros) / -6408132 (rangers): API close 01:59Z = 9:59 PM EDT the day before
+  // (date re-audit Oct 2026: stored 2026-09-07, closed 2026-09-06)
+  assert.equal(saleDayOf('MLB Auctions', '2026-09-07T01:59:00.000Z'), '2026-09-06');
+  assert.equal(saleDayOf('MLB Auctions', '2026-09-14T01:59:00.000Z'), '2026-09-13');
+  // fixture item 6420023: 22:00Z = 6 PM EDT — the same day
+  assert.equal(saleDayOf('MLB Auctions', '2026-09-30T22:00:00.000Z'), '2026-09-30');
+  // NFL "Sep 16, 2026, 2:02:00 AM" GMT = 10:02 PM EDT Sep 15
+  assert.equal(saleDayOf('NFL Auction', '2026-09-16T02:02:00.000Z'), '2026-09-15');
+  assert.equal(saleTimeZone('MLB Auctions'), 'America/New_York');
+});
+
 test('sale-day: other houses and unreadable stamps abstain', () => {
   assert.equal(saleDayOf('REA', '2026-09-18T02:00:00Z'), null);
   assert.equal(saleDayOf('Goldin', ''), null);

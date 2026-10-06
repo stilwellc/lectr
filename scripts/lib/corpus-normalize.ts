@@ -17,7 +17,7 @@ import { segmentOf } from '../corpus-io';
 import { reclassifyLot } from './classify';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 import { seasonToDate } from './sports-crawl';
-import { saleCloseFor } from './sale-close-dates';
+import { saleCloseFor, galleryStubClose, GALLERY_HOUSES } from './sale-close-dates';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -1108,6 +1108,39 @@ export function redateSeasonSales(lots: Lot[], now: Date = new Date()): { total:
   return { total, bySale };
 }
 
+// ── GALLERY STUB DATES (date re-audit, Oct 2026): Lelands / Love of the Game /
+// Memory Lane gallery rows carry seasonToDate's mid-month stub of the dropdown
+// sale name but NO saleName (the crawler dropped it), and the stub is not a
+// safe bound there (LOTG Fall → Oct 15 closed late Nov; Lelands Spring →
+// Apr 15 closed Jun 7; ML "The Find Winter 2012" → Feb 15 closed Dec 15).
+// sale-close-dates.ts inverts the stub over the house's own dropdown labels:
+// a unique cited sale → its close ('day'); several cited → the latest close
+// as a bound ('season'); any uncited candidate → untouched. A row whose 15th
+// is itself a cited close (live-leg End: day) only loses the guessed 'month'.
+// Only 'month' rows with no saleDateTime; a re-dated row is no longer 'month',
+// so the pass is idempotent. fxAsOf follows when it was the stub.
+export function redateGalleryStubs(lots: Lot[], now: Date = new Date()): { total: number; exact: number; byHouse: Record<string, number> } {
+  const asOf = now.toISOString().slice(0, 10);
+  const byHouse: Record<string, number> = {};
+  let total = 0, exact = 0;
+  for (const l of lots as DQLot[]) {
+    if (!GALLERY_HOUSES.has(l.auctionHouse)) continue;
+    if (l.datePrecision !== 'month' || l.saleDateTime || typeof l.saleDate !== 'string') continue;
+    const stub = l.saleDate.slice(0, 10);
+    const name = typeof l.saleName === 'string' && l.saleName ? l.saleName : null;
+    const named = name ? saleCloseFor(l.auctionHouse, name, asOf) : null;
+    const r = named && seasonToDate(name!) === stub ? named : galleryStubClose(l.auctionHouse, stub, asOf);
+    if (!r) continue;
+    if ('exact' in r) { l.datePrecision = 'day'; exact++; continue; }
+    l.saleDate = r.date;
+    l.datePrecision = r.precision;
+    if ((l as { fxAsOf?: string | null }).fxAsOf === stub) (l as { fxAsOf?: string | null }).fxAsOf = r.date;
+    byHouse[l.auctionHouse] = (byHouse[l.auctionHouse] || 0) + 1;
+    total++;
+  }
+  return { total, exact, byHouse };
+}
+
 // ── HAMMER == ALL-IN (Wright 989 · LAMA 338): older Wright-platform rows copied
 // the premium-inclusive price into the hammer field, so every hammer-basis read
 // (inferHammerUsd, houseCal, max-bid guidance) took a realized price as the
@@ -1161,6 +1194,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // real REA / H&S close days before any pass reads saleDate
   const seasonDates = redateSeasonSales(ls, opts.now);
   console.log(`[normalize] season sales re-dated to their close: ${seasonDates.total} rows across ${Object.keys(seasonDates.bySale).length} sales`);
+  const galleryDates = redateGalleryStubs(ls, opts.now);
+  console.log(`[normalize] gallery stub dates → cited close: ${galleryDates.total} (${Object.entries(galleryDates.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'}) · exact 15th closes un-'month'ed=${galleryDates.exact}`);
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const deadSso = nullDeadChristiesSsoUrls(ls);

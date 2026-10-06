@@ -50,6 +50,7 @@ import { reportLegHealth, reportAndExit } from './lib/leg-health';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import * as fs from 'fs';
 import * as path from 'path';
+import { saleDayOf } from './lib/sale-day';
 
 const HOST = 'https://auctions.mlb.com';
 const SID = '1101001';
@@ -361,7 +362,9 @@ function mlbAuth(cat: ReturnType<typeof classifySports>, title: string, desc: st
 export function toLot(it: ApiItem, ident: { title: string; desc: string }, kind: 'sold' | 'upcoming', realized?: number | null): AuctionLot | null {
   const iso = closeIso(it);
   if (!iso) return null;
-  const saleDate = iso.slice(0, 10);
+  // the ET calendar day of the GMT close (a 9:59 PM ET close is 01:59Z the
+  // next day — lib/sale-day.ts); the instant itself rides on every row
+  const saleDate = saleDayOf('MLB Auctions', iso) || iso.slice(0, 10);
   const cat = classifySports('', ident.title);
   const auth = mlbAuth(cat, ident.title, ident.desc);
   const bid = money(it.currentBid);
@@ -386,7 +389,7 @@ export function toLot(it: ApiItem, ident: { title: string; desc: string }, kind:
     const finalBid = realized ?? null;
     if (!finalBid || num(it.bidCount) <= 0) return null;
     if (saleDate > TODAY) return null;
-    return { ...base, status: 'sold', ...stampRealizedUsd(finalBid, saleDate) } as unknown as AuctionLot;
+    return { ...base, status: 'sold', saleDateTime: iso, ...stampRealizedUsd(finalBid, saleDate) } as unknown as AuctionLot;
   }
   return {
     ...base,
