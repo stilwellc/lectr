@@ -139,6 +139,20 @@ export type CalObs = {
   /** (Oct 6) the call was 'above comparable market' (absent on older rows →
    *  isAboveObs recovers it from the label rule) */
   ab?: boolean;
+  /** (Oct 6) HAMMER basis: inferred hammer / estimate mid − 1, and hammer
+   *  beat the estimate top — the per-row twins of Bucket.hammerPerfs /
+   *  hammerBeat, so a restricted population can be re-aggregated from rows */
+  hp?: number; hb?: boolean;
+};
+/** (Oct 6) ONE bought-in observation — the row behind a Bucket.boughtIn
+ *  count, kept so the record can say WHERE unsold lots were observed. */
+export type BiObs = {
+  m: string; h?: string; sd: string;
+  /** the call: F below (flagged) · U at market · A above */
+  lab: 'F' | 'U' | 'A';
+  /** flagged calls only: the engine tier */
+  t?: 'main' | 'fallback';
+  id: string;
 };
 /** (Sep 27) a NO-ESTIMATE hedonic observation — the pure comp path's record
  *  (Goldin/no-estimate objects). Feeds the no-estimate bias correction and
@@ -180,6 +194,14 @@ export interface BacktestState {
   engineVersion?: string;
   /** (Sep 27) no-estimate observations (trailing window only — see targetsOf) */
   noEst?: NoEstObs[];
+  /** (Oct 6) bought-in observations; biComplete marks that EVERY bought-in
+   *  count in the buckets has its row here (a full build, or backfillUnsold
+   *  on a legacy state) — until then the record stays on the sold-only basis */
+  bi?: BiObs[];
+  biComplete?: boolean;
+  /** (Oct 6) house|quarter cells where the corpus CAPTURED unsold lots
+   *  (unsoldCapturedCells) — the population the headline levels are claimed on */
+  unsoldCells?: string[];
 }
 
 export const mkBucket = (): Bucket => ({ perfs: [], hammerPerfs: [], beat: 0, hammerBeat: 0, n: 0, boughtIn: 0 });
@@ -189,7 +211,7 @@ export function mkState(nowMs: number): BacktestState {
     flagged: mkBucket(), unflagged: mkBucket(), above: mkBucket(),
     flaggedMain: mkBucket(), flaggedFallback: mkBucket(),
     byYear: {}, calObs: [], nowMs, scoredIds: [], triedIds: [], engineVersion: ENGINE_VERSION,
-    noEst: [],
+    noEst: [], bi: [], biComplete: true, unsoldCells: [],
   };
 }
 
@@ -212,9 +234,13 @@ export function mergeStates(states: BacktestState[]): BacktestState {
     }
     for (const o of s.calObs) out.calObs.push(o);
     for (const o of s.noEst || []) out.noEst!.push(o);
+    for (const o of s.bi || []) out.bi!.push(o);
+    for (const c of s.unsoldCells || []) out.unsoldCells!.push(c);
     for (const id of s.scoredIds) out.scoredIds.push(id);
     for (const id of s.triedIds || []) out.triedIds!.push(id);
   }
+  out.biComplete = states.every(s => s.biComplete === true);
+  out.unsoldCells = Array.from(new Set(out.unsoldCells)).sort();
   return out;
 }
 
@@ -473,6 +499,8 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
       pf: realized / estMid - 1,
       fl: isBelow,
       ab: isAbove,
+      hp: hammer / estMid - 1,
+      hb: hammer > estTop,
       // watches era-gate MEASUREMENT (spec 8a precondition): reference-keyed
       // vs model-name-keyed error splits fall out of the Sunday full replay
       kt: prep.marketBySlug[lot.artist] === 'watches' ? ((lot as L & { reference?: string | null }).reference ? 'ref' : 'model') : undefined,
@@ -522,7 +550,80 @@ export function scoreBoughtIn(prep: Prepared, st: BacktestState, lot: L): boolea
   const isBelow = v.signal.label.startsWith('below');
   const isAbove = v.signal.label.startsWith('above');
   (isBelow ? st.flagged : isAbove ? st.above : st.unflagged).boughtIn++;
+  // the tier buckets count their bought-ins too (they used to read 0% fail-
+  // to-sell by construction — only sold lots were ever folded into them)
+  const t = v.tier === 'fallback' ? 'fallback' : 'main';
+  if (isBelow) (t === 'fallback' ? st.flaggedFallback : st.flaggedMain).boughtIn++;
+  (st.bi || (st.bi = [])).push({
+    m: prep.marketBySlug[lot.artist] || 'all',
+    ...(lot.auctionHouse ? { h: String(lot.auctionHouse) } : {}),
+    sd: lot.saleDate.slice(0, 10),
+    lab: isBelow ? 'F' : isAbove ? 'A' : 'U',
+    ...(isBelow ? { t } : {}),
+    id: lot.id,
+  });
   return true;
+}
+
+// ── UNSOLD CAPTURE (Oct 6) ──
+// Christie's and Sotheby's history before 2026 was crawled SOLD-ONLY (results
+// pages list what sold; a bought-in lot simply vanishes), and so is Hake's and
+// most of RR's. A level claim ("flags realized +X% vs estimate", "Y% failed to
+// sell") over those cells measures survivors only. The record therefore claims
+// its HEADLINE LEVELS only where unsold lots were captured: a house × calendar
+// quarter whose concluded range-estimate lots include at least
+// UNSOLD_CAPTURE_MIN_N bought-ins making up at least UNSOLD_CAPTURE_MIN_SHARE
+// of them (real sell-through runs 70-90%; a sold-only crawl reads ~0%).
+export const UNSOLD_CAPTURE_MIN_SHARE = 0.03;
+export const UNSOLD_CAPTURE_MIN_N = 3;
+export const unsoldCellKey = (house: string | null | undefined, sd: string) => `${house || ''}|${quarterOf(sd)}`;
+export function unsoldCapturedCells(lots: L[]): string[] {
+  const c = new Map<string, [number, number]>();
+  for (const l of lots) {
+    if ((l.status !== 'sold' && l.status !== 'bought_in') || !l.saleDate || !l.auctionHouse || !hasEst(l)) continue;
+    const k = unsoldCellKey(String(l.auctionHouse), l.saleDate);
+    const v = c.get(k) || c.set(k, [0, 0]).get(k)!;
+    v[l.status === 'sold' ? 0 : 1]++;
+  }
+  const out: string[] = [];
+  c.forEach(([sold, bi], k) => { if (bi >= UNSOLD_CAPTURE_MIN_N && bi / (sold + bi) >= UNSOLD_CAPTURE_MIN_SHARE) out.push(k); });
+  return out.sort();
+}
+
+/** One-time repair of a state minted before bought-in rows existed: re-score
+ *  every bought-in target the record already counted (same point-in-time
+ *  replay, so the same calls), rebuilding the boughtIn counters — tier buckets
+ *  included — and the bi rows; and look up each range row's hammer twins
+ *  (hp/hb) from the corpus. Idempotent; a no-op once biComplete. */
+export function backfillUnsold(prep: Prepared, st: BacktestState, log: (m: string) => void = () => {}): { bi: number; hp: number; before: number[]; after: number[] } {
+  const buckets = [st.flagged, st.unflagged, st.above, st.flaggedMain, st.flaggedFallback];
+  const before = buckets.map(b => b.boughtIn);
+  let hp = 0;
+  const byId = new Map<string, L>();
+  for (const l of prep.lots) byId.set(String(l.id), l);
+  for (const o of st.calObs) {
+    if (o.et === 'p' || typeof o.hp === 'number' || !o.id) continue;
+    const l = byId.get(String(o.id));
+    if (!l || l.status !== 'sold' || !hasEst(l) || !((l.realizedUsd || 0) > 0)) continue;
+    const hammer = inferHammerUsd(l);
+    o.hp = hammer / estMidOf(l) - 1;
+    o.hb = hammer > estTopOf(l);
+    hp++;
+  }
+  if (st.biComplete) return { bi: (st.bi || []).length, hp, before, after: before };
+  const scored = new Set(st.scoredIds);
+  const { biTargets } = targetsOf(prep);
+  const redo = biTargets.filter(l => scored.has(l.id));
+  for (const b of buckets) b.boughtIn = 0;
+  st.bi = [];
+  // a shim shares every accumulator (buckets, calObs, noEst, bi) by reference
+  // but swallows the id bookkeeping — these lots are already on record
+  const shim: BacktestState = { ...st, scoredIds: [], triedIds: [] };
+  const r = replayTargets(prep, shim, [], redo, log, 5000);
+  st.biComplete = true;
+  const after = buckets.map(b => b.boughtIn);
+  log(`[backtest] unsold backfill: ${r.scored}/${redo.length} bought-in targets re-scored (${r.tried} abstain now) · boughtIn F/U/A/main/fallback ${before.join('/')} → ${after.join('/')} · hammer twins on ${hp} rows`);
+  return { bi: st.bi.length, hp, before, after };
 }
 
 // ── POINT-IN-TIME REPLAY ──
@@ -1155,7 +1256,12 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
   const cal = calibrationOf(calObs, st.noEst || []);
   // PER-MARKET RECORD (Aug 13 value audit): the +41/+16 receipt was global-
   // only — a watches user read an art/design-dominant number. Split it.
-  const byMarket = recordByMarketOf(calObs);
+  // THE HEADLINE POPULATION (Oct 6): range-estimate lots in the house ×
+  // quarters where unsold lots were captured, bought-ins counted as failed
+  // outcomes (docs/ENGINE_LANES.md "Unsold lots"). A state without bought-in
+  // rows falls back to the sold-only buckets and says so (recordBasis).
+  const captured = capturedHeadlineOf(st);
+  const byMarket = recordByMarketOf(calObs, captured?.scope ?? null);
   // WATCH KEY-TYPE SPLIT — the era-gate measurement (fills as replays run)
   const watchKt: Record<string, { n: number; medAbsErr: number | null }> = {};
   for (const kt of ['ref', 'model']) {
@@ -1211,9 +1317,20 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
      *  the record still carries rows from an older labeler (refresh with a
      *  per-market full leg) */
     rowsOnVersionPct: calObs.length ? Math.round(1000 * onVersion / calObs.length) / 10 : 0,
-    flagged: summarize(st.flagged),
-    unflagged: summarize(st.unflagged),
-    above: summarize(st.above),
+    flagged: captured ? captured.flagged : summarize(st.flagged),
+    unflagged: captured ? captured.unflagged : summarize(st.unflagged),
+    above: captured ? captured.above : summarize(st.above),
+    /** what the headline is claimed on: 'unsold-captured' = range-estimate
+     *  lots in house × quarters whose unsold lots the corpus holds, bought-ins
+     *  counted as failed outcomes; 'sold-only' = every house × period, sold
+     *  lots only (survivors — the pre-Oct-6 basis) */
+    recordBasis: captured
+      ? { headline: 'unsold-captured' as const, cells: captured.nCells, minShare: UNSOLD_CAPTURE_MIN_SHARE, minBoughtIn: UNSOLD_CAPTURE_MIN_N }
+      : { headline: 'sold-only' as const, cells: 0, minShare: UNSOLD_CAPTURE_MIN_SHARE, minBoughtIn: UNSOLD_CAPTURE_MIN_N },
+    /** the pre-Oct-6 headline buckets: every house × period, range-estimate
+     *  lots; medians over SOLD lots, bought-ins only in the fail rate (and the
+     *  sold-only crawls contribute none) — kept for continuity */
+    soldOnly: { flagged: summarize(st.flagged), unflagged: summarize(st.unflagged), above: summarize(st.above) },
     flaggedTiers: { main: summarize(st.flaggedMain), fallback: summarize(st.flaggedFallback) },
     byMarket,
     valueRecord,
@@ -1290,32 +1407,101 @@ export function valueRecordOf(calObs: CalObs[], noEst: NoEstObs[]): Record<strin
  *  being fr, or cr on rows from before the house-normalized flag). */
 export const isAboveObs = (o: CalObs): boolean => (typeof o.ab === 'boolean' ? o.ab : !o.fl && (o.fr ?? o.cr) <= 0.75);
 
-export type RecordCell = { n: number; medPct: number | null };
+export type RecordCell = { n: number; medPct: number | null; nBoughtIn?: number };
 export type MarketRecord = {
   flagged: RecordCell; unflagged: RecordCell; above: RecordCell;
   /** single-figure estimates ("$500+", RR) — scored, but a different yardstick
-   *  (no range, the figure is a floor), so never pooled into the cells above */
+   *  (no range, the figure is a floor), so never pooled into the cells above;
+   *  sold-only (no single-figure bought-in is ever a target) */
   singleFigure: { flagged: RecordCell; unflagged: RecordCell; above: RecordCell };
+  /** (Oct 6) the range-estimate arms over EVERY house × period, sold lots
+   *  only — what the cells read before the unsold-capture restriction */
+  soldOnly?: { flagged: RecordCell; unflagged: RecordCell; above: RecordCell };
 };
+/** The unsold-captured population (see unsoldCapturedCells): the cells, and
+ *  the bought-in rows. Absent → the sold-only basis. */
+export type CapturedScope = { cells: Set<string>; bi: BiObs[] };
+const armOf = (o: CalObs): 'F' | 'U' | 'A' => (o.fl ? 'F' : isAboveObs(o) ? 'A' : 'U');
 /** PER-MARKET RECORD CELLS (/value "The record" when a market is selected).
- *  Same population as the global headline buckets: RANGE-estimate lots only
- *  (et 'b'); 'unflagged' = the at-market calls, never the above-market ones
- *  (the headline keeps those in their own 'above' arm). Single-figure lots are
- *  reported separately. medPct needs n >= 50. */
-export function recordByMarketOf(calObs: CalObs[]): Record<string, MarketRecord> {
+ *  Same population as the global headline: RANGE-estimate lots only (et 'b');
+ *  'unflagged' = the at-market calls, never the above-market ones (they are
+ *  their own 'above' arm). With a CapturedScope the cells are the headline's
+ *  unsold-captured house × quarters, and a bought-in lot counts as a failed
+ *  outcome (below every sold lot) in the median. Single-figure lots are
+ *  reported separately. medPct needs n + nBoughtIn >= 50. */
+export function recordByMarketOf(calObs: CalObs[], scope: CapturedScope | null = null): Record<string, MarketRecord> {
   const medOf = (a: number[]) => { if (a.length < 50) return null; const x = [...a].sort((p, q) => p - q); return Math.round(x[Math.floor(x.length / 2)] * 1000) / 10; };
-  const cell = (rows: CalObs[]): RecordCell => ({ n: rows.length, medPct: medOf(rows.map(o => o.pf!)) });
-  const arms = (rows: CalObs[]) => ({
-    flagged: cell(rows.filter(o => o.fl)),
-    unflagged: cell(rows.filter(o => !o.fl && !isAboveObs(o))),
-    above: cell(rows.filter(o => !o.fl && isAboveObs(o))),
+  const cell = (rows: CalObs[], nBi: number | null = null): RecordCell => ({
+    n: rows.length,
+    medPct: medOf(rows.map(o => o.pf!).concat(new Array(nBi ?? 0).fill(-1))),
+    ...(nBi != null ? { nBoughtIn: nBi } : {}),
   });
+  const arms = (rows: CalObs[], bi: BiObs[] | null = null) => {
+    const nb = (lab: 'F' | 'U' | 'A') => (bi ? bi.filter(b => b.lab === lab).length : null);
+    return {
+      flagged: cell(rows.filter(o => armOf(o) === 'F'), nb('F')),
+      unflagged: cell(rows.filter(o => armOf(o) === 'U'), nb('U')),
+      above: cell(rows.filter(o => armOf(o) === 'A'), nb('A')),
+    };
+  };
+  const inScope = (h: string | undefined, sd: string | undefined) => !!scope && !!sd && scope.cells.has(unsoldCellKey(h, sd));
   const out: Record<string, MarketRecord> = {};
   for (const m of marketsOf(calObs)) {
     const rows = calObs.filter(o => o.m === m && typeof o.pf === 'number');
-    out[m] = { ...arms(rows.filter(o => o.et !== 'p')), singleFigure: arms(rows.filter(o => o.et === 'p')) };
+    const band = rows.filter(o => o.et !== 'p');
+    const singleFigure = arms(rows.filter(o => o.et === 'p'));
+    if (!scope) { out[m] = { ...arms(band), singleFigure }; continue; }
+    out[m] = {
+      ...arms(band.filter(o => inScope(o.h, o.sd)), scope.bi.filter(b => b.m === m && inScope(b.h, b.sd))),
+      singleFigure,
+      soldOnly: arms(band),
+    };
   }
   return out;
+}
+
+/** A headline arm over ROWS (calObs + bought-in count), on the CONCLUDED basis:
+ *  a bought-in lot is a failed outcome — it ranks below every sold lot in the
+ *  medians (perf −100%) and never beats the high. The *Sold* fields are the
+ *  same rows without the bought-ins. Field names match summarize() so every
+ *  consumer of flagged/unflagged/above reads it unchanged. */
+export function summarizeRows(sold: CalObs[], nBi: number) {
+  const n = sold.length;
+  const concluded = n + nBi;
+  const fail = new Array(nBi).fill(-1) as number[];
+  const pf = sold.map(o => o.pf!).sort((a, b) => a - b);
+  const ham = sold.filter(o => typeof o.hp === 'number');
+  const hp = ham.map(o => o.hp!).sort((a, b) => a - b);
+  const beat = sold.filter(o => o.beat).length;
+  const hBeat = ham.filter(o => o.hb).length;
+  const pct = (k: number, d: number) => (d ? Math.round((k / d) * 100) : 0);
+  const med = (a: number[]) => (a.length ? Math.round(median(a) * 100) : 0);
+  return {
+    n,
+    medianPerfPct: med(fail.concat(pf)),
+    beatHighPct: pct(beat, concluded),
+    hammerMedianPct: med(fail.concat(hp)),
+    hammerBeatPct: pct(hBeat, ham.length + nBi),
+    nBoughtIn: nBi,
+    failToSellPct: concluded ? Math.round((nBi / concluded) * 1000) / 10 : 0,
+    beatHighHonestPct: pct(beat, concluded),
+    medianSoldPct: med(pf),
+    hammerMedianSoldPct: med(hp),
+    beatHighSoldPct: pct(beat, n),
+    hammerBeatSoldPct: pct(hBeat, ham.length),
+  };
+}
+
+/** The HEADLINE arms on the unsold-captured population (null when the state
+ *  cannot support it: no bought-in rows yet, or no captured cells). */
+export function capturedHeadlineOf(st: BacktestState): { scope: CapturedScope; flagged: ReturnType<typeof summarizeRows>; unflagged: ReturnType<typeof summarizeRows>; above: ReturnType<typeof summarizeRows>; nCells: number } | null {
+  if (!st.biComplete || !st.unsoldCells || !st.unsoldCells.length) return null;
+  const cells = new Set(st.unsoldCells);
+  const inScope = (h: string | undefined, sd: string | undefined) => !!sd && cells.has(unsoldCellKey(h, sd));
+  const rows = st.calObs.filter(o => o.et !== 'p' && typeof o.pf === 'number' && inScope(o.h, o.sd));
+  const bi = (st.bi || []).filter(b => inScope(b.h, b.sd));
+  const arm = (lab: 'F' | 'U' | 'A') => summarizeRows(rows.filter(o => armOf(o) === lab), bi.filter(b => b.lab === lab).length);
+  return { scope: { cells, bi: st.bi || [] }, flagged: arm('F'), unflagged: arm('U'), above: arm('A'), nCells: cells.size };
 }
 
 /** The one-line console summary both entry points print on completion. */

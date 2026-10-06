@@ -46,7 +46,7 @@ import { ARTISTS } from '../app/constants';
 import type { AuctionLot } from '../app/types';
 import {
   prepare, targetsOf, mkState, replayTargets, mergeStates, assertRecord,
-  summarizeState, summaryLine, ENGINE_VERSION, type BacktestState,
+  summarizeState, summaryLine, ENGINE_VERSION, unsoldCapturedCells, backfillUnsold, type BacktestState,
 } from './backtest-core';
 
 // Sidecar accumulator state for the incremental. backtest.json holds only the
@@ -150,6 +150,8 @@ export function buildBacktest(dataDir: string, allLots?: AuctionLot[], opts: Ful
   const st = mkState(Date.now());
   const { scored, tried } = replayTargets(prep, st, soldTargets, biTargets, console.log, 20000, noEstTargets);
   console.log(`[backtest] replay complete (${elapsed()}) — ${scored} scored, ${tried} abstained`);
+  // where the corpus captured unsold lots — the headline's population
+  st.unsoldCells = unsoldCapturedCells(prep.lots);
 
   const out = summarizeState(st, new Date().toISOString().slice(0, 10));
   if (opts.market) {
@@ -212,6 +214,25 @@ if (require.main === module) {
       fs.mkdirSync(dataDir, { recursive: true });
       fs.writeFileSync(path.join(dataDir, 'backtest.json'), JSON.stringify(out));
       console.log('backtest.json (re-summarized):', summaryLine(out));
+    } else if (flag('backfill-unsold')) {
+      // ONE-TIME repair of a pre-Oct-6 state (the nightly incremental does the
+      // same on its own): re-score the bought-ins already on record into rows
+      // (tier buckets included), add the hammer twins, stamp the unsold-
+      // captured cells, re-summarize. Loads the corpus; no sold replay.
+      const st = readStateFile(STATE_FILE);
+      if (!st) throw new Error(`[backtest] --backfill-unsold: no readable state at ${STATE_FILE}`);
+      const t0 = Date.now();
+      const lots = readCorpusShared() as unknown as AuctionLot[];
+      const prep = prepare(lots, console.log, () => `${((Date.now() - t0) / 1000).toFixed(0)}s`);
+      backfillUnsold(prep, st, console.log);
+      st.unsoldCells = unsoldCapturedCells(prep.lots);
+      const prev = (() => { try { return JSON.parse(fs.readFileSync(path.join(dataDir, 'backtest.json'), 'utf8')) as { generatedAt?: string }; } catch { return null; } })();
+      const out = summarizeState(st, prev?.generatedAt || new Date().toISOString().slice(0, 10));
+      assertRecord(out);
+      fs.mkdirSync(dataDir, { recursive: true });
+      fs.writeFileSync(path.join(dataDir, 'backtest.json'), JSON.stringify(out));
+      writeState(st);
+      console.log('backtest.json (unsold backfill):', summaryLine(out));
     } else if (flag('merge')) {
       const mk = arg('markets');
       mergeLegs(dataDir, legDir, mk ? mk.split(',').map(s => s.trim()).filter(Boolean) : null);
