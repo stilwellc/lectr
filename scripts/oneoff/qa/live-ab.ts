@@ -8,7 +8,7 @@
  * refit before the snapshot day, legacy keys only (--full-cal adds the
  * published-value layer). Writes one row per valued-or-abstained lot.
  *
- *   npx tsx scripts/oneoff/qa/live-ab.ts --code <dir> --corpus <snapdir> --asof 2026-09-14 --out rows.json [--candidate]
+ *   npx tsx scripts/oneoff/qa/live-ab.ts --code <dir> --corpus <snapdir> --asof 2026-09-14 --out rows.json [--candidate] [--flags cardGate=0,noEstGate=0]
  *
  * Never writes to data/ or public/ (evalOnly). tsconfig-excluded (_qa).
  */
@@ -29,6 +29,14 @@ async function main() {
   const value = require(path.join(code, 'app/lib/value'));
   const { lotAllInFactor } = require(path.join(code, 'app/lib/premiums'));
   if (process.argv.includes('--candidate') && value.setEngineFlags) value.setEngineFlags(value.ENGINE_FLAGS_CANDIDATE);
+  // ad-hoc flag tweaks for measurement, e.g. --flags cardGate=0,noEstGate=0
+  // (score the values a gate would withhold)
+  if (arg('flags') && value.setEngineFlags) {
+    const f = { ...value.getEngineFlags() };
+    for (const kv of arg('flags')!.split(',')) { const [k, v] = kv.split('='); f[k] = v === '1'; }
+    f.version = `${f.version}~${arg('flags')}`;
+    value.setEngineFlags(f);
+  }
   // outcomes first (only the id → sold map is kept)
   const outcome = new Map<string, { r: number; sd: string; h: number | null }>();
   for (const f of ['lots.json.gz', 'sold-archive.json.gz']) {

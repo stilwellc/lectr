@@ -82,10 +82,13 @@ export function houseAllInFactor(house: string | null | undefined, hammerUsd?: n
  *
  *  USED BY the price-bleed sentinel's honesty test (scripts/assemble.ts
  *  computeSentinel): the 29+ standing REA "poison" signatures were real flat
- *  increments × the OLDER premiums that the flat 1.175 could not see. NOT
- *  (yet) wired into lotAllInFactor/inferHammerUsd — that moves the engine's
- *  hammer basis for REA (flat 1.175 under-reads 2014+ hammers by 2–5%) and is
- *  the engine owner's call. */
+ *  increments × the OLDER premiums that the flat 1.175 could not see. And
+ *  (Oct 5 2026, engine) by lotAllInFactor → inferHammerUsd / buyerFields /
+ *  vsBidRead whenever the lot carries a saleDate: measured on the live book
+ *  (Sep 14 snapshot, 145 REA lots sold by Oct 5, true hammer = realized ÷ the
+ *  era premium) the served expected hammer moved median abs error 40.3% →
+ *  34.8%, ±30% 37.9% → 46.2%, hammers ≤ max bid 57.9% → 49.7% (nominal 30);
+ *  all-in figures are unchanged by construction. docs/ENGINE_LANES.md §10. */
 export const DATED_PREMIUMS: Record<string, Array<[string, number]>> = {
   REA: [
     ['0000-01-01', 1.15],
@@ -109,10 +112,15 @@ export function houseAllInFactorAt(house: string | null | undefined, hammerUsd: 
 }
 
 /** The factor for a specific lot: its own stamped premium wins, then the house
+ *  schedule AS OF the lot's saleDate (era-dated houses), then the undated
  *  schedule. `usd` disambiguates the tiered houses' band. */
-export function lotAllInFactor(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null }, usd?: number | null): number {
+export function lotAllInFactor(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null }, usd?: number | null): number {
   const bp = lot.buyerPremiumPct;
   if (typeof bp === 'number' && bp > 0 && bp < 60) return 1 + bp / 100;
+  // the premium IN FORCE on the lot's sale date (DATED_PREMIUMS; REA's eras) —
+  // a sold lot's hammer, and a live lot's expected hammer / max bid at the
+  // premium it will actually be charged. Undated lots take the house schedule.
+  if (lot.saleDate) return houseAllInFactorAt(lot.auctionHouse, usd, lot.saleDate);
   return houseAllInFactor(lot.auctionHouse, usd);
 }
 

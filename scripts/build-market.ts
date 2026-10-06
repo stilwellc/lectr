@@ -87,6 +87,9 @@ for (const a of ARTISTS) (MARKETS[a.market] ||= []).push(a.slug);
 const CARD_WINDOW_Y = 1;
 const CARD_SINGLE_Y = 0.5;
 const CARD_HL_Y = 0.25;
+/** tier 2 (grade-adjusted) prices from rungs at most this many grades from the
+ *  card's own (Oct 5 2026 — see the tier's note in priceCard) */
+const CARD_GA_MAX_STEP = 0.5;
 const MARKET_BY_SLUG: Record<string, string> = {};
 for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) MARKET_BY_SLUG[s] = mkt;
 
@@ -1059,11 +1062,20 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // the target — a 1977 Ryan PSA 9 sale ($919) outvotes a stack of
         // scaled-up PSA 4-5 copies (the ladder ratio is a market-wide
         // average; far rungs carry its error multiplied).
+        // NEIGHBOUR RUNGS ONLY (Oct 5 2026): a rung more than
+        // CARD_GA_MAX_STEP grades away never prices this card — the
+        // market-wide ladder ratio cannot carry one card's grade premium
+        // across whole grades. Point-in-time record of the tier (every sold
+        // card priced as of its own day; trailing 365d): ±30% hit medium
+        // 34.6% → 48.5%, low 28.8% → 46.5% (year to Oct 2025: medium 31.8%
+        // → 55.5%, low 26.4% → 41.3%); live (Sep 14 book): medium 19.3% →
+        // 57.1%, low 33.0% → 44.8%. It prices fewer cards (the far-rung
+        // ones abstain 'card:pool<2'). docs/ENGINE_LANES.md §10.
         const target = c.gradeNum;
         const adj = ladderR
           .filter(s => !(s as PLot)._card?.gradeQual)
           .map(s => ({ g: (s as PLot)._card?.gradeNum ?? null, p: venueAdj(s, house), ms: saleMsOf(s) }))
-          .filter(r => r.p > 0 && r.g != null)
+          .filter(r => r.p > 0 && r.g != null && Math.abs(r.g - target) <= CARD_GA_MAX_STEP)
           .map(r => ({ p: r.p * (gradeMult(target) / gradeMult(r.g!)), ms: r.ms, w: Math.pow(0.5, Math.abs(r.g! - target)) }));
         if (adj.length >= 2) {
           out.value = Math.round(recentMedian(adj));
@@ -1089,7 +1101,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     // cell abstains with the cell's reason code (ENGINE_FLAGS.cardGate).
     let cardCalib: CardCalibration;
     {
-      const CAL_MAX = 12000;
+      // (Oct 5 2026) 12,000 → 120,000: the neighbour-rung grade-adj tier
+      // seats fewer rows, and at a 1-in-9 sample its 120-day calibration
+      // fell under tierMinN and its gate cells hovered at minN — every
+      // recent sold card is priced now at 1× (~100k; the pass is O(pool))
+      const CAL_MAX = 120000;
       const cut = NOW_MS - CARD_GATE.windowDays * 864e5;
       const recentSold = (sportsSold as PLot[]).filter(s => CARD_SLUGS.has(s.artist) && s._card && saleMsOf(s) > cut && saleMsOf(s) < NOW_MS && !hasConditionFlag(s.title));
       const step = Math.max(1, Math.ceil(recentSold.length / CAL_MAX));
@@ -1122,7 +1138,10 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         value = Math.round(raw * tc.bias);
         low = Math.round(value * tc.lo); high = Math.round(value * tc.hi); mbAllIn = value * tc.mb;
       }
-      const g = cardGate(cal, market, tier, confidence);
+      // (Oct 5 2026) a tier with no calibration publishes nothing: its band
+      // would be the raw spread of one or two comps (live: 26% coverage)
+      const g0 = cardGate(cal, market, tier, confidence);
+      const g = tc ? g0 : { ...g0, pass: false, reason: 'card:uncalibrated' as const };
       const flagsNow = getEngineFlags();
       // shadow: the candidate's verdict on the same priced value (never served)
       if (SHADOW) {

@@ -500,8 +500,9 @@ export function blendPredict(
   return { value: estMid * pm * Math.pow(ratio / pm, w), w };
 }
 
-/** Whether the engine applies the no-estimate bias (measured: not yet — see
- *  estimateValueEx). The 'n' value band is fit on the SAME basis. */
+/** Whether the engine applies the no-estimate bias (measured: no — see
+ *  estimateValueEx; re-measured Oct 5 2026, still no). The 'n' value band is
+ *  fit on the SAME basis. */
 export const APPLY_NOEST_BIAS = false;
 /** The shrunk no-estimate bias multiplier for a market × tier (1 = none). */
 export function noEstimateBias(artist: string, confidence: string, cal: EngineCalibration | null = CAL): number {
@@ -724,6 +725,13 @@ export function estimateValueEx(
     // replay's no-estimate pools don't yet mirror production's same-player /
     // roster-tier pools closely enough for its level to transfer. The time
     // adjustment alone carries this path (0.97 → 1.00 vs 1.05 before).
+    // RE-MEASURED Oct 5 2026 with point-in-time fits by market × tier (and by
+    // house × market, 4y/2y/1y windows) on the full-replay record, test year
+    // Oct 25 → Oct 26 (7,936 no-estimate lots): bias 1.069 → 1.00–1.04 but
+    // median abs error 67.1% → 67.1–67.9% and ±30% 29.2% → 28.7–29.0% — it
+    // recentres the level without making a single value more accurate; live
+    // (Sep 14 book, 197 lots) 99.5% → 101.0% error. Stays off.
+    // docs/ENGINE_LANES.md §10.
     predUsd = compAdjUsd * (APPLY_NOEST_BIAS ? noEstimateBias(lot.artist, confidence) : 1);
   }
   if (!(predUsd > 0) || !Number.isFinite(predUsd)) return { value: null, abstain: 'no-value' };
