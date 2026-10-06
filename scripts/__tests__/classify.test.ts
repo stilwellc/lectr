@@ -261,3 +261,20 @@ test('class 11 · attribution: after / attributed / appropriation / exhibition p
   assert.equal(A('pablo-picasso', 'Pablo Picasso Paloma et sa poupée sur fond noir (B. 727; M. 229)'), 'pablo-picasso');
   assert.equal(A('jeff-koons', 'Cracked Egg (Red)', 'Jeff Koons (born 1955) Cracked Egg (Red)'), 'jeff-koons');
 });
+
+test('class 12 · culture mass leaks: graded tapes, sealed boxes, toys, non-sport cards out; sports cards home; autographs stay', () => {
+  const C = (title: string, artist = 'entertainment-memorabilia', house = 'Goldin') => move({ auctionHouse: house, artist, title });
+  assert.equal(C('1991 Teknoe (I Wanna) Be Like Mike Factory-Sealed Casette Tape - IGS NM 8/MINT 9'), DROP);
+  assert.equal(C('2025 WEGS Faces Of Fury Yellow Shell Variant (#1/1) - WEGS Encapsulated - With Original Box'), DROP);
+  assert.equal(C('1997 Princess Diana Beanie Baby Second Edition Collection (11)'), DROP);
+  assert.equal(C('2023 Union Arena Ua02Bt/Jjk Jujutsu Kaisen 068 Suguru Geto – PSA MINT 9'), DROP);
+  assert.equal(C('2023 Disney Lorcana EN 1 The First Chapter Enchanted #206 Stitch - Carefree Surfer - PSA GEM MT 10'), DROP);
+  assert.equal(C('1887 N172 John Clarkson CHI Right Hand, Right Profile - PSA EX 5 (Highest Graded!)', 'entertainment-memorabilia', 'RR Auction'), 'graded-cards');
+  assert.equal(C('1933 Goudey #31 Tony Lazzeri PSA EX 5', 'entertainment-memorabilia', 'RR Auction'), 'graded-cards');
+  // encapsulated autographs, graded tickets, signed cards and original posters are real culture lots
+  assert.equal(C('Cher Signature - PSA GEM MT 10', 'entertainment-memorabilia', 'RR Auction'), 'entertainment-memorabilia');
+  assert.equal(C('John F. Kennedy Typed Letter Signed as President - PSA MINT 9', 'entertainment-memorabilia', 'RR Auction'), 'entertainment-memorabilia');
+  assert.equal(C('Dwight D. Eisenhower White House Card', 'entertainment-memorabilia', 'RR Auction'), 'entertainment-memorabilia');
+  assert.equal(C('The Beatles Remote View Ticket Stub - 1st U.S. Concert El Portal Theatre - PSA EX-MT 6(MK)'), 'entertainment-memorabilia');
+  assert.equal(C('THE INVISIBLE MAN, UNIVERSAL, 1933', 'movie-tv', "Christie's"), 'movie-tv');
+});

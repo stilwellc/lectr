@@ -352,6 +352,26 @@ export function attributionFix(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 12 · CULTURE MASS LEAKS — the culture doctrine is NEVER mass items, but the
+// gate only ran at crawl time and missed graded-collectible marks (IGS, WEGS,
+// AFA/UKG/CAS toy grades), factory-sealed tapes/boxes and Beanie Babies; ~3k
+// sat in culture. The same culture.ts gate (isMassCulture) now runs on every
+// culture-slug row.
+// ═══════════════════════════════════════════════════════════════════════════
+// Narrower than culture.ts's crawl gate on purpose: original posters, first
+// editions and printed documents are judged real culture lots in the audit;
+// these are the marks of a MASS item only.
+const CULTURE_MASS_RE = /\b(igs|wegs|wata|vga|cgc|cbcs|afa (?:qualified )?\d{2}|ukg \d{2}|cas \d{2}|vmg|factory[- ]sealed|sealed (?:video|vhs|cassette|cd|dvd|laserdisc|box|case|pack|game|tape)|hobby (?:box|case)|booster (?:box|pack)|blaster box|beanie bab(?:y|ies)|funko|action figures?|playset|video ?games?|nintendo|playstation|\bvhs\b|laserdisc|video 8|trading cards?|comic books?|comics)\b/i;
+export function cultureMassFix(l: ClassifyLot): string | null {
+  if (!CULTURE_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  if (CULTURE_MASS_RE.test(t) || NON_SPORT_TCG_RE.test(t)) return DROP;
+  // a trading card in culture: a sports card goes home to sports, a non-sport card has none
+  if (isCardTitle(t) && !SIGNED_RE.test(t) && (SLAB_GRADE_RE.test(t) || CARD_SET_RE.test(t) || leadsWithSetCode(t))) return leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t) || SPORT_WORD_RE.test(t) || /\b(?:goudey|cracker jack|topps|bowman|play ball|leaf|fleer|donruss|upper deck|panini)\b/i.test(t) ? 'graded-cards' : DROP;
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
 // crawler's print test ran before its ceramic test and five artists defaulted
 // to 'print' with no evidence; normalize never moved print → sculpture and
@@ -429,6 +449,7 @@ export const RECLASS_RULES: ReclassRule[] = [
   { cls: 'sports-catch-all-programmes', apply: sportsCatchAllFix },
   { cls: 'watch-jewelry-tudor', apply: watchMakerFix },
   { cls: 'art-design-attribution', apply: attributionFix },
+  { cls: 'culture-mass-leaks', apply: cultureMassFix },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */
