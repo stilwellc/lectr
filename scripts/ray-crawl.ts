@@ -23,6 +23,7 @@ import type {
 // parsing. All pure/no-side-effect modules — safe as static imports.
 import { RESULT_PENDING_MS } from './lib/skip-set';
 import { artCategoryFix, type ClassifyLot } from './lib/classify';
+import { ARTIST_MARKET } from '../app/constants';
 import { saleDayOf } from './lib/sale-day';
 
 // v2 foundation — the single, deterministic normalization layer. Every FUTURE
@@ -734,7 +735,15 @@ async function main() {
     // set (objectFingerprint reads entity/objectType). Every field is additive;
     // an absent signal produces null (never fabricated identity).
     lot.formKey = classifyForm(lot);
-    lot.modelKey = normModelKey(lot);
+    // (Oct 6 2026 categorization wave 3) the model code is an identity for a
+    // design piece (LCW, PJ-SI-30-A, ESU 400) or an art catalogue number
+    // (F. & S. II.31); on a card / sports / culture / watch title it read the
+    // grade or size ("PSA GEM MT 10" → mt10, "8 x 10" → x10, "AN 18K" → an18)
+    // and earned a "same model" similarity bonus between unrelated lots.
+    // Watches carry their model LINE (corpus-normalize enrichWatchReferences).
+    const mkMarket = ARTIST_MARKET[lot.artist as keyof typeof ARTIST_MARKET];
+    if (mkMarket === 'design' || mkMarket === 'art') lot.modelKey = normModelKey(lot);
+    else delete lot.modelKey;
     // a reference is a printed NUMBER (corpus-normalize enrichWatchReferences
     // owns the model-line fallback); a model name never rides this field
     const wk = normWatchKey(lot);

@@ -45,6 +45,65 @@ export interface CardId {
    *  cards (CGC-graded comics at H&S, SLAM newsstand covers) — never a card
    *  identity: cardKey/cardLadderKey abstain */
   notCard?: boolean;
+  /** (Oct 6, categorization wave 3) the American Card Catalog code of a
+   *  pre-war card that prints NO card number ("T206", "E90-1", "N172") — with
+   *  the player and `pose` it is the card's identity; null otherwise */
+  catalog?: string | null;
+  /** (wave 3) a catalog card's pose / team / background / back words
+   *  ("portrait-green-background", "bat-on-shoulder", "boston") — T206 Cobb
+   *  has four poses, Dahlen a Boston and a Brooklyn card */
+  pose?: string | null;
+}
+
+/* ── PRE-WAR CATALOG CARDS (Oct 6 2026, categorization wave 3) — 85k single
+   cards (T206, T205, E90, N172 …) print no card number, so the parser read no
+   player and no key. Their identity is catalog code + player + pose / team /
+   background / back: "1909-1911 T206 White Border Ty Cobb Portrait Green
+   Background", "1912 T207 Brown Background Mike Mitchell Cincinnati PSA GOOD
+   2". The player is the 2-word capitalised run (3 with a middle initial)
+   right before the first pose / team / grade word; the issue's brand words
+   before it ("White Border", "George Close Candy") are skipped. */
+const CATALOG_RE = /\b((?:[TEDMNRWH]|PC|WG)-?\d{1,3}(?:-\d{1,2})?)\b/;
+const CATALOG_MULTI_RE = /\(\d[\d,+]*\)|\b(?:collection|lots?|pair|trio|quartet|group|sets?|run|folders?|team card|uncut|panel|sheet|album|box|pack|wrapper|display|banner|poster|proof|lithograph|premium|cabinets?|and|with)\b|&|\//i;
+const CATALOG_GRADE_CUT_RE = /\s(?:-|–|—)\s|\b(?:PSA|SGC|BVG|BGS|GAI|CGC|KSA|GMA|Beckett|Graded|Authentic)\b|\(|!|,/;
+const POSE_WORDS = new Set(('portrait batting bat bats fielding throwing pitching catching hands hand glove arms arm cap front follow-through follow leaning horizontal sliding kneeling bare closed open mouth finger dark light white red green blue brown orange yellow gold pink pastel background no name error variation southern leaguer back shows near ground over head up down on off shoulder chest waist knees ready to hit left right looking facing ball sleeves sweater').split(' '));
+const TEAM_WORDS = new Set(('boston brooklyn chicago cincinnati cleveland detroit new york philadelphia pittsburgh st. st louis washington baltimore buffalo providence newark jersey toronto montreal kansas city minneapolis milwaukee indianapolis louisville columbus rochester atlanta nashville memphis birmingham mobile montgomery chattanooga little rock orleans shreveport portsmouth nationals americans national american league nl al sox cubs giants phillies').split(' '));
+const BACK_WORDS = /^(?:polar|bear|sovereign|piedmont|sweet|caporal|old|mill|hindu|tolstoi|drum|uzit|lenox|broad|leaf|broadleaf|cycle|carolina|brights|beauty|hassan|ty|cobb|el|principe|gales|\d{3})$/;
+const ISSUE_WORDS = new Set(('border borders background tobacco cigarettes cigarette candy caramel caramels bakery bread gum baking co. co bros. bros company anonymous series type cards card old judge mill sweet caporal hassan mecca fatima piedmont polar bear ramly obak coupon turkey cabinets postcards postcard sepia strip champions prize fighters cracker sporting news supplements supplement exhibits exhibit tango eggs brand standard general clement fleischmann close creole hess california goodwin duke kimball allen ginter honest long cut plug dixie lids pins pin silks silk blankets felts life zeenut world wide goudey chicle diamond stars portraits action big chewing helmar stamps stamp swamp garter chips contentnea photo cycle sovereign beauty broad hindu tolstoi uzit drum lenox carolina brights mono rochester dockman sons publications kashin pastel').split(' '));
+function catalogIdentity(t: string): { player: string; code: string; pose: string | null } | null {
+  const s = t.replace(/&quot;|["“”]/g, '"').replace(/&amp;/g, '&');
+  if (s.includes('#')) return null;
+  const cm = s.match(CATALOG_RE);
+  if (!cm) return null;
+  if (CATALOG_MULTI_RE.test(s.replace(/\b(?:white|gold) borders?\b/gi, ' ').replace(/"[^"]*"/g, ' '))) return null;
+  const code = cm[1].toLowerCase().replace(/^([a-z]+)-/, '$1');
+  // quoted sub-brands ("Set of 30", "Series 6") separate the issue from the name
+  const rest = s.slice((cm.index || 0) + cm[0].length).replace(/"[^"]*"/g, ' | ');
+  const cut = rest.search(CATALOG_GRADE_CUT_RE);
+  const head = (cut >= 0 ? rest.slice(0, cut) : rest).trim();
+  const tail = cut >= 0 ? rest.slice(cut) : '';
+  const words = head.split(/\s+/).filter(Boolean);
+  // the issue's own words lead ("White Border", "Brown Background", "Old Judge")
+  const lw = (w: string) => w.toLowerCase().replace(/[^a-z.'-]/g, '');
+  let start = 0;
+  while (start < words.length && (ISSUE_WORDS.has(lw(words[start])) || POSE_WORDS.has(lw(words[start])))) start++;
+  let end = words.length;
+  for (let i = start + 1; i < words.length; i++) {
+    const w = words[i].toLowerCase().replace(/[^a-z.'-]/g, '');
+    if (POSE_WORDS.has(w) || POSE_WORDS.has(w.split('-')[0]) || TEAM_WORDS.has(w)) { end = i; break; }
+  }
+  const bar = words.slice(0, end).lastIndexOf('|');
+  const nameWords = words.slice(bar + 1, end);
+  if (nameWords.length < 2) return null;
+  const n = nameWords.length >= 3 && /^[A-Z]\.$/.test(nameWords[nameWords.length - 2]) ? 3 : 2;
+  const name = nameWords.slice(-n);
+  if (name.some(w => !/^[A-Z][A-Za-z.'’-]*$/.test(w) || (ISSUE_WORDS.has(w.toLowerCase()) && !/^(?:Cobb|Ty|Jack|George|Red|Bill|Duke|Long|Old)$/.test(w)))) return null;
+  const poseToks = words.slice(end).concat(tail.split(/\s+/))
+    .map(w => w.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+    .flatMap(w => (POSE_WORDS.has(w) ? [w] : w.split('-')))
+    .filter(w => POSE_WORDS.has(w) || TEAM_WORDS.has(w) || BACK_WORDS.test(w));
+  const pose = Array.from(new Set(poseToks)).join('-') || null;
+  return { player: name.join(' '), code, pose };
 }
 // (Oct 6) the gap never crosses a '#' (an insert code "Autograph #DA-32" is
 // not an autograph grade 32) — and a gap naming a card grader is the CARD
@@ -332,6 +391,15 @@ export function parseCard(title: string): CardId {
   // numbers is several cards — its price is never one card's
   out.multi = isMultiCardTitle(t);
   out.notCard = isComicOrMagazineTitle(t);
+  // (wave 3) a numberless pre-war catalog card: player + code + pose
+  if (!out.cardNo && !out.multi && !out.notCard) {
+    const cat = catalogIdentity(t);
+    if (cat) {
+      out.player = cat.player; out.playerSlug = playerSlugOf(cat.player);
+      out.catalog = cat.code; out.pose = cat.pose;
+      if (!out.setName) out.setName = cat.code.toUpperCase();
+    }
+  }
   return out;
 }
 
@@ -344,7 +412,7 @@ export function parseCard(title: string): CardId {
    runs that card titles also produce are excluded by word. */
 // (Oct 6) + lot-description leads that a card parse now stops at the sport
 // word on ("Assorted Brands Baseball …", "Nineteenth Century Baseball …")
-const NOT_A_PLAYER_WORD = /\b(assorted|brands|vintage|modern|century|nineteenth|various|greats|hofers?|hof|team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
+const NOT_A_PLAYER_WORD = /\b(type|original|signed|kanji-signed|kanji|assorted|brands|vintage|modern|century|nineteenth|various|greats|hofers?|hof|team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
 export function knownPlayerSet(cardPlayers: Iterable<string | null | undefined>, minCount = 3): Set<string> {
   const n = new Map<string, number>();
   for (const name of Array.from(cardPlayers)) {
@@ -455,7 +523,7 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
   // reject non-person leads ("World Series", "Super Bowl", team-ish runs,
   // sale branding — "London Games", "Crucial Catch", "Salute to Service")
   if (name && /\b(World|Series|Super|Bowl|Olympic|Stanley|Final|Champion|League|Team|City|United|Yankees|Lakers|Cowboys|Collection|Games|Catch|Salute|Auction|Lot\b)/i.test(name)) {
-    return { player: null, playerSlug: null };
+    return knownPlayerIn(title, known);
   }
   const g = gateKnown(name, known);
   // an unknown name directly followed by USE language ("Andy Barkett Game
@@ -465,7 +533,44 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
     && stripped.startsWith(name) && /^\s+(?:Game|Match|Player|Team)[- ](?:Used|Worn|Issued)/i.test(stripped.slice(name.length))) {
     return { player: name, playerSlug: playerSlugOf(name) };
   }
-  return g;
+  return g.player ? g : knownPlayerIn(title, known);
+}
+
+/** (Oct 6 2026, categorization wave 3) The ONE known player an object title
+ *  names anywhere in its head — the leading-run reader misses a date or lot
+ *  number prefix ("9/1/1957 Jim Brown Signed …", "Jan. 1996 - Kobe Bryant
+ *  Signed …", "146 1918 Christy Mathewson …"), a descriptor lead ("Scarce
+ *  Connie Mack Signed …", "HIGH-GRADE JACKIE ROBINSON SIGNED …") and
+ *  Sotheby's lower-case NBA titles ("grayson allen … game worn jersey").
+ *  2–3 word windows over the first 10 words, matched against the known-player
+ *  set; a title naming two different known players is a multi-player piece
+ *  (no player). Only with `known`. */
+/** two-word places card parses mint as "players" ("San Francisco Giants") */
+const PLACE_SLUGS = new Set(['san-francisco', 'new-york', 'los-angeles', 'st-louis', 'kansas-city', 'new-jersey', 'tampa-bay', 'green-bay', 'san-diego', 'new-england', 'new-orleans', 'golden-state', 'oklahoma-city', 'san-antonio', 'las-vegas', 'salt-lake', 'el-paso', 'santa-clara', 'notre-dame', 'ohio-state', 'penn-state', 'north-carolina', 'south-carolina', 'west-virginia', 'hall-fame', 'all-star']);
+function knownPlayerIn(title: string, known?: ReadonlySet<string>): { player: string | null; playerSlug: string | null } {
+  const none = { player: null, playerSlug: null };
+  if (!known || !title) return none;
+  // a sealed box's "Possible …" chase list, a lot or a collection is no one player's
+  if (/\b(?:possible|featuring|including|includes|lots?|collection|group|unopened|sealed|wax|hobby|team[- ]signed|multi[- ]signed)\b|\(\d+\)/i.test(title)) return none;
+  const words = title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z.'’ -]+/g, ' ').split(/\s+/).filter(w => /[A-Za-z]/.test(w));
+  const head = words.slice(0, 12);
+  const found = new Map<string, string>();
+  for (let i = 0; i < head.length - 1; i++) {
+    for (const n of [3, 2]) {
+      if (i + n > head.length) continue;
+      const run = head.slice(i, i + n).join(' ');
+      const slug = playerSlugOf(run);
+      if (slug && known.has(slug) && !PLACE_SLUGS.has(slug) && !/^(?:fc|ac|as|sc|cf|real)-|-(?:fc|cf|united|city)$/.test(slug)) {
+        if (i < 10 || found.size) found.set(slug, run);
+        i += n - 1;
+        break;
+      }
+    }
+  }
+  if (found.size !== 1) return none;
+  const [[slug, run]] = Array.from(found.entries());
+  const name = run.split(' ').map(w => (w === w.toUpperCase() || w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w)).join(' ');
+  return { player: name, playerSlug: slug };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -629,6 +734,12 @@ export function cardSetKey(setName: string | null | undefined): string {
  *  variant signature + serial run (a /99 Gold parallel is a different card
  *  from the base, at every grade). */
 export function cardLadderKey(id: CardId): string | null {
+  // (wave 3) a numberless pre-war catalog card: the code is the issue (its
+  // year span is printed three ways — "1909-1911", "1909-11", Goldin's "11"),
+  // the pose / team / back its card
+  if (id.catalog && !id.cardNo && id.playerSlug && !id.multi && !id.notCard) {
+    return `${id.playerSlug}|${id.catalog}|${id.catalog}|-${id.pose ? `|p:${id.pose}` : ''}${id.serialOf ? `|/${id.serialOf}` : ''}${id.autoGrade ? `|ag:${id.autoGrade}` : ''}`;
+  }
   if (!id.playerSlug || !id.year || !id.cardNo || id.multi || id.notCard) return null;
   const set = cardSetKey(id.setName);
   const v = id.variant ? `|v:${id.variant}` : '';

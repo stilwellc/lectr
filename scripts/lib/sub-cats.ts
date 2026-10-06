@@ -54,23 +54,74 @@ export const sportSlugOf = (raw: unknown): string | null =>
 // pre-war set codes and vintage issues (all baseball once the non-sport
 // issues are out of the vertical — classify.ts sportsHouseCardLotKind).
 const SPORT_WORDS: [string, RegExp][] = [
-  ['boxing-mma', /\b(?:boxing|boxers?|heavyweight|middleweight|welterweight|lightweight|ufc|mma|prize ?fight|fight[- ]worn|title fight|bout|abe attell|jack dempsey|gene tunney|joe louis|rocky marciano|jack johnson|john l\.? sullivan|jim corbett|bob fitzsimmons|jim jeffries|stanley ketchel|sam langford|joe gans|max schmeling|max baer|jersey joe walcott|ezzard charles|sugar ray robinson|muhammad ali|cassius clay|joe frazier|george foreman|sonny liston|floyd patterson|sugar ray leonard|marvin hagler|mike tyson|jack sharkey|primo carnera|battling nelson|terry mcgovern)\b/i],
-  ['golf', /\b(?:golf|golfer|pga|masters tournament|ryder cup|british open)\b/i],
+  ['boxing-mma', /\b(?:boxing|boxers?|heavyweight|middleweight|welterweight|lightweight|ufc|mma|prize ?fight(?:ers?|s)?|fight[- ]worn|title fight|bout|abe attell|jack dempsey|gene tunney|joe louis|rocky marciano|jack johnson|john l\.? sullivan|jim corbett|bob fitzsimmons|jim jeffries|stanley ketchel|sam langford|joe gans|max schmeling|max baer|jersey joe walcott|ezzard charles|sugar ray robinson|muhammad ali|cassius clay|joe frazier|george foreman|sonny liston|floyd patterson|sugar ray leonard|marvin hagler|mike tyson|jack sharkey|primo carnera|battling nelson|terry mcgovern)\b/i],
+  // (wave 3) the old club names a golf lot is titled by ("A JEAN GASSIAT PUTTER")
+  ['golf', /\b(?:golf|golfer|pga|masters tournament|ryder cup|british open|putters?|niblicks?|mashies?|cleeks?|featherie|feathery|gutty|gutta[- ]percha ball)\b/i],
   ['tennis', /\b(?:tennis|wimbledon|us open tennis)\b/i],
   ['racing', /\b(?:nascar|formula (?:1|one)|f1|indy ?500|racing|daytona 500)\b/i],
   ['wrestling', /\b(?:wrestling|wrestler|wwe|wwf|wcw)\b/i],
   ['olympics', /\b(?:olympics?|olympic games)\b/i],
   ['hockey', /\b(?:hockey|nhl|stanley cup|puck|maple leafs|canadiens|red wings|blackhawks|bruins)\b/i],
-  ['basketball', /\b(?:basketballs?|nba|aba|final four|lakers|celtics|knicks|76ers|pistons|warriors|harlem globetrotters)\b/i],
+  // (wave 3) WNBA and the Hoops card brand ("SkyBox Hoops", "NBA Hoops")
+  ['basketball', /\b(?:basketballs?|nba|wnba|aba|final four|lakers|celtics|knicks|76ers|pistons|warriors|harlem globetrotters|hoops)\b/i],
   ['football', /\b(?:footballs?|nfl|afl|super bowl|heisman|rose bowl|packers|steelers|cowboys|49ers|redskins|buccaneers|seahawks|bengals)\b/i],
   ['soccer', /\b(?:soccer|fifa|world cup|premier league|la liga|champions league|fc barcelona|real madrid|manchester united|boca juniors)\b/i],
   ['baseball', /\b(?:baseballs?|base ball|b\.b\.c\.|mlb|world series|home runs?|perfect game|no-hitter|lineup cards?|line-up cards?|louisville slugger|national league|american league|federal league|negro leagues?|pcl|yankees|red sox|white sox|dodgers|cubs|mets|phillies|orioles|pirates|tigers|indians|athletics|brewers|astros|padres|mariners|expos|twins|royals|braves|reds|senators|browns|doves|red stockings|highlanders|superbas|beaneaters|naps)\b/i],
 ];
 /** pre-war set codes and vintage issues that are baseball (T206, E90, N172, D304, M116, W551, R319, Goudey, Old Judge …) */
-const BASEBALL_ISSUE_RE = /^\s*(?:\d{1,3}\s+)?(?:(?:19|18)\d\d(?:-\d{2,4})?\s+)?(?:[TEDMNRW]-?\d{1,3}(?:-\d)?|N-?Unc)\b|\b(?:goudey|play ball|cracker jack|zeenut|old judge|delong|diamond stars|turkey red|sporting life|bazooka|double play|red man|kahn'?s|exhibits?|leaf|callahan|perez-steele)\b/i;
+const BASEBALL_ISSUE_RE = /^\s*(?:\d{1,3}\s+)?(?:(?:19|18)\d\d(?:-\d{2,4})?\s+)?(?:[TEDMNRW]-?\d{1,3}(?:-\d)?|N-?Unc)\b|\b(?:goudey|play ball|cracker jack|zeenut|old judge|delong|diamond stars|turkey red|sporting life|bazooka|double play|red man|kahn'?s|exhibits?|leaf|callahan|perez-steele|american caramel|tango (?:brand )?eggs|mayo'?s cut plug|kalamazoo bats|max stein)\b/i;
+/** (wave 3) the pre-war BASEBALL catalogue codes wherever the title names them
+ *  ("1909-11 American Caramel E90-1 Joe Jackson", "All (3) 1909-1911 T206
+ *  Christy Mathewson Poses") — the leading-code test above misses a code after
+ *  a lot count or a maker name. Only the codes that are baseball-only issues. */
+const BASEBALL_CODE_ANY_RE = /\b(?:T20[1-7]|T21[3-6]|T222|E9\d|E1[0-4]\d|M101|M116|N167|N172|N284|N300|D3\d\d)(?:-\d)?\b/;
+/** association football / cricket / rugby lots carry no drill of ours (and a
+ *  London "Football Memorabilia" sale is soccer) */
+const NO_SPORT_DRILL_RE = /\b(?:cricket|rugby|polo|croquet|rowing|regatta|curling)\b/i;
 export function sportFromText(title: string): string | null {
   for (const [sport, re] of SPORT_WORDS) if (re.test(title)) return sport;
-  return BASEBALL_ISSUE_RE.test(title) ? 'baseball' : null;
+  return BASEBALL_ISSUE_RE.test(title) || BASEBALL_CODE_ANY_RE.test(title) ? 'baseball' : null;
+}
+/** (wave 3) the sport words only — no vintage-issue brand ("Leaf", "Exhibits"
+ *  print every sport today): the evidence a learned player / set map may
+ *  vote with */
+export function sportWordOf(title: string): string | null {
+  for (const [sport, re] of SPORT_WORDS) if (re.test(title)) return sport;
+  return BASEBALL_CODE_ANY_RE.test(title) ? 'baseball' : null;
+}
+/** (wave 3) the vintage card houses (REA, H&S, Memory Lane, LOTG, SCP, Lelands) */
+const VINTAGE_CARD_HOUSES = new Set(['REA', 'Huggins & Scott', 'Lelands', 'Love of the Game', 'SCP', 'Memory Lane']);
+/** non-sport / non-baseball issue words the vintage-house prior must not read
+ *  as baseball (Buffalo Bill cabinets, "Chiefs and Rulers" albums, Adventure gum) */
+const NON_BASEBALL_ISSUE_RE = /\b(?:cabinets?|albums?|chiefs|rulers|actors?|actress(?:es)?|adventure|presidents?|indian|wild west|buffalo bill|circus|military|war|flags|birds|animals|cowboys?)\b/i;
+/** (wave 3) the houses whose "Football" sales are association football */
+const UK_FOOTBALL_HOUSES = new Set(["Christie's", 'Bonhams']);
+const SALE_SPORT_WORDS: [string, RegExp][] = [
+  ['basketball', /\bnba\b|\bwnba\b|\bbasketball\b/i],
+  ['golf', /\bgolf/i],
+  ['olympics', /\bolympic/i],
+  ['tennis', /\btennis\b|\bwimbledon\b/i],
+  ['boxing-mma', /\bboxing\b|\bufc\b/i],
+  ['hockey', /\bhockey\b|\bnhl\b/i],
+  ['baseball', /\bbaseball\b|\bmlb\b|\bworld series\b/i],
+  ['soccer', /\bsoccer\b|\bworld cup\b/i],
+  ['racing', /\bmotor ?sport|\bracing\b|\bformula (?:1|one)\b|\bnascar\b/i],
+  ['wrestling', /\bwrestling\b/i],
+];
+/** (wave 3) The sport a SINGLE-SPORT sale names ("Golfing Memorabilia",
+ *  "Nba Auctions Summer Series", "Football Memorabilia" in London) — null for
+ *  a mixed or multi-sport sale ("Cricket Tennis Golf Memorabilia", "Sporting
+ *  Books And Memorabilia"). Sotheby's NBA sales print no sport in 30% of their
+ *  titles; 1,529 Christie's football lots carried none and 514 read 'football'
+ *  (American) off the word. */
+export function sportOfSale(sale: string | null | undefined, house: string | null | undefined): string | null {
+  const s = String(sale || '');
+  if (!s || NO_SPORT_DRILL_RE.test(s) || /\btraditional sports?\b|\bsporting\b|\bsports\b/i.test(s)) return null;
+  const hits = new Set<string>();
+  for (const [sport, re] of SALE_SPORT_WORDS) if (re.test(s)) hits.add(sport);
+  if (/\bnfl\b/i.test(s)) hits.add('football');
+  if (/\bfootball\b/i.test(s)) hits.add(UK_FOOTBALL_HOUSES.has(String(house || '')) ? 'soccer' : 'football');
+  return hits.size === 1 ? Array.from(hits)[0] : null;
 }
 
 // ── watches ─────────────────────────────────────────────────────────────────
@@ -118,6 +169,53 @@ const CULT_KIND: Record<string, string> = {
   'instrument': 'instruments', 'award': 'awards', 'prop': 'props',
   'poster': 'posters', 'record': 'records', 'ticket': 'tickets',
 };
+// (wave 3) the domain a culture lot's OWN words name, when no curated subject
+// does — 97k culture lots carried no drill (RR's "<Name> Signed Photograph /
+// Letter" titles, Goldin's "Type I Original Photo" captions). The object /
+// office words are read in the title, then the head of the description; the
+// EARLIEST-named domain wins ("Hendrix … Concert Full Ticket" is music,
+// "Impeachment Trial Pass" political). Royalty needs a title + name ("Queen
+// Victoria", "King Louis XIII"): Queen the band is music.
+const CULT_TEXT_DOMAIN: [RegExp, string][] = [
+  [/\b(?:astronauts?|cosmonauts?|nasa|apollo \d+|space shuttle|mercury seven|moonwalkers?)\b/i, 'space-science'],
+  [/\b(?:presidents?|presidential|vice[- ]president|first lady|white house|senat(?:e|ors?)|congress(?:man|woman|ional)?|impeachment|(?:presidential|political) campaign|campaign (?:buttons?|posters?|pins?|banners?|ribbons?|badges?)|inaugura(?:l|tion)|jugate|supreme court|chief justice|governor|secretary of state|prime minister|parliament|mayor|ambassador|electoral|confederate president|political)\b/i, 'political'],
+  [/\b(?:concerts?|tour (?:posters?|programs?|books?|jackets?|shirts?|pass(?:es)?)|albums?(?!\s+pages?)|rock band|the band|band[- ](?:signed|members?)|guitars?|singers?|songs?|songwriter|lyrics?|rock (?:and|&|n'?) roll|vinyl|gold record|platinum record|grammy|drum ?sticks?|drumheads?|setlist|set list|stage[- ](?:worn|played|used)|backstage|recording|motown|woodstock|orchestra|opera|symphony|composer|musical quot\w*|musical score|ballroom)\b/i, 'music'],
+  [/\b(?:films?|movies?|motion picture|screen[- ](?:used|worn|matched)|production[- ](?:made|used|drawing|cels?|art)|film studios?|actors?|actress(?:es)?|one[- ]sheets?|lobby cards?|animation|animated|cels?|walt disney|disney|television|tv series|tv show|sitcom|episode|ursa|oscars?|academy awards?|emmys?|hollywood|filmmakers?|screenplay|shooting script|movie poster)\b/i, 'hollywood'],
+  [/\b(?:wwii|ww2|wwi|world war|army|navy|naval|admiral|soldiers?|battle(?:ship|field)?|regiment(?:al)?|air aces?|luftwaffe|military|marine corps|usmc|usaf|pearl harbor|d-day|nazi|third reich|medal of honor|fighter pilot)\b/i, 'military'],
+  // case-sensitive: a royal title + a capitalised name ("King Louis XIII",
+  // "QUEEN VICTORIA"); Prince the musician is not royalty
+  [/\b(?:[Kk]ing|KING) (?:George|GEORGE|Louis|LOUIS|Henry|HENRY|Edward|EDWARD|Charles|CHARLES|William|WILLIAM|James|JAMES|Richard|RICHARD|Philip|PHILIP|Ferdinand|Frederick|Gustav|Haakon|Leopold|Alfonso|Carlos|Juan|Umberto|Victor|Farouk|Hussein|Faisal|Kalakaua|Kamehameha)\b|\b(?:[Qq]ueen|QUEEN) (?:[Vv]ictoria|VICTORIA|[Ee]lizabeth|ELIZABETH|[Mm]ary|MARY|[Aa]nne|ANNE|[Mm]other|MOTHER|[Aa]lexandra|[Cc]harlotte|[Mm]arie)|\b(?:[Pp]rince|PRINCE)(?:ss|SS)? (?:of|OF) [A-Z]|\b(?:[Pp]rincess|PRINCESS) (?:Diana|DIANA|Grace|GRACE|Margaret|MARGARET|Anne|ANNE|Alexandra)\b|\b(?:[Pp]rince|PRINCE) (?:Albert|Charles|Philip|William|Harry|Edward|Andrew|Rainier|Henry|Frederick|Louis)\b|\b(?:[Ee]mperor|EMPEROR|[Ee]mpress|EMPRESS|[Cc]zar|CZAR|[Tt]sar|TSAR)\b|\b(?:[Rr]oyal [Ff]amily|[Dd]uke of|[Dd]uchess of|DUKE OF|DUCHESS OF)/, 'royalty'],
+  [/\b(?:novels?|novelist|poets?|poems?|poetry|authors?|playwright|first edition)\b/i, 'literary'],
+];
+/** The curated domain of a lot's subjects. (wave 3) A subject read as a longer
+ *  capitalised run ("marilyn monroe unpublished snapshot", "harry s truman
+ *  typed letter") is looked up by its leading 2–3 words too. */
+export function curatedDomainOf(subjects: readonly string[] | null | undefined): string | null {
+  if (!Array.isArray(subjects)) return null;
+  for (const s of subjects) {
+    const d = SUBJECT_DOMAINS[s];
+    if (d && d !== 'other') return d;
+  }
+  for (const s of subjects) {
+    const w = s.split(' ');
+    for (const n of [3, 2]) {
+      if (w.length <= n) continue;
+      const d = SUBJECT_DOMAINS[w.slice(0, n).join(' ')];
+      if (d && d !== 'other') return d;
+    }
+  }
+  return null;
+}
+/** the earliest-named text domain in `s`, or null */
+export function cultureTextDomain(s: string): string | null {
+  let best: string | null = null, at = Infinity;
+  for (const [re, d] of CULT_TEXT_DOMAIN) {
+    const m = re.exec(s);
+    if (m && m.index < at) { at = m.index; best = d; }
+  }
+  return best;
+}
+
 // sale-name fallback when no subject maps to a domain
 const CULT_SALE_DOMAIN: [RegExp, string][] = [
   [/marvels of modern music|rock n'? ?roll|music/i, 'music'],
@@ -223,7 +321,45 @@ export interface SubCatStamp { subCat: string | null; drill: string | null; flow
  * Goldin stamped directly) so unstamped cards/memorabilia inherit their
  * player's sport.
  */
-export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPlayer: Map<string, string>; cardPlayer?: (l: Lot) => string | null }): SubCatStamp {
+/** The corpus-learned maps stampSubCats builds (corpus-normalize) — each a
+ *  majority vote over the rows whose value is KNOWN from their own evidence. */
+export interface SubCatMaps {
+  /** sports: Goldin pid → sport, player slug → sport */
+  byPid: Map<string, string>;
+  byPlayer: Map<string, string>;
+  /** the player slug of a sports row (card parse, roster athlete) */
+  cardPlayer?: (l: Lot) => string | null;
+  /** (wave 3) sports: card SET (year|set) → sport */
+  bySet?: Map<string, string>;
+  /** the set keys of a card row, most specific first */
+  setOf?: (l: Lot) => string[];
+  /** (wave 3) culture: subject (person / franchise) → domain */
+  bySubject?: Map<string, string>;
+  /** (wave 3) watches: maker|reference → model family */
+  byRef?: Map<string, string>;
+}
+
+/** (wave 3) the head of a lot's description (the object line most houses
+ *  print first) — the text the title-only readers fall back to */
+export function descHeadOf(l: Lot, n = 300): string {
+  return String(l.description || '').replace(/<[^>]+>|class="[^"]*"/g, ' ').slice(0, n);
+}
+/** (wave 3) a watch reference's join key: maker + the reference's core digits */
+export function watchRefKey(l: Lot): string | null {
+  const r = String(l.reference || '').toLowerCase().replace(/\s+/g, '');
+  const core = (r.match(/^[a-z]{0,3}\d{3,6}/) || [])[0];
+  return core ? `${l.artist}|${core}` : null;
+}
+/** the model family a watch text names, for the tracked maker */
+export function watchFamilyOf(artist: string, hay: string): string | null {
+  const fams = WATCH_FAMILIES[artist];
+  if (!fams) return null;
+  const h = hay.toLowerCase();
+  for (const [fam, re] of fams) if (re.test(h)) return fam;
+  return null;
+}
+
+export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
   const vert = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET];
   const title = (l.title as string) || '';
   const formKey = (l.formKey as string) || 'unknown';
@@ -231,6 +367,10 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
   if (vert === 'sports') {
     const subCat = SPORTS_KIND[l.artist as string] ?? null;
     let drill = sportSlugOf(l.sport);
+    // (wave 3) a cricket / rugby / polo lot has no drill of ours
+    if (!drill && NO_SPORT_DRILL_RE.test(title.replace(/\bpolo grounds\b/gi, ' '))) return { subCat, drill: null, flown: null };
+    // (wave 3) a single-sport sale names the sport of every lot in it
+    if (!drill) drill = sportOfSale(l.saleName as string, l.auctionHouse as string);
     if (!drill && sportMaps) {
       const pid = l._pid != null ? String(l._pid) : null;
       const card = l._card as { playerSlug?: string } | undefined;
@@ -238,6 +378,19 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
       drill = (pid && sportMaps.byPid.get(pid)) || (player && sportMaps.byPlayer.get(player)) || null;
     }
     if (!drill) drill = sportFromText(title);
+    // (wave 3) the card's SET, learned from its sport-known siblings ("1952
+    // Topps" is baseball, "Panini Prizm WNBA" basketball)
+    if (!drill && sportMaps?.bySet && sportMaps.setOf) {
+      for (const k of sportMaps.setOf(l)) { drill = sportMaps.bySet.get(k) || null; if (drill) break; }
+    }
+    // (wave 3) the vintage card houses title a non-baseball issue by its sport
+    // ("1957 Topps Football", "1935 National Chicle Football"): a pre-1981
+    // card there that names no sport, no known player and no learned set is
+    // baseball (DEV: 25 of 29 such labelled lots)
+    if (!drill && subCat === 'cards' && VINTAGE_CARD_HOUSES.has(String(l.auctionHouse || ''))) {
+      const y = title.match(/\b(18[6-9]\d|19\d\d)\b/);
+      if (y && +y[1] <= 1980 && !NON_BASEBALL_ISSUE_RE.test(title)) drill = 'baseball';
+    }
     return { subCat, drill, flown: null };
   }
 
@@ -248,11 +401,14 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
       : formKey === 'jewelry' ? 'jewelry' : null;
     let drill: string | null = null;
     if (subCat === 'wristwatches') {
-      const fams = WATCH_FAMILIES[l.artist as string];
-      if (fams) {
-        const hay = `${(l.reference as string) || ''} ${title}`.toLowerCase();
-        for (const [fam, re] of fams) if (re.test(hay)) { drill = fam; break; }
-      }
+      const a = l.artist as string;
+      drill = watchFamilyOf(a, `${(l.reference as string) || ''} ${(l.modelKey as string) || ''} ${title}`);
+      // (wave 3) the reference's family, learned from its titled siblings
+      // ("Ref. 5513" is a Submariner, "3372" an Oyster Perpetual bubbleback),
+      // then the description's object line (Phillips / Bonhams titles name
+      // only the metal and the complications)
+      if (!drill && sportMaps?.byRef) { const k = watchRefKey(l); drill = (k && sportMaps.byRef.get(k)) || null; }
+      if (!drill) drill = watchFamilyOf(a, descHeadOf(l));
     }
     return { subCat, drill, flown: null };
   }
@@ -272,14 +428,18 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
 
   if (vert === 'culture') {
     const subCat = CULT_KIND[(l.itemClass as string) || ''] ?? 'other';
-    let drill: string | null = null;
     const subjects = l.subjectKeys as string[] | undefined;
-    if (Array.isArray(subjects)) {
-      for (const s of subjects) {
-        const d = SUBJECT_DOMAINS[s];
-        if (d && d !== 'other') { drill = d; break; }
-      }
+    let drill: string | null = curatedDomainOf(subjects);
+    // (wave 3) the lot's own words, then the subject's domain learned from its
+    // worded siblings (a bare "Schuyler Colfax" lot inherits "Schuyler Colfax
+    // Signed Document as Vice President"), then the description's head
+    if (!drill) drill = cultureTextDomain(title);
+    if (!drill && sportMaps?.bySubject && Array.isArray(subjects)) {
+      // a subject the curated list files 'other' (Civil War, Titanic, WWII)
+      // spans domains — it is never learned
+      for (const s of subjects) { const d = SUBJECT_DOMAINS[s] ? null : sportMaps.bySubject.get(s); if (d) { drill = d; break; } }
     }
+    if (!drill) drill = cultureTextDomain(descHeadOf(l, 260));
     if (!drill) {
       const sale = (l.saleName as string) || '';
       for (const [re, d] of CULT_SALE_DOMAIN) if (re.test(sale)) { drill = d; break; }

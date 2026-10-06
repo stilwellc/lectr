@@ -42,6 +42,13 @@ const MAKER_LINES: Record<string, ReadonlySet<string>> = {
   cartier: new Set(['tank', 'santos', 'panthere', 'ballonbleu', 'pasha', 'crash', 'baignoire', 'tortue', 'ellipse']),
 };
 
+/** (Oct 6 2026 categorization wave 3) is `key` one of `maker`'s own model
+ *  lines (the only watch modelKey that is an identity — not "an18" from
+ *  "AN 18K GOLD", not "s18" from "LADY'S 18K") */
+export function isWatchModelLine(maker: string, key: string | null | undefined): boolean {
+  return !!key && !!MAKER_LINES[maker]?.has(key);
+}
+
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 const modelKeyOf = (m: string) => fold(m).replace(/[-~ ]/g, '');
 

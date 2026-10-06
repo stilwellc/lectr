@@ -1,9 +1,11 @@
 import type { AuctionLot } from '../../app/types';
-import { subCatOf, sportSlugOf } from './sub-cats';
+import { subCatOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, type SubCatMaps } from './sub-cats';
+import { SUBJECT_DOMAINS } from './subject-domains';
+import { athleteIn } from './athlete-roster';
 import { extractReference } from './identity-enrich';
-import { looksLikeCard, playerSlugOf, parseCard } from '../../app/lib/cards';
+import { looksLikeCard, playerSlugOf, parseCard, cardYearKey } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRun, personNameOf } from '../../app/lib/comps';
-import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
+import { vetReference, readDescriptionReference, splitWatchRef, isWatchModelLine } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
 import { christiesLocationCurrency } from './houses/common';
@@ -288,6 +290,34 @@ export function enrichWatchReferences(lots: Lot[]): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 3b · clearJunkModelKeys (Oct 6 2026 categorization wave 3) — the crawler
+// stamped comps.modelKey (a FURNITURE model-code reader) on every lot, so a
+// card's grade ("PSA GEM MT 10" → mt10: 63k rows), a photo's size ("8 x 10" →
+// x10), a watch's metal ("AN 18K GOLD" → an18) became a "model" — 229k rows,
+// and similarity.ts paid a same-model bonus between any two PSA 10s. A model
+// key is kept only where it is an identity: design (LCW, PJ-SI-30-A), art
+// (catalogue numbers: F. & S. II.31) and a watch's own model LINE. Deleted,
+// not nulled: the readers fall back the same way on an absent field.
+// ─────────────────────────────────────────────────────────────────────────────
+export function clearJunkModelKeys(lots: Lot[]): number {
+  let cleared = 0;
+  for (const l of lots) {
+    const x = l as Lot & { modelKey?: string | null };
+    if (x.modelKey == null) continue;
+    const m = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET];
+    if (m === 'design' || m === 'art') continue;
+    if (m === 'watches' && isWatchModelLine(l.artist, x.modelKey)) continue;
+    // a watch key that IS the printed reference ("REF. 3919" → 3919 / ref3919)
+    const ref = String(l.reference || '').toLowerCase().replace(/\s+/g, '');
+    const core = String(x.modelKey).toLowerCase().replace(/^ref/, '');
+    if (m === 'watches' && ref && /\d{3}/.test(core) && ref.startsWith(core)) continue;
+    delete x.modelKey;
+    cleared++;
+  }
+  return cleared;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 4 · saleDate ← saleDateTime reconciliation.
 //
 // The crawler stamps `saleDate` with the CRAWL DAY as a fallback when it can't
@@ -363,33 +393,98 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
   // before build-market stamps _card): Goldin's sport-stamped cards teach the
   // player → sport map, and the expansion houses' unstamped cards read it
   const CARD_SLUGS_SC = new Set(['sports-cards', 'graded-cards']);
-  const cardPlayerCache = new Map<string, string | null>();
-  const cardPlayer = (r: Record<string, unknown>): string | null => {
-    if (!CARD_SLUGS_SC.has(r.artist as string)) return null;
+  const cardCache = new Map<string, ReturnType<typeof parseCard>>();
+  const cardOf = (r: Record<string, unknown>) => {
     const t = String(r.title || '');
-    let p = cardPlayerCache.get(t);
-    if (p === undefined) { p = parseCard(t).playerSlug; cardPlayerCache.set(t, p); }
-    return p;
+    let c = cardCache.get(t);
+    if (c === undefined) { c = parseCard(t); cardCache.set(t, c); }
+    return c;
   };
+  // (wave 3) a sports OBJECT row's player is the roster athlete its title
+  // leads with ("Joe DiMaggio Signed Photograph") — 8.7k RR / 4.7k H&S
+  // autographs carried no drill because only card rows were read
+  const cardPlayer = (r: Record<string, unknown>): string | null => {
+    if (CARD_SLUGS_SC.has(r.artist as string)) return cardOf(r).playerSlug;
+    if (ARTIST_MARKET[r.artist as keyof typeof ARTIST_MARKET] !== 'sports') return null;
+    const a = athleteIn(String(r.title || ''), 3);
+    return a ? playerSlugOf(a) : null;
+  };
+  // (wave 3) a card's SET keys — the year as keyed + the set name as printed
+  // (sport words kept: "1975 Topps Football" is not "1975 Topps"), and a
+  // coarse year + brand-line key (its first two words: "2020|bowman chrome")
+  const setOf = (r: Record<string, unknown>): string[] => {
+    if (!CARD_SLUGS_SC.has(r.artist as string)) return [];
+    const c = cardOf(r);
+    const yr = cardYearKey(c.year);
+    const words = String(c.setName || '').toLowerCase().replace(/^-?(?:\d{4}|\d{2})\b\s*/, '').replace(/[^a-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    if (!yr || !words.length) return [];
+    const keys = [`${yr}|${words.join(' ')}`];
+    if (words.length > 2) keys.push(`${yr}|~${words.slice(0, 2).join(' ')}`);
+    return keys;
+  };
+  // player → sport from the rows whose sport is KNOWN by their own evidence:
+  // Goldin's stamp, and (wave 3) a single-sport sale or the title's sport words
+  const ownSport = (r: Record<string, unknown>): string | null =>
+    sportSlugOf(r.sport) || sportOfSale(r.saleName as string, r.auctionHouse as string) || sportWordOf(String(r.title || ''));
   for (const l of lots) {
     const r = l as unknown as Record<string, unknown>;
-    const sport = sportSlugOf(r.sport);
+    if (ARTIST_MARKET[r.artist as keyof typeof ARTIST_MARKET] !== 'sports') continue;
+    const stamped = sportSlugOf(r.sport);
+    const sport = ownSport(r);
     if (!sport) continue;
-    if (r._pid != null) vote(pidVotes, String(r._pid), sport);
+    if (stamped && r._pid != null) vote(pidVotes, String(r._pid), sport);
     const card = r._card as { playerSlug?: string } | undefined;
     const player = (r.playerSlug as string) || card?.playerSlug || cardPlayer(r);
     if (player) vote(playerVotes, player, sport);
   }
-  const settle = (m: Map<string, Map<string, number>>): Map<string, string> => {
+  const settle = (m: Map<string, Map<string, number>>, minN = 3, purity = 0.8): Map<string, string> => {
     const out = new Map<string, string>();
     m.forEach((inner, k) => {
       let tot = 0, best = '', bestN = 0;
       inner.forEach((n, sp) => { tot += n; if (n > bestN) { best = sp; bestN = n; } });
-      if (tot >= 3 && bestN / tot >= 0.8) out.set(k, best);
+      if (tot >= minN && bestN / tot >= purity) out.set(k, best);
     });
     return out;
   };
-  const maps = { byPid: settle(pidVotes), byPlayer: settle(playerVotes), cardPlayer: (l: Record<string, unknown>) => cardPlayer(l) };
+  const byPid = settle(pidVotes), byPlayer = settle(playerVotes);
+  // (wave 3) set → sport from every card whose sport is known (own evidence or
+  // its player), 90% pure over ≥ 5 cards — "1952 Topps", "1933 Goudey",
+  // "Bowman Chrome Prospects" are one sport; "1948 Bowman" is not and abstains
+  const setVotes = new Map<string, Map<string, number>>();
+  for (const l of lots) {
+    const r = l as unknown as Record<string, unknown>;
+    const ks = setOf(r);
+    if (!ks.length) continue;
+    const pid = r._pid != null ? String(r._pid) : null;
+    const player = cardPlayer(r);
+    const sport = ownSport(r) || (pid && byPid.get(pid)) || (player && byPlayer.get(player)) || null;
+    if (sport) for (const k of ks) vote(setVotes, k, sport);
+  }
+  const bySet = settle(setVotes, 5, 0.9);
+  // (wave 3) culture subject → domain from the rows whose domain their own
+  // words (or the curated subject list) name; watch reference → family from
+  // the rows whose title names the family
+  const subjVotes = new Map<string, Map<string, number>>();
+  const refVotes = new Map<string, Map<string, number>>();
+  for (const l of lots) {
+    const r = l as unknown as Record<string, unknown>;
+    const m = ARTIST_MARKET[r.artist as keyof typeof ARTIST_MARKET];
+    if (m === 'culture') {
+      const subs = r.subjectKeys as string[] | undefined;
+      if (!Array.isArray(subs) || !subs.length) continue;
+      const d = curatedDomainOf(subs) || cultureTextDomain(String(r.title || ''));
+      if (d) for (const s of subs) if (!SUBJECT_DOMAINS[s]) vote(subjVotes, s, d);
+    } else if (m === 'watches' && r.formKey === 'wristwatch') {
+      const k = watchRefKey(r);
+      const fam = k ? watchFamilyOf(r.artist as string, String(r.title || '')) : null;
+      if (k && fam) vote(refVotes, k, fam);
+    }
+  }
+  const maps: SubCatMaps = {
+    byPid, byPlayer, cardPlayer: (l: Record<string, unknown>) => cardPlayer(l),
+    bySet, setOf: (l: Record<string, unknown>) => setOf(l),
+    bySubject: settle(subjVotes, 2, 0.8), byRef: settle(refVotes, 3, 0.8),
+  };
 
   let subCats = 0, drills = 0, sportRecovered = 0;
   for (const l of lots) {
@@ -1254,6 +1349,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const refsFilled = enrichWatchReferences(ls);
   // regex first; the extraction fills only a reference still empty (src:'llm')
   fillWatchReferencesFromExtract(ls);
+  const junkModelKeys = clearJunkModelKeys(ls);
+  console.log(`[normalize] junk modelKeys cleared (grade / size / metal tokens outside design, art and watch model lines): ${junkModelKeys}`);
   const players = recoverPlayerSlugs(ls);
   const junkEntities = healCrawlEntities(ls);
   if (junkEntities) console.log(`[normalize] crawl entity tags trimmed to a person's name / cleared: ${junkEntities}`);
@@ -1410,7 +1507,10 @@ const PRINT_PROCESS = /\b(lithograph(?:s|e|ie)?|silkscreen|screen\s?print(?:s|in
 const PLATE_FROM = /\b(?:pl\.?|plates?)\s*(?:[IVXLCDM]+\b|\d{1,3}\b)?[,]?\s*from\b|\b(?:one|two|three|four|five|six|seven|eight|\d{1,2})\s+plates?\b|\bplate\s+(?:[IVXLCDM]+|\d{1,3})\b/i;
 const FROM_SERIES = /,\s*from\s+(?!the\s+(?:collection|estate|property)|a\s+private|an?\s+important)(?:the\s+)?[A-Z'"«“]/;
 const EDITION_STRONG = /\bedition of \d+\b|\bfrom (?:an|the) edition\b|\bnumbered\b[^.;]{0,16}\d{1,3}\s*\/\s*\d{1,4}|\bartist'?s proof\b|\bprinter'?s proof\b|\btrial proof\b|\bbon [aà] tirer\b|\bhors commerce\b/i;
-const ORIGINAL_STRONG = /\b(?:oil|acrylic|tempera|alkyd|enamel|synthetic polymer)\b[^.;]{0,40}\bon\s+(?:canvas|linen|panel|board|masonite|cardboard|paper)\b|\bmixed media on (?:canvas|panel|board)\b|\bhand[- ]painted\b|\bunique\b/i;
+// (wave 3) Warhol's medium line runs long ("Synthetic polymer paint,
+// screenprint ink, and diamond dust on canvas") and silkscreen INK on canvas
+// is his painting medium — neither may be flipped back to a print
+const ORIGINAL_STRONG = /\b(?:oil|acrylic|tempera|alkyd|enamel|synthetic polymer)\b[^.;]{0,60}\bon\s+(?:canvas|linen|panel|board|masonite|cardboard|paper)\b|\b(?:silkscreen|screen ?print) inks?\b[^.;]{0,60}\bon (?:canvas|linen)\b|\bmixed media on (?:canvas|panel|board)\b|\bhand[- ]painted\b|\bunique\b/i;
 const OIL_CANVAS = /\b(?:oil|acrylic|tempera|synthetic polymer)\b[^.;]{0,30}\bon\s+(?:canvas|panel|board|linen|masonite)\b/i;
 const EDITION_ANY = /\bedition of \d+|\bnumbered edition\b|\blimited edition\b/i;
 
@@ -1759,7 +1859,7 @@ const CULT_KIND_RULES: [RegExp, string][] = [
   // a signed FLAT / retail piece is an autograph (a signed programme, book,
   // menu, card, standee, retail hat or ball); a signed guitar, album, shoe or
   // document is still that object (the noun rules below)
-  [/\b(?:signed|autographed)\b.{0,30}\b(?:programs?|programmes?|books?|menus?|cards?|pages?|standees?|drum ?sticks?|hats?|caps?|baseballs?|footballs?|basketballs?|balls?|posters?|banners?|plaques?|bats?|helmets?|jerseys?|mini[- ]helmets?)\b|\b(?:programs?|programmes?|books?|menus?|cards?|pages?)\b.{0,25}\bsigned\b/i, 'autograph-other'],
+  [/\b(?:signed|autographed)\b.{0,30}\b(?:programs?|programmes?|books?|menus?|cards?|pages?|standees?|drawings?|sketch(?:es)?|artwork|drum ?sticks?|hats?|caps?|baseballs?|footballs?|basketballs?|balls?|posters?|banners?|plaques?|bats?|helmets?|jerseys?|mini[- ]helmets?)\b|\b(?:programs?|programmes?|books?|menus?|cards?|pages?)\b.{0,25}\bsigned\b/i, 'autograph-other'],
   [/\b(?:photo|photos|photograph|photographs|snapshots?|negatives?|carte[- ]de[- ]visites?|cdvs?|tintypes?|daguerreotypes?|polaroids?|(?:film|press|publicity|production|black and white|colou?r) stills?|a still of|contact sheets?|transparenc(?:y|ies)|image of)\b/i, 'photo'],
   [/\b(?:letters?|correspondence|telegrams?|manuscripts?|typescripts?|documents?|deeds?|land grants?|commissions?|proclamations?|broadsides?|autograph notes?|handwritten|lyrics?|diar(?:y|ies)|notebooks?|als|tls|endorsements?|(?:confederate|war|treasury|savings|railroad) bonds?|bond certificates?|certificates?|stock|treaty|bulletins?|memo(?:randum|randa|s)?|ledgers?|registers?|guest ?books?|journals?|financial statements?|contracts?|telephone messages?|itinerar(?:y|ies)|writes (?:to|his|her|a|an|of|about|from))\b/i, 'document'],
   [/\b(?:script|scripts|screenplay|shooting script|storyboards?|teleplay)\b/i, 'script'],
@@ -1794,7 +1894,10 @@ function descHead(title: string, desc: string): string {
   return d.slice(0, 260);
 }
 export function cultureItemClass(l: { title?: string | null; description?: string | null; saleName?: string | null; auctionHouse?: string | null }): string {
-  const title = String(l.title || '').replace(/["“”]/g, ' ');
+  // (wave 3) a portrait DRAWING / painting is not a photograph ("Kurt Cobain
+  // Signed Original DJ Portrait Drawing")
+  let title = String(l.title || '').replace(/["“”]/g, ' ');
+  if (/\b(?:drawings?|sketch(?:es)?|paintings?|illustrations?|caricatures?)\b/i.test(title)) title = title.replace(/\bportraits?\b/gi, ' ');
   if (CULT_CARD_RE.test(title)) return 'card';
   // the word "prop" names the kind wherever it sits ("Stormtrooper Helmet Prop")
   if (/\bprops?\b/i.test(title)) return 'prop';
@@ -1808,6 +1911,9 @@ export function cultureItemClass(l: { title?: string | null; description?: strin
   if (/\bphotograph/i.test(sale)) return 'photo';
   // RR's signed-piece shorthand: "<Signer> Book", "<Signer> Program", "<Signer> Menu"
   if (l.auctionHouse === 'RR Auction' && /\b(?:books?|programs?|programmes?|menus?|cards?|bibles?|baseballs?|footballs?|basketballs?|bats?|balls?|scores?|pages?|first day covers?|covers?)\s*$/i.test(title.trim())) return 'autograph-other';
+  // (wave 3) RR's narrative letter headline: "Edwin M. Stanton: Stanton
+  // consoles a doctor …", "Judy Garland: Judy refuses to share her money …"
+  if (/^[^:]{3,60}:\s+(?:[A-Z][\w.'’-]*\s+){1,3}(?:writes|wrote|consoles|refuses|thanks|asks|discusses|explains|recalls|reflects|praises|requests|orders|informs|tells|declines|accepts|invites|congratulates|heralds|defends|describes|urges|offers|sends|seeks|laments|confirms|responds|replies|reports|promises|agrees|complains|announces|instructs|advises|apologizes|insists|warns|vows|pledges|recommends|appoints|authorizes|grants|demands)\b/.test(title)) return 'document';
   return 'other';
 }
 function cultPersonOf(title: string): string | null {
