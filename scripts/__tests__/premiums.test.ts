@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   houseAllInFactor, lotAllInFactor, maxHammerFor, inferHammerUsd, isRoundIncrement, BID_LADDER_PCT,
+  houseAllInFactorAt, DATED_PREMIUMS,
 } from '../../app/lib/premiums';
 
 test('houseAllInFactor: flat houses, tiered houses by hammer band, 1.25 fallback', () => {
@@ -23,6 +24,31 @@ test('houseAllInFactor: flat houses, tiered houses by hammer band, 1.25 fallback
   assert.equal(houseAllInFactor('Bonhams'), 1.28, 'no hammer → lowest band');
   assert.equal(houseAllInFactor('Some New House'), 1.25);
   assert.equal(houseAllInFactor(null), 1.25);
+});
+
+test('houseAllInFactorAt: REA era schedule by saleDate; other houses / bad dates fall back to the undated schedule', () => {
+  const at = (d: string | null) => houseAllInFactorAt('REA', 2000, d);
+  assert.equal(at('2003-11-01'), 1.15, 'before the first era → first rate');
+  assert.equal(at('2004-04-15'), 1.15);
+  assert.equal(at('2005-04-15'), 1.16);
+  assert.equal(at('2006-10-15'), 1.16);
+  assert.equal(at('2007-04-15'), 1.175);
+  assert.equal(at('2011-04-15'), 1.175);
+  assert.equal(at('2012-04-15'), 1.185);
+  assert.equal(at('2014-04-15'), 1.185, 'Spring 2014 still 18.5%');
+  assert.equal(at('2014-10-15'), 1.20, 'Fall 2014 → 20%');
+  assert.equal(at('2025-07-15'), 1.20);
+  assert.equal(at('2025-09-15'), 1.23);
+  assert.equal(at('2026-07-15T00:00:00Z'), 1.23, 'datetime is read by its date');
+  assert.equal(at(null), houseAllInFactor('REA'), 'no date → undated schedule');
+  assert.equal(at('?'), houseAllInFactor('REA'));
+  assert.equal(houseAllInFactorAt('Goldin', 1000, '2010-01-01'), houseAllInFactor('Goldin'));
+  assert.equal(houseAllInFactorAt("Sotheby's", 2_000_000, '2010-01-01'), houseAllInFactor("Sotheby's", 2_000_000));
+  // schedule hygiene: ascending dates, plausible factors
+  for (const [h, eras] of Object.entries(DATED_PREMIUMS)) {
+    for (let i = 1; i < eras.length; i++) assert.ok(eras[i][0] > eras[i - 1][0], `${h} eras ascending`);
+    for (const [, f] of eras) assert.ok(f > 1 && f < 1.4, `${h} factor ${f}`);
+  }
 });
 
 test('lotAllInFactor: a stamped buyerPremiumPct (0 < bp < 60) wins over the schedule', () => {

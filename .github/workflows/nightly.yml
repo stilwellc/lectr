@@ -352,9 +352,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           HOUSES: ${{ join(fromJSON(needs.plan.outputs.houses), ' ') }}
+        # --archive = segments with NO crawl leg (backfill-only history): no
+        # handoff is looked for, and one that is confirmed ABSENT in R2 is
+        # logged + skipped instead of warned (juliens/propstore before their
+        # first Wayback push). Unreadable-but-listed stays fatal for both kinds.
+        # juliens/propstore are also ARCHIVE_SOURCES in scripts/lib/house-status.ts
+        # (status.json "archives", never crawl health) — keep the lists in step
+        # (scripts/__tests__/archive-segments.test.ts checks).
         run: |
           read -r -a houses <<< "$HOUSES"
-          bash scripts/data-store.sh assemble-segments "${houses[@]}" rrauction-archive other
+          bash scripts/data-store.sh assemble-segments "${houses[@]}" --archive rrauction-archive other juliens propstore
       - name: Pull previous totals + backtest + house ledger (gate baselines + carried state)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}

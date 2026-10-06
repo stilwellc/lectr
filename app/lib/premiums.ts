@@ -49,6 +49,53 @@ export function houseAllInFactor(house: string | null | undefined, hammerUsd?: n
   return FLAT[house] ?? 1.25;
 }
 
+/** ERA-DATED premium schedules (Oct 5 2026) — houses whose buyer's premium
+ *  changed over the years the corpus spans. [first saleDate (YYYY-MM-DD) the
+ *  rate applies to, factor], ascending; a saleDate before the first entry takes
+ *  the first rate.
+ *
+ *  REA (183k rows, 2004 → today, NO stamped buyerPremiumPct/hammer). MEASURED
+ *  on the corpus by increment quantization: for every sold REA row ≥ $1,000,
+ *  the share whose price ÷ factor is a round flat bid increment is ~100% for
+ *  exactly ONE factor per sale and ~0% for the neighbours (≥ 85% where the
+ *  remainder are off-ladder bids), with clean break points between sales:
+ *    2004 (Apr)                  1.15   100%
+ *    2005 – 2006                 1.16   100%
+ *    2007 – 2011                 1.175  100%
+ *    2012 – Spring 2014 (Apr)    1.185  100%
+ *    Fall 2014 (Oct) – Jul 2025  1.20   85–100%
+ *    Sep 2025 → today            1.23   79–90%
+ *  REA's published terms (Wayback captures of robertedwardauctions.com) are
+ *  cited per era below where a capture exists.
+ *
+ *  USED BY the price-bleed sentinel's honesty test (scripts/assemble.ts
+ *  computeSentinel): the 29+ standing REA "poison" signatures were real flat
+ *  increments × the OLDER premiums that the flat 1.175 could not see. NOT
+ *  (yet) wired into lotAllInFactor/inferHammerUsd — that moves the engine's
+ *  hammer basis for REA (flat 1.175 under-reads 2014+ hammers by 2–5%) and is
+ *  the engine owner's call. */
+export const DATED_PREMIUMS: Record<string, Array<[string, number]>> = {
+  REA: [
+    ['0000-01-01', 1.15],
+    ['2005-01-01', 1.16],
+    ['2007-01-01', 1.175],
+    ['2012-01-01', 1.185],
+    ['2014-07-01', 1.20],
+    ['2025-08-01', 1.23],
+  ],
+};
+
+/** The house's premium factor AT a sale date: the era schedule when the house
+ *  has one and the date parses, else houseAllInFactor (same as undated). */
+export function houseAllInFactorAt(house: string | null | undefined, hammerUsd: number | null | undefined, saleDate: string | null | undefined): number {
+  const eras = house ? DATED_PREMIUMS[house] : undefined;
+  const d = typeof saleDate === 'string' ? saleDate.slice(0, 10) : '';
+  if (!eras || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return houseAllInFactor(house, hammerUsd);
+  let f = eras[0][1];
+  for (const [from, factor] of eras) if (d >= from) f = factor;
+  return f;
+}
+
 /** The factor for a specific lot: its own stamped premium wins, then the house
  *  schedule. `usd` disambiguates the tiered houses' band. */
 export function lotAllInFactor(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null }, usd?: number | null): number {
