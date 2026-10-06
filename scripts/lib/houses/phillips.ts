@@ -13,6 +13,15 @@ import { type EnrichResult, MEDIUM_PATTERNS, UA, detectCurrency, noteEnrichFail,
 // Phillips embeds lot data as a JSON string in ReactDOM.hydrate props for ArtistLanding.
 // The "maker" prop contains a JSON-encoded string with pastLots.data[].
 
+/** Last maker-lots page to walk. Nightly = the first 2 pages (fresh sales);
+ *  PHILLIPS_DEEP=1 = the full history, optionally capped at `maxPages` per
+ *  maker (PHILLIPS_MAX_PAGES — the backfill workflow's slice knob; 0 = no cap). */
+export function phillipsLastPage(totalPages: number, deep: boolean, maxPages = 0): number {
+  const total = Math.max(1, Math.floor(totalPages) || 1);
+  if (!deep) return Math.min(total, 2);
+  return maxPages > 0 ? Math.min(total, Math.floor(maxPages)) : total;
+}
+
 export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]> {
   if (!artist.phillips) return [];
   const lots: AuctionLot[] = [];
@@ -38,7 +47,7 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
       noteFetched('phillips');
       const totalPages = j.totalPages || 1;
       const deep = process.env.PHILLIPS_DEEP === '1';
-      const lastPage = deep ? totalPages : Math.min(totalPages, 2);
+      const lastPage = phillipsLastPage(totalPages, deep, Number(process.env.PHILLIPS_MAX_PAGES) || 0);
       console.log(`  [Phillips] API: ${j.totalCount || lotData.length} lots, walking ${lastPage}/${totalPages} pages${deep ? ' (deep)' : ''}`);
       for (let p = 2; p <= lastPage; p++) {
         await sleep(400);

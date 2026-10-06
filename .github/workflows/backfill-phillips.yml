@@ -1,0 +1,111 @@
+# Phillips FULL-HISTORY backfill. The nightly phillips leg walks only the first
+# 2 pages of each maker's api.phillips.com/api/maker/{id}/lots feed (fresh
+# sales); PHILLIPS_DEEP=1 walks every page. Pricing wave 8 measured the gap:
+# Phillips has ~3,526 Patek Philippe lots vs the 269 in the corpus, ~5,800
+# watch lots in all, plus deep art-maker history — and since wave 7 every watch
+# row carries the structured `houseReference` (wReferenceNo) the comp pool keys on.
+#
+# The crawl is the nightly's own path (ray-crawl.ts, RAY_HOUSE=phillips) scoped
+# by RAY_ONLY, so rows are classified/normalized exactly like nightly rows. The
+# result is then unioned back over the pre-crawl snapshot (fresh id wins, a pre
+# id the crawl dropped is restored — nothing is evicted) and pushed as the
+# phillips segment; tonight's assemble picks it up. Dispatch-only, sliceable by
+# maker set + a per-maker page cap; dry_run (the default) crawls and reports
+# the counts without pushing.
+name: Backfill Phillips (full history)
+on:
+  workflow_dispatch:
+    inputs:
+      makers:
+        description: "makers: watches | art | all | comma list of roster slugs (e.g. patek-philippe,rolex)"
+        default: watches
+      max_pages:
+        description: 'max maker-API pages per maker (100 lots/page; 0 = full history)'
+        default: '0'
+      dry_run:
+        description: 'crawl + report counts (and the push gate verdict) WITHOUT pushing the segment'
+        type: boolean
+        default: true
+      skip_gate:
+        description: 'set SEGMENT_SHRINK_OK=1 on push — ONLY after a dry run showed the gate blocking on a price-band shift from legitimate growth'
+        type: boolean
+        default: false
+# SEGMENT LOCK: the same per-house group nightly.yml's crawl matrix uses, so a
+# pull → crawl → union → push here can never interleave with another writer's.
+concurrency:
+  group: segments-phillips
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      MAKERS: ${{ inputs.makers || 'watches' }}
+      MAX_PAGES: ${{ inputs.max_pages || '0' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # the selector is resolved against the roster (unknown slug / no Phillips
+      # id = a failed dispatch, never a silent zero-maker crawl)
+      - name: Validate inputs
+        id: makers
+        run: |
+          [[ "$MAKERS" =~ ^[A-Za-z0-9,\ -]+$ ]] || { echo "::error::makers must be watches|art|all or a comma list of slugs"; exit 1; }
+          [[ "$MAX_PAGES" =~ ^[0-9]+$ ]] && [ "$MAX_PAGES" -le 1000 ] || { echo "::error::max_pages must be an integer 0..1000"; exit 1; }
+          only=$(npx tsx scripts/backfill-phillips.ts makers "$MAKERS")
+          [ -n "$only" ] || { echo "::error::selector '$MAKERS' resolved to no makers"; exit 1; }
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+          echo "- makers \`$MAKERS\` → \`$only\` · max_pages $MAX_PAGES · dry_run ${{ inputs.dry_run }}" >> "$GITHUB_STEP_SUMMARY"
+      # STRICT pull (no `|| echo` fallback): a failed pull followed by a
+      # union-and-push would publish a crawl-only segment over the real one.
+      - name: Pull last-good segment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull-segment phillips
+      - name: Snapshot the pre-crawl segment
+        run: |
+          f=data/corpus/segments/phillips.ndjson.gz
+          if [ -f "$f" ]; then cp "$f" "$RUNNER_TEMP/phillips.pre.ndjson.gz"; else echo "no phillips segment in R2 yet — bootstrap"; fi
+      # 400ms between pages inside each maker (crawlPhillips); 2 makers at once
+      - name: Deep-crawl Phillips
+        timeout-minutes: 150
+        env:
+          RAY_HOUSE: phillips
+          RAY_ONLY: ${{ steps.makers.outputs.only }}
+          PHILLIPS_DEEP: '1'
+          PHILLIPS_MAX_PAGES: ${{ env.MAX_PAGES }}
+          CRAWL_CONCURRENCY: '2'
+        run: npx tsx scripts/ray-crawl.ts
+      - name: Union over the snapshot (nothing evicted) + report
+        env:
+          ONLY: ${{ steps.makers.outputs.only }}
+        run: npx tsx scripts/backfill-phillips.ts union --pre "$RUNNER_TEMP/phillips.pre.ndjson.gz" --makers "$ONLY" --write
+      # dry run: what push-segment's per-house shrink/price gate WOULD say
+      - name: Push-gate preview (dry run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          stats=data/corpus/segments/.phillips.pulled-stats.json
+          if [ ! -s "$stats" ]; then echo "- push gate: no baseline stats (first write) — would pass" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          rc=0; npx tsx scripts/ci/segment-gate.ts check phillips "$stats" data/corpus/segments/phillips.ndjson.gz || rc=$?
+          case "$rc" in
+            0) echo "- push gate: PASS" >> "$GITHUB_STEP_SUMMARY" ;;
+            3) echo "::warning title=push gate would block::see data/qa/leg-health-gate.json in the log above"; echo "- push gate: WOULD BLOCK (skip_gate=true overrides once verified)" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "- push gate: tool error rc $rc" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
+          echo "- DRY RUN — segment NOT pushed" >> "$GITHUB_STEP_SUMMARY"
+      - name: Push segment
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SEGMENT_SHRINK_OK: ${{ inputs.skip_gate && '1' || '0' }}
+        run: bash scripts/data-store.sh push-segment phillips
