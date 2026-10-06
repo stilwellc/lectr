@@ -165,12 +165,17 @@ export function rerouteScienceMisroutes(lots: Lot[]): {
     if (!SCIENCE_SLUGS.has(l.artist)) continue;
     const t = lotText(l);
     if (SCIENCE_SUBJECT.test(t)) continue; // a genuine science subject pins it in place
+    // (wave 2) a lot an RR / generalist SPACE sale catalogued is space: "Wristwatch
+    // Group Lot (6) - From the Personal Collection of Alan Bean" is an
+    // astronaut's effects — re-routed to a tracked maker if it names one (a
+    // flown Omega), never evicted as an untracked watch maker
+    const spacePinned = l.artist === 'space-exploration' && /\bspace\b/i.test(String((l as { saleName?: string | null }).saleName || ''));
 
     // ── WATCHES (a skeletonized dial is not a fossil) ──
     if (WATCH_MAKER.test(t) || WATCH_SIGNAL.test(t)) {
       const w = WATCH_MAKER_SLUG.find(([re]) => re.test(t));
       if (w) { l.artist = w[1]; l.makerSlug = w[1]; toWatch++; }
-      else { lots.splice(i, 1); evicted++; } // untracked watch maker → never kept
+      else if (!spacePinned) { lots.splice(i, 1); evicted++; } // untracked watch maker → never kept
       continue;
     }
 
@@ -178,7 +183,7 @@ export function rerouteScienceMisroutes(lots: Lot[]): {
     if (ART_MAKERS.test(t) || GEMINI_PRINT.test(t) || ART_MEDIUM.test(t)) {
       const a = ART_MAKER_SLUG.find(([re]) => re.test(t));
       if (a) { l.artist = a[1]; l.makerSlug = a[1]; toArt++; }
-      else { lots.splice(i, 1); evicted++; } // untracked blue-chip / print-ref → never kept
+      else if (!spacePinned || /\bpatent\b/.test(t)) { lots.splice(i, 1); evicted++; } // untracked blue-chip / print-ref → never kept
     }
   }
   return { total: toArt + toWatch + evicted, toArt, toWatch, evicted };
@@ -900,11 +905,22 @@ export function rerouteSetCodeCards(lots: Lot[]): number {
 export function reclassifyCorpus(lots: Lot[]): { byClass: Record<string, number>; dropped: number } {
   const byClass: Record<string, number> = {};
   const drop = new Set<number>();
+  let stalePlayers = 0;
   for (let i = 0; i < lots.length; i++) {
     const r = reclassifyLot(lots[i] as Lot & { saleName?: string | null; description?: string | null });
     for (const c of r.fired) byClass[c] = (byClass[c] || 0) + 1;
-    if (r.drop) drop.add(i);
+    if (r.drop) { drop.add(i); continue; }
+    // (wave 2) a player is a SPORTS identity: a row that is not (or no longer)
+    // in the sports market sheds the crawl-time playerName/playerSlug it carried
+    // in ("CHINESE A GRAY", "Walt Disney Studios", a moved Julien's lot's
+    // "MARILYN MONROE") — 2,458 moved rows kept theirs; the signer pass and the
+    // backtest identity read playerSlug first, so a stale one shadows them.
+    const w = lots[i] as Lot & { playerName?: string | null; playerSlug?: string | null };
+    if ((w.playerName || w.playerSlug) && ARTIST_MARKET[w.artist as keyof typeof ARTIST_MARKET] !== 'sports') {
+      delete w.playerName; delete w.playerSlug; stalePlayers++;
+    }
   }
+  if (stalePlayers) byClass['stale-player-cleared'] = stalePlayers;
   return { byClass, dropped: compact(lots, drop) };
 }
 
@@ -1233,7 +1249,9 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
    ("Tandy" matches Jessica Tandy; require computer context). Hardware/
    apparatus → scientific-instruments; documents/figures → science-tech. */
 const CULT_SLUGS_TECH = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pop-memorabilia']);
-const TECH_HW = /\b(apple[- ]?(1|one|iii?\w{0,2})\b|apple (computer|lisa)|macintosh|iphone|ipod|ipad|imac|powerbook|next ?(computer|cube)|commodore|amiga|altair \d{3,4}\w?|ibm (pc|5150)|trs-80|osborne 1|circuit board|motherboard|logic board|microprocessor|enigma machine|difference engine|oscilloscope|prototype (board|computer|phone|device))\b/i;
+// (wave 2) a bare "Commodore" is the naval rank (Commodore Stephen Decatur's
+// letter book went to scientific-instruments); the computer names its model
+const TECH_HW = /\b(apple[- ]?(1|one|iii?\w{0,2})\b|apple (computer|lisa)|macintosh|iphone|ipod|ipad|imac|powerbook|next ?(computer|cube)|commodore (?:64|pet|amiga|vic|128|computer)|amiga|altair \d{3,4}\w?|ibm (pc|5150)|trs-80|osborne 1|circuit board|motherboard|logic board|microprocessor|enigma machine|difference engine|oscilloscope|prototype (board|computer|phone|device))\b/i;
 const TECH_DOC = /\b(steve jobs|steve wozniak|\bwoz\b|bill gates|alan turing|ada lovelace|charles babbage|xerox parc)\b/i;
 export function rerouteCultureTech(lots: Lot[]): number {
   let moved = 0;

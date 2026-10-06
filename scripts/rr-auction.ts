@@ -45,12 +45,16 @@ const INSTRUMENT = /\b(telescope|microscope|orrery|astrolabe|sextant|octant|slid
 
 export interface RRRoute { slug: string; }
 
+/** the title itself reads space (no sale-name prior) */
+export const rrSpaceTitle = (title: string): boolean => SPACE.test(title.toLowerCase());
+
 /** RR is an AUTOGRAPH house: a sports lot its title doesn't otherwise type
  *  ("Barry Bonds Baseball", "Joe Frazier Boxing Glove") is a signed piece —
  *  Olympic insignia/pins/medals/torches excepted. */
 export function rrSportsPrior(slug: string, text: string): string {
   return slug === 'sports-memorabilia' && !/\b(olympics?|pins?|badges?|insignia|medals?|torch|pennants?|tickets?)\b/i.test(text) ? 'autographs' : slug;
 }
+
 
 /** Route an RR Auction lot to an entity slug, or null to drop it.
  *  Science is matched, never defaulted — unmatched lots go to routeCulture. */
@@ -59,7 +63,10 @@ export function rrSportsPrior(slug: string, text: string): string {
 // regex can read. In a space sale a lot is space unless it reads aviation /
 // another domain (Oct 6 2026 audit: 5.8k space lots sat in culture).
 const SPACE_SALE = /\b(space|apollo|nasa|astronaut)/i;
-const NOT_SPACE_IN_SPACE_SALE = /\b(lindbergh|wright brothers|orville|wilbur|yeager|aviation|aviator|airplane|aircraft|airline|airship|zeppelin|hindenburg|b-\d{2}|p-\d{2}|pilot'?s license|earhart|howard hughes|air force|luftwaffe|wwi|wwii|world war|red baron|spirit of st\.? louis|telegraph|plymouth|meteorite)\b/i;
+// (wave 2) the aviators a "Space & Aviation" catalogue also lists by bare name
+// ("Jacqueline Cochran Signed Photograph", "Jimmy Doolittle", "Paul Tibbets")
+// — they are aviation autographs (culture's historic catch-all), not space.
+const NOT_SPACE_IN_SPACE_SALE = /\b(lindbergh|wright brothers|orville|wilbur|yeager|aviation|aviator|aviatrix|airplane|aircraft|airline|airship|zeppelin|hindenburg|b-\d{2}|p-\d{2}|pilot'?s license|earhart|howard hughes|air force|luftwaffe|wwi|wwii|world war|red baron|spirit of st\.? louis|telegraph|plymouth|meteorite|cochran|doolittle|rickenbacker|tibbets|enola gay|curtiss|wiley post|sikorsky|boyington|chennault|flying tigers|blue angels|concorde|bob hoover|bleriot|bl[ée]riot|amelia|piccard|fokker|richthofen|tuskegee|doolittle raid|bomber|fighter ace|flying ace|squadron)\b/i;
 
 export function routeRRLot(title: string, description = '', saleName = ''): string | null {
   const t = `${title} ${description}`.toLowerCase();

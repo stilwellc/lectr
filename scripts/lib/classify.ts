@@ -22,8 +22,9 @@ import { classifyForm } from '../../app/lib/comps';
 import { leadsWithSetCode } from './set-codes';
 import { ARTIST_MARKET } from '../../app/constants';
 import { routeCulture, isCultureSale } from '../culture';
-import { routeRRLot, rrSportsPrior } from '../rr-auction';
+import { routeRRLot, rrSportsPrior, rrSpaceTitle } from '../rr-auction';
 import { routeSportsLot } from '../sports-sale';
+import { athleteIn } from './athlete-roster';
 
 export const DROP = 'DROP' as const;
 
@@ -50,9 +51,9 @@ export interface ClassifyLot {
 
 /** a slab grade: grader + optional descriptor + number. Never PSA/DNA (that
  *  authenticates a raw signed object, not a card). */
-export const SLAB_GRADE_RE = /\b(?:psa|bgs|sgc|cgc|bvg|gma|hga|csg)(?!\s*\/\s*dna)\s*(?:gem[- ]?(?:mt|mint)|mint|nm[- ]?mt\+?|nm\+?|ex[- ]?nm\+?|ex[- ]?mt\+?|ex\+?|vg[- ]?ex\+?|vg\+?|good|gd\+?|fair|fr|pr|poor|authentic|altered)?\s*\d/i;
+export const SLAB_GRADE_RE = /\b(?:psa|bgs|sgc|cgc|bvg|gma|hga|csg|beckett(?: auto)?)(?!\s*\/\s*dna)\s*(?:gem[- ]?(?:mt|mint)|mint|nm[- ]?mt\+?|nm\+?|ex[- ]?nm\+?|ex[- ]?mt\+?|ex\+?|vg[- ]?ex\+?|vg\+?|good|gd\+?|fair|fr|pr|poor|authentic|altered)?\s*\d/i;
 /** title leads with a year (or a lot number + year): the card-title shape */
-const YEAR_LEAD_RE = /^\s*(?:\d{1,4}\s+)?(?:['’]?\d{2}|1[89]\d{2}|20\d{2})(?:[-/]\d{2,4})?s?,?\s+\S/;
+const YEAR_LEAD_RE = /^\s*(?:(?:signed|autographed)\s+)?(?:\d{1,4}\s+)?(?:['’]?\d{2}|1[89]\d{2}|20\d{2})(?:[-/]\d{2,4})?s?,?\s+\S/;
 /** "11 T206 …", "11 E90-1 …" — Goldin's two-digit-year set-code titles */
 const SHORT_YEAR_SET_CODE_RE = /^\s*\d{2}\s+(?:T\d{3}|E\d{2,3}|N\d{2,3}|R\d{3}|D\d{3}|M\d{3}|W\d{3})(?:-\d{1,2})?\b/;
 const CARD_NO_RE = /#\s?[A-Za-z0-9][A-Za-z0-9/-]*/;
@@ -60,7 +61,7 @@ const CARD_NO_RE = /#\s?[A-Za-z0-9][A-Za-z0-9/-]*/;
 const CARD_BRAND_RE = /\b(topps|bowman|panini|upper deck|fleer|donruss|goudey|play ball|o-pee-chee|score|pro set|hoops|skybox|prizm|optic|leaf|mosaic|stadium club|pinnacle|finest|metal universe|sp authentic|exquisite|national treasures|flawless|immaculate|kellogg'?s|bazooka|parkhurst|sportflics|playoff|contenders|spectra|obsidian|crown royale|zenith|flair|e-x2000|press pass|tobacco card)\b/i;
 /** the physical OBJECT nouns that make a branded/graded title memorabilia, not a card */
 const CARD_OBJECT_RE = /\b(jerseys?|uniform|bats?|gloves?|cleats|boots|helmet|trunks|shorts|jacket|shoes?|sneakers?|shirt|robe|photo|photograph|(?:signed|official|game|onl|oml|oal|obal|nfl|nba|wilson|spalding|rawlings) (?:base|basket|foot|soccer |golf )?ball|puck|pennant|banner|trophy|ring|belt|ticket|stub|pass|poster|painting|lithograph|display|plaque|bobblehead|statue|program|magazine|letter|check|contract|cut|envelope|cover|bobb(?:ing|in'?|le)[- ]?heads?|statues?|figurines?|miniatures?|pins?|pinbacks?|buttons?|coins?)\b/i;
-const CARD_WORD_RE = /(?<!(?:playing|index|business|schedule|cabinet|greeting|christmas|post|place|calling|report|score|signature|membership|id|identification|scorer'?s|admission|pass|program|trade|cigarette pack|souvenir|menu|lobby|title|window|wedding|signed|autographed|3x5|3 x 5|birthday|holiday|ration|draft|war|sympathy|note|recipe) )\bcards?\b(?![- ]used)|\bhand[- ]cut\b/i;
+const CARD_WORD_RE = /(?<!(?:line-?up|playing|index|business|schedule|cabinet|greeting|christmas|post|place|calling|report|score|signature|membership|id|identification|scorer'?s|admission|pass|program|trade|cigarette pack|souvenir|menu|lobby|title|window|wedding|signed|autographed|3x5|3 x 5|birthday|holiday|ration|draft|war|sympathy|note|recipe) )\bcards?\b(?![- ]used)|\bhand[- ]cut\b/i;
 const FLAT_OBJECT_RE = /\b(?:photos?|photographs?|lithographs?|prints?|posters?|paintings?|canvas|display|framed|plaque|letter|check|contract|magazine)\b/i;
 /** cards that are not trading cards (looksLikeCard reads "Golf Score Card" via the Score brand) */
 const NON_TRADING_CARD_RE = /\b(?:index|business|score|greeting|lobby|3 ?x ?5|signature|membership|cabinet|place|calling|report) ?cards?\b/i;
@@ -76,12 +77,19 @@ export const COMIC_RE = /\b(comic books?|(?<!bazooka )comics?|marvel comics|dc c
 /** mass-produced toys — no home unless an athlete SIGNED it (then an autograph) */
 export const MASS_TOY_RE = /\b(funko|action figures?|carded figure|beanie bab(?:y|ies)|kenner|hasbro|mattel|afa (?:[a-z+-]+ )?\d{2}|roleplay toy)\b/i;
 
+/** (wave 2) graded/numbered objects that are not cards: a PSA-graded full
+ *  ticket ("… Full Ticket - Mantle Hits #468 HR PSA 6"), a signed lineup card,
+ *  an empty pack wrapper, a blown-up print of a card */
+const NOT_A_CARD_OBJECT_RE = /\b(?:full )?tickets?\b|\bticket stubs?\b|\bstubs?\b|\bline-?up cards?\b|\bwrappers?\b|\bblown[- ]up\b/i;
+
 /** Is this lot a trading CARD? (routing detector — see header) */
 export function isCardTitle(title: string | null | undefined): boolean {
   const t = String(title || '');
   if (!t.trim()) return false;
   if (leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t)) return true;
   if (PHOTO_FOR_CARD_RE.test(t)) return false;
+  if (NOT_A_CARD_OBJECT_RE.test(t) && !/\bsets?\b|rookie tickets?|contenders|\bstubs?\b.*\bcards?\b/i.test(t)
+    && !(/\bblown[- ]up\b/i.test(t) ? false : CARD_WORD_RE.test(t.replace(/\bline-?up cards?\b/gi, ' ')))) return false;
   if (NON_TRADING_CARD_RE.test(t) && !CARD_NO_RE.test(t) && !/\btrading cards?\b/i.test(t)) return false;
   // a photo/print/display named without a card word or number is that object
   // (looksLikeCard reads "Signed 16 x 20 Photograph (Upper Deck)" as a card)
@@ -202,6 +210,18 @@ export function expansionSportsKind(l: ClassifyLot): string | null {
   return null;
 }
 
+/** (wave 2) the reverse flip: a card-slug row at an expansion house that is a
+ *  graded TICKET, a signed lineup card, a pack wrapper or a blown-up print —
+ *  the card-first rule's grade/number test caught them ("Aug. 6, 1965 Detroit
+ *  Tigers Full Ticket - Mantle Hits #468 HR PSA 6", "May 28, 1964 New York
+ *  Mets Lineup Card Signed by Casey Stengel (PSA)"). */
+export function expansionCardObject(l: ClassifyLot): string | null {
+  if (!SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '') || l.artist !== 'graded-cards') return null;
+  const t = String(l.title || '');
+  if (!NOT_A_CARD_OBJECT_RE.test(t) || isCardTitle(t)) return null;
+  return /\bwrappers?\b/i.test(t) && !SIGNED_RE.test(t) ? 'memorabilia' : sportsObjectKind(t, 'memorabilia');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 5 · SCIENCE AT THE GENERALIST HOUSES — Christie's/Sotheby's lots were routed
 // on the FULL description (apollo|lunar|rocket|celestial|calculat|anatomical|
@@ -230,6 +250,24 @@ const SCI_SALE_RE = /scien|instrument|travel|natural history|technolog|camera|ph
 const LIFEDATE_LEAD_RE = /^\s*[[A-Z][^()]{1,70}\((?:b\.|born|n[ée]e? en|fl\.|active|ca?\.?|circa|d\.)?\s?\d{3,4}/;
 const SCIENCE_SLUGS_ALL = new Set(['meteorites', 'fossils', 'space-exploration', 'scientific-instruments']);
 
+/** (wave 2) A SIGNED or handwritten document/photo — the historic catch-all
+ *  (entertainment-memorabilia) or science-tech for a scientist — even when the
+ *  title also reads like a book ("Bound volume of 168 printed bills of lading
+ *  … SIGNED ("John Hancock")", "Printed text of his last message as President
+ *  signed", "Cabinet photograph signed on verso ('Charles Dickens')"). The
+ *  book/lifedate evictions below swept 186 of these out of the corpus. Maker
+ *  signatures on objects (a dial "signed Longines", an inro, a Japanese print
+ *  "signed Goyo ga", a photographer's "colour print, signed") are not. */
+export const SIGNED_DOC_RE = /\b(?:(?:autograph|typed|holograph)\s+(?:letters?|notes?|documents?|manuscripts?|endorsements?|quotations?|journals?|diar(?:y|ies)|memoranda|inventory|cards?)\b|(?:letters?|documents?|typescripts?|manuscripts?|endorsements?|photo(?:graph)?s?|contracts?|checks?|cheques?|commissions?|appointments?|deeds?|land grants?|proclamations?|certificates?|bills? of lading|printed text|portraits?|programmes?|programs?|menus?|cards?|books?|yearbooks?|pages?|notes?|speech|memorand(?:um|a))\b[^.;]{0,60}?\bsigned\b|\bsigned\b[^.;]{0,20}?\b(?:contracts?|letters?|photo(?:graph)?s?|documents?|checks?|programs?|programmes?|menus?|yearbooks?|books?|speech)\b|\bautographed\b)|\bsigned\s*\(\s*["“'‘]/i;
+const MAKER_SIGNED_RE = /\b(?:watch|clock|dial|movement|chronometer|netsuke|inro|vase|bowl|gelatin silver|silver print|chromogenic|c-print|colou?r print|platinum print|albumen|woodblock|ukiyo|hitsu|ga and|signed and sealed)\b/i;
+export function isSignedDocument(t: string): boolean {
+  return SIGNED_DOC_RE.test(t) && !MAKER_SIGNED_RE.test(t) && !/\bunsigned\b/i.test(t.replace(/mostly unsigned|\d+ unsigned/gi, ''));
+}
+/** a Christie's/Sotheby's popular-culture SALE (Entertainment Memorabilia, Pop
+ *  Memorabilia, Rock & Roll …) — its lots are culture lots, whatever slug a
+ *  science regex once gave them ("TOM THUMB", "ORSON WELLES. Typescript …") */
+const CULTURE_SALE_NAME_RE = /entertainment|pop memorabilia|pop culture|popular culture|rock (?:and|&|n'?)? ?(?:roll|pop)|rock roll|hollywood|film and|music memorabilia/i;
+
 /** Re-validate a science slug from the lot's own title (+ sale name prior). */
 export function scienceVerdict(l: ClassifyLot): string | null {
   const a = l.artist;
@@ -238,6 +276,10 @@ export function scienceVerdict(l: ClassifyLot): string | null {
   const sale = String(l.saleName || '');
   if (a === 'meteorites') return METEOR_RE.test(t) || METEOR_RE.test(String(l.medium || '')) ? null : DROP;
   if (a === 'space-exploration' && !SPACE_TOY_RE.test(t) && (SPACE_RE.test(t) || /space/i.test(sale))) return null;
+  if (isSignedDocument(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : 'entertainment-memorabilia';
+  if (CULTURE_SALE_NAME_RE.test(sale) && !(a === 'scientific-instruments' && INSTRUMENT_RE.test(t))) {
+    return SCIENTIST_RE.test(t) ? 'science-tech' : (routeCulture(t, String(l.description || '').slice(0, 300)) ?? DROP);
+  }
   if (SCI_LETTER_RE.test(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : 'entertainment-memorabilia';
   if (SCI_BOOK_RE.test(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : DROP;
   if (a === 'scientific-instruments' && INSTRUMENT_RE.test(t) && !LIFEDATE_LEAD_RE.test(t)) return null;
@@ -283,9 +325,12 @@ export function saleGateFix(l: ClassifyLot): string | null {
     const spaceCase = CULTURE_SLUGS.has(from);
     const jerseyCase = SPORTS_SLUGS.has(from) && /new jersey/i.test(t);
     const macCase = from === 'science-tech' && /\bmac\b/i.test(t);
-    if (!spaceCase && !jerseyCase && !macCase) return null;
+    // (wave 2) the space-sale default caught aviators listed by bare name
+    const aviationCase = from === 'space-exploration' && !rrSpaceTitle(t);
+    if (!spaceCase && !jerseyCase && !macCase && !aviationCase) return null;
     const to = routeRRLot(t, '', sale);
     if (spaceCase) return to === 'space-exploration' ? to : null;
+    if (aviationCase) return to === 'space-exploration' ? null : to ?? DROP;
     return to ?? DROP;
   }
   return null;
@@ -362,12 +407,30 @@ export function attributionFix(l: ClassifyLot): string | null {
 // editions and printed documents are judged real culture lots in the audit;
 // these are the marks of a MASS item only.
 const CULTURE_MASS_RE = /\b(igs|wegs|wata|vga|cgc|cbcs|afa (?:qualified )?\d{2}|ukg \d{2}|cas \d{2}|vmg|factory[- ]sealed|sealed (?:video|vhs|cassette|cd|dvd|laserdisc|box|case|pack|game|tape)|hobby (?:box|case)|booster (?:box|pack)|blaster box|beanie bab(?:y|ies)|funko|action figures?|playset|video ?games?|nintendo|playstation|\bvhs\b|laserdisc|video 8|trading cards?|comic books?|comics)\b/i;
+/** graded-slab / sealed-product marks: a SIGNED item carrying one is still a
+ *  mass collectible (a signed CGC comic, a "Possible … Signed Cards" box) */
+const MASS_EVEN_SIGNED_RE = /\b(?:igs|wegs|wata|vga|cgc|cbcs|afa|ukg|cas \d|vmg|amg|hobby (?:box|case)|booster|blaster|possible|factory[- ]sealed)\b|\b(?:psa|bgs|sgc)\s+(?:gem|mint|nm|ex|vg|good|\d)/i;
+/** pre-war / vintage sports card issues that print no sport word ("1941 Double
+ *  Play", "1952 Red Man", "1966 Philadelphia Gum Gale Sayers RC") */
+const VINTAGE_SPORT_ISSUE_RE = /\b(?:goudey|cracker jack|topps|bowman|play ball|leaf|fleer|donruss|upper deck|panini|double play|red man|diamond stars|exhibits?|batter-up|turkey red|sweet caporal|old judge|mecca|hassan|kimball|allen & ginter|zeenut|obak|delong|national chicle|r\d{3}|philadelphia gum)\b/i;
+/** a sports card by any of its marks: set code, sport word, a roster athlete, a sports issue */
+export function isSportsCardText(t: string): boolean {
+  return leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t) || SPORT_WORD_RE.test(t) || !!athleteIn(t) || VINTAGE_SPORT_ISSUE_RE.test(t);
+}
 export function cultureMassFix(l: ClassifyLot): string | null {
   if (!CULTURE_SLUGS.has(l.artist)) return null;
   const t = String(l.title || '');
-  if (CULTURE_MASS_RE.test(t) || NON_SPORT_TCG_RE.test(t)) return DROP;
-  // a trading card in culture: a sports card goes home to sports, a non-sport card has none
-  if (isCardTitle(t) && !SIGNED_RE.test(t) && (SLAB_GRADE_RE.test(t) || CARD_SET_RE.test(t) || leadsWithSetCode(t))) return leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t) || SPORT_WORD_RE.test(t) || /\b(?:goudey|cracker jack|topps|bowman|play ball|leaf|fleer|donruss|upper deck|panini)\b/i.test(t) ? 'graded-cards' : DROP;
+  // (wave 2) a celebrity-SIGNED piece is an autograph, not the mass object it
+  // is signed on ("Al Pacino, James Caan, and Diane Keaton Signed LaserDisc
+  // Sleeve", "Quentin Tarantino and Steve Buscemi Signed Laserdisc") — unless
+  // it is slabbed / sealed product or a comic / non-sport TCG card
+  const signedPiece = SIGNED_RE.test(t) && !MASS_EVEN_SIGNED_RE.test(t) && !COMIC_RE.test(t) && !NON_SPORT_TCG_RE.test(t);
+  if ((CULTURE_MASS_RE.test(t) && !signedPiece) || NON_SPORT_TCG_RE.test(t)) return DROP;
+  // a trading card in culture: a sports card goes home to sports, a non-sport
+  // card has none. A "set" counts only when it is a set of CARDS ("near-complete
+  // set of the USS Pueblo crew" signatures is not).
+  const cardSet = CARD_SET_RE.test(t) && !/\b(?:crew|signatures?|autographs?|signed)\b/i.test(t);
+  if (isCardTitle(t) && !SIGNED_RE.test(t) && (SLAB_GRADE_RE.test(t) || cardSet || leadsWithSetCode(t))) return isSportsCardText(t) ? 'graded-cards' : DROP;
   return null;
 }
 
@@ -452,6 +515,7 @@ export const RECLASS_RULES: ReclassRule[] = [
     },
   },
   { cls: 'sports-kind-card-first-gu-language', apply: expansionSportsKind },
+  { cls: 'sports-card-slug-objects', apply: expansionCardObject },
   {
     cls: 'science-title-object-noun',
     apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
