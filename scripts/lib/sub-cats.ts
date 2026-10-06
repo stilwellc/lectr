@@ -162,6 +162,14 @@ const ART_KIND: Record<string, string> = {
   'original-2d': 'originals', 'work-on-paper': 'originals', 'painting': 'originals',
   'sculpture': 'sculpture', 'photograph': 'photographs', 'book': 'books',
 };
+// (wave 2) class 10 · an editioned multiple: a KAWS vinyl figure filed sculpture is
+// sculpture; skateboard decks / plates / plush are multiples (prints)
+function artKind(formKey: string, category: string): string {
+  let k = ART_KIND[formKey] ?? null;
+  if (formKey === 'object-edition') k = category === 'sculpture' ? 'sculpture' : 'prints';
+  return k ?? 'other';
+}
+
 const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel', 'aluminum', 'fiberglass', 'bronze', 'glass', 'upholstery'];
 
 // Design MODEL vocabulary (Oct 6 2026 audit): the title of a design lot is
@@ -282,7 +290,7 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
   }
 
   if (vert === 'art') {
-    return { subCat: ART_KIND[formKey] ?? 'other', drill: null, flown: null };
+    return { subCat: artKind(formKey, (l.category as string) || ''), drill: null, flown: null };
   }
 
   if (vert === 'design') {

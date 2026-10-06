@@ -38,6 +38,7 @@ export interface ClassifyLot {
   category?: string | null;
   auctionHouse?: string | null;
   saleName?: string | null;
+  priceUsd?: number | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -567,6 +568,16 @@ const EDITION_MARK_RE = /edition of|numbered|\b\d{1,3}\s*\/\s*\d{1,4}\b/i;
 
 const artText = (l: ClassifyLot) => `${l.title || ''} | ${l.medium || ''} | ${(l.description || '').slice(0, 600)}`;
 
+/** (wave 2) class 10 · ceramics / sculpture with no medium text: a Picasso
+ *  Madoura form noun ("Oiseau au ver ashtray", "Visage No. 202", "Plaque Profil
+ *  de Jacqueline", "Service poisson, bol H", "visage brun/bleu (alain ramié 2)"),
+ *  a repoussé silver plate, a bronze cast, a KAWS vinyl / chrome figure */
+const PICASSO_CERAMIC_RE = /\b(?:plates?|plat|assiette|pitchers?|pichet|cruchon|vases?|bowls?|bol|coupelle|ashtray|cendrier|plaques?|tiles?|carreaux?|dish|service poisson|tripode|pignate|jug|visage no\.?\s*\d+|alain rami[ée])\b/i;
+const SCULPT_RE = /repouss|\b(?:bronze|patina|foundry|fonderie|cast (?:in|by)|lost[- ]wax|sculpture|marble|painted steel|stainless steel|chrome[- ]coated|resin)\b/i;
+const KAWS_FIGURE_RE = /\b(?:companion|bff|chum|accomplice|dissected|small lie|together|time off|kubrick|be@?rbrick|vinyl|holiday|what party|clean slate|along the way|good intentions|passing through|resting place|gone|seeing|watching|share|take|figures?|plush)\b/i;
+/** catalogue / edition evidence that a lot is a print (incl. the catalogue
+ *  raisonné citations the Sotheby's text-less records print in the title) */
+const PRINT_EVIDENCE_RE = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|silkscreen|s[ée]rigraph|woodcut|engraving|drypoint|offset|edition of|numbered|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|\bplates?\b|portfolio|\bfrom\b|\bsuite\b|f\.?\s*(?:&|and)\s*s\.?|feldman|schellmann|\bbloch\b|mourlot|\bbaer\b|cramer|corlett|gemini|ulae|duthuit|\([a-z]{1,3}\.\s*\d+[a-z]?\)|\b\d{1,3}\s*\/\s*\d{1,4}\b|\bhc\b|\bp\.?\s?p\.?\b|\bproof\b|\bimpression\b|\bsheet\b|catalogue|catalog\b|\bbooks?\b/i;
 /** The corrected art CATEGORY for a tracked art maker's lot, or null when the
  *  current one stands. Ceramic → sculpture; a unique medium → original. */
 export function artCategoryFix(l: ClassifyLot): string | null {
@@ -574,9 +585,20 @@ export function artCategoryFix(l: ClassifyLot): string | null {
   const cat = l.category || 'unknown';
   if (cat === 'sculpture' || cat === 'photograph') return null;
   const s = artText(l);
+  const tm = `${l.title || ''} | ${l.medium || ''}`;
+  const sale = String(l.saleName || '');
   const printWord = ART_PRINT_WORD_RE.test(s);
-  const ceramic = CERAMIC_RE.test(s) || (l.artist === 'pablo-picasso' && RAMIE_NO_RE.test(`${l.title || ''} ${l.medium || ''}`));
-  if (ceramic && !/poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|serigraph|woodcut|engraving|drypoint|offset/i.test(s)) return 'sculpture';
+  // (wave 2) a "knife engraving" / "engraved" decoration on a ceramic is not a print
+  const strongPrint = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|serigraph|woodcut|drypoint|offset/i.test(s);
+  const ceramic = CERAMIC_RE.test(s) || (l.artist === 'pablo-picasso' && (RAMIE_NO_RE.test(tm) || /alain rami[ée]/i.test(tm)));
+  if (ceramic && !strongPrint) return 'sculpture';
+  // (wave 2) class 10 · ceramic / sculpture forms with no medium text
+  if (!strongPrint && !UNIQUE_MEDIUM_RE.test(s)) {
+    const printRef = /\b(?:bloch|baer|cramer|mourlot|geiser|\d+ plates|plates? from|from the|suite)\b/i.test(s);
+    if (l.artist === 'pablo-picasso' && !printRef && (PICASSO_CERAMIC_RE.test(l.title || '') || (cat === 'design' && !PRINT_EVIDENCE_RE.test(tm)))) return 'sculpture';
+    if (SCULPT_RE.test(s) && !/\bon (?:paper|canvas|linen|board)\b/i.test(s)) return 'sculpture';
+    if (l.artist === 'kaws' && KAWS_FIGURE_RE.test(tm) && !/\bon (?:paper|canvas)\b|portfolio|screenprint|print\b/i.test(s)) return 'sculpture';
+  }
   if (cat === 'original') return null;
   if (UNIQUE_MEDIUM_RE.test(s) && !printWord) return 'original';
   if (SILKSCREEN_CANVAS_RE.test(s) && !EDITION_MARK_RE.test(s)) return 'original';

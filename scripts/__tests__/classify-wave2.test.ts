@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reclassifyLot, isCardTitle, isSignedDocument, DROP } from '../lib/classify';
+import { reclassifyLot, isCardTitle, isSignedDocument, artCategoryFix, DROP } from '../lib/classify';
 import { reclassifyCorpus, rerouteScienceMisroutes, cultureItemClass } from '../lib/corpus-normalize';
 import { routeRRLot } from '../rr-auction';
 import { athleteIn } from '../lib/athlete-roster';
@@ -206,6 +206,21 @@ test('class 16 · drill coverage: a sports lot\'s own words name its sport; an a
   assert.equal(S('Wally Schirra and Frank Borman Signed Photograph'), 'mercury-gemini');
   assert.equal(S('Skylab Medical Experiment Altitude Test (SMEAT) Beta Patches (8)'), 'apollo');
   assert.equal(S('N1-L3 Soviet Lunar Launch Vehicle Model - Nearly Five Feet Tall'), 'soviet');
+});
+
+const ART = (o: R) => artCategoryFix({ id: 'x', category: 'print', medium: '', description: '', saleName: '', auctionHouse: "Sotheby's", ...o } as any);
+
+test('class 10 · ceramics / sculpture / KAWS figures with no medium text', () => {
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'Oiseau au ver ashtray', auctionHouse: 'Wright' }), 'sculpture');
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'Visage No. 202', auctionHouse: 'Wright' }), 'sculpture');
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'visage brun/bleu (alain ramié 2)', saleName: 'Important Picasso Ceramics' }), 'sculpture');
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'Little sun', medium: 'Rectangular plaque of red earthenware clay, engobe ground, engraving enhanced with oxides under partial brushed glaze patina', auctionHouse: 'LAMA' }), 'sculpture');
+  assert.equal(ART({ artist: 'pablo-picasso', title: "Tête en forme d'horloge", medium: 'solid repoussé silver', auctionHouse: 'LAMA', saleName: 'Masterworks' }), 'sculpture');
+  assert.equal(ART({ artist: 'kaws', title: 'Small Lie, set of three', category: 'original', auctionHouse: 'Wright' }), 'sculpture');
+  assert.equal(ART({ artist: 'kaws', title: '400% Mad Hectic Kubrick', category: 'original', auctionHouse: 'Rago' }), 'sculpture');
+  // print plates and catalogued prints stay prints
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'pablo picasso (1881-1973) la celestine: 4 plates (bloch 1592; 1603; 1608; 1612)' }), null);
+  assert.equal(ART({ artist: 'kaws', title: 'Untitled (Kimpsons)', category: 'original', medium: 'acrylic on canvas', auctionHouse: 'Phillips' }), null);
 });
 
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
