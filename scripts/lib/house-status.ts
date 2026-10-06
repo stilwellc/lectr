@@ -30,6 +30,20 @@ export const HOUSE_LABELS: Record<string, string> = {
   memorylane: 'Memory Lane', lotg: 'Love of the Game', nflauction: 'NFL Auction', mlbauction: 'MLB Auctions',
 };
 
+/** ARCHIVE-ONLY SOURCES (Oct 5 2026): segments with sold history but NO crawl
+ *  leg — written by a backfill (backfill-struts-wayback.yml walks Wayback
+ *  captures of the walled Julien's / Propstore lot pages). There is no crawl to
+ *  be healthy or stale about, so they never enter the ledger, the stale-house
+ *  hide, the per-house rolling issues or publish.housesDown; status.json lists
+ *  them under `archives` (rows + newest saleDate) instead. Keep in step with
+ *  nightly.yml's `assemble-segments … --archive` list
+ *  (scripts/__tests__/archive-segments.test.ts checks). */
+export const ARCHIVE_SOURCES: Record<string, string> = {
+  juliens: "Julien's",
+  propstore: 'Propstore',
+};
+export const isArchiveSource = (h: string): boolean => Object.prototype.hasOwnProperty.call(ARCHIVE_SOURCES, h);
+
 export interface LegRecord {
   house: string;
   ok: boolean;
@@ -103,7 +117,8 @@ export function updateLedger(
   const nowIso = input.now.toISOString();
   const houses: Record<string, LedgerEntry> = {};
   for (const h of input.houses) {
-    const p = prev?.houses?.[h];
+    if (isArchiveSource(h)) continue; // no crawl leg — never a ledger house
+    const p =prev?.houses?.[h];
     const seed = input.bootstrapSince?.[h];
     const base: LedgerEntry = p ? { ...p } : {
       lastOkAt: null, lastAttemptAt: null, trackedSince: seed && seed < nowIso ? seed : nowIso, ok: false,
@@ -140,7 +155,7 @@ export function updateLedger(
     };
   }
   // houses dropped from the matrix keep their entry (history), untouched
-  for (const [h, e] of Object.entries(prev?.houses || {})) if (!(h in houses)) houses[h] = e;
+  for (const [h, e] of Object.entries(prev?.houses || {})) if (!(h in houses) && !isArchiveSource(h)) houses[h] = e;
   return { version: 1, updatedAt: nowIso, houses };
 }
 
@@ -154,7 +169,7 @@ export function houseAgeHours(e: LedgerEntry, now: Date): number {
 /** Segment keys whose live lots must be hidden tonight. */
 export function staleHouseKeys(ledger: Ledger | null, now: Date, maxAgeH = STALE_AFTER_H): Set<string> {
   const out = new Set<string>();
-  for (const [h, e] of Object.entries(ledger?.houses || {})) if (houseAgeHours(e, now) > maxAgeH) out.add(h);
+  for (const [h, e] of Object.entries(ledger?.houses || {})) if (!isArchiveSource(h) && houseAgeHours(e, now) > maxAgeH) out.add(h);
   return out;
 }
 
@@ -198,6 +213,19 @@ export interface StatusJson {
     hiddenLive: number;
     failStreak: number;
   }>;
+  /** ARCHIVE-ONLY sources (ARCHIVE_SOURCES): sold history with no crawl leg —
+   *  never healthy/unhealthy, never in housesDown. present=false = the segment
+   *  was not in R2 tonight (e.g. before its first backfill push). Additive. */
+  archives: Array<{
+    house: string;
+    label: string;
+    kind: 'archive';
+    present: boolean;
+    rows: number;
+    sold: number;
+    /** newest sold saleDate (≤ today) in the segment */
+    lastSaleDate: string | null;
+  }>;
 }
 
 export function buildStatus(input: {
@@ -211,7 +239,7 @@ export function buildStatus(input: {
   maxAgeH?: number;
 }): StatusJson {
   const maxAgeH = input.maxAgeH ?? STALE_AFTER_H;
-  const houses = input.houses.map(h => {
+  const houses = input.houses.filter(h => !isArchiveSource(h)).map(h => {
     const e = input.ledger?.houses?.[h];
     const s = input.stats?.[h];
     const staleHidden = !!e && houseAgeHours(e, input.now) > maxAgeH;
@@ -232,6 +260,13 @@ export function buildStatus(input: {
     };
   });
   const housesDown = houses.filter(h => !h.ok).map(h => h.house);
+  const archives = Object.keys(ARCHIVE_SOURCES).map(h => {
+    const s = input.stats?.[h];
+    return {
+      house: h, label: ARCHIVE_SOURCES[h], kind: 'archive' as const,
+      present: !!s && s.rows > 0, rows: s?.rows ?? 0, sold: s?.sold ?? 0, lastSaleDate: s?.lastSaleDate ?? null,
+    };
+  });
   const engineOk = input.engineSignal == null || input.engineSignal === 'validated';
   return {
     generatedAt: input.now.toISOString(),
@@ -244,5 +279,6 @@ export function buildStatus(input: {
       housesDown,
     },
     houses,
+    archives,
   };
 }

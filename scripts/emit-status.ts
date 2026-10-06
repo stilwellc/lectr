@@ -125,7 +125,7 @@ async function cmdStatus() {
   });
   const out = arg('out', 'public/data/ray/status.json');
   writeJson(out, status);
-  console.log(`[status] ${out}: signal ${status.publish.signal} · engine ${engineVersion} (${status.publish.engineSignal ?? 'n/a'}) · down ${status.publish.housesDown.join(', ') || 'none'}`);
+  console.log(`[status] ${out}: signal ${status.publish.signal} · engine ${engineVersion} (${status.publish.engineSignal ?? 'n/a'}) · down ${status.publish.housesDown.join(', ') || 'none'} · archives ${status.archives.map(a => `${a.house} ${a.present ? `${a.rows} rows → ${a.lastSaleDate ?? 'n/a'}` : 'absent'}`).join(', ')}`);
 }
 
 if (process.env.RAY_SKIP_MAIN !== '1') {

@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import {
   clampImpossibleYears, rerouteScienceMisroutes, rerouteRelicCards, reconcileSaleDates,
   dedupeWrightFamilyMirrors, deriveRRAuctionUrls, normalizeArtCategory, recoverPlayerSlug,
-  guTeamOf, guUseClass, guGameKey, stampCultureAxes,
+  guTeamOf, guUseClass, guGameKey, stampCultureAxes, nullDeadChristiesSsoUrls,
 } from '../lib/corpus-normalize';
 
 type R = Record<string, any>;
@@ -119,6 +119,28 @@ test('deriveRRAuctionUrls: fills only an empty url on an RR-shaped id', () => {
   assert.equal(lots[2].url, 'https://www.rrauction.com/own');
   assert.equal(lots[3].url, null);
   assert.equal(lots[4].url, null);
+});
+
+test("nullDeadChristiesSsoUrls: nulls the dead www /<lang>/sso links, keeps the live onlineonly sso permalinks", () => {
+  const C = (id: string, url: string | null, house = "Christie's") => L({ id, url, auctionHouse: house });
+  const lots = [
+    C('christies-auc-5602497', 'https://www.christies.com/en/sso?ObjectID=4431.7&LotNumber=7&ldp_breadcrumb=back'),
+    C('christies-auc-1', 'https://christies.com/sso?ObjectID=1.2'),
+    C('christies-auc-2', '/en/sso'),
+    C('christies-auc-3', 'http://www.christies.com/zh/sso#x'),
+    C('christies-24969.26', 'https://onlineonly.christies.com/sso?ObjectID=24969.26&LotNumber=26'),
+    C('christies-auc-6608607', 'https://www.christies.com/en/lot/lot-6608607?ldp_breadcrumb=back'),
+    C('christies-auc-4', 'https://www.christies.com/en/ssot-sale'),
+    C('christies-auc-5', null),
+    C('bonhams-1', 'https://www.christies.com/en/sso?x', 'Bonhams'),
+  ];
+  assert.equal(nullDeadChristiesSsoUrls(lots), 4);
+  assert.deepEqual(lots.slice(0, 4).map(l => l.url), [null, null, null, null]);
+  assert.equal(lots[4].url, 'https://onlineonly.christies.com/sso?ObjectID=24969.26&LotNumber=26');
+  assert.equal(lots[5].url, 'https://www.christies.com/en/lot/lot-6608607?ldp_breadcrumb=back');
+  assert.equal(lots[6].url, 'https://www.christies.com/en/ssot-sale');
+  assert.equal(lots[8].url, 'https://www.christies.com/en/sso?x', 'another house is never touched');
+  assert.equal(nullDeadChristiesSsoUrls(lots), 0, 'idempotent');
 });
 
 test('normalizeArtCategory: print↔original re-derivation on ART makers only, explicit unique mediums never flipped', () => {

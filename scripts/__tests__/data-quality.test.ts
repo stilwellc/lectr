@@ -14,7 +14,7 @@ import {
   rerouteForeignLeadMaker, rerouteSetCodeCards, demoteStaleUpcoming, stampCompExcludes,
   nullPlaceholderImages, stampDatePrecision, fixFamilyHammerEqualsPrice, BRUUN_HOUSE,
 } from '../lib/corpus-normalize';
-import { isRoundIncrement, BID_LADDER_PCT, lotAllInFactor } from '../../app/lib/premiums';
+import { isRoundIncrement, BID_LADDER_PCT, lotAllInFactor, houseAllInFactorAt } from '../../app/lib/premiums';
 import { computeSentinel, sentinelVerdict } from '../assemble';
 import { isServedUpcoming } from '../corpus-io';
 import { leadsWithSetCode } from '../lib/set-codes';
@@ -207,6 +207,32 @@ check('computeSentinel: a Lelands ladder cluster is honest, the NFL idwalk bleed
   assert.strictEqual(sentinelVerdict(sigs, base).abort, false, 'standing poison in the baseline does not gate');
   const extra = sigs.concat([{ house: 'X', price: 5555, n: 30, top: 30, topDate: 'd', hammer: 4545, honest: false }, { house: 'Y', price: 7777, n: 30, top: 30, topDate: 'd', hammer: 6000, honest: false }]);
   assert.strictEqual(sentinelVerdict(extra, base).reason, 'new-poison');
+});
+
+check('computeSentinel + REA premium eras: real increment × era-premium clusters are honest; a bleed (and a wrong-era tie) stays poison', () => {
+  const lots: R[] = [];
+  const add = (price: number, n: number, date: string) => { for (let i = 0; i < n; i++) lots.push({ status: 'sold', auctionHouse: 'REA', priceUsd: price, saleDate: date }); };
+  // REAL standing signatures from the Oct 5 2026 corpus (price ×n @ placeholder date):
+  add(1840, 38, '2004-04-15');   // $1,600 × 1.15
+  add(1508, 77, '2005-04-15');   // $1,300 × 1.16
+  add(7540, 36, '2006-04-15');   // $6,500 × 1.16
+  add(2962, 65, '2013-04-15');   // $2,500 × 1.185
+  add(10072, 17, '2013-04-15');  // $8,500 × 1.185
+  // an era-1.175 tie dated in the 18.5% era: $2,350 = $2,000 × 1.175 — NOT honest in 2013
+  add(2350, 20, '2013-04-15');
+  // a bleed: one arbitrary price stamped across a batch
+  add(10050, 40, '2025-10-15');
+  const dated = { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT, houseAllInFactorAt };
+  const sig = (s: ReturnType<typeof computeSentinel>, p: number) => s.find(x => x.price === p)!;
+  const withEras = computeSentinel(lots as never, dated);
+  for (const p of [1840, 1508, 7540, 2962, 10072]) assert.ok(sig(withEras, p).honest, `$${p} is an era-premium tie`);
+  assert.strictEqual(sig(withEras, 2350).honest, false, '$2,350 in 2013 is not a 18.5%-era increment');
+  assert.strictEqual(sig(withEras, 10050).honest, false, 'the bleed stays poison');
+  assert.ok(Math.abs(sig(withEras, 2962).hammer - 2500) <= 1, 'implied hammer ≈ $2,500 (REA rounds the premium to the dollar)');
+  // the flat 1.175 (no eras) is what made the real ties look like poison
+  const flat = computeSentinel(lots as never, { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT });
+  for (const p of [1840, 1508, 7540, 2962, 10072]) assert.strictEqual(sig(flat, p).honest, false, `$${p} under the flat 1.175`);
+  assert.strictEqual(sig(flat, 2350).honest, true, 'the flat factor blessed a wrong-era tie');
 });
 
 // ── 7 · placeholder images ────────────────────────────────────────────────
