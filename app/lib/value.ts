@@ -915,7 +915,22 @@ export function resolveComps(
     // admit down to the RELAXED tier-b gate — estimateValue applies the strict
     // gate first and only reaches for these when the strict pool is thin
     if (!passesGateWith(FALLBACK_GATE, m)) continue;
-    out.push({ id: c.id, match: m, realizedUsd: c.realizedUsd!, saleDate: c.saleDate });
+    out.push({ id: c.id, match: m, realizedUsd: compAllInUsd(c), saleDate: c.saleDate });
   }
   return out;
+}
+
+/** (Oct 6 2026) A comp's price ON THE POOL'S BASIS (all-in). Every pool
+ *  statistic is a median of premium-inclusive realized prices, but a row whose
+ *  priceBasis says the number is the HAMMER ('hammer-only' — Bonhams/Phillips
+ *  lots published without a premium; 'hammer' — the struts houses' stamp)
+ *  carries realizedUsd = hammer. Gross it with the house premium in force on
+ *  ITS sale date (premiums.lotAllInFactor — the stamped premium, else the dated
+ *  schedule; the exact inverse of lotHammerFromAllIn), so a hammer never sits
+ *  ~20% low in an all-in pool. */
+export function compAllInUsd(c: { realizedUsd?: number | null; hammerUsd?: number | null; priceBasis?: string | null; auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null }): number {
+  const r = c.realizedUsd || 0;
+  if (c.priceBasis !== 'hammer-only' && c.priceBasis !== 'hammer') return r;
+  const h = (c.hammerUsd || 0) > 0 ? c.hammerUsd! : r;
+  return h > 0 ? Math.round(h * lotAllInFactor(c, h) * 100) / 100 : r;
 }
