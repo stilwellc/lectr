@@ -314,6 +314,36 @@ const CULTURE_SLUGS = new Set(['movie-tv', 'music-memorabilia', 'entertainment-m
 /** sale names that are NOT sports sales but matched the old bare-'memorabilia' gate */
 const NON_SPORT_SALE_RE = /pop memorabilia|pop culture|television|\bfilm\b|movie|posters|guitars?|rock (?:and|&|n)|rock roll|entertainment|music|ocean ?liner|transport/i;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// (wave 2) 8 · ENTERTAINMENT HOUSES — the Julien's / Propstore parser
+// (struts-auction.ts) runs the SPORTS classifier on every lot, so a Big
+// Lebowski costume, Sinatra's bracelets or an Emmy became sports memorabilia /
+// game-used / trophies (6.6k rows). At these houses a lot is sports only with
+// SPORT evidence — a league/sport word, a roster athlete, game/fight-worn
+// language, or a sports sale; everything else is a culture lot (or, in the
+// house's decorative-arts / luxury-goods sales, has no home).
+// ═══════════════════════════════════════════════════════════════════════════
+export const ENTERTAINMENT_HOUSES = new Set(["Julien's", 'Propstore']);
+/** sport words that cannot be a costume / prop / generic object */
+export const SPORT_STRONG_RE = /\bali (?:and|&|vs\.?) |\b(?:and|&|vs\.?) ali\b|\b(frazier|baseball|football|basketball|hockey|boxing|boxer|golf|golfer|tennis|olympics?|soccer|wrestl(?:ing|er)|nascar|formula (?:1|one)|world series|super bowl|stanley cup|world cup|fifa|all[- ]star game|hall of fame|mlb|nfl|nba|nhl|ufc|wwe|wwf|heavyweight|(?:game|match|fight|race)[- ](?:used|worn|issued)|yankees|dodgers|red sox|white sox|cubs|lakers|celtics|bulls|knicks|packers|cowboys|steelers|49ers|canadiens|maple leafs|bruins|boca juniors|real madrid|barcelona|manchester united|aston villa|liverpool|juventus|pel[eé]|maradona|muhammad ali|babe ruth|mantle|gretzky)\b/i;
+const SPORTS_SALE_NAME_RE = /\bsports?\b|baseball|basketball|football|boxing|golf|soccer|hockey|olympic|nba|nfl|holyfield|pel[eé]|di st[eé]fano/i;
+const NO_HOME_SALE_RE = /fine and decorative arts|street art|gentleman'?s arcade|luxury treasures/i;
+export function isSportsEvidence(title: string, saleName = ''): boolean {
+  if (SPORT_STRONG_RE.test(title) || athleteIn(title)) return true;
+  // a pure sports sale; a mixed one ("Sports Legends and Music Icons") needs the title to say so
+  return SPORTS_SALE_NAME_RE.test(saleName) && !/music|hollywood|rock|film|icons? (?:&|and) idols(?!: sports)/i.test(saleName);
+}
+export function entertainmentHouseFix(l: ClassifyLot): string | null {
+  if (!ENTERTAINMENT_HOUSES.has(l.auctionHouse || '') || !SPORTS_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  if (isSportsEvidence(t, String(l.saleName || ''))) return null;
+  if (NO_HOME_SALE_RE.test(String(l.saleName || ''))) return DROP;
+  const to = routeCulture(t, String(l.description || '').slice(0, 300).replace(/class="[^"]*"|lot closed[^]*$/i, ''));
+  if (to) return to;
+  // a celebrity-SIGNED lobby card / album sleeve is an autograph, not the mass object
+  return SIGNED_RE.test(t) && !MASS_EVEN_SIGNED_RE.test(t) && !COMIC_RE.test(t) ? 'entertainment-memorabilia' : DROP;
+}
+
 export function saleGateFix(l: ClassifyLot): string | null {
   const t = String(l.title || '');
   const sale = String(l.saleName || '');
@@ -528,6 +558,7 @@ export const RECLASS_RULES: ReclassRule[] = [
     apply: l => (l.auctionHouse === 'RR Auction' && CULTURE_SLUGS.has(l.artist) ? rrAthleteRoute(String(l.title || '')) : null),
   },
   { cls: 'sports-catch-all-programmes', apply: sportsCatchAllFix },
+  { cls: 'entertainment-house-not-sports', apply: entertainmentHouseFix },
   { cls: 'watch-jewelry-tudor', apply: watchMakerFix },
   { cls: 'art-design-attribution', apply: attributionFix },
   { cls: 'culture-mass-leaks', apply: cultureMassFix },

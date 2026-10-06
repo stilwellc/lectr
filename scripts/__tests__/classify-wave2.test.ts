@@ -118,6 +118,21 @@ test('class 4 · RR athlete autographs by bare name are sports, not culture', ()
   assert.equal(move({ auctionHouse: 'Lelands', artist: 'pop-memorabilia', title: '208 Wilt Chamberlain Stilt Record Label Acetate & More' }), 'pop-memorabilia');
 });
 
+test('class 8 · Julien\'s / Propstore lots are sports only with sport evidence', () => {
+  const J = (title: string, artist = 'memorabilia', saleName = 'Icons & Idols Hollywood', house = "Julien's") => move({ auctionHouse: house, artist, saleName, title });
+  assert.equal(J('THE BIG LEBOWSKI JEFF BRIDGES WHITE SLEEVELESS COVERALLS'), 'entertainment-memorabilia');
+  assert.equal(J('DAYS OF OUR LIVES EMMY AWARD', 'trophies-awards'), 'entertainment-memorabilia');
+  assert.equal(J('MICHAEL JACKSON SIGNED STANDEE', 'autographs', 'The Collection of Tompkins and Bush'), 'entertainment-memorabilia');
+  assert.equal(J("Lot # 368: Star Wars: The Phantom Menace (1999) - Obi-Wan Kenobi's (Ewan McGregor) Dueling Lightsaber Hilt", 'memorabilia', 'Entertainment Memorabilia Live', 'Propstore'), 'entertainment-memorabilia');
+  assert.equal(J('PINOCCHIO RE-RELEASE POSTER', 'memorabilia', 'Icons & Idols 2012: Hollywood'), DROP);
+  assert.equal(J('LETTER OPENER AND MAGNIFYING GLASS', 'memorabilia', "A Gentleman's Arcade of Luxury Treasures"), DROP);
+  // sports evidence keeps it: a sports sale, a roster athlete, fight/match-worn language
+  assert.equal(J('BOB GIBSON 1961 TOPPS TRADING CARD #211 - PSA MINT 9', 'graded-cards', 'Sports Legends'), 'graded-cards');
+  assert.equal(J('DIEGO MARADONA 1995 MATCH WORN BOCA JUNIORS SHIRT', 'game-used', 'Icons & Idols: Sports'), 'game-used');
+  assert.equal(J('ALI AND FRAZIER SIGNED NEIL LEIFER PHOTOGRAPH', 'type-1-photos', 'Sports Legends and Music Icons'), 'type-1-photos');
+  assert.equal(J('MICHAEL JACKSON SIGNED BAD DISPLAY', 'equipment-artifacts', 'Sports Legends and Music Icons'), 'entertainment-memorabilia');
+});
+
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
   const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
   // the object lives in the description (Christie's / Sotheby's culture titles)

@@ -35,6 +35,7 @@
 import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
 import type { AuctionLot, Currency, LotCategory, PriceBasis } from '../../app/types';
 import { decodeHtml, classifySports, pseudoArtist, readAuth, type SportsCategory } from './sports-crawl';
+import { ENTERTAINMENT_HOUSES, isSportsEvidence } from './classify';
 
 export interface StrutsHouse {
   segment: string;
@@ -225,7 +226,13 @@ export function parseStrutsLot(cfg: StrutsHouse, html: string, catalogId: string
 
   const description = readDescription(html);
   const base = classifySports('', h.title);
-  const cat: SportsCategory = (base === 'autograph' || base === 'other-memorabilia') && POP_RE.test(`${h.title} ${description}`)
+  // (wave 2) an entertainment house's lot is sports only with SPORT evidence
+  // (classify.ts isSportsEvidence) — the sports classifier's defaults filed a
+  // Big Lebowski costume as memorabilia and an Emmy as a trophy; corpus-
+  // normalize (entertainmentHouseFix) then routes pop-memorabilia to its
+  // culture home or evicts it
+  const cat: SportsCategory = ((base === 'autograph' || base === 'other-memorabilia') && POP_RE.test(`${h.title} ${description}`))
+    || (ENTERTAINMENT_HOUSES.has(cfg.auctionHouse) && !isSportsEvidence(h.title, h.saleName || ''))
     ? 'pop-memorabilia' : base;
   const auth = readAuth(cat, h.title, description);
   // house doctrine: a "signed" lot with no inline provenance/estate paragraph
